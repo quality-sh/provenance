@@ -199,6 +199,7 @@ fn seed_shaping_owners(store: &StateStore, scope: &ScopeId) {
         .unwrap();
     store
         .create_question(CreateQuestionInput {
+            depends_on: Vec::new(),
             scope_id: scope.clone(),
             id: sid("question_threshold"),
             topic_id: sid("topic_rates"),

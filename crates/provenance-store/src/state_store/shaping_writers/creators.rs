@@ -123,6 +123,7 @@ impl StateStore {
             topic_id,
             question,
             resolution_method,
+            depends_on,
             status,
             answer,
             mut links,
@@ -158,6 +159,8 @@ impl StateStore {
         }
         self.validate_artifact_links(&scope_id, &links)?;
         sort_artifact_links(&mut links);
+        let depends_on =
+            self.checked_question_dependencies(&scope_id, &id, &topic_id, depends_on)?;
         let path = shards::questions_path(&self.layout, &scope_id);
         self.mutate_graph_record(&path, |records: &mut Vec<Question>| {
             let question = Question {
@@ -168,6 +171,7 @@ impl StateStore {
                 requirement_id: topic.requirement_id,
                 question,
                 resolution_method,
+                depends_on,
                 status,
                 archived_in_commit: None,
                 claimed_by: None,

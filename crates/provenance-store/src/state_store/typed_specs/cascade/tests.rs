@@ -57,6 +57,7 @@ fn fixture() -> (tempfile::TempDir, StateStore, ScopeId) {
         .unwrap();
     store
         .create_question(CreateQuestionInput {
+            depends_on: Vec::new(),
             scope_id: scope.clone(),
             id: id("question_cascade_writer"),
             topic_id: id("topic_cascade_writer"),
