@@ -64,10 +64,8 @@ fn implementation_sites(report: &CoverageReport) -> impl Iterator<Item = ReportS
 fn implementation_modules(report: &CoverageReport) -> BTreeMap<&str, &camino::Utf8Path> {
     implementation_sites(report)
         .map(ReportSite::core)
-        .filter(|site| {
-            site.verification.is_none()
-                && site.anchor_state != provenance_core::coverage::AnchorState::Gone
-        })
+        .filter(|site| site.role() == provenance_core::coverage::SiteRole::Implementation)
+        .filter(|site| site.is_current())
         .map(|site| (site.rule_id.as_str(), site.file_path.as_path()))
         .collect()
 }
