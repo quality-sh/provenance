@@ -421,7 +421,10 @@ async fn concurrent_replies_do_not_split_head_from_messages() {
         .await
         .unwrap()
         .result;
-        assert_eq!(result.messages.entries.len(), result.head.version as usize);
+        assert_eq!(
+            u64::try_from(result.messages.entries.len()).unwrap(),
+            result.head.version
+        );
         assert!(result.messages.next_cursor.is_none());
         tokio::task::yield_now().await;
     }
