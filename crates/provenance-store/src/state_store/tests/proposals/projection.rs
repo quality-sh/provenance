@@ -55,7 +55,7 @@ fn proposal_projection_uses_one_publication_snapshot() {
     let (validated_tx, validated_rx) = std::sync::mpsc::channel();
     let (release_tx, release_rx) = std::sync::mpsc::channel();
     let reader = {
-        let store = store.clone();
+        let store = crate::test_support::store(&store.layout);
         let scope = scope.clone();
         std::thread::spawn(move || {
             store.project_proposal_cards(&scope, None, || {
@@ -69,7 +69,7 @@ fn proposal_projection_uses_one_publication_snapshot() {
 
     let (published_tx, published_rx) = std::sync::mpsc::channel();
     let publisher = {
-        let store = store.clone();
+        let store = crate::test_support::store(&store.layout);
         let scope = scope.clone();
         std::thread::spawn(move || {
             store
@@ -140,7 +140,7 @@ fn ratification_records_a_disposition_without_mutating_proposal_definition() {
     let barrier = std::sync::Arc::new(std::sync::Barrier::new(3));
     let mut threads = Vec::new();
     for id in ["disposition_overtime_a", "disposition_overtime_b"] {
-        let store = store.clone();
+        let store = crate::test_support::store(&store.layout);
         let scope = scope.clone();
         let barrier = barrier.clone();
         threads.push(std::thread::spawn(move || {

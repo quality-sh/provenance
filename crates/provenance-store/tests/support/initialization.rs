@@ -1,6 +1,4 @@
-use provenance_store::{
-    layout::ProvenanceLayout, repository_init::plan_manifest, state_store::StateStore,
-};
+use provenance_store::{layout::ProvenanceLayout, repository_init::plan_manifest};
 
 /// Uses the manifest plan that `provenance init --disposition-actor-id` uses.
 #[allow(dead_code)]
@@ -8,7 +6,7 @@ pub fn initialize(layout: &ProvenanceLayout, actors: &[&str]) {
     let existing = layout
         .manifest_path()
         .exists()
-        .then(|| StateStore::new(layout.clone()).manifest().unwrap());
+        .then(|| serde_json::from_slice(&std::fs::read(layout.manifest_path()).unwrap()).unwrap());
     let manifest = plan_manifest(
         existing,
         Some("default"),
