@@ -119,14 +119,13 @@ async fn source_patch_refuses_the_second_client_with_a_stale_etag() {
     repo.all_kinds();
     let host = host(&repo, true);
     let etag = source_etag(&repo);
-    let quoted = format!("\"{etag}\"");
 
     let (first_status, first) = support::resource_http::call_with_headers(
         &host,
         "PATCH",
         "/sources/source_shared",
-        Some(json!({"data":{"name":"Source B"}})),
-        &[("if-match", &quoted)],
+        Some(json!({"data":{"expected_etag":etag.clone(),"name":"Source B"}})),
+        &[],
     )
     .await;
     assert_eq!(first_status, 200, "{first}");
@@ -135,8 +134,8 @@ async fn source_patch_refuses_the_second_client_with_a_stale_etag() {
         &host,
         "PATCH",
         "/sources/source_shared",
-        Some(json!({"data":{"name":"Source C"}})),
-        &[("if-match", &quoted)],
+        Some(json!({"data":{"expected_etag":etag,"name":"Source C"}})),
+        &[],
     )
     .await;
     assert_eq!(second_status, 409, "{second}");

@@ -9,13 +9,10 @@ use provenance_core::{
 
 impl StateStore {
     pub fn update_resolution(&self, input: UpdateResolutionInput) -> anyhow::Result<Resolution> {
-        self.prepare_resolution_update(input)
+        self.write_resolution_update(input)
     }
 
-    fn prepare_resolution_update(
-        &self,
-        input: UpdateResolutionInput,
-    ) -> anyhow::Result<Resolution> {
+    fn write_resolution_update(&self, input: UpdateResolutionInput) -> anyhow::Result<Resolution> {
         let scope = input.scope_id.clone();
         let path = shards::resolutions_path(&self.layout, &input.scope_id);
         let expected_etag = input.expected_etag.clone();
