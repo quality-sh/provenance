@@ -35,6 +35,7 @@ hex.workspace = true
 pulldown-cmark.workspace = true
 provenance-core.workspace = true
 provenance-macros.workspace = true
+provenance-mcp.workspace = true
 provenance-porcelain.workspace = true
 provenance-report.workspace = true
 provenance-review.workspace = true
@@ -81,3 +82,4 @@ predicates.workspace = true
 provenance-mcp = { workspace = true, features = ["client"] }
 tar.workspace = true
 provenance-transport = { path = "../provenance-transport", version = "0.3.2", features = ["test-fixture"] }
+tokio = { workspace = true, features = ["process"] }
