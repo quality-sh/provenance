@@ -79,6 +79,15 @@ pub struct RecordSnapshot {
     pub record: ReviewRecord,
 }
 
+/// Identifies one record type that the native review journal supports.
+pub trait ReviewRecordKind {
+    const KIND: NodeType;
+
+    fn review_id(&self) -> &StableId;
+    fn review_schema_version(&self) -> SchemaVersion;
+    fn set_review_schema_version(&mut self, version: SchemaVersion);
+}
+
 /// The closed list of record kinds that native review evidence supports.
 ///
 /// To add a kind, define its record type and add one entry here. This list
@@ -145,6 +154,22 @@ macro_rules! define_review_record {
             impl From<$record> for ReviewRecord {
                 fn from(record: $record) -> Self {
                     Self::$variant(record)
+                }
+            }
+
+            impl ReviewRecordKind for $record {
+                const KIND: NodeType = NodeType::$kind;
+
+                fn review_id(&self) -> &StableId {
+                    &self.id
+                }
+
+                fn review_schema_version(&self) -> SchemaVersion {
+                    self.schema_version
+                }
+
+                fn set_review_schema_version(&mut self, version: SchemaVersion) {
+                    self.schema_version = version;
                 }
             }
         )*

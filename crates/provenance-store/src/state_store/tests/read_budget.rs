@@ -239,6 +239,7 @@ async fn oversized_update_is_refused_and_keeps_the_published_record() {
         .update_source(UpdateSourceInput {
             scope_id: scope.clone(),
             id: StableId::new(OVERSIZED_ID).unwrap(),
+            expected_etag: None,
             declared_by: None,
             name: Some("y".repeat(READ_BUDGET)),
             source_type: None,

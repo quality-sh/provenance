@@ -87,32 +87,37 @@ impl StateStore {
 
     pub fn update_domain(&self, input: UpdateDomainInput) -> anyhow::Result<Domain> {
         let path = shards::domains_path(&self.layout, &input.scope_id);
-        self.mutate_graph_record(&path, |records: &mut Vec<Domain>| {
-            if let Some(name) = &input.name {
-                required_text(name)?;
-                if records.iter().any(|r| r.id != input.id && r.name == *name) {
-                    return Err(invalid("domain name already exists"));
+        let expected_etag = input.expected_etag.clone();
+        self.mutate_graph_record_with_etag(
+            &path,
+            expected_etag.as_deref(),
+            |records: &mut Vec<Domain>| {
+                if let Some(name) = &input.name {
+                    required_text(name)?;
+                    if records.iter().any(|r| r.id != input.id && r.name == *name) {
+                        return Err(invalid("domain name already exists"));
+                    }
                 }
-            }
-            let record = records
-                .iter_mut()
-                .find(|r| r.id == input.id)
-                .ok_or_else(missing)?;
-            set(&mut record.name, input.name);
-            optional(
-                &mut record.description,
-                input.description,
-                input.clear_fields.contains(&DomainClearField::Description),
-            )?;
-            optional(
-                &mut record.color,
-                input.color,
-                input.clear_fields.contains(&DomainClearField::Color),
-            )?;
-            let record = record.clone();
-            read_budget::ensure_within_read_budget(&record)?;
-            Ok(record)
-        })
+                let record = records
+                    .iter_mut()
+                    .find(|r| r.id == input.id)
+                    .ok_or_else(missing)?;
+                set(&mut record.name, input.name);
+                optional(
+                    &mut record.description,
+                    input.description,
+                    input.clear_fields.contains(&DomainClearField::Description),
+                )?;
+                optional(
+                    &mut record.color,
+                    input.color,
+                    input.clear_fields.contains(&DomainClearField::Color),
+                )?;
+                let record = record.clone();
+                read_budget::ensure_within_read_budget(&record)?;
+                Ok(record)
+            },
+        )
     }
 
     pub fn update_boundary(&self, input: UpdateBoundaryInput) -> anyhow::Result<Boundary> {
@@ -129,21 +134,26 @@ impl StateStore {
                 required_text(statement)?;
             }
             let path = shards::boundaries_path(&self.layout, &input.scope_id);
-            self.mutate_graph_record(&path, |records: &mut Vec<Boundary>| {
-                let record = records
-                    .iter_mut()
-                    .find(|r| r.id == input.id)
-                    .ok_or_else(missing)?;
-                set(&mut record.statement, input.statement);
-                optional(
-                    &mut record.source_ref,
-                    input.source_ref,
-                    input.clear_fields.contains(&BoundaryClearField::SourceRef),
-                )?;
-                let record = record.clone();
-                read_budget::ensure_within_read_budget(&record)?;
-                Ok(record)
-            })
+            let expected_etag = input.expected_etag.clone();
+            self.mutate_graph_record_with_etag(
+                &path,
+                expected_etag.as_deref(),
+                |records: &mut Vec<Boundary>| {
+                    let record = records
+                        .iter_mut()
+                        .find(|r| r.id == input.id)
+                        .ok_or_else(missing)?;
+                    set(&mut record.statement, input.statement);
+                    optional(
+                        &mut record.source_ref,
+                        input.source_ref,
+                        input.clear_fields.contains(&BoundaryClearField::SourceRef),
+                    )?;
+                    let record = record.clone();
+                    read_budget::ensure_within_read_budget(&record)?;
+                    Ok(record)
+                },
+            )
         })
     }
 }
