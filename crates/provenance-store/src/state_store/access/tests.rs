@@ -80,7 +80,7 @@ async fn a_store_under_the_guard_takes_no_second_lock() {
     let reader = std::thread::spawn(move || {
         let guarded = StateStore::under_guard(&guard);
         let records = read_families!(&guarded, &scope).and_then(|mut records| {
-            records.extend(closed_families(&guarded.store, &scope)?);
+            records.extend(closed_families(&guarded, &scope)?);
             Ok(records)
         });
         sender
