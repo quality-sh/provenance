@@ -3,7 +3,7 @@
 
 use crate::state_store::StateStore;
 use provenance_core::{
-    review::{CycleEntry, CycleFact, JournalEntry},
+    review::{CycleEntry, CycleFact},
     DispositionDecision, IdeationTargetType, ProposalType, ScopeId, StableId,
 };
 
@@ -15,34 +15,6 @@ pub(super) fn request_digest(input: &impl serde::Serialize) -> anyhow::Result<St
     Ok(crate::canonical_digest::digest(
         &crate::canonical_digest::canonical_bytes(input)?,
     ))
-}
-
-/// Returns the committed receipt for this request after identity and intent
-/// checks. An absent receipt is authoritative: the caller holds the
-/// publication lock, so recovery has already run.
-pub(super) fn replay(
-    store: &StateStore,
-    scope: &ScopeId,
-    request: &StableId,
-    actor: &str,
-    digest: &str,
-) -> anyhow::Result<Option<CycleEntry>> {
-    let path = super::journal::entry_path(&store.layout, scope, request);
-    if !path.try_exists()? {
-        return Ok(None);
-    }
-    let entry = match super::journal::read_journal_entry(&store.layout, &path)? {
-        JournalEntry::Cycle(entry) => *entry,
-        _ => anyhow::bail!("request ID belongs to another review write"),
-    };
-    anyhow::ensure!(
-        entry.scope_id == *scope
-            && entry.request_id == *request
-            && entry.actor == actor
-            && entry.intent_digest == digest,
-        "review request ID was reused with different intent"
-    );
-    Ok(Some(entry))
 }
 
 pub(super) fn write_receipt(store: &StateStore, entry: &CycleEntry) -> anyhow::Result<()> {
