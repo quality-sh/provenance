@@ -233,19 +233,25 @@ fn prepare_sdk(
     };
     let rollback = CargoRollback::capture(paths)?;
     let dependency = format!("{SDK_CRATE}@={}", env!("CARGO_PKG_VERSION"));
-    let status = Command::new("cargo")
+    let output = Command::new("cargo")
         .args(["add", &dependency, "--manifest-path"])
         .arg(&package.manifest_path)
         .current_dir(workspace_root)
-        .status();
+        .output();
     let rollback = rollback.observe_after()?;
-    let cargo_result = status
+    let cargo_result = output
         .context("failed to run `cargo add` for the Provenance SDK")
-        .and_then(|status| {
+        .and_then(|output| {
+            let diagnostics = if output.stderr.is_empty() {
+                &output.stdout
+            } else {
+                &output.stderr
+            };
             anyhow::ensure!(
-                status.success(),
-                "`cargo add {dependency} --manifest-path {}` failed",
-                package.manifest_path
+                output.status.success(),
+                "`cargo add {dependency} --manifest-path {}` failed: {}",
+                package.manifest_path,
+                String::from_utf8_lossy(diagnostics).trim()
             );
             Ok(())
         });

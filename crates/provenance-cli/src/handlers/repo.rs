@@ -1,5 +1,6 @@
 use crate::atomic_file::{FileRollbackJournal, FileSnapshot};
-use crate::init_summary::{scope_phrase, skill_note, InitEnding, InitSummary};
+use crate::init_summary::{scope_phrase, InitEnding, InitSummary};
+use crate::skills::{FileStatus, InstallReport};
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{Manifest, RepoPathPrefix, Scope, ScopeId};
@@ -28,15 +29,10 @@ pub(super) fn init(path: &Utf8Path, options: InitOptions) -> anyhow::Result<()> 
 
 pub(super) struct InitPlan {
     path: Utf8PathBuf,
-    manifest_before: FileSnapshot,
-    manifest_bytes: Vec<u8>,
+    planned: PlannedFiles,
     skills: crate::skills::InitSkillPlan,
-    agents_before: FileSnapshot,
-    agents_bytes: Vec<u8>,
-    gitignore_before: FileSnapshot,
-    gitignore_bytes: Vec<u8>,
     dictionary: crate::ste_onboarding::Plan,
-    ending: InitEnding,
+    scope_ids: Vec<String>,
 }
 
 #[rule("rule_init_plans_all_project_writes")]
@@ -107,32 +103,12 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
         .iter()
         .map(|scope| scope.id.as_str().to_owned())
         .collect();
-    let skills_changes = skills.planned_changes();
-    let ending = build_summary(path, &scope_ids, &planned, &skills_changes, &dictionary)
-        .map_or_else(
-            || already_ending(&scope_ids, path, &dictionary),
-            |summary| InitEnding::applied(summary, dictionary.warning()),
-        );
-    let PlannedFiles {
-        manifest_bytes,
-        manifest_before,
-        agents_bytes,
-        agents_before,
-        gitignore_bytes,
-        gitignore_before,
-        ..
-    } = planned;
     Ok(InitPlan {
         path: path.to_path_buf(),
-        manifest_before,
-        manifest_bytes,
+        planned,
         skills,
-        agents_before,
-        agents_bytes,
-        gitignore_before,
-        gitignore_bytes,
         dictionary,
-        ending,
+        scope_ids,
     })
 }
 
@@ -200,7 +176,7 @@ fn build_summary(
     path: &Utf8Path,
     scope_ids: &[String],
     planned: &PlannedFiles,
-    skills: &crate::skills::InitSkillChanges,
+    skills: &InstallReport,
     dictionary: &crate::ste_onboarding::Plan,
 ) -> Option<InitSummary> {
     let manifest_changed =
@@ -208,7 +184,10 @@ fn build_summary(
     let agents_changed = planned.agents_before.bytes() != Some(planned.agents_bytes.as_slice());
     let gitignore_changed =
         planned.gitignore_before.bytes() != Some(planned.gitignore_bytes.as_slice());
-    let skills_unchanged = skills.canonical.is_unchanged() && skills.claude.is_unchanged();
+    let skills_unchanged = skills
+        .files()
+        .iter()
+        .all(|file| file.status == FileStatus::Unchanged);
     let dictionary_change = dictionary.reference_change();
     if !manifest_changed
         && !agents_changed
@@ -230,22 +209,17 @@ fn build_summary(
             summary.push_changed(".provenance/state/manifest.json", "updated the manifest");
         }
     }
-    for (changes, directory, noun) in [
-        (&skills.canonical, ".agents/skills", "skill"),
-        (
-            &skills.claude,
-            ".claude/skills",
-            if skills.claude_links { "link" } else { "skill" },
-        ),
-    ] {
-        if changes.is_unchanged() {
-            continue;
-        }
-        let note = skill_note(changes.installed, changes.updated, changes.removed, noun);
-        if changes.updated == 0 && changes.removed == 0 {
-            summary.push_new(directory, note);
-        } else {
-            summary.push_changed(directory, note);
+    for file in skills.files() {
+        let relative = std::path::Path::new(&file.path)
+            .strip_prefix(path.as_std_path())
+            .unwrap_or_else(|_| std::path::Path::new(&file.path));
+        let relative = relative.display().to_string();
+        match file.status {
+            FileStatus::Unchanged => {}
+            FileStatus::Installed => summary.push_new(relative, "added skill file"),
+            FileStatus::Linked => summary.push_new(relative, "added link"),
+            FileStatus::Updated => summary.push_changed(relative, "updated skill entry"),
+            FileStatus::Removed => summary.push_changed(relative, "removed legacy file"),
         }
     }
     if agents_changed {
@@ -287,51 +261,58 @@ impl InitPlan {
     #[rule("rule_init_apply_rolls_back_owned_changes")]
     pub(super) fn apply(self) -> anyhow::Result<InitEnding> {
         let layout = ProvenanceLayout::new(self.path.clone());
-        self.manifest_before
+        self.planned.manifest_before
             .recheck(layout.manifest_path().as_std_path())?;
         self.skills.recheck()?;
-        self.agents_before
+        self.planned.agents_before
             .recheck(self.path.join("AGENTS.md").as_std_path())?;
-        self.gitignore_before
+        self.planned.gitignore_before
             .recheck(self.path.join(".gitignore").as_std_path())?;
         self.dictionary.recheck(&self.path)?;
         let mut rollback = FileRollbackJournal::within(self.path.as_std_path());
-        let result = (|| -> anyhow::Result<()> {
+        let result = (|| -> anyhow::Result<InstallReport> {
             rollback.replace(
                 layout.manifest_path().as_std_path(),
-                &self.manifest_before,
-                &self.manifest_bytes,
+                &self.planned.manifest_before,
+                &self.planned.manifest_bytes,
             )?;
-            self.skills.apply_in(&mut rollback)?;
+            let skills = self.skills.apply_in(&mut rollback)?;
             let agents_path = self.path.join("AGENTS.md");
-            if self.agents_before.bytes() != Some(self.agents_bytes.as_slice()) {
+            if self.planned.agents_before.bytes() != Some(self.planned.agents_bytes.as_slice()) {
                 rollback.replace(
                     agents_path.as_std_path(),
-                    &self.agents_before,
-                    &self.agents_bytes,
+                    &self.planned.agents_before,
+                    &self.planned.agents_bytes,
                 )?;
             }
             let gitignore_path = self.path.join(".gitignore");
-            if self.gitignore_before.bytes() != Some(self.gitignore_bytes.as_slice()) {
+            if self.planned.gitignore_before.bytes() != Some(self.planned.gitignore_bytes.as_slice()) {
                 rollback.replace(
                     gitignore_path.as_std_path(),
-                    &self.gitignore_before,
-                    &self.gitignore_bytes,
+                    &self.planned.gitignore_before,
+                    &self.planned.gitignore_bytes,
                 )?;
             }
             self.dictionary.apply_in(&self.path, &mut rollback)?;
-            Ok(())
+            Ok(skills)
         })();
-        if let Err(error) = result {
-            return match rollback.rollback() {
-                Ok(()) => Err(error),
-                Err(rollback) => Err(error.context(format!(
-                    "repository initialization rollback failed: {rollback:#}"
-                ))),
-            };
-        }
+        let skills = match result {
+            Ok(skills) => skills,
+            Err(error) => {
+                return match rollback.rollback() {
+                    Ok(()) => Err(error),
+                    Err(rollback) => Err(error.context(format!(
+                        "repository initialization rollback failed: {rollback:#}"
+                    ))),
+                };
+            }
+        };
         rollback.commit()?;
-        Ok(self.ending)
+        Ok(build_summary(&self.path, &self.scope_ids, &self.planned, &skills, &self.dictionary)
+            .map_or_else(
+                || already_ending(&self.scope_ids, &self.path, &self.dictionary),
+                |summary| InitEnding::applied(summary, self.dictionary.warning()),
+            ))
     }
 }
 
