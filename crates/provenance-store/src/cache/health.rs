@@ -130,7 +130,7 @@ pub fn coverage_health(
     scope: &provenance_core::ScopeId,
 ) -> anyhow::Result<HealthView> {
     let store = StateStore::new(layout.clone());
-    store.with_repository_publication(|| coverage_health_locked(layout, scope, &store))
+    crate::layout::with_initialized_graph(layout, || coverage_health_locked(layout, scope, &store))
 }
 
 fn coverage_health_locked(

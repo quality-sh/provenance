@@ -268,11 +268,13 @@ impl InitPlan {
         self.dictionary.recheck(&self.path)?;
         let mut rollback = FileRollbackJournal::within(self.path.as_std_path());
         let result = (|| -> anyhow::Result<InstallReport> {
-            rollback.replace(
-                layout.manifest_path().as_std_path(),
-                &self.planned.manifest_before,
-                &self.planned.manifest_bytes,
-            )?;
+            if self.planned.manifest_before.bytes() != Some(self.planned.manifest_bytes.as_slice()) {
+                rollback.replace(
+                    layout.manifest_path().as_std_path(),
+                    &self.planned.manifest_before,
+                    &self.planned.manifest_bytes,
+                )?;
+            }
             let skills = self.skills.apply_in(&mut rollback)?;
             let agents_path = self.path.join("AGENTS.md");
             if self.planned.agents_before.bytes() != Some(self.planned.agents_bytes.as_slice()) {

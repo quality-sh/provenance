@@ -56,7 +56,7 @@ impl RepositoryCheckPort {
 
     fn graph_run(&self, scope: Option<&str>) -> Result<CategoryRun, String> {
         let store = Store::open(&self.repo);
-        let findings = match store.with_repository_publication(|| {
+        let result = provenance_store::layout::with_initialized_graph(store.layout(), || {
             let mut manifest = store.manifest()?;
             if let Some(scope) = scope {
                 manifest
@@ -65,9 +65,14 @@ impl RepositoryCheckPort {
                 anyhow::ensure!(!manifest.scopes.is_empty(), "scope {scope} does not exist");
             }
             validate_locked(&store, &manifest, scope.is_none())
-        }) {
+        });
+        let findings = match result {
             Ok(()) => Vec::new(),
-            Err(error) if error.downcast_ref::<std::io::Error>().is_some() => {
+            Err(error) if error.downcast_ref::<std::io::Error>().is_some()
+                || error
+                    .downcast_ref::<provenance_store::layout::GraphNotInitialized>()
+                    .is_some() =>
+            {
                 return Err(format!("{error:#}"));
             }
             Err(error) => vec![Finding::new(format!("{error:#}"))],
@@ -82,8 +87,9 @@ impl RepositoryCheckPort {
 
     fn statement_run(&self, scope: Option<&str>) -> Result<CategoryRun, String> {
         let store = Store::open(&self.repo);
-        let (diagnostics, context) = store
-            .with_repository_publication(|| {
+        let (diagnostics, context) = provenance_store::layout::with_initialized_graph(
+            store.layout(),
+            || {
                 let mut manifest = store.manifest()?;
                 if let Some(scope) = scope {
                     manifest
@@ -103,8 +109,9 @@ impl RepositoryCheckPort {
                     statement_report::changed_statements_from_head(&store, &self.repo, &manifest)
                         .map(|diagnostics| (diagnostics, None))
                 }
-            })
-            .map_err(|error| format!("{error:#}"))?;
+            },
+        )
+        .map_err(|error| format!("{error:#}"))?;
         let findings = diagnostics
             .into_iter()
             .map(|diagnostic| {
@@ -130,7 +137,9 @@ impl RepositoryCheckPort {
     #[rule("rule_porcelain_coverage_does_not_run_tests")]
     fn binding_run(&self, selected_scope: Option<&str>) -> Result<CategoryRun, String> {
         let store = Store::open(&self.repo);
-        let manifest = store.manifest().map_err(|error| format!("{error:#}"))?;
+        let manifest =
+            provenance_store::layout::with_initialized_graph(store.layout(), || store.manifest())
+                .map_err(|error| format!("{error:#}"))?;
         let policy = provenance_store::settings::Settings::load(store.layout())
             .map_err(|error| format!("{error:#}"))?
             .coverage
