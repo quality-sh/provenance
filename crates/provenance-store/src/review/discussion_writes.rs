@@ -39,7 +39,10 @@ impl StateStore {
             return Ok(receipt);
         }
         let head = match &input.action {
-            DiscussionAction::Start { .. } => None,
+            DiscussionAction::Start { .. } => {
+                self.discussion_heads(&input.scope_id)?;
+                None
+            }
             DiscussionAction::Reply {
                 discussion_id,
                 expected_version,
