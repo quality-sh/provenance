@@ -8,6 +8,7 @@
 //! This library does not open a listener. The `provenance-review` crate owns the local review
 //! listener.
 mod access;
+mod atomic_file;
 mod admission;
 #[cfg(test)]
 mod admission_tests;
@@ -16,17 +17,24 @@ pub mod coverage;
 pub mod docs;
 mod execution;
 mod failure;
+mod gitignore;
 #[cfg(feature = "test-fixture")]
 pub mod fixture;
 mod http;
+mod init_summary;
 mod invocation;
+mod legacy_cleanup;
 mod local;
 pub mod local_host;
+mod onboarding;
 pub mod porcelain;
 pub mod repository;
 mod review_page;
+pub mod reviewer;
 mod routing;
+pub mod skills;
 pub mod snapshot;
+mod ste_onboarding;
 pub use review_page::ReviewPageWrite;
 
 pub use access::{HostAccess, HttpCredential, OpenCredential};

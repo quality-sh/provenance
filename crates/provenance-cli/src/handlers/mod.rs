@@ -4,6 +4,7 @@ use crate::registry_cli::BoundContext;
 use camino::Utf8PathBuf;
 use provenance_cli::servers::{DocsServeInput, McpInput, ReviewInput, Server};
 use provenance_porcelain::export::Document;
+use provenance_porcelain::init::InitReport;
 use provenance_porcelain::registry::{
     self, CargoInitInput, DictionaryImportInput, DictionaryStatusInput, ExportInput, GraphCommand,
     ImportInput, InitInput, MaterializeInput, MergeJsonlInput, ReferenceInput, ReferenceIssueInput,
@@ -11,18 +12,14 @@ use provenance_porcelain::registry::{
     SkillsListInput, SkillsShowInput, SwarmBacktraceLandInput, ValidateInput, WorkspaceCommand,
 };
 use provenance_porcelain::Porcelain;
-use provenance_transport::porcelain::{ArtifactPort, RepositoryPort};
+use provenance_transport::porcelain::{ArtifactPort, RepositoryPort, SetupPort};
 use provenance_transport::repository::RepoContext;
 
-mod cargo_init;
 mod docs;
 #[cfg(feature = "dogfood")]
 mod dogfood;
 mod mcp;
-mod merge_jsonl;
 mod prime;
-mod repo;
-mod skills;
 
 #[cfg(feature = "dogfood")]
 #[allow(clippy::redundant_pub_crate)]
@@ -96,31 +93,8 @@ impl RepositoryInput {
 #[allow(clippy::redundant_pub_crate)]
 pub(super) async fn repository_command(input: RepositoryInput, quiet: bool) -> anyhow::Result<()> {
     match input {
-        RepositoryInput::Init(input) => {
-            let options = repo::InitOptions {
-                scope: input.scope,
-                path_prefix: input.path_prefix.map(Utf8PathBuf::from),
-                disposition_actor_ids: input.disposition_actor_id,
-                clear_disposition_actors: input.clear_disposition_actors,
-                ste_pdf: input.ste_pdf.map(Utf8PathBuf::from),
-                invocation_channel: flag_value(
-                    &input.invocation_channel,
-                    cli::InvocationChannel::from_flag,
-                )?,
-                package_manager: input
-                    .package_manager
-                    .as_deref()
-                    .map(|manager| flag_value(manager, cli::PackageManager::from_flag))
-                    .transpose()?,
-                quiet,
-            };
-            let path = Utf8PathBuf::from(input.path);
-            run_blocking(move || repo::init(&path, options)).await
-        }
-        RepositoryInput::CargoInit(input) => {
-            let ste_pdf = input.ste_pdf.map(Utf8PathBuf::from);
-            run_blocking(move || cargo_init::handle(input.package.as_deref(), ste_pdf, quiet)).await
-        }
+        RepositoryInput::Init(input) => print_init(&setup().init(input).await?, quiet),
+        RepositoryInput::CargoInit(input) => print_init(&setup().cargo_init(input).await?, quiet),
         RepositoryInput::Materialize(input, context) => {
             let json = context.json;
             let result = work(context).materialize(input).await?;
@@ -142,14 +116,7 @@ pub(super) async fn repository_command(input: RepositoryInput, quiet: bool) -> a
         }
         RepositoryInput::MergeJsonl(input) => {
             flag_value(&input.format, JsonFormat::from_flag)?;
-            let path = input.path.map(Utf8PathBuf::from);
-            merge_jsonl::handle(
-                &input.base.into(),
-                &input.ours.into(),
-                &input.theirs.into(),
-                input.output.map(Utf8PathBuf::from),
-                path.as_deref(),
-            )
+            merge_jsonl(input).await
         }
         RepositoryInput::Validate(input) => {
             flag_value(&input.format, JsonFormat::from_flag)?;
@@ -186,6 +153,49 @@ fn print<T: serde::Serialize>(
     } else {
         println!("{}", readable(result));
         Ok(())
+    }
+}
+
+/// The adapter of init, cargo init, and the skills commands, with the bundled skills.
+const fn setup() -> Porcelain<SetupPort> {
+    Porcelain::new(SetupPort::new(crate::skills::BUNDLED))
+}
+
+/// Prints the notices of an init on standard error, then its summary unless the caller
+/// asked for silence.
+fn print_init(report: &InitReport, quiet: bool) -> anyhow::Result<()> {
+    use std::io::Write;
+    for notice in &report.notices {
+        eprintln!("{notice}");
+    }
+    if !quiet {
+        std::io::stdout()
+            .lock()
+            .write_all(report.summary.as_bytes())?;
+    }
+    Ok(())
+}
+
+/// Merges one record shard and prints the outcome. A conflict fails the command, so
+/// that Git leaves the path unmerged.
+async fn merge_jsonl(input: MergeJsonlInput) -> anyhow::Result<()> {
+    match Porcelain::new(ArtifactPort).merge_jsonl(input).await {
+        Ok(report) => {
+            println!("{}", report.outcome);
+            anyhow::ensure!(
+                report.conflicts.is_empty(),
+                "merge left {} conflicting record(s): {}",
+                report.conflicts.len(),
+                report.conflicts.join(", ")
+            );
+            Ok(())
+        }
+        Err(failure) => {
+            if let Some(outcome) = failure.outcome {
+                println!("{outcome}");
+            }
+            Err(failure.error)
+        }
     }
 }
 
@@ -315,22 +325,18 @@ impl WorkspaceInput {
 /// Runs one workspace command.
 #[allow(clippy::redundant_pub_crate)]
 pub(super) async fn workspace_command(input: WorkspaceInput) -> anyhow::Result<()> {
-    use cli::workspace::SkillsCommand;
     match input {
         WorkspaceInput::SkillsList(input) => {
             flag_value(&input.format, JsonFormat::from_flag)?;
-            skills::handle(SkillsCommand::List)
+            output::print_json(&setup().skills_list(input).await?)
         }
         WorkspaceInput::SkillsShow(input) => {
-            skills::handle(SkillsCommand::Show { name: input.name })
+            print!("{}", setup().skills_show(input).await?.text);
+            Ok(())
         }
         WorkspaceInput::SkillsInstall(input) => {
             flag_value(&input.format, JsonFormat::from_flag)?;
-            skills::handle(SkillsCommand::Install {
-                global: input.global,
-                copy: input.copy,
-                force: input.force,
-            })
+            output::print_json(&setup().skills_install(input).await?)
         }
         WorkspaceInput::ReportRender(input) => {
             let to_file = input.output.is_some();
@@ -450,14 +456,15 @@ mod tests {
                         }
                         "format" => JsonFormat::from_flag(value).is_some(),
                         "artifact" => names::<provenance_porcelain::schema::Artifact>(value),
-                        "invocation_channel" => cli::InvocationChannel::from_flag(value).is_some(),
-                        "package_manager" => cli::PackageManager::from_flag(value).is_some(),
-                        #[cfg(feature = "dogfood")]
-                        "category" => cli::DogfoodCategory::from_flag(value).is_some(),
-                        #[cfg(feature = "dogfood")]
-                        "severity" => cli::DogfoodSeverity::from_flag(value).is_some(),
-                        #[cfg(feature = "dogfood")]
-                        "status" => cli::TriageFilter::from_flag(value).is_some(),
+                        "invocation_channel" => {
+                            names::<provenance_porcelain::init::InvocationChannel>(value)
+                        }
+                        "package_manager" => {
+                            names::<provenance_porcelain::init::PackageManager>(value)
+                        }
+                        "category" => names::<provenance_porcelain::dogfood::Category>(value),
+                        "severity" => names::<provenance_porcelain::dogfood::Severity>(value),
+                        "status" => names::<provenance_porcelain::dogfood::TriageStatus>(value),
                         other => panic!("{command:?} field {other} has no conversion"),
                     };
                     assert!(converts, "{command:?} field {} {value}", flag.name);

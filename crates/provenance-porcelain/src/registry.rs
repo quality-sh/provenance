@@ -13,24 +13,29 @@ mod porcelain_fields;
 mod repository;
 mod workspace;
 
+pub use crate::cargo_init::CargoInitInput;
 pub use crate::dictionary::{DictionaryImportInput, DictionaryStatusInput};
+pub use crate::dogfood::{
+    DogfoodListInput, DogfoodNoteInput, DogfoodReportInput, DogfoodSimulateInput,
+    TriageHandleInput, TriageListInput, TriageReopenInput,
+};
 pub use crate::export::ExportInput;
 pub use crate::graph_reference::{ReferenceInput, ReferenceIssueInput};
 pub use crate::import::ImportInput;
+pub use crate::init::InitInput;
 pub use crate::materialize::MaterializeInput;
+pub use crate::merge_jsonl::MergeJsonlInput;
 pub use crate::report::{ReportBuildInput, ReportRenderInput};
 pub use crate::schema::SchemaShowInput;
+pub use crate::skills::{SkillsInstallInput, SkillsListInput, SkillsShowInput};
 pub use crate::swarm_backtrace::SwarmBacktraceLandInput;
 pub use crate::validate::ValidateInput;
-pub use dogfood::{
-    DogfoodCommand, DogfoodListInput, DogfoodNoteInput, DogfoodReportInput, DogfoodSimulateInput,
-    TriageHandleInput, TriageListInput, TriageReopenInput,
-};
+pub use dogfood::DogfoodCommand;
 pub use fields::{json_format, Field, FieldValue, Fields, Relation, REPO, SCOPE};
 pub use graph::GraphCommand;
 pub use porcelain::{PrimeFormat, PrimeInput};
-pub use repository::{CargoInitInput, InitInput, MergeJsonlInput, RepositoryCommand};
-pub use workspace::{SkillsInstallInput, SkillsListInput, SkillsShowInput, WorkspaceCommand};
+pub use repository::RepositoryCommand;
+pub use workspace::WorkspaceCommand;
 
 use crate::action::Action;
 use provenance_macros::rule;

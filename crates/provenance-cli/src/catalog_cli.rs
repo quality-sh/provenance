@@ -287,7 +287,10 @@ fn warn_if_skills_missing(repo: &str, quiet: bool) -> anyhow::Result<()> {
     if quiet {
         return Ok(());
     }
-    let status = crate::skills::install_status(std::path::Path::new(repo))?;
+    let status = provenance_transport::skills::install_status(
+        crate::skills::BUNDLED,
+        std::path::Path::new(repo),
+    )?;
     if !status.installed {
         eprintln!(
             "hint: provenance skills are not installed; run `{}` from the repo root",

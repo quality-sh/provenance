@@ -39,7 +39,7 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
             None,
         )),
         on_read_only: {
-            let warning = crate::reviewer::review_page_warning(&options.repo);
+            let warning = provenance_transport::reviewer::review_page_warning(&options.repo);
             Box::new(move || eprintln!("{warning}"))
         },
     })

@@ -2,7 +2,10 @@
 //! about provenance itself.
 
 use super::{json_format, Declaration, Field, Fields};
-use serde::Deserialize;
+use crate::dogfood::{
+    DogfoodListInput, DogfoodNoteInput, DogfoodReportInput, DogfoodSimulateInput,
+    TriageHandleInput, TriageListInput, TriageReopenInput,
+};
 
 /// One dev-build-only dogfood command.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -14,65 +17,6 @@ pub enum DogfoodCommand {
     TriageReopen,
     TriageList,
     Simulate,
-}
-
-/// The `dogfood note` input.
-#[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct DogfoodNoteInput {
-    pub surface: String,
-    pub category: String,
-    pub severity: String,
-    pub detail: Option<String>,
-    pub suggestion: Option<String>,
-    pub summary: String,
-}
-
-/// The `dogfood list` input.
-#[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct DogfoodListInput {
-    pub format: String,
-}
-
-/// The `dogfood report` input.
-#[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct DogfoodReportInput {
-    pub enrich: Option<String>,
-    pub format: String,
-}
-
-/// The `dogfood triage handle` input.
-#[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct TriageHandleInput {
-    pub id: String,
-    pub reason: Option<String>,
-}
-
-/// The `dogfood triage reopen` input.
-#[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct TriageReopenInput {
-    pub id: String,
-}
-
-/// The `dogfood triage list` input.
-#[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct TriageListInput {
-    pub status: String,
-    pub format: String,
-}
-
-/// The `dogfood simulate` input.
-#[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct DogfoodSimulateInput {
-    #[serde(default)]
-    pub keep: bool,
-    pub dir: Option<String>,
 }
 
 macro_rules! schema_fn {

@@ -1,15 +1,10 @@
-mod atomic_file;
 mod browser;
 mod catalog_cli;
 mod cli;
 mod docs;
-mod gitignore;
 mod handlers;
 mod html;
-mod init_summary;
 mod invocation;
-mod legacy_cleanup;
-mod onboarding;
 mod output;
 mod read_policy;
 mod registry_cli;
@@ -17,9 +12,7 @@ mod registry_cli;
 use provenance_review::owner_file;
 mod review;
 mod review_link;
-mod reviewer;
 mod skills;
-mod ste_onboarding;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

@@ -2,7 +2,7 @@
 
 use super::{json_format, Declaration, Field, Fields};
 use crate::report::{ReportBuildInput, ReportRenderInput};
-use serde::Deserialize;
+use crate::skills::{SkillsInstallInput, SkillsListInput, SkillsShowInput};
 
 /// One workspace command.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -12,34 +12,6 @@ pub enum WorkspaceCommand {
     SkillsInstall,
     ReportRender,
     ReportBuild,
-}
-
-/// The `skills list` input.
-#[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct SkillsListInput {
-    pub format: String,
-}
-
-/// The `skills show` input.
-#[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct SkillsShowInput {
-    pub name: String,
-}
-
-/// The `skills install` input. Each bool is one switch.
-#[allow(clippy::struct_excessive_bools)]
-#[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct SkillsInstallInput {
-    #[serde(default)]
-    pub global: bool,
-    #[serde(default)]
-    pub copy: bool,
-    #[serde(default)]
-    pub force: bool,
-    pub format: String,
 }
 
 macro_rules! schema_fn {

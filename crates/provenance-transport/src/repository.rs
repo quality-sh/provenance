@@ -150,3 +150,36 @@ fn enclosing_repository(repo: &Utf8Path) -> Option<Utf8PathBuf> {
         })
         .map(Utf8Path::to_path_buf)
 }
+
+/// The record kinds of `target` in `scope`, read under the read-only marker: the read
+/// takes no publication lock and runs no recovery, so it never waits for another
+/// command and never writes to the repository. While a publication runs, the answer
+/// is best-effort.
+pub fn read_only_record_kinds(
+    repo: &Utf8Path,
+    scope: &ScopeId,
+    target: &str,
+) -> anyhow::Result<Vec<provenance_core::NodeType>> {
+    let layout = provenance_store::layout::ProvenanceLayout::new(repo);
+    provenance_store::publication::read_only_record_kinds(&layout, scope, target)
+}
+
+/// The warning that the repository has no dictionary index, when it has none.
+pub fn missing_dictionary_warning(repo: &Utf8Path) -> Option<String> {
+    let layout = provenance_store::layout::ProvenanceLayout::new(repo);
+    provenance_store::dictionary_reference::missing_index_warning(&layout)
+}
+
+/// Whether the initialized repository at `repo` has a reviewer: one disposition actor
+/// or more.
+pub fn has_reviewer(repo: &Utf8Path) -> anyhow::Result<bool> {
+    let layout = provenance_store::layout::ProvenanceLayout::new(repo);
+    provenance_store::layout::with_initialized_graph(&layout, |manifest| {
+        Ok(!manifest.disposition_actor_ids.is_empty())
+    })
+}
+
+/// The per-user cache directory of this machine.
+pub fn user_cache_directory() -> Option<std::path::PathBuf> {
+    provenance_store::user_cache::cache_directory()
+}

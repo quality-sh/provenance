@@ -1,6 +1,11 @@
+use super::SetupPort;
+use crate::skills::EmbeddedSkill;
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_macros::rule;
+use provenance_porcelain::cargo_init::{CargoInitInput, CargoInitPort};
+use provenance_porcelain::init::InitReport;
+use provenance_porcelain::WorkFuture;
 use semver::{Version, VersionReq};
 use serde::Deserialize;
 use std::collections::HashSet;
@@ -11,27 +16,42 @@ use rollback::{CargoPaths, CargoRollback};
 
 const SDK_CRATE: &str = "provenance-sdk";
 
-pub(super) fn handle(
+impl CargoInitPort for SetupPort {
+    type Failure = anyhow::Error;
+
+    fn cargo_init(&self, input: CargoInitInput) -> WorkFuture<'_, InitReport, anyhow::Error> {
+        let skills = self.skills;
+        Box::pin(async move {
+            let ste_pdf = input.ste_pdf.map(Utf8PathBuf::from);
+            tokio::task::spawn_blocking(move || {
+                cargo_init(input.package.as_deref(), ste_pdf, skills)
+            })
+            .await?
+        })
+    }
+}
+
+fn cargo_init(
     requested_package: Option<&str>,
     ste_pdf: Option<Utf8PathBuf>,
-    quiet: bool,
-) -> anyhow::Result<()> {
+    skills: &'static [EmbeddedSkill],
+) -> anyhow::Result<InitReport> {
     let metadata = load_metadata()?;
     let package = select_package(&metadata, requested_package)?;
     let path_prefix = package_path_prefix(&metadata.workspace_root, package)?;
     ensure_target_unchanged(&metadata, package, &path_prefix)?;
 
-    let init = super::repo::prepare_init(
+    let init = super::init::prepare_init(
         &metadata.workspace_root,
-        super::repo::InitOptions {
+        super::init::InitOptions {
             scope: Some("default".to_owned()),
             path_prefix: Some(path_prefix),
             disposition_actor_ids: Vec::new(),
             clear_disposition_actors: false,
             ste_pdf,
-            invocation_channel: crate::cli::InvocationChannel::Native,
+            invocation_channel: provenance_porcelain::init::InvocationChannel::Native,
             package_manager: None,
-            quiet: true,
+            skills,
         },
     )?;
     let cargo_rollback = prepare_sdk(&metadata.workspace_root, package)?;
@@ -56,7 +76,7 @@ pub(super) fn handle(
         .map(|rollback| rollback.changes(metadata.workspace_root.as_std_path()))
         .transpose()?
         .unwrap_or_default();
-    ending
+    Ok(ending
         .for_cargo(
             format!(
                 "Initialized Provenance for Cargo package '{}' in {}",
@@ -68,8 +88,7 @@ pub(super) fn handle(
             ),
             &cargo_changes,
         )
-        .print(&mut std::io::stdout().lock(), quiet)?;
-    Ok(())
+        .into_report())
 }
 
 fn ensure_target_unchanged(
@@ -78,7 +97,7 @@ fn ensure_target_unchanged(
     path_prefix: &Utf8Path,
 ) -> anyhow::Result<()> {
     let Some(existing_prefix) =
-        super::repo::scope_path_prefix(&metadata.workspace_root, "default")?
+        super::init::scope_path_prefix(&metadata.workspace_root, "default")?
     else {
         return Ok(());
     };

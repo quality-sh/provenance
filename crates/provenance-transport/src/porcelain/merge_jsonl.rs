@@ -1,11 +1,44 @@
-use crate::output;
+use super::ArtifactPort;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_macros::rule;
+use provenance_porcelain::merge_jsonl::{MergeJsonlInput, MergeJsonlPort, MergeReport};
+use provenance_porcelain::WorkFuture;
 use provenance_store::merge::{
     changed_statement_diagnostics, merge_records, read_jsonl_rows, read_jsonl_rows_for_shard,
     validate_merged_records, MergeOutcome, ShardFamily, StoredRow,
 };
 use provenance_store::statement_analysis::violation_error;
+
+/// A failed merge: the error, and the merge outcome when the merge had one to report
+/// before the error.
+#[derive(Debug)]
+pub struct MergeFailure {
+    pub outcome: Option<String>,
+    pub error: anyhow::Error,
+}
+
+impl MergeJsonlPort for ArtifactPort {
+    type Failure = MergeFailure;
+
+    fn merge_jsonl(&self, input: MergeJsonlInput) -> WorkFuture<'_, MergeReport, MergeFailure> {
+        Box::pin(async move {
+            let path = input.path.map(Utf8PathBuf::from);
+            merge(
+                &input.base.into(),
+                &input.ours.into(),
+                &input.theirs.into(),
+                input.output.map(Utf8PathBuf::from),
+                path.as_deref(),
+            )
+            .unwrap_or_else(|error| {
+                Err(MergeFailure {
+                    outcome: None,
+                    error,
+                })
+            })
+        })
+    }
+}
 
 /// Merges one JSONL shard and, when asked, writes the result.
 ///
@@ -14,16 +47,16 @@ use provenance_store::statement_analysis::violation_error;
 /// driver three temporary files and the real path separately (`%P`), so the
 /// caller must pass it; without it the merged records are written unchecked.
 ///
-/// Conflicts are reported on stdout and then fail the command, because a git
+/// The report names each conflict; the caller fails on a conflict, because a git
 /// merge driver that exits zero tells git the file merged cleanly. Exiting
 /// non-zero leaves the path unmerged for a human to resolve.
-pub(super) fn handle(
+fn merge(
     base: &Utf8PathBuf,
     ours: &Utf8PathBuf,
     theirs: &Utf8PathBuf,
     output_path: Option<Utf8PathBuf>,
     shard_path: Option<&Utf8Path>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Result<MergeReport, MergeFailure>> {
     let target_path = shard_path.or(output_path.as_deref());
     let read_rows = |path: &Utf8PathBuf| {
         target_path.map_or_else(
@@ -57,10 +90,10 @@ pub(super) fn handle(
         if let Err(error) =
             ensure_changed_statements_are_clean(shard_path, &record_values(&base_rows), records)
         {
-            if matches!(outcome, MergeOutcome::Conflicted { .. }) {
-                output::print_json(&outcome)?;
-            }
-            return Err(error);
+            let outcome = matches!(outcome, MergeOutcome::Conflicted { .. })
+                .then(|| pretty(&outcome))
+                .transpose()?;
+            return Ok(Err(MergeFailure { outcome, error }));
         }
     }
     if let Some(output_path) = output_path {
@@ -73,19 +106,22 @@ pub(super) fn handle(
             records,
         )?;
     }
-    output::print_json(&outcome)?;
-    if let MergeOutcome::Conflicted { conflicts, .. } = &outcome {
-        anyhow::bail!(
-            "merge left {} conflicting record(s): {}",
-            conflicts.len(),
-            conflicts
-                .iter()
-                .map(|conflict| conflict.record_id.clone())
-                .collect::<Vec<String>>()
-                .join(", ")
-        );
-    }
-    Ok(())
+    let conflicts = match &outcome {
+        MergeOutcome::Clean { .. } => Vec::new(),
+        MergeOutcome::Conflicted { conflicts, .. } => conflicts
+            .iter()
+            .map(|conflict| conflict.record_id.clone())
+            .collect(),
+    };
+    Ok(Ok(MergeReport {
+        outcome: pretty(&outcome)?,
+        conflicts,
+    }))
+}
+
+/// The outcome as the pretty JSON document that the merge reports.
+fn pretty<T: serde::Serialize>(outcome: &MergeOutcome<T>) -> serde_json::Result<String> {
+    serde_json::to_string_pretty(outcome)
 }
 
 #[rule("rule_ste_merge_changed_statement_gate")]
