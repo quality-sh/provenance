@@ -64,6 +64,7 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
             manifest_before
                 .bytes()
                 .ok_or_else(|| anyhow::anyhow!("manifest disappeared during init"))?,
+            layout.manifest_path().as_std_path(),
         )?
     } else {
         let scope = scope.as_deref().unwrap_or("default");
@@ -349,11 +350,15 @@ pub(super) fn scope_path_prefix(
 
 fn read_manifest(layout: &ProvenanceLayout) -> anyhow::Result<Option<Manifest>> {
     let snapshot = FileSnapshot::read(layout.manifest_path().as_std_path())?;
-    snapshot.bytes().map(parse_manifest).transpose()
+    snapshot
+        .bytes()
+        .map(|bytes| parse_manifest(bytes, layout.manifest_path().as_std_path()))
+        .transpose()
 }
 
-fn parse_manifest(bytes: &[u8]) -> anyhow::Result<Manifest> {
-    let manifest = serde_json::from_slice::<Manifest>(bytes)?;
+fn parse_manifest(bytes: &[u8], path: &std::path::Path) -> anyhow::Result<Manifest> {
+    let manifest = serde_json::from_slice::<Manifest>(bytes)
+        .with_context(|| format!("failed to parse manifest {}", path.display()))?;
     provenance_core::ensure_supported_schema_version("manifest", manifest.schema_version)?;
     Ok(manifest)
 }

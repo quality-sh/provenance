@@ -42,6 +42,7 @@ impl InstallPlan {
                 copy,
             } => (global, force, copy, true),
         };
+        let guidance = conflict_guidance(base, global, copy);
         let canonical_dir = base.join(".agents/skills");
         let claude_dir = base.join(".claude/skills");
         ensure_managed_directory(base, &canonical_dir)?;
@@ -52,6 +53,7 @@ impl InstallPlan {
                 canonical_dir.join(skill.directory).join("SKILL.md"),
                 super::render::skill_file(skill).into_bytes(),
                 force,
+                &guidance,
             )?);
         }
 
@@ -59,7 +61,14 @@ impl InstallPlan {
         let mut link_mode = if copy { "copy" } else { "symlink" };
         let mut fallback_reason = None;
         for skill in super::EMBEDDED_SKILLS {
-            let action = ClaudeAction::plan(skill, &canonical_dir, &claude_dir, force, copy)?;
+            let action = ClaudeAction::plan(
+                skill,
+                &canonical_dir,
+                &claude_dir,
+                force,
+                copy,
+                &guidance,
+            )?;
             if action.uses_copy_fallback() && !copy {
                 link_mode = "copy-fallback";
                 fallback_reason.get_or_insert_with(|| action.fallback_reason());
@@ -158,24 +167,17 @@ impl InstallPlan {
     }
 }
 
-fn conflict_guidance(path: &Path) -> String {
-    let project = path
-        .ancestors()
-        .find(|ancestor| {
-            ancestor
-                .file_name()
-                .is_some_and(|name| name == ".agents" || name == ".claude")
-        })
-        .and_then(Path::parent);
-    project.map_or_else(
-        || "run `provenance skills install --force` from the target project directory".to_owned(),
-        |project| {
-            format!(
-                "run `provenance skills install --force` with this working directory: {}",
-                project.display()
-            )
-        },
-    )
+fn conflict_guidance(base: &Path, global: bool, copy: bool) -> String {
+    let command = format!(
+        "provenance skills install{}{} --force",
+        if global { " --global" } else { "" },
+        if copy { " --copy" } else { "" },
+    );
+    if global {
+        format!("run `{command}`")
+    } else {
+        format!("run `{command}` with this working directory: {}", base.display())
+    }
 }
 
 pub(super) struct FileAction {
@@ -188,7 +190,12 @@ pub(super) struct FileAction {
 
 impl FileAction {
     #[rule("rule_init_upgrades_hash_owned_skills")]
-    pub(super) fn managed(path: PathBuf, contents: Vec<u8>, force: bool) -> anyhow::Result<Self> {
+    pub(super) fn managed(
+        path: PathBuf,
+        contents: Vec<u8>,
+        force: bool,
+        guidance: &str,
+    ) -> anyhow::Result<Self> {
         let entry = TargetEntry::read(&path)?;
         let before = match entry {
             TargetEntry::Vacant => FileSnapshot::Missing,
@@ -199,7 +206,7 @@ impl FileAction {
                     anyhow::bail!(
                         "{} exists and differs; {}",
                         path.display(),
-                        conflict_guidance(&path)
+                        guidance
                     );
                 }
                 anyhow::bail!("{} is not a regular file", path.display());
@@ -218,7 +225,7 @@ impl FileAction {
             anyhow::bail!(
                 "{} exists and differs; {}",
                 path.display(),
-                conflict_guidance(&path)
+                guidance
             );
         }
         let status = if unchanged {
