@@ -4,7 +4,6 @@ use std::{collections::BTreeMap, sync::OnceLock};
 pub(super) struct Resolved {
     pub address: &'static Address,
     pub path: String,
-    pub flags: Vec<String>,
     pub query: Option<&'static str>,
 }
 
@@ -21,12 +20,7 @@ pub(super) struct Address {
     pub(super) query: Option<&'static str>,
 }
 
-pub(super) fn resolve(collection: &str, words: &[String]) -> anyhow::Result<Resolved> {
-    let address_len = words
-        .iter()
-        .position(|word| word.starts_with("--"))
-        .unwrap_or(words.len());
-    let supplied = &words[..address_len];
+pub(super) fn resolve(collection: &str, supplied: &[String]) -> anyhow::Result<Resolved> {
     let candidates = registrations(collection)
         .into_iter()
         .filter(|address| address.words.len() == supplied.len())
@@ -41,9 +35,22 @@ pub(super) fn resolve(collection: &str, words: &[String]) -> anyhow::Result<Reso
     Ok(Resolved {
         address,
         path: render_path(address.definition.path, &values)?,
-        flags: words[address_len..].to_vec(),
         query: address.query,
     })
+}
+
+pub(super) fn help(collection: &str) -> String {
+    registrations(collection)
+        .into_iter()
+        .map(|address| {
+            let words = address.words.iter().map(|segment| match segment {
+                Segment::Literal(word) => (*word).to_owned(),
+                Segment::Parameter(name) => format!("<{name}>"),
+            }).collect::<Vec<_>>().join(" ");
+            format!("  {collection} {words}")
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn addresses() -> &'static [Address] {
