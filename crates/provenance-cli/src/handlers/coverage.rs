@@ -31,6 +31,26 @@ fn coverage_scan_against(
     baseline: Option<&camino::Utf8Path>,
 ) -> anyhow::Result<provenance_core::coverage::CoverageScan> {
     let scanned = provenance_scanner::scan_path_with_content(path)?;
+    coverage_scan_from_scanned_against(repo, path, scope, validate_rules, &scanned, baseline)
+}
+
+pub(super) fn coverage_scan_from_scanned(
+    repo: &camino::Utf8Path,
+    path: &Utf8PathBuf,
+    scope: &str,
+    scanned: &[provenance_scanner::FileScanWithContent],
+) -> anyhow::Result<provenance_core::coverage::CoverageScan> {
+    coverage_scan_from_scanned_against(repo, path, scope, true, scanned, None)
+}
+
+fn coverage_scan_from_scanned_against(
+    repo: &camino::Utf8Path,
+    path: &Utf8PathBuf,
+    scope: &str,
+    validate_rules: bool,
+    scanned: &[provenance_scanner::FileScanWithContent],
+    baseline: Option<&camino::Utf8Path>,
+) -> anyhow::Result<provenance_core::coverage::CoverageScan> {
     let scans = scanned
         .iter()
         .map(|file| file.scan.clone())
