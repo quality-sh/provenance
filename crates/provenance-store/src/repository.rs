@@ -11,7 +11,7 @@ use crate::state_store::StateStore;
 use crate::write_error::{SourceFailure, WriteError, WriteFailure};
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::protocol::failure::{InvalidInputReason, OperationFailure};
-use provenance_core::{Manifest, ScopeId};
+use provenance_core::{Manifest, Scope, ScopeId, Stamp};
 use provenance_macros::{rule, verifies};
 use std::path::Path;
 use std::sync::Arc;
@@ -121,7 +121,7 @@ impl Repository {
         let root = canonical_root(root.as_ref())?;
         let layout = ProvenanceLayout::new(root.clone());
         let manifest = with_initialized_graph(&layout, Ok).map_err(gate_failure)?;
-        let scope = declared_scope(&manifest, scope)?;
+        let scope = declared_scope(&manifest, scope)?.id.clone();
         let settings = Settings::load(&layout)?;
         Ok(Self {
             inner: Arc::new(Inner {
@@ -211,7 +211,39 @@ impl Repository {
     /// A store over the live state of this repository.
     #[rule("rule_operation_acts_on_opened_repository")]
     pub fn store(&self) -> StateStore {
-        StateStore::new(self.inner.layout.clone())
+        StateStore::live(self.inner.identity.clone(), self.inner.layout.clone())
+    }
+
+    /// Runs `prepare` on a staged copy of the live state, then publishes the
+    /// copy, or drops it on a dry run or an error.
+    ///
+    /// The body borrows a store that keeps this repository's identity and
+    /// reads and writes the staged state root. The store takes no lock,
+    /// because the live publication section holds it. While the body runs,
+    /// live access to this repository on the same thread refuses with
+    /// [`LiveAccessDuringStage`](crate::publication::LiveAccessDuringStage).
+    /// Records written in the body carry `stamp`, or the working tree's
+    /// commit when it is `None`.
+    #[rule("rule_staged_write_keeps_live_repository_identity")]
+    pub fn stage<R>(
+        &self,
+        dry_run: bool,
+        stamp: Option<Stamp>,
+        prepare: impl FnOnce(&StateStore) -> anyhow::Result<R>,
+    ) -> anyhow::Result<R> {
+        let live = &self.inner.layout;
+        let record_stamp = stamp.map_or(
+            crate::state_store::RecordStamp::ResolveFromRepository,
+            crate::state_store::RecordStamp::Fixed,
+        );
+        crate::publication::with_staged_state(live, dry_run, |staged| {
+            let store = StateStore::staged_view(
+                Some(self.inner.identity.clone()),
+                staged.clone(),
+                record_stamp,
+            );
+            crate::publication::with_stage_body(live, || prepare(&store))
+        })
     }
 }
 
@@ -219,12 +251,11 @@ impl Repository {
 /// not declare is refused with the declared scopes, so a mistyped scope never
 /// reads as an empty one.
 #[rule("rule_graph_report_refuses_undeclared_scope")]
-fn declared_scope(manifest: &Manifest, selected: &str) -> Result<ScopeId, OpenFailure> {
+pub fn declared_scope<'a>(manifest: &'a Manifest, selected: &str) -> Result<&'a Scope, OpenFailure> {
     manifest
         .scopes
         .iter()
         .find(|scope| scope.id.as_str() == selected)
-        .map(|scope| scope.id.clone())
         .ok_or_else(|| OpenFailure::UnknownScope {
             selected: selected.to_owned(),
             declared: manifest
@@ -255,3 +286,6 @@ fn gate_failure(error: anyhow::Error) -> OpenFailure {
         OpenFailure::Io(error)
     }
 }
+
+#[cfg(test)]
+mod stage_recovery_tests;
