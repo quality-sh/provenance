@@ -1,5 +1,5 @@
 use crate::{catalog_cli, cli::Cli, handlers};
-use clap::{CommandFactory as _, FromArgMatches as _, Parser as _};
+use clap::{CommandFactory as _, FromArgMatches as _};
 use provenance_cli::porcelain;
 use provenance_cli::repo_context::RepoContext;
 use provenance_core::NodeType;
@@ -13,9 +13,10 @@ mod discussion;
 pub mod grammar;
 mod help_kind;
 use grammar::{
-    ApiArgs, ApiCommand, Delivery, DiscussionsArgs, DiscussionsCommand, DiscussionsRoute, RootWord,
-    SearchArgs, SearchCommand, TargetArgs, TargetVerb,
+    ApiArgs, Delivery, DiscussionsArgs, DiscussionsCommand, DiscussionsRoute, SearchArgs,
+    TargetArgs, TargetVerb,
 };
+use provenance_porcelain::registry::{self, CheckCliInput, Interface, PrimeInput};
 
 #[cfg(test)]
 mod tests;
@@ -23,6 +24,8 @@ mod tests;
 /// One command selected from a declared grammar.
 pub enum Invocation {
     Builtin(Cli),
+    Check(CheckCliInput),
+    Prime(PrimeInput),
     Api(ApiArgs),
     Get(GetInvocation),
     Search(SearchArgs),
@@ -57,24 +60,25 @@ impl Invocation {
     #[rule("rule_porcelain_get_is_default_action")]
     pub fn parse(arguments: Vec<String>) -> anyhow::Result<Self> {
         let Some(word) = grammar::command_word(&arguments) else {
-            return Ok(Self::Builtin(
-                Cli::try_parse_from(arguments).unwrap_or_else(|error| error.exit()),
-            ));
+            return Ok(Self::parse_root(arguments));
         };
-        match RootWord::parse(word) {
-            Some(RootWord::Search) => {
-                let args =
-                    SearchCommand::try_parse_from(arguments).unwrap_or_else(|error| error.exit());
-                debug_assert_eq!(args.command, "search");
-                return Ok(Self::Search(args.args));
+        match registry::Command::find(Interface::Cli, &[word]) {
+            Some(registry::Command::Search) => {
+                let matches = crate::registry_cli::root_word_command(registry::Command::Search)
+                    .try_get_matches_from(arguments)
+                    .unwrap_or_else(|error| error.exit());
+                return Ok(Self::Search(SearchArgs::from_matches(&matches)));
             }
-            Some(RootWord::Api) => {
-                let command =
-                    ApiCommand::try_parse_from(arguments).unwrap_or_else(|error| error.exit());
-                debug_assert_eq!(command.command, "api");
-                return Ok(Self::Api(command.args));
+            Some(registry::Command::Api) => {
+                let matches = crate::registry_cli::root_word_command(registry::Command::Api)
+                    .try_get_matches_from(arguments)
+                    .unwrap_or_else(|error| error.exit());
+                return Ok(Self::Api(ApiArgs::from_matches(&matches)));
             }
-            None => {}
+            Some(registry::Command::Check | registry::Command::Prime) => {
+                return Ok(Self::parse_root(arguments));
+            }
+            Some(registry::Command::Get | registry::Command::Action(_)) | None => {}
         }
         if word == "discussions" {
             let target_command = catalog_cli::target_command()?;
@@ -94,15 +98,34 @@ impl Invocation {
             .get_subcommands()
             .any(|command| command.get_name() == word)
         {
-            return Ok(Self::Builtin(
-                Cli::try_parse_from(arguments).unwrap_or_else(|error| error.exit()),
-            ));
+            return Ok(Self::parse_root(arguments));
         }
         if is_collection(word) {
             refuse_collection_word(word);
         }
 
         Self::parse_target(arguments)
+    }
+
+    /// Parses a root command: a built-in command, or a registry command that the root
+    /// parser shows with the built-in commands.
+    fn parse_root(arguments: Vec<String>) -> Self {
+        let matches = root_command()
+            .try_get_matches_from(arguments)
+            .unwrap_or_else(|error| error.exit());
+        match matches.subcommand() {
+            Some(("check", selected)) => Self::Check(
+                crate::registry_cli::input(&registry::Command::Check.declaration(), selected)
+                    .unwrap_or_else(|error| catalog_cli::usage_error(error)),
+            ),
+            Some(("prime", selected)) => Self::Prime(
+                crate::registry_cli::input(&registry::Command::Prime.declaration(), selected)
+                    .unwrap_or_else(|error| catalog_cli::usage_error(error)),
+            ),
+            _ => {
+                Self::Builtin(Cli::from_arg_matches(&matches).unwrap_or_else(|error| error.exit()))
+            }
+        }
     }
 
     /// Parses the target before its action, defaults to get, and handles help before validation.
@@ -197,7 +220,7 @@ impl Invocation {
     /// `{error,meta}` object instead of text.
     pub fn json_output(&self) -> bool {
         let format = match self {
-            Self::Builtin(_) => None,
+            Self::Builtin(_) | Self::Check(_) | Self::Prime(_) => None,
             Self::Api(args) => args.common.format(),
             Self::Get(invocation) => invocation.format,
             Self::Search(args) => args.common.format(),
@@ -211,6 +234,8 @@ impl Invocation {
     pub async fn dispatch(self) -> anyhow::Result<()> {
         match self {
             Self::Builtin(cli) => handlers::dispatch(cli.command, cli.quiet).await,
+            Self::Check(input) => handlers::check_command(input).await,
+            Self::Prime(input) => handlers::prime_command(&input),
             Self::Api(args) => api::dispatch(args).await,
             Self::Get(invocation) => {
                 if invocation.delivery == Delivery::Follow {
@@ -317,6 +342,19 @@ impl TargetInvocation {
         )
         .await
     }
+}
+
+/// The root parser: the built-in commands and the word commands that it lists.
+pub fn root_command() -> clap::Command {
+    [
+        registry::Command::Search,
+        registry::Command::Check,
+        registry::Command::Prime,
+    ]
+    .into_iter()
+    .fold(Cli::command(), |root, command| {
+        root.subcommand(crate::registry_cli::subcommand(command))
+    })
 }
 
 /// Whether a word names an API collection, the first segment of a catalog path.

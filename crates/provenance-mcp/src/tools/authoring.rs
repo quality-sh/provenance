@@ -3,20 +3,15 @@
 use provenance_contract::Definition;
 use provenance_core::NodeType;
 use provenance_macros::rule;
-use provenance_porcelain::action::{description, render_readable};
+use provenance_porcelain::action::render_readable;
+use provenance_porcelain::registry::Command;
 use provenance_transport::porcelain::{target_call, Action, ActionError};
 use provenance_transport::StatementHost;
 use rmcp::model::{CallToolResult, ContentBlock, Tool};
 use serde_json::{json, Map, Value};
 
-pub fn tools(host: &StatementHost) -> Vec<Tool> {
-    Action::RECORD
-        .into_iter()
-        .filter_map(|action| tool(host, action))
-        .collect()
-}
-
-fn tool(host: &StatementHost, action: Action) -> Option<Tool> {
+/// The tool of one record action, when the host can run it on some record kind.
+pub fn tool(host: &StatementHost, action: Action) -> Option<Tool> {
     let definitions = host.porcelain().executable_target_definitions(action);
     if definitions.is_empty() {
         return None;
@@ -29,9 +24,10 @@ fn tool(host: &StatementHost, action: Action) -> Option<Tool> {
             .collect(),
         "anyOf",
     );
+    let declaration = Command::Action(action).declaration();
     Some(crate::surface::tool(
-        action.as_str(),
-        description(action),
+        declaration.name,
+        declaration.description,
         input,
         output,
         crate::surface::SchemaDeclaration::Keep,

@@ -22,12 +22,41 @@ mod skills;
 mod swarm_backtrace;
 mod validate;
 
+/// Runs the check command with the flags that its declaration names.
+#[allow(clippy::redundant_pub_crate)]
+pub(super) async fn check_command(
+    input: provenance_porcelain::registry::CheckCliInput,
+) -> anyhow::Result<()> {
+    let selectors = check::Selectors {
+        graph: input.graph,
+        statements: input.statements,
+        bindings: input.bindings,
+        statement: input.statement,
+    };
+    let context = provenance_cli::repo_context::RepoContext::new(input.repo.as_str(), "default");
+    check::check(
+        context,
+        input.strict,
+        input.base,
+        input.format.is_some(),
+        selectors,
+    )
+    .await
+}
+
+/// Prints the shared domain guidance.
+#[allow(clippy::redundant_pub_crate)]
+pub(super) fn prime_command(
+    input: &provenance_porcelain::registry::PrimeInput,
+) -> anyhow::Result<()> {
+    prime::handle(input.format)
+}
+
 /// Runs one built-in command. The commands that wait on async work or on a
 /// blocking thread run here. Every other command runs on the calling thread.
 #[allow(clippy::redundant_pub_crate)]
 pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()> {
     match command {
-        Command::Search(args) => args.dispatch().await,
         Command::CargoInit { package, ste_pdf } => {
             run_blocking(move || cargo_init::handle(package.as_deref(), ste_pdf, quiet)).await
         }
@@ -52,25 +81,6 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
                 quiet,
             };
             run_blocking(move || repo::init(&path, options)).await
-        }
-        Command::Check {
-            repo,
-            strict,
-            base,
-            statement,
-            graph,
-            statements,
-            bindings,
-            format,
-        } => {
-            let selectors = check::Selectors {
-                graph,
-                statements,
-                bindings,
-                statement,
-            };
-            let context = provenance_cli::repo_context::RepoContext::new(repo, "default");
-            check::check(context, strict, base, format.is_some(), selectors).await
         }
         Command::Docs { command } => docs::handle(command).await,
         Command::Review(options) => crate::review::run(options).await,
@@ -112,7 +122,6 @@ fn dispatch_on_thread(command: Command, quiet: bool) -> anyhow::Result<()> {
             output::print_json(&trace)
         }
         Command::Gaps { context, .. } => output::print_json(&cache::find_gaps(&context.open()?)?),
-        Command::Prime { format, .. } => prime::handle(format),
         Command::Health { context, .. } => {
             output::print_json(&cache::coverage_health(&context.open()?)?)
         }
@@ -159,17 +168,14 @@ fn dispatch_remaining_on_thread(command: Command, quiet: bool) -> anyhow::Result
         #[cfg(feature = "dogfood")]
         Command::Dogfood { command } => dogfood::handle(command, quiet),
         // These commands run in `dispatch` or `dispatch_on_thread`.
-        Command::Search(_)
-        | Command::CargoInit { .. }
+        Command::CargoInit { .. }
         | Command::Init { .. }
-        | Command::Check { .. }
         | Command::Docs { .. }
         | Command::Review(_)
         | Command::Materialize { .. }
         | Command::Graph { .. }
         | Command::Traceability { .. }
         | Command::Gaps { .. }
-        | Command::Prime { .. }
         | Command::Health { .. }
         | Command::Orphans { .. }
         | Command::Export { .. }
