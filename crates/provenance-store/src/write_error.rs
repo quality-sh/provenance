@@ -26,6 +26,9 @@ pub enum WriteFailure {
         current_submission: Option<provenance_core::StableId>,
         current_revision: provenance_core::StableId,
     },
+    UnsupportedReviewFeedback {
+        record_kind: provenance_core::NodeType,
+    },
     RecordOwnershipConflict,
     OwnershipConflict {
         conflicts: Vec<ReconciledResource>,

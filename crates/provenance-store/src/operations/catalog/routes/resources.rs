@@ -113,7 +113,8 @@ macro_rules! family_route_definitions {
     (
         $out:ident,
         $record:ty,
-        projection($list:ident, $list_wire:literal, $page:ident, $page_wire:literal, none),
+        projection($list:ident, $list_wire:literal, $page:ident, $page_wire:literal,
+            $member:ident, $member_wire:literal),
         requirements
     ) => {
         requirements(&mut $out);
@@ -301,6 +302,61 @@ macro_rules! family_route {
     }};
 }
 
+macro_rules! review_family_route_definitions {
+    (
+        $out:ident, $record:ty,
+        projection($list:ident, $list_wire:literal, $page:ident, $page_wire:literal,
+            $member:ident, $member_wire:literal),
+        requirements
+    ) => {
+        requirements(&mut $out);
+    };
+    (
+        $out:ident, $record:ty,
+        projection($list:ident, $list_wire:literal, $page:ident, $page_wire:literal,
+            $member:ident, $member_wire:literal),
+        writable {
+            mode: $mode:ident,
+            plural: $plural:literal,
+            singular: $singular:literal,
+            singular_id: $singular_id:literal,
+            plural_id: $plural_id:literal,
+            create: $create:ident,
+            update: $update:ident,
+            create_defaults: $create_defaults:ident,
+            create_aliases: $create_aliases:ident,
+            update_defaults: $update_defaults:ident,
+            update_aliases: $update_aliases:ident,
+            nullable: $nullable:expr,
+            target: $target:expr
+        }
+    ) => {
+        review_resource!(
+            $out, $mode, $record, pages::$page, members::$member,
+            $plural, $singular, $singular_id, $plural_id,
+            super::super::$create, super::super::$update,
+            $create_defaults, $create_aliases, $update_defaults, $update_aliases,
+            $nullable, $target
+        );
+    };
+}
+
+macro_rules! register_family_route {
+    ($out:ident, $variant:ident, $record:ty, [$($catalog:tt)*], [$($route:tt)*],
+        [$review:ident]) => {{
+        let mut definitions = Vec::new();
+        review_family_route_definitions!(definitions, $record, $($catalog)*, $($route)*);
+        let order = crate::cache::ProjectionFamily::$variant
+            .meta()
+            .route_order
+            .expect("registered resource families have a route order");
+        $out.push((order, definitions));
+    }};
+    ($out:ident, $variant:ident, $record:ty, [$($catalog:tt)*], [$($route:tt)*], []) => {
+        family_route!($out, $variant, $record, [$($catalog)*], [$($route)*]);
+    };
+}
+
 macro_rules! register_family_routes {
     (
         $out:ident;
@@ -330,8 +386,8 @@ macro_rules! register_family_routes {
             }
         )*
     ) => {
-        $($(family_route!(
-            $out, $variant, $record, [$($catalog)*], [$($route)*]
+        $($(register_family_route!(
+            $out, $variant, $record, [$($catalog)*], [$($route)*], [$($review)?]
         );)*)*
     };
 }

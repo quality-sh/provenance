@@ -19,6 +19,12 @@ pub struct PathBinding {
 }
 
 #[derive(Clone)]
+pub struct FixedBinding {
+    pub field: &'static str,
+    pub value: &'static str,
+}
+
+#[derive(Clone)]
 pub struct ParentBinding {
     pub kind: &'static str,
     pub id_parameter: &'static str,
@@ -99,6 +105,7 @@ pub struct RequestBinding {
     pub raw: Option<Value>,
     pub adapter: RequestAdapter,
     pub path: Vec<PathBinding>,
+    pub fixed: Vec<FixedBinding>,
     pub parent: Option<ParentBinding>,
     pub selector: Option<SelectorBinding>,
     pub scope_field: Option<&'static str>,
@@ -114,6 +121,7 @@ impl Default for RequestBinding {
             raw: None,
             adapter: super::routes::request::DIRECT,
             path: Vec::new(),
+            fixed: Vec::new(),
             parent: None,
             selector: None,
             scope_field: None,
