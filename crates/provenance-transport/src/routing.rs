@@ -98,15 +98,9 @@ pub async fn invoke(
         identity.as_ref().map(|(_, scope)| scope.as_str()),
     )?;
     let call = host.bound_call(bound.handler.context, &bound.data)?;
-    let mut value = host
+    let value = host
         .invoke_backing(matched.definition.name, bound.handler.operation, call)
         .await?;
-    response::select(
-        &mut value,
-        matched.definition,
-        &bound.response,
-        &matched.path,
-    )?;
     let value = response::success(value, matched.definition, &bound.response)?;
     let etag = if query.contains_key("query") {
         None

@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::operations::catalog as operation;
-use crate::operations::catalog::resource_lists as lists;
+use crate::operations::catalog::{resource_members as members, resource_pages as pages};
 
 pub(super) fn register(out: &mut Vec<Definition>) {
     history_and_evidence(out);
@@ -119,7 +119,7 @@ fn proposal_facts(out: &mut Vec<Definition>) {
         .path_field("id", "proposal_id")
         .scope("scope_id"),
     );
-    proposal_fact::<lists::ListAssertionsV2>(
+    proposal_fact::<pages::PageProposalAssertionsV2, members::GetProposalAssertionV2>(
         out,
         "assertions",
         "assertion",
@@ -127,7 +127,7 @@ fn proposal_facts(out: &mut Vec<Definition>) {
         "listProposalAssertions",
         "getProposalAssertion",
     );
-    proposal_fact::<lists::ListDispositionsV2>(
+    proposal_fact::<pages::PageProposalDispositionsV2, members::GetProposalDispositionV2>(
         out,
         "dispositions",
         "disposition",
@@ -137,7 +137,7 @@ fn proposal_facts(out: &mut Vec<Definition>) {
     );
 }
 
-fn proposal_fact<O: Operation>(
+fn proposal_fact<L: Operation, G: Operation>(
     out: &mut Vec<Definition>,
     plural: &'static str,
     singular: &'static str,
@@ -148,23 +148,21 @@ fn proposal_fact<O: Operation>(
     let list_path = leaked(format!("/proposals/{{id}}/{plural}"));
     let member_path = leaked(format!("{list_path}/{{fact_id}}"));
     out.push(
-        backed::<O>(
+        backed::<L>(
             leaked(format!("list-proposal-{plural}")),
             list_id,
             HttpMethod::Get,
             list_path,
             "List immutable facts owned by one Proposal.",
             ResponseKind::Items,
-            vec![schema::path("id")],
+            vec![schema::path("id"), limit(), cursor()],
         )
-        .adapter(request::NULL)
-        .response_selection(ResponseSelection::ArrayItems {
-            owner_parameter: "id",
-            owner_field: "proposal_id",
-        }),
+        .path_field("id", "proposal_id")
+        .items_field("items")
+        .pagination(),
     );
     out.push(
-        backed::<O>(
+        backed::<G>(
             leaked(format!("get-proposal-{singular}")),
             get_id,
             HttpMethod::Get,
@@ -173,11 +171,8 @@ fn proposal_fact<O: Operation>(
             ResponseKind::Resource,
             vec![schema::path("id"), schema::path("fact_id")],
         )
-        .adapter(request::NULL)
-        .response_selection(ResponseSelection::ArrayMember {
-            id_parameter: "fact_id",
-            owner_parameter: Some(("id", "proposal_id")),
-        }),
+        .path_field("id", "proposal_id")
+        .result(),
     );
 }
 

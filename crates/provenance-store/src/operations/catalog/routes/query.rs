@@ -12,13 +12,15 @@ pub(super) fn parameters(
     properties
         .iter()
         .filter(|(name, _)| !is_bound(name, route, query))
-        .filter_map(|(name, field)| {
-            scalar_schema(schema, field).map(|schema| Parameter {
+        .map(|(name, field)| {
+            let parameter_schema = parameter_schema(schema, field)
+                .unwrap_or_else(|| panic!("unsupported unbound query parameter `{name}`: {field}"));
+            Parameter {
                 name: Box::leak(name.clone().into_boxed_str()),
                 location: "query",
                 required: false,
-                schema,
-            })
+                schema: parameter_schema,
+            }
         })
         .collect()
 }
@@ -30,7 +32,7 @@ fn is_bound(name: &str, route: &RequestBinding, query: &QueryRequestBinding) -> 
         || query.node_type.is_some() && matches!(name, "node_type" | "node_types")
 }
 
-fn scalar_schema(root: &Value, field: &Value) -> Option<Value> {
+fn parameter_schema(root: &Value, field: &Value) -> Option<Value> {
     let field = resolve(root, field)?;
     if let Some(types) = field.get("type").and_then(Value::as_array) {
         let types = types
@@ -46,7 +48,7 @@ fn scalar_schema(root: &Value, field: &Value) -> Option<Value> {
         if field.get("default").is_some_and(Value::is_null) {
             field.as_object_mut().unwrap().remove("default");
         }
-        return is_scalar(&field).then_some(field);
+        return supported_schema(root, &field);
     }
     if let Some(variants) = field
         .get("anyOf")
@@ -58,10 +60,26 @@ fn scalar_schema(root: &Value, field: &Value) -> Option<Value> {
             .filter(|variant| variant.get("type").and_then(Value::as_str) != Some("null"))
             .collect::<Vec<_>>();
         return (variants.len() == 1)
-            .then(|| scalar_schema(root, variants[0]))
+            .then(|| parameter_schema(root, variants[0]))
             .flatten();
     }
-    is_scalar(field).then(|| field.clone())
+    supported_schema(root, field)
+}
+
+fn supported_schema(root: &Value, field: &Value) -> Option<Value> {
+    if is_scalar(field) {
+        return Some(field.clone());
+    }
+    if field.get("type").and_then(Value::as_str) != Some("array") {
+        return None;
+    }
+    let mut array = field.clone();
+    let items = parameter_schema(root, field.get("items")?)?;
+    if !is_scalar(&items) {
+        return None;
+    }
+    array["items"] = items;
+    Some(array)
 }
 
 fn resolve<'a>(root: &'a Value, field: &'a Value) -> Option<&'a Value> {
@@ -77,4 +95,25 @@ fn is_scalar(schema: &Value) -> bool {
         schema.get("type").and_then(Value::as_str),
         Some("string" | "boolean" | "integer" | "number")
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::operations::catalog::{QueryRequestBinding, RequestBinding};
+    use serde_json::json;
+
+    #[test]
+    #[should_panic(expected = "unsupported unbound query parameter")]
+    fn unsupported_query_fields_refuse_catalog_construction() {
+        let schema = json!({
+            "type": "object",
+            "properties": {"unsupported": {"type": "object"}}
+        });
+        parameters(
+            &schema,
+            &RequestBinding::default(),
+            &QueryRequestBinding::default(),
+        );
+    }
 }

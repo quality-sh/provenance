@@ -42,6 +42,21 @@ fn operation_ids_and_mutation_flags_come_from_routes() {
 }
 
 #[test]
+fn array_query_parameters_use_one_comma_separated_wire_form() {
+    let (openapi, _) = provenance_codegen::documents();
+    let parameters = operation(&openapi, "/sources/{id}", "get")["parameters"]
+        .as_array()
+        .unwrap();
+    let relations = parameters
+        .iter()
+        .find(|parameter| parameter["name"] == "relations")
+        .unwrap();
+    assert_eq!(relations["schema"]["type"], "array");
+    assert_eq!(relations["style"], "form");
+    assert_eq!(relations["explode"], false);
+}
+
+#[test]
 fn requests_bind_connection_and_path_identity_outside_data() {
     let (openapi, _) = provenance_codegen::documents();
     let request = operation(&openapi, "/sources/{id}", "patch")["requestBody"]["content"]

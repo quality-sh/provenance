@@ -131,10 +131,7 @@ fn mcp_call(
             return Err(invalid());
         }
         let Some(value) = value else { continue };
-        let text = match value {
-            Value::String(value) => value,
-            other => other.to_string(),
-        };
+        let text = catalog::serialize_parameter_value(&parameter, &value).map_err(|_| invalid())?;
         match parameter.location {
             "path" => {
                 path.insert(parameter.name.to_owned(), text);

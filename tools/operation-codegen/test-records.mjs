@@ -39,6 +39,17 @@ export async function checkRecords({ HttpClient, OperationError }, fixture) {
   });
   assert.equal(trace.meta.has_more, true);
   assert.equal(trace.data.nodes.length, 1);
+
+  for (const query of ['neighbors', 'trace']) {
+    const filtered = await client.getRequirement({
+      id: fixture.nodes.requirement, query, relations: ['domain_id'], limit: 20,
+    });
+    const items = query === 'neighbors' ? filtered.data.neighbors : filtered.data.nodes;
+    assert.ok(items.length > 0);
+    assert.ok(query === 'neighbors'
+      ? items.every(item => item.relation === 'domain_id')
+      : items.every(item => item.node.id === fixture.nodes.domain));
+  }
   await checkCursorReads(client);
 
   await assert.rejects(client.listRules({ query: 'search', text: 'shared', limit: 0 }), error => {
