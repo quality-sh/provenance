@@ -131,7 +131,8 @@ pub(super) fn register(out: &mut Vec<Definition>) {
             ("commit_pin", "commit_pin"),
             ("effective_date", "effective_date"),
             ("review_date", "review_date")
-        ]
+        ],
+        Some(NodeType::Source)
     );
     requirements(out);
     resource!(
@@ -158,7 +159,8 @@ pub(super) fn register(out: &mut Vec<Definition>) {
             ("approved_by", "approved_by"),
             ("approved_at", "approved_at"),
             ("review_on", "review_on")
-        ]
+        ],
+        Some(NodeType::Resolution)
     );
     resource!(
         out,
@@ -181,7 +183,8 @@ pub(super) fn register(out: &mut Vec<Definition>) {
             ("description", "description"),
             ("source_document", "source_document"),
             ("source_section", "source_section")
-        ]
+        ],
+        Some(NodeType::Rule)
     );
     resource!(
         out,
@@ -199,7 +202,8 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         NO_ALIASES,
         NONE,
         NO_ALIASES,
-        &[("description", "description"), ("color", "color")]
+        &[("description", "description"), ("color", "color")],
+        Some(NodeType::Domain)
     );
     resource!(
         out,
@@ -217,7 +221,8 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         NO_ALIASES,
         NONE,
         NO_ALIASES,
-        &[("source_ref", "source_ref")]
+        &[("source_ref", "source_ref")],
+        Some(NodeType::Boundary)
     );
     resource!(
         out,
@@ -235,7 +240,8 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         NO_ALIASES,
         NONE,
         NO_ALIASES,
-        &[]
+        &[],
+        Some(NodeType::Topic)
     );
     resource!(
         out,
@@ -256,7 +262,8 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         &[
             ("resolution_id", "resolution_id"),
             ("contradicts", "contradicts")
-        ]
+        ],
+        Some(NodeType::Question)
     );
     resource!(
         out,
@@ -274,7 +281,8 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         NO_ALIASES,
         NONE,
         NO_ALIASES,
-        &[]
+        &[],
+        None
     );
     resource!(
         out,
@@ -292,7 +300,8 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         NO_ALIASES,
         NONE,
         NO_ALIASES,
-        &[]
+        &[],
+        None
     );
     resource!(
         out,
@@ -379,6 +388,7 @@ fn requirements(out: &mut Vec<Definition>) {
         )
         .header("Idempotency-Key", "request_id", false)
         .cli_defaults(CREATE_REQUIREMENT_DEFAULTS)
+        .target(TargetAction::Create, Some(NodeType::Requirement))
         .with_etag("/edit/etag", false),
     );
     out.push(
@@ -399,6 +409,7 @@ fn requirements(out: &mut Vec<Definition>) {
             ("fog", "fog"),
             ("domain_id", "domain_id"),
         ])
+        .target(TargetAction::Update, Some(NodeType::Requirement))
         .with_etag("/edit/etag", false),
     );
 }

@@ -5,7 +5,9 @@ use super::{
     ArgumentAlias, CliDefault, CliDefaultValue, EtagBinding, HandlerBinding, HeaderBinding,
     Operation, ParentBinding, PathBinding, QueryRequestBinding, QueryRoute, Registration,
     RequestAdapter, ResponseAdapter, ResponseBinding, SelectorBinding,
+    TargetAction, TargetBinding,
 };
+use provenance_core::NodeType;
 use schemars::generate::Contract;
 use serde_json::{json, Value};
 
@@ -216,6 +218,11 @@ impl Definition {
             .request
             .argument_aliases
             .extend_from_slice(aliases);
+        self
+    }
+
+    fn target(mut self, action: TargetAction, kind: Option<NodeType>) -> Self {
+        self.registration.target = kind.map(|kind| TargetBinding { action, kind });
         self
     }
 }

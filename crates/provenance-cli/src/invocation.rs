@@ -123,18 +123,18 @@ impl CommandFamily {
             .get(action_index)
             .and_then(|word| provenance_transport::porcelain::Action::parse(word));
         let catalog = catalog_cli::is_collection(target);
-        if catalog {
-            return if explicit_get && collection_marker_selects_get(arguments, action_index)? {
-                Ok(Self::Get)
-            } else {
-                Ok(Self::Catalog)
-            };
-        }
-        if explicit_get {
+        if explicit_get
+            && (!catalog || collection_marker_selects_get(arguments, action_index)?)
+        {
             return Ok(Self::Get);
         }
-        if explicit_target.is_some() {
+        if explicit_target.is_some_and(|action| {
+            !catalog || collection_marker_selects_target(arguments, action_index, action)
+        }) {
             return Ok(Self::Target);
+        }
+        if catalog {
+            return Ok(Self::Catalog);
         }
         let builtin = Cli::command()
             .get_subcommands()
@@ -243,6 +243,37 @@ fn collection_marker_selects_get(
     Ok(arguments
         .get(suffix_index)
         .is_none_or(|word| word.starts_with('-')))
+}
+
+/// A collection word can also be a target ID. An option-only suffix selects
+/// its explicit target action. Create also requires the accepted type carrier.
+fn collection_marker_selects_target(
+    arguments: &[String],
+    marker_index: usize,
+    action: provenance_transport::porcelain::Action,
+) -> bool {
+    let mut has_type = false;
+    let mut index = marker_index + 1;
+    while let Some(argument) = arguments.get(index) {
+        match argument.as_str() {
+            "--quiet" | "--stdin" | "--help" => index += 1,
+            "--repo" | "--scope" | "--format" => {
+                if arguments.get(index + 1).is_none() {
+                    return false;
+                }
+                index += 2;
+            }
+            flag if flag.starts_with("--") => {
+                if arguments.get(index + 1).is_none() {
+                    return false;
+                }
+                has_type |= flag == "--type";
+                index += 2;
+            }
+            _ => return false,
+        }
+    }
+    action != provenance_transport::porcelain::Action::Create || has_type
 }
 
 /// Skip shared option tokens for syntax selection only. The selected command
@@ -355,105 +386,4 @@ struct SharedArguments {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn arguments(words: &[&str]) -> Vec<String> {
-        std::iter::once("provenance")
-            .chain(words.iter().copied())
-            .map(str::to_owned)
-            .collect()
-    }
-
-    #[test]
-    fn route_is_one_deterministic_grammar_decision() {
-        let route = |words: &[&str]| CommandFamily::select(&arguments(words)).unwrap();
-        assert_eq!(route(&["--help"]), CommandFamily::Builtin);
-        assert_eq!(
-            route(&["--quiet", "check", "--repo", "repo"]),
-            CommandFamily::Builtin
-        );
-        assert!(matches!(
-            route(&["--repo", "repo", "sources", "list"]),
-            CommandFamily::Catalog
-        ));
-        assert!(matches!(
-            route(&["sources", "get", "--repo", "repo"]),
-            CommandFamily::Get
-        ));
-        assert!(matches!(
-            route(&["sources", "get", "update", "--repo", "repo"]),
-            CommandFamily::Catalog
-        ));
-        assert_eq!(
-            route(&["sources", "get", "get", "--repo", "repo"]),
-            CommandFamily::Catalog
-        );
-        assert_eq!(
-            route(&["sources", "update", "get", "--repo", "repo"]),
-            CommandFamily::Catalog
-        );
-        assert_eq!(
-            route(&["sources", "get", "--unknown-option", "value"]),
-            CommandFamily::Get
-        );
-        assert_eq!(
-            route(&["sources", "--help", "--repo", "repo"]),
-            CommandFamily::Catalog
-        );
-        assert!(matches!(
-            route(&["check", "--repo", "repo"]),
-            CommandFamily::Builtin
-        ));
-        assert!(matches!(
-            route(&["check", "get", "--repo", "repo"]),
-            CommandFamily::Get
-        ));
-        assert_eq!(
-            route(&["check", "--repo", "repo", "get", "--format", "json"]),
-            CommandFamily::Get
-        );
-        assert!(matches!(
-            route(&["check", "--strict"]),
-            CommandFamily::Builtin
-        ));
-        assert!(matches!(
-            route(&["--repo", "repo", "unknown_id", "--format", "json"]),
-            CommandFamily::Get
-        ));
-        assert_eq!(
-            route(&["--repo", "repo", "unknown_id", "update"]),
-            CommandFamily::Target
-        );
-        assert_eq!(
-            route(&[
-                "unknown_id",
-                "--scope",
-                "other",
-                "create",
-                "--type",
-                "source"
-            ]),
-            CommandFamily::Target
-        );
-    }
-
-    #[test]
-    fn local_flag_values_are_not_reparsed_as_globals() {
-        let input = arguments(&[
-            "sources",
-            "create",
-            "--name",
-            "--repo",
-            "--repo",
-            "repository",
-        ]);
-        assert_eq!(
-            CommandFamily::select(&input).unwrap(),
-            CommandFamily::Catalog
-        );
-        let shared = ExternalArguments::parse(&input).unwrap();
-        assert_eq!(shared.context.repo, "repository");
-        assert_eq!(shared.words, ["sources", "create", "--name", "--repo"]);
-    }
-}
+mod tests;
