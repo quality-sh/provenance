@@ -70,6 +70,7 @@ update_input!(UpdateTopicInput, TopicClearField {}, {
 });
 update_input!(EditQuestionInput, QuestionClearField { ResolutionId, Contradicts }, {
     question: String, resolution_method: ResolutionMethod, status: QuestionStatus,
+    depends_on: Vec<StableId>,
     links: Vec<ArtifactLink>, resolution_id: StableId, contradicts: StableId,
     archived_in_commit: provenance_core::ArchivedStamp
 });
