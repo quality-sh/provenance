@@ -16,6 +16,7 @@ enum Fields {
 }
 
 const NO_NESTED_RECORDS: &[&str] = &[];
+
 const IDEATION_LANDING_RECORD_FIELDS: &[&str] = &[
     "contributions",
     "synthesis_packets",
@@ -23,6 +24,31 @@ const IDEATION_LANDING_RECORD_FIELDS: &[&str] = &[
     "assertions",
     "dispositions",
 ];
+
+/// Names the shard and its line when a stored line is not one JSON record.
+///
+/// serde_json reports a position inside the one line it was given, which
+/// reads as "line 1" for every row; the shard path and the row number are
+/// what locate the fault.
+pub(crate) fn located(
+    path: &Utf8Path,
+    line_number: usize,
+    error: &serde_json::Error,
+) -> anyhow::Error {
+    let text = error.to_string();
+    let message = text
+        .rfind(" at line ")
+        .map_or(text.as_str(), |at| &text[..at]);
+    anyhow::anyhow!("{path} line {line_number}: {message}")
+}
+
+pub(crate) fn parse_line(
+    path: &Utf8Path,
+    line_number: usize,
+    line: &str,
+) -> anyhow::Result<serde_json::Value> {
+    serde_json::from_str(line).map_err(|error| located(path, line_number, &error))
+}
 
 /// The one place a stored line becomes a record.
 ///
@@ -45,7 +71,9 @@ fn record_from_line<T: DeserializeOwned>(
     ensure_supported_record_version(path, line_number, &value)?;
     ensure_supported_nested_record_versions(path, line_number, &value, nested_record_fields)?;
     match fields {
-        Fields::Open => Ok(serde_json::from_value(value)?),
+        Fields::Open => {
+            serde_json::from_value(value).map_err(|error| located(path, line_number, &error))
+        }
         // The closed reader needs the untouched line: `serde_ignored` reports
         // an unknown field by walking the document as it was written.
         Fields::Closed => deserialize_closed(line),
@@ -217,7 +245,7 @@ fn read_records<T: DeserializeOwned>(
     let contents = std::fs::read_to_string(path)?;
     let mut records = Vec::new();
     for (index, line) in contents.lines().enumerate() {
-        let mut value: serde_json::Value = serde_json::from_str(line)?;
+        let mut value = parse_line(path, index + 1, line)?;
         prepare(&mut value);
         records.push(record_from_line(
             path,

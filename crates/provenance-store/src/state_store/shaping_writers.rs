@@ -11,7 +11,7 @@ pub(super) mod artifact_links;
 mod claim_eligibility_tests;
 mod claims;
 mod creators;
-use claims::{claim_blocking_status, now_ms, validated_actor, ShapingStatus};
+use claims::{claim_blocking_status, ensure_claim_holder, now_ms, validated_actor, ShapingStatus};
 pub(super) use claims::{clear_question_claim_on_exit, clear_topic_claim_on_exit};
 
 impl StateStore {
@@ -48,17 +48,11 @@ impl StateStore {
             let surfaced_proposals =
                 self.surface_proposals(scope_id, &ProposalDemand::for_topic(&current_topic))?;
             let topic = self.update_topic(scope_id, id, |topic| {
-                if let Some(holder) = &topic.claimed_by {
-                    return Err(SourceFailure::wrap(
-                        WriteFailure::InvalidUpdate,
-                        anyhow::anyhow!(
-                            "topic {} is already claimed by {holder}",
-                            topic.id.as_str()
-                        ),
-                    ));
+                ensure_claim_holder("topic", &topic.id, topic.claimed_by.as_deref(), &actor)?;
+                if topic.claimed_by.is_none() {
+                    topic.claimed_by = Some(actor);
+                    topic.claimed_at = Some(claimed_at);
                 }
-                topic.claimed_by = Some(actor);
-                topic.claimed_at = Some(claimed_at);
                 Ok(())
             })?;
             Ok(TopicClaim {
@@ -68,7 +62,13 @@ impl StateStore {
         })
     }
 
-    pub fn release_topic(&self, scope_id: &ScopeId, id: &StableId) -> anyhow::Result<Topic> {
+    pub fn release_topic(
+        &self,
+        scope_id: &ScopeId,
+        id: &StableId,
+        actor: &str,
+    ) -> anyhow::Result<Topic> {
+        let actor = validated_actor(actor)?;
         self.update_topic(scope_id, id, |topic| {
             crate::write_error::ensure!(
                 InvalidUpdate,
@@ -76,6 +76,7 @@ impl StateStore {
                 "topic {} is not claimed",
                 topic.id.as_str()
             );
+            ensure_claim_holder("topic", &topic.id, topic.claimed_by.as_deref(), &actor)?;
             topic.claimed_by = None;
             topic.claimed_at = None;
             Ok(())
@@ -109,22 +110,27 @@ impl StateStore {
                     ),
                 ));
             }
-            if let Some(holder) = &question.claimed_by {
-                return Err(SourceFailure::wrap(
-                    WriteFailure::InvalidUpdate,
-                    anyhow::anyhow!(
-                        "question {} is already claimed by {holder}",
-                        question.id.as_str()
-                    ),
-                ));
+            ensure_claim_holder(
+                "question",
+                &question.id,
+                question.claimed_by.as_deref(),
+                &actor,
+            )?;
+            if question.claimed_by.is_none() {
+                question.claimed_by = Some(actor);
+                question.claimed_at = Some(claimed_at);
             }
-            question.claimed_by = Some(actor);
-            question.claimed_at = Some(claimed_at);
             Ok(())
         })
     }
 
-    pub fn release_question(&self, scope_id: &ScopeId, id: &StableId) -> anyhow::Result<Question> {
+    pub fn release_question(
+        &self,
+        scope_id: &ScopeId,
+        id: &StableId,
+        actor: &str,
+    ) -> anyhow::Result<Question> {
+        let actor = validated_actor(actor)?;
         self.mutate_question(scope_id, id, |question| {
             crate::write_error::ensure!(
                 InvalidUpdate,
@@ -132,6 +138,12 @@ impl StateStore {
                 "question {} is not claimed",
                 question.id.as_str()
             );
+            ensure_claim_holder(
+                "question",
+                &question.id,
+                question.claimed_by.as_deref(),
+                &actor,
+            )?;
             question.claimed_by = None;
             question.claimed_at = None;
             Ok(())

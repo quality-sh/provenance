@@ -5,7 +5,7 @@ use crate::{
     cache::review_families, review::publication::with_record_state, state_store::StateStore,
     write_error::SourceFailure,
 };
-use provenance_core::{review::ReviewRecord, ScopeId};
+use provenance_core::{review::ReviewRecord, threads::Discussion, ScopeId};
 
 struct TypedChange {
     before: ReviewRecord,
@@ -43,6 +43,7 @@ impl StateStore {
     ) -> anyhow::Result<Vec<TypedChange>> {
         let current = review_records(&self.layout, scope)?;
         let facts = CycleFacts::validated(self, scope)?;
+        let discussions = self.list_discussions(scope)?;
         let mut changes = Vec::new();
         for before in &current {
             let after = desired
@@ -50,7 +51,13 @@ impl StateStore {
                 .find(|record| record.kind() == before.kind() && record.id() == before.id());
             let Some(after) = after else {
                 if facts.has_submissions(before.kind(), before.id()) {
-                    return Err(enrolled_deletion_conflict(before));
+                    return Err(enrolled_deletion_conflict(before, "review submissions"));
+                }
+                // A Discussion addresses its parent record; deleting the
+                // parent would leave every Discussion read in the scope
+                // refusing on the dangling parent.
+                if has_discussions(&discussions, before) {
+                    return Err(enrolled_deletion_conflict(before, "Discussions"));
                 }
                 continue;
             };
@@ -84,14 +91,20 @@ fn content(record: &ReviewRecord) -> serde_json::Result<serde_json::Value> {
     provenance_core::model::record_stamps::content_value(record)
 }
 
-fn enrolled_deletion_conflict(before: &ReviewRecord) -> anyhow::Error {
+fn has_discussions(discussions: &[Discussion], record: &ReviewRecord) -> bool {
+    discussions.iter().any(|discussion| {
+        discussion.parent.node_type == record.kind() && discussion.parent.node_id == *record.id()
+    })
+}
+
+fn enrolled_deletion_conflict(before: &ReviewRecord, holds: &str) -> anyhow::Error {
     SourceFailure::wrap(
         crate::write_error::WriteFailure::EnrolledRecordDeletionConflict {
             record_kind: before.kind(),
             record_id: before.id().clone(),
         },
         anyhow::anyhow!(
-            "cannot delete enrolled {} {} through typed-spec apply",
+            "cannot delete enrolled {} {} with {holds} through typed-spec apply",
             before.kind().as_str(),
             before.id().as_str()
         ),

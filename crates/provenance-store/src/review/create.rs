@@ -112,10 +112,7 @@ impl StateStore {
 }
 
 fn normalize(input: &mut CreateReviewRequirement) -> anyhow::Result<()> {
-    anyhow::ensure!(
-        !input.actor.trim().is_empty(),
-        "invalid review request identity"
-    );
+    crate::write_error::ensure_actor(&input.actor)?;
     anyhow::ensure!(
         serde_json::to_vec(&input)?.len() <= 1_048_576,
         "review request exceeds the operation byte budget"

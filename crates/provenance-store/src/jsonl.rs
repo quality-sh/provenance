@@ -1,4 +1,4 @@
-use crate::state_store::readers::ensure_supported_record_version;
+use crate::state_store::readers::{ensure_supported_record_version, located, parse_line};
 use camino::Utf8Path;
 use fs2::FileExt;
 use serde::{de::DeserializeOwned, Serialize};
@@ -97,9 +97,14 @@ where
     let contents = std::fs::read_to_string(path)?;
     let mut loaded = LoadedRecords::default();
     for (index, line) in contents.lines().enumerate() {
-        let value: serde_json::Value = serde_json::from_str(line)?;
+        let value = parse_line(path, index + 1, line)?;
         ensure_supported_record_version(path, index + 1, &value)?;
-        let (record, raw) = RawRecord::deserialize(line, index + 1)?;
+        let (record, raw) = RawRecord::deserialize(line, index + 1).map_err(|error| {
+            match error.downcast::<serde_json::Error>() {
+                Ok(error) => located(path, index + 1, &error),
+                Err(error) => error,
+            }
+        })?;
         loaded.push(record, raw);
     }
     Ok(loaded)
