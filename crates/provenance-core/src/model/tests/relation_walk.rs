@@ -103,6 +103,7 @@ created: None, updated: None,
 fn every_requirement_reference_key_is_declared_or_allowed() {
     assert_walk(
         &Requirement {
+archived_in_commit: None,
 created: None, updated: None,
             schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: ScopeId::new("default").unwrap(),
@@ -132,6 +133,7 @@ created: None, updated: None,
 fn every_resolution_reference_key_is_declared_or_allowed() {
     assert_walk(
         &Resolution {
+archived_in_commit: None,
 created: None, updated: None,
             schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: ScopeId::new("default").unwrap(),

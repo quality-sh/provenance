@@ -66,6 +66,7 @@ fn bare_source() -> Source {
 
 fn filled_requirement() -> Requirement {
     Requirement {
+        archived_in_commit: None,
         created: Some(stamp()),
         updated: Some(stamp()),
         schema_version: SUPPORTED_SCHEMA_VERSION,
@@ -100,6 +101,7 @@ fn filled_requirement() -> Requirement {
 
 fn bare_requirement() -> Requirement {
     Requirement {
+        archived_in_commit: None,
         created: None,
         updated: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
@@ -125,6 +127,7 @@ fn bare_requirement() -> Requirement {
 
 fn resolution(confidence: Option<f64>) -> Resolution {
     Resolution {
+        archived_in_commit: None,
         created: Some(stamp()),
         updated: Some(stamp()),
         schema_version: SUPPORTED_SCHEMA_VERSION,
@@ -155,6 +158,7 @@ fn resolution(confidence: Option<f64>) -> Resolution {
 
 fn bare_resolution() -> Resolution {
     Resolution {
+        archived_in_commit: None,
         created: None,
         updated: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,

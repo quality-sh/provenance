@@ -176,6 +176,7 @@ fn domain_record(scope: &ScopeId) -> Domain {
 
 fn requirement_record(scope: &ScopeId) -> Requirement {
     Requirement {
+        archived_in_commit: None,
         created: None,
         updated: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
@@ -247,6 +248,7 @@ fn question_record(scope: &ScopeId) -> Question {
 
 fn resolution_record(scope: &ScopeId) -> Resolution {
     Resolution {
+        archived_in_commit: None,
         created: None,
         updated: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,

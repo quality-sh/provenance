@@ -72,6 +72,7 @@ impl StateStore {
                 set(&mut record.position, input.position);
                 set(&mut record.rationale, input.rationale);
                 set(&mut record.status, input.status);
+                set(&mut record.archived_in_commit, input.archived_in_commit.map(Some));
                 if let Some(inputs) = inputs {
                     record.inputs = inputs;
                 }

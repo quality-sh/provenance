@@ -32,6 +32,7 @@ impl PartialEq for Requirement {
             && self.description == other.description
             && self.fog == other.fog
             && self.status == other.status
+            && self.archived_in_commit == other.archived_in_commit
             && self.domain_id == other.domain_id
             && self.source_refs == other.source_refs
             && self.refines == other.refines
@@ -54,6 +55,7 @@ impl PartialEq for Rule {
             && self.description == other.description
             && self.statement == other.statement
             && self.status == other.status
+            && self.archived_in_commit == other.archived_in_commit
             && self.severity == other.severity
             && self.requirement_ids == other.requirement_ids
             && self.resolution_ids == other.resolution_ids
@@ -61,7 +63,6 @@ impl PartialEq for Rule {
             && self.source_section == other.source_section
             && self.origin_thread == other.origin_thread
             && self.origin_message == other.origin_message
-            && self.archived_in_commit == other.archived_in_commit
     }
 }
 
@@ -74,6 +75,7 @@ impl PartialEq for Resolution {
             && self.position == other.position
             && self.rationale == other.rationale
             && self.status == other.status
+            && self.archived_in_commit == other.archived_in_commit
             && self.context == other.context
             && self.enforcement == other.enforcement
             && self.confidence == other.confidence

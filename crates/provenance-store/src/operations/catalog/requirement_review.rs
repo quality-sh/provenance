@@ -113,6 +113,7 @@ scoped_write_operation!(
                 expected_etag: request.expected_etag,
                 relationships: request.relationships,
                 update: UpdateRequirementInput {
+                    archived_in_commit: None,
                     scope_id: scope,
                     id: request.id,
                     expected_etag: None,

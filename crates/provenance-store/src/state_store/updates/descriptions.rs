@@ -47,6 +47,7 @@ impl StateStore {
                 before.clone_from(&record.statement);
                 set(&mut record.statement, input.statement);
                 set(&mut record.status, input.status);
+                set(&mut record.archived_in_commit, input.archived_in_commit.map(Some));
                 optional(
                     &mut record.description,
                     input.description,
@@ -68,6 +69,9 @@ impl StateStore {
                 )?;
                 Ok(record.clone())
             })?;
+            if record.status == provenance_core::RequirementStatus::Archived {
+                self.archive_dependents(&record.scope_id, &record.id, record.archived_in_commit.as_ref().unwrap())?;
+            }
             if before != record.statement {
                 let reviews = rule_ids
                     .into_iter()
