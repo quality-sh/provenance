@@ -2,8 +2,11 @@
 //! tool, and the api tool still reaches the operation.
 #![cfg(feature = "test-fixture")]
 
+#[allow(dead_code)]
 mod support {
+    #[path = "../../../provenance-transport/tests/support/check_port.rs"]
     pub mod check_port;
+    #[path = "../../../provenance-transport/tests/support/records.rs"]
     pub mod records;
 }
 
@@ -39,7 +42,7 @@ async fn no_plumbing_operation_name_is_a_listed_or_callable_tool() {
     repository.all_kinds();
     let host = full_host(&repository);
     let (client_io, server_io) = tokio::io::duplex(1024 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
 
     let tools = client.list_all_tools().await.unwrap();

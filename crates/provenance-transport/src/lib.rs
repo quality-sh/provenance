@@ -19,9 +19,6 @@ mod http;
 mod invocation;
 mod local;
 pub mod local_host;
-mod mcp;
-mod mcp_io;
-mod mcp_surface;
 pub mod porcelain;
 mod review_page;
 mod routing;
@@ -128,7 +125,8 @@ impl StatementHost {
         self.notify_port.as_ref()
     }
 
-    pub(crate) fn check_port(&self) -> Option<&Arc<dyn provenance_porcelain::check::CheckPort>> {
+    /// The repository-aware computations that the `check` command uses, when injected.
+    pub fn check_port(&self) -> Option<&Arc<dyn provenance_porcelain::check::CheckPort>> {
         self.check_port.as_ref()
     }
     /// The fixture principal is both the repository binding and the HTTP credential.
@@ -155,7 +153,8 @@ impl StatementHost {
     pub(crate) fn advertises(&self, operation: &str) -> bool {
         self.access.advertises(operation)
     }
-    pub(crate) fn bound_identity(&self) -> Option<(String, String)> {
+    /// The repository target and scope that the host access binds, when it binds one.
+    pub fn bound_identity(&self) -> Option<(String, String)> {
         self.access.bound_identity()
     }
 
@@ -167,23 +166,18 @@ impl StatementHost {
         }
     }
 
-    /// Serve a bounded MCP session on a caller-owned test stream.
+    /// Run one interface call under the request deadline while it holds an admission slot.
     ///
-    /// The library's initialization error is a large enum, so the public
-    /// failure channel boxes it to keep this result small.
-    pub async fn serve_mcp<T>(
-        self,
-        io: T,
-    ) -> Result<
-        rmcp::service::RunningService<rmcp::RoleServer, Self>,
-        Box<rmcp::service::ServerInitializeError>,
-    >
-    where
-        T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
-    {
-        rmcp::ServiceExt::serve(self, mcp_io::BoundedIo::new(io))
-            .await
-            .map_err(Box::new)
+    /// A closed or busy host refuses the call before `work` starts.
+    pub async fn admitted<F: std::future::Future>(
+        &self,
+        work: F,
+    ) -> Result<F::Output, FailureEnvelope> {
+        admission::with_deadline(async {
+            let _admission = self.admit().await?;
+            Ok(work.await)
+        })
+        .await
     }
 
     pub fn router(&self) -> axum::Router {

@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 /// Constructs Porcelain capabilities with the matching host adapter.
 pub struct HostPorcelain<'a> {
-    host: &'a StatementHost,
+    pub(super) host: &'a StatementHost,
 }
 
 impl<'a> HostPorcelain<'a> {

@@ -1,6 +1,5 @@
 #![cfg(feature = "test-fixture")]
 mod support {
-    pub mod mcp;
     pub mod records;
     pub mod resource_http;
 }
@@ -155,25 +154,4 @@ async fn source_patch_refuses_the_guard_in_the_body() {
     assert_eq!(refused["error"]["kind"], "invalid_input", "{refused}");
     let (_, source) = call(&host, "GET", "/sources/source_shared", None).await;
     assert_ne!(source["data"]["name"], "Source B");
-}
-
-#[tokio::test]
-#[verifies("rule_review_update_guard_header", examples)]
-async fn mcp_source_update_takes_the_guard_as_if_match() {
-    let repo = Repository::new("The shared graph is readable.");
-    repo.all_kinds();
-    let etag = source_etag(&repo);
-    let session = support::mcp::Session::start(host(&repo, true)).await;
-    let update =
-        |name: &str| json!({"target":"source_shared","if_match":etag,"data":{"name":name}});
-
-    let current = support::mcp::call(&session.client, "update", update("Source B")).await;
-    assert_ne!(current.is_error, Some(true), "{current:?}");
-    let stale = support::mcp::call(&session.client, "update", update("Source C")).await;
-    assert_eq!(stale.is_error, Some(true), "{stale:?}");
-    assert!(
-        format!("{stale:?}").contains("record_edit_conflict"),
-        "{stale:?}"
-    );
-    session.close().await;
 }

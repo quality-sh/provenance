@@ -1,220 +1,47 @@
-//! MCP-owned bindings for shared Porcelain capabilities.
+//! Host adapters for shared Porcelain capabilities.
 
-use provenance_porcelain::check::CheckInput;
-use provenance_porcelain::get::{GetInput, ReadError};
-use rmcp::model::{CallToolResult, ContentBlock};
-use serde_json::Value;
-
-mod api_mcp;
 pub mod api_port;
 pub(crate) mod authoring;
-mod authoring_mcp;
 mod discussion_port;
 mod get_port;
 mod host;
 mod search_port;
-pub(super) use api_mcp::{call as call_api, tool as api_tool};
 pub use api_port::HostApiPort;
-pub use authoring::{Action, ActionError, TargetRoute};
-pub(super) use authoring_mcp::{call as call_authoring, tools as authoring_tools};
+pub use authoring::{target_call, Action, ActionError, TargetRoute};
 pub use discussion_port::HostDiscussionPort;
 pub use get_port::HostGetPort;
 pub use host::HostPorcelain;
-
-pub(crate) fn api_is_available(host: &crate::StatementHost) -> bool {
-    api_port::is_available(host)
-}
-
-pub(crate) fn discussion_is_available(host: &crate::StatementHost, action: Action) -> bool {
-    discussion_port::is_available(host, action)
-}
-
-pub(crate) fn discussion_tools(host: &crate::StatementHost) -> Vec<rmcp::model::Tool> {
-    Action::DISCUSSION
-        .into_iter()
-        .filter(|action| discussion_is_available(host, *action))
-        .map(|action| {
-            crate::mcp_surface::tool(
-                action.as_str(),
-                provenance_porcelain::action::description(action),
-                provenance_porcelain::discussion::input_schema(action),
-                provenance_porcelain::discussion::output_schema(),
-                crate::mcp_surface::SchemaDeclaration::Remove,
-            )
-        })
-        .collect()
-}
-
-pub(crate) async fn call_discussion(
-    host: &crate::StatementHost,
-    action: Action,
-    arguments: serde_json::Map<String, Value>,
-) -> CallToolResult {
-    let value = Value::Object(arguments);
-    let service = host.porcelain().discussion();
-    let outcome = service.execute_discussion(action, value).await;
-    match outcome {
-        Ok(outcome) => {
-            let readable = provenance_porcelain::discussion::render_readable(&outcome);
-            let mut result = CallToolResult::structured(
-                serde_json::to_value(outcome).expect("Discussion outcome is JSON"),
-            );
-            result.content = vec![ContentBlock::text(readable)];
-            result
-        }
-        Err(error) => discussion_error(&error),
-    }
-}
-
-fn discussion_error(error: &ActionError) -> CallToolResult {
-    let detail = match error {
-        ActionError::InvalidOptions => serde_json::json!({
-            "kind":"invalid_input", "field":null, "reason":"invalid_value"
-        }),
-        ActionError::AccessDenied => serde_json::json!({"kind":"access_denied"}),
-        ActionError::OperationDetail { detail, .. } => detail.clone(),
-        ActionError::NotFound => serde_json::json!({"kind":"not_found"}),
-        ActionError::AmbiguousIdentity => serde_json::json!({"kind":"ambiguous_identity"}),
-        ActionError::KindSelection => serde_json::json!({"kind":"invalid_options"}),
-        ActionError::Operation(message) => {
-            serde_json::json!({"kind":"operation_failed","message":message})
-        }
-    };
-    crate::mcp_surface::detail_error(with_message(detail, error.to_string()))
-}
 pub use search_port::HostSearchPort;
 
-pub(crate) fn get_is_available(host: &crate::StatementHost) -> bool {
-    get_port::is_available(host)
-}
+use provenance_contract::Definition;
+use provenance_core::NodeType;
 
-pub(crate) fn search_is_available(host: &crate::StatementHost) -> bool {
-    search_port::is_available(host)
-}
-
-pub(crate) fn search_tool() -> rmcp::model::Tool {
-    crate::mcp_surface::tool(
-        "search",
-        provenance_porcelain::guidance::SEARCH_DESCRIPTION,
-        provenance_porcelain::search::input_schema(),
-        provenance_porcelain::search::output_schema(),
-        crate::mcp_surface::SchemaDeclaration::Remove,
-    )
-}
-
-pub(crate) fn get_tool() -> rmcp::model::Tool {
-    crate::mcp_surface::tool(
-        "get",
-        provenance_porcelain::guidance::GET_DESCRIPTION,
-        provenance_porcelain::get::input_schema(),
-        provenance_porcelain::get::output_schema(),
-        crate::mcp_surface::SchemaDeclaration::Keep,
-    )
-}
-
-pub(crate) fn check_tool() -> rmcp::model::Tool {
-    crate::mcp_surface::tool(
-        "check",
-        provenance_porcelain::guidance::CHECK_DESCRIPTION,
-        provenance_porcelain::check::input_schema(),
-        provenance_porcelain::check::output_schema(),
-        crate::mcp_surface::SchemaDeclaration::Keep,
-    )
-}
-
-pub(crate) async fn call_check(
-    host: &crate::StatementHost,
-    port: std::sync::Arc<dyn provenance_porcelain::check::CheckPort>,
-    arguments: serde_json::Map<String, Value>,
-) -> CallToolResult {
-    let Ok(arguments) = serde_json::from_value::<CheckInput>(Value::Object(arguments)) else {
-        return get_error("invalid_options", "unsupported check options");
-    };
-    let service = host.porcelain().check(port);
-    let mut input = arguments;
-    if let Some((_, scope)) = host.bound_identity() {
-        input = input.in_scope(scope);
+impl HostPorcelain<'_> {
+    /// The host grants what the get capability reads.
+    pub fn get_is_available(&self) -> bool {
+        get_port::is_available(self.host)
     }
-    let outcome = service.check(input).await;
-    let summary = provenance_porcelain::check::render_readable(&outcome);
-    let mut result =
-        CallToolResult::structured(serde_json::to_value(outcome).expect("check outcome is JSON"));
-    result.content = vec![ContentBlock::text(summary)];
-    result
-}
 
-/// Returns readable and structured MCP content for one get request.
-pub(crate) async fn call_get(
-    host: &crate::StatementHost,
-    arguments: serde_json::Map<String, Value>,
-) -> CallToolResult {
-    let Ok(arguments) = serde_json::from_value::<GetInput>(Value::Object(arguments)) else {
-        return crate::mcp_surface::envelope_error(&ReadError::InvalidOptions.failure());
-    };
-    let service = host.porcelain().get();
-    match service.get(arguments).await {
-        Ok(outcome) => {
-            let summary = provenance_porcelain::get::render_readable(&outcome)
-                .expect("get outcome is readable JSON");
-            let mut result = CallToolResult::structured(
-                serde_json::to_value(outcome).expect("get outcome is JSON"),
-            );
-            result.content = vec![ContentBlock::text(summary)];
-            result
-        }
-        Err(error) => crate::mcp_surface::envelope_error(&error.failure()),
+    /// The host grants what the search capability reads.
+    pub fn search_is_available(&self) -> bool {
+        search_port::is_available(self.host)
     }
-}
 
-/// Returns compact readable content and the canonical structured search result.
-#[provenance_macros::rule("rule_search_file_same_on_cli_and_mcp")]
-pub(crate) async fn call_search(
-    host: &crate::StatementHost,
-    arguments: serde_json::Map<String, Value>,
-) -> CallToolResult {
-    let Ok(input) = serde_json::from_value::<provenance_porcelain::search::SearchInput>(
-        Value::Object(arguments),
-    ) else {
-        return get_error("invalid_options", "unsupported search options");
-    };
-    let service = host.porcelain().search();
-    match service.search(input).await {
-        Ok(outcome) => {
-            let summary = provenance_porcelain::search::render_readable(&outcome);
-            let mut result = CallToolResult::structured(
-                serde_json::to_value(outcome).expect("search result is JSON"),
-            );
-            result.content = vec![ContentBlock::text(summary)];
-            result
-        }
-        Err(error) => search_error(&error),
+    /// The host grants what the api capability needs.
+    pub fn api_is_available(&self) -> bool {
+        api_port::is_available(self.host)
     }
-}
 
-fn search_error(error: &provenance_porcelain::search::SearchError) -> CallToolResult {
-    use provenance_porcelain::search::SearchError;
-    let detail = match error {
-        SearchError::InvalidOptions { .. } => serde_json::json!({
-            "kind":"invalid_input", "field":null, "reason":"invalid_value"
-        }),
-        SearchError::InvalidCodeLookup { field, .. } => serde_json::json!({
-            "kind":"invalid_input", "field":format!("request.{field}"), "reason":"invalid_value"
-        }),
-        SearchError::AccessDenied => serde_json::json!({"kind":"access_denied"}),
-        SearchError::Operation { detail, .. } => detail.clone(),
-    };
-    crate::mcp_surface::detail_error(with_message(detail, error.to_string()))
-}
+    /// The host grants what one discussion action needs.
+    pub fn discussion_is_available(&self, action: Action) -> bool {
+        discussion_port::is_available(self.host, action)
+    }
 
-fn get_error(kind: &str, message: &str) -> CallToolResult {
-    crate::mcp_surface::detail_error(serde_json::json!({"kind": kind, "message": message}))
-}
-
-fn with_message(mut detail: Value, message: String) -> Value {
-    detail
-        .as_object_mut()
-        .expect("error detail is an object")
-        .entry("message")
-        .or_insert(Value::String(message));
-    detail
+    /// The registered operations that this host can run for one target-first action.
+    pub fn executable_target_definitions(
+        &self,
+        action: Action,
+    ) -> Vec<(NodeType, &'static Definition)> {
+        self.host.executable_target_definitions(action)
+    }
 }

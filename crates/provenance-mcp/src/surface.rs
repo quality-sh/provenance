@@ -1,7 +1,7 @@
 //! Shared MCP call and tool wiring.
 
-use crate::{StatementHost, MAX_BODY_BYTES};
 use provenance_core::protocol::{failure::ErasedFailure, ResponseMeta};
+use provenance_transport::{StatementHost, MAX_BODY_BYTES};
 use rmcp::{
     model::{CallToolResult, Tool},
     ErrorData,
@@ -27,11 +27,7 @@ where
     F: FnOnce(Map<String, Value>) -> Fut,
     Fut: Future<Output = CallToolResult>,
 {
-    crate::admission::with_deadline(async {
-        let _admission = match host.admit().await {
-            Ok(permit) => permit,
-            Err(failure) => return Ok(failure_result(failure)),
-        };
+    host.admitted(async {
         let arguments = arguments.unwrap_or_default();
         let encoded = serde_json::to_vec(&arguments)
             .map_err(|_| ErrorData::internal_error("Cannot encode input", None))?;
@@ -47,6 +43,7 @@ where
         Ok(invoke(arguments).await)
     })
     .await
+    .unwrap_or_else(|failure| Ok(failure_result(failure)))
 }
 
 /// Build one MCP tool from its JSON input and output schemas.
