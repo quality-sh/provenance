@@ -100,9 +100,18 @@ fn insert(
 }
 
 pub(super) fn augment(
+    command: Command,
+    definitions: impl IntoIterator<Item = &'static Definition>,
+    static_flags: &[&str],
+) -> anyhow::Result<Command> {
+    augment_with_overrides(command, definitions, static_flags, &[])
+}
+
+pub(super) fn augment_with_overrides(
     mut command: Command,
     definitions: impl IntoIterator<Item = &'static Definition>,
     static_flags: &[&str],
+    overrides: &[&str],
 ) -> anyhow::Result<Command> {
     let mut names = static_flags
         .iter()
@@ -112,6 +121,9 @@ pub(super) fn augment(
     let mut registered = BTreeSet::new();
     for definition in definitions {
         for field in declared(definition)? {
+            if overrides.contains(&field.name.as_str()) {
+                continue;
+            }
             anyhow::ensure!(
                 !names.contains(&field.name),
                 "catalog field --{} collides with a command option",

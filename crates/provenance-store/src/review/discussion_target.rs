@@ -4,7 +4,7 @@ use crate::{
     write_error::{SourceFailure, WriteFailure},
 };
 use provenance_core::{
-    review::JournalEntry, threads::DiscussionEntry, MessageRole, ScopeId, StableId, ThreadParent,
+    review::JournalEntry, threads::DiscussionEntry, MessageRole, NodeType, ScopeId, StableId, ThreadParent,
 };
 use serde::{Deserialize, Serialize};
 
@@ -16,6 +16,8 @@ pub struct TargetDiscussionWrite {
     pub request_id: StableId,
     pub actor: String,
     pub declared_by: Option<String>,
+    /// Parent kinds granted by the host before this operation runs.
+    pub allowed_parent_kinds: Vec<NodeType>,
     pub action: TargetDiscussionAction,
 }
 
@@ -100,6 +102,11 @@ impl StateStore {
                     )
                 }
             };
+            crate::write_error::ensure!(
+                ResourceNotFound,
+                input.allowed_parent_kinds.contains(&parent.node_type),
+                "Discussion parent is not available"
+            );
             self.write_discussion(WriteDiscussion {
                 scope_id: input.scope_id,
                 parent,

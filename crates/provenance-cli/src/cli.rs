@@ -42,6 +42,8 @@ pub struct Cli {
 pub enum Command {
     /// Search records in one scope.
     Search(crate::invocation::grammar::SearchArgs),
+    /// List or read addressed Discussions.
+    Discussions(crate::invocation::grammar::DiscussionsArgs),
     #[command(name = "__cargo-init", hide = true)]
     CargoInit {
         #[arg(long)]

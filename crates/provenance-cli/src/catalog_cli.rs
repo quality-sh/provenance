@@ -77,12 +77,14 @@ pub fn target_command() -> anyhow::Result<Command> {
         .flat_map(catalog::target_definitions)
         .map(|(_, definition)| definition)
         .collect::<Vec<_>>();
-    fields::augment(
+    fields::augment_with_overrides(
         grammar::target_command(),
         definitions,
         &[
             "repo", "scope", "format", "quiet", "type", "view", "depth", "kind", "limit", "stdin",
+            "status", "cursor", "body", "actor", "request-id", "expected-version", "role",
         ],
+        &["status", "cursor", "body", "actor", "request-id", "expected-version", "role"],
     )
 }
 
@@ -183,7 +185,8 @@ pub fn ensure_only_fields(matches: &ArgMatches, allowed: &[&str]) {
         if matches.value_source(name) != Some(ValueSource::CommandLine) {
             continue;
         }
-        if !COMMON.contains(&name) && !allowed.contains(&name) {
+        let normalized = name.replace('_', "-");
+        if !COMMON.contains(&name) && !allowed.contains(&name) && !allowed.contains(&normalized.as_str()) {
             usage_error(anyhow::anyhow!(
                 "unsupported option --{}",
                 name.replace('_', "-")
@@ -243,7 +246,8 @@ fn input(
     let mut query = BTreeMap::new();
     let mut headers = HeaderMap::new();
     for field in declared {
-        let Some(value) = matches.get_one::<String>(&field.name) else {
+        let Some(value) = matches.try_get_one::<String>(&field.name).ok().flatten()
+            .or_else(|| matches.try_get_one::<String>(&field.name.replace('-', "_")).ok().flatten()) else {
             continue;
         };
         match field.source {

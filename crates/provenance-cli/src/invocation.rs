@@ -4,20 +4,24 @@ use provenance_cli::porcelain;
 use provenance_core::protocol::{SearchQuery, QUERY_DEFAULT_LIMIT};
 use provenance_core::{NodeType, SDK_PROTOCOL_VERSION};
 use provenance_porcelain::action::{validate_target, Action};
+use provenance_porcelain::discussion::DiscussionAction;
 use provenance_porcelain::get::View;
 
 pub mod grammar;
-use grammar::{CatalogArgs, SearchArgs, SearchCommand, TargetArgs};
+mod discussion;
+use grammar::{CatalogArgs, DiscussionsArgs, DiscussionsCommand, SearchArgs, SearchCommand, TargetArgs};
 
 #[cfg(test)]
 mod tests;
 
 /// One command selected from a declared grammar.
-pub enum Invocation {
+pub(crate) enum Invocation {
     Builtin(Cli),
     Catalog(catalog_cli::Invocation),
     Get(GetInvocation),
     Search(SearchArgs),
+    DiscussionRoot(DiscussionsArgs),
+    DiscussionTarget(TargetArgs, DiscussionAction, clap::ArgMatches),
     Target(TargetInvocation),
 }
 
@@ -55,6 +59,23 @@ impl Invocation {
             debug_assert_eq!(args.command, "search");
             return Ok(Self::Search(args.args));
         }
+        if word == "discussions" {
+            let command = DiscussionsCommand::try_parse_from(arguments)
+                .unwrap_or_else(|error| error.exit());
+            debug_assert_eq!(command.command, "discussions");
+            let args = command.args;
+            if args.discussion_id.as_deref() == Some("get") && args.action.is_none() {
+                if args.status.is_some() || args.limit.is_some() || args.cursor.is_some() {
+                    catalog_cli::usage_error("graph get does not accept Discussion list options");
+                }
+                return Ok(Self::Get(GetInvocation {
+                    context: args.common.context(),
+                    format: args.common.format(),
+                    input: provenance_porcelain::get::GetInput::new("discussions", View::Record),
+                }));
+            }
+            return Ok(Self::DiscussionRoot(args));
+        }
         if Cli::command()
             .get_subcommands()
             .any(|command| command.get_name() == word)
@@ -77,6 +98,9 @@ impl Invocation {
             .try_get_matches_from(arguments)
             .unwrap_or_else(|error| error.exit());
         let args = TargetArgs::from_matches(&matches);
+        if let Some(action) = args.action.as_deref().and_then(DiscussionAction::parse) {
+            return Ok(Self::DiscussionTarget(args, action, matches));
+        }
         let format = args.common.format();
         let context = args.common.context();
         if args.action.as_deref().is_none_or(|action| action == "get") {
@@ -129,6 +153,8 @@ impl Invocation {
                 .await
             }
             Self::Search(args) => args.dispatch().await,
+            Self::DiscussionRoot(args) => discussion::dispatch_root(args).await,
+            Self::DiscussionTarget(args, action, matches) => discussion::dispatch_target(args, action, &matches).await,
             Self::Target(invocation) => invocation.dispatch().await,
         }
     }
@@ -150,6 +176,12 @@ impl SearchArgs {
             query,
         )
         .await
+    }
+}
+
+impl DiscussionsArgs {
+    pub(crate) async fn dispatch(self) -> anyhow::Result<()> {
+        discussion::dispatch_root(self).await
     }
 }
 
