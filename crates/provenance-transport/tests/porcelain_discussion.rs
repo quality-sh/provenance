@@ -41,15 +41,7 @@ async fn call(
         .unwrap()
 }
 
-#[tokio::test]
-#[verifies("rule_porcelain_discussion_targets", examples)]
-async fn named_mcp_discussion_actions_share_structured_and_readable_results() {
-    let repository = Repository::new("A requirement has discussions.");
-    let host = StatementHost::with_fixture_access(access(&repository));
-    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
-    let client = ().serve(client_io).await.unwrap();
-    let tools = client.list_all_tools().await.unwrap();
+fn assert_tools(tools: &[rmcp::model::Tool]) {
     let names = tools
         .iter()
         .map(|tool| tool.name.to_string())
@@ -66,6 +58,85 @@ async fn named_mcp_discussion_actions_share_structured_and_readable_results() {
             jsonschema::JSONSchema::compile(&json!(tool.output_schema.as_ref().unwrap())).unwrap();
         }
     }
+}
+
+async fn assert_conversation_continuations(
+    client: &rmcp::service::RunningService<rmcp::RoleClient, ()>,
+    id: &str,
+) {
+    let other = call(
+        client,
+        "discuss",
+        json!({
+            "parent":{"node_type":"requirement","node_id":"req_shared"},
+            "request_id":"request_other", "actor":"ben", "role":"user", "body":"Other root"
+        }),
+    )
+    .await;
+    let other_id = other.structured_content.as_ref().unwrap()["receipt"]["discussion_id"]
+        .as_str()
+        .unwrap();
+    let first_page = call(client, "discussion", json!({"discussion_id":id,"limit":1})).await;
+    let cursor = first_page.structured_content.as_ref().unwrap()["result"]["messages"]
+        ["next_cursor"]
+        .as_str()
+        .unwrap();
+    let wrong_selector = call(
+        client,
+        "discussion",
+        json!({"discussion_id":other_id,"limit":1,"cursor":cursor}),
+    )
+    .await;
+    assert_eq!(wrong_selector.is_error, Some(true));
+    let next_page = call(
+        client,
+        "discussion",
+        json!({"discussion_id":id,"limit":1,"cursor":cursor}),
+    )
+    .await;
+    assert_eq!(
+        next_page.structured_content.as_ref().unwrap()["result"]["messages"]["entries"][0]["body"],
+        "Second message"
+    );
+    let stale = call(
+        client,
+        "reply",
+        json!({
+            "discussion_id":id, "request_id":"request_stale", "actor":"ben",
+            "expected_version":1, "role":"user", "body":"Stale message"
+        }),
+    )
+    .await;
+    assert_eq!(stale.is_error, Some(true));
+    let later = call(
+        client,
+        "reply",
+        json!({
+            "discussion_id":id, "request_id":"request_later", "actor":"ben",
+            "expected_version":2, "role":"user", "body":"Later message"
+        }),
+    )
+    .await;
+    assert_ne!(later.is_error, Some(true), "{later:?}");
+    let stale_cursor = call(
+        client,
+        "discussion",
+        json!({"discussion_id":id,"limit":1,"cursor":cursor}),
+    )
+    .await;
+    assert_eq!(stale_cursor.is_error, Some(true));
+}
+
+#[tokio::test]
+#[verifies("rule_porcelain_discussion_targets", examples)]
+async fn named_mcp_discussion_actions_share_structured_and_readable_results() {
+    let repository = Repository::new("A requirement has discussions.");
+    let host = StatementHost::with_fixture_access(access(&repository));
+    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
+    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let client = ().serve(client_io).await.unwrap();
+    let tools = client.list_all_tools().await.unwrap();
+    assert_tools(&tools);
 
     let started = call(
         &client,
@@ -156,67 +227,7 @@ async fn named_mcp_discussion_actions_share_structured_and_readable_results() {
         replied.structured_content.as_ref().unwrap()["receipt"]["version"],
         2
     );
-    let other = call(
-        &client,
-        "discuss",
-        json!({
-            "parent":{"node_type":"requirement","node_id":"req_shared"},
-            "request_id":"request_other", "actor":"ben", "role":"user", "body":"Other root"
-        }),
-    )
-    .await;
-    let other_id = other.structured_content.as_ref().unwrap()["receipt"]["discussion_id"]
-        .as_str()
-        .unwrap();
-    let first_page = call(&client, "discussion", json!({"discussion_id":id,"limit":1})).await;
-    let cursor = first_page.structured_content.as_ref().unwrap()["result"]["messages"]
-        ["next_cursor"]
-        .as_str()
-        .unwrap();
-    let wrong_selector = call(
-        &client,
-        "discussion",
-        json!({"discussion_id":other_id,"limit":1,"cursor":cursor}),
-    )
-    .await;
-    assert_eq!(wrong_selector.is_error, Some(true));
-    let next_page = call(
-        &client,
-        "discussion",
-        json!({"discussion_id":id,"limit":1,"cursor":cursor}),
-    )
-    .await;
-    assert_eq!(
-        next_page.structured_content.as_ref().unwrap()["result"]["messages"]["entries"][0]["body"],
-        "Second message"
-    );
-    let stale = call(
-        &client,
-        "reply",
-        json!({
-            "discussion_id":id, "request_id":"request_stale", "actor":"ben",
-            "expected_version":1, "role":"user", "body":"Stale message"
-        }),
-    )
-    .await;
-    assert_eq!(stale.is_error, Some(true));
-    let later = call(
-        &client,
-        "reply",
-        json!({
-            "discussion_id":id, "request_id":"request_later", "actor":"ben",
-            "expected_version":2, "role":"user", "body":"Later message"
-        }),
-    )
-    .await;
-    assert_ne!(later.is_error, Some(true), "{later:?}");
-    let stale_cursor = call(
-        &client,
-        "discussion",
-        json!({"discussion_id":id,"limit":1,"cursor":cursor}),
-    )
-    .await;
-    assert_eq!(stale_cursor.is_error, Some(true));
+    assert_conversation_continuations(&client, id).await;
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
 }
