@@ -127,6 +127,12 @@ macro_rules! define_review_record {
                 }
             }
 
+            pub const fn schema_version(&self) -> SchemaVersion {
+                match self {
+                    $( Self::$variant(record) => record.schema_version, )*
+                }
+            }
+
             pub const fn as_requirement(&self) -> Option<&crate::Requirement> {
                 match self {
                     Self::Requirement(record) => Some(record),
