@@ -20,7 +20,8 @@
         { "name": "fs2", "rename": null, "kind": "build", "target": null, "optional": false },
         { "name": "tokio", "rename": null, "kind": null, "target": null, "optional": true },
         { "name": "rustix", "rename": null, "kind": null, "target": "cfg(unix)", "optional": false },
-        { "name": "tempfile", "rename": null, "kind": "dev", "target": null, "optional": false }
+        { "name": "tempfile", "rename": null, "kind": "dev", "target": null, "optional": false },
+        { "name": "rmcp", "rename": null, "kind": "dev", "target": null, "optional": false }
       ]
     },
     {
@@ -28,7 +29,20 @@
       "dependencies": [
         { "name": "provenance-core", "rename": null, "kind": null, "target": null, "optional": false },
         { "name": "provenance-store", "rename": null, "kind": null, "target": null, "optional": false },
-        { "name": "serde_json", "rename": null, "kind": null, "target": null, "optional": false }
+        { "name": "serde_json", "rename": null, "kind": null, "target": null, "optional": false },
+        { "name": "clap", "rename": null, "kind": null, "target": null, "optional": false }
+      ]
+    },
+    {
+      "name": "provenance-cli",
+      "dependencies": [
+        { "name": "clap", "rename": null, "kind": null, "target": null, "optional": false }
+      ]
+    },
+    {
+      "name": "provenance-mcp",
+      "dependencies": [
+        { "name": "rmcp", "rename": null, "kind": null, "target": null, "optional": false }
       ]
     }
   ]

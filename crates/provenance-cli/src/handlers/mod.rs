@@ -1,4 +1,4 @@
-use crate::cli::{self, Command};
+use crate::cli;
 use crate::output::{self, JsonFormat, OutputFormat};
 use camino::Utf8PathBuf;
 use provenance_cli::repo_context::RepoContext;
@@ -31,6 +31,10 @@ mod schema;
 mod skills;
 mod swarm_backtrace;
 mod validate;
+
+#[cfg(feature = "dogfood")]
+#[allow(clippy::redundant_pub_crate)]
+pub(super) use dogfood::{handle as dogfood_command, DogfoodInput};
 
 /// Runs the check command with the flags that its declaration names.
 #[allow(clippy::redundant_pub_crate)]
@@ -416,16 +420,6 @@ pub(super) async fn workspace_command(input: WorkspaceInput) -> anyhow::Result<(
     }
 }
 
-/// Runs one built-in command.
-#[allow(clippy::redundant_pub_crate)]
-#[cfg_attr(not(feature = "dogfood"), allow(unused_variables))]
-pub(super) fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()> {
-    match command {
-        #[cfg(feature = "dogfood")]
-        Command::Dogfood { command } => dogfood::handle(command, quiet),
-    }
-}
-
 /// Runs a synchronous handler on a blocking thread and waits for it.
 async fn run_blocking(
     handler: impl FnOnce() -> anyhow::Result<()> + Send + 'static,
@@ -442,12 +436,14 @@ mod tests {
     #[test]
     fn every_declared_repository_value_converts() {
         for command in registry::Command::ALL {
-            if !matches!(
+            let cli_only = matches!(
                 command,
                 registry::Command::Repository(_)
                     | registry::Command::Graph(_)
                     | registry::Command::Workspace(_)
-            ) {
+                    | registry::Command::Dogfood(_)
+            );
+            if !cli_only || !command.is_present(registry::Interface::Cli) {
                 continue;
             }
             for flag in command.declaration().flags {
@@ -472,6 +468,12 @@ mod tests {
                         "artifact" => artifact(value).is_ok(),
                         "invocation-channel" => cli::InvocationChannel::from_flag(value).is_some(),
                         "package-manager" => cli::PackageManager::from_flag(value).is_some(),
+                        #[cfg(feature = "dogfood")]
+                        "category" => cli::DogfoodCategory::from_flag(value).is_some(),
+                        #[cfg(feature = "dogfood")]
+                        "severity" => cli::DogfoodSeverity::from_flag(value).is_some(),
+                        #[cfg(feature = "dogfood")]
+                        "status" => cli::TriageFilter::from_flag(value).is_some(),
                         other => panic!("{command:?} --{other} has no conversion"),
                     };
                     assert!(converts, "{command:?} --{} {value}", flag.name);
