@@ -1,5 +1,6 @@
 use crate::{catalog_cli, cli::Cli, handlers};
 use clap::{CommandFactory as _, FromArgMatches as _};
+use handlers::RepositoryInput;
 use provenance_cli::porcelain;
 use provenance_cli::repo_context::RepoContext;
 use provenance_core::NodeType;
@@ -13,8 +14,7 @@ mod discussion;
 pub mod grammar;
 mod help_kind;
 use grammar::{
-    ApiArgs, Delivery, DiscussionsArgs, DiscussionsCommand, DiscussionsRoute, SearchArgs,
-    TargetArgs, TargetVerb,
+    ApiArgs, Delivery, DiscussionsArgs, DiscussionsRoute, SearchArgs, TargetArgs, TargetVerb,
 };
 use provenance_porcelain::registry::{self, CheckCliInput, Interface, PrimeInput};
 
@@ -26,6 +26,7 @@ pub enum Invocation {
     Builtin(Cli),
     Check(CheckCliInput),
     Prime(PrimeInput),
+    Repository(RepositoryInput, bool),
     Api(ApiArgs),
     Get(GetInvocation),
     Search(SearchArgs),
@@ -75,7 +76,11 @@ impl Invocation {
                     .unwrap_or_else(|error| error.exit());
                 return Ok(Self::Api(ApiArgs::from_matches(&matches)));
             }
-            Some(registry::Command::Check | registry::Command::Prime) => {
+            Some(
+                registry::Command::Check
+                | registry::Command::Prime
+                | registry::Command::Repository(_),
+            ) => {
                 return Ok(Self::parse_root(arguments));
             }
             Some(registry::Command::Get | registry::Command::Action(_)) | None => {}
@@ -88,13 +93,13 @@ impl Invocation {
                 let matches = grammar::discussions_command()?
                     .try_get_matches_from(arguments)
                     .unwrap_or_else(|error| error.exit());
-                let command = DiscussionsCommand::from_arg_matches(&matches)
-                    .unwrap_or_else(|error| error.exit());
-                debug_assert_eq!(command.command, "discussions");
-                return Ok(Self::DiscussionRoot(command.args, Box::new(matches)));
+                return Ok(Self::DiscussionRoot(
+                    DiscussionsArgs::from_matches(&matches),
+                    Box::new(matches),
+                ));
             }
         }
-        if Cli::command()
+        if root_command()
             .get_subcommands()
             .any(|command| command.get_name() == word)
         {
@@ -113,14 +118,20 @@ impl Invocation {
         let matches = root_command()
             .try_get_matches_from(arguments)
             .unwrap_or_else(|error| error.exit());
-        match matches.subcommand() {
-            Some(("check", selected)) => Self::Check(
+        let (words, selected) = crate::registry_cli::selected(&matches);
+        match registry::Command::find(Interface::Cli, &words) {
+            Some(registry::Command::Check) => Self::Check(
                 crate::registry_cli::input(&registry::Command::Check.declaration(), selected)
                     .unwrap_or_else(|error| catalog_cli::usage_error(error)),
             ),
-            Some(("prime", selected)) => Self::Prime(
+            Some(registry::Command::Prime) => Self::Prime(
                 crate::registry_cli::input(&registry::Command::Prime.declaration(), selected)
                     .unwrap_or_else(|error| catalog_cli::usage_error(error)),
+            ),
+            Some(registry::Command::Repository(command)) => Self::Repository(
+                RepositoryInput::from_matches(command, selected)
+                    .unwrap_or_else(|error| catalog_cli::usage_error(error)),
+                matches.get_flag("quiet"),
             ),
             _ => {
                 Self::Builtin(Cli::from_arg_matches(&matches).unwrap_or_else(|error| error.exit()))
@@ -220,7 +231,7 @@ impl Invocation {
     /// `{error,meta}` object instead of text.
     pub fn json_output(&self) -> bool {
         let format = match self {
-            Self::Builtin(_) | Self::Check(_) | Self::Prime(_) => None,
+            Self::Builtin(_) | Self::Check(_) | Self::Prime(_) | Self::Repository(..) => None,
             Self::Api(args) => args.common.format(),
             Self::Get(invocation) => invocation.format,
             Self::Search(args) => args.common.format(),
@@ -236,6 +247,7 @@ impl Invocation {
             Self::Builtin(cli) => handlers::dispatch(cli.command, cli.quiet).await,
             Self::Check(input) => handlers::check_command(input).await,
             Self::Prime(input) => handlers::prime_command(&input),
+            Self::Repository(input, quiet) => handlers::repository_command(input, quiet).await,
             Self::Api(args) => api::dispatch(args).await,
             Self::Get(invocation) => {
                 if invocation.delivery == Delivery::Follow {
@@ -352,9 +364,13 @@ pub fn root_command() -> clap::Command {
         registry::Command::Prime,
     ]
     .into_iter()
-    .fold(Cli::command(), |root, command| {
-        root.subcommand(crate::registry_cli::subcommand(command))
-    })
+    .chain(
+        registry::Command::ALL
+            .iter()
+            .copied()
+            .filter(|command| matches!(command, registry::Command::Repository(_))),
+    )
+    .fold(Cli::command(), crate::registry_cli::add_subcommand)
 }
 
 /// Whether a word names an API collection, the first segment of a catalog path.
