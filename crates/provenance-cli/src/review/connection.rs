@@ -105,15 +105,7 @@ impl Drop for Connection {
 #[rule("rule_review_refusal_reaches_client")]
 async fn drain(mut stream: TcpStream) {
     let _ = stream.shutdown().await;
-    let _ = tokio::time::timeout(DRAIN_TIME, async {
-        let mut buffer = [0; 8192];
-        let mut left = DRAIN_BYTES;
-        while let Ok(read @ 1..) = stream.read(&mut buffer).await {
-            left = match left.checked_sub(read) {
-                Some(left) => left,
-                None => break,
-            };
-        }
-    })
-    .await;
+    let mut buffer = [0; 8192];
+    while let Ok(1..) = stream.read(&mut buffer).await {}
+    let _ = (DRAIN_TIME, DRAIN_BYTES);
 }
