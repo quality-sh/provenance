@@ -45,6 +45,7 @@ fn crash_child() {
         "state_backup_created" => "state_backup_created",
         "state_installed" => "state_installed",
         "state_published" => "state_published",
+        "requirement_submission_writing" => "requirement_submission_writing",
         _ => panic!("unknown crash phase"),
     };
     let store = open(Utf8Path::new(&root));
@@ -52,6 +53,44 @@ fn crash_child() {
     test_probes::arm(phase, || std::process::exit(86));
     store.save_requirement(input).unwrap();
     panic!("crash phase was not reached");
+}
+
+#[test]
+fn crash_between_edit_and_submission_publishes_neither_half() {
+    let temp = fixture();
+    let root = Utf8Path::from_path(temp.path()).unwrap();
+    let before = open(root)
+        .requirement_decision_state(&scope(), &id())
+        .unwrap()
+        .pending
+        .unwrap();
+    let status = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", "review::recovery_tests::crash_child", "--nocapture"])
+        .env("PROVENANCE_REVIEW_CRASH_ROOT", root.as_str())
+        .env(
+            "PROVENANCE_REVIEW_CRASH_PHASE",
+            "requirement_submission_writing",
+        )
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .unwrap();
+    assert_eq!(status.code(), Some(86));
+
+    let store = open(root);
+    assert_eq!(
+        store.requirement(&scope(), &id()).unwrap().description.as_deref(),
+        Some("baseline")
+    );
+    assert!(!journal_entry_exists(&store, "crash_request"));
+    assert_eq!(
+        store
+            .requirement_decision_state(&scope(), &id())
+            .unwrap()
+            .pending
+            .unwrap(),
+        before
+    );
 }
 
 #[test]

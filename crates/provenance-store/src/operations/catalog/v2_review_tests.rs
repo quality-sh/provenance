@@ -107,7 +107,68 @@ async fn create_response_failure_refuses_before_publication() {
     .await
     .unwrap();
     assert_eq!(committed.record.id.as_str(), "req_a");
+    assert_eq!(
+        committed.decision.pending.as_ref().unwrap().revision,
+        committed.edit.revision.clone().unwrap()
+    );
     assert_eq!(store.review_entries(&scope).unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn content_update_replaces_or_opens_the_current_submission() {
+    let (_temp, context, store, scope) = fixture();
+    let created = CreateRequirementV2::run(context.clone(), create_request("create_a"))
+        .await
+        .unwrap();
+    let first = created.decision.pending.unwrap();
+
+    let updated = UpdateRequirementV2::run(context.clone(), update_request(&store, "update_a"))
+        .await
+        .unwrap();
+    let second = updated.decision.pending.unwrap();
+    assert_ne!(second.proposal_id, first.proposal_id);
+    assert_ne!(second.revision, first.revision);
+    assert_eq!(second.revision, updated.edit.revision.unwrap());
+
+    store
+        .withdraw_requirement_review(
+            serde_json::from_value(json!({
+                "scope_id":"default", "actor":"ben",
+                "proposal_id":second.proposal_id
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+    let third = UpdateRequirementV2::run(context, update_request(&store, "update_b"))
+        .await
+        .unwrap();
+    assert_ne!(
+        third.decision.pending.unwrap().proposal_id,
+        second.proposal_id
+    );
+    assert_eq!(store.requirement_decision_state(&scope, &StableId::new("req_a").unwrap()).unwrap().decisions.len(), 0);
+}
+
+#[tokio::test]
+async fn lifecycle_update_keeps_the_current_submission() {
+    let (_temp, context, store, _scope) = fixture();
+    let created = CreateRequirementV2::run(context.clone(), create_request("create_a"))
+        .await
+        .unwrap();
+    let pending = created.decision.pending.unwrap();
+    let request: UpdateRequirementRequest = serde_json::from_value(json!({
+        "request_id":"activate", "actor":"ben", "expected_etag":created.edit.etag,
+        "declared_by":null, "statement":null, "description":null, "fog":null,
+        "status":"active", "domain_id":null, "clear_fields":[],
+        "relationships":null, "id":"req_a"
+    }))
+    .unwrap();
+
+    let updated = UpdateRequirementV2::run(context, request).await.unwrap();
+
+    assert_eq!(updated.decision.pending.unwrap(), pending);
+    assert_eq!(updated.edit.revision.unwrap(), pending.revision);
+    assert_eq!(store.list_proposal_definitions(&ScopeId::new("default").unwrap()).unwrap().len(), 1);
 }
 
 #[tokio::test]
