@@ -3,7 +3,7 @@ use crate::cache::{catch_up_state, open_cache};
 use crate::operations::queries;
 use crate::operations::read_policy::ReadPolicy;
 use provenance_core::protocol::{RecordResolution, ResolveRecordQuery};
-use provenance_core::{NodeType, SDK_PROTOCOL_VERSION};
+use provenance_core::{NodeType, StableId, SDK_PROTOCOL_VERSION};
 
 fn request(id: &str, allowed_node_types: Vec<NodeType>) -> ResolveRecordQuery {
     ResolveRecordQuery {
@@ -142,7 +142,7 @@ async fn hidden_duplicate_kind_does_not_change_the_visible_resolution() {
 }
 
 #[tokio::test]
-async fn identity_resolution_reports_an_ambiguous_visible_index() {
+async fn identity_resolver_reports_an_ambiguous_visible_index() {
     let (dir, _store, scope) = seeded_store();
     let layout = crate::layout::ProvenanceLayout::new(root_of(&dir));
     catch_up_state(&layout).await.unwrap();
@@ -159,19 +159,19 @@ async fn identity_resolution_reports_an_ambiguous_visible_index() {
         .execute(pool.pool())
         .await
         .unwrap();
-    pool.close().await.unwrap();
-
-    let answer = queries::resolve_record(
-        Some(root_of(&dir)),
-        &scope,
-        ReadPolicy::default(),
-        request("req_overtime", NodeType::ALL.to_vec()),
+    let snapshot = crate::operations::reader::ReadSnapshot::open(pool.pool(), &scope)
+        .await
+        .unwrap()
+        .unwrap();
+    let resolution = super::super::nodes::resolve(
+        &snapshot,
+        &StableId::new("req_overtime").unwrap(),
+        NodeType::ALL,
     )
     .await
     .unwrap();
+    drop(snapshot);
+    pool.close().await.unwrap();
 
-    assert!(matches!(
-        answer.result.resolution,
-        RecordResolution::Ambiguous
-    ));
+    assert!(matches!(resolution, RecordResolution::Ambiguous));
 }
