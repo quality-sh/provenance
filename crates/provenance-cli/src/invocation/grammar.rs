@@ -1,11 +1,13 @@
 use super::GlobalContext;
 use crate::output::JsonFormat;
 use clap::{
-    ArgAction, ArgMatches, Args, Command, CommandFactory, FromArgMatches, Parser, ValueEnum,
+    builder::PossibleValuesParser, ArgAction, ArgMatches, Args, Command, CommandFactory,
+    FromArgMatches, Parser,
 };
 use provenance_cli::porcelain;
 use provenance_core::NodeType;
 use provenance_porcelain::get::View;
+use provenance_porcelain::action::Action;
 
 // Shared options for the Porcelain and catalog grammars.
 #[derive(Args)]
@@ -75,38 +77,18 @@ impl CatalogArgs {
     }
 }
 
-#[derive(Clone, Copy, Default, ValueEnum)]
-pub(super) enum GetView {
-    #[default]
-    Record,
-    Children,
-    Grounding,
-    Impact,
-}
-
-impl From<GetView> for View {
-    fn from(value: GetView) -> Self {
-        match value {
-            GetView::Record => Self::Record,
-            GetView::Children => Self::Children,
-            GetView::Grounding => Self::Grounding,
-            GetView::Impact => Self::Impact,
-        }
-    }
-}
-
 #[derive(Parser)]
 #[command(name = "provenance", about = "Read or change one record")]
 pub(super) struct TargetArgs {
     #[command(flatten)]
     pub common: Common,
     pub target: String,
-    #[arg(value_parser = ["get", "create", "update", "answer", "claim", "release", "submit"])]
+    #[arg(value_parser = target_actions())]
     pub action: Option<String>,
     #[arg(long = "type", value_parser = parse_kind)]
     pub record_type: Option<NodeType>,
-    #[arg(long, value_enum)]
-    pub view: Option<GetView>,
+    #[arg(long, value_parser = get_views())]
+    pub view: Option<String>,
     #[arg(long)]
     pub depth: Option<usize>,
     #[arg(long, value_parser = parse_kind, action = ArgAction::Append)]
@@ -115,6 +97,14 @@ pub(super) struct TargetArgs {
     pub limit: Option<usize>,
     #[arg(long)]
     pub stdin: bool,
+}
+
+fn target_actions() -> PossibleValuesParser {
+    PossibleValuesParser::new(std::iter::once("get").chain(Action::ALL.map(Action::as_str)))
+}
+
+fn get_views() -> PossibleValuesParser {
+    PossibleValuesParser::new(View::ALL.map(View::as_str))
 }
 
 impl TargetArgs {
