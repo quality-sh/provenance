@@ -8,7 +8,7 @@ use crate::state_store::{
 use provenance_core::review::SaveOutcome;
 use provenance_core::{
     NodeType, QuestionStatus, RequirementStatus, ResolutionMethod, ResolutionStatus, RuleSeverity,
-    RuleStatus, SourceType, StableId, TopicStatus,
+    RuleStatus, Source, SourceType, StableId, TopicStatus,
 };
 
 fn id(value: &str) -> StableId {
@@ -412,4 +412,64 @@ fn graph_record_replacement_captures_an_occurrence() {
     source.sort_by_key(|entry| entry.sequence);
     assert_eq!(source.len(), 2);
     assert_eq!(source[1].outcome, SaveOutcome::Changed);
+}
+
+#[test]
+fn native_save_refuses_a_stale_etag_without_publishing_the_mutation() {
+    let (_dir, store, scope) = seeded_requirement_store();
+    seed_native_records(&store, &scope);
+    let stale_etag = store
+        .review_entries(&scope)
+        .unwrap()
+        .into_iter()
+        .find(|entry| {
+            entry.record_kind == NodeType::Source && entry.record_id.as_str() == "source_native"
+        })
+        .unwrap()
+        .etag;
+    store
+        .update_source(
+            serde_json::from_value::<UpdateSourceInput>(serde_json::json!({
+                "scope_id": "default",
+                "id": "source_native",
+                "name": "Source B"
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+
+    let path = crate::shards::sources_path(&store.layout, &scope);
+    let error = store
+        .save_native_record_with_etag(&path, &stale_etag, |records: &mut Vec<Source>| {
+            let record = records
+                .iter_mut()
+                .find(|record| record.id == id("source_native"))
+                .unwrap();
+            record.name = "Source C".into();
+            Ok(record.clone())
+        })
+        .unwrap_err();
+    assert!(matches!(
+        crate::write_error::WriteError(error).safe(),
+        crate::write_error::WriteFailure::RequirementEditConflict { .. }
+    ));
+    assert_eq!(
+        store
+            .list_sources(&scope)
+            .unwrap()
+            .into_iter()
+            .find(|source| source.id == id("source_native"))
+            .unwrap()
+            .name,
+        "Source B"
+    );
+    assert_eq!(
+        store
+            .review_entries(&scope)
+            .unwrap()
+            .into_iter()
+            .filter(|entry| entry.record_kind == NodeType::Source)
+            .count(),
+        2
+    );
 }
