@@ -29,7 +29,9 @@ test("saved Questions reach the bound idle thread and its model-visible transcri
     expect(transcript).toContain("accepted");
     expect(transcript).toContain("reply_probe");
     expect(transcript).toContain("clientId");
-    expect(JSON.stringify(await harness.transcript(other, false))).not.toContain("req_notifications");
+    expect(harness.requestThreads.length).toBeGreaterThan(0);
+    expect(harness.requestThreads.every(id => id === thread)).toBe(true);
+    expect(harness.requestThreads).not.toContain(other);
     harness.children[1].kill();
     expect(await deadline(harness.adapter!.exited, "client-loss adapter exit")).not.toBe(0);
   } finally { await harness.close(); }
@@ -138,4 +140,19 @@ test("a lost queue acknowledgement stops with an uncertain identity", async () =
     for (const socket of upstream) socket.close();
     proxy.stop(true); await harness.close();
   }
+}, 60000);
+
+// Implementation aid: each inference request must identify the configured thread.
+test("every captured model request belongs to the bound thread", async () => {
+  const harness = new Harness();
+  try {
+    await harness.start();
+    const thread = await harness.thread();
+    const other = await harness.thread();
+    harness.startAdapter(thread);
+    await harness.input("req_notifications");
+    expect(harness.requestThreads.length).toBeGreaterThan(0);
+    expect(harness.requestThreads.every(id => id === thread)).toBe(true);
+    expect(harness.requestThreads).not.toContain(other);
+  } finally { await harness.close(); }
 }, 60000);
