@@ -1,7 +1,8 @@
 use pdf_oxide::writer::PdfWriter;
 use provenance_macros::verifies;
 use provenance_ste100::{
-    import_dictionary, DictionaryImportError, DictionaryStatus, PartOfSpeech, StandardIssue,
+    import_dictionary, load_dictionary_index_for_source, store_dictionary_index,
+    DictionaryImportError, DictionaryIndexError, DictionaryStatus, PartOfSpeech, StandardIssue,
 };
 
 const STATED_APPROVED_WORDS: usize = 875;
@@ -122,6 +123,46 @@ fn imports_a_complete_positioned_dictionary_deterministically() {
     );
     assert_eq!(prefix_entry.ste_example, "");
     assert_eq!(prefix_entry.non_ste_example, None);
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_import_reuse", examples)]
+fn a_verified_index_loads_for_the_same_source_bytes() {
+    let pdf = dictionary_pdf(APPROVED_TABLE_ROWS, UNAPPROVED_TABLE_ROWS, 9, true);
+    let import = import_dictionary(&pdf).expect("import the fixture");
+    let directory = tempfile::tempdir().expect("create the index directory");
+    store_dictionary_index(&import, directory.path()).expect("store the index");
+
+    let loaded = load_dictionary_index_for_source(directory.path(), &pdf)
+        .expect("load the matching index");
+
+    assert_eq!(loaded, import);
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_import_reuse", examples)]
+fn changed_source_or_extractor_version_cannot_reuse_an_index() {
+    let pdf = dictionary_pdf(APPROVED_TABLE_ROWS, UNAPPROVED_TABLE_ROWS, 9, true);
+    let mut old_import = import_dictionary(&pdf).expect("import the fixture");
+    let directory = tempfile::tempdir().expect("create the index directory");
+    old_import.identity.extractor_version.push_str("-old");
+    store_dictionary_index(&old_import, directory.path()).expect("store the old index");
+
+    assert!(matches!(
+        load_dictionary_index_for_source(directory.path(), &pdf),
+        Err(DictionaryIndexError::NotFound { .. })
+    ));
+
+    old_import.identity.extractor_version.truncate(
+        old_import.identity.extractor_version.len() - "-old".len(),
+    );
+    store_dictionary_index(&old_import, directory.path()).expect("store the current index");
+    let mut changed_pdf = pdf;
+    changed_pdf.push(b' ');
+    assert!(matches!(
+        load_dictionary_index_for_source(directory.path(), &changed_pdf),
+        Err(DictionaryIndexError::NotFound { .. })
+    ));
 }
 
 #[test]
