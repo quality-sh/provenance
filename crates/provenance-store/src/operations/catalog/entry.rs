@@ -219,7 +219,6 @@ pub(super) fn entries() -> Vec<Entry> {
         register::<super::resource_members::GetProposalAssertion>(),
         register::<super::resource_members::GetProposalDisposition>(),
         register::<super::resource_lists::ListVerificationRuns>(),
-        register::<super::GetRequirement>(),
         register::<super::CreateRequirementResource>(),
         register::<super::UpdateRequirementResource>(),
         register::<super::SubmitRequirementReview>(),

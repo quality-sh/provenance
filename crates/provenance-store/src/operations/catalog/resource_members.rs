@@ -1,19 +1,45 @@
 //! Direct typed reads for resource member routes.
 
 use super::review_reads::ReadResult;
-use super::{shapes::graph_read_operation, ExecutionNeed};
+use super::{
+    shapes::{graph_read_operation, scoped_read_operation},
+    ExecutionNeed,
+};
 use crate::cache::read::payloads::{PayloadRow, ProposalPayloadRow};
 use crate::operations::reader::{self, ReadContext};
 use provenance_core::model::ProjectionRow;
 use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_core::StableId;
-use serde::Deserialize;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 #[derive(Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct ResourceMemberRequest {
     pub id: StableId,
+}
+
+#[derive(Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub struct ReviewResource<T> {
+    #[serde(flatten)]
+    pub record: T,
+    pub edit: provenance_core::review::RequirementEditState,
+    pub decision: provenance_core::review::RequirementDecisionState,
+}
+
+fn review_resource<T: DeserializeOwned>(
+    store: &crate::state_store::StateStore,
+    scope: &provenance_core::ScopeId,
+    kind: provenance_core::NodeType,
+    id: &StableId,
+) -> anyhow::Result<ReviewResource<T>> {
+    let snapshot = store.record_resource_snapshot(scope, kind, id)?;
+    Ok(ReviewResource {
+        record: serde_json::from_value(serde_json::to_value(snapshot.record)?)?,
+        edit: snapshot.edit,
+        decision: snapshot.decision,
+    })
 }
 
 #[derive(Deserialize)]
@@ -96,6 +122,25 @@ macro_rules! projection_member_operation {
     };
 }
 
+macro_rules! review_member_operation {
+    ($name:ident, $wire:literal, $result:ty, $kind:ident) => {
+        scoped_read_operation!(
+            pub $name,
+            $wire,
+            ResourceMemberRequest,
+            ReviewResource<$result>,
+            &[404, 409],
+            &[ExecutionNeed::GraphStorage],
+            |store, scope, request| review_resource::<$result>(
+                store,
+                scope,
+                provenance_core::NodeType::$kind,
+                &request.id,
+            )
+        );
+    };
+}
+
 macro_rules! payload_member_operation {
     ($name:ident, $wire:literal, $result:ty) => {
         member_operation!(
@@ -121,10 +166,11 @@ macro_rules! fact_member_operation {
 }
 
 macro_rules! catalog_member {
-    (none, $record:ty) => {};
+    (none, $record:ty, $($review:tt)*) => {};
     (
         projection($list:ident, $list_wire:literal, $page:ident, $page_wire:literal, none),
-        $record:ty
+        $record:ty,
+        $($review:tt)*
     ) => {};
     (
         projection(
@@ -135,7 +181,22 @@ macro_rules! catalog_member {
             $member:ident,
             $wire:literal
         ),
-        $record:ty
+        $record:ty,
+        review($kind:ident)
+    ) => {
+        review_member_operation!($member, $wire, $record, $kind);
+    };
+    (
+        projection(
+            $list:ident,
+            $list_wire:literal,
+            $page:ident,
+            $page_wire:literal,
+            $member:ident,
+            $wire:literal
+        ),
+        $record:ty,
+        none
     ) => {
         projection_member_operation!($member, $wire, $record);
     };
@@ -148,7 +209,8 @@ macro_rules! catalog_member {
             $member:ident,
             $wire:literal
         ),
-        $record:ty
+        $record:ty,
+        $($review:tt)*
     ) => {
         payload_member_operation!($member, $wire, $record);
     };
@@ -161,7 +223,8 @@ macro_rules! catalog_member {
             $member:ident,
             $wire:literal
         ),
-        $record:ty
+        $record:ty,
+        $($review:tt)*
     ) => {
         projection_member_operation!($member, $wire, $record);
     };
@@ -169,30 +232,46 @@ macro_rules! catalog_member {
 
 macro_rules! define_record_members {
     (
-        $(
-            $group:ident {
-                $(
+        $($group:ident {
+            $(
                     $variant:ident {
                         record: $record:ty,
                         field: $field:ident,
                         path: $path:ident,
+                        meta: $meta:tt,
                         node: [$($node:tt)*],
-                        reader: $reader:ident,
-                        closed: [$($closed:tt)*],
-                        strategy: $strategy:ident,
+                        reader: {
+                            open: $reader:ident,
+                            closed: [$($closed:tt)*],
+                            strategy: $strategy:ident
+                        },
                         id: $id:ident,
                         loader: [$($loader:tt)*],
+                        graph: [$($graph:tt)*],
+                        import: [$($import:tt)*],
                         catalog: [$($catalog:tt)*]
+                        , route: [$($route:tt)*]
+                        $(, review: $review:ident)?
                     };
-                )*
-            }
-        )*
+            )*
+        })*
     ) => {
-        $($(catalog_member!($($catalog)*, $record);)*)*
+        $($(register_catalog_member!(
+            [$($catalog)*], $record, [$($node)*], [$($review)?]
+        );)*)*
     };
 }
 
-crate::cache::record_families!(define_record_members);
+macro_rules! register_catalog_member {
+    ([$($catalog:tt)*], $record:ty, [$kind:ident], [$review:ident]) => {
+        catalog_member!($($catalog)*, $record, review($kind));
+    };
+    ([$($catalog:tt)*], $record:ty, [$($kind:tt)*], []) => {
+        catalog_member!($($catalog)*, $record, none);
+    };
+}
+
+crate::cache::family_table::record_family_rows!(define_record_members);
 fact_member_operation!(
     GetProposalAssertion,
     "get-proposal-assertion",
