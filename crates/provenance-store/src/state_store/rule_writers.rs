@@ -3,7 +3,7 @@ use super::writers::sorted_ids;
 use super::{CreateResolutionInput, CreateRuleInput, StateStore};
 use crate::shards;
 use provenance_core::model::relations::required_refusal;
-use provenance_core::{NodeType, Resolution, Rule, SUPPORTED_SCHEMA_VERSION};
+use provenance_core::{review::REVIEW_SCHEMA_VERSION, NodeType, Resolution, Rule};
 
 impl StateStore {
     pub fn create_resolution(&self, input: CreateResolutionInput) -> anyhow::Result<Resolution> {
@@ -62,7 +62,7 @@ impl StateStore {
             let resolution = Resolution {
                 created: None,
                 updated: None,
-                schema_version: SUPPORTED_SCHEMA_VERSION,
+                schema_version: REVIEW_SCHEMA_VERSION,
                 scope_id: scope_id.clone(),
                 id: id.clone(),
                 title,
@@ -154,7 +154,7 @@ impl StateStore {
                 created: None,
                 updated: None,
                 archived_in_commit,
-                schema_version: SUPPORTED_SCHEMA_VERSION,
+                schema_version: REVIEW_SCHEMA_VERSION,
                 scope_id: scope_id.clone(),
                 id: id.clone(),
                 declared_by: None,
