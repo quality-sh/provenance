@@ -33,7 +33,7 @@ fn seeded_requirement_store() -> (tempfile::TempDir, StateStore, ScopeId) {
             description: None,
             status: RequirementStatus::Active,
             domain_id: None,
-            refines: None,
+            refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,

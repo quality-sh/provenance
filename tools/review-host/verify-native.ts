@@ -44,7 +44,7 @@ try {
       cwd: work, encoding: 'utf8', timeout: 30_000,
       input: JSON.stringify({
         actor: 'review-test', id, statement: 'The record is readable.', status: 'discovery',
-        depends_on: [], supersedes: [], ...(parent ? { refines: parent } : {}),
+        depends_on: [], supersedes: [], ...(parent ? { refines: [parent] } : {}),
       }),
     });
   }

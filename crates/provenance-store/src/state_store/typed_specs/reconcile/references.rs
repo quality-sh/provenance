@@ -52,8 +52,11 @@ pub(super) fn apply_requirement(
     declaration: &TypedRequirementInput,
     requirement_ids: &BTreeMap<String, StableId>,
 ) -> anyhow::Result<()> {
-    if let Some(key) = &declaration.refines {
-        record.refines = Some(requirement_ids[key].clone());
+    if let Some(keys) = &declaration.refines {
+        record.refines = keys
+            .iter()
+            .map(|key| requirement_ids[key].clone())
+            .collect();
     }
     if let Some(keys) = &declaration.depends_on {
         record.depends_on = ids_of(keys, requirement_ids);
