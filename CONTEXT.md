@@ -190,6 +190,11 @@ The person who starts a local review host and the clients to which that person
 gives access. They share access to the repository target and scope selected for
 that host session.
 
+## Review page action
+
+A saved approval, rejection, Question, reply, or record edit made through an
+authenticated review page session. CLI and SDK writes are not Review page actions.
+
 ## Review document
 
 A view of one explicit Requirement and the records related to it through

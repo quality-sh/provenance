@@ -25,8 +25,8 @@ fn remove_shard(root: &std::path::Path, shard: &str) {
 }
 
 #[test]
-// Implementation aid: external removal must identify exactly the record absent from the document.
-fn removed_document_member_is_reported_in_removed_ids() {
+// Implementation aid: writes outside the page do not produce agent messages.
+fn external_removal_does_not_notify_the_agent() {
     let repo = repository();
     create(repo.path(), "req_follow", "requirement", &[]);
     create(
@@ -41,22 +41,20 @@ fn removed_document_member_is_reported_in_removed_ids() {
         .to_string()
         .contains("rule_follow"));
     remove_shard(repo.path(), "rules/rule.jsonl");
-    let changed = follow.frame();
-    assert_eq!(changed["type"], "state");
-    assert_eq!(changed["continuity"], "current");
-    assert_eq!(changed["removedIds"], serde_json::json!(["rule_follow"]));
-    assert!(!changed["records"].to_string().contains("rule_follow"));
+    follow.quiet();
 }
 
 #[test]
 // Implementation aid: deleting the root is a read failure while the host remains available.
-fn deleted_root_reports_a_read_error_with_its_reason() {
+fn deleted_root_reports_a_read_error_when_recovery_reads_it() {
     let repo = repository();
     create(repo.path(), "req_follow", "requirement", &[]);
     let mut host = start(repo.path());
     let follow = Follow::start(&host, repo.path(), "req_follow");
     follow.frame();
     remove_shard(repo.path(), "requirements/req.jsonl");
+    follow.quiet();
+    review_host_support::configure_disposition_actors(repo.path(), &["reviewer"]);
     let error = follow.frame();
     assert_eq!(error["type"], "read-error");
     assert_eq!(error["continuity"], "unknown");
