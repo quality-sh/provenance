@@ -19,25 +19,39 @@ impl StateStore {
         input: UpdateResolutionInput,
     ) -> anyhow::Result<Resolution> {
         let scope = input.scope_id.clone();
+        let records = self.list_resolutions(&scope)?;
+        records
+            .iter()
+            .find(|record| record.id == input.id)
+            .ok_or_else(missing)?;
+        review::relationships::validate_list_edit_targets(
+            self,
+            &scope,
+            &records,
+            &input.id,
+            "requirement_ids",
+            input.requirement_ids.as_ref(),
+        )?;
+        review::relationships::validate_list_edit_targets(
+            self,
+            &scope,
+            &records,
+            &input.id,
+            "supersedes",
+            input.supersedes.as_ref(),
+        )?;
         let path = shards::resolutions_path(&self.layout, &input.scope_id);
         let record = self.mutate_graph_record(&path, |records: &mut Vec<Resolution>| {
             let record = records
                 .iter_mut()
                 .find(|r| r.id == input.id)
                 .ok_or_else(missing)?;
-            let record_id = record.id.clone();
             review::relationships::expand_list(
                 &mut record.requirement_ids,
-                "requirement_ids",
-                "resolution",
-                &record_id,
                 input.requirement_ids.as_ref(),
             )?;
             review::relationships::expand_list(
                 &mut record.supersedes,
-                "supersedes",
-                "resolution",
-                &record_id,
                 input.supersedes.as_ref(),
             )?;
             for text in [&input.title, &input.position, &input.rationale]

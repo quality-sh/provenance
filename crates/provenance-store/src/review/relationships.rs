@@ -1,7 +1,8 @@
 use super::input::{CitesEdit, ListEdit, RequirementRelations, SaveRequirement, SingleEdit};
 use crate::{shards, state_store::StateStore};
-use provenance_core::model::relations::RelationOwner;
+use provenance_core::model::relations::{declaration_of, reaches, RelationOwner};
 use provenance_core::{Requirement, ScopeId, SourceReference, StableId};
+use provenance_macros::rule;
 
 #[derive(Debug, Clone, Default)]
 pub(super) struct FinalRelations {
@@ -31,6 +32,89 @@ impl RequirementRelations {
         sort_cites(self.cites.as_mut());
     }
 
+    pub(super) fn validate(
+        &self,
+        store: &StateStore,
+        scope: &ScopeId,
+        before: &Requirement,
+    ) -> anyhow::Result<()> {
+        let records = store.list_requirements(scope)?;
+        if let Some(SingleEdit::Set(target)) = &self.refines {
+            validate_relation_target(
+                store,
+                scope,
+                &records,
+                &before.id,
+                "refines",
+                target,
+                "refines",
+            )?;
+        }
+        validate_list_edit_targets(
+            store,
+            scope,
+            &records,
+            &before.id,
+            "depends_on",
+            self.depends_on.as_ref(),
+        )?;
+        validate_list_edit_targets(
+            store,
+            scope,
+            &records,
+            &before.id,
+            "supersedes",
+            self.supersedes.as_ref(),
+        )?;
+        if let Some(SingleEdit::Set(target)) = &self.spawned_by {
+            validate_relation_target(
+                store,
+                scope,
+                &records,
+                &before.id,
+                "spawned_by",
+                target,
+                "spawned_by",
+            )?;
+        }
+        if let Some(edit) = &self.cites {
+            match edit {
+                CitesEdit::Set(entries) => {
+                    for entry in entries {
+                        validate_relation_target(
+                            store,
+                            scope,
+                            &records,
+                            &before.id,
+                            "cites",
+                            &entry.source_id,
+                            "cites",
+                        )?;
+                    }
+                }
+                CitesEdit::Delta { add, remove } => {
+                    for entry in add {
+                        validate_relation_target(
+                            store,
+                            scope,
+                            &records,
+                            &before.id,
+                            "cites",
+                            &entry.source_id,
+                            "cites",
+                        )?;
+                    }
+                    for target in remove {
+                        validate_relation_target(
+                            store, scope, &records, &before.id, "cites", target, "cites",
+                        )?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     pub(super) fn expand(&self, before: &Requirement) -> anyhow::Result<FinalRelations> {
         let mut final_sets = FinalRelations {
             refines: before.refines.clone(),
@@ -45,27 +129,15 @@ impl RequirementRelations {
                 SingleEdit::Clear => None,
             };
         }
-        expand_list(
-            &mut final_sets.depends_on,
-            "depends_on",
-            "requirement",
-            &before.id,
-            self.depends_on.as_ref(),
-        )?;
-        expand_list(
-            &mut final_sets.supersedes,
-            "supersedes",
-            "requirement",
-            &before.id,
-            self.supersedes.as_ref(),
-        )?;
+        expand_list(&mut final_sets.depends_on, self.depends_on.as_ref())?;
+        expand_list(&mut final_sets.supersedes, self.supersedes.as_ref())?;
         if let Some(edit) = &self.spawned_by {
             final_sets.spawned_by = match edit {
                 SingleEdit::Set(id) => Some(id.clone()),
                 SingleEdit::Clear => None,
             };
         }
-        expand_cites(&mut final_sets.cites, before, self.cites.as_ref())?;
+        expand_cites(&mut final_sets.cites, self.cites.as_ref())?;
         Ok(final_sets)
     }
 }
@@ -102,6 +174,56 @@ pub(super) fn sorted_ids(mut ids: Vec<StableId>) -> Vec<StableId> {
     ids
 }
 
+#[rule("rule_porcelain_relationship_noop_validates")]
+pub(crate) fn validate_relation_target<T: RelationOwner>(
+    store: &StateStore,
+    scope: &ScopeId,
+    records: &[T],
+    owner: &StableId,
+    name: &str,
+    target: &StableId,
+    named_by: &str,
+) -> anyhow::Result<()> {
+    let declaration = declaration_of(T::relations(), name)
+        .expect("every relationship edit names a declared relation");
+    store.ensure_node_exists(scope, declaration.target, target, named_by)?;
+    if declaration.target == T::OWNER && reaches(records, name, target, owner) {
+        return Err(crate::write_error::SourceFailure::wrap(
+            crate::write_error::WriteFailure::InvalidUpdate,
+            anyhow::anyhow!(
+                "{name} from {} to {} would form a cycle",
+                owner.as_str(),
+                target.as_str()
+            ),
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_list_edit_targets<T: RelationOwner>(
+    store: &StateStore,
+    scope: &ScopeId,
+    records: &[T],
+    owner: &StableId,
+    name: &str,
+    edit: Option<&ListEdit>,
+) -> anyhow::Result<()> {
+    let Some(edit) = edit else { return Ok(()) };
+    match edit {
+        ListEdit::Set(targets) => {
+            for target in targets {
+                validate_relation_target(store, scope, records, owner, name, target, name)?;
+            }
+        }
+        ListEdit::Delta { add, remove } => {
+            for target in add.iter().chain(remove) {
+                validate_relation_target(store, scope, records, owner, name, target, name)?;
+            }
+        }
+    }
+    Ok(())
+}
+
 fn sorted_citations(mut refs: Vec<SourceReference>) -> Vec<SourceReference> {
     refs.sort_by(|a, b| {
         a.source_id
@@ -122,11 +244,9 @@ fn sort_citations(entries: &mut [SourceReference]) {
     });
 }
 
+#[rule("rule_porcelain_relationship_membership_noop")]
 pub fn expand_list(
     target: &mut Vec<StableId>,
-    name: &str,
-    owner_kind: &str,
-    owner_id: &StableId,
     edit: Option<&ListEdit>,
 ) -> anyhow::Result<()> {
     let Some(edit) = edit else { return Ok(()) };
@@ -138,14 +258,6 @@ pub fn expand_list(
                     target.push(entry.clone());
                 }
             }
-            for entry in remove {
-                anyhow::ensure!(
-                    target.contains(entry),
-                    "{owner_kind} {} does not name a record under {name}: {}",
-                    owner_id.as_str(),
-                    entry.as_str()
-                );
-            }
             target.retain(|entry| !remove.contains(entry));
             *target = sorted_ids(std::mem::take(target));
         }
@@ -155,7 +267,6 @@ pub fn expand_list(
 
 fn expand_cites(
     target: &mut Vec<SourceReference>,
-    before: &Requirement,
     edit: Option<&CitesEdit>,
 ) -> anyhow::Result<()> {
     let Some(edit) = edit else { return Ok(()) };
@@ -166,14 +277,6 @@ fn expand_cites(
                 if !target.contains(citation) {
                     target.push(citation.clone());
                 }
-            }
-            for source in remove {
-                anyhow::ensure!(
-                    target.iter().any(|entry| &entry.source_id == source),
-                    "requirement {} does not name source {} under cites",
-                    before.id.as_str(),
-                    source.as_str()
-                );
             }
             target.retain(|entry| !remove.contains(&entry.source_id));
             *target = sorted_citations(std::mem::take(target));

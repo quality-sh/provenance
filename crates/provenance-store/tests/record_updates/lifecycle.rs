@@ -82,6 +82,52 @@ async fn all_four_records_keep_created_and_update_only_for_changed_content() {
     }
 }
 
+#[tokio::test]
+async fn repeated_valid_relationship_removal_keeps_the_record_stamp() {
+    let fixture = Fixture::new();
+    git(&fixture, &["init", "--quiet"]);
+    commit(&fixture);
+    create_source_for_stamp(&fixture, "source_old", &[]).await;
+    create_source_for_stamp(&fixture, "source_one", &["source_old"]).await;
+    let removal_commit = commit(&fixture);
+    let removed = fixture
+        .call(
+            "update-source",
+            json!({
+                "scope_id":"default", "id":"source_one",
+                "supersedes":{"remove":["source_old"]}
+            }),
+        )
+        .await
+        .unwrap();
+    assert_eq!(removed["updated"]["commit"], removal_commit);
+    commit(&fixture);
+    let repeated = fixture
+        .call(
+            "update-source",
+            json!({
+                "scope_id":"default", "id":"source_one",
+                "supersedes":{"remove":["source_old"]}
+            }),
+        )
+        .await
+        .unwrap();
+    assert_eq!(repeated, removed);
+}
+
+async fn create_source_for_stamp(fixture: &Fixture, id: &str, supersedes: &[&str]) {
+    fixture
+        .call(
+            "create-source",
+            json!({
+                "scope_id":"default", "id":id, "name":id,
+                "source_type":"policy", "supersedes":supersedes
+            }),
+        )
+        .await
+        .unwrap();
+}
+
 async fn rule(fixture: &Fixture, status: &str, archive: Option<Value>) -> Result<Value, Value> {
     let mut input = json!({"scope_id":"default","id":"rule_one","statement":"The system saves the record.","status":status,"severity":"medium","requirement_ids":["req_one"],"resolution_ids":[]});
     if let Some(archive) = archive {
