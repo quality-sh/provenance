@@ -178,7 +178,8 @@ impl GraphReferences {
             {
                 return Err(GraphReferenceError::Incomplete {
                     detail: format!(
-                        "implicit HEAD requires clean canonical state for scope '{scope}'; commit graph changes first"
+                        "implicit HEAD requires clean canonical state for scope \
+                         '{scope}'; commit graph changes first"
                     ),
                 });
             }

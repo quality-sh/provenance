@@ -23,14 +23,17 @@ pub trait ProposalPayloadRow: PayloadRow + sealed::ProposalOwned {}
 macro_rules! define_payload_rows {
     (
         export { $($export:tt)* }
-        canonical { $($variant:ident: $record:ty, $field:ident, $path:ident, $suffix:literal, $table:literal, [$($node:tt)*], $reader:ident, [$($closed:tt)*], $id:ident, [$($loader:tt)*], [$($catalog:tt)*];)* }
+        canonical { $(
+            $variant:ident { record: $record:ty, $($rest:tt)* };
+        )* }
         bindings { $($bindings:tt)* }
         internal { $($internal:tt)* }
     ) => {
         $(
             impl sealed::Sealed for $record {}
             impl PayloadRow for $record {
-                const TABLE: &'static str = $table;
+                const TABLE: &'static str =
+                    crate::cache::ProjectionFamily::$variant.family_name();
             }
         )*
     };
