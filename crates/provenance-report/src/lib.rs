@@ -10,4 +10,7 @@ pub mod build;
 pub mod catalog;
 pub mod envelope;
 pub mod escape;
-pub mod render;
+mod pipeline;
+mod render;
+
+pub use pipeline::{render_envelope, RenderError, RenderFormat};
