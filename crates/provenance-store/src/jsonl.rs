@@ -137,10 +137,22 @@ fn with_state_publication<R>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde::Serialize;
+    use serde::{Deserialize, Serialize};
     #[derive(Serialize)]
     struct Record {
         id: &'static str,
+    }
+
+    #[derive(Deserialize, Serialize)]
+    struct NestedRecord {
+        schema_version: u32,
+        id: String,
+        detail: Detail,
+    }
+
+    #[derive(Deserialize, Serialize)]
+    struct Detail {
+        known: String,
     }
     #[test]
     fn writes_newline_terminated_jsonl() {
@@ -207,5 +219,149 @@ mod tests {
             WriteFailure::InvalidCompletion
         ));
         assert_eq!(std::fs::read(&path).unwrap(), before);
+    }
+
+    #[test]
+    fn unrelated_mutation_keeps_a_nested_unknown_row_exactly() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = camino::Utf8Path::from_path(dir.path()).unwrap();
+        let path = root.join("records.jsonl");
+        let existing =
+            "  {\"id\":\"one\",\"detail\":{\"extension\":true,\"known\":\"value\"},\"schema_version\":2}  ";
+        std::fs::write(&path, format!("{existing}\n")).unwrap();
+
+        mutate_jsonl_locked(
+            &path,
+            &root.join("records.lock"),
+            |records: &mut Vec<NestedRecord>| {
+                records.push(NestedRecord {
+                    schema_version: provenance_core::SUPPORTED_SCHEMA_VERSION.0,
+                    id: "two".into(),
+                    detail: Detail {
+                        known: "new".into(),
+                    },
+                });
+                Ok(())
+            },
+        )
+        .unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(path).unwrap(),
+            format!(
+                "{existing}\n{{\"schema_version\":2,\"id\":\"two\",\"detail\":{{\"known\":\"new\"}}}}\n"
+            )
+        );
+    }
+
+    #[test]
+    fn mutation_keeps_a_changed_row_with_top_level_unknown_data() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = camino::Utf8Path::from_path(dir.path()).unwrap();
+        let path = root.join("records.jsonl");
+        std::fs::write(
+            &path,
+            "{\"schema_version\":2,\"id\":\"one\",\"detail\":{\"known\":\"value\"},\"extension\":true}\n",
+        )
+        .unwrap();
+
+        mutate_jsonl_locked(
+            &path,
+            &root.join("records.lock"),
+            |records: &mut Vec<NestedRecord>| {
+                records[0].detail.known = "changed".into();
+                Ok(())
+            },
+        )
+        .unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(path).unwrap(),
+            "{\"schema_version\":2,\"id\":\"one\",\"detail\":{\"known\":\"changed\"},\"extension\":true}\n"
+        );
+    }
+
+    #[test]
+    fn mutation_refuses_a_changed_row_with_nested_unknown_data() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = camino::Utf8Path::from_path(dir.path()).unwrap();
+        let path = root.join("records.jsonl");
+        std::fs::write(
+            &path,
+            "{\"schema_version\":2,\"id\":\"one\",\"detail\":{\"known\":\"value\",\"extension\":true}}\n",
+        )
+        .unwrap();
+        let before = std::fs::read(&path).unwrap();
+        let message = mutate_jsonl_locked(
+            &path,
+            &root.join("records.lock"),
+            |records: &mut Vec<NestedRecord>| {
+                records[0].detail.known = "changed".into();
+                Ok(())
+            },
+        )
+        .unwrap_err()
+        .to_string();
+
+        assert!(message.contains("nested unknown field"), "{message}");
+        assert!(message.contains("detail.extension"), "{message}");
+        assert_eq!(std::fs::read(path).unwrap(), before);
+    }
+
+    #[test]
+    fn mutation_refuses_a_changed_row_with_a_repeated_unknown_field() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = camino::Utf8Path::from_path(dir.path()).unwrap();
+        let path = root.join("records.jsonl");
+        std::fs::write(
+            &path,
+            "{\"schema_version\":2,\"id\":\"one\",\"detail\":{\"known\":\"value\"},\"extension\":1,\"extension\":2}\n",
+        )
+        .unwrap();
+        let before = std::fs::read(&path).unwrap();
+
+        let message = mutate_jsonl_locked(
+            &path,
+            &root.join("records.lock"),
+            |records: &mut Vec<NestedRecord>| {
+                records[0].detail.known = "changed".into();
+                Ok(())
+            },
+        )
+        .unwrap_err()
+        .to_string();
+
+        assert!(message.contains("repeated top-level member"), "{message}");
+        assert!(message.contains("extension"), "{message}");
+        assert_eq!(std::fs::read(path).unwrap(), before);
+    }
+
+    #[test]
+    fn unsupported_version_refusal_precedes_mutation_and_keeps_the_shard() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = camino::Utf8Path::from_path(dir.path()).unwrap();
+        let path = root.join("records.jsonl");
+        let future = provenance_core::SUPPORTED_SCHEMA_VERSION.0 + 1;
+        std::fs::write(
+            &path,
+            format!("{{\"schema_version\":{future},\"id\":\"one\"}}\n"),
+        )
+        .unwrap();
+        let before = std::fs::read(&path).unwrap();
+        let mut mutation_ran = false;
+
+        let error = mutate_jsonl_locked(
+            &path,
+            &root.join("records.lock"),
+            |_: &mut Vec<NestedRecord>| {
+                mutation_ran = true;
+                Ok(())
+            },
+        )
+        .unwrap_err();
+
+        assert!(error.to_string().contains("has schema_version"));
+        assert!(!mutation_ran);
+        assert_eq!(std::fs::read(path).unwrap(), before);
     }
 }
