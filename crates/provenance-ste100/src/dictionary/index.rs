@@ -6,7 +6,8 @@ use std::{
 use fs2::FileExt;
 use provenance_macros::rule;
 
-use super::{digest, DictionaryImport, DictionaryImportIdentity};
+use super::{digest, DictionaryImport, DictionaryImportIdentity, DICTIONARY_EXTRACTOR_VERSION};
+use crate::StandardIssue;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DictionaryIndexError {
@@ -15,6 +16,7 @@ pub enum DictionaryIndexError {
     Malformed { path: PathBuf, message: String },
     IdentityMismatch { path: PathBuf },
     DigestMismatch { path: PathBuf },
+    InvalidStructure { path: PathBuf, message: String },
 }
 
 impl std::fmt::Display for DictionaryIndexError {
@@ -45,6 +47,11 @@ impl std::fmt::Display for DictionaryIndexError {
             Self::DigestMismatch { path } => write!(
                 formatter,
                 "the index file at {} does not match its recorded data digest",
+                path.display()
+            ),
+            Self::InvalidStructure { path, message } => write!(
+                formatter,
+                "the index file at {} has invalid dictionary structure: {message}",
                 path.display()
             ),
         }
@@ -92,19 +99,55 @@ pub fn load_dictionary_index(
     identity: &DictionaryImportIdentity,
 ) -> Result<DictionaryImport, DictionaryIndexError> {
     let path = index_path(directory, identity);
-    let contents = match std::fs::read(&path) {
+    let import = read_index(&path)?;
+    verify_index(&import, identity, &path)?;
+    Ok(import)
+}
+
+/// Loads a validated index for these PDF bytes and the current extractor.
+pub fn load_dictionary_index_for_source(
+    directory: &Path,
+    source: &[u8],
+) -> Result<DictionaryImport, DictionaryIndexError> {
+    let source_sha256 = digest::source_digest(source);
+    let path = index_path_parts(
+        directory,
+        StandardIssue::Nine,
+        &source_sha256,
+        DICTIONARY_EXTRACTOR_VERSION,
+    );
+    let import = read_index(&path)?;
+    if import.identity.issue != StandardIssue::Nine
+        || import.identity.source_sha256 != source_sha256
+        || import.identity.extractor_version != DICTIONARY_EXTRACTOR_VERSION
+    {
+        return Err(DictionaryIndexError::IdentityMismatch { path });
+    }
+    verify_index(&import, &import.identity, &path)?;
+    super::validate_entries(&import.entries).map_err(|error| {
+        DictionaryIndexError::InvalidStructure {
+            path,
+            message: error.to_string(),
+        }
+    })?;
+    Ok(import)
+}
+
+fn read_index(path: &Path) -> Result<DictionaryImport, DictionaryIndexError> {
+    let contents = match std::fs::read(path) {
         Ok(contents) => contents,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Err(DictionaryIndexError::NotFound { path });
+            return Err(DictionaryIndexError::NotFound {
+                path: path.to_path_buf(),
+            });
         }
-        Err(error) => return Err(io_error(&path, &error)),
+        Err(error) => return Err(io_error(path, &error)),
     };
     let import: DictionaryImport =
         serde_json::from_slice(&contents).map_err(|error| DictionaryIndexError::Malformed {
-            path: path.clone(),
+            path: path.to_path_buf(),
             message: error.to_string(),
         })?;
-    verify_index(&import, identity, &path)?;
     Ok(import)
 }
 
@@ -129,11 +172,25 @@ fn verify_index(
 }
 
 fn index_path(directory: &Path, identity: &DictionaryImportIdentity) -> PathBuf {
+    index_path_parts(
+        directory,
+        identity.issue,
+        &identity.source_sha256,
+        &identity.extractor_version,
+    )
+}
+
+fn index_path_parts(
+    directory: &Path,
+    issue: StandardIssue,
+    source_sha256: &str,
+    extractor_version: &str,
+) -> PathBuf {
     directory.join(format!(
         "issue-{}-{}-{}.json",
-        u8::from(identity.issue),
-        identity.source_sha256,
-        identity.extractor_version
+        u8::from(issue),
+        source_sha256,
+        extractor_version
     ))
 }
 
@@ -298,5 +355,19 @@ mod tests {
             matches!(error, DictionaryIndexError::NotFound { .. }),
             "unexpected error: {error:?}"
         );
+    }
+
+    #[test]
+    #[verifies("rule_ste_dictionary_structure_validation", examples)]
+    fn a_source_match_does_not_accept_an_incomplete_index() {
+        let directory = scratch_directory();
+        let import = fixture_import();
+        store_dictionary_index(&import, &directory).expect("store the index");
+
+        let error = super::load_dictionary_index_for_source(&directory, b"synthetic source bytes")
+            .expect_err("an incomplete index must not load for a new project");
+
+        assert!(matches!(error, DictionaryIndexError::InvalidStructure { .. }));
+        std::fs::remove_dir_all(&directory).expect("remove the scratch directory");
     }
 }

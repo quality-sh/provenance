@@ -148,6 +148,65 @@ fn repeated_setup_and_normal_checks_use_local_data_without_network_access() {
 }
 
 #[test]
+#[verifies("rule_ste_dictionary_import_reuse", examples)]
+fn another_project_uses_the_same_verified_source_index() {
+    let _serial = serial();
+    let server = TestServer::new(200, dictionary_support::dictionary_pdf());
+    let fixture = Fixture::new();
+    fixture
+        .init("agent")
+        .env("PROVENANCE_TEST_STE100_ASSET_URL", server.url())
+        .assert()
+        .success();
+    let another_repo = fixture.temporary.path().join("another-repo");
+
+    fixture
+        .command()
+        .args(init_args(&another_repo, "agent"))
+        .env("PROVENANCE_TEST_STE100_ASSET_URL", server.url())
+        .assert()
+        .success();
+
+    assert_eq!(server.requests().len(), 1);
+    assert_eq!(
+        std::fs::read(dictionary_support::reference_path(&fixture.repo)).unwrap(),
+        std::fs::read(dictionary_support::reference_path(&another_repo)).unwrap()
+    );
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_index_digest_verification", examples)]
+fn truncated_shared_index_is_rebuilt_from_the_cached_pdf() {
+    let _serial = serial();
+    let server = TestServer::new(200, dictionary_support::dictionary_pdf());
+    let fixture = Fixture::new();
+    fixture
+        .init("agent")
+        .env("PROVENANCE_TEST_STE100_ASSET_URL", server.url())
+        .assert()
+        .success();
+    let index = std::fs::read_dir(&fixture.index_dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .find(|path| path.extension().is_some_and(|extension| extension == "json"))
+        .expect("the first init stored an index");
+    std::fs::write(&index, b"{\"identity\":").unwrap();
+    let another_repo = fixture.temporary.path().join("another-repo");
+
+    fixture
+        .command()
+        .args(init_args(&another_repo, "agent"))
+        .env("PROVENANCE_TEST_STE100_ASSET_URL", server.url())
+        .assert()
+        .success();
+
+    assert_eq!(server.requests().len(), 1);
+    assert!(dictionary_support::reference_path(&another_repo).is_file());
+    let restored = std::fs::read(&index).unwrap();
+    assert!(serde_json::from_slice::<serde_json::Value>(&restored).is_ok());
+}
+
+#[test]
 #[verifies("rule_ste_dictionary_download_concurrency", examples)]
 fn concurrent_onboarding_shares_one_download() {
     let _serial = serial();

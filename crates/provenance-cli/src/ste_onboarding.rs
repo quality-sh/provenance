@@ -127,6 +127,15 @@ fn import_bytes(bytes: &[u8]) -> anyhow::Result<DictionaryImport> {
         .map_err(|error| anyhow::anyhow!("import the dictionary: {error}"))
 }
 
+fn import_cached_bytes(bytes: &[u8]) -> anyhow::Result<DictionaryImport> {
+    if let Some(directory) = dictionary_reference::index_directory() {
+        if let Ok(import) = provenance_ste100::load_dictionary_index_for_source(&directory, bytes) {
+            return Ok(import);
+        }
+    }
+    import_bytes(bytes)
+}
+
 /// Serializes access to the shared asset and retries only the official URL.
 #[rule("rule_ste_dictionary_download_concurrency")]
 #[rule("rule_ste_dictionary_download_retry_bound")]
@@ -139,7 +148,7 @@ fn acquire_official_dictionary_blocking() -> anyhow::Result<DictionaryImport> {
     FileExt::lock_exclusive(&lock).context("lock the shared STE asset cache")?;
     let asset = directory.join("ASD-STE100_ISSUE9.pdf");
     if let Ok(bytes) = std::fs::read(&asset) {
-        if let Ok(import) = import_bytes(&bytes) {
+        if let Ok(import) = import_cached_bytes(&bytes) {
             return Ok(import);
         }
         std::fs::remove_file(&asset).context("remove an invalid cached STE asset")?;
@@ -152,7 +161,7 @@ fn acquire_official_dictionary_blocking() -> anyhow::Result<DictionaryImport> {
     let mut last_error = None;
     for attempt in 0..DOWNLOAD_ATTEMPTS {
         match download(&client).and_then(|bytes| {
-            let import = import_bytes(&bytes)?;
+            let import = import_cached_bytes(&bytes)?;
             store_asset(&asset, &bytes)?;
             Ok(import)
         }) {
