@@ -95,7 +95,8 @@ impl StateStore {
                 let staged = Self::new(layout.clone());
                 let staged_path = layout.root().join(&relative);
                 guard::with_writer(&staged_path, "*", || {
-                    let (before, _) = staged.mutate_graph_record_guarded(&staged_path, mutate)?;
+                    let (before, after) =
+                        staged.mutate_graph_record_guarded(&staged_path, mutate)?;
                     let before = before.ok_or_else(|| {
                         anyhow::anyhow!("native update cannot create a graph record")
                     })?;
@@ -113,8 +114,7 @@ impl StateStore {
                             ));
                         }
                     }
-                    let after = staged.enroll_graph_record::<T>(&staged_path, before.id())?;
-                    let after: ReviewRecord = after.clone().into();
+                    let after: ReviewRecord = after.into();
                     staged.commit_native_occurrence(Some(&before), &after)?;
                     staged.validate_graph_scope(after.scope_id())?;
                     staged.enroll_review_manifest()?;
