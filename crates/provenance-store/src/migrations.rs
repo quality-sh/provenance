@@ -33,7 +33,8 @@ pub const RECORD_DELETION_MIGRATION_ID: &str = "026";
 pub const RECORD_STAMPS_MIGRATION_ID: &str = "027";
 pub const STORED_DIGESTS_MIGRATION_ID: &str = "028";
 pub const RESOURCE_PAYLOADS_MIGRATION_ID: &str = "029";
-pub const LATEST_MIGRATION_ID: &str = RESOURCE_PAYLOADS_MIGRATION_ID;
+pub const RECORD_IDENTITIES_MIGRATION_ID: &str = "030";
+pub const LATEST_MIGRATION_ID: &str = RECORD_IDENTITIES_MIGRATION_ID;
 const INITIAL_SQL: &str = include_str!("../migrations/001_initial_cache.sql");
 const SOURCE_REQUIREMENT_SQL: &str =
     include_str!("../migrations/002_sources_requirements_edges.sql");
@@ -144,6 +145,10 @@ pub async fn run_migrations(
             RESOURCE_PAYLOADS_MIGRATION_ID,
             include_str!("../migrations/029_resource_payloads.sql"),
         ),
+        (
+            RECORD_IDENTITIES_MIGRATION_ID,
+            include_str!("../migrations/030_record_identities.sql"),
+        ),
     ] {
         let already_applied: Option<String> =
             sqlx::query_scalar("SELECT id FROM _schema_migrations WHERE id = ?")
@@ -209,7 +214,7 @@ mod tests {
             vec![
                 "001", "002", "003", "004", "005", "006", "007", "008", "009", "010", "011", "012",
                 "013", "014", "015", "016", "017", "018", "019", "020", "021", "022", "023", "024",
-                "025", "026", "027", "028", "029"
+                "025", "026", "027", "028", "029", "030"
             ]
         );
         assert!(run_migrations(&pool, &layout).await.unwrap().is_empty());
@@ -222,7 +227,7 @@ mod tests {
             vec![
                 "001", "002", "003", "004", "005", "006", "007", "008", "009", "010", "011", "012",
                 "013", "014", "015", "016", "017", "018", "019", "020", "021", "022", "023", "024",
-                "025", "026", "027", "028", "029"
+                "025", "026", "027", "028", "029", "030"
             ]
         );
     }

@@ -203,32 +203,37 @@ pub(crate) async fn call_get(
 
 pub fn render_get_readable(outcome: &provenance_porcelain::get::GetOutcome) -> String {
     let mut lines = vec![
-        format!("{} {}", outcome.record.kind, outcome.record.id),
-        format!("view: {:?}", outcome.view).to_ascii_lowercase(),
+        format!(
+            "{} {}",
+            outcome.record.node_type().as_str(),
+            outcome.record.id()
+        ),
+        format!("view: {:?}", outcome.view()).to_ascii_lowercase(),
         format!(
             "record: {}",
-            serde_json::to_string_pretty(&outcome.record.value)
+            serde_json::to_string_pretty(&provenance_porcelain::get::RecordData(&outcome.record))
                 .expect("record values are valid JSON")
         ),
     ];
-    if !outcome.related.is_empty() {
+    if !outcome.related().is_empty() {
         lines.push("related:".to_owned());
-        lines.extend(outcome.related.iter().map(|record| {
+        lines.extend(outcome.related().iter().map(|record| {
             format!(
                 "- {} {}: {}",
-                record.kind,
-                record.id,
-                serde_json::to_string(&record.value).expect("record values are valid JSON")
+                record.node.node_type().as_str(),
+                record.node.id(),
+                serde_json::to_string(&provenance_porcelain::get::RecordData(&record.node))
+                    .expect("record values are valid JSON")
             )
         }));
     }
-    if let Some(detail) = &outcome.detail {
+    if let Some(detail) = outcome.impact() {
         lines.push(format!(
             "detail: {}",
             serde_json::to_string_pretty(detail).expect("view details are valid JSON")
         ));
     }
-    if let Some(bounds) = &outcome.bounds {
+    if let Some(bounds) = outcome.bounds() {
         lines.push(format!(
             "bounds: limit={} max_depth={} has_more={} truncated={} continuation={}",
             bounds.limit,
@@ -242,12 +247,9 @@ pub fn render_get_readable(outcome: &provenance_porcelain::get::GetOutcome) -> S
     }
     for (label, metadata) in [
         ("record", outcome.record_metadata.as_ref()),
-        ("view", outcome.view_metadata.as_ref()),
+        ("view", outcome.view_metadata()),
     ] {
-        if let Some(error) = metadata
-            .and_then(|value| value.get("freshness_error"))
-            .and_then(Value::as_str)
-        {
+        if let Some(error) = metadata.and_then(|value| value.freshness_error.as_deref()) {
             lines.push(format!("warning: {label} freshness: {error}"));
         }
     }
@@ -287,11 +289,7 @@ impl GetArguments {
             target: self.target,
             view: self.view,
             max_depth: self.max_depth,
-            returned_kinds: self
-                .returned_kinds
-                .into_iter()
-                .map(|kind| kind.as_str().to_owned())
-                .collect(),
+            returned_kinds: self.returned_kinds,
             limit: self.limit,
         }
     }

@@ -3,7 +3,8 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Write as _;
 
 use crate::model::{
-    Boundary, Domain, NodeType, Question, Requirement, Resolution, Rule, Source, StableId, Topic,
+    Boundary, Domain, NodeType, Question, Requirement, Resolution, Rule, ScopeId, Source, StableId,
+    Topic,
 };
 
 use super::Direction;
@@ -51,6 +52,19 @@ impl GraphNode {
             Self::Question(record) => &record.id,
             Self::Domain(record) => &record.id,
             Self::Boundary(record) => &record.id,
+        }
+    }
+
+    pub fn scope_id(&self) -> &ScopeId {
+        match self {
+            Self::Source(record) => &record.scope_id,
+            Self::Requirement(record) => &record.scope_id,
+            Self::Resolution(record) => &record.scope_id,
+            Self::Rule(record) => &record.scope_id,
+            Self::Topic(record) => &record.scope_id,
+            Self::Question(record) => &record.scope_id,
+            Self::Domain(record) => &record.scope_id,
+            Self::Boundary(record) => &record.scope_id,
         }
     }
 

@@ -94,9 +94,7 @@ pub fn parse_get(words: &[&str]) -> Result<GetInput, BindingError> {
             "--depth" => input.max_depth = Some(value.parse().map_err(|_| BindingError)?),
             "--kind" => input.returned_kinds.push(
                 provenance_core::NodeType::parse(value)
-                    .map_err(|_| BindingError)?
-                    .as_str()
-                    .to_owned(),
+                    .map_err(|_| BindingError)?,
             ),
             "--limit" => input.limit = Some(value.parse().map_err(|_| BindingError)?),
             _ => return Err(BindingError),
@@ -241,37 +239,42 @@ fn render_get(outcome: &GetOutcome, format: Option<OutputFormat>) -> serde_json:
 /// Render a get outcome and report any stale response metadata.
 pub fn render_get_readable(outcome: &GetOutcome) -> serde_json::Result<String> {
     let sections = vec![
-        format!("{} {}", outcome.record.kind, outcome.record.id),
-        format!("view: {:?}", outcome.view).to_ascii_lowercase(),
+        format!(
+            "{} {}",
+            outcome.record.node_type().as_str(),
+            outcome.record.id()
+        ),
+        format!("view: {:?}", outcome.view()).to_ascii_lowercase(),
         format!(
             "record:\n{}",
-            serde_json::to_string_pretty(&outcome.record.value)?
+            serde_json::to_string_pretty(&provenance_porcelain::get::RecordData(&outcome.record))?
         ),
     ];
     let mut sections = sections;
-    if !outcome.related.is_empty() {
+    if !outcome.related().is_empty() {
         sections.push(format!(
             "related:\n{}",
             outcome
-                .related
+                .related()
                 .iter()
                 .map(|record| format!(
                     "- {} {}: {}",
-                    record.kind,
-                    record.id,
-                    serde_json::to_string(&record.value).expect("record values are valid JSON")
+                    record.node.node_type().as_str(),
+                    record.node.id(),
+                    serde_json::to_string(&provenance_porcelain::get::RecordData(&record.node))
+                        .expect("record values are valid JSON")
                 ))
                 .collect::<Vec<_>>()
                 .join("\n")
         ));
     }
-    if let Some(detail) = &outcome.detail {
+    if let Some(detail) = outcome.impact() {
         sections.push(format!(
             "detail:\n{}",
             serde_json::to_string_pretty(detail)?
         ));
     }
-    if let Some(bounds) = &outcome.bounds {
+    if let Some(bounds) = outcome.bounds() {
         sections.push(format!(
             "bounds: limit={} max_depth={} has_more={} truncated={} continuation={}",
             bounds.limit,
@@ -289,12 +292,9 @@ pub fn render_get_readable(outcome: &GetOutcome) -> serde_json::Result<String> {
 fn finish_readable(outcome: &GetOutcome, mut sections: Vec<String>) -> String {
     for (label, metadata) in [
         ("record", outcome.record_metadata.as_ref()),
-        ("view", outcome.view_metadata.as_ref()),
+        ("view", outcome.view_metadata()),
     ] {
-        if let Some(error) = metadata
-            .and_then(|value| value.get("freshness_error"))
-            .and_then(serde_json::Value::as_str)
-        {
+        if let Some(error) = metadata.and_then(|value| value.freshness_error.as_deref()) {
             sections.push(format!("warning: {label} freshness: {error}"));
         }
     }
