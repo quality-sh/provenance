@@ -151,6 +151,36 @@ async fn search_reaches_domains_and_boundaries_by_kind_and_text() {
 }
 
 #[tokio::test]
+async fn filter_only_search_reaches_each_selected_kind() {
+    let (dir, _store, scope) = seeded_store();
+    let answer = super::search(
+        Some(root_of(&dir)),
+        &scope,
+        ReadPolicy::default(),
+        serde_json::from_value(serde_json::json!({
+            "node_types":["requirement", "boundary"],
+            "limit":10
+        }))
+        .unwrap(),
+    )
+    .await
+    .unwrap()
+    .result;
+    let found: Vec<(NodeType, &str)> = answer
+        .nodes
+        .iter()
+        .map(|node| (node.node_type(), node.id().as_str()))
+        .collect();
+    assert_eq!(
+        found,
+        [
+            (NodeType::Requirement, "req_overtime"),
+            (NodeType::Boundary, "boundary_no_backpay")
+        ]
+    );
+}
+
+#[tokio::test]
 async fn default_search_keeps_the_six_settled_kinds_under_protocol_five() {
     let (dir, _store, scope) = seeded_store();
     let answer = super::search(

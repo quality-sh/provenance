@@ -138,3 +138,35 @@ impl super::ReadDocumentQuery {
         id(&self.id)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::NodeType;
+
+    fn search(value: serde_json::Value) -> SearchQuery {
+        serde_json::from_value(value).unwrap()
+    }
+
+    #[test]
+    fn search_accepts_each_supported_predicate_combination() {
+        for value in [
+            serde_json::json!({"text":"needle"}),
+            serde_json::json!({"node_types":["requirement"]}),
+            serde_json::json!({"text":"needle", "node_types":["requirement"]}),
+        ] {
+            search(value).validate().unwrap();
+        }
+    }
+
+    #[test]
+    fn search_refuses_no_predicates_and_supplied_blank_text() {
+        assert!(search(serde_json::json!({})).validate().is_err());
+        assert!(search(serde_json::json!({
+            "text":"  ",
+            "node_types":[NodeType::Requirement]
+        }))
+        .validate()
+        .is_err());
+    }
+}
