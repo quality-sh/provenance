@@ -185,6 +185,10 @@ impl Cascade {
     }
 
     pub(super) fn publish(self, store: &StateStore, scope: &ScopeId) -> anyhow::Result<()> {
+        use crate::state_store::read_budget::ensure_slice_within_read_budget;
+        ensure_slice_within_read_budget(&self.topics)?;
+        ensure_slice_within_read_budget(&self.questions)?;
+        ensure_slice_within_read_budget(&self.boundaries)?;
         store.replace_graph_records(
             &shards::resolutions_path(&store.layout, scope),
             self.resolutions,
