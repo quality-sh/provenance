@@ -299,6 +299,8 @@ async fn empty_mcp_search_carries_the_reason_and_recovery_forms() {
         "search requires text or at least one filter",
         "provenance search --text <query>",
         "provenance search --kind <kind>",
+        "\"text\": \"<query>\"",
+        "\"node_types\": [\"<kind>\"]",
     ] {
         assert!(message.contains(text), "{message}");
     }
