@@ -1,3 +1,7 @@
+mod pending_decisions;
+#[allow(unused_imports)]
+pub use pending_decisions::keep_decision_links_pending;
+
 use provenance_core::{review::REVIEW_SCHEMA_VERSION, SUPPORTED_SCHEMA_VERSION};
 use std::collections::BTreeSet;
 use std::path::Path;
