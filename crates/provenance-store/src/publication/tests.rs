@@ -360,3 +360,16 @@ fn read_only_validation_through_an_alias_does_not_publish() {
     })
     .unwrap();
 }
+
+// Implementation aid: init validates planned state before its repository exists.
+#[test]
+fn read_only_validation_accepts_a_planned_repository() {
+    let temporary = tempfile::tempdir().unwrap();
+    let root = temporary.path().join("planned/repository");
+    let layout = ProvenanceLayout::new(root.to_str().unwrap());
+    with_read_only_validation(&layout, || {
+        with_repository_publication(&layout, || Ok(()))?;
+        Ok(())
+    }).unwrap();
+    assert!(!root.exists());
+}
