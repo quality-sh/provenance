@@ -15,8 +15,11 @@ pub struct Follow {
 }
 impl Follow {
     pub fn start(host: &Host, root: &Path, id: &str) -> Self {
-        let mut child = host
-            .cli()
+        Self::with_options(host, root, id, &[])
+    }
+    pub fn with_options(host: &Host, root: &Path, id: &str, options: &[&str]) -> Self {
+        let mut command = host.cli();
+        command
             .args([
                 id,
                 "get",
@@ -28,6 +31,11 @@ impl Follow {
                 "--repo",
                 root.to_str().unwrap(),
             ])
+            .args(options);
+        Self::spawn(command)
+    }
+    pub fn spawn(mut command: std::process::Command) -> Self {
+        let mut child = command
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
             .spawn()
