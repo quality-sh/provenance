@@ -3,7 +3,10 @@ use crate::store::Store;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{ensure_supported_schema_version, Manifest};
 use provenance_macros::rule;
-use provenance_porcelain::check::{Category, CheckInput, CheckPort, Finding, PortFuture, Status};
+use provenance_porcelain::check::{
+    BindingContext, BindingPolicy, Category, CategoryContext, CategoryRun, CheckInput, CheckPort,
+    Finding, PortFuture, Refusal, Status,
+};
 use provenance_store::dictionary_reference::{resolve_project_dictionary, DictionaryResolution};
 use std::collections::BTreeSet;
 
@@ -43,17 +46,17 @@ impl RepositoryCheckPort {
         Self { repo, strict, base }
     }
 
-    fn compute(&self, category: Category, scope: Option<&str>) -> Result<Vec<Finding>, String> {
+    fn compute(&self, category: Category, scope: Option<&str>) -> Result<CategoryRun, String> {
         match category {
-            Category::Graph => self.graph_findings(scope),
-            Category::Statements => self.statement_findings(scope),
-            Category::Bindings => self.binding_findings(scope),
+            Category::Graph => self.graph_run(scope),
+            Category::Statements => self.statement_run(scope),
+            Category::Bindings => self.binding_run(scope),
         }
     }
 
-    fn graph_findings(&self, scope: Option<&str>) -> Result<Vec<Finding>, String> {
+    fn graph_run(&self, scope: Option<&str>) -> Result<CategoryRun, String> {
         let store = Store::open(&self.repo);
-        match store.with_repository_publication(|| {
+        let findings = match store.with_repository_publication(|| {
             let mut manifest = store.manifest()?;
             if let Some(scope) = scope {
                 manifest
@@ -63,17 +66,23 @@ impl RepositoryCheckPort {
             }
             validate_locked(&store, &manifest, scope.is_none())
         }) {
-            Ok(()) => Ok(Vec::new()),
+            Ok(()) => Vec::new(),
             Err(error) if error.downcast_ref::<std::io::Error>().is_some() => {
-                Err(format!("{error:#}"))
+                return Err(format!("{error:#}"));
             }
-            Err(error) => Ok(vec![Finding::new(format!("{error:#}"))]),
-        }
+            Err(error) => vec![Finding::new(format!("{error:#}"))],
+        };
+        let refusal = if findings.is_empty() {
+            Refusal::None
+        } else {
+            Refusal::Findings
+        };
+        Ok(CategoryRun::new(Category::Graph, findings).with_refusal(refusal))
     }
 
-    fn statement_findings(&self, scope: Option<&str>) -> Result<Vec<Finding>, String> {
+    fn statement_run(&self, scope: Option<&str>) -> Result<CategoryRun, String> {
         let store = Store::open(&self.repo);
-        store
+        let (diagnostics, context) = store
             .with_repository_publication(|| {
                 let mut manifest = store.manifest()?;
                 if let Some(scope) = scope {
@@ -89,32 +98,44 @@ impl RepositoryCheckPort {
                         &manifest,
                         self.base.as_deref(),
                     )?;
-                    Ok(analysis.diagnostics)
+                    Ok((analysis.diagnostics, Some(analysis.context)))
                 } else {
                     statement_report::changed_statements_from_head(&store, &self.repo, &manifest)
+                        .map(|diagnostics| (diagnostics, None))
                 }
             })
-            .map(|diagnostics| {
-                diagnostics
-                    .into_iter()
-                    .map(|diagnostic| {
-                        Finding::with_detail(
-                            &diagnostic.message,
-                            serde_json::to_value(&diagnostic)
-                                .expect("statement diagnostic is JSON"),
-                        )
-                    })
-                    .collect()
+            .map_err(|error| format!("{error:#}"))?;
+        let findings = diagnostics
+            .into_iter()
+            .map(|diagnostic| {
+                Finding::with_detail(
+                    &diagnostic.message,
+                    serde_json::to_value(&diagnostic).expect("statement diagnostic is JSON"),
+                )
             })
-            .map_err(|error| format!("{error:#}"))
+            .collect::<Vec<_>>();
+        let refusal = if self.strict && !findings.is_empty() {
+            Refusal::Findings
+        } else {
+            Refusal::None
+        };
+        let mut run = CategoryRun::new(Category::Statements, findings).with_refusal(refusal);
+        if let Some(context) = context {
+            run = run.with_context(CategoryContext::Statements(context));
+        }
+        Ok(run)
     }
 
     /// Finds missing code bindings without running project tests.
     #[rule("rule_porcelain_coverage_does_not_run_tests")]
-    fn binding_findings(&self, selected_scope: Option<&str>) -> Result<Vec<Finding>, String> {
+    fn binding_run(&self, selected_scope: Option<&str>) -> Result<CategoryRun, String> {
         let store = Store::open(&self.repo);
         let manifest = store.manifest().map_err(|error| format!("{error:#}"))?;
-        let mut findings = Vec::new();
+        let policy = provenance_store::settings::Settings::load(store.layout())
+            .map_err(|error| format!("{error:#}"))?
+            .coverage
+            .binding_findings;
+        let mut warnings = Vec::new();
         for scope in manifest
             .scopes
             .into_iter()
@@ -123,14 +144,31 @@ impl RepositoryCheckPort {
             let report =
                 super::coverage::coverage_scan(&self.repo, &self.repo, scope.id.as_str(), true)
                     .map_err(|error| format!("{error:#}"))?;
-            findings.extend(report.warnings.iter().map(|warning| {
+            warnings.extend(report.report.warnings);
+        }
+        let refusal = if policy == provenance_store::settings::BindingFindingsSeverity::Error
+            && warnings.iter().any(|warning| warning.binding_finding)
+        {
+            Refusal::Findings
+        } else {
+            Refusal::None
+        };
+        let findings = warnings
+            .into_iter()
+            .map(|warning| {
                 Finding::with_detail(
                     &warning.message,
-                    serde_json::to_value(warning).expect("coverage warning is JSON"),
+                    serde_json::to_value(&warning).expect("coverage warning is JSON"),
                 )
-            }));
-        }
-        Ok(findings)
+            })
+            .collect();
+        let policy = match policy {
+            provenance_store::settings::BindingFindingsSeverity::Warning => BindingPolicy::Warning,
+            provenance_store::settings::BindingFindingsSeverity::Error => BindingPolicy::Error,
+        };
+        Ok(CategoryRun::new(Category::Bindings, findings)
+            .with_context(CategoryContext::Bindings(BindingContext { policy }))
+            .with_refusal(refusal))
     }
 }
 
@@ -144,16 +182,6 @@ impl CheckPort for RepositoryCheckPort {
                 .map_err(|error| format!("check worker failed: {error}"))?
         })
     }
-
-    fn context(&self, category: Category) -> Option<serde_json::Value> {
-        (self.strict && category == Category::Statements)
-            .then(|| {
-                statement_report::committed_statement_context(&self.repo, self.base.as_deref())
-                    .ok()
-                    .and_then(|context| serde_json::to_value(context).ok())
-            })
-            .flatten()
-    }
 }
 
 #[rule("rule_ste_strict_committed_statement_gate")]
@@ -165,18 +193,6 @@ pub(super) async fn check(
     selectors: Selectors,
 ) -> anyhow::Result<()> {
     let input = selectors.input();
-    let binding_error_policy = if input.categories().contains(&Category::Bindings) {
-        matches!(
-            provenance_store::settings::Settings::load(
-                &provenance_store::layout::ProvenanceLayout::new(&repo),
-            )?
-            .coverage
-            .binding_findings,
-            provenance_store::settings::BindingFindingsSeverity::Error
-        )
-    } else {
-        false
-    };
     let service =
         provenance_porcelain::Porcelain::new(RepositoryCheckPort::new(repo, strict, base));
     let report = service.check(input).await;
@@ -185,31 +201,7 @@ pub(super) async fn check(
     } else {
         println!("{}", provenance_cli::porcelain::render_check(&report));
     }
-    let graph_failed = report
-        .categories
-        .iter()
-        .any(|category| category.category == Category::Graph && category.status != Status::Passed);
-    let unavailable = report
-        .categories
-        .iter()
-        .any(|category| category.status == Status::Unavailable);
-    let strict_findings = strict
-        && report.categories.iter().any(|category| {
-            category.category == Category::Statements && category.status == Status::Findings
-        });
-    let binding_refused = binding_error_policy
-        && report.categories.iter().any(|category| {
-            category.category == Category::Bindings
-                && category.findings.iter().any(|finding| {
-                    finding
-                        .detail
-                        .as_ref()
-                        .and_then(|detail| detail.get("binding_finding"))
-                        .and_then(serde_json::Value::as_bool)
-                        .unwrap_or(false)
-                })
-        });
-    if graph_failed || unavailable || strict_findings || binding_refused {
+    if report.categories.iter().any(|category| category.refuses()) {
         let details = report
             .categories
             .iter()
@@ -451,8 +443,8 @@ mod tests {
         std::fs::write(foreign, "not JSON\n").unwrap();
 
         let port = RepositoryCheckPort::new(repo, false, None);
-        let findings = port.run(Category::Graph, Some("default")).await.unwrap();
+        let run = port.run(Category::Graph, Some("default")).await.unwrap();
 
-        assert!(findings.is_empty());
+        assert!(run.findings.is_empty());
     }
 }

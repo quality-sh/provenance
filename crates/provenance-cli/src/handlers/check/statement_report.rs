@@ -10,12 +10,7 @@ use serde::de::DeserializeOwned;
 
 pub(super) struct CommittedStatementAnalysis {
     pub diagnostics: Vec<StatementDiagnostic>,
-}
-
-#[derive(serde::Serialize)]
-pub(super) struct CommittedStatementContext {
-    pub candidate_commit: String,
-    pub base_commit: Option<String>,
+    pub context: provenance_porcelain::check::StatementContext,
 }
 
 #[derive(Default)]
@@ -54,19 +49,25 @@ pub(super) fn changed_statements_from_commits(
     )?;
     let candidate = read_commit_family(repo, &candidate_commit, &manifest.scopes)?;
     let diagnostics = analyze_family_change(repo, &base, &candidate);
-    Ok(CommittedStatementAnalysis { diagnostics })
+    Ok(CommittedStatementAnalysis {
+        diagnostics,
+        context: provenance_porcelain::check::StatementContext {
+            candidate_commit,
+            base_commit,
+        },
+    })
 }
 
 pub(super) fn committed_statement_context(
     repo: &Utf8Path,
     explicit_base: Option<&str>,
-) -> anyhow::Result<CommittedStatementContext> {
+) -> anyhow::Result<provenance_porcelain::check::StatementContext> {
     let candidate_commit = resolve_commit(repo, "HEAD")?;
     let base_commit = match explicit_base {
         Some(base) => Some(resolve_commit(repo, base)?),
         None => first_parent(repo, &candidate_commit)?,
     };
-    Ok(CommittedStatementContext {
+    Ok(provenance_porcelain::check::StatementContext {
         candidate_commit,
         base_commit,
     })
