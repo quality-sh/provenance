@@ -3,13 +3,17 @@ use crate::{
     cache::review_families,
     layout::ProvenanceLayout,
     shards,
-    state_store::{StateStore, TypedSpecInput},
+    state_store::{
+        CreateBoundaryInput, CreateQuestionInput, CreateResolutionInput, CreateTopicInput,
+        StateStore, TypedSpecInput,
+    },
 };
 use camino::Utf8Path;
 use provenance_core::{
     protocol::{TypedRequirementInput, TypedRuleInput, TypedSourceInput},
     review::{ReviewEntry, SaveOutcome, REVIEW_SCHEMA_VERSION},
-    NodeType, ScopeId, StableId, SUPPORTED_SCHEMA_VERSION,
+    ArtifactLink, ArtifactLinkTargetType, NodeType, QuestionStatus, ResolutionMethod,
+    ResolutionStatus, ScopeId, SourceReference, StableId, TopicStatus, SUPPORTED_SCHEMA_VERSION,
 };
 
 const OWNER: &str = "spec://review/typed";
@@ -212,4 +216,141 @@ fn typed_omission_refuses_enrolled_deletion() {
         before
     );
     assert_eq!(records.len(), 3);
+}
+
+fn cascade_document(include_removable: bool) -> TypedSpecInput {
+    let mut input = document(
+        "Policy one",
+        "The system stores records.",
+        "The system retains records.",
+    );
+    input.rules.clear();
+    input.requirements.push(TypedRequirementInput {
+        key: "removable".into(),
+        id: None,
+        statement: "The system removes temporary records.".into(),
+        description: None,
+        sources: Vec::new(),
+        refines: None,
+        depends_on: None,
+        supersedes: None,
+        spawned_by: None,
+    });
+    if !include_removable {
+        input.sources.clear();
+        input.requirements.pop();
+    }
+    input
+}
+
+#[test]
+fn typed_cascade_captures_each_changed_enrolled_kind() {
+    let (_temp, store, scope) = fixture();
+    store
+        .apply_typed_spec(&scope, cascade_document(true))
+        .unwrap();
+    let source = store.list_sources(&scope).unwrap()[0].id.clone();
+    let requirements = store.list_requirements(&scope).unwrap();
+    let kept = requirements
+        .iter()
+        .find(|record| record.statement.contains("stores"))
+        .unwrap()
+        .id
+        .clone();
+    let removed = requirements
+        .iter()
+        .find(|record| record.statement.contains("removes"))
+        .unwrap()
+        .id
+        .clone();
+    store
+        .create_resolution(CreateResolutionInput {
+            scope_id: scope.clone(),
+            id: StableId::new("resolution_cascade").unwrap(),
+            title: "Keep the durable record".into(),
+            requirement_ids: vec![kept.clone(), removed.clone()],
+            supersedes: Vec::new(),
+            position: "Keep the durable record.".into(),
+            rationale: "The durable record is required.".into(),
+            status: ResolutionStatus::Proposed,
+            context: None,
+            enforcement: None,
+            confidence: None,
+            inputs: Vec::new(),
+            made_by: None,
+            approved_by: None,
+            approved_at: None,
+            origin_thread: None,
+            origin_message: None,
+        })
+        .unwrap();
+    store
+        .create_boundary(CreateBoundaryInput {
+            scope_id: scope.clone(),
+            id: StableId::new("boundary_cascade").unwrap(),
+            requirement_id: kept.clone(),
+            statement: "The policy is the boundary.".into(),
+            source_ref: Some(SourceReference {
+                source_id: source.clone(),
+                clause: None,
+            }),
+        })
+        .unwrap();
+    store
+        .create_topic(CreateTopicInput {
+            scope_id: scope.clone(),
+            id: StableId::new("topic_cascade").unwrap(),
+            requirement_id: kept,
+            title: "Durable storage".into(),
+            status: TopicStatus::Open,
+            links: vec![ArtifactLink {
+                target_type: ArtifactLinkTargetType::Source,
+                target_id: source,
+            }],
+        })
+        .unwrap();
+    store
+        .create_question(CreateQuestionInput {
+            scope_id: scope.clone(),
+            id: StableId::new("question_cascade").unwrap(),
+            topic_id: StableId::new("topic_cascade").unwrap(),
+            question: "Does the temporary record remain?".into(),
+            resolution_method: ResolutionMethod::Research,
+            status: QuestionStatus::Open,
+            answer: None,
+            links: vec![ArtifactLink {
+                target_type: ArtifactLinkTargetType::Requirement,
+                target_id: removed.clone(),
+            }],
+            contradicts: Some(removed),
+            resolution_id: None,
+        })
+        .unwrap();
+    let records = [
+        (NodeType::Resolution, "resolution_cascade"),
+        (NodeType::Boundary, "boundary_cascade"),
+        (NodeType::Topic, "topic_cascade"),
+        (NodeType::Question, "question_cascade"),
+    ];
+    for (kind, id) in records {
+        enroll(&store, &scope, kind, &StableId::new(id).unwrap());
+    }
+
+    store
+        .apply_typed_spec(&scope, cascade_document(false))
+        .unwrap();
+
+    for (kind, id) in records {
+        let record = match kind {
+            NodeType::Resolution => store.list_resolutions(&scope).unwrap()[0].clone().into(),
+            NodeType::Boundary => store.list_boundaries(&scope).unwrap()[0].clone().into(),
+            NodeType::Topic => store.list_topics(&scope).unwrap()[0].clone().into(),
+            NodeType::Question => store.list_questions(&scope).unwrap()[0].clone().into(),
+            _ => unreachable!(),
+        };
+        let head = store.head(&record).unwrap().unwrap();
+        assert_eq!(head.record_id.as_str(), id);
+        assert_eq!(head.sequence, 2, "{kind:?}");
+        assert_eq!(head.actor, OWNER);
+    }
 }
