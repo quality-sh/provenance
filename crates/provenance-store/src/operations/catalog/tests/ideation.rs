@@ -103,7 +103,7 @@ fn rejected_disposition(scope: &ScopeId, id: &str, proposal_id: &str) -> CreateD
         id: StableId::new(id).unwrap(),
         proposal_id: StableId::new(proposal_id).unwrap(),
         decision: DispositionDecision::Rejected,
-        rationale: "Reviewed".into(),
+        rationale: Some("Reviewed".into()),
         actor: actor("reviewer"),
         canonical_artifact: None,
         external_action: None,

@@ -44,14 +44,14 @@ fn edit(store: &StateStore, request: &str, statement: &str) -> StableId {
 }
 fn submit(
     store: &StateStore,
-    request: &str,
+    _request: &str,
     proposal: &str,
     revises: Option<&str>,
     expected: Option<&str>,
 ) -> anyhow::Result<CycleEntry> {
     store.submit_requirement_review(
         serde_json::from_value(json!({
-            "scope_id":"default","request_id":request,"actor":"agent","requirement_id":"req_a",
+            "scope_id":"default","actor":"agent","requirement_id":"req_a",
             "proposal_id":proposal,"proposal_key":format!("{proposal}-key"),"title":"Title",
             "summary":"Summary","source_ids":[],"evidence_references":[],"builds_on":[],
             "revises":revises,"expected_revision":expected
@@ -61,16 +61,16 @@ fn submit(
 }
 fn decide(
     store: &StateStore,
-    request: &str,
+    _request: &str,
     proposal: &str,
-    disposition: &str,
+    _disposition: &str,
     decision: &str,
     actor: &Value,
     extra: &Value,
 ) -> anyhow::Result<CycleEntry> {
     let mut value = json!({
-        "scope_id":"default","request_id":request,"actor":actor,"proposal_id":proposal,
-        "disposition_id":disposition,"decision":decision,"rationale":"Because"
+        "scope_id":"default","actor":actor,"proposal_id":proposal,
+        "decision":decision,"rationale":"Because"
     });
     for (key, extra_value) in extra.as_object().unwrap() {
         value[key] = extra_value.clone();
@@ -86,8 +86,8 @@ fn artifact() -> Value {
 fn feedback(body: &str) -> Value {
     json!({"feedback":{"role":"user","body":body}})
 }
-fn withdraw(store: &StateStore, request: &str, proposal: &str) -> anyhow::Result<CycleEntry> {
-    store.withdraw_requirement_review(serde_json::from_value(json!({"scope_id":"default","request_id":request,"actor":"agent","proposal_id":proposal})).unwrap())
+fn withdraw(store: &StateStore, _request: &str, proposal: &str) -> anyhow::Result<CycleEntry> {
+    store.withdraw_requirement_review(serde_json::from_value(json!({"scope_id":"default","actor":"agent","proposal_id":proposal})).unwrap())
 }
 /// The fixture with one edit enrolled and one pending submission bound to it.
 fn enrolled() -> (tempfile::TempDir, StateStore, StableId) {
@@ -184,7 +184,7 @@ fn full_cycle_persists_exact_versions_without_lifecycle_change() {
         "rejection links are not assertion lineage"
     );
 
-    decide(
+    let approval = decide(
         &store,
         "decide-2",
         "prop-2",
@@ -197,7 +197,10 @@ fn full_cycle_persists_exact_versions_without_lifecycle_change() {
     let final_state = state(&store);
     assert_eq!(final_state.current_revision.as_ref().unwrap(), &r2);
     let acceptance = final_state.current_acceptance.as_ref().unwrap();
-    assert_eq!(acceptance.disposition.id.as_str(), "disp-2");
+    assert_eq!(
+        &acceptance.disposition.id,
+        approval.disposition_id.as_ref().unwrap()
+    );
     assert_eq!(
         acceptance.revision.as_ref().unwrap(),
         &r2,
@@ -208,7 +211,10 @@ fn full_cycle_persists_exact_versions_without_lifecycle_change() {
         2,
         "history keeps every terminal decision"
     );
-    assert_eq!(final_state.decisions[0].disposition.id.as_str(), "disp-1");
+    assert_eq!(
+        &final_state.decisions[0].disposition.id,
+        rejection.disposition_id.as_ref().unwrap()
+    );
     assert!(final_state.withdrawn.is_empty());
     assert_lifecycle_and_proposals_unchanged(&store, "Statement v2");
 }
@@ -224,14 +230,30 @@ fn assert_lifecycle_and_proposals_unchanged(store: &StateStore, statement: &str)
 }
 
 #[test]
-fn replayed_requests_return_the_committed_receipt() {
-    let (_temp, store, _) = enrolled();
-    let first = submit(&store, "submit-1", "prop-1", None, None).unwrap();
-    assert_eq!(
-        first,
-        submit(&store, "submit-1", "prop-1", None, None).unwrap()
+fn server_creates_review_request_and_disposition_identities() {
+    let temp = fixture();
+    let store = open(Utf8Path::from_path(temp.path()).unwrap());
+    edit(&store, "edit-1", "Statement v1");
+    let submission = submit(&store, "submit-1", "prop-1", None, None).unwrap();
+    assert_ne!(submission.request_id.as_str(), "submit-1");
+    let decision = decide(
+        &store,
+        "decide-1",
+        "prop-1",
+        "disp-1",
+        "accepted",
+        &reviewer("reviewer"),
+        &json!({
+            "rationale": null,
+            "canonical_artifact":{"artifact_type":"requirement","artifact_id":"req_a"}
+        }),
+    )
+    .unwrap();
+    assert_ne!(decision.request_id.as_str(), "decide-1");
+    assert_ne!(
+        decision.disposition_id.as_ref().unwrap().as_str(),
+        "disp-1"
     );
-    assert_eq!(store.list_proposal_definitions(&scope()).unwrap().len(), 1);
 }
 
 #[test]
