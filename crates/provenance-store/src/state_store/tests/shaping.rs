@@ -89,6 +89,7 @@ fn shaping_records_are_written_deterministically_and_validate_relationships() {
         .unwrap();
     let question = store
         .create_question(CreateQuestionInput {
+            depends_on: Vec::new(),
             scope_id: scope.clone(),
             id: StableId::new("question_threshold").unwrap(),
             topic_id: StableId::new("topic_a").unwrap(),
@@ -119,6 +120,7 @@ fn shaping_records_are_written_deterministically_and_validate_relationships() {
     assert_eq!(question.requirement_id.as_str(), "req_overtime");
     assert!(store
         .create_question(CreateQuestionInput {
+            depends_on: Vec::new(),
             scope_id: scope,
             id: StableId::new("question_missing_topic").unwrap(),
             topic_id: StableId::new("topic_missing").unwrap(),
@@ -205,6 +207,7 @@ fn question_claims_clear_when_answered() {
         .unwrap();
     store
         .create_question(CreateQuestionInput {
+            depends_on: Vec::new(),
             scope_id: scope.clone(),
             id: StableId::new("question_threshold").unwrap(),
             topic_id: StableId::new("topic_overtime").unwrap(),
@@ -272,6 +275,7 @@ fn question_claims_clear_when_an_update_blocks_them_on_a_human() {
         .unwrap();
     store
         .create_question(CreateQuestionInput {
+            depends_on: Vec::new(),
             scope_id: scope.clone(),
             id: StableId::new("question_threshold").unwrap(),
             topic_id: StableId::new("topic_overtime").unwrap(),

@@ -99,6 +99,8 @@ pub struct CreateQuestionInput {
     pub topic_id: StableId,
     pub question: String,
     pub resolution_method: ResolutionMethod,
+    #[serde(default)]
+    pub depends_on: Vec<StableId>,
     pub status: QuestionStatus,
     pub answer: Option<String>,
     pub links: Vec<ArtifactLink>,

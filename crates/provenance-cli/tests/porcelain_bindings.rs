@@ -252,6 +252,7 @@ fn readable_get_warns_when_the_record_or_view_is_stale() {
         record,
         result: provenance_porcelain::get::ViewResult::Children(
             provenance_porcelain::get::Traversal {
+                shaping: None,
                 records: Vec::new(),
                 bounds: provenance_porcelain::get::Bounds {
                     limit: 50,

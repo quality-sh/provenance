@@ -186,6 +186,7 @@ pub(super) fn question(
     links: &[(&str, ArtifactLinkTargetType)],
 ) -> Question {
     Question {
+        depends_on: Vec::new(),
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid(id),
