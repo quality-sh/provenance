@@ -8,8 +8,6 @@ mod verification_state;
 use render::render_coverage;
 use verification_state::load_validation_state;
 
-pub(super) use provenance_store::evidence_anchors as anchors;
-
 #[cfg(test)]
 pub(super) fn coverage_scan(
     repo: &camino::Utf8Path,
@@ -59,10 +57,7 @@ fn coverage_scan_from_scanned_against(
         .collect::<Vec<_>>();
     let commit = scan_commit(repo, &scans);
     let validation = load_validation_state(repo, scope, &scans, validate_rules)?;
-    // Scanner warnings all come from a line the scan read, so each keeps its
-    // location. Derived Rule findings are joined on after, without one.
-    let mut warnings = parse_warnings(&scans);
-    warnings.extend(validation.warnings);
+    let mut warnings = validation.warnings;
     let mut governed_finding_count = 0;
     if validate_rules {
         let completeness = if provenance_scanner::scan_covers_repository(repo, path) {
@@ -80,67 +75,30 @@ fn coverage_scan_from_scanned_against(
         governed_finding_count = facts.governed_finding_count();
         warnings.extend(rule_evidence_warnings(facts));
     }
-    let results = provenance_scanner::coverage_results(&scans);
-    let scanned_files = scanned
-        .iter()
-        .map(|file| provenance_core::coverage::ScannedFile {
-            file_path: file.scan.file_path.clone(),
-            content: file.content.clone(),
-        })
-        .collect();
-    let mut report = provenance_core::coverage::CoverageScan {
-        report: provenance_core::coverage::CoverageReport::new(
-            commit,
-            scans.len(),
-            results.annotations,
-            results.bindings,
-            warnings,
-        ),
-        scanned_files,
-    };
-    report.report.verification_bindings = validation.bindings;
-    if let Some(baseline) = baseline {
+    let baseline_scan = if let Some(baseline) = baseline {
         let bytes = std::fs::read(baseline)
             .with_context(|| format!("read coverage baseline {baseline}"))?;
-        let baseline = serde_json::from_slice(&bytes)
-            .with_context(|| format!("parse coverage baseline {baseline}"))?;
-        anchors::reconcile(&mut report, &baseline, repo, path, validate_rules);
-    }
+        Some(
+            serde_json::from_slice(&bytes)
+                .with_context(|| format!("parse coverage baseline {baseline}"))?,
+        )
+    } else {
+        None
+    };
+    let baseline = baseline_scan
+        .as_ref()
+        .map(|scan| provenance_scanner::CoverageBaseline {
+            scan,
+            repo,
+            scan_path: path,
+            validate_rules,
+        });
+    let mut report = provenance_scanner::scan_to_coverage(scanned, commit, warnings, baseline);
+    report.report.verification_bindings = validation.bindings;
     Ok(CoverageScanOutcome {
-        scan: report,
+        scan: report.into_scan(),
         governed_finding_count,
     })
-}
-
-/// What the parser complained about while reading the files: the legacy
-/// Statesman marker, a directive with no `key: value`, a confidence
-/// outside the range, an unknown field.
-///
-/// These name a file and a line but no rule. A malformed directive may never
-/// get as far as saying which rule it meant, and inventing one would send a
-/// reader after a rule that does not exist. The empty `rule_id` is what an
-/// absent subject looks like, and the render leaves it out.
-///
-/// They are reported whether or not `--validate-rules` was passed: nothing
-/// here is checked against the graph, so the scan owes them either way. Before
-/// this, every one of them was dropped on the floor.
-fn parse_warnings(
-    scans: &[provenance_scanner::FileScan],
-) -> Vec<provenance_core::coverage::ValidationWarning> {
-    scans
-        .iter()
-        .flat_map(|scan| {
-            scan.warnings
-                .iter()
-                .map(|warning| provenance_core::coverage::ValidationWarning {
-                    rule_id: String::new(),
-                    file_path: Some(scan.file_path.clone()),
-                    line: Some(warning.line),
-                    message: warning.message.clone(),
-                    binding_finding: false,
-                })
-        })
-        .collect()
 }
 
 fn rule_evidence_warnings(
