@@ -14,17 +14,16 @@ pub use authoring::{Action, ActionError, TargetRoute};
 pub(super) use authoring_mcp::{call as call_authoring, tools as authoring_tools};
 pub use discussion_port::HostDiscussionPort;
 pub use get_port::HostGetPort;
-pub(crate) use provenance_porcelain::discussion::DiscussionAction;
 
 pub(crate) fn discussion_is_available(
     host: &crate::StatementHost,
-    action: DiscussionAction,
+    action: Action,
 ) -> bool {
     discussion_port::is_available(host, action)
 }
 
 pub(crate) fn discussion_tools(host: &crate::StatementHost) -> Vec<rmcp::model::Tool> {
-    DiscussionAction::ALL
+    Action::DISCUSSION
         .into_iter()
         .filter(|action| discussion_is_available(host, *action))
         .map(|action| {
@@ -36,20 +35,7 @@ pub(crate) fn discussion_tools(host: &crate::StatementHost) -> Vec<rmcp::model::
                 .map(|object| object.remove("$schema"));
             let mut tool = rmcp::model::Tool::new(
                 action.as_str(),
-                match action {
-                    DiscussionAction::Discussions => {
-                        "List addressed Discussions in the bound scope or under one parent."
-                    }
-                    DiscussionAction::Discussion => {
-                        "Read one addressed Discussion and a Message page."
-                    }
-                    DiscussionAction::Discuss => {
-                        "Start an independent Discussion under one record."
-                    }
-                    DiscussionAction::Reply => {
-                        "Reply to one addressed Discussion at its expected version."
-                    }
-                },
+                provenance_porcelain::action::description(action),
                 input
                     .as_object()
                     .expect("Discussion input schema is an object")
@@ -69,32 +55,12 @@ pub(crate) fn discussion_tools(host: &crate::StatementHost) -> Vec<rmcp::model::
 
 pub(crate) async fn call_discussion(
     host: &crate::StatementHost,
-    action: DiscussionAction,
+    action: Action,
     arguments: serde_json::Map<String, Value>,
 ) -> CallToolResult {
-    use provenance_porcelain::discussion::{
-        ConversationInput, DiscussionError, ListInput, ReplyInput, StartInput,
-    };
     let value = Value::Object(arguments);
     let service = provenance_porcelain::Porcelain::new(HostDiscussionPort::new(host.clone()));
-    let outcome = match action {
-        DiscussionAction::Discussions => match serde_json::from_value::<ListInput>(value) {
-            Ok(input) => service.discussions(input).await,
-            Err(_) => Err(DiscussionError::InvalidOptions),
-        },
-        DiscussionAction::Discussion => match serde_json::from_value::<ConversationInput>(value) {
-            Ok(input) => service.conversation(input).await,
-            Err(_) => Err(DiscussionError::InvalidOptions),
-        },
-        DiscussionAction::Discuss => match serde_json::from_value::<StartInput>(value) {
-            Ok(input) => service.discuss(input).await,
-            Err(_) => Err(DiscussionError::InvalidOptions),
-        },
-        DiscussionAction::Reply => match serde_json::from_value::<ReplyInput>(value) {
-            Ok(input) => service.reply(input).await,
-            Err(_) => Err(DiscussionError::InvalidOptions),
-        },
-    };
+    let outcome = service.execute_discussion(action, value).await;
     match outcome {
         Ok(outcome) => {
             let readable = provenance_porcelain::discussion::render_readable(&outcome);
@@ -108,14 +74,17 @@ pub(crate) async fn call_discussion(
     }
 }
 
-fn discussion_error(error: &provenance_porcelain::discussion::DiscussionError) -> CallToolResult {
-    use provenance_porcelain::discussion::DiscussionError;
+fn discussion_error(error: &ActionError) -> CallToolResult {
     let detail = match error {
-        DiscussionError::InvalidOptions => serde_json::json!({
+        ActionError::InvalidOptions => serde_json::json!({
             "kind":"invalid_input", "field":null, "reason":"invalid_value"
         }),
-        DiscussionError::AccessDenied => serde_json::json!({"kind":"access_denied"}),
-        DiscussionError::Operation { detail, .. } => detail.clone(),
+        ActionError::AccessDenied => serde_json::json!({"kind":"access_denied"}),
+        ActionError::OperationDetail { detail, .. } => detail.clone(),
+        ActionError::NotFound => serde_json::json!({"kind":"not_found"}),
+        ActionError::AmbiguousIdentity => serde_json::json!({"kind":"ambiguous_identity"}),
+        ActionError::KindSelection => serde_json::json!({"kind":"invalid_options"}),
+        ActionError::Operation(message) => serde_json::json!({"kind":"operation_failed","message":message}),
     };
     CallToolResult::structured_error(serde_json::json!({
         "error": detail, "meta": {}, "message": error.to_string()

@@ -35,7 +35,7 @@ async fn mcp_target_first_authoring_publishes_target_and_type_schemas() {
     let client = ().serve(client_io).await.unwrap();
 
     let tools = client.list_all_tools().await.unwrap();
-    for action in provenance_porcelain::action::Action::ALL {
+    for action in provenance_porcelain::action::Action::RECORD {
         let name = action.as_str();
         let tool = tools.iter().find(|tool| tool.name == name).unwrap();
         assert!(tool.output_schema.is_some(), "{name} output schema");

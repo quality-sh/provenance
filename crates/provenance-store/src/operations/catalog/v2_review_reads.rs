@@ -15,6 +15,7 @@ use provenance_core::{
     },
     Message, ScopeId, StableId, ThreadParent,
 };
+pub use provenance_core::threads::DiscussionResultPage;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize)]
@@ -23,15 +24,6 @@ pub struct ReadResult<T> {
     pub result: T,
     pub stamp: provenance_core::protocol::Stamp,
     pub freshness_error: Option<String>,
-}
-
-#[derive(Serialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-pub struct DiscussionResultPage<T> {
-    pub entries: Vec<T>,
-    pub limit: usize,
-    pub has_more: bool,
-    pub next_cursor: Option<String>,
 }
 
 const fn discussion_result<T>(

@@ -7,7 +7,7 @@ use rmcp::model::{CallToolResult, Content, Tool};
 use serde_json::{json, Map, Value};
 
 pub fn tools(host: &crate::StatementHost) -> Vec<Tool> {
-    Action::ALL
+    Action::RECORD
         .into_iter()
         .filter_map(|action| tool(host, action))
         .collect()
@@ -228,7 +228,7 @@ fn action_error(error: &ActionError) -> CallToolResult {
         ActionError::NotFound => "not_found",
         ActionError::AmbiguousIdentity => "ambiguous_identity",
         ActionError::AccessDenied => "access_denied",
-        ActionError::Operation(_) => "operation_failed",
+        ActionError::Operation(_) | ActionError::OperationDetail { .. } => "operation_failed",
     };
     let message = if matches!(error, ActionError::KindSelection) {
         "unsupported action options".to_owned()
