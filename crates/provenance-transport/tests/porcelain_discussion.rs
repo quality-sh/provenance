@@ -233,6 +233,48 @@ async fn named_mcp_discussion_actions_share_structured_and_readable_results() {
 }
 
 #[tokio::test]
+async fn reply_grant_does_not_admit_start() {
+    let repository = Repository::new("A requirement has discussions.");
+    let store = provenance_store::state_store::StateStore::new(repository.layout.clone());
+    let request = serde_json::from_value(json!({
+        "scope_id":"default", "request_id":"initial_start", "actor":"ben",
+        "declared_by":null, "allowed_parent_kinds":["requirement"],
+        "action":{"kind":"start","parent":{"node_type":"requirement","node_id":"req_shared"},
+            "role":"user","body":"Opening text"}
+    }))
+    .unwrap();
+    let receipt = store.write_target_discussion(request).unwrap();
+    let host = StatementHost::with_fixture_access(
+        access(&repository).deny_operation("requirements-create-discussion"),
+    );
+    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
+    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let client = ().serve(client_io).await.unwrap();
+    let names = client
+        .list_all_tools()
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|tool| tool.name.to_string())
+        .collect::<Vec<_>>();
+    assert!(!names.contains(&"discuss".to_owned()));
+    assert!(names.contains(&"reply".to_owned()));
+    let reply = call(
+        &client,
+        "reply",
+        json!({
+            "discussion_id":receipt.discussion_id, "request_id":"reply_only", "actor":"ben",
+            "expected_version":1, "role":"user", "body":"Permitted reply"
+        }),
+    )
+    .await;
+    assert_ne!(reply.is_error, Some(true), "{reply:?}");
+    assert_eq!(reply.structured_content.as_ref().unwrap()["receipt"]["version"], 2);
+    client.cancel().await.unwrap();
+    server.await.unwrap().cancel().await.unwrap();
+}
+
+#[tokio::test]
 async fn denied_parent_grant_is_applied_before_discussion_page_selection() {
     let repository = Repository::new("A requirement has discussions.");
     repository.all_kinds();

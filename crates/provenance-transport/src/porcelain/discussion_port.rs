@@ -11,7 +11,7 @@ use provenance_porcelain::discussion::{
     PortFuture, ReplyInput, StartInput,
 };
 use provenance_store::{
-    operations::catalog::{self, Operation as _},
+    operations::catalog::{self, DiscussionWriteKind, Operation as _},
     review::{TargetDiscussionAction, TargetDiscussionWrite},
 };
 
@@ -37,22 +37,12 @@ impl HostDiscussionPort {
     }
 
     fn permitted_write_parent_kinds(&self, action: DiscussionAction) -> Vec<NodeType> {
-        let suffix = match action {
-            DiscussionAction::Discuss => "-create-discussion",
-            DiscussionAction::Reply => "-create-discussion-message",
+        let kind = match action {
+            DiscussionAction::Discuss => DiscussionWriteKind::Start,
+            DiscussionAction::Reply => DiscussionWriteKind::Reply,
             _ => return Vec::new(),
         };
-        catalog::definitions()
-            .iter()
-            .filter(|definition| {
-                definition.registration.handler.operation == catalog::WriteDiscussionV2::NAME
-            })
-            .filter(|definition| {
-                definition.name.ends_with(suffix) && self.host.advertises(definition.name)
-            })
-            .filter_map(|definition| definition.registration.request.parent.as_ref())
-            .filter_map(|parent| NodeType::parse(parent.kind).ok())
-            .collect()
+        write_parent_kinds(catalog::definitions(), kind, |name| self.host.advertises(name))
     }
 
     fn scope(&self) -> Result<ScopeId, DiscussionError> {
@@ -62,6 +52,23 @@ impl HostDiscussionPort {
             .ok_or(DiscussionError::AccessDenied)
             .and_then(|scope| ScopeId::new(scope).map_err(|_| DiscussionError::AccessDenied))
     }
+}
+
+fn write_parent_kinds(
+    definitions: &[catalog::Definition],
+    kind: DiscussionWriteKind,
+    advertises: impl Fn(&str) -> bool,
+) -> Vec<NodeType> {
+    definitions
+        .iter()
+        .filter(|definition| {
+            definition.registration.handler.operation == catalog::WriteDiscussionV2::NAME
+                && definition.registration.request.adapter.discussion_write == Some(kind)
+                && advertises(definition.name)
+        })
+        .filter_map(|definition| definition.registration.request.parent.as_ref())
+        .filter_map(|parent| NodeType::parse(parent.kind).ok())
+        .collect()
 }
 
 impl DiscussionPort for HostDiscussionPort {
@@ -219,5 +226,32 @@ pub(super) fn is_available(host: &crate::StatementHost, action: DiscussionAction
             host.advertises(catalog::WriteTargetDiscussionV2::NAME)
                 && !port.permitted_write_parent_kinds(action).is_empty()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn write_grants_follow_the_registered_action_after_a_route_rename() {
+        let mut definitions = catalog::definitions().to_vec();
+        let start = definitions
+            .iter_mut()
+            .find(|definition| definition.name == "requirements-create-discussion")
+            .unwrap();
+        start.name = "renamed-requirement-start";
+        let kinds = write_parent_kinds(&definitions, DiscussionWriteKind::Start, |name| {
+            name == "renamed-requirement-start"
+        });
+        assert_eq!(kinds, vec![NodeType::Requirement]);
+        let reply = write_parent_kinds(&definitions, DiscussionWriteKind::Reply, |name| {
+            name == "requirements-create-discussion-message"
+        });
+        assert_eq!(reply, vec![NodeType::Requirement]);
+        let denied = write_parent_kinds(&definitions, DiscussionWriteKind::Start, |name| {
+            name == "requirements-create-discussion-message"
+        });
+        assert!(denied.is_empty());
     }
 }
