@@ -11,11 +11,14 @@ use provenance_core::{
     RuleStatus, Source, SourceType, StableId, TopicStatus,
 };
 
-fn id(value: &str) -> StableId {
+pub(super) fn id(value: &str) -> StableId {
     StableId::new(value).unwrap()
 }
 
-fn seed_native_records(store: &crate::state_store::StateStore, scope: &provenance_core::ScopeId) {
+pub(super) fn seed_native_records(
+    store: &crate::state_store::StateStore,
+    scope: &provenance_core::ScopeId,
+) {
     store
         .create_source(CreateSourceInput {
             scope_id: scope.clone(),

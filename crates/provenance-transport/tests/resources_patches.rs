@@ -10,6 +10,30 @@ use support::records::Repository;
 use support::resource_http::{call, host};
 use tower::ServiceExt as _;
 
+fn source_etag(repo: &Repository) -> String {
+    let journal = repo
+        .layout
+        .scopes_dir()
+        .join("default")
+        .join("review")
+        .join("journal");
+    std::fs::read_dir(journal)
+        .unwrap()
+        .map(|entry| {
+            let bytes = std::fs::read(entry.unwrap().path()).unwrap();
+            serde_json::from_slice::<provenance_core::review::JournalEntry>(&bytes).unwrap()
+        })
+        .find_map(|entry| match entry {
+            provenance_core::review::JournalEntry::Record(entry)
+                if entry.record_kind == provenance_core::NodeType::Source =>
+            {
+                Some(entry.etag)
+            }
+            _ => None,
+        })
+        .unwrap()
+}
+
 #[tokio::test]
 async fn draft_patch_refuses_missing_resources() {
     let repo = Repository::new("The shared graph is readable.");
@@ -87,4 +111,36 @@ async fn requirement_patch_binds_receipt_and_precondition_headers() {
     );
     assert!(value["data"]["edit"]["etag"].is_string());
     assert!(value["data"]["decision"].is_object());
+}
+
+#[tokio::test]
+async fn source_patch_refuses_the_second_client_with_a_stale_etag() {
+    let repo = Repository::new("The shared graph is readable.");
+    repo.all_kinds();
+    let host = host(&repo, true);
+    let etag = source_etag(&repo);
+    let quoted = format!("\"{etag}\"");
+
+    let (first_status, first) = support::resource_http::call_with_headers(
+        &host,
+        "PATCH",
+        "/sources/source_shared",
+        Some(json!({"data":{"name":"Source B"}})),
+        &[("if-match", &quoted)],
+    )
+    .await;
+    assert_eq!(first_status, 200, "{first}");
+
+    let (second_status, second) = support::resource_http::call_with_headers(
+        &host,
+        "PATCH",
+        "/sources/source_shared",
+        Some(json!({"data":{"name":"Source C"}})),
+        &[("if-match", &quoted)],
+    )
+    .await;
+    assert_eq!(second_status, 409, "{second}");
+    let (read_status, source) = call(&host, "GET", "/sources/source_shared", None).await;
+    assert_eq!(read_status, 200, "{source}");
+    assert_eq!(source["data"]["name"], "Source B");
 }
