@@ -1,8 +1,8 @@
 use super::{read_ideation_landings, IdeationLandingBatch, StateStore};
 use crate::shards;
 use provenance_core::{
-    AssertionRecord, Contribution, DispositionRecord, IdeationAggregate, ProposalCard, ScopeId,
-    SynthesisPacket,
+    ensure_record_id_assignable, AssertionRecord, Contribution, DispositionRecord,
+    IdeationAggregate, ProposalCard, ScopeId, StableId, SynthesisPacket,
 };
 use provenance_macros::rule;
 use std::collections::BTreeSet;
@@ -51,6 +51,11 @@ impl StateStore {
             let mut proposals = self.list_proposal_definitions(scope)?;
             let mut assertions = self.list_assertion_records(scope)?;
             let mut dispositions = self.list_dispositions(scope)?;
+            reject_new_ids(&contributions, &incoming.contributions, |record| record.id.as_str())?;
+            reject_new_ids(&synthesis_packets, &incoming.synthesis_packets, |record| record.id.as_str())?;
+            reject_new_ids(&proposals, &incoming.proposals, |record| record.id.as_str())?;
+            reject_new_ids(&assertions, &incoming.assertions, |record| record.id.as_str())?;
+            reject_new_ids(&dispositions, &incoming.dispositions, |record| record.id.as_str())?;
             merge_immutable("proposal", &mut proposals, &incoming.proposals, |r| {
                 r.id.as_str()
             })?;
@@ -138,6 +143,20 @@ impl StateStore {
             Ok(())
         })
     }
+}
+
+fn reject_new_ids<T>(
+    existing: &[T],
+    incoming: &[T],
+    id: impl Fn(&T) -> &str,
+) -> anyhow::Result<()> {
+    for record in incoming {
+        let assigned = id(record);
+        if !existing.iter().any(|known| id(known) == assigned) {
+            ensure_record_id_assignable(assigned)?;
+        }
+    }
+    Ok(())
 }
 
 /// Evidence an assertion rests on cannot be edited afterwards.

@@ -1,60 +1,5 @@
 use super::{local_host, OutputFormat};
-use provenance_core::protocol::{SearchQuery, QUERY_DEFAULT_LIMIT};
-use provenance_core::{NodeType, SDK_PROTOCOL_VERSION};
-use std::fmt::{Display, Formatter};
-
-/// One parsed root-search action.
-pub enum SearchCommand {
-    Help,
-    Run(SearchQuery),
-}
-
-/// Invalid root-search grammar.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct SearchBindingError;
-
-impl Display for SearchBindingError {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str("unsupported search options")
-    }
-}
-
-impl std::error::Error for SearchBindingError {}
-
-/// Translate root-search words into the canonical typed query.
-pub fn parse_search(words: &[&str]) -> Result<SearchCommand, SearchBindingError> {
-    if words == ["search", "--help"] {
-        return Ok(SearchCommand::Help);
-    }
-    if words.first().copied() != Some("search") {
-        return Err(SearchBindingError);
-    }
-    let mut text = None;
-    let mut cursor = None;
-    let mut node_types = Vec::new();
-    let mut limit = None;
-    let mut index = 1;
-    while index < words.len() {
-        let value = words.get(index + 1).copied().ok_or(SearchBindingError)?;
-        match words[index] {
-            "--text" if text.is_none() => text = Some(value.to_owned()),
-            "--cursor" if cursor.is_none() => cursor = Some(value.to_owned()),
-            "--kind" => node_types.push(NodeType::parse(value).map_err(|_| SearchBindingError)?),
-            "--limit" if limit.is_none() => {
-                limit = Some(value.parse().map_err(|_| SearchBindingError)?);
-            }
-            _ => return Err(SearchBindingError),
-        }
-        index += 2;
-    }
-    Ok(SearchCommand::Run(SearchQuery {
-        protocol_version: Some(SDK_PROTOCOL_VERSION),
-        cursor,
-        text,
-        node_types,
-        limit: limit.unwrap_or(QUERY_DEFAULT_LIMIT),
-    }))
-}
+use provenance_core::protocol::SearchQuery;
 
 /// Run one root search through the canonical typed operation.
 pub async fn dispatch_search(
@@ -75,12 +20,4 @@ pub async fn dispatch_search(
     };
     println!("{rendered}");
     Ok(())
-}
-
-/// Print the root-search grammar without opening a repository.
-pub fn print_search_help() {
-    println!("Search records in one scope:");
-    println!("  provenance search [--text <text>] [--kind <record-type>]...");
-    println!("                    [--limit <count>] [--cursor <token>]");
-    println!("                    [--repo <path>] [--scope <id>] [--format json]");
 }

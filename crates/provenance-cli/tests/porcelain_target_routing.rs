@@ -82,38 +82,8 @@ async fn target_first_action_names_match_on_the_live_cli_and_mcp_surfaces() {
 
 #[test]
 #[verifies("rule_porcelain_cli_target_action_order", examples)]
-#[verifies("rule_porcelain_create_names_new_record", examples)]
-fn collection_named_targets_accept_explicit_create_update_and_get() {
-    let (_directory, repo) = initialized_repo();
-
-    let created = json_output(&[
-        "--repo",
-        &repo,
-        "sources",
-        "create",
-        "--type",
-        "source",
-        "--name",
-        "Collection ID",
-        "--format",
-        "json",
-    ]);
-    assert_eq!(created["data"]["id"], "sources");
-
-    let updated = json_output(&[
-        "sources", "update", "--repo", &repo, "--name", "Changed", "--format", "json",
-    ]);
-    assert_eq!(updated["data"]["id"], "sources");
-    assert_eq!(updated["data"]["name"], "Changed");
-
-    let read = json_output(&["sources", "get", "--repo", &repo, "--format", "json"]);
-    assert_eq!(read["record"]["id"], "sources");
-}
-
-#[test]
-#[verifies("rule_porcelain_cli_target_action_order", examples)]
 #[verifies("rule_porcelain_named_domain_actions", examples)]
-fn explicit_named_actions_win_for_collection_named_targets() {
+fn named_actions_work_for_ordinary_targets() {
     let (_directory, repo) = initialized_repo();
     json_output(&[
         "requirements",
@@ -133,7 +103,7 @@ fn explicit_named_actions_win_for_collection_named_targets() {
         "--repo",
         &repo,
         "--id",
-        "topics",
+        "topic_routing",
         "--requirement-id",
         "req_routing",
         "--title",
@@ -147,9 +117,9 @@ fn explicit_named_actions_win_for_collection_named_targets() {
         "--repo",
         &repo,
         "--id",
-        "questions",
+        "question_routing",
         "--topic-id",
-        "topics",
+        "topic_routing",
         "--question",
         "Does the grammar select the action?",
         "--method",
@@ -159,11 +129,11 @@ fn explicit_named_actions_win_for_collection_named_targets() {
     ]);
 
     let claimed = json_output(&[
-        "topics", "claim", "--repo", &repo, "--actor", "worker", "--format", "json",
+        "topic_routing", "claim", "--repo", &repo, "--actor", "worker", "--format", "json",
     ]);
     assert_eq!(claimed["data"]["claimed_by"], "worker");
     let answered = json_output(&[
-        "questions",
+        "question_routing",
         "answer",
         "--repo",
         &repo,

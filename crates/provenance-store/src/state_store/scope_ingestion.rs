@@ -2,9 +2,10 @@ use super::{serde_name, StateStore};
 use crate::cache::ProjectionFamily;
 use crate::jsonl::write_jsonl_atomic_under_publication;
 use provenance_core::{
-    AssertionRecord, Boundary, Contribution, DispositionRecord, Domain, ImplementationBinding,
-    Message, NodeType, ProposalCard, Question, Requirement, Resolution, Rule, ScopeId, Source,
-    SynthesisPacket, Thread, ThreadStatus, Topic, VerificationBinding,
+    ensure_record_id_assignable, AssertionRecord, Boundary, Contribution, DispositionRecord,
+    Domain, ImplementationBinding, Message, NodeType, ProposalCard, Question, Requirement,
+    Resolution, Rule, ScopeId, Source, SynthesisPacket, Thread, ThreadStatus, Topic,
+    VerificationBinding,
 };
 
 macro_rules! define_scope_shards {
@@ -53,6 +54,18 @@ macro_rules! define_scope_shards {
                         NodeType::Boundary,
                     ],
                 )?;
+                for id in shards.verification_bindings.iter().map(|record| &record.id)
+                    .chain(shards.implementation_bindings.iter().map(|record| &record.id))
+                    .chain(shards.threads.iter().map(|record| &record.id))
+                    .chain(shards.messages.iter().map(|record| &record.id))
+                    .chain(shards.contributions.iter().map(|record| &record.id))
+                    .chain(shards.synthesis_packets.iter().map(|record| &record.id))
+                    .chain(shards.proposal_cards.iter().map(|record| &record.id))
+                    .chain(shards.assertion_records.iter().map(|record| record.id.as_stable_id()))
+                    .chain(shards.dispositions.iter().map(|record| &record.id))
+                {
+                    ensure_record_id_assignable(id.as_str())?;
+                }
                 $(
                     write_jsonl_atomic_under_publication(
                         &ProjectionFamily::$family.shard_path(&self.layout, scope),
