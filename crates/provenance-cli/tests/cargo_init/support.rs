@@ -76,6 +76,10 @@ fn main() {
             print!("{metadata}");
         }
         Some("add") => {
+            if env::var_os("FAKE_CARGO_ADD_NOISE").is_some() {
+                println!("FAKE_CARGO_STDOUT");
+                eprintln!("FAKE_CARGO_STDERR");
+            }
             let manifest_path = env::var_os("FAKE_CARGO_MANIFEST").unwrap();
             let workspace_path = env::var_os("FAKE_CARGO_WORKSPACE").unwrap();
             let workspace = std::path::Path::new(&workspace_path);

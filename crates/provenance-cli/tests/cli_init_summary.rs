@@ -236,6 +236,51 @@ fn failed_dictionary_acquisition_keeps_init_successful_and_warns_even_when_quiet
 }
 
 #[test]
+fn dictionary_warning_precedes_the_final_handoff_in_a_combined_stream() {
+    let temporary = tempfile::tempdir().unwrap();
+    let repo = temporary.path().join("repo");
+    let output_path = temporary.path().join("terminal.log");
+    let output = std::fs::File::create(&output_path).unwrap();
+    let errors = output.try_clone().unwrap();
+    let status = std::process::Command::new(assert_cmd::cargo::cargo_bin("provenance"))
+        .args(["init", "--path", repo.to_str().unwrap(), "--scope", "default"])
+        .env("PROVENANCE_STE100_ASSET_DIR", temporary.path().join("assets"))
+        .env("PROVENANCE_STE100_INDEX_DIR", temporary.path().join("indexes"))
+        .env("PROVENANCE_TEST_STE100_ASSET_URL", "http://127.0.0.1:9/unavailable")
+        .stdout(output)
+        .stderr(errors)
+        .status()
+        .unwrap();
+    assert!(status.success());
+    let terminal = std::fs::read_to_string(output_path).unwrap();
+    assert!(terminal.contains("Warning: the official Issue 9 asset is unavailable"));
+    assert!(terminal.ends_with("Have your agent run provenance prime to get acclimated.\n"));
+}
+
+#[test]
+fn existing_skill_parents_report_changed_child_paths_and_keep_unrelated_skills() {
+    let temporary = tempfile::tempdir().unwrap();
+    let repo = temporary.path().join("repo");
+    for parent in [".agents/skills", ".claude/skills"] {
+        let unrelated = repo.join(parent).join("unrelated/SKILL.md");
+        std::fs::create_dir_all(unrelated.parent().unwrap()).unwrap();
+        std::fs::write(unrelated, "keep this\n").unwrap();
+    }
+    let output = init(&repo).success().get_output().stdout.clone();
+    let output = String::from_utf8(output).unwrap();
+    assert!(!output.contains("  .agents/skills ("));
+    assert!(!output.contains("  .claude/skills ("));
+    assert!(output.contains("  .agents/skills/provenance-shaping/SKILL.md ("));
+    assert!(output.contains("  .claude/skills/provenance-shaping ("));
+    for parent in [".agents/skills", ".claude/skills"] {
+        assert_eq!(
+            std::fs::read_to_string(repo.join(parent).join("unrelated/SKILL.md")).unwrap(),
+            "keep this\n"
+        );
+    }
+}
+
+#[test]
 fn adding_a_dictionary_reference_on_reinit_is_reported_as_a_change() {
     let temporary = tempfile::tempdir().unwrap();
     let repo = temporary.path().join("repo");
