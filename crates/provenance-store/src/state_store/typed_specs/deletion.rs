@@ -1,94 +1,35 @@
-use std::collections::BTreeMap;
+use provenance_core::DeclarationAddress;
 
-use provenance_core::{DeclarationAddress, Requirement, Rule, Source, StableId};
+use super::reconcile::changes::DeclarationRecord;
+use super::{DesiredTypedIds, ReconcileState, ReconciledResource};
 
-use super::rule_addresses::local_parent;
-use crate::state_store::{ReconcileState, ReconciledResource, TypedResourceKind};
-
-pub(super) fn delete_omitted_sources(
-    records: &mut Vec<Source>,
+pub(super) fn delete_omitted<T: DeclarationRecord>(
+    records: &mut Vec<T>,
     resources: &mut Vec<ReconciledResource>,
     spec: &str,
     owner: &str,
-    desired: &BTreeMap<String, StableId>,
+    desired: &DesiredTypedIds,
 ) {
     records.retain(|record| {
         let omitted = owned_by_spec(
-            record.declared_by.as_deref(),
-            record.declaration_address.as_ref(),
+            record.declared_by(),
+            record.declaration_address(),
             spec,
             owner,
-        ) && !desired.values().any(|id| id == &record.id);
+        ) && !T::desired_contains(desired, record.stable_id());
         if !omitted {
             return true;
         }
-        let address = typed_address(record.declaration_address.as_ref());
-        resources.push(deleted_resource(
-            TypedResourceKind::Source,
-            declaration_key(&address),
-            None,
+        let address = typed_address(record.declaration_address());
+        resources.push(ReconciledResource {
+            kind: T::KIND,
+            key: declaration_key(&address),
+            parent: T::parent(&address),
             address,
-            record.id.clone(),
-        ));
-        false
-    });
-}
-
-pub(super) fn delete_omitted_requirements(
-    records: &mut Vec<Requirement>,
-    resources: &mut Vec<ReconciledResource>,
-    spec: &str,
-    owner: &str,
-    desired: &BTreeMap<String, StableId>,
-) {
-    records.retain(|record| {
-        let omitted = owned_by_spec(
-            record.declared_by.as_deref(),
-            record.declaration_address.as_ref(),
-            spec,
-            owner,
-        ) && !desired.values().any(|id| id == &record.id);
-        if !omitted {
-            return true;
-        }
-        let address = typed_address(record.declaration_address.as_ref());
-        resources.push(deleted_resource(
-            TypedResourceKind::Requirement,
-            declaration_key(&address),
-            None,
-            address,
-            record.id.clone(),
-        ));
-        false
-    });
-}
-
-pub(super) fn delete_omitted_rules(
-    records: &mut Vec<Rule>,
-    resources: &mut Vec<ReconciledResource>,
-    spec: &str,
-    owner: &str,
-    desired: &BTreeMap<DeclarationAddress, StableId>,
-) {
-    records.retain(|record| {
-        let omitted = owned_by_spec(
-            record.declared_by.as_deref(),
-            record.declaration_address.as_ref(),
-            spec,
-            owner,
-        ) && !desired.values().any(|id| id == &record.id);
-        if !omitted {
-            return true;
-        }
-        let address = typed_address(record.declaration_address.as_ref());
-        let key = declaration_key(&address);
-        resources.push(deleted_resource(
-            TypedResourceKind::Rule,
-            key,
-            local_parent(&address),
-            address,
-            record.id.clone(),
-        ));
+            id: record.stable_id().clone(),
+            state: ReconcileState::Deleted,
+            changes: Vec::new(),
+        });
         false
     });
 }
@@ -116,22 +57,4 @@ fn declaration_key(address: &DeclarationAddress) -> String {
         .last()
         .expect("declaration address is non-empty")
         .clone()
-}
-
-const fn deleted_resource(
-    kind: TypedResourceKind,
-    key: String,
-    parent: Option<String>,
-    address: DeclarationAddress,
-    id: StableId,
-) -> ReconciledResource {
-    ReconciledResource {
-        kind,
-        key,
-        parent,
-        address,
-        id,
-        state: ReconcileState::Deleted,
-        changes: Vec::new(),
-    }
 }
