@@ -148,6 +148,93 @@ fn repeated_setup_and_normal_checks_use_local_data_without_network_access() {
 }
 
 #[test]
+#[verifies("rule_ste_dictionary_import_reuse", examples)]
+fn new_projects_reuse_a_verified_index_and_reject_a_changed_asset() {
+    let _serial = serial();
+    let server = TestServer::new(200, dictionary_support::dictionary_pdf());
+    let fixture = Fixture::new();
+    fixture
+        .init()
+        .env("PROVENANCE_TEST_STE100_ASSET_URL", server.url())
+        .assert()
+        .success();
+    let another_repo = fixture.temporary.path().join("another-repo");
+
+    fixture
+        .command()
+        .args(init_args(&another_repo))
+        .env("PROVENANCE_TEST_STE100_ASSET_URL", server.url())
+        .assert()
+        .success();
+
+    assert_eq!(server.requests().len(), 1);
+    assert_eq!(
+        std::fs::read(dictionary_support::reference_path(&fixture.repo)).unwrap(),
+        std::fs::read(dictionary_support::reference_path(&another_repo)).unwrap()
+    );
+
+    let asset = fixture.asset_dir.join("ASD-STE100_ISSUE9.pdf");
+    std::fs::write(&asset, b"not a PDF").unwrap();
+    let third_repo = fixture.temporary.path().join("third-repo");
+    fixture
+        .command()
+        .args(init_args(&third_repo))
+        .env("PROVENANCE_TEST_STE100_ASSET_URL", server.url())
+        .assert()
+        .success();
+    assert_eq!(server.requests().len(), 2);
+    assert!(dictionary_support::reference_path(&third_repo).is_file());
+    assert_eq!(std::fs::read(asset).unwrap(), dictionary_support::dictionary_pdf());
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_index_digest_verification", examples)]
+fn invalid_shared_indexes_are_rebuilt_from_the_cached_pdf() {
+    let _serial = serial();
+    for corruption in ["truncated", "digest", "identity"] {
+        let server = TestServer::new(200, dictionary_support::dictionary_pdf());
+        let fixture = Fixture::new();
+        fixture
+            .init()
+            .env("PROVENANCE_TEST_STE100_ASSET_URL", server.url())
+            .assert()
+            .success();
+        let index = std::fs::read_dir(&fixture.index_dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .find(|path| path.extension().is_some_and(|extension| extension == "json"))
+            .expect("the first init stored an index");
+        let mut stored: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&index).unwrap()).unwrap();
+        match corruption {
+            "digest" => stored["entries"][0]["headword"] = "CHANGED".into(),
+            "identity" => stored["identity"]["source_sha256"] = "wrong".into(),
+            _ => {}
+        }
+        let damaged = if corruption == "truncated" {
+            b"{\"identity\":".to_vec()
+        } else {
+            serde_json::to_vec(&stored).unwrap()
+        };
+        std::fs::write(&index, damaged).unwrap();
+        let another_repo = fixture.temporary.path().join("another-repo");
+
+        fixture
+            .command()
+            .args(init_args(&another_repo))
+            .env("PROVENANCE_TEST_STE100_ASSET_URL", server.url())
+            .assert()
+            .success();
+
+        assert_eq!(server.requests().len(), 1, "corruption: {corruption}");
+        assert!(dictionary_support::reference_path(&another_repo).is_file());
+        let restored: provenance_ste100::DictionaryImport =
+            serde_json::from_slice(&std::fs::read(&index).unwrap()).unwrap();
+        assert_eq!(&restored, dictionary_support::imported_dictionary());
+    }
+}
+
+#[test]
 #[verifies("rule_ste_dictionary_download_concurrency", examples)]
 fn concurrent_onboarding_shares_one_download() {
     let _serial = serial();
