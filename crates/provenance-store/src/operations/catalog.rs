@@ -44,6 +44,7 @@ pub use discussion_discovery::*;
 pub use discussion_reads::*;
 pub use discussion_writes::*;
 pub use requirement_review::*;
+pub use resource_members::GetRequirement;
 pub use review_reads::*;
 pub use updates::*;
 
@@ -51,8 +52,8 @@ pub use authoring::{Apply, BeginVerification, CompleteVerification, Plan};
 #[cfg(feature = "schema")]
 pub use binding::{
     ArgumentAlias, CliBinding, CliDefault, CliDefaultValue, Controls, DiscussionWriteKind,
-    EtagBinding, HandlerBinding, HeaderBinding, NullClearBinding, ParentBinding, PathBinding,
-    QueryRequestBinding, QueryRoute, Registration, RequestAdapter, RequestAdapterError,
+    EtagBinding, FixedBinding, HandlerBinding, HeaderBinding, NullClearBinding, ParentBinding,
+    PathBinding, QueryRequestBinding, QueryRoute, Registration, RequestAdapter, RequestAdapterError,
     RequestBinding, ResponseAdapter, ResponseBinding, SelectorBinding, TargetAction, TargetBinding,
 };
 pub use context::{

@@ -26,15 +26,23 @@ impl StateStore {
         scope: &ScopeId,
         id: &StableId,
     ) -> anyhow::Result<RequirementEditState> {
+        self.record_edit_state(scope, provenance_core::NodeType::Requirement, id)
+    }
+
+    pub fn record_edit_state(
+        &self,
+        scope: &ScopeId,
+        kind: provenance_core::NodeType,
+        id: &StableId,
+    ) -> anyhow::Result<RequirementEditState> {
         self.with_repository_publication(|| {
-            let record = self.requirement(scope, id)?;
-            let review_record = provenance_core::review::ReviewRecord::from(record);
-            let head = self.head(&review_record)?;
+            let record = crate::cache::review_families::record(self, scope, kind, id)?;
+            let head = self.head(&record)?;
             Ok(RequirementEditState {
                 etag: head
                     .as_ref()
                     .map(|e| e.etag.clone())
-                    .unwrap_or(journal::etag(&review_record, None)?),
+                    .unwrap_or(journal::etag(&record, None)?),
                 revision: head.as_ref().map(|e| e.revision.clone()),
                 snapshot: head.map(|e| e.after),
             })
@@ -266,6 +274,9 @@ impl StateStore {
             &journal::entry_path(&self.layout, &scope, &entry.request_id),
             &entry,
         )?;
+        if classifier::changes_revision(kind, &entry.changed_fields) {
+            self.commit_automatic_submission(after, &entry)?;
+        }
         Ok(entry)
     }
 }
