@@ -174,6 +174,62 @@ async fn emitted_get_contract_accepts_each_live_view_and_rejects_wrong_payloads(
     server.await.unwrap().cancel().await.unwrap();
 }
 
+fn assert_check_context_edges(output: &JSONSchema) {
+    use provenance_porcelain::check::{CategoryReport, CheckOutcome};
+
+    let result = CheckOutcome {
+        categories: vec![
+            CategoryReport::from_run(CategoryRun::Statements {
+                findings: vec![Finding::new("statement finding")],
+                context: Some(StatementContext {
+                    candidate_commit: "candidate".into(),
+                    base_commit: Some("base".into()),
+                }),
+                refusal: Refusal::Findings,
+            }),
+            CategoryReport::from_run(CategoryRun::Bindings {
+                findings: vec![],
+                context: BindingContext {
+                    policy: BindingPolicy::Error,
+                },
+                refusal: Refusal::None,
+            }),
+            CategoryReport::from_run(CategoryRun::Graph {
+                findings: vec![Finding::with_detail("graph finding", json!(7))],
+                refusal: Refusal::Findings,
+            }),
+        ],
+    };
+    let valid = serde_json::to_value(result).unwrap();
+    assert!(output.is_valid(&valid), "populated check contexts: {valid}");
+    assert_eq!(valid["categories"][0]["context"]["base_commit"], "base");
+    assert_eq!(valid["categories"][1]["context"]["policy"], "error");
+    assert_eq!(valid["categories"][2]["findings"][0]["detail"], 7);
+
+    let mut missing_candidate = valid.clone();
+    missing_candidate["categories"][0]["context"]
+        .as_object_mut()
+        .unwrap()
+        .remove("candidate_commit");
+    let mut wrong_base = valid.clone();
+    wrong_base["categories"][0]["context"]["base_commit"] = json!(12);
+    let mut unknown_policy = valid.clone();
+    unknown_policy["categories"][1]["context"]["policy"] = json!("ignore");
+    let mut missing_message = valid.clone();
+    missing_message["categories"][2]["findings"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("message");
+    for (label, candidate) in [
+        ("missing statement candidate", missing_candidate),
+        ("numeric base commit", wrong_base),
+        ("unknown binding policy", unknown_policy),
+        ("missing finding message", missing_message),
+    ] {
+        assert!(!output.is_valid(&candidate), "accepted {label}: {candidate}");
+    }
+}
+
 struct CategoryFixture {
     unavailable: AtomicBool,
 }
@@ -285,6 +341,7 @@ async fn emitted_check_contract_accepts_all_categories_contexts_and_unavailable_
         invalid["categories"][1][field] = bad;
         assert!(!output.is_valid(&invalid), "invalid {field} was accepted");
     }
+    assert_check_context_edges(&output);
 
     fixture.unavailable.store(true, Ordering::SeqCst);
     let arguments = json!({"categories":["bindings"]});
