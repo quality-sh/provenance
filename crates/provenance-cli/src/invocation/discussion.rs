@@ -51,7 +51,7 @@ pub async fn dispatch_target(
     let mut input = crate::catalog_cli::fields::schema_input(
         &schema,
         matches,
-        &["parent", "discussion_id", "declared_by"],
+        &["parent", "discussion_id"],
         &["limit"],
     )
     .unwrap_or_else(|error| crate::catalog_cli::usage_error(error));

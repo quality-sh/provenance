@@ -329,3 +329,6 @@ fn cli_discussion_actions_use_one_scope_and_preserve_receipt_identity() {
     let get = json(&["req_a", "get", "--repo", repo, "--format", "json"]);
     assert_eq!(get["record"]["id"], "req_a");
 }
+
+#[path = "porcelain_discussion/ownership.rs"]
+mod ownership;
