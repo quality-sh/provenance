@@ -12,6 +12,14 @@ use provenance_core::review::{
 use provenance_core::{Requirement, ScopeId, StableId};
 use provenance_macros::rule;
 
+struct RecordEvidenceContext {
+    head: Option<ReviewEntry>,
+    actor: String,
+    request_id: StableId,
+    intent_digest: String,
+    origin: Option<provenance_core::threads::DiscussionOrigin>,
+}
+
 impl StateStore {
     pub fn requirement_edit_state(
         &self,
@@ -160,14 +168,18 @@ impl StateStore {
             self.layout.manifest_path(),
             serde_json::to_vec_pretty(&manifest)?,
         )?;
+        let before_record = ReviewRecord::from(before.clone());
+        let after_record = ReviewRecord::from(after.clone());
         let entry = self.commit_record_evidence(
-            before.clone().into(),
-            after.clone().into(),
-            head,
-            actor,
-            request_id,
-            intent_digest,
-            origin,
+            &before_record,
+            &after_record,
+            RecordEvidenceContext {
+                head,
+                actor,
+                request_id,
+                intent_digest,
+                origin,
+            },
         )?;
         if classifier::changes_revision(entry.record_kind, &entry.changed_fields) {
             self.commit_automatic_submission(&after, &entry)?;
@@ -177,14 +189,17 @@ impl StateStore {
 
     fn commit_record_evidence(
         &self,
-        before: ReviewRecord,
-        after: ReviewRecord,
-        head: Option<ReviewEntry>,
-        actor: String,
-        request_id: StableId,
-        intent_digest: String,
-        origin: Option<provenance_core::threads::DiscussionOrigin>,
+        before: &ReviewRecord,
+        after: &ReviewRecord,
+        context: RecordEvidenceContext,
     ) -> anyhow::Result<ReviewEntry> {
+        let RecordEvidenceContext {
+            head,
+            actor,
+            request_id,
+            intent_digest,
+            origin,
+        } = context;
         let kind = before.kind();
         anyhow::ensure!(
             after.kind() == kind
@@ -194,7 +209,7 @@ impl StateStore {
         );
         let scope = before.scope_id().clone();
         let id = before.id().clone();
-        let fields = classifier::changed_fields(kind, &before, &after)?;
+        let fields = classifier::changed_fields(kind, before, after)?;
         let outcome = if head.is_none() {
             SaveOutcome::Enrolled
         } else if fields.is_empty() {
@@ -210,18 +225,18 @@ impl StateStore {
         };
         let before_snapshot = match &head {
             Some(entry) => entry.after.clone(),
-            None => journal::snapshot(&self.layout, &before)?,
+            None => journal::snapshot(&self.layout, before)?,
         };
         let after_snapshot = if outcome == SaveOutcome::NoChange {
             before_snapshot.clone()
         } else {
-            journal::snapshot(&self.layout, &after)?
+            journal::snapshot(&self.layout, after)?
         };
         let entry_id = journal::new_id();
         let etag = if outcome == SaveOutcome::NoChange {
             head.as_ref().unwrap().etag.clone()
         } else {
-            journal::etag(&after, Some(&entry_id))?
+            journal::etag(after, Some(&entry_id))?
         };
         let entry = ReviewEntry {
             schema_version: REVIEW_SCHEMA_VERSION,
@@ -349,15 +364,19 @@ mod tests {
         let mut after = before.clone();
         after.name = "Policy B".into();
 
+        let before = ReviewRecord::from(before);
+        let after = ReviewRecord::from(after);
         let entry = store
             .commit_record_evidence(
-                before.into(),
-                after.into(),
-                None,
-                "reviewer".into(),
-                StableId::new("save-source-a").unwrap(),
-                "sha256:intent".into(),
-                None,
+                &before,
+                &after,
+                RecordEvidenceContext {
+                    head: None,
+                    actor: "reviewer".into(),
+                    request_id: StableId::new("save-source-a").unwrap(),
+                    intent_digest: "sha256:intent".into(),
+                    origin: None,
+                },
             )
             .unwrap();
 
