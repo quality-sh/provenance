@@ -104,6 +104,7 @@ query!(
     ResolveRecordQuery,
     ResolveRecordResult,
     resolve_record,
+    resolve_record_answer,
     graph_needs
 );
 query!(
