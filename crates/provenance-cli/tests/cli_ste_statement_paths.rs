@@ -8,3 +8,5 @@ mod merge;
 mod strict;
 #[path = "cli_ste_statement_paths/support.rs"]
 mod support;
+#[path = "export_fixture_support/mod.rs"]
+mod export_fixture_support;

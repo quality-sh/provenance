@@ -2,6 +2,9 @@ use assert_cmd::Command;
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_macros::verifies;
 
+#[path = "export_fixture_support/mod.rs"]
+mod export_fixture_support;
+
 #[allow(clippy::too_many_lines)]
 #[test]
 fn cli_creates_and_exports_enriched_sources_and_resolutions() {
@@ -70,6 +73,7 @@ fn cli_creates_and_exports_enriched_sources_and_resolutions() {
         ))
         .stdout(predicates::str::contains(r#""supersedes": ["#))
         .stdout(predicates::str::contains(r#""source_sah_2025""#));
+    export_fixture_support::make_default_scope_portable(&repo);
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
