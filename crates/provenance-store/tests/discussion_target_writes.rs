@@ -14,7 +14,9 @@ use serde_json::json;
 fn request(id: &str, action: &serde_json::Value) -> TargetDiscussionWrite {
     serde_json::from_value(json!({
         "scope_id": "default", "request_id": id, "actor": "ben",
-        "declared_by": null, "action": action
+        "declared_by": null, "allowed_parent_kinds": [
+            "source", "requirement", "resolution", "rule", "topic", "question", "domain", "boundary"
+        ], "action": action
     }))
     .unwrap()
 }
