@@ -195,16 +195,29 @@ pub async fn open_immutable_cache(layout: &ProvenanceLayout) -> anyhow::Result<C
 /// an immutable image of the stored projection.
 #[rule("rule_read_only_checkout_answers_as_an_immutable_image")]
 pub async fn open_stored_cache(layout: &ProvenanceLayout) -> anyhow::Result<CacheConnection> {
-    let stored = CacheConnection::connect(
-        stored_cache_options(layout).create_if_missing(false),
-        false,
-        WalSwitchRetry::default(),
-    )
-    .await;
+    let stored = open_stored_writable(layout).await;
     match stored {
         Ok(connection) => Ok(connection),
         Err(error) if permission_failure(layout, &error) => open_immutable_cache(layout).await,
         Err(error) => Err(error),
+    }
+}
+
+async fn open_stored_writable(layout: &ProvenanceLayout) -> anyhow::Result<CacheConnection> {
+    let connection = CacheConnection::connect(
+        stored_cache_options(layout).create_if_missing(false),
+        false,
+        WalSwitchRetry::default(),
+    )
+    .await?;
+    let probe: anyhow::Result<Option<String>> =
+        sqlx::query_scalar("SELECT name FROM sqlite_schema ORDER BY name LIMIT 1")
+            .fetch_optional(connection.pool())
+            .await
+            .map_err(Into::into);
+    match probe {
+        Ok(_) => Ok(connection),
+        Err(error) => Err(connection.close_reporting(error).await),
     }
 }
 
