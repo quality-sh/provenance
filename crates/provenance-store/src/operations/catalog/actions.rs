@@ -1,10 +1,5 @@
 //! Adapters for existing single-record shaping and relationship actions.
-use super::{ExecutionNeed, ExecutionNeeds, Operation, OperationFuture, PreparedContext};
-use crate::{
-    layout::ProvenanceLayout,
-    state_store::StateStore,
-    write_error::{SourceFailure, WriteError, WriteFailure},
-};
+use super::ExecutionNeed;
 use provenance_core::{ScopeId, StableId};
 use serde::Deserialize;
 
@@ -46,38 +41,10 @@ pub struct ReferenceActionInput {
 
 macro_rules! native_action {
     ($name:ident, $wire:literal, $input:ty, $output:ty, |$store:ident, $request:ident| $call:expr) => {
-        pub struct $name;
-        impl Operation for $name {
-            type Request = $input;
-            type Success = $output;
-            type Failure = WriteError;
-            const NAME: &'static str = $wire;
-            const MUTATES: bool = true;
-            const CONTEXT: super::ContextKind = super::ContextKind::Scope;
-            fn failure_status(error: &WriteError) -> u16 {
-                error.status()
-            }
-            fn needs(_: &Self::Request) -> ExecutionNeeds {
-                &[ExecutionNeed::GraphStorage]
-            }
-            fn run(
-                context: PreparedContext,
-                $request: Self::Request,
-            ) -> OperationFuture<Self::Success, Self::Failure> {
-                Box::pin(async move {
-                    let context = context.scope()?;
-                    if $request.scope_id != context.scope {
-                        return Err(SourceFailure::wrap(
-                            WriteFailure::ScopeMismatch,
-                            anyhow::anyhow!("request scope does not match selected scope"),
-                        )
-                        .into());
-                    }
-                    let $store = StateStore::new(ProvenanceLayout::new(context.root));
-                    Ok($call?)
-                })
-            }
-        }
+        $crate::operations::catalog::shapes::scoped_write_operation!(
+            pub $name, $wire, $input, $output, &[], &[ExecutionNeed::GraphStorage],
+            scope = scope_id, |$store, _scope, $request| $call
+        );
     };
 }
 pub(super) use native_action;

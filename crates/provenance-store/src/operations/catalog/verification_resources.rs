@@ -1,12 +1,9 @@
 //! Bounded typed reads over the live verification-run file.
 
-use super::failures::ReadError;
 use super::resource_members::ResourceMemberRequest;
 use super::resource_pages::{ResourcePage, VerificationPageRequest};
 use super::v2_review_reads::ReadResult;
-use super::{
-    ContextKind, ExecutionNeed, ExecutionNeeds, Operation, OperationFuture, PreparedContext,
-};
+use super::{shapes::graph_read_operation, ExecutionNeed};
 use crate::operations::reader::{self, Cursor, Live, Position, ReadContext, PAGE_BYTES};
 use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_core::{ScopeId, VerificationRun};
@@ -83,72 +80,50 @@ fn run_member(
         })
 }
 
-pub struct PageVerificationRunsV2;
-impl Operation for PageVerificationRunsV2 {
-    type Request = VerificationPageRequest;
-    type Success = ReadResult<ResourcePage<VerificationRun>>;
-    type Failure = ReadError;
-    const NAME: &'static str = "page-verification-runs-v2";
-    const CONTEXT: ContextKind = ContextKind::Scoped;
-    const FAILURE_STATUSES: &'static [u16] = &[409];
-    fn needs(_: &Self::Request) -> ExecutionNeeds {
+graph_read_operation!(
+    pub PageVerificationRunsV2,
+    "page-verification-runs-v2",
+    VerificationPageRequest,
+    ReadResult<ResourcePage<VerificationRun>>,
+    &[409],
+    |_| {
         &[
             ExecutionNeed::GraphStorage,
             ExecutionNeed::ProjectionMaintenance,
             ExecutionNeed::RunStorage,
         ]
-    }
-    fn failure_status(error: &ReadError) -> u16 {
-        error.status()
-    }
-    fn run(
-        context: PreparedContext,
-        request: Self::Request,
-    ) -> OperationFuture<Self::Success, Self::Failure> {
-        Box::pin(async move {
-            let read = context.graph()?;
-            let scope = read.scope.clone();
-            let answer_scope = scope.clone();
-            Ok(reader::answer(&read.root, &scope, read.policy, move |ctx| {
-                Box::pin(async move { run_page(ctx, &answer_scope, &request) })
-            })
-            .await?
-            .into())
+    },
+    |read, request| async move {
+        let scope = read.scope.clone();
+        let answer_scope = scope.clone();
+        Ok(reader::answer(&read.root, &scope, read.policy, move |ctx| {
+            Box::pin(async move { run_page(ctx, &answer_scope, &request) })
         })
+        .await?
+        .into())
     }
-}
+);
 
-pub struct GetVerificationRunV2;
-impl Operation for GetVerificationRunV2 {
-    type Request = ResourceMemberRequest;
-    type Success = ReadResult<VerificationRun>;
-    type Failure = ReadError;
-    const NAME: &'static str = "get-verification-run-v2";
-    const CONTEXT: ContextKind = ContextKind::Scoped;
-    const FAILURE_STATUSES: &'static [u16] = &[404, 409];
-    fn needs(_: &Self::Request) -> ExecutionNeeds {
+graph_read_operation!(
+    pub GetVerificationRunV2,
+    "get-verification-run-v2",
+    ResourceMemberRequest,
+    ReadResult<VerificationRun>,
+    &[404, 409],
+    |_| {
         &[
             ExecutionNeed::GraphStorage,
             ExecutionNeed::ProjectionMaintenance,
             ExecutionNeed::RunStorage,
         ]
-    }
-    fn failure_status(error: &ReadError) -> u16 {
-        error.status()
-    }
-    fn run(
-        context: PreparedContext,
-        request: Self::Request,
-    ) -> OperationFuture<Self::Success, Self::Failure> {
-        Box::pin(async move {
-            let read = context.graph()?;
-            let scope = read.scope.clone();
-            let answer_scope = scope.clone();
-            Ok(reader::answer(&read.root, &scope, read.policy, move |ctx| {
-                Box::pin(async move { run_member(ctx, &answer_scope, &request) })
-            })
-            .await?
-            .into())
+    },
+    |read, request| async move {
+        let scope = read.scope.clone();
+        let answer_scope = scope.clone();
+        Ok(reader::answer(&read.root, &scope, read.policy, move |ctx| {
+            Box::pin(async move { run_member(ctx, &answer_scope, &request) })
         })
+        .await?
+        .into())
     }
-}
+);
