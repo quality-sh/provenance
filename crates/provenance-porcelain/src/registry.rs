@@ -352,8 +352,6 @@ impl Command {
     /// Whether `interface` shows this command. Each interface has one exhaustive match,
     /// so a new command does not compile until each interface records it.
     #[rule("rule_porcelain_interface_records_each_command")]
-    // One exhaustive match for each interface is the point, so it stays one function.
-    #[allow(clippy::too_many_lines)]
     pub const fn presence(self, interface: Interface) -> Presence {
         match interface {
             Interface::Cli => match self {
@@ -372,58 +370,10 @@ impl Command {
                     | Action::Discuss
                     | Action::Reply => Presence::Present,
                 },
-                Self::Repository(command) => match command {
-                    RepositoryCommand::Init
-                    | RepositoryCommand::CargoInit
-                    | RepositoryCommand::Materialize
-                    | RepositoryCommand::Export
-                    | RepositoryCommand::Import
-                    | RepositoryCommand::MergeJsonl
-                    | RepositoryCommand::Validate
-                    | RepositoryCommand::SchemaShow
-                    | RepositoryCommand::DictionaryImport
-                    | RepositoryCommand::DictionaryStatus => Presence::Present,
-                },
-                Self::Graph(command) => match command {
-                    GraphCommand::Graph
-                    | GraphCommand::Traceability
-                    | GraphCommand::Gaps
-                    | GraphCommand::Health
-                    | GraphCommand::Orphans
-                    | GraphCommand::CoverageScan
-                    | GraphCommand::ReferenceIssue
-                    | GraphCommand::ReferenceShow
-                    | GraphCommand::ReferenceVerify
-                    | GraphCommand::ReferenceExactExport
-                    | GraphCommand::SwarmBacktraceLand => Presence::Present,
-                },
-                Self::Workspace(command) => match command {
-                    WorkspaceCommand::DocsCheck
-                    | WorkspaceCommand::DocsServe
-                    | WorkspaceCommand::SkillsList
-                    | WorkspaceCommand::SkillsShow
-                    | WorkspaceCommand::SkillsInstall
-                    | WorkspaceCommand::ReportRender
-                    | WorkspaceCommand::ReportBuild
-                    | WorkspaceCommand::Review => Presence::Present,
-                },
-                Self::Dogfood(command) => match command {
-                    DogfoodCommand::Note
-                    | DogfoodCommand::List
-                    | DogfoodCommand::Report
-                    | DogfoodCommand::TriageHandle
-                    | DogfoodCommand::TriageReopen
-                    | DogfoodCommand::TriageList
-                    | DogfoodCommand::Simulate => {
-                        if cfg!(feature = "dogfood") {
-                            Presence::Present
-                        } else {
-                            Presence::Absent {
-                                reason: "only dev builds with the dogfood feature have the command",
-                            }
-                        }
-                    }
-                },
+                Self::Repository(command) => command.presence(interface),
+                Self::Graph(command) => command.presence(interface),
+                Self::Workspace(command) => command.presence(interface),
+                Self::Dogfood(command) => command.presence(interface),
             },
             Interface::Mcp => match self {
                 Self::Get | Self::Search | Self::Api | Self::Check => Presence::Present,
@@ -442,59 +392,10 @@ impl Command {
                     | Action::Discuss
                     | Action::Reply => Presence::Present,
                 },
-                Self::Repository(command) => match command {
-                    RepositoryCommand::Init
-                    | RepositoryCommand::CargoInit
-                    | RepositoryCommand::Materialize
-                    | RepositoryCommand::Export
-                    | RepositoryCommand::Import
-                    | RepositoryCommand::MergeJsonl
-                    | RepositoryCommand::Validate
-                    | RepositoryCommand::SchemaShow
-                    | RepositoryCommand::DictionaryImport
-                    | RepositoryCommand::DictionaryStatus => Presence::Absent {
-                        reason:
-                            "the command changes or reads repository files on the local machine",
-                    },
-                },
-                Self::Graph(command) => match command {
-                    GraphCommand::Graph
-                    | GraphCommand::Traceability
-                    | GraphCommand::Gaps
-                    | GraphCommand::Health
-                    | GraphCommand::Orphans
-                    | GraphCommand::CoverageScan
-                    | GraphCommand::ReferenceIssue
-                    | GraphCommand::ReferenceShow
-                    | GraphCommand::ReferenceVerify
-                    | GraphCommand::ReferenceExactExport
-                    | GraphCommand::SwarmBacktraceLand => Presence::Absent {
-                        reason: "MCP clients read the graph through get, search, and api",
-                    },
-                },
-                Self::Workspace(command) => match command {
-                    WorkspaceCommand::DocsCheck
-                    | WorkspaceCommand::DocsServe
-                    | WorkspaceCommand::SkillsList
-                    | WorkspaceCommand::SkillsShow
-                    | WorkspaceCommand::SkillsInstall
-                    | WorkspaceCommand::ReportRender
-                    | WorkspaceCommand::ReportBuild
-                    | WorkspaceCommand::Review => Presence::Absent {
-                        reason: "the command works on files and hosts on the local machine",
-                    },
-                },
-                Self::Dogfood(command) => match command {
-                    DogfoodCommand::Note
-                    | DogfoodCommand::List
-                    | DogfoodCommand::Report
-                    | DogfoodCommand::TriageHandle
-                    | DogfoodCommand::TriageReopen
-                    | DogfoodCommand::TriageList
-                    | DogfoodCommand::Simulate => Presence::Absent {
-                        reason: "the notes are about the CLI on the local machine",
-                    },
-                },
+                Self::Repository(command) => command.presence(interface),
+                Self::Graph(command) => command.presence(interface),
+                Self::Workspace(command) => command.presence(interface),
+                Self::Dogfood(command) => command.presence(interface),
             },
         }
     }
