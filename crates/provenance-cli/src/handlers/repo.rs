@@ -206,8 +206,13 @@ fn build_summary(
     for file in skills.files() {
         let relative = std::path::Path::new(&file.path)
             .strip_prefix(path.as_std_path())
-            .unwrap_or_else(|_| std::path::Path::new(&file.path));
-        let relative = relative.display().to_string();
+            .map(|path| {
+                path.iter()
+                    .map(|part| part.to_string_lossy())
+                    .collect::<Vec<_>>()
+                    .join("/")
+            })
+            .unwrap_or_else(|_| file.path.clone());
         match file.status {
             FileStatus::Unchanged => {}
             FileStatus::Installed => summary.push_new(relative, "added skill file"),
