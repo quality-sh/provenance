@@ -1,9 +1,8 @@
 use crate::cli::report::ReportCommand;
-use crate::output::OutputFormat;
+use crate::output::ReportFormat;
 use anyhow::Context;
 use camino::Utf8PathBuf;
-use provenance_report::envelope::ReportEnvelope;
-use provenance_report::render;
+use provenance_report::{render_envelope, RenderError, RenderFormat};
 
 pub(super) fn handle(command: ReportCommand) -> anyhow::Result<()> {
     match command {
@@ -39,28 +38,23 @@ pub(super) fn handle(command: ReportCommand) -> anyhow::Result<()> {
 
 fn render_handler(
     input: &Utf8PathBuf,
-    format: OutputFormat,
+    format: ReportFormat,
     output: Option<&Utf8PathBuf>,
 ) -> anyhow::Result<()> {
     let raw = std::fs::read_to_string(input).with_context(|| format!("failed to read {input}"))?;
-    let envelope: ReportEnvelope = serde_json::from_str(&raw)
-        .with_context(|| format!("failed to parse report envelope {input}"))?;
-    envelope
-        .validate()
-        .map_err(|message| anyhow::anyhow!("invalid report envelope: {message}"))?;
-    render::validate_duplicates(&envelope)
-        .map_err(|message| anyhow::anyhow!("invalid report envelope: {message}"))?;
-    let normalized = render::normalize(&envelope);
-    match format {
-        OutputFormat::Markdown => emit(&render::render_markdown(&normalized), output),
-        OutputFormat::Json => {
-            let json = serde_json::to_string_pretty(&normalized)?;
-            emit(&json, output)
+    let format = match format {
+        ReportFormat::Json => RenderFormat::Json,
+        ReportFormat::Markdown => RenderFormat::Markdown,
+    };
+    let rendered = match render_envelope(&raw, format) {
+        Ok(rendered) => rendered,
+        Err(RenderError::Parse(source)) => {
+            return Err(anyhow::Error::new(source))
+                .with_context(|| format!("failed to parse report envelope {input}"));
         }
-        other => {
-            anyhow::bail!("unsupported format {other:?} for report render; use markdown or json")
-        }
-    }
+        Err(error) => return Err(error.into()),
+    };
+    emit(&rendered, output)
 }
 
 fn emit(text: &str, output: Option<&Utf8PathBuf>) -> anyhow::Result<()> {
