@@ -9,22 +9,6 @@ use std::fmt::Display;
 
 pub use provenance_core::TargetAction as Action;
 
-/// Describe one action for tool discovery.
-pub const fn description(action: Action) -> &'static str {
-    match action {
-        Action::Create => "Create the target ID as an explicit record type.",
-        Action::Update => "Update the existing target while preserving omitted fields.",
-        Action::Answer => "Answer the target Question.",
-        Action::Claim => "Claim the target Topic.",
-        Action::Release => "Release the target Topic claim.",
-        Action::Submit => "Submit the target Requirement for review.",
-        Action::Discussions => "List addressed Discussions in a scope or under a record.",
-        Action::Discussion => "Read the addressed Discussion.",
-        Action::Discuss => "Start a Discussion under the target record.",
-        Action::Reply => "Reply to the addressed Discussion.",
-    }
-}
-
 /// An action target with a kind selected by its declaration or stored identity.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Target {

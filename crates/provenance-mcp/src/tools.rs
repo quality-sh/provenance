@@ -2,6 +2,7 @@
 
 use provenance_porcelain::check::CheckInput;
 use provenance_porcelain::get::{GetInput, ReadError};
+use provenance_porcelain::registry::Command;
 use provenance_transport::porcelain::{Action, ActionError};
 use provenance_transport::StatementHost;
 use rmcp::model::{CallToolResult, ContentBlock};
@@ -10,22 +11,17 @@ use serde_json::Value;
 mod api;
 mod authoring;
 pub use api::{call as call_api, tool as api_tool};
-pub use authoring::{call as call_authoring, tools as authoring_tools};
+pub use authoring::{call as call_authoring, tool as authoring_tool};
 
-pub fn discussion_tools(host: &StatementHost) -> Vec<rmcp::model::Tool> {
-    Action::DISCUSSION
-        .into_iter()
-        .filter(|action| host.porcelain().discussion_is_available(*action))
-        .map(|action| {
-            crate::surface::tool(
-                action.as_str(),
-                provenance_porcelain::action::description(action),
-                provenance_porcelain::discussion::input_schema(action),
-                provenance_porcelain::discussion::output_schema(),
-                crate::surface::SchemaDeclaration::Remove,
-            )
-        })
-        .collect()
+pub fn discussion_tool(action: Action) -> rmcp::model::Tool {
+    let declaration = Command::Action(action).declaration();
+    crate::surface::tool(
+        declaration.name,
+        declaration.description,
+        provenance_porcelain::discussion::input_schema(action),
+        provenance_porcelain::discussion::output_schema(),
+        crate::surface::SchemaDeclaration::Remove,
+    )
 }
 
 pub async fn call_discussion(
@@ -68,8 +64,8 @@ fn discussion_error(error: &ActionError) -> CallToolResult {
 
 pub fn search_tool() -> rmcp::model::Tool {
     crate::surface::tool(
-        "search",
-        provenance_porcelain::guidance::SEARCH_DESCRIPTION,
+        Command::Search.declaration().name,
+        Command::Search.declaration().description,
         provenance_porcelain::search::input_schema(),
         provenance_porcelain::search::output_schema(),
         crate::surface::SchemaDeclaration::Remove,
@@ -78,8 +74,8 @@ pub fn search_tool() -> rmcp::model::Tool {
 
 pub fn get_tool() -> rmcp::model::Tool {
     crate::surface::tool(
-        "get",
-        provenance_porcelain::guidance::GET_DESCRIPTION,
+        Command::Get.declaration().name,
+        Command::Get.declaration().description,
         provenance_porcelain::get::input_schema(),
         provenance_porcelain::get::output_schema(),
         crate::surface::SchemaDeclaration::Keep,
@@ -88,8 +84,8 @@ pub fn get_tool() -> rmcp::model::Tool {
 
 pub fn check_tool() -> rmcp::model::Tool {
     crate::surface::tool(
-        "check",
-        provenance_porcelain::guidance::CHECK_DESCRIPTION,
+        Command::Check.declaration().name,
+        Command::Check.declaration().description,
         provenance_porcelain::check::input_schema(),
         provenance_porcelain::check::output_schema(),
         crate::surface::SchemaDeclaration::Keep,

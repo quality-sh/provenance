@@ -3,14 +3,15 @@
 use provenance_porcelain::api::{
     render_discovery_readable, ApiArguments, ApiError, ApiOutcome, ApiRequest,
 };
+use provenance_porcelain::registry::Command;
 use provenance_transport::StatementHost;
 use rmcp::model::{CallToolResult, ContentBlock, Tool};
 use serde_json::Value;
 
 pub fn tool() -> Tool {
     crate::surface::tool(
-        "api",
-        provenance_porcelain::api::API_DESCRIPTION,
+        Command::Api.declaration().name,
+        Command::Api.declaration().description,
         provenance_porcelain::api::input_schema(),
         provenance_porcelain::api::output_schema(),
         crate::surface::SchemaDeclaration::Remove,
