@@ -196,17 +196,19 @@ pub struct TargetArgs {
     pub kind: Vec<NodeType>,
     #[arg(long)]
     pub limit: Option<usize>,
-    /// Stream the current review document and pushed changes as JSON lines.
-    #[arg(long, requires = "view", conflicts_with = "review_link")]
-    pub follow: bool,
-    /// Print a link to this record in the running review host.
-    #[arg(long, conflicts_with_all = ["view", "depth", "kind", "limit"])]
-    pub review_link: bool,
-    /// Print the review link and do not open it in a browser.
-    #[arg(long, requires = "review_link")]
-    pub no_open: bool,
+    #[arg(skip)]
+    pub delivery: Delivery,
     #[arg(long)]
     pub stdin: bool,
+}
+
+/// Selects the target read's delivery, while keeping CLI flag names unchanged.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum Delivery {
+    #[default]
+    Read,
+    Follow,
+    ReviewLink { open: bool },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -255,7 +257,15 @@ fn get_views() -> PossibleValuesParser {
 
 impl TargetArgs {
     pub fn from_matches(matches: &ArgMatches) -> Self {
-        Self::from_arg_matches(matches).unwrap_or_else(|error| error.exit())
+        let mut args = Self::from_arg_matches(matches).unwrap_or_else(|error| error.exit());
+        args.delivery = if matches.get_flag("follow") {
+            Delivery::Follow
+        } else if matches.get_flag("review-link") {
+            Delivery::ReviewLink { open: !matches.get_flag("no-open") }
+        } else {
+            Delivery::Read
+        };
+        args
     }
 }
 
@@ -306,6 +316,14 @@ pub(super) fn positional_word<'a>(
 
 pub fn target_command() -> Command {
     TargetArgs::command()
+        .arg(clap::Arg::new("follow").long("follow").action(ArgAction::SetTrue)
+            .requires("view").conflicts_with("review-link")
+            .help("Stream the current review document and pushed changes as JSON lines."))
+        .arg(clap::Arg::new("review-link").long("review-link").action(ArgAction::SetTrue)
+            .conflicts_with_all(["view", "depth", "kind", "limit"])
+            .help("Print a link to this record in the running review host."))
+        .arg(clap::Arg::new("no-open").long("no-open").action(ArgAction::SetTrue)
+            .requires("review-link").help("Print the review link and do not open it in a browser."))
 }
 
 pub fn catalog_command() -> Command {
