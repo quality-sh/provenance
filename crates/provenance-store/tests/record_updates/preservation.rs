@@ -303,8 +303,7 @@ async fn target_edit_with_nested_unknown_data_is_refused_without_publication() {
 
     let mut loaded = parsed_rows(&fixture, "boundaries", "boundary.jsonl");
     assert_eq!(loaded[0]["statement"], "Renamed");
-    loaded[0]["sourceRef"] =
-        json!({"sourceId":"source_one","clause":"section 1","extension":"keep"});
+    loaded[0]["source_ref"]["extension"] = json!("keep");
     let original = padded(&loaded[0]);
     write_rows(
         &fixture,
