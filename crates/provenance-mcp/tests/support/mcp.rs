@@ -6,13 +6,14 @@ pub type Client = rmcp::service::RunningService<rmcp::RoleClient, ()>;
 
 pub struct Session {
     pub client: Client,
-    server: tokio::task::JoinHandle<rmcp::service::RunningService<rmcp::RoleServer, StatementHost>>,
+    server: tokio::task::JoinHandle<provenance_mcp::Session>,
 }
 
 impl Session {
     pub async fn start(host: StatementHost) -> Self {
         let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-        let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+        let server =
+            tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
         let client = ().serve(client_io).await.unwrap();
         Self { client, server }
     }

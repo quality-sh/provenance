@@ -6,7 +6,7 @@ use std::{
 
 use serde_json::Value;
 
-const CRATE_ORDER: [&str; 13] = [
+const CRATE_ORDER: [&str; 14] = [
     "provenance-macros",
     "provenance-core",
     "provenance-porcelain",
@@ -18,6 +18,7 @@ const CRATE_ORDER: [&str; 13] = [
     "provenance-http-client",
     "provenance-contract",
     "provenance-transport",
+    "provenance-mcp",
     "provenance-review",
     "provenance-cli",
 ];

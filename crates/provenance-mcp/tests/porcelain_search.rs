@@ -4,6 +4,7 @@ use provenance_macros::verifies;
 
 mod support {
     pub mod mcp;
+    #[path = "../../../provenance-transport/tests/support/records.rs"]
     pub mod records;
 }
 

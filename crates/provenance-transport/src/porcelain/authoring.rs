@@ -2,9 +2,10 @@
 
 use axum::http::HeaderMap;
 use provenance_contract::Definition;
+use provenance_core::protocol::failure::{ErasedFailure, InvalidInputReason, OperationFailure};
 use provenance_core::NodeType;
 use provenance_macros::rule;
-pub use provenance_porcelain::action::{description, render_readable, Action, ActionError};
+pub use provenance_porcelain::action::{Action, ActionError};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 
@@ -51,7 +52,7 @@ impl crate::StatementHost {
         route: &TargetRoute,
         mut data: Value,
         headers: HeaderMap,
-    ) -> Result<Value, provenance_core::protocol::failure::ErasedFailure> {
+    ) -> Result<Value, ErasedFailure> {
         if route.action == Action::Create {
             let object = data
                 .as_object_mut()
@@ -69,7 +70,7 @@ impl crate::StatementHost {
             .await
     }
 
-    pub(super) fn executable_target_definitions(
+    pub(crate) fn executable_target_definitions(
         &self,
         action: Action,
     ) -> Vec<(NodeType, &'static Definition)> {
@@ -97,4 +98,81 @@ impl crate::StatementHost {
         }
         Ok(definition)
     }
+}
+
+/// Split structured target-action arguments into the body, query, and headers of one
+/// registered operation. The target fills each path parameter.
+pub fn target_call(
+    definition: &'static Definition,
+    value: &Value,
+    target: &str,
+) -> Result<(Value, BTreeMap<String, String>, HeaderMap), ErasedFailure> {
+    let mut path: BTreeMap<String, String> = definition
+        .registration
+        .request
+        .path
+        .iter()
+        .map(|binding| (binding.parameter.to_owned(), target.to_owned()))
+        .collect();
+    let mut arguments = value.as_object().cloned().ok_or_else(invalid)?;
+    let data = arguments.remove("data").unwrap_or_else(|| json!({}));
+    let mut query = BTreeMap::new();
+    let mut headers = HeaderMap::new();
+    let variants: Vec<provenance_contract::QueryVariant> = definition.query_variants();
+    let parameters: Vec<provenance_contract::Parameter> = if variants.is_empty() {
+        definition.parameters()
+    } else {
+        let selector: Option<&str> = arguments.get("query").and_then(Value::as_str);
+        variants
+            .into_iter()
+            .find(|variant| variant.selector == selector)
+            .ok_or_else(invalid)?
+            .parameters
+    };
+    for parameter in parameters {
+        if parameter.location == "path" && path.contains_key(parameter.name) {
+            continue;
+        }
+        let mcp_name = if parameter.location == "header" {
+            parameter.name.to_ascii_lowercase().replace('-', "_")
+        } else {
+            parameter.name.to_owned()
+        };
+        let value = arguments.remove(&mcp_name);
+        if parameter.required && value.is_none() {
+            return Err(invalid());
+        }
+        let Some(value) = value else { continue };
+        let text = provenance_contract::serialize_parameter_value(&parameter, &value)
+            .map_err(|_| invalid())?;
+        match parameter.location {
+            "path" => {
+                path.insert(parameter.name.to_owned(), text);
+            }
+            "query" => {
+                query.insert(parameter.name.to_owned(), text);
+            }
+            "header" => {
+                let name = axum::http::HeaderName::from_bytes(parameter.name.as_bytes())
+                    .map_err(|_| invalid())?;
+                let value = text.parse().map_err(|_| invalid())?;
+                headers.insert(name, value);
+            }
+            _ => return Err(invalid()),
+        }
+    }
+    if !arguments.is_empty() {
+        return Err(invalid());
+    }
+    Ok((data, query, headers))
+}
+
+fn invalid() -> ErasedFailure {
+    ErasedFailure::new(
+        None,
+        OperationFailure::InvalidInput {
+            field: None,
+            reason: InvalidInputReason::InvalidValue,
+        },
+    )
 }

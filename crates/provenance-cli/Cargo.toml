@@ -78,6 +78,6 @@ jsonschema.workspace = true
 notify = { version = "8.2.0", default-features = false, features = ["macos_fsevent"] }
 tempfile.workspace = true
 predicates.workspace = true
-rmcp = { version = "=2.2.0", default-features = false, features = ["client"] }
+provenance-mcp = { workspace = true, features = ["client"] }
 tar.workspace = true
 provenance-transport = { path = "../provenance-transport", version = "0.3.2", features = ["test-fixture"] }

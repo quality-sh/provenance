@@ -1,0 +1,216 @@
+#![cfg(feature = "test-fixture")]
+
+mod support {
+    #[path = "../../../provenance-transport/tests/support/api_fixture.rs"]
+    #[path = "../../../provenance-transport/tests/support/api_fixture.rs"]
+    pub mod api_fixture;
+    pub mod api_session;
+    #[path = "../../../provenance-transport/tests/support/records.rs"]
+    #[path = "../../../provenance-transport/tests/support/records.rs"]
+    pub mod records;
+}
+
+use jsonschema::Validator;
+use provenance_macros::verifies;
+use provenance_transport::StatementHost;
+use serde_json::{json, Value};
+use support::api_fixture::{access, host, Repository};
+use support::api_session::{error_kind, ApiSession};
+
+fn schema_has_property(document: &Value, schema: &Value, property: &str) -> bool {
+    if schema["properties"].get(property).is_some() {
+        return true;
+    }
+    if let Some(reference) = schema["$ref"].as_str() {
+        return schema_has_property(
+            document,
+            document
+                .pointer(reference.strip_prefix('#').unwrap())
+                .unwrap(),
+            property,
+        );
+    }
+    ["allOf", "anyOf"]
+        .into_iter()
+        .filter_map(|keyword| schema[keyword].as_array())
+        .flatten()
+        .any(|part| schema_has_property(document, part, property))
+}
+
+#[tokio::test]
+#[verifies("rule_porcelain_api_catalog_discovery", examples)]
+async fn api_discovery_describes_the_live_catalog_routes() {
+    let repository = Repository::new("The shared graph is readable.");
+    repository.all_kinds();
+    let session = ApiSession::start(StatementHost::with_fixture_access(
+        access(&repository).allow_writes(),
+    ))
+    .await;
+
+    let tools = session.tools().await;
+    let tool = tools.iter().find(|tool| tool.name == "api").unwrap();
+    for field in ["path", "method", "query", "headers", "body"] {
+        assert!(
+            tool.input_schema["properties"][field].is_object(),
+            "{tool:?}"
+        );
+    }
+
+    let discovery = session.call(json!({})).await;
+    assert_ne!(discovery.is_error, Some(true), "{discovery:?}");
+    let routes = discovery.structured_content.as_ref().unwrap()["routes"]
+        .as_array()
+        .unwrap()
+        .clone();
+
+    // The write-granted fixture advertises every registered definition, so
+    // the described routes must track that set exactly.
+    assert_eq!(
+        routes.len(),
+        provenance_contract::definitions().len(),
+        "one described route per advertised definition"
+    );
+
+    let member = routes
+        .iter()
+        .find(|route| route["path"] == "/sources/{id}" && route["method"] == "get")
+        .expect("the source member route is described");
+    let definition = provenance_contract::definitions()
+        .iter()
+        .find(|definition| {
+            definition.path == "/sources/{id}"
+                && definition.method == provenance_contract::HttpMethod::Get
+        })
+        .unwrap();
+    assert_eq!(member["description"], definition.description);
+    let forms = member["queries"].as_array().unwrap();
+    assert_eq!(forms.len(), 4, "one base and three member queries");
+    let base = forms.iter().find(|form| form["query"].is_null()).unwrap();
+    let names = base["parameters"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|parameter| parameter["name"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(names, ["id"], "the member base form binds only the path");
+    let base_success = base["success_schema"].as_object().unwrap();
+    let data = &base_success["properties"]["data"];
+    for property in ["name", "edit", "decision"] {
+        assert!(
+            schema_has_property(&Value::Object(base_success.clone()), data, property),
+            "the base form publishes the reviewed source field {property}"
+        );
+    }
+    assert_eq!(base_success["required"], json!(["data", "meta"]));
+    let neighbors = forms
+        .iter()
+        .find(|form| form["query"] == "neighbors")
+        .unwrap();
+    assert_ne!(neighbors["success_schema"], base["success_schema"]);
+
+    let create = routes
+        .iter()
+        .find(|route| route["path"] == "/sources" && route["method"] == "post")
+        .expect("the source creation route is described");
+    assert!(create["request_schema"].is_object(), "{create}");
+
+    session.shutdown().await;
+}
+
+#[tokio::test]
+async fn api_discovery_hides_denied_operations() {
+    let repository = Repository::new("The shared graph is readable.");
+    repository.all_kinds();
+    let restricted = access(&repository).deny_operation("list-sources");
+    let session = ApiSession::start(StatementHost::with_fixture_access(restricted)).await;
+
+    let discovery = session.call(json!({})).await;
+    let routes = discovery.structured_content.as_ref().unwrap()["routes"]
+        .as_array()
+        .unwrap();
+    assert!(
+        routes
+            .iter()
+            .all(|route| !(route["path"] == "/sources" && route["method"] == "get")),
+        "{routes:?}"
+    );
+
+    // Hiding the route also refuses the path at invocation.
+    let refused = session
+        .call(json!({"path": "sources", "query": {"limit": "1"}}))
+        .await;
+    assert_eq!(refused.is_error, Some(true), "{refused:?}");
+    assert_eq!(error_kind(&refused), "access_denied");
+
+    session.shutdown().await;
+}
+
+#[tokio::test]
+async fn mcp_api_outputs_validate_against_the_published_schema() {
+    let repository = Repository::new("The shared graph is readable.");
+    repository.all_kinds();
+    let session = ApiSession::start(host(&repository)).await;
+
+    let tools = session.tools().await;
+    let tool = tools
+        .iter()
+        .find(|tool| tool.name == "api")
+        .expect("the api tool is listed");
+    let published_schema = Value::Object(
+        tool.output_schema
+            .as_ref()
+            .expect("the api tool publishes an output schema")
+            .as_ref()
+            .clone(),
+    );
+    // jsonschema resolves each local reference when it builds the validator,
+    // so a dangling reference fails here.
+    let published = compile(&published_schema).expect("the published api output schema compiles");
+
+    let discovery = session.call(json!({})).await;
+    let structured = discovery.structured_content.as_ref().unwrap();
+    assert!(
+        published.is_valid(structured),
+        "discovery output violates the published schema: {discovery:?}"
+    );
+
+    let invoked = session.call(json!({"path": "sources/source_shared"})).await;
+    let structured = invoked.structured_content.as_ref().unwrap();
+    assert!(
+        published.is_valid(structured),
+        "invocation output violates the published schema: {invoked:?}"
+    );
+
+    // The described base form schema must also describe the live result
+    // that the api tool returns on the same public path.
+    let routes = discovery.structured_content.as_ref().unwrap()["routes"]
+        .as_array()
+        .unwrap();
+    let member = routes
+        .iter()
+        .find(|route| route["path"] == "/sources/{id}" && route["method"] == "get")
+        .expect("the source member route is described");
+    let base_schema = member["queries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|form| form["query"].is_null())
+        .expect("the base form is described")["success_schema"]
+        .clone();
+    let base_contract = compile(&base_schema).expect("the described base form schema compiles");
+    assert!(
+        base_contract.is_valid(invoked.structured_content.as_ref().unwrap()),
+        "api output violates the described route schema: {invoked:?}"
+    );
+
+    session.shutdown().await;
+}
+
+/// Read a schema that has no `$schema` keyword as a Draft 7 document.
+fn compile(schema: &Value) -> Result<Validator, jsonschema::ValidationError<'static>> {
+    if schema.get("$schema").is_some() {
+        jsonschema::validator_for(schema)
+    } else {
+        jsonschema::draft7::new(schema)
+    }
+}

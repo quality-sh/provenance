@@ -12,7 +12,9 @@ use std::sync::{
 #[cfg(feature = "test-fixture")]
 #[allow(dead_code)]
 mod support {
+    #[path = "../../../provenance-transport/tests/support/records.rs"]
     pub mod records;
+    #[path = "../../../provenance-transport/tests/support/resource_http.rs"]
     pub mod resource_http;
 }
 
@@ -105,7 +107,8 @@ async fn emitted_get_contract_accepts_each_live_view_and_rejects_wrong_payloads(
     let host = support::resource_http::host(&repository, false);
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
     let server_host = host.clone();
-    let server = tokio::spawn(async move { server_host.serve_mcp(server_io).await.unwrap() });
+    let server =
+        tokio::spawn(async move { provenance_mcp::serve(server_host, server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
     let tools = client.list_all_tools().await.unwrap();
     let get = tools.iter().find(|tool| tool.name == "get").unwrap();
@@ -281,7 +284,7 @@ async fn emitted_check_contract_accepts_all_categories_contexts_and_unavailable_
     let port: Arc<dyn CheckPort> = fixture.clone();
     let host = provenance_transport::StatementHost::default().with_check_port(port.clone());
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
     let tools = client.list_all_tools().await.unwrap();
     let check = tools.iter().find(|tool| tool.name == "check").unwrap();

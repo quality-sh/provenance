@@ -7,7 +7,9 @@
 #![cfg(feature = "test-fixture")]
 
 mod support {
+    #[path = "../../../provenance-transport/tests/support/check_port.rs"]
     pub mod check_port;
+    #[path = "../../../provenance-transport/tests/support/records.rs"]
     pub mod records;
 }
 
@@ -51,7 +53,7 @@ impl Wire {
     fn start(host: StatementHost) -> Self {
         let (client_io, server_io) = tokio::io::duplex(1024 * 1024);
         tokio::spawn(async move {
-            let running = host.serve_mcp(server_io).await.unwrap();
+            let running = provenance_mcp::serve(host, server_io).await.unwrap();
             let _ = running.waiting().await;
         });
         let (reader, writer) = tokio::io::split(client_io);
