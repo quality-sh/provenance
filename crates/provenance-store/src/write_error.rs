@@ -19,6 +19,9 @@ pub enum WriteFailure {
     },
     InvalidDeclaration,
     InvalidUpdate,
+    ApprovalEvidenceRequired {
+        message: String,
+    },
     RequirementEditConflict {
         current_etag: String,
     },
@@ -119,6 +122,16 @@ impl WriteError {
         }
         if let Some(error) = self.0.downcast_ref::<SourceFailure>() {
             return error.failure.clone();
+        }
+        if self
+            .0
+            .downcast_ref::<provenance_core::ApprovalEvidenceRequired>()
+            .is_some()
+        {
+            return WriteFailure::ApprovalEvidenceRequired {
+                message: "An approval requires a prior assertion or a human canonical_artifact."
+                    .into(),
+            };
         }
         if let Some(error) = self.0.downcast_ref::<StatementWriteError>() {
             return WriteFailure::StatementInvalid {

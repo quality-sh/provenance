@@ -242,13 +242,13 @@ pub fn validate_disposition_admissible<'a>(
         .find(|proposal| proposal.id == disposition.proposal_id)
         .ok_or_else(|| anyhow::anyhow!("proposal does not exist"))?;
     if proposal.promotion_state == PromotionState::Proposed {
-        anyhow::ensure!(
-            !disposition_requires_prior_assertion(disposition)
-                || assertions
-                    .iter()
-                    .any(|assertion| assertion.proposal_id == disposition.proposal_id),
-            "accepted proposal must be asserted before disposition"
-        );
+        if disposition_requires_prior_assertion(disposition)
+            && !assertions
+                .iter()
+                .any(|assertion| assertion.proposal_id == disposition.proposal_id)
+        {
+            return Err(crate::model::ApprovalEvidenceRequired.into());
+        }
     }
     anyhow::ensure!(
         !recorded
