@@ -12,7 +12,7 @@ use support::record_review::{
     accept_current, create_resolution, create_rule, current_submission, data, decide,
     guarded_update, read,
 };
-use support::review_paths::{create_requirement, init};
+use support::review_paths::{create_requirement, init, json_output, provenance};
 
 /// The change opened one pending submission bound to the new revision, and
 /// the lifecycle status stayed `status`.
@@ -189,7 +189,9 @@ fn creating_a_rule_or_resolution_in_review_opens_its_pending_submission() {
     for (collection, id) in [("rules", "rule_a"), ("resolutions", "res_a")] {
         let created = read(&repo, collection, id);
         assert_pending_at_current_revision(&created, "review");
-        let review = data(&repo, &[id, "get", "--view", "review"]);
+        let review = json_output(provenance().args([
+            id, "get", "--view", "review", "--repo", &repo, "--format", "json",
+        ]));
         assert_eq!(
             review["review"]["decision"]["pending"]["proposal_id"],
             created["decision"]["pending"]["proposal_id"]

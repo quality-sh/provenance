@@ -64,7 +64,7 @@ fn failed_submission_publishes_neither_the_created_record_nor_the_submission() {
         "the create published without its submission"
     );
     assert_eq!(sections(&store, &scope), before);
-    assert!(store.list_rules(&scope).unwrap().is_empty());
+    assert_eq!(store.list_rules(&scope).unwrap(), []);
 }
 
 #[test]
