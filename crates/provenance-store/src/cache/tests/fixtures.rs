@@ -72,7 +72,7 @@ pub fn seeded_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
             supersedes: Vec::new(),
             position: "Use award threshold".into(),
             rationale: "Matches source clause".into(),
-            status: ResolutionStatus::Proposed,
+            status: ResolutionStatus::Approved,
             context: None,
             enforcement: None,
             confidence: None,
@@ -318,7 +318,7 @@ pub fn create_rule_of(store: &StateStore, scope: &ScopeId, id: &str, requirement
         .unwrap();
 }
 
-/// A proposed resolution naming one requirement.
+/// An approved resolution naming one requirement.
 pub fn create_resolution(store: &StateStore, scope: &ScopeId, id: &str, requirement_id: &str) {
     store
         .create_resolution(CreateResolutionInput {
@@ -329,7 +329,7 @@ pub fn create_resolution(store: &StateStore, scope: &ScopeId, id: &str, requirem
             supersedes: Vec::new(),
             position: "Adopt".into(),
             rationale: format!("{id} rationale"),
-            status: ResolutionStatus::Proposed,
+            status: ResolutionStatus::Approved,
             context: None,
             enforcement: None,
             confidence: None,
