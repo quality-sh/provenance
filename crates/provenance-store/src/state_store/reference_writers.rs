@@ -105,7 +105,8 @@ impl StateStore {
         owner: &StableId,
         named_targets: &[(&str, &[StableId])],
     ) -> anyhow::Result<()> {
-        let mut batches = Vec::new();
+        let mut owner_ids = None;
+        let mut target_indexes = Vec::new();
         for (name, targets) in named_targets {
             if targets.is_empty() {
                 continue;
@@ -118,35 +119,27 @@ impl StateStore {
                 .filter(|target| seen.insert(target.as_str().to_owned()))
                 .cloned()
                 .collect::<Vec<_>>();
-            batches.push((*name, declaration.target, targets));
-        }
-
-        let owner_ids = records
-            .iter()
-            .map(|record| record.id().as_str().to_owned())
-            .collect::<BTreeSet<_>>();
-        let mut target_indexes = Vec::new();
-        for (_, kind, _) in &batches {
-            if target_indexes
-                .iter()
-                .any(|(indexed_kind, _)| indexed_kind == kind)
-            {
-                continue;
-            }
-            let ids = if *kind == T::OWNER {
-                owner_ids.clone()
+            let kind = declaration.target;
+            let ids = if kind == T::OWNER {
+                owner_ids.get_or_insert_with(|| {
+                    records
+                        .iter()
+                        .map(|record| record.id().as_str().to_owned())
+                        .collect::<BTreeSet<_>>()
+                })
             } else {
-                self.node_ids(scope_id, *kind)?
+                let position = match target_indexes
+                    .iter()
+                    .position(|(indexed_kind, _)| *indexed_kind == kind)
+                {
+                    Some(position) => position,
+                    None => {
+                        target_indexes.push((kind, self.node_ids(scope_id, kind)?));
+                        target_indexes.len() - 1
+                    }
+                };
+                &target_indexes[position].1
             };
-            target_indexes.push((*kind, ids));
-        }
-
-        for (name, kind, targets) in batches {
-            let ids = &target_indexes
-                .iter()
-                .find(|(indexed_kind, _)| *indexed_kind == kind)
-                .expect("each target kind has an index")
-                .1;
             for target in &targets {
                 crate::write_error::ensure!(
                     MissingReference,
