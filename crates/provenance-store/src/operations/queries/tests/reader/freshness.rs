@@ -189,6 +189,28 @@ async fn annotate_only_refuses_an_incompatible_current_schema_without_writing() 
     );
 }
 
+#[tokio::test]
+async fn annotate_only_does_not_change_a_delete_mode_cache_that_it_refuses() {
+    let store = test_stores::seeded_queries();
+    let before = super::incompatible_delete_mode_cache(&store).await;
+
+    let refused = get_through(
+        &store,
+        ReadPolicy::with_freshness(FreshnessPolicy::AnnotateOnly),
+    )
+    .await
+    .unwrap_err();
+
+    assert!(matches!(
+        refused.downcast_ref::<crate::operations::reader::ReadRefusal>(),
+        Some(crate::operations::reader::ReadRefusal::SchemaBehind { .. })
+    ));
+    assert_eq!(
+        std::fs::read(store.layout().cache_db_path()).unwrap(),
+        before
+    );
+}
+
 /// When the freshness step fails before it can rebuild, the read falls
 /// back to the stored file; an old file holds no revision table, and the
 /// refusal must still be the typed one that names materialize.
