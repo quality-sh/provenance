@@ -10,7 +10,13 @@ pub use safe_fs::{rename_no_replace, ChildKind, Directory};
 #[path = "files/held.rs"]
 mod held;
 #[cfg(any(unix, windows))]
-pub use held::{FileIdentity, HeldRepositoryFile, PreparedRepositoryFile};
+#[path = "files/held_metadata.rs"]
+mod held_metadata;
+#[cfg(any(unix, windows))]
+pub use held::{
+    BackupRetentionReason, FileIdentity, HeldRepositoryFile, PreparedRepositoryFile,
+    RepositoryFileInstall,
+};
 use std::{fs::File, io::Read};
 #[cfg(test)]
 #[path = "files/tests.rs"]
@@ -55,6 +61,8 @@ pub enum RepositoryFileRefusal {
     InvalidUtf8,
     #[error("repository file changed after it was read")]
     Changed,
+    #[error("repository file owner {owner} differs from effective user {effective}")]
+    OwnerMismatch { owner: u32, effective: u32 },
     #[error("repository file write failed: {0}")]
     Write(#[source] std::io::Error),
     #[error("repository file restore failed: {0}")]
