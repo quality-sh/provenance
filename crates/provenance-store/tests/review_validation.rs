@@ -140,8 +140,8 @@ fn statement_edits_keep_existing_verification_review_behavior() {
 }
 
 #[test]
-fn typed_apply_refuses_before_publishing_any_other_shard() {
-    let (_temp, store) = fixture();
+fn typed_apply_captures_an_occurrence_and_publishes_other_shards() {
+    let (temp, store) = fixture();
     let spec = json!({"schema_version":2,"spec":"fixture","declared_by":"spec://fixture",
         "requirements":[{"key":"a","statement":"The system stores records."}],"sources":[{"key":"source","name":"Original","kind":"policy"}]});
     store
@@ -159,14 +159,31 @@ fn typed_apply_refuses_before_publishing_any_other_shard() {
         .etag;
     store.save_requirement(serde_json::from_value(json!({"request_id":"enroll_owned","actor":"ben","expected_etag":etag,
         "update":{"scope_id":"default","id":record.id,"declared_by":"spec://fixture"},"relationships":null})).unwrap()).unwrap();
-    let sources = store.list_sources(&scope()).unwrap();
+    let journal = temp
+        .path()
+        .join(".provenance/state/scopes/default/review/journal");
+    let occurrence_count = std::fs::read_dir(&journal).unwrap().count();
     let mut changed = spec;
-    changed["sources"][0]["name"] = json!("Must not publish");
+    changed["sources"][0]["name"] = json!("Changed source");
     changed["requirements"][0]["statement"] = json!("The system reads records.");
-    assert!(store
+    store
         .apply_typed_spec(&scope(), serde_json::from_value(changed).unwrap())
-        .is_err());
-    assert_eq!(store.list_sources(&scope()).unwrap(), sources);
+        .unwrap();
+    assert_eq!(store.list_sources(&scope()).unwrap()[0].name, "Changed source");
+    assert_eq!(
+        store
+            .list_requirements(&scope())
+            .unwrap()
+            .into_iter()
+            .find(|requirement| requirement.declared_by.is_some())
+            .unwrap()
+            .statement,
+        "The system reads records."
+    );
+    assert_eq!(
+        std::fs::read_dir(journal).unwrap().count(),
+        occurrence_count + 1
+    );
 }
 
 #[test]
