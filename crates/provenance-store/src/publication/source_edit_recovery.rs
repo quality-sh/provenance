@@ -183,37 +183,60 @@ fn complete_state(
     transaction: &Utf8Path,
     marker: &mut SourceEditMarker,
 ) -> anyhow::Result<()> {
-    let staged = ProvenanceLayout::new(transaction.join("staged-repo"));
-    let backup = transaction.join("backup-state");
     if marker.phase == SourceEditPhase::Prepared {
-        if layout.state_dir().exists() && !backup.exists() {
-            std::fs::rename(layout.state_dir(), &backup)?;
-            crate::test_probes::at("state_after_backup_rename")?;
-        }
-        marker.phase = SourceEditPhase::BackupCreated;
-        write_marker(layout, marker)?;
-        crate::test_probes::at("source_edit_backup_created")?;
+        complete_backup_phase(layout, transaction, marker)?;
     }
     if marker.phase == SourceEditPhase::BackupCreated {
-        if staged.state_dir().exists() {
-            anyhow::ensure!(
-                !layout.state_dir().exists(),
-                "source-edit recovery found both staged and live state"
-            );
-            std::fs::rename(staged.state_dir(), layout.state_dir())?;
-            crate::test_probes::at("state_after_install_rename")?;
-            sync_directory(&layout.provenance_dir())?;
-        } else {
-            anyhow::ensure!(
-                layout.state_dir().exists(),
-                "source-edit recovery found no state"
-            );
-        }
-        marker.phase = SourceEditPhase::StateInstalled;
-        write_marker(layout, marker)?;
-        crate::test_probes::at("source_edit_state_installed")?;
+        complete_install_phase(layout, transaction, marker)?;
     }
     Ok(())
+}
+
+fn complete_backup_phase(
+    layout: &ProvenanceLayout,
+    transaction: &Utf8Path,
+    marker: &mut SourceEditMarker,
+) -> anyhow::Result<()> {
+    let backup = transaction.join("backup-state");
+    if layout.state_dir().exists() && !backup.exists() {
+        std::fs::rename(layout.state_dir(), &backup)?;
+        crate::test_probes::at("state_after_backup_rename")?;
+    }
+    marker.phase = SourceEditPhase::BackupCreated;
+    write_marker(layout, marker)?;
+    crate::test_probes::at("source_edit_backup_created")
+}
+
+fn complete_install_phase(
+    layout: &ProvenanceLayout,
+    transaction: &Utf8Path,
+    marker: &mut SourceEditMarker,
+) -> anyhow::Result<()> {
+    let staged = ProvenanceLayout::new(transaction.join("staged-repo"));
+    if staged.state_dir().exists() {
+        install_staged_state(layout, &staged)?;
+    } else {
+        anyhow::ensure!(
+            layout.state_dir().exists(),
+            "source-edit recovery found no state"
+        );
+    }
+    marker.phase = SourceEditPhase::StateInstalled;
+    write_marker(layout, marker)?;
+    crate::test_probes::at("source_edit_state_installed")
+}
+
+fn install_staged_state(
+    layout: &ProvenanceLayout,
+    staged: &ProvenanceLayout,
+) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        !layout.state_dir().exists(),
+        "source-edit recovery found both staged and live state"
+    );
+    std::fs::rename(staged.state_dir(), layout.state_dir())?;
+    crate::test_probes::at("state_after_install_rename")?;
+    sync_directory(&layout.provenance_dir())
 }
 
 fn clean_unmarked_transactions(layout: &ProvenanceLayout) -> anyhow::Result<()> {
