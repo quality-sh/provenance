@@ -13,7 +13,7 @@ mod source_edit;
 mod source_edit_recovery;
 mod staged;
 pub use durability::{sync_directory, sync_tree};
-pub use guard::{publication_guard, PublicationGuard};
+pub use guard::{publication_guard, with_publication_guard, PublicationGuard};
 pub use read_only::with_read_only_validation;
 use recovery::{canonical_transactions_dir, create_real_directory};
 pub use recovery::{

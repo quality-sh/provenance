@@ -108,3 +108,25 @@ pub fn create(root: &Path, id: &str, kind: &str, extra: &[&str]) {
         String::from_utf8_lossy(&result.stderr)
     );
 }
+
+/// Uses the authenticated page session, without native bearer credentials.
+pub fn page_request(host: &Host, method: &str, path: &str) -> ureq::Request {
+    super::request(host, method, path, false)
+        .set("Cookie", &super::events::cookie(host))
+        .set("Origin", host.config["endpoint"].as_str().unwrap())
+        .set("Content-Type", "application/json")
+}
+
+pub fn page_rule(host: &Host, id: &str, requirement: &str) {
+    let saved = super::response(
+        page_request(host, "POST", "/rules").send_string(
+            &serde_json::json!({"data":{
+                "id":id, "statement":"The agent receives saved changes.",
+                "status":"draft", "severity":"high", "requirement_ids":[requirement],
+                "resolution_ids":[]
+            }})
+            .to_string(),
+        ),
+    );
+    assert_eq!(saved.status(), 200, "{}", saved.into_string().unwrap());
+}
