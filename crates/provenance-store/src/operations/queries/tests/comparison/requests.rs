@@ -207,7 +207,7 @@ pub fn search(text: &str, node_types: Vec<NodeType>) -> SearchQuery {
     SearchQuery {
         cursor: None,
         protocol_version: Some(SDK_PROTOCOL_VERSION),
-        text: text.to_string(),
+        text: Some(text.to_string()),
         node_types,
 
         limit: 10,
