@@ -36,3 +36,8 @@ slow-timeout = { period = "60s", terminate-after = 3 }
 # The manual stress check includes 30 repetitions but also has a process limit.
 filter = 'binary(cli_review_events_recovery) & test(repeat_kernel_queue_loss_thirty_times)'
 slow-timeout = { period = "60s", terminate-after = 4 }
+
+[[profile.default.overrides]]
+# A blocked OS lock cannot be cancelled by an async timeout.
+filter = 'binary(page_write_response)'
+slow-timeout = { period = "30s", terminate-after = 2 }
