@@ -182,6 +182,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 24
+      - run: sfw npm install --global @openai/codex@0.159.1
       - name: Fetch crates through Socket Firewall
         run: sfw cargo fetch --locked
       - run: sfw npm ci --prefix tools/operation-codegen
@@ -219,6 +220,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 24
+      - run: sfw npm install --global @openai/codex@0.159.1
       - name: Fetch crates through Socket Firewall
         run: sfw cargo fetch --locked
       - run: sfw npm ci --prefix tools/operation-codegen
