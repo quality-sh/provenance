@@ -210,7 +210,7 @@ async fn source_reference_edit_keeps_an_unrelated_requirement_exactly() {
     fixture.requirement().await;
     fixture
         .call(
-            "create-requirement",
+            "create-requirement-native",
             json!({"scope_id":"default","id":"req_two","statement":"The system reads the record.","status":"active","depends_on":[],"supersedes":[]}),
         )
         .await
