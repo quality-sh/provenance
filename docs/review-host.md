@@ -453,3 +453,33 @@ Clients must treat every reset and any epoch or sequence gap as a full-read
 request. The feed cannot recover missed event count, order, or intermediate
 values. On shutdown, observation stops and a started guarded read finishes.
 The existing operation drain still waits for writes.
+
+## Native review stream
+
+Run `provenance REQUIREMENT_ID get --view review --follow --format json --repo REPOSITORY`.
+The command connects to the verified host for the selected repository and scope.
+It reads the owner-only launch key and sends it in `X-Provenance-Launch-Key` on
+`/review-events`. Native subscriptions refuse Origin, Cookie, Authorization and
+browser fetch metadata. Browser subscriptions still require the exact Origin and
+a valid session cookie. Native subscriptions do not count as connected review pages.
+
+The command flushes one JSON line for each bounded current-state page. Each line
+has `type`, `epoch`, `sequence`, `continuity`, `records`, `removedIds` and
+`continuations`. Records are canonical document entries, including Questions,
+Threads and Messages. `--limit` sets the page size. A nonempty continuation array
+identifies the next page; the stream reads it before it waits for another notice.
+Removed IDs appear on the last page, after a complete read.
+
+A pushed change starts a new document read. Reads run in order and the WebSocket
+retains later notices during each read. Unrelated writes produce no output when
+the selected document is unchanged. A reset or sequence gap returns current state
+with unknown continuity. Initial state also has unknown continuity, because this
+process has no retained baseline. Ctrl-C cancels the stream with success. Host loss
+flushes a `disconnected` line with unknown continuity and exits with failure.
+Start a new subscription after the host restarts. There are no scheduled retries.
+
+The host stores epoch, sequence and subscriptions in memory. The stream retains
+only its current document comparison state. It does not recover notification
+order, intermediate edits or removed transient records after an absence. Saved
+decisions and Messages remain in the graph. Delivery does not prove that a model
+processed a message.
