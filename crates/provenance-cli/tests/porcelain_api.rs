@@ -197,8 +197,14 @@ fn api_discovery_describes_the_live_catalog() {
         .iter()
         .find(|route| route["path"] == "/sources/{id}" && route["method"] == "get")
         .expect("the source member route is described");
-    assert!(member["response_schema"].is_object());
-    assert!(!member["parameters"].as_array().unwrap().is_empty());
+    let variants = member["variants"].as_array().unwrap();
+    assert!(!variants.is_empty());
+    let base = variants
+        .iter()
+        .find(|variant| variant["selector"].is_null())
+        .expect("the base variant is described");
+    assert!(!base["success_schema"].as_object().unwrap().is_empty());
+    assert!(!base["parameters"].as_array().unwrap().is_empty());
 }
 
 #[test]
@@ -272,6 +278,98 @@ fn api_rejects_unsupported_methods_and_malformed_flags_before_any_call() {
         ])
         .assert()
         .failure();
+}
+
+#[test]
+fn api_method_without_a_path_refuses_instead_of_discovering() {
+    let (_directory, repo) = init();
+
+    let refused = output(&["api", "--method", "post", "--repo", &repo]);
+    assert!(!refused.status.success());
+    let text = String::from_utf8_lossy(&refused.stderr);
+    assert!(
+        text.contains("unsupported api options"),
+        "an explicit method without a path must refuse: {text}"
+    );
+    assert!(!text.contains("api routes:"), "{text}");
+}
+
+#[test]
+#[verifies("rule_porcelain_api_public_path", examples)]
+fn api_query_selectors_follow_the_variant_contracts() {
+    let (_directory, repo) = init();
+    provenance()
+        .args([
+            "sources", "create", "--repo", &repo, "--id", "source_q", "--name", "Needle source",
+        ])
+        .assert()
+        .success();
+    provenance()
+        .args([
+            "requirements",
+            "create",
+            "--repo",
+            &repo,
+            "--id",
+            "req_q",
+            "--statement",
+            "Shared needle requirement.",
+        ])
+        .assert()
+        .success();
+    provenance()
+        .args([
+            "rules",
+            "create",
+            "--repo",
+            &repo,
+            "--id",
+            "rule_q",
+            "--requirement-id",
+            "req_q",
+            "--statement",
+            "Shared needle rule.",
+            "--severity",
+            "medium",
+        ])
+        .assert()
+        .success();
+
+    let base = json(&["api", "rules", "--repo", &repo, "--query", "limit=1"]);
+    assert_eq!(base["data"]["items"].as_array().unwrap().len(), 1);
+
+    let searched = json(&[
+        "api",
+        "rules",
+        "--repo",
+        &repo,
+        "--query",
+        "query=search",
+        "--query",
+        "text=needle",
+    ]);
+    let items = searched["data"]["items"].as_array().unwrap();
+    assert!(items.iter().any(|item| item["id"] == "rule_q"));
+
+    let neighbors = json(&[
+        "api",
+        "requirements/req_q",
+        "--repo",
+        &repo,
+        "--query",
+        "query=neighbors",
+    ]);
+    assert!(neighbors["data"].is_object(), "{neighbors}");
+
+    let unknown_selector = output(&[
+        "api",
+        "requirements/req_q",
+        "--repo",
+        &repo,
+        "--query",
+        "query=stale",
+    ]);
+    assert!(!unknown_selector.status.success());
 }
 
 fn directory_file(repo: &str, name: &str, content: &str) -> String {

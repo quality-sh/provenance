@@ -14,7 +14,7 @@ use std::io::Read as _;
 pub fn request(args: &ApiArgs) -> ApiRequest {
     let arguments = ApiArguments {
         path: args.path.clone(),
-        method: args.path.as_ref().map(|_| args.method),
+        method: args.method,
         query: pairs(&args.queries, '=', "query options use NAME=VALUE"),
         headers: pairs(&args.headers, ':', "headers use NAME: VALUE"),
         body: args.input.as_deref().map(read_body),

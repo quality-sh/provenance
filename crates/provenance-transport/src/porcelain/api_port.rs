@@ -1,5 +1,6 @@
 use provenance_porcelain::api::{
     ApiCatalog, ApiError, ApiErrorKind, ApiMethod, ApiParameter, ApiPort, ApiPortFuture, ApiRoute,
+    ApiVariant,
 };
 use provenance_store::operations::catalog::{self, Definition, HttpMethod};
 use serde_json::{json, Value};
@@ -70,6 +71,25 @@ fn route(definition: &Definition) -> ApiRoute {
         }
         data
     });
+    let declared = definition.query_variants();
+    let variants = if declared.is_empty() {
+        vec![ApiVariant {
+            selector: None,
+            parameters: definition.parameters().iter().map(parameter).collect(),
+            success_schema: definition.success_schema(),
+            failure_schema: definition.failure_schema().clone(),
+        }]
+    } else {
+        declared
+            .iter()
+            .map(|variant| ApiVariant {
+                selector: variant.selector.map(str::to_owned),
+                parameters: variant.parameters.iter().map(parameter).collect(),
+                success_schema: variant.success_schema.clone(),
+                failure_schema: variant.failure_schema.clone(),
+            })
+            .collect()
+    };
     ApiRoute {
         method: match definition.method {
             HttpMethod::Get => ApiMethod::Get,
@@ -78,18 +98,17 @@ fn route(definition: &Definition) -> ApiRoute {
         },
         path: definition.path.to_owned(),
         description: definition.description.to_owned(),
-        parameters: definition
-            .parameters()
-            .iter()
-            .map(|parameter| ApiParameter {
-                name: parameter.name.to_owned(),
-                location: parameter.location.to_owned(),
-                required: parameter.required,
-                schema: parameter.schema.clone(),
-            })
-            .collect(),
         request_schema,
-        response_schema: definition.mcp_output_schema(),
+        variants,
+    }
+}
+
+fn parameter(parameter: &catalog::Parameter) -> ApiParameter {
+    ApiParameter {
+        name: parameter.name.to_owned(),
+        location: parameter.location.to_owned(),
+        required: parameter.required,
+        schema: parameter.schema.clone(),
     }
 }
 
