@@ -157,6 +157,7 @@ macro_rules! define_export_readers {
                 record: $record:ty,
                 field: $field:ident,
                 path: $path:ident,
+                meta: $meta:tt,
                 node: [$($node:tt)*],
                 reader: $list:ident,
                 closed: [$closed:ident],

@@ -20,6 +20,7 @@ macro_rules! project_families {
                         record: $record:ty,
                         field: $field:ident,
                         path: $path:ident,
+                        meta: $meta:tt,
                         node: [$($node:tt)*],
                         reader: {
                             open: $reader:ident,

@@ -311,6 +311,7 @@ macro_rules! register_family_routes {
                         record: $record:ty,
                         field: $field:ident,
                         path: $path:ident,
+                        meta: $meta:tt,
                         node: [$($node:tt)*],
                         reader: {
                             open: $reader:ident,
