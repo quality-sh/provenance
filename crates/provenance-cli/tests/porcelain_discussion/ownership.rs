@@ -1,7 +1,6 @@
 use super::{json, run, success};
 
-#[test]
-fn owned_requirement_discussions_require_the_owner_for_start_and_reply() {
+fn repo_with_owned_requirement() -> tempfile::TempDir {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path().to_str().unwrap();
     success(&[
@@ -30,7 +29,13 @@ fn owned_requirement_discussions_require_the_owner_for_start_and_reply() {
     )
     .unwrap();
     success(&["import", "--repo", repo, "--input", seed.to_str().unwrap()]);
+    directory
+}
 
+#[test]
+fn owned_requirement_discussions_require_the_owner_for_start_and_reply() {
+    let directory = repo_with_owned_requirement();
+    let repo = directory.path().to_str().unwrap();
     for owner in [None, Some("spec://other")] {
         let mut args = vec!["req_owned", "discuss", "--repo", repo, "--body", "Question"];
         if let Some(owner) = owner {
