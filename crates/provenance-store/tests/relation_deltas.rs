@@ -183,6 +183,96 @@ fn cite_deltas_add_citations_and_remove_every_clause_of_one_source() {
 }
 
 #[test]
+#[provenance_macros::verifies("rule_porcelain_relationship_membership_noop", examples)]
+fn valid_absent_removals_keep_requirement_content_and_edit_preconditions() {
+    let (_temp, store) = fixture();
+    seed_targets(&store);
+    save_ok(
+        &store,
+        "link",
+        json!({
+            "depends_on": {"add": ["req_b"]},
+            "cites": {"add": [{"source_id": "source_one", "clause": "4.2"}]}
+        }),
+    );
+    save_ok(
+        &store,
+        "unlink",
+        json!({
+            "depends_on": {"remove": ["req_b"]},
+            "cites": {"remove": ["source_one"]}
+        }),
+    );
+    let before = record(&store);
+    let head = store.requirement_edit_state(&scope(), &id()).unwrap();
+
+    let repeated = save_ok(
+        &store,
+        "repeat_unlink",
+        json!({
+            "depends_on": {"remove": ["req_b"]},
+            "cites": {"remove": ["source_one"]}
+        }),
+    );
+    assert_eq!(repeated.outcome, SaveOutcome::NoChange);
+    assert_eq!(record(&store), before);
+    assert_eq!(repeated.etag, head.etag);
+
+    let never_linked = save_ok(
+        &store,
+        "never_linked",
+        json!({
+            "depends_on": {"remove": ["req_c"]},
+            "cites": {"remove": ["source_two"]}
+        }),
+    );
+    assert_eq!(never_linked.outcome, SaveOutcome::NoChange);
+    assert_eq!(record(&store), before);
+    assert_eq!(never_linked.etag, head.etag);
+}
+
+#[test]
+#[provenance_macros::verifies("rule_porcelain_relationship_noop_validates", examples)]
+fn absent_removals_still_validate_missing_wrong_kind_and_forbidden_targets() {
+    let (_temp, store) = fixture();
+    seed_targets(&store);
+    let before = record(&store);
+    let etag = store.requirement_edit_state(&scope(), &id()).unwrap().etag;
+
+    for (request, edit) in [
+        (
+            "missing_list_target",
+            json!({"depends_on": {"remove": ["req_missing"]}}),
+        ),
+        (
+            "wrong_list_target_kind",
+            json!({"depends_on": {"remove": ["source_one"]}}),
+        ),
+        (
+            "forbidden_list_target",
+            json!({"depends_on": {"remove": ["req_cycle"]}}),
+        ),
+        (
+            "missing_citation_target",
+            json!({"cites": {"remove": ["source_missing"]}}),
+        ),
+        (
+            "wrong_citation_target_kind",
+            json!({"cites": {"remove": ["req_b"]}}),
+        ),
+    ] {
+        assert!(store
+            .save_requirement(relations(&store, request, edit))
+            .is_err());
+        assert_eq!(record(&store), before);
+        assert_eq!(
+            store.requirement_edit_state(&scope(), &id()).unwrap().etag,
+            etag
+        );
+    }
+}
+
+#[test]
 fn invalid_deltas_refuse_and_publish_nothing() {
     let (_temp, store) = fixture();
     seed_targets(&store);
