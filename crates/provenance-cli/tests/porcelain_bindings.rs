@@ -99,6 +99,14 @@ async fn cli_uses_the_names_from_the_live_mcp_inventory() {
         .unwrap()
         .name
         .to_string();
+    let get_tool = tools.iter().find(|tool| tool.name == get_name).unwrap();
+    let get_schema = json!(get_tool.output_schema.as_ref().unwrap());
+    let get_validator = jsonschema::JSONSchema::compile(&get_schema).unwrap();
+    let invalid_record = json!({
+        "record": {"id":"source_live_inventory", "kind":"source", "value":42},
+        "view":"record", "related":[], "detail":null, "bounds":null
+    });
+    assert!(!get_validator.is_valid(&invalid_record), "record payload must be typed");
     let check_name = tools
         .iter()
         .find(|tool| {
