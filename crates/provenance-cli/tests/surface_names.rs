@@ -1,8 +1,8 @@
 //! Characterization of the two command surfaces, without a Rule binding.
 //!
-//! These tests pin the help text of each CLI command and the input schema of each MCP
-//! tool, so a change to a flag or a property name shows here first. A changed name
-//! changes its pin in the same commit.
+//! This test pins the help text of each CLI command, so a change to a flag name shows
+//! here first. A changed name changes its pin in the same commit. The MCP input schema
+//! pins are in `provenance-mcp/tests/surface_names.rs`.
 
 #[allow(dead_code)]
 mod support {
@@ -10,7 +10,7 @@ mod support {
 }
 
 use std::path::PathBuf;
-use support::surface::{help, tools};
+use support::surface::help;
 
 /// The argument lists whose help each pin holds, by pin name.
 const HELP: &[(&str, &[&str])] = &[
@@ -88,26 +88,20 @@ fn assert_pins(actual: &[(String, String)]) {
     assert!(changed.is_empty(), "changed pins: {changed:?}");
 }
 
+/// The help text with the executable suffix removed from the binary name, so the
+/// `Usage: provenance.exe` of a Windows build matches the pin.
+fn without_suffix(text: String) -> String {
+    match std::env::consts::EXE_SUFFIX {
+        "" => text,
+        suffix => text.replace(&format!("provenance{suffix}"), "provenance"),
+    }
+}
+
 #[test]
 fn cli_help_of_each_command_is_pinned() {
     let actual = HELP
         .iter()
-        .map(|(name, words)| (format!("cli_{name}.txt"), help(words)))
-        .collect::<Vec<_>>();
-    assert_pins(&actual);
-}
-
-#[tokio::test]
-async fn mcp_input_schema_of_each_tool_is_pinned() {
-    let repo = tempfile::tempdir().unwrap();
-    let actual = tools(repo.path())
-        .await
-        .into_iter()
-        .map(|(name, tool)| {
-            let mut text = serde_json::to_string_pretty(&tool["inputSchema"]).unwrap();
-            text.push('\n');
-            (format!("mcp_{name}.json"), text)
-        })
+        .map(|(name, words)| (format!("cli_{name}.txt"), without_suffix(help(words))))
         .collect::<Vec<_>>();
     assert_pins(&actual);
 }
