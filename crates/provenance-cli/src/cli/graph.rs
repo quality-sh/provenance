@@ -1,40 +1,29 @@
 use camino::Utf8PathBuf;
-use clap::Subcommand;
 use provenance_cli::repo_context::RepoContext;
 
-#[derive(Subcommand)]
+/// One `provenance graph-reference` command and its inputs.
 pub enum GraphReferenceCommand {
     /// Issue an immutable reference after canonical graph state is committed.
     Issue {
-        #[command(flatten)]
         context: RepoContext,
         /// Git revision to pin. When omitted, clean relevant state at HEAD is required.
-        #[arg(long)]
         commit: Option<String>,
-        #[arg(long, requires = "correlation_key")]
         correlation_system: Option<String>,
-        #[arg(long, requires = "correlation_system")]
         correlation_key: Option<String>,
     },
     /// Show metadata and graph-family counts from a pinned reference.
     Show {
-        #[arg(long, default_value = ".")]
         repo: Utf8PathBuf,
-        #[arg(long)]
         reference: Utf8PathBuf,
     },
     /// Verify identity and graph content at the pinned Git revision.
     Verify {
-        #[arg(long, default_value = ".")]
         repo: Utf8PathBuf,
-        #[arg(long)]
         reference: Utf8PathBuf,
     },
     /// Export the canonical graph reconstructed from the pinned Git revision.
     ExactExport {
-        #[arg(long, default_value = ".")]
         repo: Utf8PathBuf,
-        #[arg(long)]
         reference: Utf8PathBuf,
     },
 }

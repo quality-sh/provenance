@@ -12,7 +12,6 @@ use camino::Utf8PathBuf;
 #[cfg(feature = "dogfood")]
 use clap::ValueEnum;
 use clap::{Parser, Subcommand};
-use provenance_cli::repo_context::RepoContext;
 
 /// How the caller runs provenance, so init prints commands that the caller can run.
 #[derive(Clone, Copy, Debug, Default)]
@@ -89,54 +88,10 @@ pub enum Command {
     },
     /// Serve local review assets and authorized repository operations.
     Review(crate::review::Options),
-    GraphReference {
-        #[command(subcommand)]
-        command: graph::GraphReferenceCommand,
-    },
-    Graph {
-        requirement_id: String,
-        #[command(flatten)]
-        context: RepoContext,
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
-    },
-    Traceability {
-        rule_id: String,
-        #[command(flatten)]
-        context: RepoContext,
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
-    },
-    Gaps {
-        #[command(flatten)]
-        context: RepoContext,
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
-    },
-    Health {
-        #[command(flatten)]
-        context: RepoContext,
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
-    },
-    Orphans {
-        #[command(flatten)]
-        context: RepoContext,
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
-    },
-    Coverage {
-        #[command(subcommand)]
-        command: workspace::CoverageCommand,
-    },
     /// Deterministic report rendering from a versioned report envelope.
     Report {
         #[command(subcommand)]
         command: report::ReportCommand,
-    },
-    SwarmBacktrace {
-        #[command(subcommand)]
-        command: ideation::SwarmBacktraceCommand,
     },
     Skills {
         #[command(subcommand)]

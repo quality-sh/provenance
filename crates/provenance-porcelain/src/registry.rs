@@ -5,9 +5,14 @@
 //! renders its parser from these declarations and the MCP server lists its tools
 //! from them.
 
+mod graph;
 mod porcelain;
 mod repository;
 
+pub use graph::{
+    CoverageScanInput, GraphCommand, GraphReadInput, ReferenceInput, ReferenceIssueInput,
+    RequirementGraphInput, SwarmBacktraceLandInput, TraceabilityInput,
+};
 pub use porcelain::{CheckCliInput, CheckFormat, GetCliInput, PrimeFormat, PrimeInput};
 pub use repository::{
     CargoInitInput, DictionaryImportInput, DictionaryStatusInput, ExportInput, ImportInput,
@@ -248,6 +253,7 @@ pub enum Command {
     Prime,
     Action(Action),
     Repository(RepositoryCommand),
+    Graph(GraphCommand),
 }
 
 impl Command {
@@ -278,6 +284,17 @@ impl Command {
         Self::Repository(RepositoryCommand::SchemaShow),
         Self::Repository(RepositoryCommand::DictionaryImport),
         Self::Repository(RepositoryCommand::DictionaryStatus),
+        Self::Graph(GraphCommand::Graph),
+        Self::Graph(GraphCommand::Traceability),
+        Self::Graph(GraphCommand::Gaps),
+        Self::Graph(GraphCommand::Health),
+        Self::Graph(GraphCommand::Orphans),
+        Self::Graph(GraphCommand::CoverageScan),
+        Self::Graph(GraphCommand::ReferenceIssue),
+        Self::Graph(GraphCommand::ReferenceShow),
+        Self::Graph(GraphCommand::ReferenceVerify),
+        Self::Graph(GraphCommand::ReferenceExactExport),
+        Self::Graph(GraphCommand::SwarmBacktraceLand),
     ];
 
     /// The declaration of this command.
@@ -318,6 +335,19 @@ impl Command {
                     | RepositoryCommand::DictionaryImport
                     | RepositoryCommand::DictionaryStatus => Presence::Present,
                 },
+                Self::Graph(command) => match command {
+                    GraphCommand::Graph
+                    | GraphCommand::Traceability
+                    | GraphCommand::Gaps
+                    | GraphCommand::Health
+                    | GraphCommand::Orphans
+                    | GraphCommand::CoverageScan
+                    | GraphCommand::ReferenceIssue
+                    | GraphCommand::ReferenceShow
+                    | GraphCommand::ReferenceVerify
+                    | GraphCommand::ReferenceExactExport
+                    | GraphCommand::SwarmBacktraceLand => Presence::Present,
+                },
             },
             Interface::Mcp => match self {
                 Self::Get | Self::Search | Self::Api | Self::Check => Presence::Present,
@@ -349,6 +379,21 @@ impl Command {
                     | RepositoryCommand::DictionaryStatus => Presence::Absent {
                         reason:
                             "the command changes or reads repository files on the local machine",
+                    },
+                },
+                Self::Graph(command) => match command {
+                    GraphCommand::Graph
+                    | GraphCommand::Traceability
+                    | GraphCommand::Gaps
+                    | GraphCommand::Health
+                    | GraphCommand::Orphans
+                    | GraphCommand::CoverageScan
+                    | GraphCommand::ReferenceIssue
+                    | GraphCommand::ReferenceShow
+                    | GraphCommand::ReferenceVerify
+                    | GraphCommand::ReferenceExactExport
+                    | GraphCommand::SwarmBacktraceLand => Presence::Absent {
+                        reason: "MCP clients read the graph through get, search, and api",
                     },
                 },
             },
