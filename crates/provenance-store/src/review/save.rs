@@ -2,7 +2,7 @@ use super::{classifier, guard, SaveRequirement};
 use crate::{
     review::publication::with_record_state,
     shards,
-    state_store::StateStore,
+    state_store::{RecordStamp, StateStore},
     write_error::{SourceFailure, WriteFailure},
 };
 use provenance_core::review::{RequirementEditState, ReviewRecord};
@@ -133,13 +133,12 @@ impl StateStore {
             let current_etag = etag(&ReviewRecord::from(record.clone()))?;
             let stale = (input.expected_etag != current_etag).then_some(current_etag);
             let stamp = self.current_record_stamp()?;
-            with_record_state(&self.layout, |layout| {
-                let staged = Self::staged(layout.clone(), stamp);
-                let path = shards::requirements_path(layout, scope);
+            with_record_state(self, RecordStamp::resolved(stamp), |staged| {
+                let path = shards::requirements_path(&staged.layout, scope);
                 let record_id = record.id.clone();
                 guard::with_writer(&path, record_id.as_str(), || {
                     let after = staged.commit_requirement(input, &record, origin, stale)?;
-                    complete(&staged, after)
+                    complete(staged, after)
                 })
             })
         })
