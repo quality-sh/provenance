@@ -90,6 +90,7 @@ pub async fn invoke(
     data: Value,
     query: BTreeMap<String, String>,
     headers: &HeaderMap,
+    page_write: bool,
 ) -> Result<(response::Success, Option<String>), ErasedFailure> {
     if !host.advertises(matched.definition.name) {
         return Err(ErasedFailure::new(None, OperationFailure::AccessDenied));
@@ -106,7 +107,12 @@ pub async fn invoke(
     )?;
     let call = host.bound_call(bound.handler.context, &bound.data)?;
     let value = host
-        .invoke_backing(matched.definition.name, bound.handler.operation, call)
+        .invoke_backing(
+            matched.definition.name,
+            bound.handler.operation,
+            call,
+            page_write,
+        )
         .await?;
     let value = response::success(
         value,

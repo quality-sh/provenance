@@ -88,6 +88,10 @@ impl ReviewEvents {
             .with_state(self.state.clone())
     }
 
+    pub fn page_changed(&self, changes: provenance_store::review_changes::ReviewChanges) {
+        self.state.subscribers.page_changed(changes);
+    }
+
     pub fn stop(&self) {
         self.state.subscribers.stop();
     }
@@ -154,7 +158,7 @@ async fn upgrade(State(state): State<RouteState>, request: Request) -> Response 
         Ok(upgrade) => upgrade,
         Err(error) => return error.into_response(),
     };
-    let Some(subscription) = state.subscribers.subscribe() else {
+    let Some(subscription) = state.subscribers.subscribe(native) else {
         return super::refusal(OperationFailure::UnavailableNeeds);
     };
     let page = (!native).then(|| state.navigation.attach());
@@ -234,7 +238,7 @@ async fn connected(
                 }
             }
             Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
-                let reset = subscribers.reset("subscriber-loss");
+                let reset = subscribers.subscriber_loss(page.is_none());
                 let _ = send(&mut socket, &reset, &mut subscription.stopped).await;
                 break;
             }

@@ -1,3 +1,4 @@
+import { recordData } from "./envelope";
 import { realpathSync } from "node:fs";
 import { object, requiredString } from "./validation";
 import { FollowStream, type Selection, type StateFrame } from "./stream";
@@ -160,7 +161,7 @@ async function enqueue(client: AppServer, config: Configuration, state: StateFra
   try {
     result = await client.call("thread/queue/add", {
       threadId: config.threadId, clientUserMessageId,
-      input: [{ type: "text", text: `Provenance current-state reconciliation. Repository: ${config.repository}; scope: ${config.scope}; root: ${config.rootId}.\n${JSON.stringify(state)}` }],
+      input: [{ type: "text", text: recordData(config, state) }],
     }, queueResponse);
   } catch (error) {
     if (error instanceof Rejected) throw error;
