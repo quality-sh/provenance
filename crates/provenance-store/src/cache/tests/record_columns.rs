@@ -3,7 +3,9 @@
 //! A struct field with no column fails here until its migration lands.
 
 use super::catch_up_behavior::assert_catch_up_equals_rebuild;
-use super::fixtures::pinned_store::{pinned_store_layout, TWIN_ID};
+use super::fixtures::pinned_store::{
+    pinned_store_layout, LINKED_REQUIREMENT_ID, LINKED_RULE_ID,
+};
 use super::fixtures::seeded_layout;
 use crate::cache::{materialize_state, open_cache};
 use provenance_core::model::ProjectionRow;
@@ -97,21 +99,26 @@ async fn catch_up_equals_rebuild_over_the_widened_tables() {
     assert_catch_up_equals_rebuild(&layout).await;
 }
 
-/// `links` may name one id under two kinds; the relation table keeps a
-/// row for each kind.
+/// `links` retain the declared target kind for each record identity.
 #[tokio::test]
-async fn a_link_under_two_kinds_keeps_both_relation_rows() {
+async fn links_to_two_kinds_keep_their_typed_relation_rows() {
     let (_dir, layout, _scope) = pinned_store_layout();
     materialize_state(&layout).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
-    let kinds: Vec<String> = sqlx::query_scalar(
-        "SELECT target_type FROM relations WHERE owner_id = 'topic_rates' AND relation = 'links' \
-         AND target_id = ? ORDER BY target_type",
+    let links: Vec<(String, String)> = sqlx::query_as(
+        "SELECT target_id, target_type FROM relations \
+         WHERE owner_id = 'topic_rates' AND relation = 'links' AND target_type != 'source' \
+         ORDER BY target_type",
     )
-    .bind(TWIN_ID)
     .fetch_all(pool.pool())
     .await
     .unwrap();
-    assert_eq!(kinds, ["requirement", "rule"]);
+    assert_eq!(
+        links,
+        [
+            (LINKED_REQUIREMENT_ID.into(), "requirement".into()),
+            (LINKED_RULE_ID.into(), "rule".into()),
+        ]
+    );
     pool.close().await.unwrap();
 }

@@ -31,11 +31,11 @@ struct ArgumentParser<'a> {
     words: Vec<String>,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Debug)]
 enum Route {
     Builtin,
     Catalog,
-    Get,
+    Get(provenance_porcelain::get::GetInput),
 }
 
 impl Invocation {
@@ -51,15 +51,13 @@ impl Invocation {
                     shared.words,
                 )?))
             }
-            Route::Get => {
+            Route::Get(input) => {
                 let shared = parser.finish()?;
                 let format = match shared.format.as_deref() {
                     None => None,
                     Some("json") => Some(OutputFormat::Json),
                     Some(_) => anyhow::bail!("Porcelain get supports --format json"),
                 };
-                let words = shared.words.iter().map(String::as_str).collect::<Vec<_>>();
-                let input = porcelain::parse_get(&words).map_err(|error| anyhow::anyhow!(error))?;
                 Ok(Self::Get(GetInvocation {
                     repo: shared.context.repo,
                     scope: shared.context.scope,
@@ -115,25 +113,29 @@ impl<'a> ArgumentParser<'a> {
         self.words.push(target.clone());
         self.index += 1;
         self.take_globals()?;
-        if self
-            .arguments
-            .get(self.index)
-            .is_some_and(|word| word == "get")
-        {
-            self.words.push("get".to_owned());
-            self.index += 1;
-            return Ok(Route::Get);
-        }
         if catalog_cli::is_collection(&target) {
-            return Ok(Route::Catalog);
+            self.complete()?;
+            let words = self.words.iter().map(String::as_str).collect::<Vec<_>>();
+            return Ok(match porcelain::parse_get(&words) {
+                Ok(input) if self.words.get(1).is_some_and(|word| word == "get") => {
+                    Route::Get(input)
+                }
+                _ => Route::Catalog,
+            });
         }
         let builtin = Cli::command()
             .get_subcommands()
             .any(|candidate| candidate.get_name() == target);
-        Ok(if builtin { Route::Builtin } else { Route::Get })
+        if builtin {
+            return Ok(Route::Builtin);
+        }
+        self.complete()?;
+        let words = self.words.iter().map(String::as_str).collect::<Vec<_>>();
+        let input = porcelain::parse_get(&words).map_err(|error| anyhow::anyhow!(error))?;
+        Ok(Route::Get(input))
     }
 
-    fn finish(mut self) -> anyhow::Result<SharedArguments> {
+    fn complete(&mut self) -> anyhow::Result<()> {
         while self.index < self.arguments.len() {
             if self.take_global()? {
                 continue;
@@ -158,6 +160,11 @@ impl<'a> ArgumentParser<'a> {
                 }
             }
         }
+        Ok(())
+    }
+
+    fn finish(mut self) -> anyhow::Result<SharedArguments> {
+        self.complete()?;
         Ok(SharedArguments {
             context: self.context,
             format: self.format,
@@ -220,14 +227,27 @@ mod tests {
             let input = arguments(words);
             ArgumentParser::new(&input).route().unwrap()
         };
-        assert_eq!(
+        assert!(matches!(
             route(&["--repo", "repo", "sources", "list"]),
             Route::Catalog
-        );
-        assert_eq!(route(&["sources", "get", "--repo", "repo"]), Route::Get);
-        assert_eq!(route(&["check", "--repo", "repo"]), Route::Builtin);
-        assert_eq!(route(&["check", "--strict"]), Route::Builtin);
-        assert_eq!(route(&["unknown_id", "--format", "json"]), Route::Get);
+        ));
+        assert!(matches!(
+            route(&["sources", "get", "--repo", "repo"]),
+            Route::Get(_)
+        ));
+        assert!(matches!(
+            route(&["sources", "get", "update", "--repo", "repo"]),
+            Route::Catalog
+        ));
+        assert!(matches!(
+            route(&["check", "--repo", "repo"]),
+            Route::Builtin
+        ));
+        assert!(matches!(route(&["check", "--strict"]), Route::Builtin));
+        assert!(matches!(
+            route(&["unknown_id", "--format", "json"]),
+            Route::Get(_)
+        ));
     }
 
     #[test]
@@ -241,7 +261,7 @@ mod tests {
             "repository",
         ]);
         let mut parser = ArgumentParser::new(&input);
-        assert_eq!(parser.route().unwrap(), Route::Catalog);
+        assert!(matches!(parser.route().unwrap(), Route::Catalog));
         let shared = parser.finish().unwrap();
         assert_eq!(shared.context.repo, "repository");
         assert_eq!(shared.words, ["sources", "create", "--name", "--repo"]);
