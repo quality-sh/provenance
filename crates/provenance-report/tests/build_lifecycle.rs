@@ -1,6 +1,5 @@
-//! Implementation aids: no Rule defines lifecycle labels in branch reports.
-
 use camino::Utf8Path;
+use provenance_macros::verifies;
 use provenance_report::{
     build::{build_envelope, BuildInput},
     render_envelope, RenderFormat,
@@ -84,6 +83,7 @@ fn report(shard: &str, initial: Value, final_records: &[Value]) -> String {
 }
 
 #[test]
+#[verifies("rule_branch_report_head_lifecycle", examples)]
 fn added_rule_archived_in_range_has_head_status() {
     let mut row = json!({
         "schema_version": 2, "scope_id": "default", "id": "rule_history",
@@ -96,13 +96,14 @@ fn added_rule_archived_in_range_has_head_status() {
     let rendered = report("rules/rule.jsonl", initial, &[row]);
     assert!(
         rendered.contains(
-            "| added | rule `rule_history` | The old rule holds. | status at head: archived;"
+            "| added | rule `rule_history` | [archived] The old rule holds. | adds"
         ),
         "{rendered}"
     );
 }
 
 #[test]
+#[verifies("rule_branch_report_head_lifecycle", examples)]
 fn requirement_superseded_in_range_has_head_status() {
     let initial = json!({
         "schema_version": 2, "scope_id": "default", "id": "req_history",
@@ -115,10 +116,11 @@ fn requirement_superseded_in_range_has_head_status() {
         "statement": "The new requirement holds.", "status": "active", "supersedes": ["req_history"]
     });
     let rendered = report("requirements/req.jsonl", initial, &[old, replacement]);
-    assert!(rendered.contains("| added | requirement `req_history` | The old requirement holds. | status at head: resolved |"), "{rendered}");
+    assert!(rendered.contains("| added | requirement `req_history` | [superseded by 'req_replacement'] The old requirement holds. |"), "{rendered}");
 }
 
 #[test]
+#[verifies("rule_branch_report_head_lifecycle", examples)]
 fn added_resolution_abandoned_in_range_has_head_status() {
     let initial = json!({
         "schema_version": 2, "scope_id": "default", "id": "res_history",
@@ -130,8 +132,20 @@ fn added_resolution_abandoned_in_range_has_head_status() {
     let rendered = report("resolutions/res.jsonl", initial, &[row]);
     assert!(
         rendered.contains(
-            "| added | resolution `res_history` | Keep the old policy | status at head: abandoned;"
+            "| added | resolution `res_history` | [abandoned] Keep the old policy | adds"
         ),
         "{rendered}"
     );
+}
+
+#[test]
+#[verifies("rule_branch_report_head_lifecycle", examples)]
+fn current_added_record_has_no_lifecycle_label() {
+    let row = json!({
+        "schema_version": 2, "scope_id": "default", "id": "req_current",
+        "statement": "The current requirement holds.", "status": "active"
+    });
+    let rendered = report("requirements/req.jsonl", row.clone(), &[row]);
+    assert!(rendered.contains("| added | requirement `req_current` | The current requirement holds. |  |"), "{rendered}");
+    assert!(!rendered.contains("status at head:"), "{rendered}");
 }
