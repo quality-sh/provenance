@@ -18,6 +18,7 @@ impl StateStore {
         id: &StableId,
     ) -> anyhow::Result<RequirementResourceSnapshot> {
         self.with_repository_publication(|| {
+            crate::test_probes::at("requirement_resource_snapshot")?;
             let record = self
                 .list_requirements(scope)?
                 .into_iter()
