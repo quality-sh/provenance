@@ -15,7 +15,7 @@ struct ActionFields {
 }
 
 /// The actions of one tool and the fields of each action.
-pub struct ToolInput {
+pub struct ActionInput {
     actions: Vec<ActionFields>,
     definitions: Map<String, Value>,
     default: Option<&'static str>,
@@ -41,7 +41,7 @@ impl FieldRefusal {
     }
 }
 
-impl ToolInput {
+impl ActionInput {
     /// A tool without actions. A call without an action argument selects `default`.
     pub fn new(default: Option<&'static str>) -> Self {
         Self {
@@ -98,7 +98,7 @@ impl ToolInput {
     }
 
     /// The flat input schema. Each field description names the actions that take it.
-    #[provenance_macros::rule("rule_mcp_tool_inputs_are_flat_objects")]
+    #[provenance_macros::rule("rule_mcp_action_inputs_are_flat_objects")]
     pub fn schema(&self) -> Value {
         let mut properties = Map::new();
         properties.insert(

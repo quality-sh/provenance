@@ -38,9 +38,9 @@ async fn field(client: &Client, name: &str, arguments: Value) -> (Value, Value) 
 }
 
 #[tokio::test]
-#[verifies("rule_mcp_tool_inputs_are_flat_objects", examples)]
+#[verifies("rule_mcp_action_inputs_are_flat_objects", examples)]
 #[verifies("rule_mcp_tools_read_or_write", examples)]
-async fn each_tool_input_is_a_flat_object_and_only_change_and_api_write() {
+async fn each_action_input_is_a_flat_object_and_only_change_and_api_write() {
     let repository = Repository::new("The shared graph is readable.");
     let session = session(&repository).await;
     let client = &session.client;

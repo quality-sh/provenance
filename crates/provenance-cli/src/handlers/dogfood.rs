@@ -100,8 +100,7 @@ impl DogfoodInput {
         command: DogfoodCommand,
         matches: &clap::ArgMatches,
     ) -> anyhow::Result<Self> {
-        let declaration =
-            provenance_cli::cli_form::declaration(registry::Command::Dogfood(command));
+        let declaration = registry::Command::Dogfood(command).declaration();
         macro_rules! read {
             ($variant:ident) => {
                 Self::$variant(crate::registry_cli::input(&declaration, matches)?)

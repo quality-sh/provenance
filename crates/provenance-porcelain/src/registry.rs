@@ -1,19 +1,25 @@
 //! One declaration for each porcelain command.
 //!
-//! A declaration names a command, describes it, and declares its input. It does no
-//! work: the handlers stay behind the existing ports. Each consumer keeps its own list
-//! of the commands that it shows, and its own grammar for them.
+//! A declaration names a command, describes it, and declares its one input: the fields,
+//! the fields that name its target, and the relations between them. It does no work:
+//! the handlers stay behind the existing ports. Each consumer keeps its own list of the
+//! commands that it shows, and shows each one from this declaration by one rule.
 
+mod arguments;
 mod dogfood;
+mod fields;
 mod graph;
 mod porcelain;
+mod porcelain_fields;
 mod repository;
 mod workspace;
 
+pub use arguments::{CheckArguments, CheckFormat, GetArguments, ReportFileFormat};
 pub use dogfood::{
     DogfoodCommand, DogfoodListInput, DogfoodNoteInput, DogfoodReportInput, DogfoodSimulateInput,
     TriageHandleInput, TriageListInput, TriageReopenInput,
 };
+pub use fields::{json_format, Field, FieldValue, Fields, Relation, REPO, SCOPE};
 pub use graph::{GraphCommand, ReferenceInput, ReferenceIssueInput, SwarmBacktraceLandInput};
 pub use porcelain::{PrimeFormat, PrimeInput};
 pub use repository::{
@@ -55,17 +61,49 @@ impl Grammar {
 /// The input of a command.
 #[derive(Clone, Copy, Debug)]
 pub enum Input {
-    /// A typed input, given as its JSON Schema.
-    Typed(fn() -> serde_json::Value),
-    /// The fields of the catalog operations that the action selects.
-    RecordFields(Action),
+    /// A typed input, declared as its fields.
+    Fields(Fields),
+    /// The fields of the catalog operations that the action selects, after these fields
+    /// of the action.
+    RecordFields {
+        action: Action,
+        fields: &'static [Field],
+        relations: &'static [Relation],
+    },
     /// The typed input of one Discussion action.
     Discussion(Action),
     None,
 }
 
-/// What one command is. It holds no handler and names no consumer: each consumer
-/// keeps its own grammar for the command.
+impl Input {
+    /// The declared fields, in order.
+    pub const fn fields(&self) -> &'static [Field] {
+        match self {
+            Self::Fields(fields) => fields.fields,
+            Self::RecordFields { fields, .. } => fields,
+            Self::Discussion(_) | Self::None => &[],
+        }
+    }
+
+    /// The relations between the declared fields.
+    pub const fn relations(&self) -> &'static [Relation] {
+        match self {
+            Self::Fields(fields) => fields.relations,
+            Self::RecordFields { relations, .. } => relations,
+            Self::Discussion(_) | Self::None => &[],
+        }
+    }
+
+    /// The fields that name what the command acts on, in order.
+    pub const fn target(&self) -> &'static [&'static str] {
+        match self {
+            Self::Fields(fields) => fields.target,
+            Self::RecordFields { .. } | Self::Discussion(_) | Self::None => &[],
+        }
+    }
+}
+
+/// What one command is. It holds no handler and names no consumer.
 #[rule("rule_porcelain_names_no_consumer")]
 #[derive(Clone, Copy, Debug)]
 pub struct Declaration {
@@ -75,21 +113,27 @@ pub struct Declaration {
     pub description: &'static str,
     pub grammar: Grammar,
     pub input: Input,
+    /// Programs run this command, so a consumer does not document it for people.
+    pub internal: bool,
 }
 
 impl Declaration {
     /// A command selected by its name, with a typed input.
-    pub(crate) const fn named(
-        name: &'static str,
-        description: &'static str,
-        schema: fn() -> serde_json::Value,
-    ) -> Self {
+    pub const fn named(name: &'static str, description: &'static str, fields: Fields) -> Self {
         Self {
             name,
             description,
             grammar: Grammar::Name,
-            input: Input::Typed(schema),
+            input: Input::Fields(fields),
+            internal: false,
         }
+    }
+
+    /// This command, run by programs.
+    #[must_use]
+    pub const fn internal(mut self) -> Self {
+        self.internal = true;
+        self
     }
 
     /// The words of the name.
@@ -193,6 +237,54 @@ impl Command {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Implementation aid: each typed input has one schema property for each field.
+    #[test]
+    fn each_typed_input_has_a_property_for_each_field() {
+        for command in Command::ALL {
+            let Input::Fields(fields) = command.declaration().input else {
+                continue;
+            };
+            let Some(schema) = fields.schema else {
+                continue;
+            };
+            let mut names = fields
+                .fields
+                .iter()
+                .map(|field| field.name)
+                .collect::<Vec<_>>();
+            names.sort_unstable();
+            let schema = schema();
+            let mut properties = schema["properties"]
+                .as_object()
+                .unwrap()
+                .keys()
+                .map(String::as_str)
+                .collect::<Vec<_>>();
+            properties.sort_unstable();
+            assert_eq!(names, properties, "{command:?}");
+        }
+    }
+
+    /// Implementation aid: each relation and each target names a field of its command.
+    #[test]
+    fn relations_and_targets_name_declared_fields() {
+        for command in Command::ALL {
+            let input = command.declaration().input;
+            let declared = |name: &str| input.fields().iter().any(|field| field.name == name);
+            for relation in input.relations() {
+                let (Relation::Requires(first, second) | Relation::Conflicts(first, second)) =
+                    *relation;
+                assert!(
+                    declared(first) && declared(second),
+                    "{command:?}: {relation:?}"
+                );
+            }
+            for target in input.target() {
+                assert!(declared(target), "{command:?}: {target}");
+            }
+        }
+    }
 
     /// Implementation aid: each command has its own declaration name.
     #[test]

@@ -20,7 +20,7 @@ pub fn tool(host: &StatementHost) -> Option<Tool> {
             declaration.name,
             declaration.description,
             Effect::Reads,
-            provenance_porcelain::discussion::tool_input_schema(),
+            provenance_porcelain::discussion::action_input_schema(),
             provenance_porcelain::discussion::output_schema(),
             SchemaDeclaration::Remove,
         )

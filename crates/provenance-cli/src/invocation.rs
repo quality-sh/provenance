@@ -17,9 +17,9 @@ mod removed;
 use grammar::{
     ApiArgs, Delivery, DiscussionsArgs, DiscussionsRoute, SearchArgs, TargetArgs, TargetVerb,
 };
-use provenance_cli::cli_form::{self, CheckCliInput};
 use provenance_cli::exposed;
 use provenance_cli::servers::Server;
+use provenance_porcelain::registry::CheckArguments;
 use provenance_porcelain::registry::{self, PrimeInput};
 
 #[cfg(test)]
@@ -29,7 +29,7 @@ mod tests;
 
 /// One command selected from a declared grammar.
 pub enum Invocation {
-    Check(CheckCliInput),
+    Check(CheckArguments),
     Prime(PrimeInput),
     Repository(RepositoryInput, bool),
     Graph(GraphInput),
@@ -150,18 +150,12 @@ impl Invocation {
         }
         match exposed::find(&words) {
             Some(registry::Command::Check) => Self::Check(
-                crate::registry_cli::input(
-                    &cli_form::declaration(registry::Command::Check),
-                    selected,
-                )
-                .unwrap_or_else(|error| catalog_cli::usage_error(error)),
+                crate::registry_cli::input(&registry::Command::Check.declaration(), selected)
+                    .unwrap_or_else(|error| catalog_cli::usage_error(error)),
             ),
             Some(registry::Command::Prime) => Self::Prime(
-                crate::registry_cli::input(
-                    &cli_form::declaration(registry::Command::Prime),
-                    selected,
-                )
-                .unwrap_or_else(|error| catalog_cli::usage_error(error)),
+                crate::registry_cli::input(&registry::Command::Prime.declaration(), selected)
+                    .unwrap_or_else(|error| catalog_cli::usage_error(error)),
             ),
             Some(registry::Command::Repository(command)) => Self::Repository(
                 RepositoryInput::from_matches(command, selected)
@@ -196,7 +190,7 @@ impl Invocation {
     #[rule("rule_porcelain_cli_target_action_order")]
     fn parse_target(arguments: Vec<String>) -> anyhow::Result<Self> {
         let command = catalog_cli::target_command()?;
-        let help_command = command.clone().mut_arg("record_type", |arg| {
+        let help_command = command.clone().mut_arg("type", |arg| {
             arg.value_parser(clap::builder::StringValueParser::new())
         });
         let matches = match help_command.clone().try_get_matches_from(arguments.clone()) {
@@ -214,7 +208,7 @@ impl Invocation {
                     );
                 let action = selection.get_one::<TargetVerb>("action").copied();
                 let kind = selection
-                    .get_one::<String>("record_type")
+                    .get_one::<String>("type")
                     .and_then(|kind| NodeType::parse(kind).ok())
                     .or_else(|| help_kind::resolve_record_kind(&selection, action));
                 catalog_cli::print_target_help(command, action, kind)?;

@@ -25,7 +25,7 @@ pub(super) fn target(
                 .map(str::to_owned)
                 .collect::<BTreeSet<_>>();
             if action == provenance_contract::TargetAction::Create {
-                allowed.insert("record_type".into());
+                allowed.insert("type".into());
             }
             for (_, definition) in
                 provenance_contract::target_definitions(action).filter(|(registered, _)| {

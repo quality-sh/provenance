@@ -5,73 +5,84 @@ use clap::{
     builder::{PossibleValuesParser, ValueParser},
     Arg, ArgAction, ArgMatches, Command,
 };
-use provenance_cli::cli_form::{
-    self, CliDeclaration, Flag, FlagKind, FlagValue, Relation, GLOBAL_FLAGS, GROUP_DESCRIPTIONS,
-};
-use provenance_porcelain::registry;
+use provenance_cli::cli_options::{self, flag_name, GLOBAL_OPTIONS, GROUP_DESCRIPTIONS};
+use provenance_porcelain::registry::{self, Declaration, Field, FieldValue, Input, Relation};
 use serde_json::{Map, Value};
 use std::collections::BTreeSet;
 
-/// The clap arguments of the declared flags, with their relations.
-pub fn args(declaration: &CliDeclaration) -> Vec<Arg> {
-    declaration
-        .form
-        .flags
+/// The CLI switch that reads all the fields of a record or Discussion action as one JSON
+/// object from standard input.
+const STDIN: Field = Field::switch("stdin");
+
+/// The clap arguments of the declared fields, with their relations. A target field is a
+/// positional argument and each other field is a `--kebab-case` flag. A record or
+/// Discussion action also takes `--stdin` after its fields.
+pub fn args(declaration: &Declaration) -> Vec<Arg> {
+    let input = &declaration.input;
+    let stdin = matches!(input, Input::RecordFields { .. } | Input::Discussion(_));
+    input
+        .fields()
         .iter()
-        .map(|flag| relate(arg(flag), &flag.field_id(), declaration.form.relations))
+        .map(|field| {
+            let positional = input.target().contains(&field.name);
+            relate(arg(field, positional), field.name, input.relations())
+        })
+        .chain(stdin.then(|| arg(&STDIN, false)))
         .collect()
 }
 
-fn arg(flag: &Flag) -> Arg {
-    let id = flag.field_id();
-    let mut arg = Arg::new(id.clone());
-    arg = match flag.kind {
-        FlagKind::Switch => arg.long(flag.name).action(ArgAction::SetTrue),
-        FlagKind::Value => arg.long(flag.name).action(ArgAction::Set),
-        FlagKind::Repeated => arg.long(flag.name).action(ArgAction::Append),
-        FlagKind::Positional => arg.action(ArgAction::Set),
+fn arg(field: &Field, positional: bool) -> Arg {
+    let mut arg = Arg::new(field.name);
+    arg = match (positional, field.value, field.repeated) {
+        (true, ..) => arg.action(ArgAction::Set),
+        (false, FieldValue::Switch, _) => arg.long(flag_name(field)).action(ArgAction::SetTrue),
+        (false, _, false) => arg.long(flag_name(field)).action(ArgAction::Set),
+        (false, _, true) => arg.long(flag_name(field)).action(ArgAction::Append),
     };
-    if flag.kind != FlagKind::Switch {
+    if positional || field.value != FieldValue::Switch {
         arg = arg
-            .value_parser(value_parser(flag))
-            .value_name(id.to_uppercase());
+            .value_parser(value_parser(field))
+            .value_name(field.name.to_uppercase());
     }
-    if let Some(help) = flag.help {
-        arg = arg.help(help);
+    if let Some(doc) = field.doc {
+        arg = arg.help(doc);
     }
-    if let Some(default) = flag.default {
+    if let Some(default) = field.default {
         arg = arg.default_value(default);
     }
-    arg.allow_hyphen_values(flag.hyphen_values)
-        .hide(flag.hidden)
-        .required(flag.required)
-        .global(flag.global)
+    arg.allow_hyphen_values(field.leading_hyphen)
+        .hide(field.internal)
+        .required(field.required)
 }
 
 /// The command with the shared repository options that the porcelain parsers take.
 pub fn with_global_flags(command: Command) -> Command {
-    command.args(GLOBAL_FLAGS.iter().map(arg))
+    command.args(
+        GLOBAL_OPTIONS
+            .iter()
+            .map(|option| arg(option, false).global(true)),
+    )
 }
 
-fn value_parser(flag: &Flag) -> ValueParser {
-    if !flag.values.is_empty() {
-        return PossibleValuesParser::new(flag.values).into();
+fn value_parser(field: &Field) -> ValueParser {
+    if !field.values.is_empty() {
+        return PossibleValuesParser::new(field.values).into();
     }
-    match flag.value {
-        FlagValue::Text => ValueParser::string(),
-        FlagValue::Count => clap::value_parser!(usize).into(),
-        FlagValue::RecordKind => ValueParser::new(parse_kind),
-        FlagValue::ApiMethod => ValueParser::new(parse_api_method),
-        FlagValue::CatalogLimit => ValueParser::new(parse_catalog_limit),
-        FlagValue::Port => clap::value_parser!(u16).into(),
+    match field.value {
+        FieldValue::Switch | FieldValue::Text => ValueParser::string(),
+        FieldValue::Count => clap::value_parser!(usize).into(),
+        FieldValue::RecordKind => ValueParser::new(parse_kind),
+        FieldValue::ApiMethod => ValueParser::new(parse_api_method),
+        FieldValue::CatalogLimit => ValueParser::new(parse_catalog_limit),
+        FieldValue::Port => clap::value_parser!(u16).into(),
     }
 }
 
 fn relate(mut arg: Arg, name: &str, relations: &[Relation]) -> Arg {
     for relation in relations {
         match *relation {
-            Relation::Requires(flag, needed) if flag == name => arg = arg.requires(needed),
-            Relation::Conflicts(flag, other) if flag == name => {
+            Relation::Requires(field, needed) if field == name => arg = arg.requires(needed),
+            Relation::Conflicts(field, other) if field == name => {
                 arg = arg.conflicts_with(other);
             }
             Relation::Requires(..) | Relation::Conflicts(..) => {}
@@ -123,7 +134,7 @@ pub fn root_command() -> clap::Command {
     ]
     .iter()
     .chain(registry::Command::ALL.iter().filter(listed))
-    .map(|command| cli_form::declaration(*command))
+    .map(|command| command.declaration())
     .chain(
         provenance_cli::servers::SERVERS
             .iter()
@@ -133,20 +144,20 @@ pub fn root_command() -> clap::Command {
         registry::Command::ALL
             .iter()
             .filter(dogfood)
-            .map(|command| cli_form::declaration(*command)),
+            .map(|command| command.declaration()),
     )
     .fold(crate::cli::Cli::command(), add_subcommand)
 }
 
 /// Adds one word command to `root` under its words, as `provenance <words...>` shows it.
 /// Each word before the last is a group that needs one of its commands.
-pub fn add_subcommand(root: Command, declaration: CliDeclaration) -> Command {
-    let Some(words) = declaration.words() else {
+pub fn add_subcommand(root: Command, declaration: Declaration) -> Command {
+    let Some(words) = cli_options::words(&declaration) else {
         panic!("{} is not a word command", declaration.name);
     };
     let (word, groups) = words.split_last().expect("a word command has a word");
     let mut leaf = Command::new(*word)
-        .hide(declaration.form.hidden)
+        .hide(declaration.internal)
         .args(args(&declaration));
     if !declaration.description.is_empty() {
         leaf = leaf.about(declaration.description);
@@ -197,8 +208,8 @@ pub fn selected(matches: &ArgMatches) -> (Vec<&str>, &ArgMatches) {
 /// The root parser of one word command that reads the shared repository options, as
 /// `provenance search` and `provenance api` read them.
 pub fn root_word_command(command: provenance_porcelain::registry::Command) -> Command {
-    let declaration = cli_form::declaration(command);
-    let Some(words) = declaration.words() else {
+    let declaration = command.declaration();
+    let Some(words) = cli_options::words(&declaration) else {
         panic!("{} is not a word command", declaration.name);
     };
     let word = Arg::new("command")
@@ -211,35 +222,35 @@ pub fn root_word_command(command: provenance_porcelain::registry::Command) -> Co
         .args(args(&declaration))
 }
 
-/// Reads a typed input from the declared flags of one command.
+/// Reads a typed input from the declared fields of one command.
 pub fn input<T: serde::de::DeserializeOwned>(
-    declaration: &CliDeclaration,
+    declaration: &Declaration,
     matches: &ArgMatches,
 ) -> anyhow::Result<T> {
     let mut object = Map::new();
-    for flag in declaration.form.flags {
-        let id = flag.field_id();
-        let value = match (flag.kind, flag.value) {
-            (FlagKind::Switch, _) => Some(Value::Bool(matches.get_flag(&id))),
-            (FlagKind::Repeated, _) => Some(Value::Array(
+    for field in declaration.input.fields() {
+        let id = field.name;
+        let value = match (field.value, field.repeated) {
+            (FieldValue::Switch, _) => Some(Value::Bool(matches.get_flag(id))),
+            (_, true) => Some(Value::Array(
                 matches
-                    .get_raw(&id)
+                    .get_raw(id)
                     .into_iter()
                     .flatten()
                     .map(|value| Value::String(value.to_string_lossy().into_owned()))
                     .collect(),
             )),
-            (_, FlagValue::Count | FlagValue::CatalogLimit) => {
-                matches.get_one::<usize>(&id).map(|value| (*value).into())
+            (FieldValue::Count | FieldValue::CatalogLimit, false) => {
+                matches.get_one::<usize>(id).map(|value| (*value).into())
             }
-            (_, FlagValue::Port) => matches.get_one::<u16>(&id).map(|value| (*value).into()),
+            (FieldValue::Port, false) => matches.get_one::<u16>(id).map(|value| (*value).into()),
             _ => matches
-                .get_raw(&id)
+                .get_raw(id)
                 .and_then(|mut values| values.next())
                 .map(|value| Value::String(value.to_string_lossy().into_owned())),
         };
         if let Some(value) = value {
-            object.insert(id, value);
+            object.insert(id.to_owned(), value);
         }
     }
     serde_json::from_value(Value::Object(object))

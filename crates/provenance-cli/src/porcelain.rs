@@ -1,10 +1,10 @@
 //! CLI-owned bindings for shared Porcelain capabilities.
 use provenance_macros::rule;
 
-use crate::cli_form::{CheckCliInput, ReportFileFormat};
 use camino::Utf8PathBuf;
 use provenance_porcelain::check::{Category, CategoryReport, CheckInput, Status};
 use provenance_porcelain::get::{GetInput, GetOutcome};
+use provenance_porcelain::registry::{CheckArguments, ReportFileFormat};
 use provenance_transport::check::{BindingOptions, RepositoryCheckPort};
 use provenance_transport::coverage::ReportFormat;
 use provenance_transport::repository::RepoContext;
@@ -60,7 +60,7 @@ pub fn place(context: &RepoContext) -> provenance_review::RepositoryScope {
 /// Runs the check command with the repository check adapter, prints the report, and
 /// fails when a category refuses.
 #[rule("rule_ste_strict_committed_statement_gate")]
-pub async fn dispatch_check(input: CheckCliInput) -> anyhow::Result<()> {
+pub async fn dispatch_check(input: CheckArguments) -> anyhow::Result<()> {
     let repo = Utf8PathBuf::from(&input.repo);
     if let Some(scope) = &input.scope {
         // An undeclared scope refuses the whole check before any category runs.

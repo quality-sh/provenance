@@ -4,7 +4,6 @@ use clap::{
     builder::{PossibleValuesParser, TypedValueParser},
     Arg, ArgAction, ArgMatches, Command,
 };
-use provenance_cli::cli_form::{self, CliDeclaration};
 use provenance_cli::porcelain;
 use provenance_core::NodeType;
 use provenance_porcelain::action::Action;
@@ -220,10 +219,10 @@ fn target_words() -> Vec<&'static str> {
         .collect()
 }
 
-fn target_declarations() -> impl Iterator<Item = CliDeclaration> {
+fn target_declarations() -> impl Iterator<Item = registry::Declaration> {
     registry::Command::ALL
         .iter()
-        .map(|command| cli_form::declaration(*command))
+        .map(|command| command.declaration())
         .filter(|declaration| declaration.grammar.takes_target())
 }
 
@@ -236,7 +235,7 @@ impl TargetArgs {
                 .cloned()
                 .unwrap_or_default(),
             action: matches.get_one::<TargetVerb>("action").copied(),
-            record_type: matches.get_one::<NodeType>("record_type").copied(),
+            record_type: matches.get_one::<NodeType>("type").copied(),
             view: matches.get_one::<String>("view").cloned(),
             depth: matches.get_one::<usize>("depth").copied(),
             kind: kinds(matches),
@@ -309,13 +308,8 @@ pub fn target_command() -> Command {
         );
     let mut declared = std::collections::BTreeSet::new();
     for declaration in target_declarations() {
-        for (flag, arg) in declaration
-            .form
-            .flags
-            .iter()
-            .zip(crate::registry_cli::args(&declaration))
-        {
-            if declared.insert(flag.field_id()) {
+        for arg in crate::registry_cli::args(&declaration) {
+            if declared.insert(arg.get_id().to_string()) {
                 command = command.arg(arg);
             }
         }
