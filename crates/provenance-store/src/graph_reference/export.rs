@@ -5,7 +5,6 @@
 //! reference can defer to Git this document has to carry.
 
 use super::{
-    canonical::{canonical_bytes, digest},
     ensure_graph_schema_version, incomplete, mismatch, projection, validate_prefixed_hash,
     GraphExport, GraphReferenceError,
 };
@@ -45,7 +44,8 @@ pub fn graph_digest(graph: &GraphExport) -> Result<String, GraphReferenceError> 
         record.created = None;
         record.updated = None;
     }
-    Ok(digest(&canonical_bytes(&content)?))
+    let bytes = crate::canonical_digest::canonical_bytes(&content).map_err(incomplete)?;
+    Ok(crate::canonical_digest::digest(&bytes))
 }
 
 impl ExactExport {

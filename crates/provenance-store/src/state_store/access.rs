@@ -3,18 +3,9 @@ use crate::layout::ProvenanceLayout;
 use crate::publication::{with_repository_publication, PublicationGuard};
 use camino::Utf8Path;
 use provenance_macros::rule;
-use std::marker::PhantomData;
-
-mod guarded_readers;
 
 #[cfg(test)]
 mod tests;
-
-/// A read-only store that borrows its repository publication guard.
-pub struct GuardedStore<'g> {
-    store: StateStore,
-    _guard: PhantomData<&'g PublicationGuard>,
-}
 
 impl Clone for StateStore {
     fn clone(&self) -> Self {
@@ -33,13 +24,10 @@ impl StateStore {
     /// let forged = PublicationGuard { _lock: None, layout };
     /// let _ = StateStore::under_guard(&forged);
     /// ```
-    pub fn under_guard(guard: &PublicationGuard) -> GuardedStore<'_> {
-        GuardedStore {
-            store: Self {
-                layout: guard.layout().clone(),
-                access: Access::Held,
-            },
-            _guard: PhantomData,
+    pub fn under_guard(guard: &PublicationGuard) -> Self {
+        Self {
+            layout: guard.layout().clone(),
+            access: Access::Held,
         }
     }
 

@@ -27,6 +27,7 @@ pub use prime::*;
 pub use projection_digest::{
     family_content_digests, revision_digest, revision_digest_from_stored_rows, FamilyContentDigest,
 };
+pub(crate) use projection_families::record_families;
 pub use projection_families::ProjectionFamily;
 pub use traceability::*;
 
