@@ -506,12 +506,18 @@ jobs:
       - name: Build and render the pull request report
         if: github.event_name == 'pull_request'
         continue-on-error: true
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REPOSITORY: ${{ github.repository }}
         run: |
+          git fetch --no-tags origin "$HEAD_SHA"
+          REPORT_BASE=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
           target/debug/provenance report build \
             --repo . \
-            --base "${{ github.event.pull_request.base.sha }}" \
-            --head HEAD \
-            --repository "${{ github.repository }}" \
+            --base "$REPORT_BASE" \
+            --head "$HEAD_SHA" \
+            --repository "$REPOSITORY" \
             --output "$RUNNER_TEMP/provenance-report-envelope.json"
           target/debug/provenance report render \
             --input "$RUNNER_TEMP/provenance-report-envelope.json" \
