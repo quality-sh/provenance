@@ -235,10 +235,11 @@ jobs:
           path: target/debug
       - run: chmod +x target/debug/provenance
       - run: sfw npm ci --no-audit --no-fund --prefix tools/agent-notifications
+      - run: npm run typecheck --prefix tools/agent-notifications
       - name: Prove wrong-thread routing fails isolation
         env:
           PROVENANCE_TEST_BIN: ${{ github.workspace }}/target/debug/provenance
-        run: tools/agent-notifications/node_modules/.bin/bun tools/agent-notifications/test/isolation-mutation.ts
+        run: npm run test:isolation --prefix tools/agent-notifications
       - name: Test public client adapters
         env:
           PROVENANCE_TEST_BIN: ${{ github.workspace }}/target/debug/provenance

@@ -1,4 +1,5 @@
 import { realpathSync } from "node:fs";
+import { object, requiredString } from "./validation";
 import { FollowStream, type Selection, type StateFrame } from "./stream";
 
 export interface Configuration extends Selection {
@@ -10,19 +11,24 @@ class Rejected extends Error {}
 
 class AppServer {
   private nextId = 0;
-  private pending = new Map<number, { resolve: (value: any) => void; reject: (error: Error) => void }>();
+  private pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>();
   readonly closed: Promise<Error>;
   private ended!: (error: Error) => void;
   private constructor(private socket: WebSocket) {
     this.closed = new Promise(resolve => this.ended = resolve);
     socket.onmessage = event => {
       try {
-        const value = JSON.parse(String(event.data));
+        const value = object(JSON.parse(String(event.data)));
+        if (typeof value.id !== "number") return;
         const request = this.pending.get(value.id);
         if (!request) return;
-        this.pending.delete(value.id);
-        if (value.error) request.reject(new Rejected(`App Server rejected request (${value.error.code}): ${value.error.message}`));
+        if (value.error) {
+          const error = object(value.error);
+          if (typeof error.code !== "number" || typeof error.message !== "string") throw new Error("Invalid App Server error");
+          request.reject(new Rejected(`App Server rejected request (${error.code}): ${error.message}`));
+        }
         else request.resolve(value.result);
+        this.pending.delete(value.id);
       } catch { this.fail(new Error("Invalid App Server response")); }
     };
     socket.onclose = () => this.fail(new Error("App Server disconnected"));
@@ -53,7 +59,7 @@ class AppServer {
     const server = new AppServer(socket);
     try {
       // The peer protocol requires clientInfo.version; no Provenance format is versioned.
-      await server.call("initialize", { clientInfo: { name: "provenance_notifications", version: "" }, capabilities: { experimentalApi: true } });
+      await server.call("initialize", { clientInfo: { name: "provenance_notifications", version: "" }, capabilities: { experimentalApi: true } }, object);
       socket.send(JSON.stringify({ method: "initialized" }));
       return server;
     } catch (error) { server.close(); throw error; }
@@ -62,27 +68,46 @@ class AppServer {
     for (const request of this.pending.values()) request.reject(error);
     this.pending.clear(); this.ended(error);
   }
-  async call(method: string, params: unknown) {
+  async call<T>(method: string, params: unknown, decode: (value: unknown) => T): Promise<T> {
     const id = ++this.nextId;
     let timer: ReturnType<typeof setTimeout>;
-    const response = new Promise<any>((resolve, reject) => this.pending.set(id, { resolve, reject }));
+    const response = new Promise<unknown>((resolve, reject) => this.pending.set(id, { resolve, reject }));
     try {
       this.socket.send(JSON.stringify({ id, method, params }));
-      return await Promise.race([response, new Promise((_, reject) => {
+      return decode(await Promise.race([response, new Promise<never>((_, reject) => {
         timer = setTimeout(() => reject(new Error("App Server acknowledgement timed out")), 10000);
-      })]);
+      })]));
     } finally { clearTimeout(timer!); this.pending.delete(id); }
   }
   close() { this.socket.close(); this.fail(new Error("App Server connection closed")); }
 }
 
 function configuration(value: unknown): Configuration {
-  if (!value || typeof value !== "object") throw new Error("Adapter configuration must be an object");
-  const config = value as Configuration;
-  for (const name of ["clientEndpoint", "threadId", "repository", "scope", "rootId"] as const) {
-    if (typeof config[name] !== "string" || !config[name].trim()) throw new Error(`Configuration requires ${name}`);
+  let config: Record<string, unknown>;
+  try { config = object(value); }
+  catch { throw new Error("Adapter configuration must be an object"); }
+  return {
+    clientEndpoint: requiredString(config, "clientEndpoint"),
+    threadId: requiredString(config, "threadId"),
+    repository: realpathSync(requiredString(config, "repository")),
+    scope: requiredString(config, "scope"),
+    rootId: requiredString(config, "rootId"),
+  };
+}
+
+function threadResponse(value: unknown): { thread: { id: string; cwd: string } } {
+  const thread = object(object(value).thread);
+  if (typeof thread.id !== "string" || typeof thread.cwd !== "string") throw new Error("Invalid App Server thread response");
+  return { thread: { id: thread.id, cwd: thread.cwd } };
+}
+
+interface QueueAcceptance { queuedSubmission: { id: string; clientUserMessageId: string } }
+function queueResponse(value: unknown): QueueAcceptance {
+  const submission = object(object(value).queuedSubmission);
+  if (typeof submission.id !== "string" || typeof submission.clientUserMessageId !== "string") {
+    throw new Error("Invalid queue acknowledgement");
   }
-  return { ...config, repository: realpathSync(config.repository) };
+  return { queuedSubmission: { id: submission.id, clientUserMessageId: submission.clientUserMessageId } };
 }
 
 /** Queues current graph state to the configured thread; acceptance is not model completion. */
@@ -97,21 +122,30 @@ export async function run(value: unknown) {
   process.once("SIGINT", cancel); process.once("SIGTERM", cancel);
   try {
     client = await AppServer.connect(config.clientEndpoint);
-    const { thread } = await client.call("thread/read", { threadId: config.threadId, includeTurns: false });
+    const { thread } = await client.call("thread/read", { threadId: config.threadId, includeTurns: false }, threadResponse);
     if (thread.id !== config.threadId || realpathSync(thread.cwd) !== config.repository) {
       throw new Error("thread repository does not match the configured binding");
     }
     stream = new FollowStream(config);
+    let queued: Promise<void> | undefined;
     const deliver = async () => {
       const frames = stream!.frames();
       while (true) {
-        const next = await Promise.race([frames.next(), client!.closed.then(error => { throw error; })]);
+        const next = await frames.next();
         if (next.done) break;
-        await enqueue(client!, config, next.value);
+        queued = enqueue(client!, config, next.value);
+        await queued;
+        queued = undefined;
         if (next.value.type === "disconnected") throw new Error("Provenance host disconnected; continuity is unknown");
+        if (next.value.type === "read-error") throw new Error(`Provenance read failed: ${next.value.reason}`);
       }
     };
-    await Promise.race([deliver(), cancellation]);
+    const disconnected = client.closed.then(async error => {
+      // An in-flight queue request owns the uncertain-acceptance diagnostic.
+      if (queued) await queued;
+      throw error;
+    });
+    await Promise.race([deliver(), disconnected, cancellation]);
   } catch (error) { if (!cancelled) throw error; }
   finally {
     client?.close(); await stream?.close();
@@ -121,12 +155,12 @@ export async function run(value: unknown) {
 
 async function enqueue(client: AppServer, config: Configuration, state: StateFrame) {
   const clientUserMessageId = crypto.randomUUID();
-  let result: any;
+  let result: QueueAcceptance;
   try {
     result = await client.call("thread/queue/add", {
       threadId: config.threadId, clientUserMessageId,
       input: [{ type: "text", text: `Provenance current-state reconciliation. Repository: ${config.repository}; scope: ${config.scope}; root: ${config.rootId}.\n${JSON.stringify(state)}` }],
-    });
+    }, queueResponse);
   } catch (error) {
     if (error instanceof Rejected) throw error;
     throw new Error(`Queue acceptance is uncertain; clientUserMessageId=${clientUserMessageId}. No resend: ${error instanceof Error ? error.message : "transport failure"}`);
