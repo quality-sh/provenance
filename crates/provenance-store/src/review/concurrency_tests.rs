@@ -154,9 +154,14 @@ fn concurrent_final_set_and_delta_return_a_typed_conflict_without_corruption() {
         release_tx.send(()).unwrap();
         first.join().unwrap().unwrap();
         let error = second.join().unwrap().unwrap_err();
+        let current_etag = store
+            .requirement_edit_state(&scope(), &requirement())
+            .unwrap()
+            .etag;
         assert!(matches!(
             WriteError(error).safe(),
-            WriteFailure::InvalidUpdate
+            WriteFailure::RequirementEditConflict { current_etag: actual }
+                if actual == current_etag
         ));
     });
     assert_eq!(depends_on(&store), ["req_b"]);
