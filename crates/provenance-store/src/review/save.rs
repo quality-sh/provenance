@@ -301,4 +301,36 @@ mod tests {
             .pending
             .is_none());
     }
+
+    #[test]
+    fn record_save_evidence_uses_the_record_kind() {
+        let (_temp, store, _) = fixture();
+        let before = serde_json::from_value::<provenance_core::Source>(json!({
+            "schema_version": 3,
+            "scope_id": "default",
+            "id": "source_a",
+            "name": "Policy A",
+            "source_type": "document",
+            "url": null
+        }))
+        .unwrap();
+        let mut after = before.clone();
+        after.name = "Policy B".into();
+
+        let entry = store
+            .commit_record_evidence(
+                before.into(),
+                after.into(),
+                None,
+                "reviewer".into(),
+                StableId::new("save-source-a").unwrap(),
+                "sha256:intent".into(),
+                None,
+            )
+            .unwrap();
+
+        assert_eq!(entry.record_kind, provenance_core::NodeType::Source);
+        assert_eq!(entry.record_id.as_str(), "source_a");
+        assert_eq!(entry.changed_fields, ["name"]);
+    }
 }
