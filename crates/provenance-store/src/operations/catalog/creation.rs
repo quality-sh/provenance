@@ -1,39 +1,16 @@
 //! Existing native creation inputs retain their scope and placement fields.
-use super::{ExecutionNeed, ExecutionNeeds, Operation, OperationFuture, PreparedContext};
-use crate::write_error::{SourceFailure, WriteFailure};
-use crate::{
-    layout::ProvenanceLayout,
-    state_store::{
-        AddSourceReferenceInput, CreateRequirementInput, CreateResolutionInput, CreateRuleInput,
-        CreateSourceInput, StateStore,
-    },
-    write_error::WriteError,
+use super::{shapes::scoped_write_operation, ExecutionNeed};
+use crate::state_store::{
+    AddSourceReferenceInput, CreateRequirementInput, CreateResolutionInput, CreateRuleInput,
+    CreateSourceInput,
 };
 
 macro_rules! creation {
     ($name:ident, $wire:literal, $input:ty, $output:ty, $method:ident, [$($need:ident),*]) => {
-        pub struct $name;
-        impl Operation for $name {
-            type Request = $input;
-            type Success = $output;
-            type Failure = WriteError;
-            const NAME: &'static str = $wire;
-            const MUTATES: bool = true;
-            const CONTEXT: super::ContextKind = super::ContextKind::Scope;
-            const FAILURE_STATUSES: &'static [u16] = &[409];
-            fn failure_status(error: &WriteError) -> u16 { error.status() }
-            fn needs(_: &Self::Request) -> ExecutionNeeds { &[$(ExecutionNeed::$need),*] }
-            fn run(context: PreparedContext, request: Self::Request) -> OperationFuture<Self::Success, Self::Failure> {
-                Box::pin(async move {
-                    let context = context.scope()?;
-                    if request.scope_id != context.scope {
-                        return Err(SourceFailure::wrap(WriteFailure::ScopeMismatch,
-                            anyhow::anyhow!("request scope does not match selected scope")).into());
-                    }
-                    Ok(StateStore::new(ProvenanceLayout::new(context.root)).$method(request)?)
-                })
-            }
-        }
+        scoped_write_operation!(
+            pub $name, $wire, $input, $output, &[409], &[$(ExecutionNeed::$need),*],
+            scope = scope_id, |store, _scope, request| store.$method(request)
+        );
     };
 }
 creation!(

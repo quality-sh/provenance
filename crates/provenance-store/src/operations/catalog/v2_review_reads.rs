@@ -3,18 +3,12 @@ use super::{
     failures::ReadError, ContextKind, ExecutionNeed, ExecutionNeeds, Operation, OperationFuture,
     PreparedContext,
 };
-use crate::{
-    layout::ProvenanceLayout, operations::read_policy::ReadPolicy, review, state_store::StateStore,
-    write_error::WriteError,
-};
+use crate::review;
 pub use provenance_core::threads::DiscussionResultPage;
 use provenance_core::{
     review::{EvidencePage, EvidenceQuery, ReviewEntry, ReviewHistoryQuery},
-    threads::{
-        DiscussionEntry, DiscussionGroup, DiscussionMessagesQuery, DiscussionQuery,
-        DiscussionSelector,
-    },
-    Message, ScopeId, StableId, ThreadParent,
+    threads::{DiscussionGroup, DiscussionMessagesQuery, DiscussionQuery, DiscussionSelector},
+    Message, StableId, ThreadParent,
 };
 use serde::{Deserialize, Serialize};
 
@@ -418,62 +412,9 @@ impl Operation for ReviewDiscussionMessageV2 {
     }
 }
 
-#[derive(Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-pub struct WriteDiscussionRequest {
-    pub scope_id: ScopeId,
-    pub parent: ThreadParent,
-    pub request_id: StableId,
-    pub actor: String,
-    pub declared_by: Option<String>,
-    pub action: review::DiscussionAction,
-}
-
-pub struct WriteDiscussionV2;
-impl Operation for WriteDiscussionV2 {
-    type Request = WriteDiscussionRequest;
-    type Success = DiscussionEntry;
-    type Failure = WriteError;
-    const NAME: &'static str = "write-discussion-v2";
-    const MUTATES: bool = true;
-    const CONTEXT: ContextKind = ContextKind::Scope;
-    const FAILURE_STATUSES: &'static [u16] = &[409];
-    fn needs(_: &Self::Request) -> ExecutionNeeds {
-        &[ExecutionNeed::GraphStorage]
-    }
-    fn failure_status(error: &WriteError) -> u16 {
-        error.status()
-    }
-    fn run(
-        context: PreparedContext,
-        request: Self::Request,
-    ) -> OperationFuture<Self::Success, Self::Failure> {
-        Box::pin(async move {
-            let context = context.scope()?;
-            if request.scope_id != context.scope {
-                return Err(anyhow::anyhow!("request scope does not match selected scope").into());
-            }
-            StateStore::new(ProvenanceLayout::new(context.root))
-                .write_discussion(review::WriteDiscussion {
-                    scope_id: request.scope_id,
-                    parent: request.parent,
-                    request_id: request.request_id,
-                    actor: request.actor,
-                    declared_by: request.declared_by,
-                    action: request.action,
-                })
-                .map_err(Into::into)
-        })
-    }
-}
-
 pub fn parent(kind: &str, id: StableId) -> anyhow::Result<ThreadParent> {
     Ok(ThreadParent {
         node_type: serde_json::from_value(serde_json::Value::String(kind.to_owned()))?,
         node_id: id,
     })
 }
-
-#[allow(dead_code)]
-fn keep_types(_: (DiscussionGroup, Message, ReadPolicy)) {}
