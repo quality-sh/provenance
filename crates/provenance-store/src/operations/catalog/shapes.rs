@@ -133,9 +133,7 @@ impl<S: ScopedReadSpec> OperationShape<S> for ScopedRead {
 pub struct ScopedWrite;
 
 pub trait ScopedWriteSpec: OperationSpec<Shape = ScopedWrite> {
-    fn request_scope(_: &Self::Request) -> Option<&ScopeId> {
-        None
-    }
+    fn request_scope(request: &Self::Request) -> Option<&ScopeId>;
 
     fn write(
         store: &StateStore,
@@ -175,6 +173,8 @@ impl<S: ScopedWriteSpec> OperationShape<S> for ScopedWrite {
 pub struct ScopedCommand;
 
 pub trait ScopedCommandSpec: OperationSpec<Shape = ScopedCommand> {
+    fn request_scope(request: &Self::Request) -> Option<&ScopeId>;
+
     fn execute(
         context: super::PreparedScope,
         request: Self::Request,
@@ -194,7 +194,17 @@ impl<S: ScopedCommandSpec> OperationShape<S> for ScopedCommand {
         context: PreparedContext,
         request: S::Request,
     ) -> OperationFuture<S::Success, Self::Failure> {
-        Box::pin(async move { S::execute(context.scope()?, request).map_err(Into::into) })
+        Box::pin(async move {
+            let context = context.scope()?;
+            if S::request_scope(&request).is_some_and(|scope| *scope != context.scope) {
+                return Err(SourceFailure::wrap(
+                    WriteFailure::ScopeMismatch,
+                    anyhow::anyhow!("request scope does not match selected scope"),
+                )
+                .into());
+            }
+            S::execute(context, request).map_err(Into::into)
+        })
     }
 }
 
@@ -286,15 +296,15 @@ macro_rules! graph_read_operation {
 
 macro_rules! scoped_write_operation {
     ($visibility:vis $name:ident, $wire:literal, $request:ty, $success:ty,
-     $statuses:expr, $needs:expr, scope = $scope_field:ident,
+     $statuses:expr, $needs:expr, scope = none,
      |$store:ident, $scope:ident, $input:ident| $body:expr) => {
         $crate::operations::catalog::shapes::scoped_write_operation!(
             @base $visibility $name, $wire, $request, $success, $statuses, $needs,
             |$store, $scope, $input| $body
         );
         impl $crate::operations::catalog::shapes::ScopedWriteSpec for $name {
-            fn request_scope(request: &Self::Request) -> Option<&provenance_core::ScopeId> {
-                Some(&request.$scope_field)
+            fn request_scope(_: &Self::Request) -> Option<&provenance_core::ScopeId> {
+                None
             }
             fn write(
                 $store: &$crate::state_store::StateStore,
@@ -306,13 +316,16 @@ macro_rules! scoped_write_operation {
         }
     };
     ($visibility:vis $name:ident, $wire:literal, $request:ty, $success:ty,
-     $statuses:expr, $needs:expr,
+     $statuses:expr, $needs:expr, scope = $scope_field:ident,
      |$store:ident, $scope:ident, $input:ident| $body:expr) => {
         $crate::operations::catalog::shapes::scoped_write_operation!(
             @base $visibility $name, $wire, $request, $success, $statuses, $needs,
             |$store, $scope, $input| $body
         );
         impl $crate::operations::catalog::shapes::ScopedWriteSpec for $name {
+            fn request_scope(request: &Self::Request) -> Option<&provenance_core::ScopeId> {
+                Some(&request.$scope_field)
+            }
             fn write(
                 $store: &$crate::state_store::StateStore,
                 $scope: provenance_core::ScopeId,
@@ -342,8 +355,47 @@ macro_rules! scoped_write_operation {
 
 macro_rules! scoped_command_operation {
     ($visibility:vis $name:ident, $wire:literal, $request:ty, $success:ty,
-     mutates = $mutates:literal, $statuses:expr, $needs:expr, validate = $validate:expr,
+     mutates = $mutates:literal, $statuses:expr, $needs:expr, scope = none,
+     validate = $validate:expr,
      |$context:ident, $input:ident| $body:expr) => {
+        $crate::operations::catalog::shapes::scoped_command_operation!(
+            @base $visibility $name, $wire, $request, $success, $mutates, $statuses, $needs,
+            $validate
+        );
+        impl $crate::operations::catalog::shapes::ScopedCommandSpec for $name {
+            fn request_scope(_: &Self::Request) -> Option<&provenance_core::ScopeId> {
+                None
+            }
+            fn execute(
+                $context: $crate::operations::catalog::PreparedScope,
+                $input: Self::Request,
+            ) -> anyhow::Result<Self::Success> {
+                $body
+            }
+        }
+    };
+    ($visibility:vis $name:ident, $wire:literal, $request:ty, $success:ty,
+     mutates = $mutates:literal, $statuses:expr, $needs:expr, scope = $scope_field:ident,
+     validate = $validate:expr,
+     |$context:ident, $input:ident| $body:expr) => {
+        $crate::operations::catalog::shapes::scoped_command_operation!(
+            @base $visibility $name, $wire, $request, $success, $mutates, $statuses, $needs,
+            $validate
+        );
+        impl $crate::operations::catalog::shapes::ScopedCommandSpec for $name {
+            fn request_scope(request: &Self::Request) -> Option<&provenance_core::ScopeId> {
+                Some(&request.$scope_field)
+            }
+            fn execute(
+                $context: $crate::operations::catalog::PreparedScope,
+                $input: Self::Request,
+            ) -> anyhow::Result<Self::Success> {
+                $body
+            }
+        }
+    };
+    (@base $visibility:vis $name:ident, $wire:literal, $request:ty, $success:ty,
+     $mutates:literal, $statuses:expr, $needs:expr, $validate:expr) => {
         $visibility struct $name;
         impl $crate::operations::catalog::shapes::OperationSpec for $name {
             type Request = $request;
@@ -359,14 +411,6 @@ macro_rules! scoped_command_operation {
                 request: &Self::Request,
             ) -> Result<(), provenance_core::protocol::failure::OperationFailure> {
                 ($validate)(request)
-            }
-        }
-        impl $crate::operations::catalog::shapes::ScopedCommandSpec for $name {
-            fn execute(
-                $context: $crate::operations::catalog::PreparedScope,
-                $input: Self::Request,
-            ) -> anyhow::Result<Self::Success> {
-                $body
             }
         }
     };
