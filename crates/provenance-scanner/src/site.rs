@@ -1,13 +1,7 @@
 use camino::Utf8Path;
 
 use crate::{AnnotationLocation, AttributeBinding, FileScan, Verification};
-
-/// The semantic role of a native attribute or portable comment marker.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SourceSiteRole {
-    Implementation,
-    Verification,
-}
+pub use provenance_core::coverage::SiteRole as SourceSiteRole;
 
 /// One source relationship, independent of the syntax that declared it.
 #[derive(Debug, Clone, Copy)]
