@@ -177,9 +177,7 @@ impl CycleFacts {
             .entries
             .iter()
             .filter(|e| {
-                e.record_kind == kind
-                    && e.record_id == *record_id
-                    && e.fact == CycleFact::Withdrawn
+                e.record_kind == kind && e.record_id == *record_id && e.fact == CycleFact::Withdrawn
             })
             .map(|e| (e.sequence, e.proposal_id.clone()))
             .collect();

@@ -100,10 +100,8 @@ impl StateStore {
             pending,
             current_acceptance,
             decisions: recorded,
-            withdrawn: facts.withdrawn_submissions(
-                provenance_core::NodeType::Requirement,
-                requirement_id,
-            ),
+            withdrawn: facts
+                .withdrawn_submissions(provenance_core::NodeType::Requirement, requirement_id),
         })
     }
 }
