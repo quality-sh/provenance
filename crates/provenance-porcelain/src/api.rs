@@ -127,9 +127,21 @@ pub struct ApiRoute {
     pub method: ApiMethod,
     pub path: String,
     pub description: String,
-    pub parameters: Vec<ApiParameter>,
     pub request_schema: Option<Value>,
-    pub response_schema: Value,
+    pub variants: Vec<ApiVariant>,
+}
+
+/// One selector-scoped input and response contract of one route.
+///
+/// The base variant has no selector; each query variant names its selector
+/// and carries the parameters, success schema, and failure schema that the
+/// canonical definition declares for it.
+#[derive(Clone, Debug, Serialize, Eq, PartialEq, schemars::JsonSchema)]
+pub struct ApiVariant {
+    pub selector: Option<String>,
+    pub parameters: Vec<ApiParameter>,
+    pub success_schema: Value,
+    pub failure_schema: Value,
 }
 
 /// The catalog-derived route inventory behind the api action.
@@ -163,14 +175,31 @@ pub fn input_schema() -> Value {
 }
 
 /// The output schema covering both api answers.
+///
+/// Both arms are generated from typed contracts, so their shared definitions
+/// are hoisted to one root document and every `#/$defs/` reference resolves.
 pub fn output_schema() -> Value {
-    serde_json::json!({
-        "anyOf": [
-            serde_json::to_value(schemars::schema_for!(ApiCatalog))
-                .expect("catalog schema is JSON"),
-            {"type": "object", "required": ["data", "meta"], "properties": {"data": {}, "meta": {}}}
-        ]
-    })
+    let mut catalog = serde_json::to_value(schemars::schema_for!(ApiCatalog))
+        .expect("catalog schema is JSON");
+    let mut envelope = serde_json::to_value(schemars::schema_for!(
+        provenance_core::protocol::SuccessEnvelope<Value>
+    ))
+    .expect("envelope schema is JSON");
+    let mut defs = serde_json::Map::new();
+    for schema in [&mut catalog, &mut envelope] {
+        if let Some(definitions) = schema
+            .as_object_mut()
+            .and_then(|object| object.remove("$defs"))
+            .and_then(|definitions| definitions.as_object().cloned())
+        {
+            defs.extend(definitions);
+        }
+    }
+    let mut schema = serde_json::json!({"anyOf": [catalog, envelope]});
+    if !defs.is_empty() {
+        schema["$defs"] = Value::Object(defs);
+    }
+    schema
 }
 
 impl ApiRequest {
