@@ -10,6 +10,7 @@ pub use relationships::*;
 mod context;
 mod creation;
 mod discussions;
+mod discussion_discovery;
 mod drafts;
 pub use drafts::*;
 mod entry;
@@ -38,6 +39,7 @@ mod v2_review_reads;
 mod verification_resources;
 pub use updates::*;
 pub use v2_discussion_reads::*;
+pub use discussion_discovery::*;
 pub use v2_review::*;
 pub use v2_review_reads::*;
 
