@@ -31,6 +31,7 @@ mod schema_page;
 mod schema_values;
 mod scoped_list;
 mod statement;
+mod target_discussion_writes;
 mod updates;
 mod v2_discussion_reads;
 mod v2_review;
@@ -73,6 +74,7 @@ pub use schema::{
     Parameter, ParseValueError, QueryVariant, ResponseKind,
 };
 pub use statement::CheckStatement;
+pub use target_discussion_writes::WriteTargetDiscussionV2;
 
 #[cfg(test)]
 mod tests;
