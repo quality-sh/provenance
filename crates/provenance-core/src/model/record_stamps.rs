@@ -153,3 +153,16 @@ archive_lifecycle!(
     super::QuestionStatus::Archived,
     "Question"
 );
+
+archive_lifecycle!(
+    super::Requirement,
+    super::RequirementStatus,
+    super::RequirementStatus::Archived,
+    "Requirement"
+);
+archive_lifecycle!(
+    super::Resolution,
+    super::ResolutionStatus,
+    super::ResolutionStatus::Archived,
+    "Resolution"
+);
