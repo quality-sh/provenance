@@ -185,6 +185,7 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         "update-question"
     );
     configure_argument_alias(out, "create-question", "method", "resolution_method");
+    configure_argument_alias(out, "update-question", "method", "resolution_method");
     configure_patch(
         out,
         "update-question",

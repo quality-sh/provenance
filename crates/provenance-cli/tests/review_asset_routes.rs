@@ -131,7 +131,7 @@ struct WireResponse {
 }
 
 impl WireResponse {
-    fn status(&self) -> u16 {
+    const fn status(&self) -> u16 {
         self.status
     }
 
