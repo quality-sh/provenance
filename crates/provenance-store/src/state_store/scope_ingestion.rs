@@ -271,7 +271,6 @@ macro_rules! define_imported_scope_shards {
                 scope: &ScopeId,
                 shards: &ScopeShards<'_>,
             ) -> anyhow::Result<()> {
-                self.ensure_writable()?;
                 validate_threads(shards.threads)?;
                 $(ensure_family_budget(shards.$export_field)?;)*
                 $(ensure_binding_budget!(
