@@ -47,6 +47,12 @@ fn cli_discussion_actions_use_one_scope_and_preserve_receipt_identity() {
         "--statement",
         "A discussion has one parent.",
     ]);
+    success(&[
+        "requirements", "create", "--repo", repo, "--id", "discussions",
+        "--statement", "A graph ID can match this command word.",
+    ]);
+    let keyword_record = json(&["discussions", "get", "--repo", repo, "--format", "json"]);
+    assert_eq!(keyword_record["record"]["id"], "discussions");
 
     let start = json(&[
         "req_a",
@@ -95,6 +101,8 @@ fn cli_discussion_actions_use_one_scope_and_preserve_receipt_identity() {
         })
         .unwrap();
     let scope = json(&["discussions", "--repo", repo, "--format", "json"]);
+    let prefixed = json(&["--repo", repo, "discussions", "--format", "json"]);
+    assert_eq!(prefixed["result"]["entries"], scope["result"]["entries"]);
     assert_eq!(scope["scope_id"], "default");
     assert_eq!(scope["status"], "active");
     assert_eq!(scope["result"]["entries"][0]["discussion_id"], id);
@@ -120,7 +128,7 @@ fn cli_discussion_actions_use_one_scope_and_preserve_receipt_identity() {
         "--format",
         "json",
     ]);
-    assert_eq!(all["result"]["has_more"], true);
+    assert_eq!(all["has_more"], true);
     let parent = json(&["req_a", "discussions", "--repo", repo, "--format", "json"]);
     assert_eq!(parent["result"]["entries"][0]["discussion_id"], id);
     let conversation = json(&["discussions", id, "get", "--repo", repo, "--format", "json"]);

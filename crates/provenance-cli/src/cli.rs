@@ -28,7 +28,7 @@ pub enum PackageManager {
 }
 
 #[derive(Parser)]
-#[command(name = "provenance", version)]
+#[command(name = "provenance", version, after_help = "Discussion actions: provenance discussions [<discussion-id> get], or provenance <record-id> discussions|discuss, or provenance <discussion-id> reply.")]
 pub struct Cli {
     /// Drop the advisory notes commands print alongside their output, such as
     /// the warning that this repository has no shaping skills installed.
@@ -42,8 +42,6 @@ pub struct Cli {
 pub enum Command {
     /// Search records in one scope.
     Search(crate::invocation::grammar::SearchArgs),
-    /// List or read addressed Discussions.
-    Discussions(crate::invocation::grammar::DiscussionsArgs),
     #[command(name = "__cargo-init", hide = true)]
     CargoInit {
         #[arg(long)]

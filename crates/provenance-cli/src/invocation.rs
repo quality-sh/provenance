@@ -62,21 +62,18 @@ impl Invocation {
             return Ok(Self::Search(args.args));
         }
         if word == "discussions" {
-            let command =
-                DiscussionsCommand::try_parse_from(arguments).unwrap_or_else(|error| error.exit());
-            debug_assert_eq!(command.command, "discussions");
-            let args = command.args;
-            if args.discussion_id.as_deref() == Some("get") && args.action.is_none() {
-                if args.status.is_some() || args.limit.is_some() || args.cursor.is_some() {
-                    catalog_cli::usage_error("graph get does not accept Discussion list options");
+            if let Ok(command) = DiscussionsCommand::try_parse_from(arguments.clone()) {
+                debug_assert_eq!(command.command, "discussions");
+                let graph_action = command.args.action.is_none()
+                    && command.args.discussion_id.as_deref().is_some_and(|action| {
+                        action == "get"
+                            || Action::parse(action).is_some()
+                            || DiscussionAction::parse(action).is_some()
+                    });
+                if !graph_action {
+                    return Ok(Self::DiscussionRoot(command.args));
                 }
-                return Ok(Self::Get(GetInvocation {
-                    context: args.common.context(),
-                    format: args.common.format(),
-                    input: provenance_porcelain::get::GetInput::new("discussions", View::Record),
-                }));
             }
-            return Ok(Self::DiscussionRoot(args));
         }
         if Cli::command()
             .get_subcommands()
@@ -183,11 +180,6 @@ impl SearchArgs {
     }
 }
 
-impl DiscussionsArgs {
-    pub(crate) async fn dispatch(self) -> anyhow::Result<()> {
-        discussion::dispatch_root(self).await
-    }
-}
 
 impl TargetInvocation {
     async fn dispatch(self) -> anyhow::Result<()> {
