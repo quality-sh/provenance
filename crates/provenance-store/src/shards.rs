@@ -1,140 +1,43 @@
 use camino::Utf8PathBuf;
 use provenance_core::{NodeType, ScopeId};
 
+use crate::cache::{record_families, ProjectionFamily};
 use crate::layout::ProvenanceLayout;
 
 /// The canonical record file of one node kind.
 pub fn path_for(layout: &ProvenanceLayout, scope: &ScopeId, kind: NodeType) -> Utf8PathBuf {
-    match kind {
-        NodeType::Source => sources_path(layout, scope),
-        NodeType::Requirement => requirements_path(layout, scope),
-        NodeType::Resolution => resolutions_path(layout, scope),
-        NodeType::Rule => rules_path(layout, scope),
-        NodeType::Topic => topics_path(layout, scope),
-        NodeType::Question => questions_path(layout, scope),
-        NodeType::Domain => domains_path(layout, scope),
-        NodeType::Boundary => boundaries_path(layout, scope),
-    }
+    ProjectionFamily::ALL
+        .into_iter()
+        .find(|family| family.node_type() == Some(kind))
+        .expect("each node type has one record family")
+        .shard_path(layout, scope)
 }
 
-pub fn sources_path(layout: &ProvenanceLayout, scope: &ScopeId) -> Utf8PathBuf {
-    layout
-        .scopes_dir()
-        .join(scope.as_str())
-        .join("sources/source.jsonl")
+macro_rules! define_shard_paths {
+    (
+        export { $($export_variant:ident: $export_type:ty, $export_field:ident, $export_path:ident, $export_suffix:literal, $export_table:literal, [$($export_node:tt)*], $export_reader:ident, [$($export_closed:tt)*], $export_id:ident, [$($export_loader:tt)*], [$($export_catalog:tt)*];)* }
+        canonical { $($canonical_variant:ident: $canonical_type:ty, $canonical_field:ident, $canonical_path:ident, $canonical_suffix:literal, $canonical_table:literal, [$($canonical_node:tt)*], $canonical_reader:ident, [$($canonical_closed:tt)*], $canonical_id:ident, [$($canonical_loader:tt)*], [$($canonical_catalog:tt)*];)* }
+        internal { $($internal_variant:ident: $internal_type:ty, $internal_field:ident, $internal_path:ident, $internal_suffix:literal, $internal_table:literal, [$($internal_node:tt)*], $internal_reader:ident, [$($internal_closed:tt)*], $internal_id:ident, [$($internal_loader:tt)*], [$($internal_catalog:tt)*];)* }
+    ) => {
+        $(
+            pub fn $export_path(layout: &ProvenanceLayout, scope: &ScopeId) -> Utf8PathBuf {
+                ProjectionFamily::$export_variant.shard_path(layout, scope)
+            }
+        )*
+        $(
+            pub fn $canonical_path(layout: &ProvenanceLayout, scope: &ScopeId) -> Utf8PathBuf {
+                ProjectionFamily::$canonical_variant.shard_path(layout, scope)
+            }
+        )*
+        $(
+            pub fn $internal_path(layout: &ProvenanceLayout, scope: &ScopeId) -> Utf8PathBuf {
+                ProjectionFamily::$internal_variant.shard_path(layout, scope)
+            }
+        )*
+    };
 }
 
-pub fn requirements_path(layout: &ProvenanceLayout, scope: &ScopeId) -> Utf8PathBuf {
-    layout
-        .scopes_dir()
-        .join(scope.as_str())
-        .join("requirements/req.jsonl")
-}
-
-pub fn domains_path(layout: &ProvenanceLayout, scope: &ScopeId) -> Utf8PathBuf {
-    layout
-        .scopes_dir()
-        .join(scope.as_str())
-        .join("domains/domain.jsonl")
-}
-
-pub fn boundaries_path(layout: &ProvenanceLayout, scope: &ScopeId) -> Utf8PathBuf {
-    layout
-        .scopes_dir()
-        .join(scope.as_str())
-        .join("boundaries/boundary.jsonl")
-}
-
-pub fn topics_path(layout: &ProvenanceLayout, scope: &ScopeId) -> Utf8PathBuf {
-    layout
-        .scopes_dir()
-        .join(scope.as_str())
-        .join("topics/topic.jsonl")
-}
-
-pub fn questions_path(layout: &ProvenanceLayout, scope: &ScopeId) -> Utf8PathBuf {
-    layout
-        .scopes_dir()
-        .join(scope.as_str())
-        .join("questions/question.jsonl")
-}
-
-pub fn resolutions_path(layout: &ProvenanceLayout, scope: &ScopeId) -> Utf8PathBuf {
-    layout
-        .scopes_dir()
-        .join(scope.as_str())
-        .join("resolutions/res.jsonl")
-}
-
-pub fn rules_path(layout: &ProvenanceLayout, scope: &ScopeId) -> Utf8PathBuf {
-    layout
-        .scopes_dir()
-        .join(scope.as_str())
-        .join("rules/rule.jsonl")
-}
-
-pub fn verification_bindings_path(layout: &ProvenanceLayout, scope: &ScopeId) -> Utf8PathBuf {
-    layout
-        .scopes_dir()
-        .join(scope.as_str())
-        .join("verifications/binding.jsonl")
-}
-
-pub fn requirement_reviews_path(layout: &ProvenanceLayout, scope: &ScopeId) -> Utf8PathBuf {
-    layout
-        .scopes_dir()
-        .join(scope.as_str())
-        .join("requirements/review.jsonl")
-}
-
-pub fn implementation_bindings_path(layout: &ProvenanceLayout, scope: &ScopeId) -> Utf8PathBuf {
-    layout
-        .scopes_dir()
-        .join(scope.as_str())
-        .join("implementations/binding.jsonl")
-}
-
-pub fn threads_path(layout: &ProvenanceLayout, scope: &ScopeId) -> Utf8PathBuf {
-    layout
-        .scopes_dir()
-        .join(scope.as_str())
-        .join("threads/threads.jsonl")
-}
-
-pub fn messages_path(layout: &ProvenanceLayout, scope: &ScopeId) -> Utf8PathBuf {
-    layout
-        .scopes_dir()
-        .join(scope.as_str())
-        .join("threads/2026-07.jsonl")
-}
-
-pub fn contributions_path(layout: &ProvenanceLayout, scope: &ScopeId) -> Utf8PathBuf {
-    layout
-        .scopes_dir()
-        .join(scope.as_str())
-        .join("ideation/contributions.jsonl")
-}
-
-pub fn synthesis_packets_path(layout: &ProvenanceLayout, scope: &ScopeId) -> Utf8PathBuf {
-    layout
-        .scopes_dir()
-        .join(scope.as_str())
-        .join("ideation/synthesis_packets.jsonl")
-}
-
-pub fn proposal_cards_path(layout: &ProvenanceLayout, scope: &ScopeId) -> Utf8PathBuf {
-    layout
-        .scopes_dir()
-        .join(scope.as_str())
-        .join("ideation/proposal_cards.jsonl")
-}
-
-pub fn dispositions_path(layout: &ProvenanceLayout, scope: &ScopeId) -> Utf8PathBuf {
-    layout
-        .scopes_dir()
-        .join(scope.as_str())
-        .join("ideation/dispositions.jsonl")
-}
+record_families!(define_shard_paths);
 
 pub(crate) fn legacy_promotion_decisions_path(
     layout: &ProvenanceLayout,
@@ -144,13 +47,6 @@ pub(crate) fn legacy_promotion_decisions_path(
         .scopes_dir()
         .join(scope.as_str())
         .join("ideation/promotion_decisions.jsonl")
-}
-
-pub fn assertion_records_path(layout: &ProvenanceLayout, scope: &ScopeId) -> Utf8PathBuf {
-    layout
-        .scopes_dir()
-        .join(scope.as_str())
-        .join("ideation/assertions.jsonl")
 }
 
 pub fn ideation_landings_path(layout: &ProvenanceLayout, scope: &ScopeId) -> Utf8PathBuf {

@@ -1,4 +1,4 @@
-use super::{ensure_graph_schema_version, GraphReferenceError};
+use super::{ensure_graph_schema_version, incomplete, GraphReferenceError};
 use crate::{layout::ProvenanceLayout, state_store::StateStore};
 use camino::Utf8Path;
 use provenance_core::{
@@ -219,36 +219,19 @@ fn strip_collaboration_fields(graph: &mut GraphExport) {
     visit_collaboration_fields(graph, &mut |_, field| field.clear());
 }
 
-fn sort_records(graph: &mut GraphExport) {
-    graph
-        .sources
-        .sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
-    graph
-        .domains
-        .sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
-    graph
-        .requirements
-        .sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
-    graph
-        .boundaries
-        .sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
-    graph
-        .topics
-        .sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
-    graph
-        .questions
-        .sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
-    graph
-        .resolutions
-        .sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
-    graph.rules.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
-    graph
-        .verification_bindings
-        .sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
-    graph
-        .implementation_bindings
-        .sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
+macro_rules! define_export_sort {
+    (
+        export { $($variant:ident: $record:ty, $field:ident, $path:ident, $suffix:literal, $table:literal, [$($node:tt)*], $reader:ident, [$($closed:tt)*], $id:ident, [$($loader:tt)*], [$($catalog:tt)*];)* }
+        canonical { $($canonical:tt)* }
+        internal { $($internal:tt)* }
+    ) => {
+        fn sort_records(graph: &mut GraphExport) {
+            $(graph.$field.sort_by(|left, right| left.id.as_str().cmp(right.id.as_str()));)*
+        }
+    };
 }
+
+crate::cache::record_families!(define_export_sort);
 
 /// Decides whether a pinned graph may travel as the scope it claims to be.
 ///
@@ -292,12 +275,6 @@ pub(super) fn validate_scope_ownership(
     require_scope!(&graph.verification_bindings, "verification binding");
     require_scope!(&graph.implementation_bindings, "implementation binding");
     Ok(())
-}
-
-fn incomplete(error: impl std::fmt::Display) -> GraphReferenceError {
-    GraphReferenceError::Incomplete {
-        detail: error.to_string(),
-    }
 }
 
 #[cfg(test)]
