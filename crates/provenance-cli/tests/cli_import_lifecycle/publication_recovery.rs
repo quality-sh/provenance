@@ -1,4 +1,4 @@
-use super::support::{init_repo, provenance};
+use super::support::{create_system_source, init_repo, provenance};
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 /// The macOS temp area sits behind `/var -> /private/var`, so a marker holds
@@ -26,27 +26,43 @@ fn relative_access_recovers_a_marker_written_through_a_path_alias() {
         .exists());
 }
 
+/// A crash before the commit point leaves the live state missing and the old
+/// state in the backup. Recovery restores the backup for each such phase.
 #[test]
 fn relative_repository_access_restores_backup_after_interrupted_publication() {
-    let dir = tempfile::tempdir().unwrap();
-    let repo = dir.path().join("repo");
-    init_repo(&repo, None);
-    let transaction = repo.join(".provenance/cache/import-transactions/interrupted");
-    std::fs::create_dir_all(&transaction).unwrap();
-    std::fs::rename(
-        repo.join(".provenance/state"),
-        transaction.join("backup-state"),
-    )
-    .unwrap();
-    write_publication_marker(&repo, &transaction, "backup_created");
+    for phase in ["prepared", "backup_created"] {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("repo");
+        init_repo(&repo, None);
+        create_system_source(&repo);
+        let transaction = repo.join(".provenance/cache/import-transactions/interrupted");
+        std::fs::create_dir_all(&transaction).unwrap();
+        std::fs::rename(
+            repo.join(".provenance/state"),
+            transaction.join("backup-state"),
+        )
+        .unwrap();
+        write_publication_marker(&repo, &transaction, phase);
 
-    check_repo_relative(&repo);
+        check_repo_relative(&repo);
 
-    assert!(repo.join(".provenance/state/manifest.json").is_file());
-    assert!(!repo
-        .join(".provenance/cache/import-publication.json")
-        .exists());
-    assert!(!transaction.exists());
+        assert!(
+            repo.join(".provenance/state/manifest.json").is_file(),
+            "{phase}"
+        );
+        assert!(
+            !repo
+                .join(".provenance/cache/import-publication.json")
+                .exists(),
+            "{phase}"
+        );
+        assert!(!transaction.exists(), "{phase}");
+        assert_eq!(
+            source_ids(&repo),
+            ["source_a"],
+            "{phase}: the backup is readable"
+        );
+    }
 }
 
 #[test]
@@ -73,6 +89,12 @@ fn repository_access_finishes_cleanup_after_published_state() {
     init_repo(&repo, None);
     let transaction = repo.join(".provenance/cache/import-transactions/published");
     std::fs::create_dir_all(transaction.join("backup-state")).unwrap();
+    std::fs::copy(
+        repo.join(".provenance/state/manifest.json"),
+        transaction.join("backup-state/manifest.json"),
+    )
+    .unwrap();
+    create_system_source(&repo);
     write_publication_marker(&repo, &transaction, "published");
 
     check_repo(&repo);
@@ -82,6 +104,22 @@ fn repository_access_finishes_cleanup_after_published_state() {
     assert!(!repo
         .join(".provenance/cache/import-publication.json")
         .exists());
+    assert_eq!(
+        source_ids(&repo),
+        ["source_a"],
+        "a published state stays live after the commit point"
+    );
+}
+
+fn source_ids(repo: &std::path::Path) -> Vec<String> {
+    provenance_store::repository::Repository::open(repo, "default")
+        .unwrap()
+        .store()
+        .list_sources(&provenance_core::ScopeId::new("default").unwrap())
+        .unwrap()
+        .into_iter()
+        .map(|source| source.id.as_str().to_owned())
+        .collect()
 }
 
 fn check_repo(repo: &std::path::Path) {

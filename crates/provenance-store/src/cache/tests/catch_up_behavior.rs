@@ -43,14 +43,21 @@ async fn stored_digest(pool: &sqlx::SqlitePool) -> String {
 
 /// Catch-up output must equal a fresh rebuild, rows and digest.
 pub(super) async fn assert_catch_up_equals_rebuild(layout: &crate::layout::ProvenanceLayout) {
-    let report = catch_up_state(&open(layout)).await.unwrap();
+    assert_catch_up_equals_rebuild_of(&open(layout)).await;
+}
+
+/// Like [`assert_catch_up_equals_rebuild`], over a repository opened before
+/// the test changed its manifest.
+pub(super) async fn assert_catch_up_equals_rebuild_of(repository: &crate::repository::Repository) {
+    let layout = repository.layout();
+    let report = catch_up_state(repository).await.unwrap();
     let pool = open_cache(layout).await.unwrap();
     let caught_up_rows = dump_family_tables(pool.pool()).await;
     let caught_up_digest = stored_digest(pool.pool()).await;
     assert_eq!(report.digest, caught_up_digest);
     drop(pool);
 
-    materialize_state(&open(layout)).await.unwrap();
+    materialize_state(repository).await.unwrap();
     let pool = open_cache(layout).await.unwrap();
     assert_eq!(caught_up_rows, dump_family_tables(pool.pool()).await);
     assert_eq!(caught_up_digest, stored_digest(pool.pool()).await);

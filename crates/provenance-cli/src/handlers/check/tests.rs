@@ -173,3 +173,41 @@ fn binding_check_reads_a_scope_published_after_the_code_scan() {
         .iter()
         .any(|finding| finding.message.contains("rule_second")));
 }
+
+#[tokio::test]
+#[provenance_macros::verifies("rule_graph_report_refuses_undeclared_scope", examples)]
+async fn graph_check_refuses_an_undeclared_scope_without_a_default_scope() {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
+    let layout = ProvenanceLayout::new(repo.clone());
+    std::fs::create_dir_all(layout.state_dir()).unwrap();
+    let mut manifest =
+        Manifest::default_with_scope(ScopeId::new("alpha").unwrap(), RepoPathPrefix::new("a"));
+    manifest.scopes.push(provenance_core::Scope {
+        id: ScopeId::new("beta").unwrap(),
+        path_prefix: RepoPathPrefix::new("b"),
+    });
+    std::fs::write(
+        layout.manifest_path(),
+        serde_json::to_vec(&manifest).unwrap(),
+    )
+    .unwrap();
+
+    let port = RepositoryCheckPort::new(repo, false, None);
+    let CategoryRun::Graph { findings, .. } = port.run(Category::Graph, None).await.unwrap() else {
+        panic!("graph run")
+    };
+    assert_eq!(findings, [] as [provenance_porcelain::check::Finding; 0]);
+
+    let CategoryRun::Graph { findings, .. } =
+        port.run(Category::Graph, Some("gamma")).await.unwrap()
+    else {
+        panic!("graph run")
+    };
+    assert!(
+        findings[0]
+            .message
+            .contains("unknown scope `gamma`; declared scopes: alpha, beta"),
+        "{findings:?}"
+    );
+}

@@ -21,7 +21,10 @@ fn seeded_store() -> (tempfile::TempDir, StateStore, ScopeId) {
         .unwrap(),
     )
     .unwrap();
-    (dir, StateStore::new(layout), scope)
+    let store = provenance_store::repository::Repository::open(dir.path(), "default")
+        .unwrap()
+        .store();
+    (dir, store, scope)
 }
 
 fn seed_domains_and_rule(store: &StateStore, scope: &ScopeId) {
