@@ -40,10 +40,35 @@ struct EmptyCheckPort;
 impl provenance_porcelain::check::CheckPort for EmptyCheckPort {
     fn run<'a>(
         &'a self,
-        _: provenance_porcelain::check::Category,
+        category: provenance_porcelain::check::Category,
         _: Option<&'a str>,
     ) -> provenance_porcelain::check::PortFuture<'a> {
-        Box::pin(async { Ok(Vec::new()) })
+        Box::pin(async move {
+            Ok(match category {
+                provenance_porcelain::check::Category::Graph => {
+                    provenance_porcelain::check::CategoryRun::Graph {
+                        findings: Vec::new(),
+                        refusal: provenance_porcelain::check::Refusal::None,
+                    }
+                }
+                provenance_porcelain::check::Category::Statements => {
+                    provenance_porcelain::check::CategoryRun::Statements {
+                        findings: Vec::new(),
+                        context: None,
+                        refusal: provenance_porcelain::check::Refusal::None,
+                    }
+                }
+                provenance_porcelain::check::Category::Bindings => {
+                    provenance_porcelain::check::CategoryRun::Bindings {
+                        findings: Vec::new(),
+                        context: provenance_porcelain::check::BindingContext {
+                            policy: provenance_porcelain::check::BindingPolicy::Warning,
+                        },
+                        refusal: provenance_porcelain::check::Refusal::None,
+                    }
+                }
+            })
+        })
     }
 }
 
@@ -178,18 +203,33 @@ fn live_cli_and_mcp_check_selectors_keep_shared_semantics() {
 #[test]
 #[verifies("rule_porcelain_cli_readable_json", examples)]
 fn readable_get_warns_when_the_record_or_view_is_stale() {
+    let record = serde_json::from_value(json!({
+        "node_type": "requirement", "schema_version": 2, "scope_id": "default",
+        "id": "req_stale", "statement": "Keep the graph typed.", "status": "active"
+    }))
+    .unwrap();
     let outcome = provenance_porcelain::get::GetOutcome {
-        record: provenance_porcelain::get::Record::new(
-            "req_stale",
-            "requirement",
-            json!({"id":"req_stale"}),
+        record,
+        result: provenance_porcelain::get::ViewResult::Children(
+            provenance_porcelain::get::Traversal {
+                records: Vec::new(),
+                bounds: provenance_porcelain::get::Bounds {
+                    limit: 50,
+                    max_depth: Some(1),
+                    has_more: false,
+                    continuation: None,
+                    truncated: false,
+                },
+                response_metadata: Some(provenance_core::protocol::ResponseMeta {
+                    freshness_error: Some("view catch-up failed".into()),
+                    ..Default::default()
+                }),
+            },
         ),
-        view: provenance_porcelain::get::View::Children,
-        related: Vec::new(),
-        detail: None,
-        bounds: None,
-        record_metadata: Some(json!({"freshness_error":"record catch-up failed"})),
-        view_metadata: Some(json!({"freshness_error":"view catch-up failed"})),
+        record_metadata: Some(provenance_core::protocol::ResponseMeta {
+            freshness_error: Some("record catch-up failed".into()),
+            ..Default::default()
+        }),
     };
 
     let readable = provenance_cli::porcelain::render_get_readable(&outcome).unwrap();
