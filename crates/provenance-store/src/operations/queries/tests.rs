@@ -19,6 +19,7 @@ mod document_membership;
 mod evidence;
 mod front_equivalence;
 mod impact;
+mod identity;
 mod limits;
 mod live;
 mod order;
