@@ -76,6 +76,7 @@ mod legacy_coexistence;
 mod manifest;
 mod native_review_writer_findings;
 mod native_review_writers;
+mod native_rule_creation;
 mod proposal_surfaces;
 mod proposals;
 mod read_budget;
