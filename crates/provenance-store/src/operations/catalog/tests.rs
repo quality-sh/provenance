@@ -208,6 +208,16 @@ fn query_registrations_keep_typed_scalar_parameters() {
         "schema: {}",
         base.schema
     );
+    for parameter in stale.parameters.iter().filter(|parameter| {
+        matches!(parameter.name, "head" | "line" | "symbol")
+    }) {
+        assert!(
+            parameter.schema.get("default").is_none(),
+            "non-null query parameter {} has an invalid default: {}",
+            parameter.name,
+            parameter.schema
+        );
+    }
     let member = super::definitions()
         .iter()
         .find(|definition| definition.name == "get-rule")

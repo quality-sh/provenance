@@ -43,6 +43,9 @@ fn scalar_schema(root: &Value, field: &Value) -> Option<Value> {
         }
         let mut field = field.clone();
         field["type"] = types[0].clone();
+        if field.get("default").is_some_and(Value::is_null) {
+            field.as_object_mut().unwrap().remove("default");
+        }
         return is_scalar(&field).then_some(field);
     }
     if let Some(variants) = field
