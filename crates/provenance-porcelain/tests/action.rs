@@ -42,6 +42,30 @@ fn port(result: CoreResolution) -> (Porcelain<Port>, Arc<Mutex<usize>>) {
     )
 }
 
+#[test]
+fn discussion_keywords_share_the_target_action_declaration() {
+    let words = Action::DISCUSSION.map(Action::as_str);
+    assert_eq!(words, ["discussions", "discussion", "discuss", "reply"]);
+    for action in Action::DISCUSSION {
+        assert_eq!(Action::parse(action.as_str()), Some(action));
+        assert!(!Action::RECORD.contains(&action));
+    }
+}
+
+#[tokio::test]
+async fn parent_selection_uses_the_record_resolver() {
+    let record: GraphNode = serde_json::from_value(serde_json::json!({
+        "node_type":"requirement", "schema_version":2, "scope_id":"default",
+        "id":"req_live", "statement":"The target exists.", "status":"active"
+    }))
+    .unwrap();
+    let (porcelain, resolved) = port(CoreResolution::Found(record));
+    let parent = porcelain.select_parent("req_live").await.unwrap();
+    assert_eq!(parent.node_type, provenance_core::NodeType::Requirement);
+    assert_eq!(parent.node_id.as_str(), "req_live");
+    assert_eq!(*resolved.lock().unwrap(), 1);
+}
+
 #[tokio::test]
 async fn create_uses_declared_kind_without_resolving_a_record() {
     let (porcelain, resolved) = port(CoreResolution::Missing);
