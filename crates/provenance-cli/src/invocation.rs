@@ -1,6 +1,6 @@
 use crate::{catalog_cli, cli::Cli, handlers};
 use clap::{CommandFactory as _, FromArgMatches as _};
-use handlers::RepositoryInput;
+use handlers::{GraphInput, RepositoryInput};
 use provenance_cli::porcelain;
 use provenance_cli::repo_context::RepoContext;
 use provenance_core::NodeType;
@@ -27,6 +27,7 @@ pub enum Invocation {
     Check(CheckCliInput),
     Prime(PrimeInput),
     Repository(RepositoryInput, bool),
+    Graph(GraphInput),
     Api(ApiArgs),
     Get(GetInvocation),
     Search(SearchArgs),
@@ -79,7 +80,8 @@ impl Invocation {
             Some(
                 registry::Command::Check
                 | registry::Command::Prime
-                | registry::Command::Repository(_),
+                | registry::Command::Repository(_)
+                | registry::Command::Graph(_),
             ) => {
                 return Ok(Self::parse_root(arguments));
             }
@@ -132,6 +134,10 @@ impl Invocation {
                 RepositoryInput::from_matches(command, selected)
                     .unwrap_or_else(|error| catalog_cli::usage_error(error)),
                 matches.get_flag("quiet"),
+            ),
+            Some(registry::Command::Graph(command)) => Self::Graph(
+                GraphInput::from_matches(command, selected)
+                    .unwrap_or_else(|error| catalog_cli::usage_error(error)),
             ),
             _ => {
                 Self::Builtin(Cli::from_arg_matches(&matches).unwrap_or_else(|error| error.exit()))
@@ -231,7 +237,11 @@ impl Invocation {
     /// `{error,meta}` object instead of text.
     pub fn json_output(&self) -> bool {
         let format = match self {
-            Self::Builtin(_) | Self::Check(_) | Self::Prime(_) | Self::Repository(..) => None,
+            Self::Builtin(_)
+            | Self::Check(_)
+            | Self::Prime(_)
+            | Self::Repository(..)
+            | Self::Graph(_) => None,
             Self::Api(args) => args.common.format(),
             Self::Get(invocation) => invocation.format,
             Self::Search(args) => args.common.format(),
@@ -248,6 +258,7 @@ impl Invocation {
             Self::Check(input) => handlers::check_command(input).await,
             Self::Prime(input) => handlers::prime_command(&input),
             Self::Repository(input, quiet) => handlers::repository_command(input, quiet).await,
+            Self::Graph(input) => handlers::graph_command(input),
             Self::Api(args) => api::dispatch(args).await,
             Self::Get(invocation) => {
                 if invocation.delivery == Delivery::Follow {
@@ -364,12 +375,12 @@ pub fn root_command() -> clap::Command {
         registry::Command::Prime,
     ]
     .into_iter()
-    .chain(
-        registry::Command::ALL
-            .iter()
-            .copied()
-            .filter(|command| matches!(command, registry::Command::Repository(_))),
-    )
+    .chain(registry::Command::ALL.iter().copied().filter(|command| {
+        matches!(
+            command,
+            registry::Command::Repository(_) | registry::Command::Graph(_)
+        )
+    }))
     .fold(Cli::command(), crate::registry_cli::add_subcommand)
 }
 

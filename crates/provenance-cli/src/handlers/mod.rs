@@ -4,9 +4,10 @@ use camino::Utf8PathBuf;
 use provenance_cli::repo_context::RepoContext;
 use provenance_core::StableId;
 use provenance_porcelain::registry::{
-    self, CargoInitInput, DictionaryImportInput, DictionaryStatusInput, ExportInput, ImportInput,
-    InitInput, MaterializeInput, MergeJsonlInput, RepositoryCommand, SchemaShowInput,
-    ValidateInput,
+    self, CargoInitInput, CoverageScanInput, DictionaryImportInput, DictionaryStatusInput,
+    ExportInput, GraphCommand, GraphReadInput, ImportInput, InitInput, MaterializeInput,
+    MergeJsonlInput, ReferenceInput, ReferenceIssueInput, RepositoryCommand, RequirementGraphInput,
+    SchemaShowInput, SwarmBacktraceLandInput, TraceabilityInput, ValidateInput,
 };
 use provenance_store::cache;
 
@@ -167,10 +168,12 @@ pub(super) async fn repository_command(input: RepositoryInput, quiet: bool) -> a
                 camino::Utf8Path::new(&input.input),
             )
         }
-        RepositoryInput::SchemaShow(input) => schema::handle(cli::SchemaCommand::Show {
-            artifact: artifact(&input.artifact)?,
-            format: flag_value(&input.format, JsonFormat::from_flag)?,
-        }),
+        RepositoryInput::SchemaShow(input) => {
+            flag_value(&input.format, JsonFormat::from_flag)?;
+            schema::handle(cli::SchemaCommand::Show {
+                artifact: artifact(&input.artifact)?,
+            })
+        }
         RepositoryInput::DictionaryImport(input) => {
             flag_value(&input.format, JsonFormat::from_flag)?;
             dictionary::handle(cli::dictionary::DictionaryCommand::Import {
@@ -187,15 +190,128 @@ pub(super) async fn repository_command(input: RepositoryInput, quiet: bool) -> a
     }
 }
 
+/// The typed input of one graph command, read from its declared flags.
+#[allow(clippy::redundant_pub_crate)]
+pub(super) enum GraphInput {
+    Graph(RequirementGraphInput),
+    Traceability(TraceabilityInput),
+    Gaps(GraphReadInput),
+    Health(GraphReadInput),
+    Orphans(GraphReadInput),
+    CoverageScan(CoverageScanInput),
+    ReferenceIssue(ReferenceIssueInput),
+    ReferenceShow(ReferenceInput),
+    ReferenceVerify(ReferenceInput),
+    ReferenceExactExport(ReferenceInput),
+    SwarmBacktraceLand(SwarmBacktraceLandInput),
+}
+
+impl GraphInput {
+    /// Reads the input of `command` from the matches of its parser.
+    #[allow(clippy::redundant_pub_crate)]
+    pub(super) fn from_matches(
+        command: GraphCommand,
+        matches: &clap::ArgMatches,
+    ) -> anyhow::Result<Self> {
+        let declaration = registry::Command::Graph(command).declaration();
+        macro_rules! read {
+            ($variant:ident) => {
+                Self::$variant(crate::registry_cli::input(&declaration, matches)?)
+            };
+        }
+        Ok(match command {
+            GraphCommand::Graph => read!(Graph),
+            GraphCommand::Traceability => read!(Traceability),
+            GraphCommand::Gaps => read!(Gaps),
+            GraphCommand::Health => read!(Health),
+            GraphCommand::Orphans => read!(Orphans),
+            GraphCommand::CoverageScan => read!(CoverageScan),
+            GraphCommand::ReferenceIssue => read!(ReferenceIssue),
+            GraphCommand::ReferenceShow => read!(ReferenceShow),
+            GraphCommand::ReferenceVerify => read!(ReferenceVerify),
+            GraphCommand::ReferenceExactExport => read!(ReferenceExactExport),
+            GraphCommand::SwarmBacktraceLand => read!(SwarmBacktraceLand),
+        })
+    }
+}
+
+/// Runs one graph command on the calling thread.
+#[allow(clippy::redundant_pub_crate)]
+pub(super) fn graph_command(input: GraphInput) -> anyhow::Result<()> {
+    use cli::graph::GraphReferenceCommand;
+    let read = |input: GraphReadInput| {
+        flag_value(&input.format, JsonFormat::from_flag)?;
+        RepoContext::new(input.repo, input.scope).open()
+    };
+    let reference = |input: ReferenceInput| (input.repo.into(), input.reference.into());
+    match input {
+        GraphInput::Graph(input) => {
+            flag_value(&input.format, JsonFormat::from_flag)?;
+            let repository = RepoContext::new(input.repo, input.scope).open()?;
+            let id = StableId::new(input.requirement_id)?;
+            output::print_json(&cache::get_requirement_graph(&repository, &id)?)
+        }
+        GraphInput::Traceability(input) => {
+            flag_value(&input.format, JsonFormat::from_flag)?;
+            let repository = RepoContext::new(input.repo, input.scope).open()?;
+            let id = StableId::new(input.rule_id)?;
+            output::print_json(&cache::trace_rule(&repository, &id)?)
+        }
+        GraphInput::Gaps(input) => output::print_json(&cache::find_gaps(&read(input)?)?),
+        GraphInput::Health(input) => output::print_json(&cache::coverage_health(&read(input)?)?),
+        GraphInput::Orphans(input) => output::print_json(&cache::orphan_rules(&read(input)?)?),
+        GraphInput::CoverageScan(input) => {
+            coverage::handle(cli::workspace::CoverageCommand::Scan {
+                repo: input.repo.into(),
+                path: input.path.into(),
+                scope: input.scope,
+                baseline: input.baseline.map(Utf8PathBuf::from),
+                validate_rules: input.validate_rules,
+                strict: input.strict,
+                format: flag_value(&input.format, |format| {
+                    <output::ReportFormat as clap::ValueEnum>::from_str(format, false).ok()
+                })?,
+                output: input.output.map(Utf8PathBuf::from),
+            })
+        }
+        GraphInput::ReferenceIssue(input) => {
+            graph_reference::handle(GraphReferenceCommand::Issue {
+                context: RepoContext::new(input.repo, input.scope),
+                commit: input.commit,
+                correlation_system: input.correlation_system,
+                correlation_key: input.correlation_key,
+            })
+        }
+        GraphInput::ReferenceShow(input) => {
+            let (repo, reference) = reference(input);
+            graph_reference::handle(GraphReferenceCommand::Show { repo, reference })
+        }
+        GraphInput::ReferenceVerify(input) => {
+            let (repo, reference) = reference(input);
+            graph_reference::handle(GraphReferenceCommand::Verify { repo, reference })
+        }
+        GraphInput::ReferenceExactExport(input) => {
+            let (repo, reference) = reference(input);
+            graph_reference::handle(GraphReferenceCommand::ExactExport { repo, reference })
+        }
+        GraphInput::SwarmBacktraceLand(input) => {
+            flag_value(&input.format, JsonFormat::from_flag)?;
+            swarm_backtrace::handle(cli::ideation::SwarmBacktraceCommand::Land {
+                context: RepoContext::new(input.repo, input.scope),
+                run_dir: input.run_dir.into(),
+                replace: input.replace,
+            })
+        }
+    }
+}
+
 /// The value that one declared flag names. The CLI parser accepts only declared values.
 fn flag_value<T>(value: &str, parse: impl FnOnce(&str) -> Option<T>) -> anyhow::Result<T> {
     parse(value).ok_or_else(|| anyhow::anyhow!("unsupported value {value}"))
 }
 
 fn artifact(value: &str) -> anyhow::Result<cli::IdeationArtifactKind> {
-    flag_value(value, |value| {
-        <cli::IdeationArtifactKind as clap::ValueEnum>::from_str(value, false).ok()
-    })
+    flag_value(value, cli::IdeationArtifactKind::from_name)
 }
 
 /// Runs one built-in command. The commands that wait on async work or on a
@@ -216,57 +332,16 @@ async fn run_blocking(
     tokio::task::spawn_blocking(handler).await?
 }
 
-/// Runs one built-in command whose handler does its work on the calling
-/// thread.
+/// Runs one built-in command whose handler does its work on the calling thread.
 #[cfg_attr(not(feature = "dogfood"), allow(unused_variables))]
 fn dispatch_on_thread(command: Command, quiet: bool) -> anyhow::Result<()> {
     match command {
-        Command::Graph {
-            requirement_id,
-            context,
-            ..
-        } => {
-            let repository = context.open()?;
-            let graph = cache::get_requirement_graph(&repository, &StableId::new(requirement_id)?)?;
-            output::print_json(&graph)
-        }
-        Command::Traceability {
-            rule_id, context, ..
-        } => {
-            let repository = context.open()?;
-            let trace = cache::trace_rule(&repository, &StableId::new(rule_id)?)?;
-            output::print_json(&trace)
-        }
-        Command::Gaps { context, .. } => output::print_json(&cache::find_gaps(&context.open()?)?),
-        Command::Health { context, .. } => {
-            output::print_json(&cache::coverage_health(&context.open()?)?)
-        }
-        Command::Orphans { context, .. } => {
-            output::print_json(&cache::orphan_rules(&context.open()?)?)
-        }
-        command => dispatch_remaining_on_thread(command, quiet),
-    }
-}
-
-/// Runs a synchronous command that does not use the shared repository context.
-#[cfg_attr(not(feature = "dogfood"), allow(unused_variables))]
-fn dispatch_remaining_on_thread(command: Command, quiet: bool) -> anyhow::Result<()> {
-    match command {
-        Command::GraphReference { command } => graph_reference::handle(command),
-        Command::Coverage { command } => coverage::handle(command),
         Command::Report { command } => report::handle(command),
-        Command::SwarmBacktrace { command } => swarm_backtrace::handle(command),
         Command::Skills { command } => skills::handle(command),
         #[cfg(feature = "dogfood")]
         Command::Dogfood { command } => dogfood::handle(command, quiet),
-        // These commands run in `dispatch` or `dispatch_on_thread`.
-        Command::Docs { .. }
-        | Command::Review(_)
-        | Command::Graph { .. }
-        | Command::Traceability { .. }
-        | Command::Gaps { .. }
-        | Command::Health { .. }
-        | Command::Orphans { .. } => {
+        // These commands run in `dispatch`.
+        Command::Docs { .. } | Command::Review(_) => {
             unreachable!("an earlier dispatcher runs this command")
         }
     }
@@ -276,19 +351,31 @@ fn dispatch_remaining_on_thread(command: Command, quiet: bool) -> anyhow::Result
 mod tests {
     use super::*;
 
-    /// Implementation aid: each value that a repository flag declares converts to the
-    /// CLI value that its handler takes.
+    /// Implementation aid: each value that a repository or graph flag declares converts
+    /// to the CLI value that its handler takes.
     #[test]
     fn every_declared_repository_value_converts() {
         for command in registry::Command::ALL {
-            let registry::Command::Repository(repository) = command else {
+            if !matches!(
+                command,
+                registry::Command::Repository(_) | registry::Command::Graph(_)
+            ) {
                 continue;
-            };
+            }
             for flag in command.declaration().flags {
                 for value in flag.values {
                     let converts = match flag.name {
-                        "format" if *repository == RepositoryCommand::Export => {
+                        "format"
+                            if *command
+                                == registry::Command::Repository(RepositoryCommand::Export) =>
+                        {
                             OutputFormat::from_flag(value).is_some()
+                        }
+                        "format"
+                            if *command == registry::Command::Graph(GraphCommand::CoverageScan) =>
+                        {
+                            <output::ReportFormat as clap::ValueEnum>::from_str(value, false)
+                                .is_ok()
                         }
                         "format" => JsonFormat::from_flag(value).is_some(),
                         "artifact" => artifact(value).is_ok(),

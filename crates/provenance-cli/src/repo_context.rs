@@ -1,13 +1,11 @@
 use camino::Utf8PathBuf;
-use clap::Args;
 use provenance_core::{protocol::failure::OperationFailure, ScopeId};
 use provenance_store::repository::{OpenFailure, Repository};
 
-#[derive(Clone, Debug, Args)]
+/// The repository root and scope that one command opens.
+#[derive(Clone, Debug)]
 pub struct RepoContext {
-    #[arg(long, default_value = ".")]
     pub repo: Utf8PathBuf,
-    #[arg(long, default_value = "default")]
     pub scope: String,
 }
 
