@@ -81,6 +81,7 @@ mod read_budget_boundaries;
 mod references;
 mod reserved_ids;
 mod scope_ingestion;
+mod scope_ingestion_order;
 mod shaping;
 mod source_requirements;
 mod source_supersedes_concurrency;
