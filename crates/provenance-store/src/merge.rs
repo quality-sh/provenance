@@ -62,6 +62,85 @@ impl<T> MergeOutcome<T> {
 
 pub type CanonicalRecord = Value;
 
+/// One stored input row kept beside the record parsed from it.
+///
+/// A merge never authors record content: every merged record is one side's
+/// record unchanged. Keeping the exact stored line beside that record lets
+/// the merged shard preserve each record's stored bytes, so content this
+/// build would encode differently survives the write untouched.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredRow {
+    /// The row exactly as the input file held it, without its newline.
+    pub line: String,
+    /// The record parsed from that line.
+    pub record: Value,
+}
+
+/// Reads one JSONL merge input, keeping each stored row beside its record.
+pub fn read_jsonl_rows_for_shard(
+    path: &camino::Utf8Path,
+    shard_path: &camino::Utf8Path,
+) -> anyhow::Result<Vec<StoredRow>> {
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let contents = std::fs::read_to_string(path)?;
+    let mut rows = Vec::new();
+    for (index, line) in contents.lines().enumerate() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let record = serde_json::from_str(line)?;
+        // Errors name the logical shard, but line numbers come from Git's temporary input file.
+        ensure_supported_record_version(shard_path, index + 1, &record)?;
+        if ShardFamily::for_shard_path(shard_path) == ShardFamily::IdeationLandings {
+            ensure_supported_ideation_landing_versions(shard_path, index + 1, &record)?;
+        }
+        rows.push(StoredRow {
+            line: line.to_owned(),
+            record,
+        });
+    }
+    Ok(rows)
+}
+
+/// Reads one JSONL merge input with no shard type known.
+pub fn read_jsonl_rows(path: &camino::Utf8Path) -> anyhow::Result<Vec<StoredRow>> {
+    read_jsonl_rows_for_shard(path, path)
+}
+
+/// Chooses the stored line each merged record keeps.
+///
+/// Every merged record is one side's record unchanged, so each one matches a
+/// stored row by value exactly. A record keeps the line it was stored with:
+/// ours when our side holds it, theirs when only theirs does. The merge is
+/// refused when no stored row matches, because re-encoding that record would
+/// publish content that no side stored.
+pub fn preserved_lines(
+    ours: &[StoredRow],
+    theirs: &[StoredRow],
+    merged: &[CanonicalRecord],
+) -> anyhow::Result<Vec<String>> {
+    merged
+        .iter()
+        .map(|record| {
+            let named = record
+                .get("id")
+                .and_then(Value::as_str)
+                .unwrap_or("<record with no id>");
+            ours.iter()
+                .chain(theirs.iter())
+                .find(|row| &row.record == record)
+                .map(|row| row.line.clone())
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "merged record {named} matches no stored line; refusing to re-encode it"
+                    )
+                })
+        })
+        .collect()
+}
+
 /// Merges three sides of one JSONL shard by record id.
 ///
 /// This decides *which* record survives, not whether the survivor is a legal
@@ -148,31 +227,20 @@ pub fn merge_records(
 }
 
 pub fn read_jsonl_records(path: &camino::Utf8Path) -> anyhow::Result<Vec<CanonicalRecord>> {
-    read_jsonl_records_for_shard(path, path)
+    Ok(read_jsonl_rows(path)?
+        .into_iter()
+        .map(|row| row.record)
+        .collect())
 }
 
 pub fn read_jsonl_records_for_shard(
     path: &camino::Utf8Path,
     shard_path: &camino::Utf8Path,
 ) -> anyhow::Result<Vec<CanonicalRecord>> {
-    if !path.exists() {
-        return Ok(Vec::new());
-    }
-    let contents = std::fs::read_to_string(path)?;
-    let mut records = Vec::new();
-    for (index, line) in contents.lines().enumerate() {
-        if line.trim().is_empty() {
-            continue;
-        }
-        let record = serde_json::from_str(line)?;
-        // Errors name the logical shard, but line numbers come from Git's temporary input file.
-        ensure_supported_record_version(shard_path, index + 1, &record)?;
-        if ShardFamily::for_shard_path(shard_path) == ShardFamily::IdeationLandings {
-            ensure_supported_ideation_landing_versions(shard_path, index + 1, &record)?;
-        }
-        records.push(record);
-    }
-    Ok(records)
+    Ok(read_jsonl_rows_for_shard(path, shard_path)?
+        .into_iter()
+        .map(|row| row.record)
+        .collect())
 }
 
 fn index_by_id(records: &[CanonicalRecord]) -> anyhow::Result<BTreeMap<String, CanonicalRecord>> {
@@ -190,3 +258,5 @@ fn index_by_id(records: &[CanonicalRecord]) -> anyhow::Result<BTreeMap<String, C
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod preservation_tests;
