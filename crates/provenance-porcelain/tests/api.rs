@@ -1,6 +1,6 @@
 use provenance_porcelain::api::{
     render_discovery_readable, ApiArguments, ApiCatalog, ApiError, ApiErrorKind, ApiInput,
-    ApiMethod, ApiOutcome, ApiPort, ApiPortFuture, ApiRequest, ApiRoute,
+    ApiMethod, ApiOutcome, ApiPort, ApiPortFuture, ApiRequest, ApiRoute, ApiVariant,
 };
 use provenance_porcelain::Porcelain;
 use serde_json::{json, Value};
@@ -53,9 +53,17 @@ fn route(
         method,
         path: path.into(),
         description: description.into(),
-        parameters: Vec::new(),
         request_schema,
-        response_schema: json!({"type": "object"}),
+        variants: vec![variant(None)],
+    }
+}
+
+fn variant(selector: Option<&str>) -> ApiVariant {
+    ApiVariant {
+        selector: selector.map(str::to_owned),
+        parameters: Vec::new(),
+        success_schema: json!({"type": "object"}),
+        failure_schema: json!({"type": "object"}),
     }
 }
 
@@ -279,6 +287,8 @@ fn readable_discovery_lists_method_path_and_description() {
             ),
         ],
     };
+    assert_eq!(catalog.routes[0].variants.len(), 1);
+    assert_eq!(catalog.routes[0].variants[0].selector, None);
 
     assert_eq!(
         render_discovery_readable(&catalog),
