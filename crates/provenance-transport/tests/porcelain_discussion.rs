@@ -262,7 +262,7 @@ async fn named_mcp_discussion_actions_share_structured_and_readable_results() {
 #[tokio::test]
 async fn reply_grant_does_not_admit_start() {
     let repository = Repository::new("A requirement has discussions.");
-    let store = provenance_store::state_store::StateStore::new(repository.layout.clone());
+    let store = repository.open().store();
     let request = serde_json::from_value(json!({
         "scope_id":"default", "actor":"ben",
         "declared_by":null,
@@ -318,7 +318,7 @@ async fn reply_grant_does_not_admit_start() {
 async fn denied_parent_grant_is_applied_before_discussion_page_selection() {
     let repository = Repository::new("A requirement has discussions.");
     repository.all_kinds();
-    let store = provenance_store::state_store::StateStore::new(repository.layout.clone());
+    let store = repository.open().store();
     let mut source = None;
     for (body, node_type, node_id) in [
         ("req_start", "requirement", "req_shared"),

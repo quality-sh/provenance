@@ -1,0 +1,10 @@
+error[E0624]: associated function `new` is private
+ --> tests/compile_fail/layout_store_outside_crate.rs:5:25
+  |
+5 |     let _ = StateStore::new(ProvenanceLayout::new("repo"));
+  |                         ^^^ private associated function
+  |
+ ::: src/state_store.rs
+  |
+  |     pub(crate) const fn new(layout: ProvenanceLayout) -> Self {
+  |     --------------------------------------------------------- private associated function defined here

@@ -58,7 +58,7 @@ pub fn empty_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
 
 pub fn seeded_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
     let (dir, layout, scope) = empty_layout();
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(&layout);
     store
         .create_domain(CreateDomainInput {
             scope_id: scope.clone(),
@@ -135,7 +135,7 @@ pub fn seeded_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
 /// tests need a row from each.
 pub fn owner_row_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
     let (dir, layout, scope) = empty_layout();
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(&layout);
     seed_owner_chain(&store, &scope);
     seed_shaping_owners(&store, &scope);
     (dir, layout, scope)

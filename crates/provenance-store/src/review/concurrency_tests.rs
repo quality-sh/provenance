@@ -27,7 +27,7 @@ fn fixture() -> (tempfile::TempDir, StateStore) {
         r#"{"schema_version":2,"scopes":[{"id":"default","path_prefix":"."}]}"#,
     )
     .unwrap();
-    let store = StateStore::new(layout);
+    let store = crate::test_support::store(&layout);
     for id in ["req_a", "req_b", "req_c", "req_d"] {
         store
             .create_requirement(

@@ -385,3 +385,55 @@ fn read_only_validation_accepts_a_planned_repository() {
     .unwrap();
     assert!(!root.exists());
 }
+
+/// A repository with one Source, and a copy of its state with no cache.
+fn record_kind_repositories() -> (tempfile::TempDir, ProvenanceLayout, ProvenanceLayout) {
+    let directory = tempfile::tempdir().unwrap();
+    let root = Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
+    let live = ProvenanceLayout::new(root.join("live"));
+    crate::cache::tests::fixtures::initialized(live.root().as_std_path());
+    let scope = provenance_core::ScopeId::new("default").unwrap();
+    crate::cache::tests::fixtures::create_source(
+        &crate::test_support::store(&live),
+        &scope,
+        "source_help",
+    );
+    let copy = ProvenanceLayout::new(root.join("copy"));
+    staged::copy_directory(&live.state_dir(), &copy.state_dir()).unwrap();
+    (directory, live, copy)
+}
+
+#[test]
+#[verifies("rule_read_only_section_stays_inside_the_store", examples)]
+fn read_only_record_kinds_answer_while_another_handle_holds_the_lock() {
+    let (_directory, live, _copy) = record_kind_repositories();
+    let _held = guard::LockedPublicationFile::acquire(&live.publication_lock_path()).unwrap();
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let reader = live.clone();
+    std::thread::spawn(move || {
+        let scope = provenance_core::ScopeId::new("default").unwrap();
+        sender
+            .send(read_only_record_kinds(&reader, &scope, "source_help").unwrap())
+            .unwrap();
+    });
+    let kinds = receiver
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .expect("the read takes no publication lock");
+    assert_eq!(kinds, vec![provenance_core::NodeType::Source]);
+}
+
+#[test]
+#[verifies("rule_read_only_section_stays_inside_the_store", examples)]
+fn read_only_record_kinds_create_no_path() {
+    let (_directory, _live, copy) = record_kind_repositories();
+    let scope = provenance_core::ScopeId::new("default").unwrap();
+    assert_eq!(
+        read_only_record_kinds(&copy, &scope, "source_help").unwrap(),
+        vec![provenance_core::NodeType::Source]
+    );
+    assert_eq!(
+        read_only_record_kinds(&copy, &scope, "source_missing").unwrap(),
+        Vec::new()
+    );
+    assert!(!copy.cache_dir().exists(), "the read creates no cache");
+}

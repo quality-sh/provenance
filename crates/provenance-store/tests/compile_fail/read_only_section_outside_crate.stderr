@@ -1,0 +1,15 @@
+error[E0603]: function `with_read_only_validation` is private
+ --> tests/compile_fail/read_only_section_outside_crate.rs:2:36
+  |
+2 | use provenance_store::publication::with_read_only_validation;
+  |                                    ^^^^^^^^^^^^^^^^^^^^^^^^^ private function
+  |
+note: the function `with_read_only_validation` is defined here
+ --> src/publication.rs
+  |
+  | pub(crate) use read_only::with_read_only_validation;
+  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: import `with_read_only_validation` directly
+  |
+2 | use provenance_store::publication::read_only::with_read_only_validation;
+  |                                    +++++++++++

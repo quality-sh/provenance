@@ -57,7 +57,9 @@ async fn catch_up_refuses_state_the_aggregate_validator_refuses() {
 #[tokio::test]
 async fn a_departed_scope_loses_its_rows_and_its_baselines() {
     let (_dir, layout, scope) = seeded_layout();
-    materialize_state(&open(&layout)).await.unwrap();
+    // Open before the test changes the manifest: an open refuses that manifest.
+    let repository = open(&layout);
+    materialize_state(&repository).await.unwrap();
 
     // The scope leaves the manifest. Its shard files remain on disk.
     let mut manifest: provenance_core::Manifest =
@@ -69,7 +71,7 @@ async fn a_departed_scope_loses_its_rows_and_its_baselines() {
     )
     .unwrap();
 
-    let report = catch_up_state(&open(&layout)).await.unwrap();
+    let report = catch_up_state(&repository).await.unwrap();
     assert!(!report.rebuilt);
     let pool = open_cache(&layout).await.unwrap();
     let rows: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM requirements WHERE scope_id = ?")

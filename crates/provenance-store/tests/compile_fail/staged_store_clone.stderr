@@ -1,0 +1,5 @@
+error[E0277]: the trait bound `StateStore: Clone` is not satisfied
+ --> tests/compile_fail/staged_store_clone.rs:6:55
+  |
+6 |     let _ = repository.stage(false, None, |staged| Ok(StateStore::clone(staged)));
+  |                                                       ^^^^^^^^^^ the trait `Clone` is not implemented for `StateStore`

@@ -1,0 +1,8 @@
+error: lifetime may not live long enough
+ --> tests/compile_fail/staged_store_outlives_stage.rs:5:58
+  |
+5 |     let escaped = repository.stage(false, None, |staged| Ok(staged)).unwrap();
+  |                                                  ------- ^^^^^^^^^^ returning this value requires that `'1` must outlive `'2`
+  |                                                  |     |
+  |                                                  |     return type of closure is Result<&'2 StateStore, anyhow::Error>
+  |                                                  has type `&'1 StateStore`
