@@ -343,6 +343,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmov"
+version = "0.5.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c9ea0ac24bc397ab3c98583a3c9ba74fa56b09a4449bbe172b9b1ddb016027a"
+
+[[package]]
 name = "colorchoice"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -468,6 +474,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ctutils"
+version = "0.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe3e9d21d39e6f39ff46e03d5b621424f88ee23d8a1672c6bfc9ccc7f2da4f6a"
+dependencies = [
+ "cmov",
+]
+
+[[package]]
 name = "cvt"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -510,7 +525,7 @@ version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "10d60334b3b2e7c9d91ef8150abfb6fa4c1c39ebbcf4a81c2e346aad939fee3e"
 dependencies = [
- "thiserror 2.0.20",
+ "thiserror",
 ]
 
 [[package]]
@@ -527,7 +542,6 @@ checksum = "9ed9a281f7bc9b7576e61468ba615a66a5c8cfdff42420a70aa82701a3b1e292"
 dependencies = [
  "block-buffer 0.10.4",
  "crypto-common 0.1.7",
- "subtle",
 ]
 
 [[package]]
@@ -539,6 +553,7 @@ dependencies = [
  "block-buffer 0.12.1",
  "const-oid",
  "crypto-common 0.2.2",
+ "ctutils",
 ]
 
 [[package]]
@@ -888,11 +903,11 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hmac"
-version = "0.12.1"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c49c37c09c17a53d937dfbb742eb3a961d65a994e6bcdcf37e7399d0cc8ab5e"
+checksum = "6303bc9732ae41b04cb554b844a762b4115a61bfaa81e3e83050991eeb56863f"
 dependencies = [
- "digest 0.10.7",
+ "digest 0.11.3",
 ]
 
 [[package]]
@@ -1301,7 +1316,7 @@ dependencies = [
  "quick-xml",
  "serde",
  "serde_json",
- "thiserror 2.0.20",
+ "thiserror",
  "zip",
 ]
 
@@ -1383,7 +1398,7 @@ dependencies = [
  "stringprep",
  "subsetter",
  "taffy",
- "thiserror 2.0.20",
+ "thiserror",
  "ttf-parser",
  "unicode-bidi",
  "unicode-linebreak",
@@ -1520,12 +1535,13 @@ version = "0.3.0"
 dependencies = [
  "anyhow",
  "camino",
+ "hex",
  "provenance-macros",
  "serde",
  "serde_ignored",
  "serde_json",
- "sha2 0.10.9",
- "thiserror 1.0.69",
+ "sha2 0.11.0",
+ "thiserror",
  "time",
 ]
 
@@ -1567,12 +1583,13 @@ name = "provenance-ste100"
 version = "0.3.0"
 dependencies = [
  "fs2",
+ "hex",
  "office_oxide",
  "pdf_oxide",
  "provenance-macros",
  "serde",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.0",
 ]
 
 [[package]]
@@ -1584,6 +1601,7 @@ dependencies = [
  "camino",
  "fs2",
  "fs_at",
+ "hex",
  "hmac",
  "libsqlite3-sys",
  "provenance-core",
@@ -1595,10 +1613,10 @@ dependencies = [
  "serde_ignored",
  "serde_json",
  "serde_path_to_error",
- "sha2 0.10.9",
+ "sha2 0.11.0",
  "sqlx",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror",
  "time",
  "tokio",
  "uuid",
@@ -1967,7 +1985,7 @@ dependencies = [
  "serde",
  "sha2 0.10.9",
  "smallvec",
- "thiserror 2.0.20",
+ "thiserror",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -2029,7 +2047,7 @@ dependencies = [
  "serde",
  "serde_urlencoded",
  "sqlx-core",
- "thiserror 2.0.20",
+ "thiserror",
  "tracing",
  "url",
 ]
@@ -2062,12 +2080,6 @@ dependencies = [
  "skrifa",
  "write-fonts",
 ]
-
-[[package]]
-name = "subtle"
-version = "2.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "syn"
@@ -2129,31 +2141,11 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "1.0.69"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6aaf5339b578ea85b50e080feb250a3e8ae8cfcdff9a461c9ec2904bc923f52"
-dependencies = [
- "thiserror-impl 1.0.69",
-]
-
-[[package]]
-name = "thiserror"
 version = "2.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec86235f5fcc2a73650310756d2ac5b138a5780bbbdfae3eeccec992c435ba4f"
 dependencies = [
- "thiserror-impl 2.0.20",
-]
-
-[[package]]
-name = "thiserror-impl"
-version = "1.0.69"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fee6c4efc90059e10f81e6d42c60a18f76588c3d74cb83a0b242a2b6c7504c1"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.119",
+ "thiserror-impl",
 ]
 
 [[package]]

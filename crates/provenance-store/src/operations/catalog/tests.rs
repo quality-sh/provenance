@@ -108,9 +108,9 @@ fn mcp_schema_resolves_definitions_at_the_document_root() {
         .find(|entry| entry.name == "check-statement")
         .unwrap();
     let schema = definition.mcp_input_schema();
-    let validator = jsonschema::JSONSchema::options()
+    let validator = jsonschema::options()
         .with_draft(jsonschema::Draft::Draft202012)
-        .compile(&schema)
+        .build(&schema)
         .unwrap();
     assert!(validator.is_valid(&json!({"data":{"statement":"Stop; wait."}})));
 }
@@ -123,9 +123,9 @@ fn mcp_query_schema_validates_only_the_selected_request_shape() {
         .find(|entry| entry.name == "list-rules")
         .unwrap();
     let schema: serde_json::Value = definition.mcp_input_schema();
-    let validator: jsonschema::JSONSchema = jsonschema::JSONSchema::options()
+    let validator: jsonschema::Validator = jsonschema::options()
         .with_draft(jsonschema::Draft::Draft202012)
-        .compile(&schema)
+        .build(&schema)
         .unwrap();
 
     for value in [
@@ -412,9 +412,9 @@ fn repository_info_has_a_numeric_version_and_closed_request() {
         definition.success_schema["properties"]["protocol_version"]["type"],
         "integer"
     );
-    let validator = jsonschema::JSONSchema::options()
+    let validator = jsonschema::options()
         .with_draft(jsonschema::Draft::Draft202012)
-        .compile(&definition.request_schema)
+        .build(&definition.request_schema)
         .unwrap();
     assert!(validator.is_valid(&json!({})));
     assert!(!validator.is_valid(&json!({"scope":"default"})));
@@ -482,18 +482,15 @@ fn every_discussion_message_member_schema_accepts_one_message() {
             || definition.name.ends_with("get-legacy-message")
     }) {
         let success_schema = definition.success_schema();
-        let validator = jsonschema::JSONSchema::options()
+        let validator = jsonschema::options()
             .with_draft(jsonschema::Draft::Draft202012)
-            .compile(&success_schema)
+            .build(&success_schema)
             .unwrap();
         assert!(
             validator.is_valid(&message),
             "{} rejects a single Message: {:?}",
             definition.name,
-            validator
-                .validate(&message)
-                .unwrap_err()
-                .collect::<Vec<_>>()
+            validator.iter_errors(&message).collect::<Vec<_>>()
         );
     }
 }

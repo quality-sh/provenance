@@ -267,7 +267,7 @@ async fn send(
         return false;
     }
     tokio::select! {
-        result = socket.send(Message::Text(serde_json::to_string(frame).expect("review frame serialization"))) => result.is_ok(),
+        result = socket.send(Message::Text(serde_json::to_string(frame).expect("review frame serialization").into())) => result.is_ok(),
         _ = stopped.changed() => false,
     }
 }

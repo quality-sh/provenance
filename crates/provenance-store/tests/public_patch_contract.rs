@@ -10,10 +10,10 @@ fn definition(name: &str) -> &'static Definition {
         .unwrap()
 }
 
-fn validator(name: &str) -> jsonschema::JSONSchema {
-    jsonschema::JSONSchema::options()
+fn validator(name: &str) -> jsonschema::Validator {
+    jsonschema::options()
         .with_draft(jsonschema::Draft::Draft202012)
-        .compile(definition(name).request_schema().unwrap())
+        .build(definition(name).request_schema().unwrap())
         .unwrap()
 }
 
