@@ -6,11 +6,12 @@ use provenance_core::{NodeType, SDK_PROTOCOL_VERSION};
 use provenance_porcelain::action::{validate_target, Action};
 use provenance_porcelain::get::View;
 
+mod api;
 mod discussion;
 pub mod grammar;
 use grammar::{
-    CatalogArgs, DiscussionsArgs, DiscussionsCommand, DiscussionsRoute, SearchArgs, SearchCommand,
-    TargetArgs, TargetVerb,
+    ApiArgs, ApiCommand, CatalogArgs, DiscussionsArgs, DiscussionsCommand, DiscussionsRoute,
+    SearchArgs, SearchCommand, TargetArgs, TargetVerb,
 };
 
 #[cfg(test)]
@@ -19,6 +20,7 @@ mod tests;
 /// One command selected from a declared grammar.
 pub enum Invocation {
     Builtin(Cli),
+    Api(ApiArgs),
     Catalog(catalog_cli::Invocation),
     Get(GetInvocation),
     Search(SearchArgs),
@@ -60,6 +62,11 @@ impl Invocation {
                 SearchCommand::try_parse_from(arguments).unwrap_or_else(|error| error.exit());
             debug_assert_eq!(args.command, "search");
             return Ok(Self::Search(args.args));
+        }
+        if word == "api" {
+            let command = ApiCommand::try_parse_from(arguments).unwrap_or_else(|error| error.exit());
+            debug_assert_eq!(command.command, "api");
+            return Ok(Self::Api(command.args));
         }
         if word == "discussions" {
             let target_command = catalog_cli::target_command()?;
@@ -141,6 +148,7 @@ impl Invocation {
     pub async fn dispatch(self) -> anyhow::Result<()> {
         match self {
             Self::Builtin(cli) => handlers::dispatch(cli.command, cli.quiet).await,
+            Self::Api(args) => api::dispatch(args).await,
             Self::Catalog(invocation) => catalog_cli::dispatch(invocation).await,
             Self::Get(invocation) => {
                 porcelain::dispatch_get(
