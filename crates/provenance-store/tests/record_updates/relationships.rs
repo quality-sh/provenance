@@ -106,9 +106,14 @@ async fn public_absent_remove_rejects_missing_wrong_kind_and_forbidden_targets()
     let fixture = Fixture::new();
     create_requirement(&fixture, "req_one").await;
     let before = create_source(&fixture, "source_one", &[]).await;
-    create_source(&fixture, "source_back", &["source_one"]).await;
+    create_source(&fixture, "source_middle", &["source_one"]).await;
+    create_source(&fixture, "source_back", &["source_middle"]).await;
 
-    for target in ["source_missing", "req_one", "source_back"] {
+    for (target, expected_kind) in [
+        ("source_missing", "missing_reference"),
+        ("req_one", "missing_reference"),
+        ("source_back", "invalid_update"),
+    ] {
         let error = fixture
             .call(
                 "update-source",
@@ -120,10 +125,7 @@ async fn public_absent_remove_rejects_missing_wrong_kind_and_forbidden_targets()
             )
             .await
             .unwrap_err();
-        assert!(matches!(
-            error["kind"].as_str(),
-            Some("missing_reference" | "invalid_update")
-        ));
+        assert_eq!(error["kind"], expected_kind);
         let source = fixture
             .store
             .list_sources(&fixture.scope)

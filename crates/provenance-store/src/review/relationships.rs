@@ -1,8 +1,6 @@
 use super::input::{CitesEdit, ListEdit, RequirementRelations, SaveRequirement, SingleEdit};
 use crate::{shards, state_store::StateStore};
-use provenance_core::model::relations::{declaration_of, reaches, RelationOwner};
 use provenance_core::{Requirement, ScopeId, SourceReference, StableId};
-use provenance_macros::rule;
 
 #[derive(Debug, Clone, Default)]
 pub(super) struct FinalRelations {
@@ -39,30 +37,16 @@ impl RequirementRelations {
         before: &Requirement,
     ) -> anyhow::Result<()> {
         let records = store.list_requirements(scope)?;
-        validate_list_removals(
-            store,
+        store.validate_relation_targets(
             scope,
             &records,
             &before.id,
-            "depends_on",
-            self.depends_on.as_ref(),
-        )?;
-        validate_list_removals(
-            store,
-            scope,
-            &records,
-            &before.id,
-            "supersedes",
-            self.supersedes.as_ref(),
-        )?;
-        if let Some(CitesEdit::Delta { remove, .. }) = &self.cites {
-            for target in remove {
-                validate_relation_target(
-                    store, scope, &records, &before.id, "cites", target, "cites",
-                )?;
-            }
-        }
-        Ok(())
+            &[
+                ("depends_on", removal_targets(self.depends_on.as_ref())),
+                ("supersedes", removal_targets(self.supersedes.as_ref())),
+                ("cites", citation_removals(self.cites.as_ref())),
+            ],
+        )
     }
 
     pub(super) fn expand(&self, before: &Requirement) -> FinalRelations {
@@ -124,48 +108,18 @@ pub(super) fn sorted_ids(mut ids: Vec<StableId>) -> Vec<StableId> {
     ids
 }
 
-/// Checks each named target before an edit can become a membership no-op.
-#[rule("rule_porcelain_relationship_noop_validates")]
-fn validate_relation_target<T: RelationOwner>(
-    store: &StateStore,
-    scope: &ScopeId,
-    records: &[T],
-    owner: &StableId,
-    name: &str,
-    target: &StableId,
-    named_by: &str,
-) -> anyhow::Result<()> {
-    let declaration = declaration_of(T::relations(), name)
-        .expect("every relationship edit names a declared relation");
-    store.ensure_node_exists(scope, declaration.target, target, named_by)?;
-    if declaration.target == T::OWNER && reaches(records, name, target, owner) {
-        return Err(crate::write_error::SourceFailure::wrap(
-            crate::write_error::WriteFailure::InvalidUpdate,
-            anyhow::anyhow!(
-                "{name} from {} to {} would form a cycle",
-                owner.as_str(),
-                target.as_str()
-            ),
-        ));
+pub fn removal_targets(edit: Option<&ListEdit>) -> &[StableId] {
+    match edit {
+        Some(ListEdit::Delta { remove, .. }) => remove,
+        _ => &[],
     }
-    Ok(())
 }
 
-pub fn validate_list_removals<T: RelationOwner>(
-    store: &StateStore,
-    scope: &ScopeId,
-    records: &[T],
-    owner: &StableId,
-    name: &str,
-    edit: Option<&ListEdit>,
-) -> anyhow::Result<()> {
-    let Some(edit) = edit else { return Ok(()) };
-    if let ListEdit::Delta { remove, .. } = edit {
-        for target in remove {
-            validate_relation_target(store, scope, records, owner, name, target, name)?;
-        }
+fn citation_removals(edit: Option<&CitesEdit>) -> &[StableId] {
+    match edit {
+        Some(CitesEdit::Delta { remove, .. }) => remove,
+        _ => &[],
     }
-    Ok(())
 }
 
 fn sorted_citations(mut refs: Vec<SourceReference>) -> Vec<SourceReference> {

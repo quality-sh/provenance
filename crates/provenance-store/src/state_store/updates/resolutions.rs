@@ -109,18 +109,19 @@ fn validate_relationship_removals(
         .iter()
         .find(|record| record.id == input.id)
         .ok_or_else(missing)?;
-    for (name, edit) in [
-        ("requirement_ids", input.requirement_ids.as_ref()),
-        ("supersedes", input.supersedes.as_ref()),
-    ] {
-        review::relationships::validate_list_removals(
-            store,
-            &input.scope_id,
-            &records,
-            &input.id,
-            name,
-            edit,
-        )?;
-    }
-    Ok(())
+    store.validate_relation_targets(
+        &input.scope_id,
+        &records,
+        &input.id,
+        &[
+            (
+                "requirement_ids",
+                review::relationships::removal_targets(input.requirement_ids.as_ref()),
+            ),
+            (
+                "supersedes",
+                review::relationships::removal_targets(input.supersedes.as_ref()),
+            ),
+        ],
+    )
 }

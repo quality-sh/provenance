@@ -195,9 +195,13 @@ fn a_valid_absent_clear_keeps_the_native_record_unchanged() {
 #[provenance_macros::verifies("rule_porcelain_relationship_noop_validates", examples)]
 fn an_absent_native_clear_still_validates_the_named_target() {
     let (_dir, store, scope) = seeded_source_requirement_store();
+    requirement(&store, &scope, "req_middle");
     requirement(&store, &scope, "req_back");
     store
-        .add_requirement_depends_on(&scope, &sid("req_back"), sid("req_overtime"))
+        .add_requirement_depends_on(&scope, &sid("req_middle"), sid("req_overtime"))
+        .unwrap();
+    store
+        .add_requirement_depends_on(&scope, &sid("req_back"), sid("req_middle"))
         .unwrap();
     let before = store
         .list_requirements(&scope)
@@ -206,10 +210,18 @@ fn an_absent_native_clear_still_validates_the_named_target() {
         .find(|record| record.id == sid("req_overtime"))
         .unwrap();
 
-    for target in ["req_missing", "source_schads", "req_back"] {
-        assert!(store
+    for (target, expected) in [
+        ("req_missing", crate::write_error::WriteFailure::MissingReference),
+        ("source_schads", crate::write_error::WriteFailure::MissingReference),
+        ("req_back", crate::write_error::WriteFailure::InvalidUpdate),
+    ] {
+        let error = store
             .clear_requirement_depends_on(&scope, &sid("req_overtime"), &sid(target))
-            .is_err());
+            .unwrap_err();
+        assert_eq!(
+            std::mem::discriminant(&crate::write_error::WriteError(error).safe()),
+            std::mem::discriminant(&expected)
+        );
         let after = store
             .list_requirements(&scope)
             .unwrap()
@@ -218,6 +230,14 @@ fn an_absent_native_clear_still_validates_the_named_target() {
             .unwrap();
         assert_eq!(after, before);
     }
+
+    let error = store
+        .clear_requirement_depends_on(&scope, &sid("req_overtime"), &sid("req_back"))
+        .unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "depends_on forms a cycle: req_back -> req_middle -> req_overtime -> req_back"
+    );
 
     for target in ["source_missing", "req_back"] {
         assert!(store
