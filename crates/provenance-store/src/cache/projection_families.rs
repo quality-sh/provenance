@@ -223,3 +223,27 @@ fn sorted_bytes<T: serde::Serialize>(
     let count = records.len() as u64;
     Ok((crate::canonical_digest::canonical_bytes(&records)?, count))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::ProjectionFamily;
+
+    #[test]
+    fn family_metadata_keeps_stable_storage_and_export_names_together() {
+        assert_eq!(ProjectionFamily::Sources.family_name(), "sources");
+        assert_eq!(
+            ProjectionFamily::Sources.shard_suffix(),
+            "sources/source.jsonl"
+        );
+        assert_eq!(ProjectionFamily::Sources.graph_field(), Some("sources"));
+        assert_eq!(
+            ProjectionFamily::SynthesisPackets.family_name(),
+            "synthesis_packets"
+        );
+        assert_eq!(
+            ProjectionFamily::SynthesisPackets.shard_suffix(),
+            "ideation/synthesis_packets.jsonl"
+        );
+        assert_eq!(ProjectionFamily::SynthesisPackets.graph_field(), None);
+    }
+}
