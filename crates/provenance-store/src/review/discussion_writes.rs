@@ -3,7 +3,7 @@ use crate::{
     canonical_digest,
     review::publication::with_record_state,
     shards,
-    state_store::{PostMessageInput, StateStore},
+    state_store::{PostMessageInput, RecordStamp, StateStore},
 };
 use provenance_core::{
     threads::{Discussion, DiscussionStatus},
@@ -118,8 +118,8 @@ impl StateStore {
                 }
             }
         }
-        with_record_state(&self.layout, |layout| {
-            let staged = Self::new(layout.clone());
+        with_record_state(self, RecordStamp::ResolveFromRepository, |staged| {
+            let layout = &staged.layout;
             guard::with_writer(&shards::threads_path(layout, &input.scope_id), "*", || {
                 guard::with_writer(&shards::messages_path(layout, &input.scope_id), "*", || {
                     staged.commit_discussion(input, head, None)

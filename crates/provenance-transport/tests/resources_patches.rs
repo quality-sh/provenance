@@ -13,7 +13,8 @@ use support::resource_http::{call, host};
 use tower::ServiceExt as _;
 
 fn source_etag(repo: &Repository) -> String {
-    provenance_store::state_store::StateStore::new(repo.layout.clone())
+    repo.open()
+        .store()
         .record_edit_state(
             &provenance_core::ScopeId::new("default").unwrap(),
             provenance_core::NodeType::Source,

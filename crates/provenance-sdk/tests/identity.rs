@@ -10,7 +10,7 @@ use provenance_sdk::operations::catalog::{
 use provenance_sdk::{operations, requirement, rule, spec, RequirementBuilder};
 use provenance_store::layout::ProvenanceLayout;
 use provenance_store::repository::Repository;
-use provenance_store::state_store::{CreateRequirementInput, StateStore, TypedResourceKind};
+use provenance_store::state_store::{CreateRequirementInput, TypedResourceKind};
 
 fn repository() -> (tempfile::TempDir, camino::Utf8PathBuf) {
     let dir = tempfile::tempdir().unwrap();
@@ -120,8 +120,8 @@ fn mixed_case_keys_keep_distinct_stable_identities() {
 async fn a_kernel_authored_requirement_adopts_one_exact_unowned_identity() {
     let (_dir, root) = repository();
     let scope = ScopeId::new("default").unwrap();
-    let store = StateStore::new(ProvenanceLayout::new(root.clone()));
     let repository = Repository::open(&root, "default").unwrap();
+    let store = repository.store();
     let context = PreparedContext::for_scope(PreparedScope {
         repository: repository.clone(),
         requested_target: "selected".into(),

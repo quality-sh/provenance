@@ -9,7 +9,7 @@ use crate::{
         guard, new_id, owner_matches,
     },
     shards,
-    state_store::{CreateProposalCardInput, StateStore},
+    state_store::{CreateProposalCardInput, RecordStamp, StateStore},
     write_error::SourceFailure,
 };
 use provenance_core::{
@@ -38,10 +38,12 @@ impl StateStore {
                 &input.record_id,
             )?;
             owner_matches(&record, input.declared_by.as_deref())?;
-            with_record_state(&self.layout, |layout| {
-                guard::with_writer(&shards::proposal_cards_path(layout, &scope), "*", || {
-                    Self::new(layout.clone()).commit_submission(input)
-                })
+            with_record_state(self, RecordStamp::ResolveFromRepository, |staged| {
+                guard::with_writer(
+                    &shards::proposal_cards_path(&staged.layout, &scope),
+                    "*",
+                    || staged.commit_submission(input),
+                )
             })
         })
     }

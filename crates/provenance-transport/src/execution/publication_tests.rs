@@ -1,10 +1,7 @@
 use super::*;
 use crate::fixture::records::Repository;
 use provenance_core::ScopeId;
-use provenance_store::{
-    operations::catalog::{self, Apply, PreparedContext, PreparedScope},
-    state_store::StateStore,
-};
+use provenance_store::operations::catalog::{self, Apply, PreparedContext, PreparedScope};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::oneshot;
 
@@ -29,7 +26,8 @@ fn context(repo: &Repository) -> PreparedContext {
 }
 
 fn requirements(repo: &Repository) -> usize {
-    StateStore::new(repo.layout.clone())
+    repo.open()
+        .store()
         .list_requirements(&ScopeId::new("default").unwrap())
         .unwrap()
         .len()

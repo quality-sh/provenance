@@ -23,7 +23,7 @@ fn modern_lifecycle_coexists_with_frozen_shipped_records() {
         .unwrap()
         .join(".provenance/state");
     copy_tree(&shipped, &layout.state_dir());
-    let store = StateStore::new(layout);
+    let store = crate::test_support::store(&layout);
     let existing = store.manifest().unwrap();
     let mut actor_ids = existing.disposition_actor_ids.clone();
     actor_ids.push("reviewer".into());
