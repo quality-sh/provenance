@@ -1,4 +1,3 @@
-#![cfg(feature = "test-fixture")]
 mod porcelain_authoring_support;
 use porcelain_authoring_support::{initialized_repo, json_output};
 use provenance_macros::verifies;
