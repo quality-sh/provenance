@@ -328,6 +328,10 @@ addressed_decision!(
         declared_by: request.declared_by,
     }
 );
+
+#[cfg(test)]
+#[path = "v2_review_tests.rs"]
+mod v2_review_tests;
 addressed_decision!(
     WithdrawRequirementReviewV2,
     "withdraw-requirement-review-v2",
