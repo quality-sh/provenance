@@ -1,5 +1,6 @@
 mod discussion_support;
-use discussion_support::{fixture, scope};
+use discussion_support::{fixture, id, scope};
+use provenance_core::protocol::failure::OperationError;
 use provenance_core::threads::DiscussionStatus;
 use provenance_store::{
     layout::ProvenanceLayout,
@@ -258,4 +259,34 @@ async fn catalog_operation_uses_the_target_write_path() {
         .unwrap();
     assert_eq!(receipt.version, 1);
     assert_eq!(store.list_messages(&scope()).unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn catalog_scope_mismatch_is_safe_and_does_not_write() {
+    let (temp, store) = fixture();
+    let layout = ProvenanceLayout::new(camino::Utf8Path::from_path(temp.path()).unwrap());
+    let journal = layout.scopes_dir().join("default/review/journal");
+    let receipt_count = std::fs::read_dir(&journal).unwrap().count();
+    let requirement = store.requirement_edit_state(&scope(), &id()).unwrap();
+    let context = PreparedContext::for_scope(PreparedScope {
+        root: camino::Utf8PathBuf::from_path_buf(temp.path().to_path_buf()).unwrap(),
+        scope: scope(),
+        requested_target: "selected".into(),
+    });
+    let mut mismatched = start("wrong_scope");
+    mismatched.scope_id = provenance_core::ScopeId::new("other").unwrap();
+
+    let error = invoke_typed::<WriteTargetDiscussionV2>(context, mismatched)
+        .await
+        .unwrap_err();
+    let OperationError::Handler(error) = error else {
+        panic!("expected a write refusal");
+    };
+    assert_eq!(serde_json::to_value(&error).unwrap(), json!({"kind":"scope_mismatch"}));
+    assert_eq!(error.status(), 400);
+    assert_eq!(std::fs::read_dir(journal).unwrap().count(), receipt_count);
+    assert!(store.list_threads(&scope()).unwrap().is_empty());
+    assert!(store.list_messages(&scope()).unwrap().is_empty());
+    assert_eq!(store.requirement_edit_state(&scope(), &id()).unwrap().etag, requirement.etag);
+    assert!(!layout.scopes_dir().join("other").exists());
 }
