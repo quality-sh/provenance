@@ -74,6 +74,7 @@ mod ideation_targets;
 mod implementation_bindings;
 mod legacy_coexistence;
 mod manifest;
+mod native_review_writers;
 mod proposal_surfaces;
 mod proposals;
 mod read_budget;
