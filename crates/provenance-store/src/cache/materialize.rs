@@ -127,6 +127,7 @@ async fn rebuild_rows(
 async fn clear_cache(tx: &mut Transaction<'_, Sqlite>) -> anyhow::Result<()> {
     for table in [
         "relations",
+        "record_identities",
         "projection_family_digests",
         "projection_unit_digests",
     ] {
