@@ -1,7 +1,7 @@
 use super::RepositoryFileRefusal as Refusal;
 use std::fs::{File, Permissions};
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct FileIdentity {
     pub(super) volume: u64,
     pub(super) file: u64,

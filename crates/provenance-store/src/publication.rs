@@ -19,6 +19,8 @@ pub use recovery::{
     PublicationPhase,
 };
 pub use staged::with_staged_state;
+#[cfg(any(unix, windows))]
+pub use source_edit::{with_staged_state_and_source_edit, SourceEditRecoveryFailure};
 use recovery::{
     canonical_transactions_dir, create_real_directory, validate_missing_transaction_dir,
     validated_transaction_dir,
@@ -134,3 +136,5 @@ impl crate::state_store::StateStore {
 mod containment_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(all(test, any(unix, windows)))]
+mod source_edit_recovery_tests;

@@ -234,6 +234,14 @@ impl HeldRepositoryFile {
 }
 
 impl PreparedRepositoryFile {
+    pub(crate) fn recovery_identity(&self) -> &FileIdentity {
+        &self.identity
+    }
+
+    pub(crate) fn recovery_leaf(&self) -> &str {
+        &self.leaf
+    }
+
     fn matches_entry(&mut self) -> Result<bool, Refusal> {
         let entry = match platform::regular(&self.parent, &self.leaf).map_err(Refusal::from) {
             Ok(file) => file,
