@@ -11,7 +11,7 @@ use RelationFlow::{None, TargetDownstream, TargetUpstream};
 const OWNERS: [NodeType; 7] = [Source, Requirement, Resolution, Rule, Topic, Question, Boundary];
 
 /// The section C table: (owner, name, target, list, required, flow).
-const TABLE: [(NodeType, &str, NodeType, bool, bool, RelationFlow); 18] = [
+const TABLE: [(NodeType, &str, NodeType, bool, bool, RelationFlow); 19] = [
     (Source, "supersedes", Source, true, false, TargetDownstream),
     (Requirement, "domain_id", Domain, false, false, None),
     (Requirement, "cites", Source, true, false, TargetUpstream),
@@ -26,6 +26,7 @@ const TABLE: [(NodeType, &str, NodeType, bool, bool, RelationFlow); 18] = [
     (Topic, "requirement_id", Requirement, false, true, None),
     (Question, "topic_id", Topic, false, true, None),
     (Question, "requirement_id", Requirement, false, true, None),
+    (Question, "depends_on", Question, true, false, None),
     (Question, "resolution_id", Resolution, false, false, None),
     (Question, "contradicts", Requirement, false, false, None),
     (Boundary, "requirement_id", Requirement, false, true, None),
@@ -62,12 +63,12 @@ fn every_owner_kind_appears_once_in_the_declared_tables() {
 /// `links` on topics and questions carries a per-entry target kind, so it is
 /// walked by hand and declared in no table: two declarations, one name.
 #[test]
-fn the_vocabulary_is_thirteen_names_over_twenty_declarations() {
+fn the_vocabulary_is_thirteen_names_over_twenty_one_declarations() {
     let mut names: Vec<&str> = TABLE.iter().map(|row| row.1).collect();
     names.push("links");
     names.sort_unstable();
     names.dedup();
-    assert_eq!(TABLE.len() + 2, 20);
+    assert_eq!(TABLE.len() + 2, 21);
     assert_eq!(
         names,
         [
