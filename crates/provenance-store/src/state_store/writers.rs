@@ -28,6 +28,11 @@ impl StateStore {
                 origin_message,
             } = input;
             self.ensure_canonical_id_available(&scope_id, &id)?;
+            self.validate_requirement_origin(
+                &scope_id,
+                origin_thread.as_ref(),
+                origin_message.as_ref(),
+            )?;
             let commit_pin = validate_optional_commit_pin(commit_pin)
                 .map_err(|error| SourceFailure::wrap(WriteFailure::InvalidCommitPin, error))?;
             for older in &supersedes {
