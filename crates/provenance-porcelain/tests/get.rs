@@ -147,8 +147,8 @@ async fn children_select_depth_and_returned_kinds() {
         impact_record: Arc::new(Mutex::new(None)),
     });
     let mut input = GetInput::new("req_root", View::Children);
-    input.max_depth = Some(2);
-    input.returned_kinds = vec![provenance_core::NodeType::Rule];
+    input.depth = Some(2);
+    input.kind = vec![provenance_core::NodeType::Rule];
 
     let outcome = porcelain.get(input).await.unwrap();
 
@@ -183,8 +183,8 @@ async fn returned_kind_filter_does_not_limit_intermediate_traversal() {
         impact_record: Arc::new(Mutex::new(None)),
     });
     let mut input = GetInput::new("req_root", View::Children);
-    input.max_depth = Some(2);
-    input.returned_kinds = vec![provenance_core::NodeType::Rule];
+    input.depth = Some(2);
+    input.kind = vec![provenance_core::NodeType::Rule];
 
     let outcome = porcelain.get(input).await.unwrap();
 
@@ -262,14 +262,14 @@ async fn trace_action_is_the_trace_view() {
     };
     let (action_port, view_port) = (port(), port());
     let mut view_input = GetInput::new("rule_alpha", View::Trace);
-    view_input.max_depth = Some(3);
-    view_input.returned_kinds = vec![provenance_core::NodeType::Requirement];
+    view_input.depth = Some(3);
+    view_input.kind = vec![provenance_core::NodeType::Requirement];
     view_input.limit = Some(7);
     let action = Porcelain::new(action_port.clone())
         .trace(TraceInput {
             target: "rule_alpha".into(),
-            max_depth: Some(3),
-            returned_kinds: vec![provenance_core::NodeType::Requirement],
+            depth: Some(3),
+            kind: vec![provenance_core::NodeType::Requirement],
             limit: Some(7),
         })
         .await
@@ -299,9 +299,9 @@ async fn trace_action_is_the_trace_view() {
 #[verifies("rule_porcelain_read_rejects_bad_options", examples)]
 async fn read_rejects_options_that_its_view_does_not_support() {
     let mut bare = GetInput::new("req_alpha", View::Record);
-    bare.max_depth = Some(2);
+    bare.depth = Some(2);
     let mut impact = GetInput::new("req_alpha", View::Impact);
-    impact.returned_kinds = vec![provenance_core::NodeType::Rule];
+    impact.kind = vec![provenance_core::NodeType::Rule];
 
     assert!(matches!(
         service().get(bare).await,

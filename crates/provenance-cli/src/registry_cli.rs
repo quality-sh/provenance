@@ -44,8 +44,15 @@ fn arg(field: &Field, positional: bool) -> Arg {
             .value_parser(value_parser(field))
             .value_name(field.name.to_uppercase());
     }
-    if let Some(doc) = field.doc {
-        arg = arg.help(doc);
+    match (field.doc, field.value) {
+        // The CLI reads an object field from a file or from standard input.
+        (Some(doc), FieldValue::Object) => {
+            arg = arg.help(format!(
+                "{doc} Give a JSON file, or \"-\" for standard input."
+            ));
+        }
+        (Some(doc), _) => arg = arg.help(doc),
+        (None, _) => {}
     }
     if let Some(default) = field.default {
         arg = arg.default_value(default);
@@ -53,6 +60,43 @@ fn arg(field: &Field, positional: bool) -> Arg {
     arg.allow_hyphen_values(field.leading_hyphen)
         .hide(field.internal)
         .required(field.required)
+}
+
+/// The CLI options of a bound command: each repository option whose name is not a
+/// field of the command.
+fn bound_options(declaration: &Declaration) -> Vec<Arg> {
+    if !declaration.bound {
+        return Vec::new();
+    }
+    GLOBAL_OPTIONS
+        .iter()
+        .filter(|option| {
+            !declaration
+                .input
+                .fields()
+                .iter()
+                .any(|field| field.name == option.name)
+        })
+        .map(|option| arg(option, false))
+        .collect()
+}
+
+/// The repository and output options that a bound word command reads.
+pub struct BoundContext {
+    pub repo: String,
+    /// The caller asked for the JSON answer.
+    pub json: bool,
+}
+
+/// Reads the repository and output options of a bound word command.
+pub fn bound_context(matches: &ArgMatches) -> BoundContext {
+    BoundContext {
+        repo: matches
+            .get_one::<String>("repo")
+            .cloned()
+            .unwrap_or_else(|| ".".to_owned()),
+        json: matches.get_one::<String>("format").is_some(),
+    }
 }
 
 /// The command with the shared repository options that the porcelain parsers take.
@@ -75,6 +119,7 @@ fn value_parser(field: &Field) -> ValueParser {
         FieldValue::ApiMethod => ValueParser::new(parse_api_method),
         FieldValue::CatalogLimit => ValueParser::new(parse_catalog_limit),
         FieldValue::Port => clap::value_parser!(u16).into(),
+        FieldValue::Pairs(_) | FieldValue::Object => ValueParser::string(),
     }
 }
 
@@ -158,6 +203,7 @@ pub fn add_subcommand(root: Command, declaration: Declaration) -> Command {
     let (word, groups) = words.split_last().expect("a word command has a word");
     let mut leaf = Command::new(*word)
         .hide(declaration.internal)
+        .args(bound_options(&declaration))
         .args(args(&declaration));
     if !declaration.description.is_empty() {
         leaf = leaf.about(declaration.description);
@@ -244,6 +290,11 @@ pub fn input<T: serde::de::DeserializeOwned>(
                 matches.get_one::<usize>(id).map(|value| (*value).into())
             }
             (FieldValue::Port, false) => matches.get_one::<u16>(id).map(|value| (*value).into()),
+            (FieldValue::Pairs(separator), _) => Some(pairs(matches, id, separator)?),
+            (FieldValue::Object, false) => matches
+                .get_one::<String>(id)
+                .map(|source| json_object(source))
+                .transpose()?,
             _ => matches
                 .get_raw(id)
                 .and_then(|mut values| values.next())
@@ -255,6 +306,33 @@ pub fn input<T: serde::de::DeserializeOwned>(
     }
     serde_json::from_value(Value::Object(object))
         .map_err(|error| anyhow::anyhow!("unsupported {} options: {error}", declaration.name))
+}
+
+/// The `NAME<separator>VALUE` values of a pairs field, as one JSON object.
+fn pairs(matches: &ArgMatches, id: &str, separator: char) -> anyhow::Result<Value> {
+    let mut object = Map::new();
+    for entry in matches.get_many::<String>(id).into_iter().flatten() {
+        let Some((name, value)) = entry.split_once(separator) else {
+            anyhow::bail!("--{} uses NAME{separator}VALUE", id.replace('_', "-"));
+        };
+        object.insert(
+            name.trim().to_owned(),
+            Value::String(value.trim_start().to_owned()),
+        );
+    }
+    Ok(Value::Object(object))
+}
+
+/// The JSON object of an object field: a file, or standard input with `-`.
+fn json_object(source: &str) -> anyhow::Result<Value> {
+    let text = if source == "-" {
+        std::io::read_to_string(std::io::stdin())?
+    } else {
+        std::fs::read_to_string(source)?
+    };
+    let value: Value = serde_json::from_str(&text)?;
+    anyhow::ensure!(value.is_object(), "{source} needs one JSON object");
+    Ok(value)
 }
 
 /// Register flags from the same typed contracts that declare the MCP inputs.

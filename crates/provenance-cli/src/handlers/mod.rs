@@ -3,11 +3,10 @@ use crate::output::{self, JsonFormat, OutputFormat};
 use camino::Utf8PathBuf;
 use provenance_cli::servers::{DocsServeInput, McpInput, ReviewInput, Server};
 use provenance_porcelain::registry::{
-    self, CargoInitInput, CheckArguments, DictionaryImportInput, DictionaryStatusInput,
-    ExportInput, GraphCommand, ImportInput, InitInput, MaterializeInput, MergeJsonlInput,
-    ReferenceInput, ReferenceIssueInput, ReportBuildInput, ReportRenderInput, RepositoryCommand,
-    SchemaShowInput, SkillsInstallInput, SkillsListInput, SkillsShowInput, SwarmBacktraceLandInput,
-    ValidateInput, WorkspaceCommand,
+    self, CargoInitInput, DictionaryImportInput, DictionaryStatusInput, ExportInput, GraphCommand,
+    ImportInput, InitInput, MaterializeInput, MergeJsonlInput, ReferenceInput, ReferenceIssueInput,
+    ReportBuildInput, ReportRenderInput, RepositoryCommand, SchemaShowInput, SkillsInstallInput,
+    SkillsListInput, SkillsShowInput, SwarmBacktraceLandInput, ValidateInput, WorkspaceCommand,
 };
 use provenance_store::cache;
 use provenance_transport::repository::RepoContext;
@@ -36,8 +35,11 @@ pub(super) use dogfood::{handle as dogfood_command, DogfoodInput};
 
 /// Runs the check command with the flags that its declaration names.
 #[allow(clippy::redundant_pub_crate)]
-pub(super) async fn check_command(input: CheckArguments) -> anyhow::Result<()> {
-    provenance_cli::porcelain::dispatch_check(input).await
+pub(super) async fn check_command(
+    input: provenance_porcelain::check::CheckInput,
+    context: crate::registry_cli::BoundContext,
+) -> anyhow::Result<()> {
+    provenance_cli::porcelain::dispatch_check(&context.repo, context.json, input).await
 }
 
 /// Prints the shared domain guidance.

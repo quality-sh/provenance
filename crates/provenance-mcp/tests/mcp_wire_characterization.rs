@@ -239,7 +239,7 @@ async fn tool_list_keeps_its_names_order_and_schemas() {
 
 #[tokio::test]
 async fn tool_call_result_keeps_its_shape() {
-    let call = json!({"name":"check","arguments":{"categories":["graph"]}});
+    let call = json!({"name":"check","arguments":{"graph": true}});
     let mut expected = json!({
         "content":[{"type":"text","text":"graph: passed"}],
         "isError":false,

@@ -8,6 +8,7 @@
 mod arguments;
 #[cfg(feature = "client")]
 mod client;
+mod derived;
 pub mod exposed;
 mod io;
 mod json_schema;

@@ -100,7 +100,7 @@ async fn mcp_check_takes_a_statement_and_refuses_the_cli_only_options() {
         .unwrap();
     let with_graph = client
         .call_tool(check_call(
-            json!({"statement": "The pump stops.", "categories": ["graph"]}),
+            json!({"statement": "The pump stops.", "graph": true}),
         ))
         .await
         .unwrap();

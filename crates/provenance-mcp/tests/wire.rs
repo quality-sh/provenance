@@ -26,7 +26,7 @@ async fn mcp_projects_the_same_resource_operation() {
                 json!({
                     "path":"statement-checks",
                     "method":"post",
-                    "body":{"statement":"The system stores records."}
+                    "input":{"statement":"The system stores records."}
                 })
                 .as_object()
                 .unwrap()
