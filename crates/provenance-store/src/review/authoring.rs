@@ -26,9 +26,10 @@ impl StateStore {
         mut replacement: Vec<T>,
     ) -> anyhow::Result<()> {
         let relative = path.strip_prefix(self.layout.root())?.to_owned();
+        let stamp = self.current_record_stamp()?;
         self.with_repository_publication(|| {
             with_staged_state(&self.layout, false, |layout| {
-                let staged = Self::new(layout.clone());
+                let staged = Self::staged(layout.clone(), stamp.clone());
                 let staged_path = layout.root().join(&relative);
                 guard::with_writer(&staged_path, "*", || {
                     for record in &mut replacement {
@@ -74,9 +75,10 @@ impl StateStore {
         mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<T>,
     ) -> anyhow::Result<T> {
         let relative = path.strip_prefix(self.layout.root())?.to_owned();
+        let stamp = self.current_record_stamp()?;
         self.with_repository_publication(|| {
             with_staged_state(&self.layout, false, |layout| {
-                let staged = Self::new(layout.clone());
+                let staged = Self::staged(layout.clone(), stamp.clone());
                 let staged_path = layout.root().join(&relative);
                 guard::with_writer(&staged_path, "*", || {
                     let (before, after) =
@@ -146,9 +148,10 @@ impl StateStore {
         write: impl FnOnce(&Self) -> anyhow::Result<T>,
     ) -> anyhow::Result<T> {
         let relative = path.strip_prefix(self.layout.root())?.to_owned();
+        let stamp = self.current_record_stamp()?;
         self.with_repository_publication(|| {
             with_staged_state(&self.layout, false, |layout| {
-                let staged = Self::new(layout.clone());
+                let staged = Self::staged(layout.clone(), stamp.clone());
                 let staged_path = layout.root().join(&relative);
                 guard::with_writer(&staged_path, id.as_str(), || {
                     write(&staged)?;
