@@ -32,6 +32,7 @@ macro_rules! define_scope_shards {
                 shards: &ScopeShards<'_>,
             ) -> anyhow::Result<()> {
                 validate_threads(shards.threads)?;
+                ensure_import_budgets(shards)?;
                 self.ensure_import_ids_unique(
                     scope,
                     shards.sources.iter().map(|record| &record.id)
@@ -83,6 +84,30 @@ define_scope_shards! {
     proposal_cards: ProposalCard => ProposalCards,
     assertion_records: AssertionRecord => AssertionRecords,
     dispositions: DispositionRecord => Dispositions,
+}
+
+/// Refuses the import when any resource record exceeds the read budget the
+/// supported resource reads enforce. Implementation bindings stay outside
+/// this check: they are a scanner index, not a served resource.
+fn ensure_import_budgets(shards: &ScopeShards<'_>) -> anyhow::Result<()> {
+    use super::read_budget::ensure_slice_within_read_budget as budget;
+    budget(shards.sources)?;
+    budget(shards.domains)?;
+    budget(shards.requirements)?;
+    budget(shards.boundaries)?;
+    budget(shards.topics)?;
+    budget(shards.questions)?;
+    budget(shards.resolutions)?;
+    budget(shards.rules)?;
+    budget(shards.verification_bindings)?;
+    budget(shards.threads)?;
+    budget(shards.messages)?;
+    budget(shards.contributions)?;
+    budget(shards.synthesis_packets)?;
+    budget(shards.proposal_cards)?;
+    budget(shards.assertion_records)?;
+    budget(shards.dispositions)?;
+    Ok(())
 }
 
 fn validate_threads(threads: &[Thread]) -> anyhow::Result<()> {

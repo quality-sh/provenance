@@ -6,9 +6,12 @@ use provenance_core::{
 use serde::{de::DeserializeOwned, Serialize};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
+use super::read_budget::{ensure_slice_within_read_budget, ensure_within_read_budget, ReadBudget};
 use super::StateStore;
 
-pub trait GraphRecord: RelationOwner + Clone + PartialEq + DeserializeOwned + Serialize {
+pub trait GraphRecord:
+    RelationOwner + Clone + PartialEq + DeserializeOwned + Serialize + ReadBudget
+{
     fn validate_write(&self, _previous: Option<&Self>) -> anyhow::Result<()> {
         Ok(())
     }
@@ -102,11 +105,13 @@ impl StateStore {
             let before = records.clone();
             let result = mutate(records)?;
             self.stamp_records(&before, records)?;
-            records
+            let stamped = records
                 .iter()
                 .find(|r| r.id() == result.id())
                 .cloned()
-                .ok_or_else(|| anyhow::anyhow!("record mutation returned a missing record"))
+                .ok_or_else(|| anyhow::anyhow!("record mutation returned a missing record"))?;
+            ensure_within_read_budget(&stamped)?;
+            Ok(stamped)
         })
     }
 
@@ -117,6 +122,7 @@ impl StateStore {
     ) -> anyhow::Result<()> {
         self.mutate_jsonl_records(path, |records| {
             self.stamp_records(records, &mut replacement)?;
+            ensure_slice_within_read_budget(&replacement)?;
             *records = replacement;
             Ok(())
         })
