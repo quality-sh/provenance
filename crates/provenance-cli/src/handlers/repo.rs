@@ -56,10 +56,6 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
     let manifest_before = FileSnapshot::read(layout.manifest_path().as_std_path())?;
     let manifest_exists = manifest_before.bytes().is_some();
     anyhow::ensure!(
-        manifest_exists || scope.is_some(),
-        "--scope is required when initializing a new repository"
-    );
-    anyhow::ensure!(
         disposition_actor_ids.iter().all(|id| !id.trim().is_empty()),
         "disposition actor IDs must not be empty"
     );
@@ -70,9 +66,7 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
                 .ok_or_else(|| anyhow::anyhow!("manifest disappeared during init"))?,
         )?
     } else {
-        let scope = scope.as_deref().ok_or_else(|| {
-            anyhow::anyhow!("--scope is required when initializing a new repository")
-        })?;
+        let scope = scope.as_deref().unwrap_or("default");
         Manifest::default_with_scope(
             ScopeId::new(scope)?,
             RepoPathPrefix::new(
