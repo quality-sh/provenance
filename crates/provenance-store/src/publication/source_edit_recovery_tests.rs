@@ -155,3 +155,39 @@ fn file_install_refusal_rolls_state_back_without_overwriting_external_bytes() {
     );
     assert!(!layout.source_edit_marker_path().exists());
 }
+
+#[test]
+fn final_marker_clears_when_cleanup_lost_its_result() {
+    let temp = fixture();
+    let root = Utf8Path::from_path(temp.path()).unwrap();
+    let status = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "publication::source_edit_recovery_tests::crash_child",
+            "--nocapture",
+        ])
+        .env("PROVENANCE_SOURCE_EDIT_CRASH_ROOT", root.as_str())
+        .env(
+            "PROVENANCE_SOURCE_EDIT_CRASH_PHASE",
+            "source_edit_file_installed",
+        )
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .unwrap();
+    assert_eq!(status.code(), Some(86));
+    let layout = ProvenanceLayout::new(root);
+    let marker: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(layout.source_edit_marker_path()).unwrap()).unwrap();
+    let transaction = Utf8Path::new(marker["transaction_dir"].as_str().unwrap());
+    std::fs::remove_dir_all(transaction).unwrap();
+
+    with_repository_publication(&layout, || Ok(())).unwrap();
+
+    assert_eq!(std::fs::read(root.join("source.txt")).unwrap(), AFTER);
+    assert_eq!(
+        std::fs::read(layout.state_dir().join("value")).unwrap(),
+        AFTER
+    );
+    assert!(!layout.source_edit_marker_path().exists());
+}
