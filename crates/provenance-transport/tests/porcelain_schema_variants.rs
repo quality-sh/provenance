@@ -57,6 +57,7 @@ fn assert_tagged_related(schema: &JSONSchema, nodes: &[GraphNode]) -> Value {
     let outcome = GetOutcome {
         record: nodes[0].clone(),
         result: ViewResult::Children(Traversal {
+            shaping: None,
             records: nodes
                 .iter()
                 .cloned()

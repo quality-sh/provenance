@@ -106,6 +106,21 @@ impl StateStore {
                 self.ensure_node_exists(&input.scope_id, NodeType::Requirement, id, "contradicts")?;
             }
             let links = self.checked_update_links(&input.scope_id, input.links)?;
+            let depends_on = if let Some(dependencies) = input.depends_on {
+                let current = self
+                    .list_questions(&input.scope_id)?
+                    .into_iter()
+                    .find(|question| question.id == input.id)
+                    .ok_or_else(|| invalid("question does not exist"))?;
+                Some(self.checked_question_dependencies(
+                    &input.scope_id,
+                    &input.id,
+                    &current.topic_id,
+                    dependencies,
+                )?)
+            } else {
+                None
+            };
             self.mutate_question_with_etag(
                 &input.scope_id,
                 &input.id,
@@ -116,6 +131,7 @@ impl StateStore {
                             "use questions answer --answer to answer a question",
                         ));
                     }
+                    set(&mut question.depends_on, depends_on);
                     set(&mut question.question, input.question);
                     set(&mut question.resolution_method, input.resolution_method);
                     set(&mut question.status, input.status);
