@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 const LARGE_FIELD_BYTES: usize = 60_000;
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 struct Payload {
     payload: String,
 }
