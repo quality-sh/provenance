@@ -61,6 +61,23 @@ fn route_is_one_deterministic_grammar_decision() {
         CommandFamily::Get
     );
     assert_eq!(
+        route(&["search", "--text", "needle"]),
+        CommandFamily::Search
+    );
+    assert_eq!(
+        route(&["--repo", "repo", "search", "--kind", "rule"]),
+        CommandFamily::Search
+    );
+    assert_eq!(route(&["search", "--help"]), CommandFamily::Search);
+    assert_eq!(
+        route(&["search", "get", "--repo", "repo"]),
+        CommandFamily::Get
+    );
+    assert_eq!(
+        route(&["search", "update", "--name", "Changed"]),
+        CommandFamily::Target
+    );
+    assert_eq!(
         route(&["--repo", "repo", "unknown_id", "--format", "json"]),
         CommandFamily::Get
     );
