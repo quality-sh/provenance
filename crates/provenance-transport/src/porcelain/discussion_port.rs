@@ -221,3 +221,31 @@ pub(super) fn is_available(host: &crate::StatementHost, action: DiscussionAction
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use provenance_store::operations::catalog::DiscussionWriteKind;
+
+    #[test]
+    fn write_grants_follow_the_registered_action_after_a_route_rename() {
+        let mut definitions = catalog::definitions().to_vec();
+        let start = definitions
+            .iter_mut()
+            .find(|definition| definition.name == "requirements-create-discussion")
+            .unwrap();
+        start.name = "renamed-requirement-start";
+        let kinds = write_parent_kinds(&definitions, DiscussionWriteKind::Start, |name| {
+            name == "renamed-requirement-start"
+        });
+        assert_eq!(kinds, vec![NodeType::Requirement]);
+        let reply = write_parent_kinds(&definitions, DiscussionWriteKind::Reply, |name| {
+            name == "requirements-create-discussion-message"
+        });
+        assert_eq!(reply, vec![NodeType::Requirement]);
+        let denied = write_parent_kinds(&definitions, DiscussionWriteKind::Start, |name| {
+            name == "requirements-create-discussion-message"
+        });
+        assert!(denied.is_empty());
+    }
+}

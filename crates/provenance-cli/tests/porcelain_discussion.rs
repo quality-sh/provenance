@@ -47,19 +47,76 @@ fn repo_with_requirement() -> tempfile::TempDir {
         "--statement",
         "A discussion has one parent.",
     ]);
-    success(&[
-        "requirements",
-        "create",
-        "--repo",
-        repo,
-        "--id",
-        "discussions",
-        "--statement",
-        "A graph ID can match this command word.",
-    ]);
+    let path = directory
+        .path()
+        .join(".provenance/state/scopes/default/requirements/req.jsonl");
+    let mut content = std::fs::read_to_string(&path).unwrap();
+    let mut legacy: Value = serde_json::from_str(content.lines().next().unwrap()).unwrap();
+    legacy["id"] = Value::String("discussions".into());
+    content.push_str(&format!("{}\n", serde_json::to_string(&legacy).unwrap()));
+    std::fs::write(path, content).unwrap();
     let keyword_record = json(&["discussions", "get", "--repo", repo, "--format", "json"]);
     assert_eq!(keyword_record["record"]["id"], "discussions");
+    let updated = json(&[
+        "discussions", "update", "--repo", repo, "--statement",
+        "A legacy graph ID remains writable.", "--format", "json",
+    ]);
+    assert_eq!(updated["data"]["id"], "discussions");
     directory
+}
+
+#[test]
+fn discussion_words_are_reserved_for_new_records() {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path().to_str().unwrap();
+    success(&["init", "--path", repo, "--scope", "default", "--path-prefix", "."]);
+    for word in ["discussions", "discussion", "discuss", "reply"] {
+        let output = run(&[
+            "requirements", "create", "--repo", repo, "--id", word,
+            "--statement", "A new record cannot use a command word.",
+        ]);
+        assert!(!output.status.success(), "{word}");
+        assert!(String::from_utf8_lossy(&output.stderr).contains("reserved record ID"));
+    }
+}
+
+#[test]
+fn discussion_help_and_errors_keep_the_discussion_grammar() {
+    let help = success(&["discussions", "--help"]);
+    let text = String::from_utf8(help.stdout).unwrap();
+    assert!(text.contains("List or read addressed Discussions"), "{text}");
+    let invalid = run(&["discussions", "--status", "draft"]);
+    assert!(!invalid.status.success());
+    assert!(String::from_utf8_lossy(&invalid.stderr).contains("possible values"));
+}
+
+#[test]
+fn target_status_uses_the_selected_record_contract() {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path().to_str().unwrap();
+    success(&["init", "--path", repo, "--scope", "default", "--path-prefix", "."]);
+    success(&[
+        "requirements", "create", "--repo", repo, "--id", "req_status",
+        "--statement", "A record has its own lifecycle.",
+    ]);
+    let resolution = json(&[
+        "res_status", "create", "--type", "resolution", "--repo", repo,
+        "--title", "Lifecycle", "--requirement-id", "req_status",
+        "--position", "Use the record status.", "--rationale", "The graph records the choice.",
+        "--status", "proposed", "--format", "json",
+    ]);
+    assert_eq!(resolution["data"]["status"], "proposed");
+    let rule = json(&[
+        "rule_status", "create", "--type", "rule", "--repo", repo,
+        "--requirement-id", "req_status", "--statement", "A rule has a lifecycle.",
+        "--severity", "medium", "--status", "draft", "--format", "json",
+    ]);
+    assert_eq!(rule["data"]["status"], "draft");
+    let invalid = run(&[
+        "rule_status", "update", "--repo", repo, "--status", "resolved",
+    ]);
+    assert!(!invalid.status.success());
+    assert!(String::from_utf8_lossy(&invalid.stderr).contains("invalid value for --status"));
 }
 
 fn resolve_second_discussion(directory: &tempfile::TempDir, second_id: &str) {
