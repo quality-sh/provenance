@@ -162,7 +162,9 @@ fn compare_and_swap_keeps_the_original_permissions() {
     held.compare_and_swap(prepared).unwrap();
 
     let after = std::fs::metadata(path.join("source.txt")).unwrap();
-    assert_eq!(after.mode() & 0o777, before.mode() & 0o777);
+    assert_eq!(after.mode() & 0o7777, before.mode() & 0o7777);
+    assert_eq!(after.uid(), before.uid());
+    assert_eq!(after.gid(), before.gid());
     assert_ne!(
         files
             .read_bounded(Utf8Path::new("source.txt"), 100)
@@ -197,4 +199,71 @@ fn compare_and_swap_keeps_the_read_only_permission() {
         std::fs::read(path.join("source.txt")).unwrap(),
         b"replacement"
     );
+}
+
+#[cfg(windows)]
+#[test]
+fn compare_and_swap_copies_a_null_dacl() {
+    use std::os::windows::fs::OpenOptionsExt as _;
+    use std::os::windows::io::AsRawHandle as _;
+    use windows_sys::Win32::Foundation::{ERROR_SUCCESS, HANDLE, HLOCAL};
+    use windows_sys::Win32::Security::Authorization::{
+        GetSecurityInfo, SetSecurityInfo, SE_FILE_OBJECT,
+    };
+    use windows_sys::Win32::Security::{DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR};
+    use windows_sys::Win32::System::Memory::LocalFree;
+
+    const READ_CONTROL: u32 = 0x0002_0000;
+    const WRITE_DAC: u32 = 0x0004_0000;
+    let (_temporary, path, files) = repository();
+    std::fs::write(path.join("source.txt"), b"original").unwrap();
+    let target = std::fs::OpenOptions::new()
+        .access_mode(READ_CONTROL | WRITE_DAC)
+        .open(path.join("source.txt"))
+        .unwrap();
+    assert_eq!(
+        unsafe {
+            SetSecurityInfo(
+                target.as_raw_handle() as HANDLE,
+                SE_FILE_OBJECT,
+                DACL_SECURITY_INFORMATION,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null(),
+                std::ptr::null(),
+            )
+        },
+        ERROR_SUCCESS
+    );
+    drop(target);
+    let held = files
+        .read_bounded(Utf8Path::new("source.txt"), 100)
+        .unwrap();
+    let prepared = held.create_temp(b"replacement").unwrap();
+
+    held.compare_and_swap(prepared).unwrap();
+
+    let installed = std::fs::OpenOptions::new()
+        .access_mode(READ_CONTROL)
+        .open(path.join("source.txt"))
+        .unwrap();
+    let mut dacl = std::ptr::null_mut();
+    let mut descriptor: PSECURITY_DESCRIPTOR = std::ptr::null_mut();
+    assert_eq!(
+        unsafe {
+            GetSecurityInfo(
+                installed.as_raw_handle() as HANDLE,
+                SE_FILE_OBJECT,
+                DACL_SECURITY_INFORMATION,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                &mut dacl,
+                std::ptr::null_mut(),
+                &mut descriptor,
+            )
+        },
+        ERROR_SUCCESS
+    );
+    assert!(dacl.is_null());
+    unsafe { LocalFree(descriptor as HLOCAL) };
 }

@@ -177,3 +177,23 @@ impl WindowsDacl {
         }
     }
 }
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt as _;
+
+    #[test]
+    fn metadata_refuses_an_owner_other_than_the_effective_user() {
+        let file = tempfile::tempfile().unwrap();
+        let metadata = FileMetadata {
+            permissions: Permissions::from_mode(0o600),
+            owner_uid: effective_uid().wrapping_add(1),
+        };
+
+        assert!(matches!(
+            metadata.apply(&file),
+            Err(Refusal::OwnerMismatch { .. })
+        ));
+    }
+}
