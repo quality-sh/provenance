@@ -9,6 +9,7 @@ use std::{
 };
 
 mod address;
+mod help;
 
 const COLLECTIONS: &[&str] = &[
     "sources",
@@ -39,15 +40,15 @@ pub async fn try_dispatch(arguments: &[String]) -> anyhow::Result<bool> {
     };
     let collection = words.remove(0);
     if words.as_slice() == ["--help"] {
-        print_help(&collection);
+        help::print_collection(&collection);
         return Ok(true);
     }
     let resolved = address::resolve(&collection, &words)?;
     if resolved.flags.as_slice() == ["--help"] {
-        print_help(&collection);
+        help::print_operation(&collection, resolved.address);
         return Ok(true);
     }
-    let definition = resolved.definition;
+    let definition = resolved.address.definition;
     let method = match definition.method {
         catalog::HttpMethod::Get => Method::GET,
         catalog::HttpMethod::Post => Method::POST,
@@ -78,17 +79,6 @@ pub async fn try_dispatch(arguments: &[String]) -> anyhow::Result<bool> {
         Err(failure) => anyhow::bail!("{}", serde_json::to_string(&failure)?),
     }
     Ok(true)
-}
-
-fn print_help(collection: &str) {
-    println!("Catalog commands for {collection}:");
-    println!("  {collection} list");
-    println!("  {collection} create [scalar flags | --stdin]");
-    println!("  {collection} <id> [get|update|trace|neighbors|impact|action]");
-    if collection == "questions" {
-        println!("A question should be resolvable in one agent session;");
-        println!("otherwise it is fog or needs decomposition.");
-    }
 }
 
 fn warn_if_skills_missing(repo: &str, quiet: bool) -> anyhow::Result<()> {
