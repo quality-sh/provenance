@@ -1,7 +1,7 @@
 use super::read_budget::ensure_within_read_budget;
 use super::{CreateDomainInput, StateStore};
 use crate::shards;
-use provenance_core::{Domain, SUPPORTED_SCHEMA_VERSION};
+use provenance_core::{review::REVIEW_SCHEMA_VERSION, Domain};
 
 impl StateStore {
     pub fn create_domain(&self, input: CreateDomainInput) -> anyhow::Result<Domain> {
@@ -22,7 +22,7 @@ impl StateStore {
         let path = shards::domains_path(&self.layout, &scope_id);
         self.mutate_graph_record(&path, |records: &mut Vec<Domain>| {
             let domain = Domain {
-                schema_version: SUPPORTED_SCHEMA_VERSION,
+                schema_version: REVIEW_SCHEMA_VERSION,
                 scope_id: scope_id.clone(),
                 id,
                 name,
