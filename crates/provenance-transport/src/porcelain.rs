@@ -261,7 +261,7 @@ pub(crate) async fn call_search(
             result.content = vec![Content::text(summary)];
             result
         }
-        Err(error) => search_error(error),
+        Err(error) => search_error(&error),
     }
 }
 
@@ -291,9 +291,9 @@ pub fn render_search_readable(
     lines.join("\n")
 }
 
-fn search_error(error: provenance_porcelain::search::SearchError) -> CallToolResult {
+fn search_error(error: &provenance_porcelain::search::SearchError) -> CallToolResult {
     use provenance_porcelain::search::SearchError;
-    let detail = match &error {
+    let detail = match error {
         SearchError::InvalidOptions => serde_json::json!({
             "kind":"invalid_input", "field":null, "reason":"invalid_value"
         }),

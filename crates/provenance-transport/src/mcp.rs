@@ -88,25 +88,7 @@ impl ServerHandler for StatementHost {
             return Ok(crate::porcelain::call_get(self, arguments).await);
         }
         if request.name == "search" && crate::porcelain::search_is_available(self) {
-            let _admission = match self.admit() {
-                Ok(permit) => permit,
-                Err(failure) => return Ok(error(failure)),
-            };
-            let arguments = request.arguments.unwrap_or_default();
-            if serde_json::to_vec(&arguments)
-                .map_err(|_| ErrorData::internal_error("Cannot encode input", None))?
-                .len()
-                > MAX_BODY_BYTES
-            {
-                return Ok(error(ErasedFailure::new(
-                    None,
-                    OperationFailure::InvalidInput {
-                        field: None,
-                        reason: InvalidInputReason::TooLarge,
-                    },
-                )));
-            }
-            return Ok(crate::porcelain::call_search(self, arguments).await);
+            return call_search(self, request.arguments).await;
         }
         if request.name == "check" {
             let Some(port) = self.check_port() else {
@@ -184,6 +166,31 @@ impl ServerHandler for StatementHost {
             },
         )
     }
+}
+
+async fn call_search(
+    host: &StatementHost,
+    arguments: Option<serde_json::Map<String, serde_json::Value>>,
+) -> Result<CallToolResult, ErrorData> {
+    let _admission = match host.admit() {
+        Ok(permit) => permit,
+        Err(failure) => return Ok(error(failure)),
+    };
+    let arguments = arguments.unwrap_or_default();
+    if serde_json::to_vec(&arguments)
+        .map_err(|_| ErrorData::internal_error("Cannot encode input", None))?
+        .len()
+        > MAX_BODY_BYTES
+    {
+        return Ok(error(ErasedFailure::new(
+            None,
+            OperationFailure::InvalidInput {
+                field: None,
+                reason: InvalidInputReason::TooLarge,
+            },
+        )));
+    }
+    Ok(crate::porcelain::call_search(host, arguments).await)
 }
 
 async fn call_authoring_action(

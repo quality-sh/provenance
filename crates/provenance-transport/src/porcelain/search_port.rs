@@ -34,13 +34,13 @@ impl SearchPort for HostSearchPort {
             self.host
                 .invoke_scoped_typed::<catalog::Search>(request)
                 .await
-                .map_err(operation_error)
+                .map_err(|error| operation_error(&error))
         })
     }
 }
 
 fn operation_error(
-    error: OperationError<<catalog::Search as catalog::Operation>::Failure>,
+    error: &OperationError<<catalog::Search as catalog::Operation>::Failure>,
 ) -> SearchError {
     let message = error.to_string();
     let detail = serde_json::to_value(&error)
