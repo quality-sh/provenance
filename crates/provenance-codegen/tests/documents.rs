@@ -23,6 +23,7 @@ fn statement_documents_have_named_operation_and_closed_call_schema() {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)]
 fn operation_names_are_explicit() {
     let (_, mcp) = provenance_codegen::documents();
     let mut names = mcp["tools"]
