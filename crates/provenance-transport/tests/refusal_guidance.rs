@@ -39,6 +39,8 @@ async fn mcp_ownership_refusal_preserves_owner_and_guidance() {
         assert_eq!(error["owner"], json!(owner));
         let message = error["message"].as_str().unwrap();
         assert!(message.contains("--declared-by"), "{message}");
+        assert!(message.contains("data.declared_by"), "{message}");
+        assert!(message.contains("ownership"), "{message}");
         if let Some(owner) = owner {
             assert!(
                 message.contains(owner) && message.contains("ask the owner"),
