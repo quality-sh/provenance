@@ -85,7 +85,7 @@ pub async fn dispatch_target(
         &matches,
         stdin,
         None,
-        &["record_type", "stdin", "replace_parent", "with_parent"],
+        &["type", "stdin", "replace_parent", "with_parent"],
     )
     .unwrap_or_else(|error| usage_error(error));
     if !query.is_empty() {

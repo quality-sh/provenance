@@ -4,6 +4,7 @@
 //! tool, so a change to a flag or a property name shows here first. A changed name
 //! changes its pin in the same commit.
 
+#[allow(dead_code)]
 mod support {
     pub mod surface;
 }
@@ -44,7 +45,10 @@ const HELP: &[(&str, &[&str])] = &[
     ("graph_reference_issue", &["graph-reference", "issue"]),
     ("graph_reference_show", &["graph-reference", "show"]),
     ("graph_reference_verify", &["graph-reference", "verify"]),
-    ("graph_reference_exact_export", &["graph-reference", "exact-export"]),
+    (
+        "graph_reference_exact_export",
+        &["graph-reference", "exact-export"],
+    ),
     ("swarm_backtrace_land", &["swarm-backtrace", "land"]),
     ("skills_list", &["skills", "list"]),
     ("skills_show", &["skills", "show"]),

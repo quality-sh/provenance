@@ -33,7 +33,7 @@ Options:
           The Codex thread UUID for --notify. The default is CODEX_THREAD_ID.
       --no-open
           Print the review link and do not open it in a browser.
-      --type <RECORD_TYPE>
+      --type <TYPE>
           
       --stdin
           
