@@ -120,53 +120,35 @@ macro_rules! fact_member_operation {
     };
 }
 
-projection_member_operation!(GetSourceV2, "get-source-v2", provenance_core::Source);
-projection_member_operation!(
-    GetResolutionV2,
-    "get-resolution-v2",
-    provenance_core::Resolution
-);
-projection_member_operation!(GetRuleV2, "get-rule-v2", provenance_core::Rule);
-projection_member_operation!(GetDomainV2, "get-domain-v2", provenance_core::Domain);
-projection_member_operation!(GetBoundaryV2, "get-boundary-v2", provenance_core::Boundary);
-projection_member_operation!(GetTopicV2, "get-topic-v2", provenance_core::Topic);
-projection_member_operation!(GetQuestionV2, "get-question-v2", provenance_core::Question);
-projection_member_operation!(
-    GetVerificationBindingV2,
-    "get-verification-binding-v2",
-    provenance_core::VerificationBinding
-);
-payload_member_operation!(
-    GetContributionV2,
-    "get-contribution-v2",
-    provenance_core::Contribution
-);
-payload_member_operation!(
-    GetSynthesisPacketV2,
-    "get-synthesis-packet-v2",
-    provenance_core::SynthesisPacket
-);
-payload_member_operation!(
-    GetProposalV2,
-    "get-proposal-v2",
-    provenance_core::ProposalCard
-);
-payload_member_operation!(
-    GetDiscussionContainerV2,
-    "get-discussion-container-v2",
-    provenance_core::Thread
-);
-payload_member_operation!(GetMessageV2, "get-message-v2", provenance_core::Message);
-payload_member_operation!(
-    GetAssertionV2,
-    "get-assertion-v2",
-    provenance_core::AssertionRecord
-);
-payload_member_operation!(
-    GetDispositionV2,
-    "get-disposition-v2",
-    provenance_core::DispositionRecord
-);
+macro_rules! catalog_member {
+    (none, $record:ty) => {};
+    (projection($list:ident, $list_wire:literal, $page:ident, $page_wire:literal, none), $record:ty) => {};
+    (projection($list:ident, $list_wire:literal, $page:ident, $page_wire:literal, $member:ident, $wire:literal), $record:ty) => {
+        projection_member_operation!($member, $wire, $record);
+    };
+    (payload($list:ident, $list_wire:literal, $page:ident, $page_wire:literal, $member:ident, $wire:literal), $record:ty) => {
+        payload_member_operation!($member, $wire, $record);
+    };
+    (verification($list:ident, $list_wire:literal, $page:ident, $member:ident, $wire:literal), $record:ty) => {
+        projection_member_operation!($member, $wire, $record);
+    };
+}
+
+macro_rules! define_record_members {
+    (
+        export { $($export_variant:ident: $export_type:ty, $export_field:ident, $export_path:ident, $export_suffix:literal, $export_table:literal, [$($export_node:tt)*], $export_reader:ident, [$($export_closed:tt)*], $export_id:ident, [$($export_loader:tt)*], [$($export_catalog:tt)*];)* }
+        canonical { $($canonical_variant:ident: $canonical_type:ty, $canonical_field:ident, $canonical_path:ident, $canonical_suffix:literal, $canonical_table:literal, [$($canonical_node:tt)*], $canonical_reader:ident, [$($canonical_closed:tt)*], $canonical_id:ident, [$($canonical_loader:tt)*], [$($canonical_catalog:tt)*];)* }
+        bindings { $($binding_variant:ident: $binding_type:ty, $binding_field:ident, $binding_path:ident, $binding_suffix:literal, $binding_table:literal, [$($binding_node:tt)*], $binding_reader:ident, [$($binding_closed:tt)*], $binding_id:ident, [$($binding_loader:tt)*], [$($binding_catalog:tt)*];)* }
+        internal { $($internal_variant:ident: $internal_type:ty, $internal_field:ident, $internal_path:ident, $internal_suffix:literal, $internal_table:literal, [$($internal_node:tt)*], $internal_reader:ident, [$($internal_closed:tt)*], $internal_id:ident, [$($internal_loader:tt)*], [$($internal_catalog:tt)*];)* }
+    ) => {
+        $(catalog_member!($($export_catalog)*, $export_type);)*
+        $(catalog_member!($($canonical_catalog)*, $canonical_type);)*
+        $(catalog_member!($($binding_catalog)*, $binding_type);)*
+        $(catalog_member!($($internal_catalog)*, $internal_type);)*
+    };
+}
+
+crate::cache::record_families!(define_record_members);
 fact_member_operation!(
     GetProposalAssertionV2,
     "get-proposal-assertion-v2",
