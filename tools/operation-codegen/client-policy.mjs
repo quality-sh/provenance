@@ -13,7 +13,7 @@ async function host(handler, action) {
 }
 
 function metadata(compatibility) {
-  return { data: { compatibility, package: { name: 'fixture', version: '0' }, contract_digest: 'fixture', repository: 'fixture', scope: 'default' }, meta: {} };
+  return { data: { compatibility, package: { name: 'fixture', version: '0' }, repository: 'fixture', scope: 'default' }, meta: {} };
 }
 
 async function refusal(run, name, failure) {
