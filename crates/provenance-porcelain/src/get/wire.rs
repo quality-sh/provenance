@@ -122,58 +122,12 @@ fn schema<T: schemars::JsonSchema>(contract: Contract) -> Value {
     .expect("typed get schema is JSON")
 }
 
-/// The MCP get request schema: the deserialized request without the notify field,
-/// because MCP registers a client thread through the notify action of change.
+/// The get request schema: the target and the get fields.
 pub fn input_schema() -> Value {
-    let mut schema = schema::<GetInput>(Contract::Deserialize);
-    schema["properties"]
-        .as_object_mut()
-        .expect("get properties are an object")
-        .remove("notify");
-    let definitions = schema["$defs"]
-        .as_object_mut()
-        .expect("get definitions are an object");
-    definitions.remove("Notify");
-    definitions.remove("NotifyClient");
-    schema
+    schema::<GetInput>(Contract::Deserialize)
 }
 
-/// The MCP notify request schema.
-pub fn notify_input_schema() -> Value {
-    schema::<NotifyInput>(Contract::Deserialize)
-}
-
-/// One notify request on MCP: the client thread to register for the review changes of
-/// one record.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct NotifyInput {
-    #[schemars(length(min = 1))]
-    pub target: String,
-    pub notify: super::Notify,
-}
-
-impl From<NotifyInput> for GetInput {
-    fn from(input: NotifyInput) -> Self {
-        let mut get = Self::new(input.target, View::Review);
-        get.notify = Some(input.notify);
-        get
-    }
-}
-
-/// The MCP notify result schema.
-pub fn notify_output_schema() -> Value {
-    schema::<NotifyResult>(Contract::Serialize)
-}
-
-/// The result of one notify request on MCP.
-#[derive(Clone, Debug, Serialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct NotifyResult {
-    pub notify: super::Registration,
-}
-
-/// The MCP trace request schema: the get request without a view or notify field.
+/// The trace request schema: the target and the trace fields.
 pub fn trace_input_schema() -> Value {
     schema::<TraceInput>(Contract::Deserialize)
 }
@@ -186,9 +140,9 @@ pub struct TraceInput {
     pub target: String,
     #[serde(default)]
     #[schemars(range(min = 1))]
-    pub max_depth: Option<usize>,
+    pub depth: Option<usize>,
     #[serde(default)]
-    pub returned_kinds: Vec<NodeType>,
+    pub kind: Vec<NodeType>,
     #[serde(default)]
     #[schemars(range(min = 1))]
     pub limit: Option<usize>,
@@ -197,14 +151,52 @@ pub struct TraceInput {
 impl From<TraceInput> for GetInput {
     fn from(input: TraceInput) -> Self {
         let mut get = Self::new(input.target, View::Trace);
-        get.max_depth = input.max_depth;
-        get.returned_kinds = input.returned_kinds;
+        get.depth = input.depth;
+        get.kind = input.kind;
         get.limit = input.limit;
         get
     }
 }
 
-/// The MCP get result schema is generated from the serialized projection.
+/// The notify request schema: the target and the get fields that write.
+pub fn notify_input_schema() -> Value {
+    schema::<NotifyInput>(Contract::Deserialize)
+}
+
+/// One notify request: the client thread to register for the review changes of one
+/// record, or `off` to end that registration.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct NotifyInput {
+    #[schemars(length(min = 1))]
+    pub target: String,
+    pub notify: super::NotifyClient,
+    #[schemars(length(min = 1))]
+    pub thread: String,
+}
+
+impl From<NotifyInput> for GetInput {
+    fn from(input: NotifyInput) -> Self {
+        let mut get = Self::new(input.target, View::Review);
+        get.notify = Some(input.notify);
+        get.thread = Some(input.thread);
+        get
+    }
+}
+
+/// The notify result schema.
+pub fn notify_output_schema() -> Value {
+    schema::<NotifyResult>(Contract::Serialize)
+}
+
+/// The result of one notify request.
+#[derive(Clone, Debug, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct NotifyResult {
+    pub notify: super::Registration,
+}
+
+/// The get result schema is generated from the serialized projection.
 pub fn output_schema() -> Value {
     schema::<GetWire<'static>>(Contract::Serialize)
 }

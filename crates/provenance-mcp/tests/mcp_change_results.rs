@@ -72,7 +72,7 @@ fn calls() -> Vec<(Value, Option<&'static str>)> {
         ),
         (
             json!({"action": "notify", "target": "req_shared",
-                   "notify": {"client": "codex", "thread": "thread-1"}}),
+                   "notify": "codex", "thread": "thread-1"}),
             None,
         ),
     ]
