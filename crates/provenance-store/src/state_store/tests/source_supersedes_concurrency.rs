@@ -25,7 +25,7 @@ fn replacement_source(
 }
 
 #[test]
-fn source_creation_keeps_supersedes_validation_and_write_in_one_publication() {
+fn source_creation_holds_the_lock_and_refuses_a_raw_followup_write() {
     let (_dir, store, scope) = seeded_source_requirement_store();
     let older_id = StableId::new("source_schads").unwrap();
     let sources_path = crate::shards::sources_path(&store.layout, &scope);
@@ -83,7 +83,10 @@ fn source_creation_keeps_supersedes_validation_and_write_in_one_publication() {
             .expect("publication must finish after source creation"),
         Err(error) => panic!("publication result channel failed: {error}"),
     };
-    publication_result.unwrap();
+    assert!(publication_result
+        .unwrap_err()
+        .to_string()
+        .contains("requires a guarded review save"));
     writer.join().unwrap();
     publisher.join().unwrap();
 
@@ -92,10 +95,7 @@ fn source_creation_keeps_supersedes_validation_and_write_in_one_publication() {
         .iter()
         .find(|source| source.id == created.id)
         .expect("the replacement Source must survive publication");
-    assert!(
-        replacement.supersedes.is_empty(),
-        "a successful create must not leave a dangling supersedes reference"
-    );
+    assert_eq!(replacement.supersedes, vec![older_id]);
     assert!(
         publication_waited,
         "publication must wait until source validation and mutation finish"

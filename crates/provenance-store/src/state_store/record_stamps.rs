@@ -19,6 +19,7 @@ pub trait GraphRecord:
         Ok(())
     }
     fn set_stamps(&mut self, _previous: Option<&Self>, _stamp: Option<&Stamp>) {}
+    fn schema_version(&self) -> SchemaVersion;
     fn set_schema_version(&mut self, version: SchemaVersion);
     fn id(&self) -> &provenance_core::StableId;
 }
@@ -37,6 +38,9 @@ macro_rules! stamps {
 }
 macro_rules! schema_version {
     () => {
+        fn schema_version(&self) -> SchemaVersion {
+            self.schema_version
+        }
         fn set_schema_version(&mut self, version: SchemaVersion) {
             self.schema_version = version;
         }
@@ -186,7 +190,13 @@ impl StateStore {
         path: &Utf8Path,
         replacement: Vec<T>,
     ) -> anyhow::Result<()> {
-        if T::KIND != NodeType::Requirement && !crate::review::guard::writer_allows_path(path) {
+        let has_enrolled_record = replacement
+            .iter()
+            .any(|record| record.schema_version() == REVIEW_SCHEMA_VERSION);
+        if T::KIND != NodeType::Requirement
+            && has_enrolled_record
+            && !crate::review::guard::writer_allows_path(path)
+        {
             return self.replace_native_records(path, replacement);
         }
         self.replace_graph_records_guarded(path, replacement)
