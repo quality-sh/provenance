@@ -184,6 +184,10 @@ impl StatementHost {
 
     /// Invoke one registered resource route for a native caller that already
     /// bound its repository and scope through `HostAccess`.
+    ///
+    /// A path the catalog publishes under another method refuses with the
+    /// canonical `method_not_allowed`; anything else is `unknown_operation`,
+    /// matching the public HTTP router.
     pub async fn invoke_resource(
         &self,
         method: axum::http::Method,
@@ -192,8 +196,14 @@ impl StatementHost {
         query: std::collections::BTreeMap<String, String>,
         headers: axum::http::HeaderMap,
     ) -> Result<Value, FailureEnvelope> {
-        let matched = routing::find(&method, path)
-            .ok_or_else(|| FailureEnvelope::new(None, OperationFailure::UnknownOperation))?;
+        let matched = routing::find(&method, path).ok_or_else(|| {
+            let failure = if routing::path_is_known(path) {
+                OperationFailure::MethodNotAllowed
+            } else {
+                OperationFailure::UnknownOperation
+            };
+            FailureEnvelope::new(None, failure)
+        })?;
         routing::invoke(self, &matched, data, query, &headers)
             .await
             .map(|result| result.0.into_value())
