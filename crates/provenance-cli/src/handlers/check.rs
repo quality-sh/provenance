@@ -462,4 +462,22 @@ mod tests {
         };
         assert!(findings.is_empty());
     }
+
+    #[tokio::test]
+    async fn binding_check_refuses_an_absent_selected_scope() {
+        let directory = tempfile::tempdir().unwrap();
+        let repo = Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
+        let layout = ProvenanceLayout::new(repo.clone());
+        std::fs::create_dir_all(layout.state_dir()).unwrap();
+        let manifest = Manifest::default_with_scope(
+            ScopeId::new("default").unwrap(),
+            RepoPathPrefix::new("."),
+        );
+        std::fs::write(layout.manifest_path(), serde_json::to_vec(&manifest).unwrap()).unwrap();
+
+        let port = RepositoryCheckPort::new(repo, false, None);
+        let error = port.run(Category::Bindings, Some("absent")).await.unwrap_err();
+
+        assert!(error.contains("scope absent does not exist"), "{error}");
+    }
 }
