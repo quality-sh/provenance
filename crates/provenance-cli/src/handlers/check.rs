@@ -56,18 +56,27 @@ impl RepositoryCheckPort {
 
     fn graph_run(&self, scope: Option<&str>) -> Result<CategoryRun, String> {
         let store = Store::open(&self.repo);
-        let findings = match store.with_repository_publication(|| {
-            let mut manifest = store.manifest()?;
-            if let Some(scope) = scope {
-                manifest
-                    .scopes
-                    .retain(|candidate| candidate.id.as_str() == scope);
-                anyhow::ensure!(!manifest.scopes.is_empty(), "scope {scope} does not exist");
-            }
-            validate_locked(&store, &manifest, scope.is_none())
-        }) {
+        let result = provenance_store::layout::require_initialized_graph(store.layout()).and_then(
+            |()| {
+                store.with_repository_publication(|| {
+                    let mut manifest = store.manifest()?;
+                    if let Some(scope) = scope {
+                        manifest
+                            .scopes
+                            .retain(|candidate| candidate.id.as_str() == scope);
+                        anyhow::ensure!(!manifest.scopes.is_empty(), "scope {scope} does not exist");
+                    }
+                    validate_locked(&store, &manifest, scope.is_none())
+                })
+            },
+        );
+        let findings = match result {
             Ok(()) => Vec::new(),
-            Err(error) if error.downcast_ref::<std::io::Error>().is_some() => {
+            Err(error) if error.downcast_ref::<std::io::Error>().is_some()
+                || error
+                    .downcast_ref::<provenance_store::layout::GraphNotInitialized>()
+                    .is_some() =>
+            {
                 return Err(format!("{error:#}"));
             }
             Err(error) => vec![Finding::new(format!("{error:#}"))],
