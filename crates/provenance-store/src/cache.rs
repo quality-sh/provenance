@@ -1,4 +1,5 @@
 pub(crate) mod connection;
+mod family_table;
 mod gaps;
 mod health;
 mod impact;
@@ -14,6 +15,7 @@ pub use connection::{
     open_cache, open_cache_with, open_existing_cache, open_immutable_cache, open_stored_cache,
     CacheConnection, WalSwitchRetry,
 };
+pub(crate) use family_table::record_families;
 pub use gaps::*;
 pub use health::*;
 pub use impact::*;
@@ -27,7 +29,6 @@ pub use prime::*;
 pub use projection_digest::{
     family_content_digests, revision_digest, revision_digest_from_stored_rows, FamilyContentDigest,
 };
-pub(crate) use projection_families::record_families;
 pub use projection_families::ProjectionFamily;
 pub use traceability::*;
 
