@@ -4,7 +4,7 @@
 use crate::state_store::StateStore;
 use provenance_core::{
     review::{CycleEntry, CycleFact},
-    DispositionDecision, IdeationTargetType, ProposalType, ScopeId, StableId,
+    DispositionDecision, IdeationTargetType, NodeType, ProposalType, ScopeId, StableId,
 };
 
 const MAX_SAFE_SEQUENCE: u64 = (1 << 53) - 1;
@@ -51,19 +51,33 @@ pub(super) fn validated_cycle_entries(
             "invalid decision-cycle actor"
         );
         anyhow::ensure!(
-            sequences.insert((entry.record_id.as_str(), entry.sequence)),
-            "duplicate decision-cycle sequence {} for requirement {}",
+            sequences.insert((
+                entry.record_kind,
+                entry.record_id.as_str(),
+                entry.sequence,
+            )),
+            "duplicate decision-cycle sequence {} for {} {}",
             entry.sequence,
+            entry.record_kind.as_str(),
             entry.record_id.as_str()
         );
         anyhow::ensure!(
             entry.sequence <= MAX_SAFE_SEQUENCE,
             "decision-cycle sequence exceeds the safe integer limit"
         );
+        let proposal = proposals
+            .iter()
+            .find(|proposal| proposal.id == entry.proposal_id)
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "cycle entry names proposal {} which does not exist",
+                    entry.proposal_id.as_str()
+                )
+            })?;
         anyhow::ensure!(
-            proposals.iter().any(|p| p.id == entry.proposal_id),
-            "cycle entry names proposal {} which does not exist",
-            entry.proposal_id.as_str()
+            entry.record_kind == proposal.traceability.target.artifact_type.into()
+                && entry.record_id == proposal.traceability.target.artifact_id,
+            "cycle entry address does not match its proposal target"
         );
         match (entry.fact, &entry.disposition_id) {
             (CycleFact::Decided, Some(disposition_id)) => {
@@ -154,11 +168,19 @@ impl CycleFacts {
     }
 
     /// The withdrawn submissions of one record, in withdrawal order.
-    pub(super) fn withdrawn_submissions(&self, requirement: &StableId) -> Vec<StableId> {
+    pub(super) fn withdrawn_submissions(
+        &self,
+        kind: NodeType,
+        record_id: &StableId,
+    ) -> Vec<StableId> {
         let mut withdrawn: Vec<(u64, StableId)> = self
             .entries
             .iter()
-            .filter(|e| e.record_id == *requirement && e.fact == CycleFact::Withdrawn)
+            .filter(|e| {
+                e.record_kind == kind
+                    && e.record_id == *record_id
+                    && e.fact == CycleFact::Withdrawn
+            })
             .map(|e| (e.sequence, e.proposal_id.clone()))
             .collect();
         withdrawn.sort_by_key(|(sequence, _)| *sequence);
@@ -168,11 +190,15 @@ impl CycleFacts {
             .collect()
     }
 
-    pub(super) fn next_sequence(&self, requirement: &StableId) -> anyhow::Result<u64> {
+    pub(super) fn next_sequence(
+        &self,
+        kind: NodeType,
+        record_id: &StableId,
+    ) -> anyhow::Result<u64> {
         let next = self
             .entries
             .iter()
-            .filter(|e| e.record_id == *requirement)
+            .filter(|e| e.record_kind == kind && e.record_id == *record_id)
             .map(|e| e.sequence)
             .max()
             .unwrap_or(0)
@@ -190,6 +216,7 @@ impl CycleFacts {
         &self,
         store: &StateStore,
         scope: &ScopeId,
+        kind: NodeType,
         requirement: &StableId,
     ) -> anyhow::Result<Option<CycleEntry>> {
         let record = store.requirement(scope, requirement)?;
@@ -203,7 +230,11 @@ impl CycleFacts {
         Ok(self
             .entries
             .iter()
-            .filter(|e| e.record_id == *requirement && e.fact == CycleFact::Submitted)
+            .filter(|e| {
+                e.record_kind == kind
+                    && e.record_id == *requirement
+                    && e.fact == CycleFact::Submitted
+            })
             .filter(|e| {
                 !decided.contains(e.proposal_id.as_str()) && !self.is_withdrawn(&e.proposal_id)
             })
@@ -230,7 +261,7 @@ impl CycleFacts {
             .ok_or_else(|| anyhow::anyhow!("the submitted record has no review history"))?
             .revision;
         let current_submission = self
-            .pending_submission(store, scope, requirement)?
+            .pending_submission(store, scope, NodeType::Requirement, requirement)?
             .map(|entry| entry.proposal_id);
         Ok(crate::write_error::WriteFailure::ReviewSubmissionConflict {
             current_submission,

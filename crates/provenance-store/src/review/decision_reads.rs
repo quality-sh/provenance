@@ -40,7 +40,12 @@ impl StateStore {
             })
             .collect();
         let pending = facts
-            .pending_submission(self, scope, requirement_id)?
+            .pending_submission(
+                self,
+                scope,
+                provenance_core::NodeType::Requirement,
+                requirement_id,
+            )?
             .map(|entry| {
                 let proposal = submissions
                     .iter()
@@ -95,7 +100,10 @@ impl StateStore {
             pending,
             current_acceptance,
             decisions: recorded,
-            withdrawn: facts.withdrawn_submissions(requirement_id),
+            withdrawn: facts.withdrawn_submissions(
+                provenance_core::NodeType::Requirement,
+                requirement_id,
+            ),
         })
     }
 }
