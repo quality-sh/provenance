@@ -25,6 +25,8 @@ path = "src/bin/cargo-provenance.rs"
 
 [dependencies]
 anyhow.workspace = true
+futures-util = "0.3"
+tokio-tungstenite = "0.24"
 axum = { workspace = true, features = ["ws"] }
 camino.workspace = true
 clap.workspace = true
