@@ -143,6 +143,7 @@ impl StateStore {
                 assertions: &self.list_assertion_records(&scope_id)?,
                 dispositions: &self.list_dispositions(&scope_id)?,
             })?;
+            super::read_budget::ensure_within_read_budget(&contribution)?;
             records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
             Ok(contribution)
         })
@@ -274,6 +275,7 @@ impl StateStore {
                 assertions: &self.list_assertion_records(&scope_id)?,
                 dispositions: &self.list_dispositions(&scope_id)?,
             })?;
+            super::read_budget::ensure_within_read_budget(&synthesis_packet)?;
             records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
             Ok(synthesis_packet)
         })

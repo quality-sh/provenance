@@ -83,6 +83,7 @@ impl StateStore {
                 records.push(binding.clone());
             }
             records.sort_by(|left, right| left.id.as_str().cmp(right.id.as_str()));
+            super::read_budget::ensure_within_read_budget(&binding)?;
             Ok(binding)
         })
     }

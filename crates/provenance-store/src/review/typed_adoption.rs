@@ -98,6 +98,7 @@ impl StateStore {
                 .ok_or_else(|| anyhow::anyhow!("adopted Requirement left the scope"))?;
             *record = after.clone();
             record.schema_version = REVIEW_SCHEMA_VERSION;
+            crate::state_store::read_budget::ensure_within_read_budget(record)?;
             Ok(record.clone())
         })?;
         self.validate_graph_scope(&scope)?;
