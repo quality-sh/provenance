@@ -80,6 +80,20 @@ fn finish(child: Child) -> Value {
     serde_json::from_slice(&output.stdout).unwrap()
 }
 
+/// Waits for the CLI until a deadline, and stops a command that does not return.
+fn finish_within(mut child: Child, timeout: Duration) -> Value {
+    let deadline = std::time::Instant::now() + timeout;
+    while child.try_wait().unwrap().is_none() {
+        if std::time::Instant::now() >= deadline {
+            child.kill().unwrap();
+            child.wait().unwrap();
+            panic!("the review link command did not return within {timeout:?}");
+        }
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    finish(child)
+}
+
 fn connected(host: &Host) -> Socket {
     let mut page = Socket::connect(host);
     assert_eq!(page.frame()["type"], "ready");
@@ -223,5 +237,47 @@ fn navigation_requires_the_launch_key() {
         panic!("navigation without the launch key must be refused");
     };
     assert_eq!(status, 401);
+    page.quiet();
+}
+
+#[test]
+#[verifies("rule_review_commands_open_the_browser", examples)]
+fn a_page_that_never_acknowledges_leaves_the_link_to_the_browser() {
+    let (repo, host) = running_review();
+    let mut page = connected(&host);
+    let browser = BrowserRecorder::install();
+    let child = review_link(&host, repo.path(), &browser, &[]);
+    assert_eq!(page.frame()["type"], "show-record");
+    // The page stays connected and never answers.
+
+    let output = finish_within(child, Duration::from_secs(20));
+    assert_eq!(output["opened"], true);
+    assert_eq!(output["review_url"], record_page(&host));
+    let opened = browser.wait_for_link(Duration::from_secs(15));
+    assert!(opened.starts_with(&format!("{}#launch=", record_page(&host))));
+    assert_eq!(redeem(&host, &launch_code(&opened)).status(), 200);
+}
+
+#[test]
+#[verifies("rule_review_commands_open_the_browser", examples)]
+fn a_newer_link_ends_the_wait_of_the_link_it_replaces() {
+    let (repo, host) = running_review();
+    let mut page = connected(&host);
+    let browser = BrowserRecorder::install();
+    let replaced = review_link(&host, repo.path(), &browser, &[]);
+    let first = page.frame();
+    assert_eq!(first["type"], "show-record");
+    let newest = review_link(&host, repo.path(), &browser, &[]);
+    let second = page.frame();
+    assert_ne!(second["requestId"], first["requestId"]);
+
+    // The replaced command returns before any acknowledgement and uses the browser.
+    let output = finish_within(replaced, Duration::from_secs(3));
+    assert_eq!(output["opened"], true);
+    let opened = browser.wait_for_link(Duration::from_secs(15));
+    assert!(opened.starts_with(&format!("{}#launch=", record_page(&host))));
+
+    page.send(&json!({"type": "ack", "requestId": second["requestId"]}));
+    assert_eq!(finish(newest)["opened"], true);
     page.quiet();
 }

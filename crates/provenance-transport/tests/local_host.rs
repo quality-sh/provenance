@@ -163,3 +163,51 @@ fn discovery_removes_an_identity_mismatch() {
     assert!(discover(repository.path(), "default").unwrap().is_none());
     assert!(!registry(repository.path()).exists());
 }
+
+#[test]
+#[verifies("rule_review_link_opens_repository_host_only", examples)]
+fn a_prepared_host_is_discoverable_only_after_it_announces() {
+    let repository = tempfile::tempdir().unwrap();
+    let (host, registration) =
+        LocalHostFixture::start_unannounced(repository.path(), "default", "local");
+
+    assert!(!registry(repository.path()).exists());
+    assert!(discover(repository.path(), "default").unwrap().is_none());
+    assert!(!registry(repository.path()).exists());
+
+    registration.announce().unwrap();
+
+    assert_eq!(
+        discover(repository.path(), "default")
+            .unwrap()
+            .unwrap()
+            .endpoint()
+            .as_str(),
+        format!("{}/", host.endpoint)
+    );
+    drop(registration);
+    assert!(!registry(repository.path()).exists());
+}
+
+#[test]
+#[verifies("rule_single_local_host_per_repository_scope", examples)]
+fn announcement_refuses_a_live_slot_owner() {
+    let repository = tempfile::tempdir().unwrap();
+    let first = LocalHostFixture::start(repository.path(), "default", "local");
+    let (_second, registration) =
+        LocalHostFixture::start_unannounced(repository.path(), "default", "local");
+
+    let error = registration.announce().unwrap_err();
+
+    assert!(error
+        .to_string()
+        .contains("already has a running local host"));
+    assert_eq!(
+        discover(repository.path(), "default")
+            .unwrap()
+            .unwrap()
+            .endpoint()
+            .as_str(),
+        format!("{}/", first.endpoint)
+    );
+}
