@@ -189,6 +189,7 @@ pub fn schema_input(
     schema: &Value,
     matches: &clap::ArgMatches,
     bound: &[&str],
+    usize_flags: &[&str],
 ) -> anyhow::Result<Map<String, Value>> {
     let properties = schema_properties(schema)?;
     let allowed = properties
@@ -204,13 +205,16 @@ pub fn schema_input(
             continue;
         }
         let name = cli_name(field);
-        let raw = match matches.try_get_one::<String>(&name) {
-            Ok(value) => value.cloned(),
-            Err(_) => match matches.try_get_one::<usize>(&name) {
-                Ok(value) => value.map(usize::to_string),
-                Err(_) => anyhow::bail!("incompatible CLI storage for --{name}"),
-            },
+        let raw = if usize_flags.contains(&field.as_str()) {
+            matches
+                .try_get_one::<usize>(&name)
+                .map(|value| value.map(usize::to_string))
+        } else {
+            matches
+                .try_get_one::<String>(&name)
+                .map(|value| value.cloned())
         };
+        let raw = raw.map_err(|_| anyhow::anyhow!("incompatible CLI storage for --{name}"))?;
         let parsed = raw
             .as_deref()
             .map(|raw| {
@@ -251,14 +255,14 @@ mod tests {
                     .try_get_matches_from(["test", "--status", accepted])
                     .unwrap();
                 assert_eq!(
-                    schema_input(schema, &matches, &[]).unwrap()["status"],
+                    schema_input(schema, &matches, &[], &[]).unwrap()["status"],
                     accepted
                 );
                 let matches = command
                     .clone()
                     .try_get_matches_from(["test", "--status", rejected])
                     .unwrap();
-                assert!(schema_input(schema, &matches, &[]).is_err());
+                assert!(schema_input(schema, &matches, &[], &[]).is_err());
             }
         }
     }
@@ -274,6 +278,24 @@ mod tests {
         let matches = command
             .try_get_matches_from(["test", "--value", "true"])
             .unwrap();
-        assert!(schema_input(&schema, &matches, &[]).is_err());
+        assert!(schema_input(&schema, &matches, &[], &[]).is_err());
+    }
+
+    #[test]
+    fn undeclared_numeric_storage_is_an_error() {
+        let schema = json!({"properties": {"page": {"type": "integer"}}});
+        let command = Command::new("test").arg(
+            Arg::new("page")
+                .long("page")
+                .value_parser(clap::value_parser!(usize)),
+        );
+        let matches = command
+            .try_get_matches_from(["test", "--page", "2"])
+            .unwrap();
+        assert!(schema_input(&schema, &matches, &[], &[]).is_err());
+        assert_eq!(
+            schema_input(&schema, &matches, &[], &["page"]).unwrap()["page"],
+            2
+        );
     }
 }
