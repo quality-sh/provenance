@@ -47,9 +47,9 @@ fn planning_first_repo() -> tempfile::TempDir {
         "--statement",
         "Expenses above the delegated authority limit need second-approver sign-off",
     ]);
-    let store = provenance_store::state_store::StateStore::new(
-        provenance_store::layout::ProvenanceLayout::new(&repo),
-    );
+    let store = provenance_store::repository::Repository::open(&repo, "default")
+        .unwrap()
+        .store();
     let etag = store
         .requirement_edit_state(
             &provenance_core::ScopeId::new("default").unwrap(),

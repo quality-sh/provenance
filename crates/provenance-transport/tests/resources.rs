@@ -246,7 +246,9 @@ async fn legacy_message_member_requires_the_addressed_parent() {
     let repo = Repository::new("The shared graph is readable.");
     repo.all_kinds();
     let scope = ScopeId::new("default").unwrap();
-    let posted = StateStore::new(repo.layout.clone())
+    let posted = repo
+        .open()
+        .store()
         .post_thread_message(PostMessageInput {
             scope_id: scope,
             parent: ThreadParent {

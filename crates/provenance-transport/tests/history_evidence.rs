@@ -56,7 +56,7 @@ fn commit(repo: &Repository) -> String {
 /// the repository and the two commit ids.
 fn repository_with_domain_change() -> (Repository, String, String) {
     let repo = Repository::new("The shared graph is readable.");
-    let store = StateStore::new(repo.layout.clone());
+    let store = repo.open().store();
     let create: CreateReviewRequirement = serde_json::from_value(json!({
         "actor":"ben","origin":null,
         "create":{"scope_id":"default","id":"req_domain",

@@ -76,7 +76,9 @@ fn an_unresolved_implementation_target_refuses_apply_without_writes() {
             .contains("implementation target `src/absent.rs` does not exist"),
         "unexpected refusal: {error}"
     );
-    let store = StateStore::new(ProvenanceLayout::new(root));
+    let store = provenance_store::repository::Repository::open(root, "default")
+        .unwrap()
+        .store();
     assert_eq!(
         store.list_rules(&ScopeId::new("default").unwrap()).unwrap(),
         [] as [provenance_core::Rule; 0]

@@ -29,7 +29,8 @@ fn context(repo: &Repository) -> PreparedContext {
 }
 
 fn requirements(repo: &Repository) -> usize {
-    StateStore::new(repo.layout.clone())
+    repo.open()
+        .store()
         .list_requirements(&ScopeId::new("default").unwrap())
         .unwrap()
         .len()

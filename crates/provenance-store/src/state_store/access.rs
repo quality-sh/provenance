@@ -18,16 +18,6 @@ pub struct GuardedStore<'g> {
     _guard: PhantomData<&'g PublicationGuard>,
 }
 
-impl Clone for StateStore {
-    fn clone(&self) -> Self {
-        Self {
-            layout: self.layout.clone(),
-            access: Access::Lock,
-            record_stamp: self.record_stamp.clone(),
-        }
-    }
-}
-
 impl StateStore {
     /// Reads the repository of a held publication guard without a second lock.
     ///
@@ -41,11 +31,11 @@ impl StateStore {
     /// ```
     pub fn under_guard(guard: &PublicationGuard) -> GuardedStore<'_> {
         GuardedStore {
-            store: Self {
-                layout: guard.repository().layout().clone(),
-                access: Access::Held,
-                record_stamp: super::RecordStamp::ResolveFromRepository,
-            },
+            store: Self::staged_view(
+                Some(guard.repository().identity().clone()),
+                guard.repository().layout().clone(),
+                super::RecordStamp::ResolveFromRepository,
+            ),
             _guard: PhantomData,
         }
     }
@@ -69,12 +59,13 @@ impl StateStore {
         self.publication_access(&ProvenanceLayout::new(root), operation)
     }
 
-    /// Uses the publication lock for writes.
+    /// Uses the publication lock for writes. A store under a held section
+    /// writes without a second lock.
     pub fn with_repository_publication<R>(
         &self,
         operation: impl FnOnce() -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
-        with_repository_publication(&self.layout, operation)
+        self.publication_access(&self.layout, operation)
     }
 
     pub(super) fn with_repository_read<R>(

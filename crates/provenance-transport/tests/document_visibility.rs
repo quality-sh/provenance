@@ -57,7 +57,7 @@ fn requirement(id: &str, depends_on: Vec<StableId>) -> CreateRequirementInput {
 async fn rejected_candidate_proposal_keeps_its_target_in_the_filtered_document() {
     let repo = Repository::new("The shared graph is readable.");
     allow_reviewer(&repo);
-    let store = StateStore::new(repo.layout.clone());
+    let store = repo.open().store();
     store
         .create_topic(CreateTopicInput {
             scope_id: scope(),
@@ -140,7 +140,7 @@ async fn rejected_candidate_proposal_keeps_its_target_in_the_filtered_document()
 #[tokio::test]
 async fn document_skips_a_reference_to_a_missing_record() {
     let repo = Repository::new("The shared graph is readable.");
-    let store = StateStore::new(repo.layout.clone());
+    let store = repo.open().store();
     store
         .create_requirement(requirement("req_cited", vec![]))
         .unwrap();
