@@ -212,7 +212,7 @@ fn mcp_readable_get_warns_when_the_record_or_view_is_stale() {
         }),
     };
 
-    let readable = provenance_transport::porcelain::render_get_readable(&outcome);
+    let readable = provenance_porcelain::get::render_readable(&outcome).unwrap();
 
     assert!(readable.contains("warning: record freshness: record catch-up failed"));
     assert!(readable.contains("warning: view freshness: view catch-up failed"));

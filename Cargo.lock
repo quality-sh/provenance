@@ -2265,6 +2265,7 @@ version = "0.2.3"
 dependencies = [
  "provenance-core",
  "provenance-macros",
+ "schemars",
  "serde",
  "serde_json",
  "tempfile",

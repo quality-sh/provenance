@@ -99,6 +99,14 @@ async fn cli_uses_the_names_from_the_live_mcp_inventory() {
         .unwrap()
         .name
         .to_string();
+    let get_tool = tools.iter().find(|tool| tool.name == get_name).unwrap();
+    let get_schema = json!(get_tool.output_schema.as_ref().unwrap());
+    let get_validator = jsonschema::JSONSchema::compile(&get_schema).unwrap();
+    let invalid_record = json!({
+        "record": {"id":"source_live_inventory", "kind":"source", "value":42},
+        "view":"record", "related":[], "detail":null, "bounds":null
+    });
+    assert!(!get_validator.is_valid(&invalid_record), "record payload must be typed");
     let check_name = tools
         .iter()
         .find(|tool| {
@@ -165,12 +173,12 @@ async fn cli_uses_the_names_from_the_live_mcp_inventory() {
 #[verifies("rule_porcelain_check_selector_union", examples)]
 fn live_cli_and_mcp_check_selectors_keep_shared_semantics() {
     let cli = provenance_cli::porcelain::check_input_from_selectors(true, false, true);
-    let mcp: provenance_transport::porcelain::CheckArguments = serde_json::from_value(json!({
+    let mcp: provenance_porcelain::check::CheckInput = serde_json::from_value(json!({
         "categories": ["graph", "bindings"]
     }))
     .unwrap();
 
-    assert_eq!(cli.categories(), mcp.into_check_input().categories());
+    assert_eq!(cli.categories(), mcp.categories());
 }
 
 #[test]
