@@ -217,10 +217,6 @@ fn apply_import(
     dry_run: bool,
 ) -> anyhow::Result<()> {
     provenance_store::publication::with_staged_state(live_layout, dry_run, |layout| {
-        let staged_scope = layout.scopes_dir().join(scope_id.as_str());
-        if staged_scope.exists() {
-            std::fs::remove_dir_all(&staged_scope)?;
-        }
         StateStore::new(layout.clone()).import_scope(scope_id, &scope_shards(exported))?;
         let staged_repo = layout.provenance_dir().parent().unwrap().to_path_buf();
         super::check::validate_repository(staged_repo)?;
