@@ -42,7 +42,7 @@ impl StateStore {
             store: Self {
                 layout: guard.layout().clone(),
                 access: Access::Held,
-                record_stamp: None,
+                record_stamp: super::RecordStamp::ResolveFromRepository,
             },
             _guard: PhantomData,
         }
