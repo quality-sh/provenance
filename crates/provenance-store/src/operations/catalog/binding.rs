@@ -41,6 +41,14 @@ pub enum SelectorBinding {
 pub struct RequestAdapter {
     pub object: bool,
     pub adapt: RequestAdapterFn,
+    pub discussion_write: Option<DiscussionWriteKind>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DiscussionWriteKind {
+    Start,
+    Reply,
+    Status,
 }
 
 pub type RequestAdapterFn =

@@ -47,7 +47,8 @@ pub use v2_review_reads::*;
 pub use authoring::{Apply, BeginVerification, CompleteVerification, Plan};
 #[cfg(feature = "schema")]
 pub use binding::{
-    ArgumentAlias, CliBinding, CliDefault, CliDefaultValue, Controls, EtagBinding, HandlerBinding,
+    ArgumentAlias, CliBinding, CliDefault, CliDefaultValue, Controls, DiscussionWriteKind,
+    EtagBinding, HandlerBinding,
     HeaderBinding, NullClearBinding, ParentBinding, PathBinding, QueryRequestBinding, QueryRoute,
     Registration, RequestAdapter, RequestAdapterError, RequestBinding, ResponseAdapter,
     ResponseBinding, SelectorBinding, TargetAction, TargetBinding,
