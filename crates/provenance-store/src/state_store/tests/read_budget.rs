@@ -1,0 +1,260 @@
+//! The write/read size invariant: a resource write the store accepts stays
+//! inside the byte budget the supported resource member and page reads
+//! enforce, and an oversized mutation is refused before publication.
+
+use super::initialized_store;
+use crate::operations::catalog::{
+    self, ContextResolver, ExecutionNeeds, PreparedContext, PreparedRead, RequestedContext,
+};
+use crate::state_store::{
+    read_budget::ReadBudget, CreateSourceInput, SourceClearField, UpdateSourceInput,
+};
+use crate::write_error::{SourceFailure, WriteFailure};
+use provenance_core::protocol::failure::OperationFailure;
+use provenance_core::protocol::SDK_PROTOCOL_VERSION;
+use provenance_core::{
+    Message, MessageRole, Source, SourceType, StableId, ScopeId, SUPPORTED_SCHEMA_VERSION,
+};
+use provenance_macros::verifies;
+use serde_json::json;
+use std::sync::Arc;
+
+/// The read budget the supported resource member and page reads enforce.
+const READ_BUDGET: usize = crate::cache::read::page::RESOURCE_RECORD_BYTES;
+
+/// The transport body budget the HTTP and MCP surfaces accept.
+const TRANSPORT_BUDGET: usize = 1024 * 1024;
+
+const OVERSIZED_ID: &str = "source_oversized";
+
+struct Target(camino::Utf8PathBuf);
+
+impl ContextResolver for Target {
+    fn prepare(
+        &self,
+        _: &'static str,
+        _: RequestedContext,
+        _: ExecutionNeeds,
+    ) -> Result<PreparedContext, OperationFailure> {
+        Ok(PreparedContext::read(PreparedRead {
+            root: self.0.clone(),
+            scope: ScopeId::new("default").unwrap(),
+            policy: Default::default(),
+            requested_target: "test".into(),
+            external: true,
+        }))
+    }
+}
+
+fn blank_source(scope: &ScopeId, id: &str) -> Source {
+    Source {
+        schema_version: SUPPORTED_SCHEMA_VERSION,
+        scope_id: scope.clone(),
+        id: StableId::new(id).unwrap(),
+        created: None,
+        updated: None,
+        declared_by: None,
+        declaration_address: None,
+        name: String::new(),
+        source_type: SourceType::Policy,
+        url: None,
+        reference: None,
+        commit_pin: None,
+        effective_date: None,
+        review_date: None,
+        supersedes: Vec::new(),
+        origin_thread: None,
+        origin_message: None,
+    }
+}
+
+/// A write request whose stored record holds exactly `target` read-accounted
+/// bytes, measured the same way the supported reads measure it.
+fn source_of_stored_bytes(scope: &ScopeId, id: &str, target: usize) -> CreateSourceInput {
+    let base = ReadBudget::read_bytes(&blank_source(scope, id)).unwrap();
+    CreateSourceInput {
+        scope_id: scope.clone(),
+        id: StableId::new(id).unwrap(),
+        name: "x".repeat(target - base),
+        source_type: SourceType::Policy,
+        url: None,
+        reference: None,
+        commit_pin: None,
+        effective_date: None,
+        review_date: None,
+        supersedes: Vec::new(),
+        origin_thread: None,
+        origin_message: None,
+    }
+}
+
+fn wire_call(request: serde_json::Value) -> serde_json::Value {
+    json!({
+        "context": {"repository": "test", "scope": "default"},
+        "request": request
+    })
+}
+
+async fn member_read(root: &camino::Utf8Path, id: &str) -> Result<serde_json::Value, String> {
+    catalog::invoke_with(
+        "get-source-v2",
+        SDK_PROTOCOL_VERSION,
+        wire_call(json!({"id": id})),
+        Arc::new(Target(root.to_path_buf())),
+    )
+    .await
+    .map_err(|failure| failure.error["kind"].as_str().unwrap_or("").to_string())
+}
+
+async fn list_read(root: &camino::Utf8Path) -> Result<serde_json::Value, String> {
+    catalog::invoke_with(
+        "page-sources-v2",
+        SDK_PROTOCOL_VERSION,
+        wire_call(json!({"limit": 50, "cursor": null})),
+        Arc::new(Target(root.to_path_buf())),
+    )
+    .await
+    .map_err(|failure| failure.error["kind"].as_str().unwrap_or("").to_string())
+}
+
+/// The trigger case: the request body fits the transport budget while the
+/// stored record exceeds the read budget, so only the write-side refusal
+/// keeps the accepted record readable.
+#[test]
+#[verifies("rule_accepted_writes_stay_readable", examples)]
+fn trigger_body_fits_the_transport_budget_and_exceeds_the_read_budget() {
+    let call = wire_call(json!({
+        "scope_id": "default",
+        "id": OVERSIZED_ID,
+        "name": "x".repeat(READ_BUDGET),
+        "source_type": "policy",
+        "supersedes": []
+    }));
+    let body = serde_json::to_vec(&call).unwrap().len();
+    assert!(
+        body < TRANSPORT_BUDGET,
+        "fixture body {body} must stay inside the transport budget"
+    );
+}
+
+#[tokio::test]
+#[verifies("rule_accepted_writes_stay_readable", examples)]
+async fn oversized_write_is_refused_before_publication_and_read_stays_clean() {
+    let (dir, store, scope) = initialized_store();
+    let error = store
+        .create_source(source_of_stored_bytes(&scope, OVERSIZED_ID, READ_BUDGET + 1))
+        .err()
+        .expect("the oversized write is refused");
+    let failure = error
+        .downcast_ref::<SourceFailure>()
+        .expect("the refusal is typed");
+    assert!(matches!(failure.failure, WriteFailure::RecordTooLarge));
+
+    let root = camino::Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
+    let kind = member_read(&root, OVERSIZED_ID)
+        .await
+        .expect_err("the refused record does not exist");
+    assert_eq!(kind, "resource_not_found");
+    let page = list_read(&root).await.unwrap();
+    assert_eq!(page["result"]["items"].as_array().unwrap().len(), 0);
+}
+
+#[tokio::test]
+#[verifies("rule_accepted_writes_stay_readable", examples)]
+async fn record_at_the_read_budget_is_accepted_and_readable() {
+    let (dir, store, scope) = initialized_store();
+    let source = store
+        .create_source(source_of_stored_bytes(&scope, OVERSIZED_ID, READ_BUDGET))
+        .expect("a record at the read budget is accepted");
+    assert_eq!(ReadBudget::read_bytes(&source).unwrap(), READ_BUDGET);
+
+    let root = camino::Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
+    let member = member_read(&root, OVERSIZED_ID).await.unwrap();
+    assert_eq!(member["result"]["id"], OVERSIZED_ID);
+    let page = list_read(&root).await.unwrap();
+    assert_eq!(page["result"]["items"].as_array().unwrap().len(), 1);
+}
+
+#[tokio::test]
+#[verifies("rule_accepted_writes_stay_readable", examples)]
+async fn oversized_update_is_refused_and_keeps_the_published_record() {
+    let (dir, store, scope) = initialized_store();
+    store
+        .create_source(source_of_stored_bytes(&scope, OVERSIZED_ID, 1024))
+        .unwrap();
+    let shard = crate::shards::sources_path(&store.layout, &scope);
+    let before = std::fs::read_to_string(&shard).unwrap();
+
+    let error = store
+        .update_source(UpdateSourceInput {
+            scope_id: scope.clone(),
+            id: StableId::new(OVERSIZED_ID).unwrap(),
+            declared_by: None,
+            name: Some("y".repeat(READ_BUDGET)),
+            source_type: None,
+            url: None,
+            reference: None,
+            commit_pin: None,
+            effective_date: None,
+            review_date: None,
+            supersedes: None,
+            clear_fields: Vec::<SourceClearField>::new(),
+        })
+        .err()
+        .expect("the oversized update is refused");
+    let failure = error
+        .downcast_ref::<SourceFailure>()
+        .expect("the refusal is typed");
+    assert!(matches!(failure.failure, WriteFailure::RecordTooLarge));
+    assert_eq!(
+        std::fs::read_to_string(&shard).unwrap(),
+        before,
+        "a refused update leaves canonical state unchanged"
+    );
+
+    let root = camino::Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
+    let member = member_read(&root, OVERSIZED_ID).await.unwrap();
+    assert_eq!(member["result"]["id"], OVERSIZED_ID);
+}
+
+#[tokio::test]
+#[verifies("rule_accepted_writes_stay_readable", examples)]
+async fn oversized_message_write_is_refused_and_persists_nothing() {
+    let (_dir, store, scope) = initialized_store();
+    let thread = StableId::new("thread_x").unwrap();
+    let error = store
+        .append_discussion_message(&scope, &thread, MessageRole::User, "x".repeat(READ_BUDGET))
+        .err()
+        .expect("a message above the message read budget is refused");
+    let failure = error
+        .downcast_ref::<SourceFailure>()
+        .expect("the refusal is typed");
+    assert!(matches!(failure.failure, WriteFailure::RecordTooLarge));
+    assert!(
+        store.list_messages(&scope).unwrap().is_empty(),
+        "a refused message is not published"
+    );
+
+    // A refused write persists nothing, so the accepted message takes the
+    // first identity and lands exactly at the message read budget.
+    let base = ReadBudget::read_bytes(&Message {
+        schema_version: SUPPORTED_SCHEMA_VERSION,
+        scope_id: scope.clone(),
+        id: StableId::new("msg_000001").unwrap(),
+        thread_id: thread,
+        role: MessageRole::User,
+        body: String::new(),
+        created_at: 1,
+        ai_metadata: None,
+    })
+    .unwrap();
+    let message = store
+        .append_discussion_message(
+            &scope,
+            &StableId::new("thread_x").unwrap(),
+            MessageRole::User,
+            "x".repeat(crate::cache::read::page::RECORD_BYTES - base),
+        )
+        .expect("a message at the message read budget is accepted");
+    assert_eq!(message.id.as_str(), "msg_000001");
+}
