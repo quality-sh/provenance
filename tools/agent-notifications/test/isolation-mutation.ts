@@ -10,7 +10,7 @@ try {
   writeFileSync(path, original.replace(target, `threadId: (await client.call("thread/start", {
     model: "fixture", modelProvider: "fixture", cwd: config.repository,
     approvalPolicy: "never", sandbox: "read-only",
-  })).thread.id, clientUserMessageId,`));
+  }, threadResponse)).thread.id, clientUserMessageId,`));
   const child = Bun.spawn(["bun", "test", join(import.meta.dir, "codex.test.ts"), "-t", "every captured"], {
     stdout: "pipe", stderr: "pipe",
   });
