@@ -162,6 +162,81 @@ macro_rules! define_export_readers {
     };
 }
 
+macro_rules! canonical_reader {
+    ($record:ty, $path:ident, $list:ident, direct) => {
+        pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
+            read_jsonl(self, &shards::$path(&self.layout, scope))
+        }
+    };
+    ($record:ty, $path:ident, $list:ident, messages) => {
+        pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
+            read_message_shards(self, &self.layout, scope)
+        }
+    };
+    ($record:ty, $path:ident, $list:ident, contributions) => {
+        pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
+            self.list_contributions_after_direct_read(scope, || Ok(()))
+        }
+    };
+    ($record:ty, $path:ident, $list:ident, synthesis_packets) => {
+        pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
+            self.with_repository_read(|| {
+                let mut records = read_jsonl(self, &shards::$path(&self.layout, scope))?;
+                for batch in self.list_ideation_landings(scope)? {
+                    overlay_records(&mut records, batch.synthesis_packets, |record| {
+                        record.id.as_str()
+                    });
+                }
+                Ok(records)
+            })
+        }
+    };
+    ($record:ty, $path:ident, $list:ident, proposal_cards) => {
+        pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
+            self.project_proposal_cards(scope, None, || Ok(()))
+        }
+    };
+    ($record:ty, $path:ident, $list:ident, assertion_records) => {
+        pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
+            self.with_repository_read(|| {
+                let mut records = read_jsonl(self, &shards::$path(&self.layout, scope))?;
+                for batch in self.list_ideation_landings(scope)? {
+                    overlay_records(&mut records, batch.assertions, |record| record.id.as_str());
+                }
+                Ok(records)
+            })
+        }
+    };
+    ($record:ty, $path:ident, $list:ident, dispositions) => {
+        pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
+            self.with_repository_read(|| {
+                let mut records = read_jsonl(self, &shards::$path(&self.layout, scope))?;
+                records.extend(read_legacy_dispositions(
+                    self,
+                    &shards::legacy_promotion_decisions_path(&self.layout, scope),
+                )?);
+                for batch in self.list_ideation_landings(scope)? {
+                    overlay_records(&mut records, batch.dispositions, |record| {
+                        record.id.as_str()
+                    });
+                }
+                Ok(records)
+            })
+        }
+    };
+}
+
+macro_rules! define_canonical_readers {
+    (
+        export { $($export:tt)* }
+        canonical { $($variant:ident { record: $record:ty, field: $field:ident, shard: { path: $path:ident, suffix: $suffix:literal, table: $table:literal }, node: [$($node:tt)*], reader: { open: $reader:ident, closed: [$($closed:tt)*], strategy: $strategy:ident }, id: $id:ident, loader: [$($loader:tt)*], graph: [$($graph:tt)*], import: [$($import:tt)*], catalog: [$($catalog:tt)*], route: [$($route:tt)*] };)* }
+        bindings { $($bindings:tt)* }
+        internal { $($internal:tt)* }
+    ) => {
+        $(canonical_reader!($record, $path, $reader, $strategy);)*
+    };
+}
+
 impl StateStore {
     pub const fn new(layout: ProvenanceLayout) -> Self {
         Self {
@@ -227,6 +302,7 @@ impl StateStore {
     }
 
     crate::cache::record_families!(define_export_readers);
+    crate::cache::family_table::record_family_rows!(define_canonical_readers);
 
     pub fn active_verification_bindings(
         &self,
@@ -246,15 +322,6 @@ impl StateStore {
             .into_iter()
             .collect())
     }
-    pub fn list_threads(&self, scope: &ScopeId) -> anyhow::Result<Vec<Thread>> {
-        read_jsonl(self, &shards::threads_path(&self.layout, scope))
-    }
-    pub fn list_messages(&self, scope: &ScopeId) -> anyhow::Result<Vec<Message>> {
-        read_message_shards(self, &self.layout, scope)
-    }
-    pub fn list_contributions(&self, scope: &ScopeId) -> anyhow::Result<Vec<Contribution>> {
-        self.list_contributions_after_direct_read(scope, || Ok(()))
-    }
     fn list_contributions_after_direct_read(
         &self,
         scope: &ScopeId,
@@ -270,21 +337,6 @@ impl StateStore {
             }
             Ok(records)
         })
-    }
-    pub fn list_synthesis_packets(&self, scope: &ScopeId) -> anyhow::Result<Vec<SynthesisPacket>> {
-        self.with_repository_read(|| {
-            let mut records =
-                read_jsonl(self, &shards::synthesis_packets_path(&self.layout, scope))?;
-            for batch in self.list_ideation_landings(scope)? {
-                overlay_records(&mut records, batch.synthesis_packets, |record| {
-                    record.id.as_str()
-                });
-            }
-            Ok(records)
-        })
-    }
-    pub fn list_proposal_cards(&self, scope: &ScopeId) -> anyhow::Result<Vec<ProposalCard>> {
-        self.project_proposal_cards(scope, None, || Ok(()))
     }
     pub fn list_proposal_cards_with_actor_ids(
         &self,
@@ -328,31 +380,6 @@ impl StateStore {
             let mut records = read_jsonl(self, &shards::proposal_cards_path(&self.layout, scope))?;
             for batch in self.list_ideation_landings(scope)? {
                 overlay_records(&mut records, batch.proposals, |record| record.id.as_str());
-            }
-            Ok(records)
-        })
-    }
-    pub fn list_dispositions(&self, scope: &ScopeId) -> anyhow::Result<Vec<DispositionRecord>> {
-        self.with_repository_read(|| {
-            let mut records = read_jsonl(self, &shards::dispositions_path(&self.layout, scope))?;
-            records.extend(read_legacy_dispositions(
-                self,
-                &shards::legacy_promotion_decisions_path(&self.layout, scope),
-            )?);
-            for batch in self.list_ideation_landings(scope)? {
-                overlay_records(&mut records, batch.dispositions, |record| {
-                    record.id.as_str()
-                });
-            }
-            Ok(records)
-        })
-    }
-    pub fn list_assertion_records(&self, scope: &ScopeId) -> anyhow::Result<Vec<AssertionRecord>> {
-        self.with_repository_read(|| {
-            let mut records =
-                read_jsonl(self, &shards::assertion_records_path(&self.layout, scope))?;
-            for batch in self.list_ideation_landings(scope)? {
-                overlay_records(&mut records, batch.assertions, |record| record.id.as_str());
             }
             Ok(records)
         })
