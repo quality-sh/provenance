@@ -184,12 +184,10 @@ decision!(
 pub struct DecideRequirementReviewRequest {
     pub scope_id: ScopeId,
     pub requirement_id: StableId,
-    pub request_id: StableId,
     pub actor: DispositionActor,
     pub proposal_id: StableId,
-    pub disposition_id: StableId,
     pub decision: DispositionDecision,
-    pub rationale: String,
+    pub rationale: Option<String>,
     pub canonical_artifact: Option<CanonicalArtifact>,
     pub feedback: Option<review::ReviewFeedback>,
     pub declared_by: Option<String>,
@@ -201,7 +199,6 @@ pub struct DecideRequirementReviewRequest {
 pub struct WithdrawRequirementReviewRequest {
     pub scope_id: ScopeId,
     pub requirement_id: StableId,
-    pub request_id: StableId,
     pub actor: String,
     pub proposal_id: StableId,
     pub declared_by: Option<String>,
@@ -230,10 +227,8 @@ addressed_decision!(
     decide_requirement_review_for,
     |request: DecideRequirementReviewRequest| review::DecideRequirementReview {
         scope_id: request.scope_id,
-        request_id: request.request_id,
         actor: request.actor,
         proposal_id: request.proposal_id,
-        disposition_id: request.disposition_id,
         decision: request.decision,
         rationale: request.rationale,
         canonical_artifact: request.canonical_artifact,
@@ -253,7 +248,6 @@ addressed_decision!(
     withdraw_requirement_review_for,
     |request: WithdrawRequirementReviewRequest| review::WithdrawRequirementReview {
         scope_id: request.scope_id,
-        request_id: request.request_id,
         actor: request.actor,
         proposal_id: request.proposal_id,
         declared_by: request.declared_by,

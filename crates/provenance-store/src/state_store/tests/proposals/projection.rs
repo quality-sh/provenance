@@ -26,7 +26,7 @@ fn proposal_projection_rejects_unlisted_disposition_actor() {
             id: StableId::new("disposition_overtime").unwrap(),
             proposal_id: StableId::new("proposal_overtime").unwrap(),
             decision: DispositionDecision::Accepted,
-            rationale: "Forged review".into(),
+            rationale: Some("Forged review".into()),
             actor: disposition_actor("forged-reviewer"),
             canonical_artifact: None,
             external_action: None,
@@ -329,7 +329,7 @@ fn disposition_input(scope_id: ScopeId, id: &str) -> CreateDispositionInput {
         id: StableId::new(id).unwrap(),
         proposal_id: StableId::new("proposal_overtime").unwrap(),
         decision: DispositionDecision::Accepted,
-        rationale: "Reviewed".into(),
+        rationale: Some("Reviewed".into()),
         actor: disposition_actor("ben"),
         canonical_artifact: Some(provenance_core::CanonicalArtifact {
             artifact_type: provenance_core::CanonicalArtifactType::Requirement,
