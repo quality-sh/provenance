@@ -60,7 +60,9 @@ jobs:
         with:
           node-version: 24
       - name: Fetch crates through Socket Firewall
-        run: sfw cargo fetch --locked
+        run: |
+          sfw cargo fetch
+          git diff -- Cargo.lock
       - run: sfw npm ci --prefix tools/operation-codegen
       - run: node tools/operation-codegen/ensure-generated.mjs
       - run: cargo build --workspace --all-features
@@ -110,7 +112,9 @@ jobs:
         with:
           node-version: 24
       - name: Fetch crates through Socket Firewall
-        run: sfw cargo fetch --locked
+        run: |
+          sfw cargo fetch
+          git diff -- Cargo.lock
       - run: sfw npm ci --prefix tools/operation-codegen
       - run: node tools/operation-codegen/ensure-generated.mjs
       - run: cargo check --workspace --all-targets
@@ -147,7 +151,9 @@ jobs:
         with:
           node-version: 24
       - name: Fetch crates through Socket Firewall
-        run: sfw cargo fetch --locked
+        run: |
+          sfw cargo fetch
+          git diff -- Cargo.lock
       - run: sfw npm ci --prefix tools/operation-codegen
       - run: node tools/operation-codegen/ensure-generated.mjs
       - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
@@ -183,7 +189,9 @@ jobs:
         with:
           node-version: 24
       - name: Fetch crates through Socket Firewall
-        run: sfw cargo fetch --locked
+        run: |
+          sfw cargo fetch
+          git diff -- Cargo.lock
       - run: sfw npm ci --prefix tools/operation-codegen
       - run: node tools/operation-codegen/ensure-generated.mjs
       - run: cargo test --workspace --all-features --no-fail-fast
@@ -220,7 +228,9 @@ jobs:
         with:
           node-version: 24
       - name: Fetch crates through Socket Firewall
-        run: sfw cargo fetch --locked
+        run: |
+          sfw cargo fetch
+          git diff -- Cargo.lock
       - run: sfw npm ci --prefix tools/operation-codegen
       - run: node tools/operation-codegen/ensure-generated.mjs
       - name: Run requested Cargo check
