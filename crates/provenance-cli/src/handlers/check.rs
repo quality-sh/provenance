@@ -135,23 +135,45 @@ impl RepositoryCheckPort {
     #[rule("rule_porcelain_coverage_does_not_run_tests")]
     fn binding_run(&self, selected_scope: Option<&str>) -> Result<CategoryRun, String> {
         let store = Store::open(&self.repo);
-        let manifest = provenance_store::layout::with_initialized_graph(store.layout(), Ok)
+        provenance_store::layout::require_initialized_graph(store.layout())
             .map_err(|error| format!("{error:#}"))?;
+        let scanned = provenance_scanner::scan_path_with_content(&self.repo)
+            .map_err(|error| format!("{error:#}"))?;
+        self.binding_run_from_scanned(selected_scope, &scanned)
+    }
+
+    fn binding_run_from_scanned(
+        &self,
+        selected_scope: Option<&str>,
+        scanned: &[provenance_scanner::FileScanWithContent],
+    ) -> Result<CategoryRun, String> {
+        let store = Store::open(&self.repo);
         let policy = provenance_store::settings::Settings::load(store.layout())
             .map_err(|error| format!("{error:#}"))?
             .coverage
             .binding_findings;
-        let mut warnings = Vec::new();
-        for scope in manifest
-            .scopes
-            .into_iter()
-            .filter(|scope| selected_scope.is_none_or(|selected| scope.id.as_str() == selected))
-        {
-            let report =
-                super::coverage::coverage_scan(&self.repo, &self.repo, scope.id.as_str(), true)
-                    .map_err(|error| format!("{error:#}"))?;
-            warnings.extend(report.report.warnings);
-        }
+        let warnings = provenance_store::layout::with_initialized_graph(store.layout(), |manifest| {
+            let scopes = manifest
+                .scopes
+                .into_iter()
+                .filter(|scope| selected_scope.is_none_or(|selected| scope.id.as_str() == selected))
+                .collect::<Vec<_>>();
+            if let Some(scope) = selected_scope {
+                anyhow::ensure!(!scopes.is_empty(), "scope {scope} does not exist");
+            }
+            let mut warnings = Vec::new();
+            for scope in scopes {
+                let report = super::coverage::coverage_scan_from_scanned(
+                    &self.repo,
+                    &self.repo,
+                    scope.id.as_str(),
+                    scanned,
+                )?;
+                warnings.extend(report.report.warnings);
+            }
+            Ok(warnings)
+        })
+        .map_err(|error| format!("{error:#}"))?;
         let refusal = if policy == provenance_store::settings::BindingFindingsSeverity::Error
             && warnings.iter().any(|warning| warning.binding_finding)
         {
@@ -298,10 +320,7 @@ fn validate_locked(
     repository_wide: bool,
 ) -> anyhow::Result<()> {
     ensure_supported_schema_version("manifest", manifest.schema_version)?;
-    anyhow::ensure!(
-        !manifest.scopes.is_empty(),
-        "manifest must contain at least one scope"
-    );
+    manifest.ensure_has_scopes()?;
     let manifest_scopes: BTreeSet<_> = manifest
         .scopes
         .iter()
@@ -346,120 +365,4 @@ fn validate_locked(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use provenance_core::{Manifest, RepoPathPrefix, ScopeId};
-    use provenance_store::layout::ProvenanceLayout;
-
-    #[test]
-    #[provenance_macros::verifies("rule_init_validates_planned_repository", examples)]
-    fn planned_manifest_validation_runs_publication_recovery_before_reading_state() {
-        let directory = tempfile::tempdir().unwrap();
-        let repo = Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
-        let layout = ProvenanceLayout::new(repo.clone());
-        std::fs::create_dir_all(layout.scopes_dir()).unwrap();
-        std::fs::write(layout.manifest_path(), "not the planned manifest").unwrap();
-        std::fs::create_dir_all(layout.cache_dir()).unwrap();
-        std::fs::write(layout.publication_marker_path(), "not a publication marker").unwrap();
-        let manifest = Manifest::default_with_scope(
-            ScopeId::new("default").unwrap(),
-            RepoPathPrefix::new("."),
-        );
-
-        let error = validate_repository_with_manifest(&repo, &manifest).unwrap_err();
-
-        assert!(format!("{error:#}").contains("expected ident"));
-        assert!(layout.publication_lock_path().exists());
-        assert!(layout.import_transactions_dir().exists());
-    }
-
-    #[cfg(unix)]
-    #[test]
-    #[provenance_macros::verifies("rule_init_validates_planned_repository", examples)]
-    fn planned_manifest_validation_refuses_a_symlinked_publication_cache() {
-        use std::os::unix::fs::symlink;
-
-        let directory = tempfile::tempdir().unwrap();
-        let repo = Utf8PathBuf::from_path_buf(directory.path().join("repo")).unwrap();
-        let outside = directory.path().join("outside");
-        let layout = ProvenanceLayout::new(repo.clone());
-        std::fs::create_dir_all(layout.provenance_dir()).unwrap();
-        std::fs::create_dir_all(&outside).unwrap();
-        symlink(&outside, layout.cache_dir()).unwrap();
-        let manifest = Manifest::default_with_scope(
-            ScopeId::new("default").unwrap(),
-            RepoPathPrefix::new("."),
-        );
-
-        let error = validate_repository_with_manifest(&repo, &manifest).unwrap_err();
-
-        assert!(format!("{error:#}").contains("symlink component"));
-    }
-
-    #[test]
-    fn planned_manifest_validation_locks_an_existing_state_tree() {
-        let directory = tempfile::tempdir().unwrap();
-        let repo = Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
-        let layout = ProvenanceLayout::new(repo.clone());
-        std::fs::create_dir_all(layout.scopes_dir()).unwrap();
-        let manifest = Manifest::default_with_scope(
-            ScopeId::new("default").unwrap(),
-            RepoPathPrefix::new("."),
-        );
-
-        validate_repository_with_manifest(&repo, &manifest).unwrap();
-
-        assert!(layout.publication_lock_path().exists());
-    }
-
-    #[test]
-    fn planned_manifest_validation_keeps_a_new_repository_read_only() {
-        let directory = tempfile::tempdir().unwrap();
-        let repo = Utf8PathBuf::from_path_buf(directory.path().join("repo")).unwrap();
-        let layout = ProvenanceLayout::new(repo.clone());
-        let manifest = Manifest::default_with_scope(
-            ScopeId::new("default").unwrap(),
-            RepoPathPrefix::new("."),
-        );
-
-        validate_repository_with_manifest(&repo, &manifest).unwrap();
-
-        assert!(!layout.provenance_dir().exists());
-    }
-
-    #[tokio::test]
-    async fn scoped_check_does_not_read_another_scope() {
-        let directory = tempfile::tempdir().unwrap();
-        let repo = Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
-        let layout = ProvenanceLayout::new(repo.clone());
-        std::fs::create_dir_all(layout.state_dir()).unwrap();
-        let mut manifest = Manifest::default_with_scope(
-            ScopeId::new("default").unwrap(),
-            RepoPathPrefix::new("."),
-        );
-        manifest.scopes.push(provenance_core::Scope {
-            id: ScopeId::new("other").unwrap(),
-            path_prefix: RepoPathPrefix::new("other"),
-        });
-        std::fs::write(
-            layout.manifest_path(),
-            serde_json::to_vec(&manifest).unwrap(),
-        )
-        .unwrap();
-        let foreign = layout
-            .scopes_dir()
-            .join("other")
-            .join("requirements")
-            .join("req.jsonl");
-        std::fs::create_dir_all(foreign.parent().unwrap()).unwrap();
-        std::fs::write(foreign, "not JSON\n").unwrap();
-
-        let port = RepositoryCheckPort::new(repo, false, None);
-        let run = port.run(Category::Graph, Some("default")).await.unwrap();
-
-        let CategoryRun::Graph { findings, .. } = run else {
-            panic!("graph run")
-        };
-        assert!(findings.is_empty());
-    }
-}
+mod tests;

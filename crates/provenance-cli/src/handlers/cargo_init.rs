@@ -68,7 +68,7 @@ pub(super) fn handle(
             ),
             &cargo_changes,
         )
-        .print(quiet);
+        .print(&mut std::io::stdout().lock(), quiet)?;
     Ok(())
 }
 
