@@ -1,5 +1,5 @@
 use super::{DiscussionEntry, DiscussionMessagesPage, DiscussionStatus};
-use crate::{NodeType, StableId, ThreadParent};
+use crate::{Message, NodeType, StableId, ThreadParent};
 use provenance_macros::rule;
 use serde::{Deserialize, Serialize};
 
@@ -78,6 +78,24 @@ pub struct DiscussionConversationQuery {
 pub struct DiscussionConversation {
     pub head: DiscussionEntry,
     pub messages: DiscussionMessagesPage,
+}
+
+/// The page returned by a registered Discussion read operation.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiscussionResultPage<T> {
+    pub entries: Vec<T>,
+    pub limit: usize,
+    pub has_more: bool,
+    pub next_cursor: Option<String>,
+}
+
+/// One Discussion head and a bounded Message page from one read snapshot.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiscussionConversationResult {
+    pub head: DiscussionEntry,
+    pub messages: DiscussionResultPage<Message>,
 }
 
 const fn default_limit() -> usize {

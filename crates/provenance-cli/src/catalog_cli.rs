@@ -12,7 +12,7 @@ use std::{
 };
 
 mod address;
-mod fields;
+pub(crate) mod fields;
 
 pub struct Invocation {
     context: GlobalContext,
@@ -72,12 +72,12 @@ pub fn command(collection: &str) -> anyhow::Result<Command> {
 }
 
 pub fn target_command() -> anyhow::Result<Command> {
-    let definitions = TargetAction::ALL
+    let definitions = TargetAction::RECORD
         .into_iter()
         .flat_map(catalog::target_definitions)
         .map(|(_, definition)| definition)
         .collect::<Vec<_>>();
-    fields::augment_with_overrides(
+    let command = fields::augment_with_overrides(
         grammar::target_command(),
         definitions,
         &[
@@ -91,23 +91,14 @@ pub fn target_command() -> anyhow::Result<Command> {
             "kind",
             "limit",
             "stdin",
-            "status",
-            "cursor",
-            "body",
-            "actor",
-            "request-id",
-            "expected-version",
-            "role",
         ],
-        &[
-            "status",
-            "cursor",
-            "body",
-            "actor",
-            "request-id",
-            "expected-version",
-            "role",
-        ],
+        &[],
+    )?;
+    fields::augment_schemas(
+        command,
+        provenance_porcelain::action::Action::DISCUSSION
+            .map(provenance_porcelain::discussion::input_schema),
+        &["parent", "discussion_id", "declared_by"],
     )
 }
 

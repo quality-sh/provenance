@@ -1,7 +1,6 @@
 use crate::cli::Cli;
 use clap::{CommandFactory as _, Parser as _};
 use provenance_core::RESERVED_RECORD_IDS;
-use provenance_porcelain::discussion::DiscussionAction;
 use provenance_porcelain::{action::Action, get::View};
 use provenance_store::operations::catalog::{self, TargetAction};
 
@@ -19,7 +18,7 @@ fn reserved_ids_cover_declared_root_commands_collections_and_actions() {
     for action in TargetAction::ALL {
         assert!(RESERVED_RECORD_IDS.contains(&action.as_str()));
     }
-    for action in DiscussionAction::ALL {
+    for action in Action::DISCUSSION {
         assert!(RESERVED_RECORD_IDS.contains(&action.as_str()));
     }
     for definition in catalog::definitions() {

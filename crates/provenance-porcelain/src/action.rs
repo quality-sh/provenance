@@ -2,7 +2,7 @@
 
 use crate::get::{GetPort, ReadError};
 use provenance_core::protocol::RecordResolution;
-use provenance_core::NodeType;
+use provenance_core::{NodeType, StableId, ThreadParent};
 use provenance_macros::rule;
 use serde_json::Value;
 use std::fmt::Display;
@@ -18,6 +18,10 @@ pub const fn description(action: Action) -> &'static str {
         Action::Claim => "Claim the target Topic.",
         Action::Release => "Release the target Topic claim.",
         Action::Submit => "Submit the target Requirement for review.",
+        Action::Discussions => "List addressed Discussions under the target record.",
+        Action::Discussion => "Read the addressed Discussion.",
+        Action::Discuss => "Start a Discussion under the target record.",
+        Action::Reply => "Reply to the addressed Discussion.",
     }
 }
 
@@ -86,23 +90,36 @@ impl<P: GetPort> crate::Porcelain<P> {
         let kind = if let Some(kind) = create_kind {
             kind
         } else {
-            match self
-                .port
-                .resolve(target)
-                .await
-                .map_err(map_read_error)?
-                .result
-            {
-                RecordResolution::Found(record) => record.node_type(),
-                RecordResolution::Missing => return Err(ActionError::NotFound),
-                RecordResolution::Ambiguous => return Err(ActionError::AmbiguousIdentity),
-            }
+            self.resolve_record_kind(target).await?
         };
         Ok(Target {
             action,
             target: target.to_owned(),
             kind,
         })
+    }
+
+    /// Resolve a graph parent for an action whose target is a graph record.
+    pub async fn select_parent(&self, target: &str) -> Result<ThreadParent, ActionError> {
+        let node_id = StableId::new(target).map_err(|_| ActionError::InvalidOptions)?;
+        Ok(ThreadParent {
+            node_type: self.resolve_record_kind(target).await?,
+            node_id,
+        })
+    }
+
+    async fn resolve_record_kind(&self, target: &str) -> Result<NodeType, ActionError> {
+        match self
+            .port
+            .resolve(target)
+            .await
+            .map_err(map_read_error)?
+            .result
+        {
+            RecordResolution::Found(record) => Ok(record.node_type()),
+            RecordResolution::Missing => Err(ActionError::NotFound),
+            RecordResolution::Ambiguous => Err(ActionError::AmbiguousIdentity),
+        }
     }
 }
 

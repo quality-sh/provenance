@@ -7,7 +7,7 @@ use rmcp::model::{CallToolResult, Content, Tool};
 use serde_json::{json, Map, Value};
 
 pub fn tools(host: &crate::StatementHost) -> Vec<Tool> {
-    Action::ALL
+    Action::RECORD
         .into_iter()
         .filter_map(|action| tool(host, action))
         .collect()
