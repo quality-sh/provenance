@@ -73,7 +73,7 @@ pub fn run(options: &super::Options) -> anyhow::Result<()> {
         (host, Some(started))
     };
     if read_only {
-        eprintln!("{}", crate::reviewer::review_page_warning(&options.repo));
+        eprintln!("{}", provenance_transport::reviewer::review_page_warning(&options.repo));
     }
     let url = host.endpoint().join("/")?;
     let mut launch = url.clone();

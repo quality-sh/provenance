@@ -12,19 +12,24 @@
 pub mod action;
 pub mod action_input;
 pub mod api;
+pub mod cargo_init;
 pub mod check;
 pub mod dictionary;
 pub mod discussion;
+pub mod dogfood;
 pub mod export;
 pub mod get;
 pub mod graph_reference;
 pub mod guidance;
 pub mod import;
+pub mod init;
 pub mod materialize;
+pub mod merge_jsonl;
 pub mod registry;
 pub mod report;
 pub mod schema;
 pub mod search;
+pub mod skills;
 pub mod swarm_backtrace;
 pub mod validate;
 

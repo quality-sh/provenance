@@ -297,6 +297,7 @@
         "provenance-scanner",
         "provenance-ste100",
         "provenance-store",
+        "remove_dir_all",
         "tempfile",
         "tokio",
         "tokio-util",

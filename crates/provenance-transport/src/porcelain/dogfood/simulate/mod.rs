@@ -27,21 +27,23 @@ const REQUIREMENT_ID: &str = "req_simulate_onboarding";
 /// One clean ASD-STE100 statement the first session writes.
 const STATEMENT: &str = "The simulator records each event in one file.";
 
-pub(super) fn handle(keep: bool, dir: Option<&Utf8Path>) -> anyhow::Result<()> {
+/// Runs the onboarding steps in a new sandbox and gives the readable account of the run.
+pub(super) fn run(keep: bool, dir: Option<&Utf8Path>) -> anyhow::Result<String> {
     let sandbox = create_sandbox(dir)?;
     let mut guard = SandboxGuard {
         path: sandbox.clone(),
         keep,
         armed: false,
     };
-    let result = run_and_report(&sandbox);
-    finish_sandbox(&sandbox, keep)?;
+    let mut out = String::new();
+    let result = run_and_report(&sandbox, &mut out);
+    finish_sandbox(&sandbox, keep, &mut out)?;
     guard.armed = true;
-    result
+    result.map(|()| out)
 }
 
-/// Removes the sandbox when the report dies mid-print (a closed pipe panics
-/// `println!`), so the default removal holds outside the happy path.
+/// Removes the sandbox when the run stops with a panic, so the default removal
+/// holds outside the happy path.
 struct SandboxGuard {
     path: PathBuf,
     keep: bool,
@@ -78,19 +80,19 @@ fn create_sandbox(dir: Option<&Utf8Path>) -> anyhow::Result<PathBuf> {
     Ok(sandbox)
 }
 
-fn finish_sandbox(sandbox: &Path, keep: bool) -> anyhow::Result<()> {
+fn finish_sandbox(sandbox: &Path, keep: bool, out: &mut String) -> anyhow::Result<()> {
     if keep {
-        println!("sandbox kept at {}", sandbox.display());
+        line(out, format_args!("sandbox kept at {}", sandbox.display()));
         return Ok(());
     }
     remove_dir_all::remove_dir_all(sandbox)
         .with_context(|| format!("remove the sandbox directory {}", sandbox.display()))?;
-    println!("sandbox removed");
+    line(out, format_args!("sandbox removed"));
     Ok(())
 }
 
-fn run_and_report(sandbox: &Path) -> anyhow::Result<()> {
-    println!("simulated onboarding");
+fn run_and_report(sandbox: &Path, out: &mut String) -> anyhow::Result<()> {
+    line(out, format_args!("simulated onboarding"));
     let body = fixture_pdf::dictionary_pdf();
     let server =
         FixtureServer::start(body).context("start the loopback dictionary fixture server")?;
@@ -100,13 +102,13 @@ fn run_and_report(sandbox: &Path) -> anyhow::Result<()> {
     for step in step_arguments(sandbox) {
         let outcome = steps::run(&exe, &step.args, step.stdin.as_deref(), sandbox, &env)
             .with_context(|| format!("run the {} step", step.label))?;
-        print_step(&outcome);
+        print_step(&outcome, out);
         if !outcome.succeeded() {
-            println!("verdict: fail");
+            line(out, format_args!("verdict: fail"));
             return Ok(());
         }
     }
-    println!("verdict: pass");
+    line(out, format_args!("verdict: pass"));
     Ok(())
 }
 
@@ -184,20 +186,26 @@ fn step_arguments(sandbox: &Path) -> Vec<StepSpec> {
     ]
 }
 
-fn print_step(outcome: &StepOutcome) {
-    println!();
-    println!("$ {}", outcome.command);
+fn print_step(outcome: &StepOutcome, out: &mut String) {
+    out.push('\n');
+    line(out, format_args!("$ {}", outcome.command));
     let seconds = outcome.elapsed.as_secs_f32();
     match outcome.exit_code {
-        Some(code) => println!("exit {code}, {seconds:.2}s"),
-        None => println!("exit signal, {seconds:.2}s"),
+        Some(code) => line(out, format_args!("exit {code}, {seconds:.2}s")),
+        None => line(out, format_args!("exit signal, {seconds:.2}s")),
     }
     let stdout = outcome.stdout.trim_end();
     if !stdout.is_empty() {
-        println!("{stdout}");
+        line(out, format_args!("{stdout}"));
     }
     let stderr = outcome.stderr.trim_end();
     if !stderr.is_empty() {
-        println!("{stderr}");
+        line(out, format_args!("{stderr}"));
     }
+}
+
+/// Appends one line to the account of the run.
+fn line(out: &mut String, text: std::fmt::Arguments<'_>) {
+    use std::fmt::Write as _;
+    writeln!(out, "{text}").expect("a write to a string does not fail");
 }

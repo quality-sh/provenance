@@ -321,7 +321,7 @@ impl Invocation {
             Self::Workspace(input) => handlers::workspace_command(input).await,
             Self::Server(input) => handlers::server_command(input).await,
             #[cfg(feature = "dogfood")]
-            Self::Dogfood(input, quiet) => handlers::dogfood_command(input, quiet),
+            Self::Dogfood(input, quiet) => handlers::dogfood_command(input, quiet).await,
             Self::Api(args) => api::dispatch(args).await,
             Self::Get(invocation) => {
                 if invocation.delivery == Delivery::Follow {

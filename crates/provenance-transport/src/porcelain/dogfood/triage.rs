@@ -13,9 +13,8 @@
 //! position in a filtered list can change an identifier.
 
 use super::{now_ms, read_spool, spool_dir, Note};
-use crate::cli::{DogfoodCategory, DogfoodSeverity, TriageFilter};
-use crate::output;
 use anyhow::Context;
+use provenance_porcelain::dogfood::{TriageMarked, TriageStatus as TriageFilter, TriageView};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -31,27 +30,11 @@ struct StateRecord {
     reason: Option<String>,
 }
 
-/// One note as the triage view shows it: the identifier to act on, the
-/// current state, and enough of the note to recognize it.
-#[derive(Serialize)]
-struct TriageView {
-    id: String,
-    status: &'static str,
-    reason: Option<String>,
-    ts_ms: i64,
-    session_id: Option<String>,
-    surface: String,
-    category: DogfoodCategory,
-    severity: DogfoodSeverity,
-    summary: String,
-}
-
 pub(super) fn set_state(
     input: &str,
     handled: bool,
     reason: Option<String>,
-    quiet: bool,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<TriageMarked> {
     let notes = read_spool()?;
     let note_id = resolve_note_id(input, &notes)?;
     append_state(&StateRecord {
@@ -60,14 +43,13 @@ pub(super) fn set_state(
         handled,
         reason,
     })?;
-    if !quiet {
-        let status = if handled { "handled" } else { "unhandled" };
-        println!("marked {note_id} {status}");
-    }
-    Ok(())
+    Ok(TriageMarked {
+        id: note_id,
+        handled,
+    })
 }
 
-pub(super) fn list(filter: TriageFilter) -> anyhow::Result<()> {
+pub(super) fn list(filter: TriageFilter) -> anyhow::Result<Vec<TriageView>> {
     let notes = read_spool()?;
     let state = load_state()?;
     let mut views: Vec<TriageView> = notes.iter().map(|note| view(note, &state)).collect();
@@ -77,8 +59,7 @@ pub(super) fn list(filter: TriageFilter) -> anyhow::Result<()> {
         .into_iter()
         .filter(|entry| matches_filter(entry, filter))
         .collect();
-    output::print_json(&shown)?;
-    Ok(())
+    Ok(shown)
 }
 
 /// The stable identifier of a note: an FNV-1a digest of its canonical JSON.

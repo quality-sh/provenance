@@ -2720,6 +2720,8 @@ dependencies = [
  "provenance-ste100",
  "provenance-store",
  "pulldown-cmark",
+ "remove_dir_all",
+ "semver",
  "serde",
  "serde_ignored",
  "serde_json",
