@@ -13,7 +13,7 @@ mod proposal_surfaces;
 mod proposal_writers;
 pub(crate) mod read_budget;
 pub(crate) mod readers;
-mod record_stamps;
+pub(crate) mod record_stamps;
 mod reference_methods;
 mod reference_writers;
 mod requirement_reviews;

@@ -6,16 +6,56 @@ use super::{
 };
 use crate::{
     canonical_digest,
+    publication::with_staged_state,
+    review::{guard, journal, save::RecordEvidenceContext},
     state_store::{
-        AddSourceReferenceInput, CreateRequirementInput, StateStore, UpdateRequirementInput,
+        record_stamps::GraphRecord, AddSourceReferenceInput, CreateRequirementInput, StateStore,
+        UpdateRequirementInput,
     },
     write_error::{SourceFailure, WriteError, WriteFailure},
 };
-use provenance_core::{Requirement, ScopeId, SourceReference, StableId};
+use camino::Utf8Path;
+use provenance_core::{review::ReviewRecord, Requirement, ScopeId, SourceReference, StableId};
 
 const AUTHORING_ACTOR: &str = "authoring";
 
 impl StateStore {
+    pub(crate) fn create_native_record<T: GraphRecord>(
+        &self,
+        path: &Utf8Path,
+        id: &StableId,
+        write: impl FnOnce(&StateStore) -> anyhow::Result<T>,
+    ) -> anyhow::Result<T> {
+        let relative = path.strip_prefix(self.layout.root())?.to_owned();
+        self.with_repository_publication(|| {
+            with_staged_state(&self.layout, false, |layout| {
+                let staged = Self::new(layout.clone());
+                let staged_path = layout.root().join(&relative);
+                guard::with_writer(&staged_path, id.as_str(), || {
+                    write(&staged)?;
+                    let created = staged.enroll_graph_record::<T>(&staged_path, id)?;
+                    let after: ReviewRecord = created.clone().into();
+                    let request_id = journal::new_id();
+                    staged.commit_record_evidence(
+                        None,
+                        &after,
+                        RecordEvidenceContext {
+                            head: None,
+                            actor: AUTHORING_ACTOR.to_owned(),
+                            request_id,
+                            intent_digest: canonical_digest::digest(
+                                &canonical_digest::canonical_bytes(&after)?,
+                            ),
+                            origin: None,
+                        },
+                    )?;
+                    staged.enroll_review_manifest()?;
+                    Ok(created)
+                })
+            })
+        })
+    }
+
     pub fn create_requirement(&self, input: CreateRequirementInput) -> anyhow::Result<Requirement> {
         let intent = intent_of(&input)?;
         let request_id = authoring_request_id("create-requirement", &[&intent])?;
