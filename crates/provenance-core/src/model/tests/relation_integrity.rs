@@ -1,6 +1,8 @@
 mod relation_integrity {
 use super::relation_fixtures::{fixture, ids, requirement, rule, sid};
-use crate::model::relations::{cycle_in, cycle_refusal, missing_required, reaches, required_refusal};
+use crate::model::relations::{
+    cycle_in, cycle_refusal, cycle_with_added_edge, missing_required, reaches, required_refusal,
+};
 
 #[test]
 fn a_rule_with_no_requirement_is_missing_its_required_relation() {
@@ -54,6 +56,30 @@ fn a_three_record_cycle_is_named_by_its_closing_pair_with_the_cycle_printed() {
     assert_eq!(
         cycle_refusal("refines", &cycle),
         "refines forms a cycle: req_cyc_a -> req_cyc_b -> req_cyc_c -> req_cyc_a"
+    );
+}
+
+#[test]
+fn a_hypothetical_edge_reports_the_complete_cycle_path() {
+    let mut a = requirement("req_cyc_a", None, &[]);
+    let mut b = requirement("req_cyc_b", None, &[]);
+    let c = requirement("req_cyc_c", None, &[]);
+    a.depends_on = ids(&["req_cyc_b"]);
+    b.depends_on = ids(&["req_cyc_c"]);
+    let records = vec![a, b, c];
+
+    let cycle = cycle_with_added_edge(
+        &records,
+        "depends_on",
+        &sid("req_cyc_c"),
+        &sid("req_cyc_a"),
+    )
+    .expect("the added edge closes the chain");
+    assert_eq!(cycle.closes_from, sid("req_cyc_c"));
+    assert_eq!(cycle.closes_into, sid("req_cyc_a"));
+    assert_eq!(
+        cycle_refusal("depends_on", &cycle),
+        "depends_on forms a cycle: req_cyc_a -> req_cyc_b -> req_cyc_c -> req_cyc_a"
     );
 }
 
