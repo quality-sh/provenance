@@ -6,29 +6,87 @@ use provenance_macros::rule;
 use serde::{ser::SerializeStruct, Deserialize, Serialize};
 
 macro_rules! graph_kind {
-    (export($kind:literal)) => {
+    (export($kind:literal, $test_kind:ident, $fixture:ident, $id:literal)) => {
         $kind
     };
-    (verification($kind:literal)) => {
+    (verification($kind:literal, $test_kind:ident, $fixture:ident, $id:literal)) => {
         $kind
     };
-    (implementation($kind:literal)) => {
+    (implementation($kind:literal, $test_kind:ident, $fixture:ident, $id:literal)) => {
         $kind
     };
 }
 
 macro_rules! serialize_binding {
-    ($graph:ident, $state:ident, verification, verification($kind:literal), $field:ident) => {
+    (
+        $graph:ident, $state:ident, verification,
+        verification($kind:literal, $test_kind:ident, $fixture:ident, $id:literal), $field:ident
+    ) => {
         if !$graph.$field.is_empty() {
             $state.serialize_field(stringify!($field), &$graph.$field)?;
         }
     };
-    ($graph:ident, $state:ident, implementation, implementation($kind:literal), $field:ident) => {
+    (
+        $graph:ident, $state:ident, implementation,
+        implementation($kind:literal, $test_kind:ident, $fixture:ident, $id:literal), $field:ident
+    ) => {
         if !$graph.$field.is_empty() {
             $state.serialize_field(stringify!($field), &$graph.$field)?;
         }
     };
-    ($graph:ident, $state:ident, $phase:ident, $other:ident($kind:literal), $field:ident) => {};
+    (
+        $graph:ident, $state:ident, $phase:ident,
+        $other:ident($kind:literal, $test_kind:ident, $fixture:ident, $id:literal), $field:ident
+    ) => {};
+}
+
+macro_rules! read_binding {
+    (
+        $graph:ident, $store:ident, $scope:ident, verification,
+        verification($kind:literal, $test_kind:ident, $fixture:ident, $id:literal),
+        $field:ident, $reader:ident
+    ) => {
+        $graph.$field = $store.$reader(&$scope).map_err(incomplete)?;
+    };
+    (
+        $graph:ident, $store:ident, $scope:ident, implementation,
+        implementation($kind:literal, $test_kind:ident, $fixture:ident, $id:literal),
+        $field:ident, $reader:ident
+    ) => {
+        $graph.$field = $store.$reader(&$scope).map_err(incomplete)?;
+    };
+    (
+        $graph:ident, $store:ident, $scope:ident, $phase:ident,
+        $other:ident($kind:literal, $test_kind:ident, $fixture:ident, $id:literal),
+        $field:ident, $reader:ident
+    ) => {};
+}
+
+macro_rules! validate_binding {
+    (
+        $graph:ident, verification,
+        verification($kind:literal, $test_kind:ident, $fixture:ident, $id:literal),
+        $field:ident, $check:ident
+    ) => {
+        $check!(&$graph.$field, $kind);
+    };
+    (
+        $graph:ident, implementation,
+        implementation($kind:literal, $test_kind:ident, $fixture:ident, $id:literal),
+        $field:ident, $check:ident
+    ) => {
+        $check!(&$graph.$field, $kind);
+    };
+    (
+        $graph:ident, $phase:ident,
+        $other:ident($kind:literal, $test_kind:ident, $fixture:ident, $id:literal),
+        $field:ident, $check:ident
+    ) => {};
+}
+
+macro_rules! count_fields {
+    () => { 0usize };
+    ($field:ident $($rest:ident)*) => { 1usize + count_fields!($($rest)*) };
 }
 
 macro_rules! define_graph_projection {
@@ -38,6 +96,7 @@ macro_rules! define_graph_projection {
                 record: $export_type:ty,
                 field: $export_field:ident,
                 path: $export_path:ident,
+                meta: $export_meta:tt,
                 node: [$($export_node:tt)*],
                 reader: {
                     open: $export_reader:ident,
@@ -58,6 +117,7 @@ macro_rules! define_graph_projection {
                 record: $binding_type:ty,
                 field: $binding_field:ident,
                 path: $binding_path:ident,
+                meta: $binding_meta:tt,
                 node: [$($binding_node:tt)*],
                 reader: {
                     open: $binding_reader:ident,
@@ -87,7 +147,10 @@ macro_rules! define_graph_projection {
 
         impl Serialize for GraphExport {
             fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-                let mut state = serializer.serialize_struct("GraphExport", 12)?;
+                let field_count = 2
+                    + count_fields!($($export_field)*)
+                    + count_fields!($($binding_field)*);
+                let mut state = serializer.serialize_struct("GraphExport", field_count)?;
                 state.serialize_field("schema_version", &self.schema_version)?;
                 state.serialize_field("scope", &self.scope)?;
                 $(state.serialize_field(stringify!($export_field), &self.$export_field)?;)*
@@ -126,8 +189,16 @@ macro_rules! define_graph_projection {
                 schema_version: SUPPORTED_SCHEMA_VERSION.0,
                 scope: selected_scope,
                 $($export_field: store.$export_closed(&scope_id).map_err(incomplete)?,)*
-                $($binding_field: store.$binding_closed(&scope_id).map_err(incomplete)?,)*
+                $($binding_field: Vec::new(),)*
             };
+            $(read_binding!(
+                graph, store, scope_id, verification, $($binding_graph)+,
+                $binding_field, $binding_closed
+            );)*
+            $(read_binding!(
+                graph, store, scope_id, implementation, $($binding_graph)+,
+                $binding_field, $binding_closed
+            );)*
             graph.validate_schema_versions()?;
             graph.validate_rule_archives()?;
             validate_scope_ownership(&graph, &scope_id)?;
@@ -149,7 +220,12 @@ macro_rules! define_graph_projection {
                     };
                 }
                 $(require_supported!(&self.$export_field, graph_kind!($($export_graph)+));)*
-                $(require_supported!(&self.$binding_field, graph_kind!($($binding_graph)+));)*
+                $(validate_binding!(
+                    self, verification, $($binding_graph)+, $binding_field, require_supported
+                );)*
+                $(validate_binding!(
+                    self, implementation, $($binding_graph)+, $binding_field, require_supported
+                );)*
                 Ok(())
             }
         }
@@ -183,7 +259,12 @@ macro_rules! define_graph_projection {
                 };
             }
             $(require_scope!(&graph.$export_field, graph_kind!($($export_graph)+));)*
-            $(require_scope!(&graph.$binding_field, graph_kind!($($binding_graph)+));)*
+            $(validate_binding!(
+                graph, verification, $($binding_graph)+, $binding_field, require_scope
+            );)*
+            $(validate_binding!(
+                graph, implementation, $($binding_graph)+, $binding_field, require_scope
+            );)*
             Ok(())
         }
     };

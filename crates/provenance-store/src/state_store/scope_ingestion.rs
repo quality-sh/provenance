@@ -120,23 +120,62 @@ macro_rules! ensure_assignable {
 macro_rules! write_binding {
     (
         verification, $store:ident, $scope:ident, $shards:ident,
-        $variant:ident, $field:ident, verification($kind:literal)
+        $variant:ident, $field:ident,
+        verification($kind:literal, $test_kind:ident, $fixture:ident, $id:literal)
     ) => {
         write_family!($store, $scope, $shards, $variant, $field);
     };
     (
         implementation, $store:ident, $scope:ident, $shards:ident,
-        $variant:ident, $field:ident, implementation($kind:literal)
+        $variant:ident, $field:ident,
+        implementation($kind:literal, $test_kind:ident, $fixture:ident, $id:literal)
     ) => {
         write_family!($store, $scope, $shards, $variant, $field);
     };
     (
         verification, $store:ident, $scope:ident, $shards:ident,
-        $variant:ident, $field:ident, implementation($kind:literal)
+        $variant:ident, $field:ident,
+        implementation($kind:literal, $test_kind:ident, $fixture:ident, $id:literal)
     ) => {};
     (
         implementation, $store:ident, $scope:ident, $shards:ident,
-        $variant:ident, $field:ident, verification($kind:literal)
+        $variant:ident, $field:ident,
+        verification($kind:literal, $test_kind:ident, $fixture:ident, $id:literal)
+    ) => {};
+}
+
+macro_rules! ensure_binding_budget {
+    (
+        $shards:ident, verification,
+        verification($kind:literal, $test_kind:ident, $fixture:ident, $id:literal), $field:ident
+    ) => {
+        ensure_family_budget($shards.$field)?;
+    };
+    (
+        $shards:ident, $phase:ident,
+        $other:ident($kind:literal, $test_kind:ident, $fixture:ident, $id:literal), $field:ident
+    ) => {};
+}
+
+macro_rules! ensure_binding_assignable {
+    (
+        $store:ident, $scope:ident, $shards:ident, verification,
+        verification($kind:literal, $test_kind:ident, $fixture:ident, $id:literal),
+        $field:ident, $path:ident, $strategy:ident, $import:ident
+    ) => {
+        ensure_assignable!($store, $scope, $shards, $field, $path, $strategy, $import);
+    };
+    (
+        $store:ident, $scope:ident, $shards:ident, implementation,
+        implementation($kind:literal, $test_kind:ident, $fixture:ident, $id:literal),
+        $field:ident, $path:ident, $strategy:ident, $import:ident
+    ) => {
+        ensure_assignable!($store, $scope, $shards, $field, $path, $strategy, $import);
+    };
+    (
+        $store:ident, $scope:ident, $shards:ident, $phase:ident,
+        $other:ident($kind:literal, $test_kind:ident, $fixture:ident, $id:literal),
+        $field:ident, $path:ident, $strategy:ident, $import:ident
     ) => {};
 }
 
@@ -157,6 +196,7 @@ macro_rules! define_imported_scope_shards {
                 record: $export_type:ty,
                 field: $export_field:ident,
                 path: $export_path:ident,
+                meta: $export_meta:tt,
                 node: [$($export_node:tt)*],
                 reader: {
                     open: $export_reader:ident,
@@ -176,6 +216,7 @@ macro_rules! define_imported_scope_shards {
                 record: $canonical_type:ty,
                 field: $canonical_field:ident,
                 path: $canonical_path:ident,
+                meta: $canonical_meta:tt,
                 node: [$($canonical_node:tt)*],
                 reader: {
                     open: $canonical_reader:ident,
@@ -195,6 +236,7 @@ macro_rules! define_imported_scope_shards {
                 record: $binding_type:ty,
                 field: $binding_field:ident,
                 path: $binding_path:ident,
+                meta: $binding_meta:tt,
                 node: [$($binding_node:tt)*],
                 reader: {
                     open: $binding_reader:ident,
@@ -228,20 +270,26 @@ macro_rules! define_imported_scope_shards {
             ) -> anyhow::Result<()> {
                 validate_threads(shards.threads)?;
                 $(ensure_family_budget(shards.$export_field)?;)*
+                $(ensure_binding_budget!(
+                    shards, verification, $($binding_graph)+, $binding_field
+                );)*
                 $(ensure_family_budget(shards.$canonical_field)?;)*
-                $(ensure_family_budget(shards.$binding_field)?;)*
 
                 let mut records = Vec::new();
                 let mut kinds = Vec::new();
                 $(collect_node_ids!(records, kinds, shards, $export_field, [$($export_node)*]);)*
                 self.ensure_import_ids_unique(scope, records, &kinds)?;
+                $(ensure_binding_assignable!(
+                    self, scope, shards, verification, $($binding_graph)+,
+                    $binding_field, $binding_path, $binding_strategy, $binding_import
+                );)*
+                $(ensure_binding_assignable!(
+                    self, scope, shards, implementation, $($binding_graph)+,
+                    $binding_field, $binding_path, $binding_strategy, $binding_import
+                );)*
                 $(ensure_assignable!(
                     self, scope, shards, $canonical_field, $canonical_path,
                     $canonical_strategy, $canonical_import
-                );)*
-                $(ensure_assignable!(
-                    self, scope, shards, $binding_field, $binding_path,
-                    $binding_strategy, $binding_import
                 );)*
 
                 let scope_dir = self.layout.scopes_dir().join(scope.as_str());

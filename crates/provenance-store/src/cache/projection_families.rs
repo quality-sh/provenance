@@ -26,6 +26,11 @@ macro_rules! define_projection_families {
                         record: $record:ty,
                         field: $field:ident,
                         path: $path:ident,
+                        meta: {
+                            shard: $shard:literal,
+                            order: $order:tt,
+                            budget: $budget:ident
+                        },
                         node: [$($node:tt)*],
                         reader: {
                             open: $reader:ident,
@@ -50,7 +55,16 @@ macro_rules! define_projection_families {
         }
 
         $($(impl RecordFamily for $record {
-            const META: &'static FamilyMeta = &FAMILIES[ProjectionFamily::$variant as usize];
+            const META: &'static FamilyMeta = &FamilyMeta {
+                group: family_group!($group),
+                table_name: stringify!($field),
+                shard_suffix: $shard,
+                node_type: family_node!([$($node)*]),
+                graph_field: family_graph_field!($group, $field),
+                route_order: family_order!($order),
+                budget: BudgetKind::$budget,
+                catalog_operations: family_catalog!($($catalog)*),
+            };
 
             fn open(store: &StateStore, scope: &ScopeId) -> anyhow::Result<Vec<Self>> {
                 store.$reader(scope)
@@ -69,7 +83,7 @@ macro_rules! define_projection_families {
         })*)*
 
         impl ProjectionFamily {
-            pub const ALL: [Self; count_families!($($($variant)*)*)] = [
+            pub const ALL: [Self; FAMILIES.len()] = [
                 $($(Self::$variant,)*)*
             ];
 
@@ -128,13 +142,18 @@ macro_rules! define_projection_families {
                     },)*)*
                 }
             }
-        }
-    };
-}
 
-macro_rules! count_families {
-    () => { 0usize };
-    ($family:ident $($rest:ident)*) => { 1usize + count_families!($($rest)*) };
+            pub(crate) const fn meta(self) -> &'static FamilyMeta {
+                match self {
+                    $($(Self::$variant => <$record as RecordFamily>::META,)*)*
+                }
+            }
+        }
+
+        pub const FAMILIES: &[FamilyMeta] = &[
+            $($(*<$record as RecordFamily>::META,)*)*
+        ];
+    };
 }
 
 macro_rules! family_record_id {
@@ -145,8 +164,6 @@ macro_rules! family_record_id {
         $record.id().as_str()
     };
 }
-
-crate::cache::family_table::record_family_rows!(define_projection_families);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FamilyGroup {
@@ -164,7 +181,7 @@ pub enum BudgetKind {
     NotImported,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FamilyMeta {
     pub group: FamilyGroup,
     pub table_name: &'static str,
@@ -177,236 +194,77 @@ pub struct FamilyMeta {
     pub catalog_operations: &'static [&'static str],
 }
 
-use BudgetKind::{NotImported, Record, Resource, Unchecked};
-use FamilyGroup::{Binding, Canonical, Export, Internal};
-pub const FAMILIES: &[FamilyMeta] = &[
-    family(
-        Export,
-        ("sources", "sources/source.jsonl"),
-        Some(provenance_core::NodeType::Source),
-        Some("sources"),
-        Some(10),
-        Resource,
-        &["list-sources", "page-sources-v2", "get-source-v2"],
-    ),
-    family(
-        Export,
-        ("domains", "domains/domain.jsonl"),
-        Some(provenance_core::NodeType::Domain),
-        Some("domains"),
-        Some(50),
-        Resource,
-        &["list-domains", "page-domains-v2", "get-domain-v2"],
-    ),
-    family(
-        Export,
-        ("requirements", "requirements/req.jsonl"),
-        Some(provenance_core::NodeType::Requirement),
-        Some("requirements"),
-        Some(20),
-        Resource,
-        &["list-requirements", "page-requirements-v2"],
-    ),
-    family(
-        Export,
-        ("boundaries", "boundaries/boundary.jsonl"),
-        Some(provenance_core::NodeType::Boundary),
-        Some("boundaries"),
-        Some(60),
-        Resource,
-        &["list-boundaries", "page-boundaries-v2", "get-boundary-v2"],
-    ),
-    family(
-        Export,
-        ("topics", "topics/topic.jsonl"),
-        Some(provenance_core::NodeType::Topic),
-        Some("topics"),
-        Some(70),
-        Resource,
-        &["list-topics", "page-topics-v2", "get-topic-v2"],
-    ),
-    family(
-        Export,
-        ("questions", "questions/question.jsonl"),
-        Some(provenance_core::NodeType::Question),
-        Some("questions"),
-        Some(80),
-        Resource,
-        &["list-questions", "page-questions-v2", "get-question-v2"],
-    ),
-    family(
-        Export,
-        ("resolutions", "resolutions/res.jsonl"),
-        Some(provenance_core::NodeType::Resolution),
-        Some("resolutions"),
-        Some(30),
-        Resource,
-        &[
-            "list-resolutions",
-            "page-resolutions-v2",
-            "get-resolution-v2",
-        ],
-    ),
-    family(
-        Export,
-        ("rules", "rules/rule.jsonl"),
-        Some(provenance_core::NodeType::Rule),
-        Some("rules"),
-        Some(40),
-        Resource,
-        &["list-rules", "page-rules-v2", "get-rule-v2"],
-    ),
-    family(
-        Canonical,
-        ("threads", "threads/threads.jsonl"),
-        None,
-        None,
-        Some(140),
-        Record,
-        &[
-            "list-discussion-containers",
-            "page-discussion-containers-v2",
-            "get-discussion-container-v2",
-        ],
-    ),
-    family(
-        Canonical,
-        ("messages", "threads/2026-07.jsonl"),
-        None,
-        None,
-        Some(150),
-        Record,
-        &["list-messages-v2", "page-messages-v2", "get-message-v2"],
-    ),
-    family(
-        Canonical,
-        ("contributions", "ideation/contributions.jsonl"),
-        None,
-        None,
-        Some(90),
-        Resource,
-        &[
-            "list-contributions",
-            "page-contributions-v2",
-            "get-contribution-v2",
-        ],
-    ),
-    family(
-        Canonical,
-        ("synthesis_packets", "ideation/synthesis_packets.jsonl"),
-        None,
-        None,
-        Some(100),
-        Resource,
-        &[
-            "list-synthesis-packets",
-            "page-synthesis-packets-v2",
-            "get-synthesis-packet-v2",
-        ],
-    ),
-    family(
-        Canonical,
-        ("proposal_cards", "ideation/proposal_cards.jsonl"),
-        None,
-        None,
-        Some(110),
-        Resource,
-        &["list-proposals-v2", "page-proposals-v2", "get-proposal-v2"],
-    ),
-    family(
-        Canonical,
-        ("assertion_records", "ideation/assertions.jsonl"),
-        None,
-        None,
-        Some(160),
-        Resource,
-        &[
-            "list-assertions-v2",
-            "page-assertions-v2",
-            "get-assertion-v2",
-        ],
-    ),
-    family(
-        Canonical,
-        ("dispositions", "ideation/dispositions.jsonl"),
-        None,
-        None,
-        Some(170),
-        Resource,
-        &[
-            "list-dispositions-v2",
-            "page-dispositions-v2",
-            "get-disposition-v2",
-        ],
-    ),
-    family(
-        Binding,
-        ("implementation_bindings", "implementations/binding.jsonl"),
-        None,
-        Some("implementation_bindings"),
-        None,
-        Unchecked,
-        &[],
-    ),
-    family(
-        Binding,
-        ("verification_bindings", "verifications/binding.jsonl"),
-        None,
-        Some("verification_bindings"),
-        Some(130),
-        Resource,
-        &[
-            "list-verification-bindings",
-            "page-verification-bindings-v2",
-            "get-verification-binding-v2",
-        ],
-    ),
-    family(
-        Internal,
-        ("requirement_reviews", "requirements/review.jsonl"),
-        None,
-        None,
-        None,
-        NotImported,
-        &[],
-    ),
-    family(
-        Internal,
-        ("review_journal", "review/journal"),
-        None,
-        None,
-        None,
-        NotImported,
-        &[],
-    ),
-];
-
-const fn family(
-    group: FamilyGroup,
-    storage: (&'static str, &'static str),
-    node_type: Option<provenance_core::NodeType>,
-    graph_field: Option<&'static str>,
-    route_order: Option<u16>,
-    budget: BudgetKind,
-    catalog_operations: &'static [&'static str],
-) -> FamilyMeta {
-    FamilyMeta {
-        group,
-        table_name: storage.0,
-        shard_suffix: storage.1,
-        node_type,
-        graph_field,
-        route_order,
-        budget,
-        catalog_operations,
-    }
+macro_rules! family_group {
+    (export) => {
+        FamilyGroup::Export
+    };
+    (canonical) => {
+        FamilyGroup::Canonical
+    };
+    (bindings) => {
+        FamilyGroup::Binding
+    };
+    (internal) => {
+        FamilyGroup::Internal
+    };
 }
 
-impl ProjectionFamily {
-    pub(crate) const fn meta(self) -> &'static FamilyMeta {
-        &FAMILIES[self as usize]
-    }
+macro_rules! family_node {
+    ([]) => {
+        None
+    };
+    ([$node:ident]) => {
+        Some(provenance_core::NodeType::$node)
+    };
 }
+
+macro_rules! family_graph_field {
+    (export, $field:ident) => {
+        Some(stringify!($field))
+    };
+    (bindings, $field:ident) => {
+        Some(stringify!($field))
+    };
+    ($group:ident, $field:ident) => {
+        None
+    };
+}
+
+macro_rules! family_order {
+    (none) => {
+        None
+    };
+    ($order:literal) => {
+        Some($order)
+    };
+}
+
+macro_rules! family_catalog {
+    (none) => {
+        &[]
+    };
+    (
+        projection(
+            $list:ident, $list_wire:literal, $page:ident, $page_wire:literal, none
+        )
+    ) => {
+        &[$list_wire, $page_wire]
+    };
+    (
+        $kind:ident(
+            $list:ident,
+            $list_wire:literal,
+            $page:ident,
+            $page_wire:literal,
+            $member:ident,
+            $member_wire:literal
+        )
+    ) => {
+        &[$list_wire, $page_wire, $member_wire]
+    };
+}
+
+crate::cache::family_table::record_family_rows!(define_projection_families);
 
 impl ProjectionFamily {
     pub(crate) fn content_digest(self, bytes: &[u8]) -> anyhow::Result<String> {
