@@ -2,6 +2,7 @@ mod access;
 mod canonical_artifacts;
 mod domain_writers;
 mod graph_validation;
+mod resolution_decisions;
 mod ideation_batches;
 mod ideation_edits;
 mod ideation_targets;

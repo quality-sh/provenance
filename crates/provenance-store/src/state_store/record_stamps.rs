@@ -154,6 +154,9 @@ impl StateStore {
         for record in after {
             let previous = by_id.get(record.id().as_str()).copied();
             record.validate_write(previous)?;
+            if previous != Some(&*record) {
+                self.validate_resolution_decision_write(&record.clone().into())?;
+            }
             if previous != Some(&*record) && stamp.is_none() {
                 stamp = Some(self.current_record_stamp()?);
             }
