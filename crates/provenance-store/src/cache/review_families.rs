@@ -102,6 +102,19 @@ mod tests {
     }
 
     #[test]
+    fn desired_inventory_contains_every_core_review_kind() {
+        let inventory = REVIEW_FAMILIES
+            .iter()
+            .map(|family| family.kind)
+            .collect::<std::collections::BTreeSet<_>>();
+        let canonical = provenance_core::review::REVIEW_RECORD_KINDS
+            .iter()
+            .copied()
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(inventory, canonical);
+    }
+
+    #[test]
     fn common_audit_fields_are_lifecycle_fields_when_present() {
         let common = [
             "schema_version",
