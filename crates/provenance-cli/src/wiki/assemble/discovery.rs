@@ -337,7 +337,7 @@ fn effective_requirement_domains(
                 requirement
                     .refines
                     .iter()
-                    .map(|id| id.as_str())
+                    .map(provenance_core::StableId::as_str)
                     .collect::<Vec<_>>(),
             )
         })
