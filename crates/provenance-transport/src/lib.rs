@@ -107,7 +107,7 @@ impl StatementHost {
     {
         use provenance_core::protocol::failure::{OperationError, OperationFailure};
         use provenance_core::protocol::repository::RepositoryContext;
-        use provenance_store::operations::catalog::RequestedContext;
+        use provenance_store::operations::catalog::{ContextResolver as _, RequestedContext};
 
         if !self.advertises(O::NAME) {
             return Err(OperationError::Common(OperationFailure::AccessDenied));
@@ -115,16 +115,21 @@ impl StatementHost {
         let (repository, scope) = self
             .bound_identity()
             .ok_or(OperationError::Common(OperationFailure::UnavailableNeeds))?;
-        provenance_store::operations::catalog::invoke_authorized_typed::<O>(
-            self.access.clone(),
-            RequestedContext::Scoped(RepositoryContext {
-                repository,
-                scope,
-                freshness: None,
-            }),
-            request,
-        )
-        .await
+        O::validate_external(&request).map_err(OperationError::Common)?;
+        let context = self
+            .access
+            .prepare(
+                O::NAME,
+                RequestedContext::Scoped(RepositoryContext {
+                    repository,
+                    scope,
+                    freshness: None,
+                }),
+                O::needs(&request),
+            )
+            .map_err(OperationError::Common)?
+            .into_native();
+        provenance_store::operations::catalog::invoke_typed::<O>(context, request).await
     }
 
     fn admit(&self) -> Result<OwnedSemaphorePermit, FailureEnvelope> {
