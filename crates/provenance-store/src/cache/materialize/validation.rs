@@ -1,11 +1,12 @@
 use super::{relation_rows, units};
 use crate::cache::ProjectionFamily;
 use crate::publication::PublicationGuard;
-use crate::state_store::{GuardedStore, StateStore};
+use crate::state_store::StateStore;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::model::relations::RelationRow;
 use provenance_core::{Manifest, ScopeId};
 use provenance_macros::rule;
+use std::marker::PhantomData;
 
 pub(super) struct FamilyRecords {
     pub family: ProjectionFamily,
@@ -19,9 +20,10 @@ pub(super) struct ScopeRecords {
 }
 
 pub(super) struct UnitReader<'g> {
-    store: GuardedStore<'g>,
+    store: StateStore,
     state_dir: Utf8PathBuf,
     pub units_hashed: u64,
+    guard: PhantomData<&'g PublicationGuard>,
 }
 
 impl<'g> UnitReader<'g> {
@@ -32,6 +34,7 @@ impl<'g> UnitReader<'g> {
             store: StateStore::under_guard(guard),
             state_dir: guard.layout().state_dir(),
             units_hashed: 0,
+            guard: PhantomData,
         }
     }
 
@@ -85,7 +88,7 @@ impl<'g> UnitReader<'g> {
                 validate(&self.store, scope)?;
                 let mut families = Vec::new();
                 for family in ProjectionFamily::ALL {
-                    let (bytes, count) = family.guarded_records(&self.store, scope)?;
+                    let (bytes, count) = family.canonical_records(&self.store, scope)?;
                     families.push(FamilyRecords {
                         family,
                         bytes,
@@ -101,7 +104,7 @@ impl<'g> UnitReader<'g> {
     }
 }
 
-fn validate(store: &GuardedStore<'_>, scope: &ScopeId) -> anyhow::Result<()> {
+fn validate(store: &StateStore, scope: &ScopeId) -> anyhow::Result<()> {
     store.validate_ideation_scope(scope)?;
     store.validate_graph_scope(scope)
 }

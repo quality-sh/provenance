@@ -10,10 +10,7 @@ use super::record_rows::{load_kind, load_record};
 use crate::cache::quoted;
 use crate::cache::ProjectionFamily;
 use provenance_core::protocol::GraphNode;
-use provenance_core::{
-    Boundary, Domain, ImplementationBinding, Question, Requirement, RequirementReview, Resolution,
-    Rule, ScopeId, Source, Topic, VerificationBinding,
-};
+use provenance_core::ScopeId;
 use sqlx::{Sqlite, Transaction};
 
 pub(super) async fn delete_rows(
@@ -38,48 +35,41 @@ pub(super) async fn delete_rows(
     Ok(())
 }
 
-pub(super) async fn load_rows(
-    tx: &mut Transaction<'_, Sqlite>,
-    family: ProjectionFamily,
-    bytes: &[u8],
-) -> anyhow::Result<u64> {
-    match family {
-        ProjectionFamily::Sources => load_record::<Source>(tx, bytes, GraphNode::Source).await,
-        ProjectionFamily::Domains => load_record::<Domain>(tx, bytes, GraphNode::Domain).await,
-        ProjectionFamily::Requirements => {
-            load_record::<Requirement>(tx, bytes, GraphNode::Requirement).await
-        }
-        ProjectionFamily::Boundaries => {
-            load_record::<Boundary>(tx, bytes, GraphNode::Boundary).await
-        }
-        ProjectionFamily::Topics => load_record::<Topic>(tx, bytes, GraphNode::Topic).await,
-        ProjectionFamily::Questions => {
-            load_record::<Question>(tx, bytes, GraphNode::Question).await
-        }
-        ProjectionFamily::Resolutions => {
-            load_record::<Resolution>(tx, bytes, GraphNode::Resolution).await
-        }
-        ProjectionFamily::Rules => load_record::<Rule>(tx, bytes, GraphNode::Rule).await,
-        ProjectionFamily::Threads => collaboration_records::load_threads(tx, bytes).await,
-        ProjectionFamily::Messages => collaboration_records::load_messages(tx, bytes).await,
-        ProjectionFamily::Contributions => {
-            collaboration_records::load_contributions(tx, bytes).await
-        }
-        ProjectionFamily::SynthesisPackets => {
-            collaboration_records::load_synthesis_packets(tx, bytes).await
-        }
-        ProjectionFamily::AssertionRecords => {
-            collaboration_records::load_assertion_records(tx, bytes).await
-        }
-        ProjectionFamily::ProposalCards => {
-            collaboration_records::load_proposal_cards(tx, bytes).await
-        }
-        ProjectionFamily::Dispositions => collaboration_records::load_dispositions(tx, bytes).await,
-        ProjectionFamily::ImplementationBindings => {
-            load_kind::<ImplementationBinding>(tx, bytes).await
-        }
-        ProjectionFamily::VerificationBindings => load_kind::<VerificationBinding>(tx, bytes).await,
-        ProjectionFamily::ReviewJournal => crate::review::cache::load_rows(tx, bytes).await,
-        ProjectionFamily::RequirementReviews => load_kind::<RequirementReview>(tx, bytes).await,
-    }
+macro_rules! load_family {
+    ($record:ty, record($node:ident), $tx:ident, $bytes:ident) => {
+        load_record::<$record>($tx, $bytes, GraphNode::$node).await
+    };
+    ($record:ty, kind, $tx:ident, $bytes:ident) => {
+        load_kind::<$record>($tx, $bytes).await
+    };
+    ($record:ty, payload($loader:ident), $tx:ident, $bytes:ident) => {
+        collaboration_records::$loader($tx, $bytes).await
+    };
+    ($record:ty, journal, $tx:ident, $bytes:ident) => {
+        crate::review::cache::load_rows($tx, $bytes).await
+    };
 }
+
+macro_rules! define_family_loader {
+    (
+        export { $($export_variant:ident: $export_type:ty, $export_field:ident, $export_path:ident, $export_suffix:literal, $export_table:literal, [$($export_node:tt)*], $export_reader:ident, [$($export_closed:tt)*], $export_id:ident, [$($export_loader:tt)*], [$($export_catalog:tt)*];)* }
+        canonical { $($canonical_variant:ident: $canonical_type:ty, $canonical_field:ident, $canonical_path:ident, $canonical_suffix:literal, $canonical_table:literal, [$($canonical_node:tt)*], $canonical_reader:ident, [$($canonical_closed:tt)*], $canonical_id:ident, [$($canonical_loader:tt)*], [$($canonical_catalog:tt)*];)* }
+        bindings { $($binding_variant:ident: $binding_type:ty, $binding_field:ident, $binding_path:ident, $binding_suffix:literal, $binding_table:literal, [$($binding_node:tt)*], $binding_reader:ident, [$($binding_closed:tt)*], $binding_id:ident, [$($binding_loader:tt)*], [$($binding_catalog:tt)*];)* }
+        internal { $($internal_variant:ident: $internal_type:ty, $internal_field:ident, $internal_path:ident, $internal_suffix:literal, $internal_table:literal, [$($internal_node:tt)*], $internal_reader:ident, [$($internal_closed:tt)*], $internal_id:ident, [$($internal_loader:tt)*], [$($internal_catalog:tt)*];)* }
+    ) => {
+        pub(super) async fn load_rows(
+            tx: &mut Transaction<'_, Sqlite>,
+            family: ProjectionFamily,
+            bytes: &[u8],
+        ) -> anyhow::Result<u64> {
+            match family {
+                $(ProjectionFamily::$export_variant => load_family!($export_type, $($export_loader)*, tx, bytes),)*
+                $(ProjectionFamily::$canonical_variant => load_family!($canonical_type, $($canonical_loader)*, tx, bytes),)*
+                $(ProjectionFamily::$binding_variant => load_family!($binding_type, $($binding_loader)*, tx, bytes),)*
+                $(ProjectionFamily::$internal_variant => load_family!($internal_type, $($internal_loader)*, tx, bytes),)*
+            }
+        }
+    };
+}
+
+crate::cache::record_families!(define_family_loader);
