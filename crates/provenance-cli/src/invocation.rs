@@ -1,5 +1,5 @@
 use crate::{catalog_cli, cli::Cli, handlers};
-use clap::{CommandFactory as _, FromArgMatches as _};
+use clap::CommandFactory as _;
 use handlers::{GraphInput, RepositoryInput, WorkspaceInput};
 use provenance_cli::porcelain;
 use provenance_cli::repo_context::RepoContext;
@@ -23,12 +23,13 @@ mod tests;
 
 /// One command selected from a declared grammar.
 pub enum Invocation {
-    Builtin(Cli),
     Check(CheckCliInput),
     Prime(PrimeInput),
     Repository(RepositoryInput, bool),
     Graph(GraphInput),
     Workspace(WorkspaceInput),
+    #[cfg(feature = "dogfood")]
+    Dogfood(handlers::DogfoodInput, bool),
     Api(ApiArgs),
     Get(GetInvocation),
     Search(SearchArgs),
@@ -83,7 +84,8 @@ impl Invocation {
                 | registry::Command::Prime
                 | registry::Command::Repository(_)
                 | registry::Command::Graph(_)
-                | registry::Command::Workspace(_),
+                | registry::Command::Workspace(_)
+                | registry::Command::Dogfood(_),
             ) => {
                 return Ok(Self::parse_root(arguments));
             }
@@ -145,9 +147,18 @@ impl Invocation {
                 WorkspaceInput::from_matches(command, selected)
                     .unwrap_or_else(|error| catalog_cli::usage_error(error)),
             ),
-            _ => {
-                Self::Builtin(Cli::from_arg_matches(&matches).unwrap_or_else(|error| error.exit()))
-            }
+            #[cfg(feature = "dogfood")]
+            Some(registry::Command::Dogfood(command)) => Self::Dogfood(
+                handlers::DogfoodInput::from_matches(command, selected)
+                    .unwrap_or_else(|error| catalog_cli::usage_error(error)),
+                matches.get_flag("quiet"),
+            ),
+            _ => root_command()
+                .error(
+                    clap::error::ErrorKind::InvalidSubcommand,
+                    format!("'{}' is not a command", words.join(" ")),
+                )
+                .exit(),
         }
     }
 
@@ -243,12 +254,13 @@ impl Invocation {
     /// `{error,meta}` object instead of text.
     pub fn json_output(&self) -> bool {
         let format = match self {
-            Self::Builtin(_)
-            | Self::Check(_)
+            Self::Check(_)
             | Self::Prime(_)
             | Self::Repository(..)
             | Self::Graph(_)
             | Self::Workspace(_) => None,
+            #[cfg(feature = "dogfood")]
+            Self::Dogfood(..) => None,
             Self::Api(args) => args.common.format(),
             Self::Get(invocation) => invocation.format,
             Self::Search(args) => args.common.format(),
@@ -261,12 +273,13 @@ impl Invocation {
 
     pub async fn dispatch(self) -> anyhow::Result<()> {
         match self {
-            Self::Builtin(cli) => handlers::dispatch(cli.command, cli.quiet),
             Self::Check(input) => handlers::check_command(input).await,
             Self::Prime(input) => handlers::prime_command(&input),
             Self::Repository(input, quiet) => handlers::repository_command(input, quiet).await,
             Self::Graph(input) => handlers::graph_command(input),
             Self::Workspace(input) => handlers::workspace_command(input).await,
+            #[cfg(feature = "dogfood")]
+            Self::Dogfood(input, quiet) => handlers::dogfood_command(input, quiet),
             Self::Api(args) => api::dispatch(args).await,
             Self::Get(invocation) => {
                 if invocation.delivery == Delivery::Follow {
@@ -389,7 +402,8 @@ pub fn root_command() -> clap::Command {
             registry::Command::Repository(_)
                 | registry::Command::Graph(_)
                 | registry::Command::Workspace(_)
-        )
+                | registry::Command::Dogfood(_)
+        ) && command.is_present(registry::Interface::Cli)
     }))
     .fold(Cli::command(), crate::registry_cli::add_subcommand)
 }

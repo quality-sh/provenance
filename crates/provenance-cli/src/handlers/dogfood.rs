@@ -9,10 +9,14 @@
 //! - Capture must not fail on missing context: absent session env or a
 //!   non-git cwd degrade to nulls, never to errors.
 
-use crate::cli::{DogfoodCategory, DogfoodCommand, DogfoodSeverity};
+use crate::cli::{DogfoodCategory, DogfoodSeverity, TriageFilter};
 use crate::output;
 use anyhow::Context;
 use camino::Utf8PathBuf;
+use provenance_porcelain::registry::{
+    self, DogfoodCommand, DogfoodListInput, DogfoodNoteInput, DogfoodReportInput,
+    DogfoodSimulateInput, TriageHandleInput, TriageListInput, TriageReopenInput,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
@@ -80,22 +84,72 @@ struct Report {
     notes: Vec<ReportNote>,
 }
 
-pub(super) fn handle(command: DogfoodCommand, quiet: bool) -> anyhow::Result<()> {
-    match command {
-        DogfoodCommand::Note {
-            surface,
-            category,
-            severity,
-            detail,
-            suggestion,
-            summary,
-        } => note(
-            &surface, category, severity, summary, detail, suggestion, quiet,
+/// The typed input of one dogfood command, read from its declared flags.
+pub enum DogfoodInput {
+    Note(DogfoodNoteInput),
+    List(DogfoodListInput),
+    Report(DogfoodReportInput),
+    TriageHandle(TriageHandleInput),
+    TriageReopen(TriageReopenInput),
+    TriageList(TriageListInput),
+    Simulate(DogfoodSimulateInput),
+}
+
+impl DogfoodInput {
+    /// Reads the input of `command` from the matches of its parser.
+    pub fn from_matches(
+        command: DogfoodCommand,
+        matches: &clap::ArgMatches,
+    ) -> anyhow::Result<Self> {
+        let declaration = registry::Command::Dogfood(command).declaration();
+        macro_rules! read {
+            ($variant:ident) => {
+                Self::$variant(crate::registry_cli::input(&declaration, matches)?)
+            };
+        }
+        Ok(match command {
+            DogfoodCommand::Note => read!(Note),
+            DogfoodCommand::List => read!(List),
+            DogfoodCommand::Report => read!(Report),
+            DogfoodCommand::TriageHandle => read!(TriageHandle),
+            DogfoodCommand::TriageReopen => read!(TriageReopen),
+            DogfoodCommand::TriageList => read!(TriageList),
+            DogfoodCommand::Simulate => read!(Simulate),
+        })
+    }
+}
+
+pub fn handle(input: DogfoodInput, quiet: bool) -> anyhow::Result<()> {
+    match input {
+        DogfoodInput::Note(input) => note(
+            &input.surface,
+            super::flag_value(&input.category, DogfoodCategory::from_flag)?,
+            super::flag_value(&input.severity, DogfoodSeverity::from_flag)?,
+            input.summary,
+            input.detail,
+            input.suggestion,
+            quiet,
         ),
-        DogfoodCommand::List { .. } => list(),
-        DogfoodCommand::Report { enrich, .. } => report(enrich.as_ref()),
-        DogfoodCommand::Triage { command } => triage::handle(command, quiet),
-        DogfoodCommand::Simulate { keep, dir } => simulate::handle(keep, dir.as_deref()),
+        DogfoodInput::List(input) => {
+            super::flag_value(&input.format, crate::output::JsonFormat::from_flag)?;
+            list()
+        }
+        DogfoodInput::Report(input) => {
+            super::flag_value(&input.format, crate::output::JsonFormat::from_flag)?;
+            report(input.enrich.map(Utf8PathBuf::from).as_ref())
+        }
+        DogfoodInput::TriageHandle(input) => {
+            triage::set_state(&input.id, true, input.reason, quiet)
+        }
+        DogfoodInput::TriageReopen(input) => triage::set_state(&input.id, false, None, quiet),
+        DogfoodInput::TriageList(input) => {
+            super::flag_value(&input.format, crate::output::JsonFormat::from_flag)?;
+            triage::list(super::flag_value(&input.status, TriageFilter::from_flag)?)
+        }
+        DogfoodInput::Simulate(input) => {
+            let dir = input.dir.map(Utf8PathBuf::from);
+            simulate::handle(input.keep, dir.as_deref())
+        }
     }
 }
 
