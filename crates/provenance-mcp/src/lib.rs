@@ -49,3 +49,14 @@ where
         .map(Session)
         .map_err(Box::new)
 }
+
+/// Serve a bounded MCP session for one host on standard input and output.
+///
+/// The session ends when standard input closes.
+pub async fn serve_stdio(host: StatementHost) -> Result<Session, Box<ServeError>> {
+    serve(
+        host,
+        tokio::io::join(tokio::io::stdin(), tokio::io::stdout()),
+    )
+    .await
+}
