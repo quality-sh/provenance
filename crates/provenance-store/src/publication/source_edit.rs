@@ -116,14 +116,14 @@ impl StagedStateHook for SourceEditPublication {
         sync_directory(&live.provenance_dir())?;
         let marker = self.marker.as_mut().expect("source-edit marker");
         marker.phase = SourceEditPhase::BackupCreated;
-        write_marker(live, &marker)?;
+        write_marker(live, marker)?;
         crate::test_probes::at("source_edit_backup_created")
     }
 
     fn state_installed(&mut self, live: &ProvenanceLayout) -> anyhow::Result<()> {
         let marker = self.marker.as_mut().expect("source-edit marker");
         marker.phase = SourceEditPhase::StateInstalled;
-        write_marker(live, &marker)?;
+        write_marker(live, marker)?;
         crate::test_probes::at("source_edit_state_installed")
     }
 
@@ -137,7 +137,7 @@ impl StagedStateHook for SourceEditPublication {
     fn published(&mut self, live: &ProvenanceLayout, _transaction: &Utf8Path) -> anyhow::Result<()> {
         let marker = self.marker.as_mut().expect("source-edit marker");
         marker.phase = SourceEditPhase::FileInstalled;
-        write_marker(live, &marker)?;
+        write_marker(live, marker)?;
         crate::test_probes::at("source_edit_file_installed")
     }
 

@@ -86,7 +86,9 @@ fn each_source_edit_phase_recovers_matching_file_and_state() {
             .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
             .collect::<Vec<_>>();
         assert!(
-            !names.iter().any(|name| name.ends_with(".tmp")),
+            !names
+                .iter()
+                .any(|name| name.strip_suffix(".tmp").is_some()),
             "{phase}: {names:?}"
         );
     }

@@ -117,7 +117,7 @@ impl HeldRepositoryFile {
         expected_digest: [u8; 32],
     ) -> Result<Option<PreparedRepositoryFile>, Refusal> {
         let expected_prefix = format!(".{}.provenance-", self.leaf);
-        if !leaf.starts_with(&expected_prefix) || !leaf.ends_with(".tmp") {
+        if !leaf.starts_with(&expected_prefix) || leaf.strip_suffix(".tmp").is_none() {
             return Err(Refusal::Changed);
         }
         let mut file = match platform::regular(&self.parent, leaf).map_err(Refusal::from) {
@@ -269,11 +269,11 @@ impl HeldRepositoryFile {
 }
 
 impl PreparedRepositoryFile {
-    pub(crate) fn recovery_identity(&self) -> &FileIdentity {
+    pub(crate) const fn recovery_identity(&self) -> &FileIdentity {
         &self.identity
     }
 
-    pub(crate) fn recovery_leaf(&self) -> &str {
+    pub(crate) const fn recovery_leaf(&self) -> &str {
         &self.leaf
     }
 
