@@ -42,6 +42,9 @@ pub const QUERY_DEFAULT_LIMIT: usize = 50;
 /// The largest page any query primitive will hand back.
 pub const QUERY_MAX_LIMIT: usize = 200;
 
+/// The largest encoded response a structured query will publish.
+pub const QUERY_RESPONSE_BYTES: usize = 1_114_112;
+
 /// How many hops `trace` walks when the caller names no depth.
 pub const TRACE_DEFAULT_MAX_DEPTH: usize = 3;
 
