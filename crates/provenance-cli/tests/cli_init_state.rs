@@ -66,14 +66,22 @@ fn bare_rerun_keeps_the_manifest_scope_and_actor_ids() {
         &["--scope", "review", "--disposition-actor-id", "reviewer"],
     )
     .success();
-    let before = std::fs::read(temporary.path().join(".provenance/state/manifest.json")).unwrap();
+    let manifest_path = temporary.path().join(".provenance/state/manifest.json");
+    let before = std::fs::read(&manifest_path).unwrap();
+    #[cfg(unix)]
+    let inode_before = {
+        use std::os::unix::fs::MetadataExt;
+        std::fs::metadata(&manifest_path).unwrap().ino()
+    };
     init(temporary.path(), &[])
         .success()
         .stdout(contains("No change."));
-    assert_eq!(
-        std::fs::read(temporary.path().join(".provenance/state/manifest.json")).unwrap(),
-        before
-    );
+    assert_eq!(std::fs::read(&manifest_path).unwrap(), before);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        assert_eq!(std::fs::metadata(&manifest_path).unwrap().ino(), inode_before);
+    }
     assert_eq!(
         manifest(temporary.path())["disposition_actor_ids"][0],
         "reviewer"
