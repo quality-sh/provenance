@@ -62,10 +62,7 @@ pub(super) fn regular(parent: &File, leaf: &str) -> Result<File, Refusal> {
     Ok(held)
 }
 
-pub(super) fn open_parent(
-    root: &File,
-    relative: &Utf8Path,
-) -> Result<(File, String), Refusal> {
+pub(super) fn open_parent(root: &File, relative: &Utf8Path) -> Result<(File, String), Refusal> {
     super::validate_relative(relative)?;
     let mut held = root.try_clone().map_err(error)?;
     let mut parts = relative.as_str().split('/').peekable();

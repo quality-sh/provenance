@@ -1,6 +1,6 @@
 use super::{manifest, PublicationOutput, PublishError};
-use provenance_store::operations::files::Directory;
 use camino::{Utf8Path, Utf8PathBuf};
+use provenance_store::operations::files::Directory;
 use std::fs::File;
 
 mod cleanup;

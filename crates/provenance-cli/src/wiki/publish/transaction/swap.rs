@@ -36,9 +36,7 @@ pub(in crate::wiki::publish) fn replace_output_with(
         paths.stage.as_std_path(),
         "output parent",
     )
-        .map_err(|error| {
-            PublishError::io("open staging directory identity", &paths.stage, error)
-        })?;
+    .map_err(|error| PublishError::io("open staging directory identity", &paths.stage, error))?;
     let stage_identity = StageIdentity::from_file(stage.as_file()).map_err(|error| {
         PublishError::io("record staging directory identity", &paths.stage, error)
     })?;

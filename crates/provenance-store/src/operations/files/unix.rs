@@ -69,10 +69,7 @@ pub(super) fn open_file(root: &File, relative: &Utf8Path) -> Result<File, Refusa
     regular(&held, &leaf)
 }
 
-pub(super) fn open_parent(
-    root: &File,
-    relative: &Utf8Path,
-) -> Result<(File, String), Refusal> {
+pub(super) fn open_parent(root: &File, relative: &Utf8Path) -> Result<(File, String), Refusal> {
     let mut held = root.try_clone().map_err(Refusal::Read)?;
     let components = relative.as_str().split('/').collect::<Vec<_>>();
     for name in &components[..components.len() - 1] {

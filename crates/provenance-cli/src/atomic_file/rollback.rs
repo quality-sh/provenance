@@ -71,13 +71,15 @@ impl FileRollbackJournal {
         let backup = super::commit::displace_to_backup(path)
             .with_context(|| format!("failed to preserve {} before replacement", path.display()))?;
         if let Err(error) = verify(&backup) {
-            provenance_store::operations::files::rename_no_replace(&backup, path).with_context(|| {
-                format!(
-                    "{} changed during displacement and could not be restored from {}",
-                    path.display(),
-                    backup.display()
-                )
-            })?;
+            provenance_store::operations::files::rename_no_replace(&backup, path).with_context(
+                || {
+                    format!(
+                        "{} changed during displacement and could not be restored from {}",
+                        path.display(),
+                        backup.display()
+                    )
+                },
+            )?;
             return Err(error.context(format!("{} changed during displacement", path.display())));
         }
         self.changes.push(FileChange::Displaced {
@@ -171,8 +173,9 @@ impl FileRollbackJournal {
                     (path, result)
                 }
                 FileChange::Displaced { path, backup } => {
-                    let result = provenance_store::operations::files::rename_no_replace(&backup, &path)
-                        .with_context(|| format!("failed to restore {}", path.display()));
+                    let result =
+                        provenance_store::operations::files::rename_no_replace(&backup, &path)
+                            .with_context(|| format!("failed to restore {}", path.display()));
                     (path, result)
                 }
             };

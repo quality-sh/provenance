@@ -142,7 +142,7 @@ impl RepositoryFiles {
         limit: usize,
     ) -> Result<HeldRepositoryFile, RepositoryFileRefusal> {
         validate_relative(relative).map_err(RepositoryFileRefusal::from)?;
-        held::open(&self.directory, relative, limit)
+        held::open(&self.directory, &self.path, relative, limit)
     }
     pub fn scan_tree(&self, limit: usize) -> Result<(Vec<FileScan>, bool), FileAccessRefusal> {
         #[cfg(any(unix, windows))]
