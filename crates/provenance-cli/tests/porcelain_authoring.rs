@@ -59,6 +59,11 @@ fn target_first_create_keeps_the_parent_separate_from_the_child_id() {
         "json",
     ]);
     assert_eq!(parent["data"]["id"], "req_parent");
+    assert!(parent["data"]["decision"]["pending"]["proposal_id"].is_string());
+    assert_eq!(
+        parent["data"]["decision"]["pending"]["revision"],
+        parent["data"]["edit"]["revision"]
+    );
 
     let child = json_output(&[
         "req_child",
@@ -76,6 +81,7 @@ fn target_first_create_keeps_the_parent_separate_from_the_child_id() {
     ]);
     assert_eq!(child["data"]["id"], "req_child");
     assert_eq!(child["data"]["refines"], "req_parent");
+    assert!(child["data"]["decision"]["pending"]["proposal_id"].is_string());
 }
 
 #[test]

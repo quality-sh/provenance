@@ -197,7 +197,7 @@ impl StateStore {
             schema_version: REVIEW_SCHEMA_VERSION,
             scope_id: scope.clone(),
             requirement_id: id,
-            sequence: head.as_ref().map_or(1, |e| e.sequence + 1),
+            sequence: head.as_ref().map_or(1, |entry| entry.sequence + 1),
             id: entry_id,
             predecessor: head.as_ref().map(|e| e.id.clone()),
             revision,
