@@ -104,17 +104,18 @@ fn ste_download_client_carries_no_quic_transport() {
 #[test]
 fn init_download_work_runs_on_tokios_blocking_pool() {
     let workspace = workspace_root();
-    let handlers = fs::read_to_string(workspace.join("crates/provenance-cli/src/handlers/mod.rs"))
-        .expect("read command dispatcher");
+    let porcelain = workspace.join("crates/provenance-transport/src/porcelain");
+    let init = fs::read_to_string(porcelain.join("init.rs")).expect("read init adapter");
+    let cargo_init =
+        fs::read_to_string(porcelain.join("cargo_init.rs")).expect("read cargo init adapter");
     let onboarding =
-        fs::read_to_string(workspace.join("crates/provenance-cli/src/ste_onboarding.rs"))
+        fs::read_to_string(workspace.join("crates/provenance-transport/src/ste_onboarding.rs"))
             .expect("read STE onboarding");
 
-    // Both init commands hand their work to the one helper that runs it on
-    // the blocking pool.
-    assert!(handlers.contains("tokio::task::spawn_blocking(handler)"));
-    assert!(handlers.contains("run_blocking(move || cargo_init::handle("));
-    assert!(handlers.contains("run_blocking(move || repo::init("));
+    // Both init adapters run their work on the blocking pool.
+    assert!(init.contains("tokio::task::spawn_blocking(move || init("));
+    assert!(cargo_init.contains("tokio::task::spawn_blocking(move || {"));
+    assert!(cargo_init.contains("cargo_init(input.package.as_deref(), ste_pdf, skills)"));
     assert!(!onboarding.contains("std::thread::spawn"));
 }
 
@@ -125,10 +126,12 @@ fn init_download_work_runs_on_tokios_blocking_pool() {
 #[test]
 fn init_summary_structure_stays_pinned_in_one_module() {
     let workspace = workspace_root();
-    let summary = fs::read_to_string(workspace.join("crates/provenance-cli/src/init_summary.rs"))
-        .expect("read init summary");
-    let repo = fs::read_to_string(workspace.join("crates/provenance-cli/src/handlers/repo.rs"))
-        .expect("read init handler");
+    let summary =
+        fs::read_to_string(workspace.join("crates/provenance-transport/src/init_summary.rs"))
+            .expect("read init summary");
+    let repo =
+        fs::read_to_string(workspace.join("crates/provenance-transport/src/porcelain/init.rs"))
+            .expect("read init handler");
 
     assert!(summary.contains("Have your agent run provenance prime to get acclimated."));
     assert!(!summary.contains("Next steps"));
@@ -146,9 +149,10 @@ fn init_summary_structure_stays_pinned_in_one_module() {
 
 #[test]
 fn release_tests_keep_the_ste_asset_override_on_loopback() {
-    let onboarding =
-        fs::read_to_string(workspace_root().join("crates/provenance-cli/src/ste_onboarding.rs"))
-            .expect("read STE onboarding");
+    let onboarding = fs::read_to_string(
+        workspace_root().join("crates/provenance-transport/src/ste_onboarding.rs"),
+    )
+    .expect("read STE onboarding");
 
     assert!(!onboarding.contains("cfg!(debug_assertions)"));
     assert!(onboarding.contains("127.0.0.1"));

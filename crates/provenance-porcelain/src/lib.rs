@@ -12,6 +12,7 @@
 pub mod action;
 pub mod action_input;
 pub mod api;
+pub mod cargo_init;
 pub mod check;
 pub mod dictionary;
 pub mod discussion;
@@ -20,6 +21,7 @@ pub mod get;
 pub mod graph_reference;
 pub mod guidance;
 pub mod import;
+pub mod init;
 pub mod materialize;
 pub mod registry;
 pub mod report;

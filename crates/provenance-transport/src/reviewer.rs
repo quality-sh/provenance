@@ -1,7 +1,7 @@
 //! Selects the initial human reviewer and describes the resulting setup.
 
 use camino::Utf8Path;
-use provenance_review::reviewer::git_actor_id;
+use provenance_core::StableId;
 use std::io::{IsTerminal, Write};
 
 pub struct InitialReviewer {
@@ -56,4 +56,48 @@ fn prompt(default: &str) -> anyhow::Result<String> {
         "" => default.to_owned(),
         value => value.to_owned(),
     })
+}
+
+/// The Git identity of the person as an actor ID: the e-mail address, or else the name,
+/// in the stable identifier form.
+pub fn git_actor_id(path: &Utf8Path) -> Option<String> {
+    ["user.email", "user.name"]
+        .into_iter()
+        .find_map(|key| normalize_actor_id(&git_config(path, key)?))
+}
+
+/// The value of one Git configuration key for the repository at `path`, or for its
+/// nearest existing ancestor.
+pub fn git_config(path: &Utf8Path, key: &str) -> Option<String> {
+    let working_directory = path
+        .ancestors()
+        .find(|candidate| candidate.exists())
+        .unwrap_or(path);
+    let output = provenance_store::git_process::git()
+        .current_dir(working_directory)
+        .args(["config", "--get", key])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let value = String::from_utf8(output.stdout).ok()?;
+    Some(value.trim().to_owned()).filter(|value| !value.is_empty())
+}
+
+fn normalize_actor_id(identity: &str) -> Option<String> {
+    let mut normalized = String::new();
+    let mut separator = false;
+    for character in identity.chars() {
+        if character.is_ascii_alphanumeric() {
+            if separator && !normalized.is_empty() {
+                normalized.push('_');
+            }
+            normalized.push(character.to_ascii_lowercase());
+            separator = false;
+        } else {
+            separator = true;
+        }
+    }
+    StableId::new(normalized.clone()).ok().map(|_| normalized)
 }

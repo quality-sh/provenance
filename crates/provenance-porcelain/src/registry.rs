@@ -13,10 +13,12 @@ mod porcelain_fields;
 mod repository;
 mod workspace;
 
+pub use crate::cargo_init::CargoInitInput;
 pub use crate::dictionary::{DictionaryImportInput, DictionaryStatusInput};
 pub use crate::export::ExportInput;
 pub use crate::graph_reference::{ReferenceInput, ReferenceIssueInput};
 pub use crate::import::ImportInput;
+pub use crate::init::InitInput;
 pub use crate::materialize::MaterializeInput;
 pub use crate::report::{ReportBuildInput, ReportRenderInput};
 pub use crate::schema::SchemaShowInput;
@@ -29,7 +31,7 @@ pub use dogfood::{
 pub use fields::{json_format, Field, FieldValue, Fields, Relation, REPO, SCOPE};
 pub use graph::GraphCommand;
 pub use porcelain::{PrimeFormat, PrimeInput};
-pub use repository::{CargoInitInput, InitInput, MergeJsonlInput, RepositoryCommand};
+pub use repository::{MergeJsonlInput, RepositoryCommand};
 pub use workspace::{SkillsInstallInput, SkillsListInput, SkillsShowInput, WorkspaceCommand};
 
 use crate::action::Action;

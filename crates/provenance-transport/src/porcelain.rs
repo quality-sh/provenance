@@ -2,6 +2,7 @@
 
 pub mod api_port;
 pub(crate) mod authoring;
+mod cargo_init;
 mod dictionary;
 mod discussion_port;
 mod export;
@@ -9,6 +10,7 @@ mod get_port;
 mod graph_reference;
 mod host;
 mod import;
+mod init;
 mod materialize;
 mod parent_replacement;
 mod report;
@@ -41,6 +43,19 @@ pub struct RepositoryPort {
 impl RepositoryPort {
     pub const fn new(context: RepoContext) -> Self {
         Self { context }
+    }
+}
+
+/// The adapter of the commands that set up a repository or a workspace: init,
+/// cargo init, and the skills commands. It holds the skills that the program bundles.
+#[derive(Clone, Copy, Debug)]
+pub struct SetupPort {
+    skills: &'static [crate::skills::EmbeddedSkill],
+}
+
+impl SetupPort {
+    pub const fn new(skills: &'static [crate::skills::EmbeddedSkill]) -> Self {
+        Self { skills }
     }
 }
 
