@@ -1,7 +1,7 @@
 use provenance_core::{RequirementReview, ScopeId, StableId, SUPPORTED_SCHEMA_VERSION};
 use sha2::{Digest, Sha256};
 
-use super::{ReconciledResource, StateStore, TypedResourceKind};
+use super::{readers::read_jsonl, ReconciledResource, StateStore, TypedResourceKind};
 use crate::shards;
 
 /// One restated Requirement obligation drawn from a reconciliation.
@@ -110,20 +110,15 @@ impl StateStore {
     }
 
     /// Every review ever raised in this scope, cleared ones included.
+    ///
+    /// The read goes through the shared record reader, so a stored review
+    /// whose layout this build does not support is refused instead of loaded
+    /// partially, and the read waits for the repository read guard.
     pub fn list_requirement_reviews(
         &self,
         scope: &ScopeId,
     ) -> anyhow::Result<Vec<RequirementReview>> {
-        let path = shards::requirement_reviews_path(&self.layout, scope);
-        crate::test_probes::record_read(&path);
-        if !path.exists() {
-            return Ok(Vec::new());
-        }
-        std::fs::read_to_string(path)?
-            .lines()
-            .filter(|line| !line.trim().is_empty())
-            .map(|line| serde_json::from_str(line).map_err(Into::into))
-            .collect()
+        read_jsonl(self, &shards::requirement_reviews_path(&self.layout, scope))
     }
 
     /// The Rules one Requirement currently produces.
