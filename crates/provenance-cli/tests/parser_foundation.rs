@@ -155,3 +155,21 @@ fn command_keywords_are_refused_as_record_ids_on_both_cli_write_forms() {
         .failure()
         .stderr(contains("reserved record ID check"));
 }
+
+#[test]
+fn end_of_options_allows_an_option_shaped_target() {
+    let (_directory, path) = repo();
+    provenance()
+        .args([
+            "sources", "create", "--repo", &path, "--id=--source", "--name", "Flagged",
+        ])
+        .assert()
+        .success();
+    let output = provenance()
+        .args(["--repo", &path, "--format=json", "--", "--source"])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let value: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(value["record"]["id"], "--source");
+}
