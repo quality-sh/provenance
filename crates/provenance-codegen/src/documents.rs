@@ -1,5 +1,6 @@
 //! Export the registered resource surface as `OpenAPI` and MCP documents.
 use serde_json::{json, Map, Value};
+use std::collections::{BTreeMap, BTreeSet};
 
 pub fn component(name: &str, mut schema: Value, components: &mut Map<String, Value>) -> Value {
     let definitions = schema.as_object_mut().unwrap().remove("$defs");
@@ -167,13 +168,15 @@ fn query_variant_documents(
         .into_iter()
         .map(|variant| {
             let suffix = variant.selector.map_or_else(|| "Base".to_owned(), pascal);
-            let success = component(
+            let success = query_variant_component(
                 &format!("{family}{suffix}Success"),
+                &format!("{family}Success"),
                 variant.success_schema,
                 schemas,
             );
-            let failure = component(
+            let failure = query_variant_component(
                 &format!("{family}{suffix}Failure"),
+                &format!("{family}Failure"),
                 variant.failure_schema,
                 schemas,
             );
@@ -185,6 +188,109 @@ fn query_variant_documents(
             })
         })
         .collect()
+}
+
+fn query_variant_component(
+    name: &str,
+    consolidated: &str,
+    mut schema: Value,
+    components: &mut Map<String, Value>,
+) -> Value {
+    schema.as_object_mut().unwrap().remove("$schema");
+    schema["x-provenance-model-family"] = json!(name);
+    strip_titles(&mut schema);
+    let definitions = schema
+        .as_object_mut()
+        .unwrap()
+        .remove("$defs")
+        .and_then(|value| value.as_object().cloned())
+        .unwrap_or_default();
+    let mut shared = definitions
+        .iter()
+        .filter_map(|(key, value)| {
+            let mut candidate = value.clone();
+            rewrite(&mut candidate, consolidated);
+            (components.get(&format!("{consolidated}{key}")) == Some(&candidate))
+                .then(|| key.clone())
+        })
+        .collect::<BTreeSet<_>>();
+    loop {
+        let dependent = shared
+            .iter()
+            .find(|key| !references_only_shared(&definitions[*key], &shared))
+            .cloned();
+        let Some(dependent) = dependent else { break };
+        shared.remove(&dependent);
+    }
+    let targets = definitions
+        .keys()
+        .map(|key| {
+            let prefix = if shared.contains(key) {
+                consolidated
+            } else {
+                name
+            };
+            (key.clone(), format!("{prefix}{key}"))
+        })
+        .collect::<BTreeMap<_, _>>();
+    rewrite_variant(&mut schema, &targets);
+    for (key, mut value) in definitions {
+        if shared.contains(&key) {
+            continue;
+        }
+        rewrite_variant(&mut value, &targets);
+        let target = targets[&key].clone();
+        assert!(
+            components.insert(target.clone(), value).is_none(),
+            "schema component name collision: {target}"
+        );
+    }
+    assert!(
+        components.insert(name.to_owned(), schema).is_none(),
+        "schema component name collision: {name}"
+    );
+    json!({"$ref": format!("#/components/schemas/{name}")})
+}
+
+fn references_only_shared(value: &Value, shared: &BTreeSet<String>) -> bool {
+    match value {
+        Value::Object(object) => {
+            let reference_is_shared = object
+                .get("$ref")
+                .and_then(Value::as_str)
+                .and_then(|reference| reference.strip_prefix("#/$defs/"))
+                .is_none_or(|name| shared.contains(name));
+            reference_is_shared
+                && object
+                    .values()
+                    .all(|child| references_only_shared(child, shared))
+        }
+        Value::Array(array) => array
+            .iter()
+            .all(|child| references_only_shared(child, shared)),
+        _ => true,
+    }
+}
+
+fn rewrite_variant(value: &mut Value, targets: &BTreeMap<String, String>) {
+    match value {
+        Value::Object(object) => {
+            if let Some(Value::String(reference)) = object.get_mut("$ref") {
+                if let Some(name) = reference.strip_prefix("#/$defs/") {
+                    *reference = format!("#/components/schemas/{}", targets[name]);
+                }
+            }
+            for child in object.values_mut() {
+                rewrite_variant(child, targets);
+            }
+        }
+        Value::Array(array) => {
+            for child in array {
+                rewrite_variant(child, targets);
+            }
+        }
+        _ => {}
+    }
 }
 
 fn parameter_document(parameter: &provenance_store::operations::catalog::Parameter) -> Value {

@@ -27,6 +27,25 @@ fn parameter<'a>(variant: &'a Value, name: &str) -> &'a Value {
         .expect("selected parameter")
 }
 
+fn references<'a>(value: &'a Value, found: &mut Vec<&'a str>) {
+    match value {
+        Value::Object(object) => {
+            if let Some(reference) = object.get("$ref").and_then(Value::as_str) {
+                found.push(reference);
+            }
+            for child in object.values() {
+                references(child, found);
+            }
+        }
+        Value::Array(array) => {
+            for child in array {
+                references(child, found);
+            }
+        }
+        _ => {}
+    }
+}
+
 #[test]
 fn catalog_query_parameters_retain_required_input_facts() {
     let definitions = provenance_store::operations::catalog::definitions();
@@ -98,4 +117,32 @@ fn member_queries_keep_path_identity_and_selected_results() {
         variant(member, Some("neighbors"))["success"],
         variant(member, Some("trace"))["success"]
     );
+}
+
+#[test]
+fn query_variants_reuse_matching_consolidated_response_components() {
+    let (openapi, _) = provenance_codegen::documents();
+    let selected = variant(operation(&openapi, "/rules/{id}"), Some("trace"));
+    let schemas = openapi["components"]["schemas"]
+        .as_object()
+        .expect("component schemas");
+
+    for (contract, consolidated) in [("success", "GetRuleSuccess"), ("failure", "GetRuleFailure")]
+    {
+        let name = selected[contract]["$ref"]
+            .as_str()
+            .expect("variant contract reference")
+            .trim_start_matches("#/components/schemas/");
+        let mut found = Vec::new();
+        references(&schemas[name], &mut found);
+        assert!(!found.is_empty(), "variant contract must remain explicit");
+        assert!(
+            found.iter().any(|reference| reference.starts_with(&format!(
+                "#/components/schemas/{consolidated}"
+            ))),
+            "{name} must reuse matching {consolidated} components: {found:?}"
+        );
+    }
+    assert!(!schemas.contains_key("GetRuleTraceSuccessResponseMetaFreshnessCause"));
+    assert!(!schemas.contains_key("GetRuleTraceFailureOperationError"));
 }
