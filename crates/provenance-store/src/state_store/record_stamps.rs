@@ -1,8 +1,8 @@
 //! Stamp changed record content while the canonical publication lock is held.
 use camino::Utf8Path;
 use provenance_core::{
-    review::{ReviewRecord, REVIEW_SCHEMA_VERSION},
-    NodeType, Requirement, Resolution, Rule, SchemaVersion, Source, Stamp,
+    review::{ReviewRecord, ReviewRecordKind, REVIEW_SCHEMA_VERSION},
+    NodeType, Stamp,
 };
 use serde::{de::DeserializeOwned, Serialize};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
@@ -10,91 +10,103 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use super::read_budget::{ensure_slice_within_read_budget, ensure_within_read_budget, ReadBudget};
 use super::StateStore;
 
-pub trait GraphRecord:
-    Clone + Into<ReviewRecord> + PartialEq + DeserializeOwned + Serialize + ReadBudget
+pub(crate) trait GraphRecord:
+    Clone
+    + Into<ReviewRecord>
+    + PartialEq
+    + DeserializeOwned
+    + Serialize
+    + ReadBudget
+    + ReviewRecordKind
+    + StoredReviewRecord
 {
-    const KIND: NodeType;
+    fn id(&self) -> &provenance_core::StableId {
+        self.review_id()
+    }
 
-    fn validate_write(&self, _previous: Option<&Self>) -> anyhow::Result<()> {
+    fn validate_write(&self, previous: Option<&Self>) -> anyhow::Result<()> {
+        match (self.clone().into(), previous.cloned().map(Into::into)) {
+            (ReviewRecord::Rule(rule), Some(ReviewRecord::Rule(previous))) => {
+                rule.validate_transition(&previous).map_err(invalid_update)
+            }
+            (ReviewRecord::Rule(rule), None) => rule.validate_archive().map_err(invalid_update),
+            _ => Ok(()),
+        }
+    }
+    fn set_stamps(&mut self, previous: Option<&Self>, stamp: Option<&Stamp>) -> anyhow::Result<()> {
+        let mut value = serde_json::to_value(&*self)?;
+        let Some(fields) = value.as_object_mut() else {
+            return Ok(());
+        };
+        if !fields.contains_key("created") {
+            return Ok(());
+        }
+        let previous_value = previous.map(serde_json::to_value).transpose()?;
+        let created = previous_value
+            .as_ref()
+            .and_then(|record| record.get("created"))
+            .cloned()
+            .unwrap_or(serde_json::to_value(stamp)?);
+        let updated = if previous.is_some_and(|record| record == self) {
+            previous_value
+                .as_ref()
+                .and_then(|record| record.get("updated"))
+                .cloned()
+                .unwrap_or(serde_json::Value::Null)
+        } else {
+            serde_json::to_value(stamp)?
+        };
+        fields.insert("created".into(), created);
+        fields.insert("updated".into(), updated);
+        *self = serde_json::from_value(value)?;
         Ok(())
     }
-    fn set_stamps(&mut self, _previous: Option<&Self>, _stamp: Option<&Stamp>) {}
-    fn schema_version(&self) -> SchemaVersion;
-    fn set_schema_version(&mut self, version: SchemaVersion);
-    fn id(&self) -> &provenance_core::StableId;
 }
 
-macro_rules! stamps {
-    () => {
-        fn set_stamps(&mut self, previous: Option<&Self>, stamp: Option<&Stamp>) {
-            self.created = previous.map_or_else(|| stamp.cloned(), |r| r.created.clone());
-            self.updated = if previous.is_some_and(|r| r == self) {
-                previous.and_then(|r| r.updated.clone())
-            } else {
-                stamp.cloned()
+impl<T> GraphRecord for T where
+    T: Clone
+        + Into<ReviewRecord>
+        + PartialEq
+        + DeserializeOwned
+        + Serialize
+        + ReadBudget
+        + ReviewRecordKind
+        + StoredReviewRecord
+{
+}
+
+fn invalid_update(error: anyhow::Error) -> anyhow::Error {
+    crate::write_error::SourceFailure::wrap(crate::write_error::WriteFailure::InvalidUpdate, error)
+}
+
+pub(crate) trait StoredReviewRecord {}
+
+macro_rules! define_stored_review_records {
+    (
+        export { $(
+            $variant:ident {
+                record: $record:ty,
+                field: $field:ident,
+                path: $path:ident,
+                meta: $meta:tt,
+                node: [$kind:ident],
+                reader: $reader:tt,
+                id: $id:ident,
+                loader: $loader:tt,
+                graph: $graph:tt,
+                import: $import:tt,
+                catalog: $catalog:tt,
+                route: $route:tt,
+                review: $review:ident
             };
-        }
+        )* }
+        $($other:tt)*
+    ) => {
+        $(impl StoredReviewRecord for $record {})*
     };
 }
-macro_rules! schema_version {
-    () => {
-        fn schema_version(&self) -> SchemaVersion {
-            self.schema_version
-        }
-        fn set_schema_version(&mut self, version: SchemaVersion) {
-            self.schema_version = version;
-        }
-        fn id(&self) -> &provenance_core::StableId {
-            &self.id
-        }
-    };
-}
-impl GraphRecord for Source {
-    const KIND: NodeType = NodeType::Source;
-    stamps!();
-    schema_version!();
-}
-impl GraphRecord for Requirement {
-    const KIND: NodeType = NodeType::Requirement;
-    stamps!();
-    schema_version!();
-}
-impl GraphRecord for Resolution {
-    const KIND: NodeType = NodeType::Resolution;
-    stamps!();
-    schema_version!();
-}
-impl GraphRecord for Rule {
-    const KIND: NodeType = NodeType::Rule;
-    stamps!();
-    schema_version!();
-    fn validate_write(&self, previous: Option<&Self>) -> anyhow::Result<()> {
-        previous
-            .map_or_else(|| self.validate_archive(), |r| self.validate_transition(r))
-            .map_err(|error| {
-                crate::write_error::SourceFailure::wrap(
-                    crate::write_error::WriteFailure::InvalidUpdate,
-                    error,
-                )
-            })
-    }
-}
-impl GraphRecord for provenance_core::Domain {
-    const KIND: NodeType = NodeType::Domain;
-    schema_version!();
-}
-impl GraphRecord for provenance_core::Boundary {
-    const KIND: NodeType = NodeType::Boundary;
-    schema_version!();
-}
-impl GraphRecord for provenance_core::Topic {
-    const KIND: NodeType = NodeType::Topic;
-    schema_version!();
-}
-impl GraphRecord for provenance_core::Question {
-    const KIND: NodeType = NodeType::Question;
-    schema_version!();
-}
+
+crate::cache::family_table::record_family_rows!(define_stored_review_records);
 
 impl StateStore {
     fn current_record_stamp(&self) -> anyhow::Result<Option<Stamp>> {
@@ -131,7 +143,7 @@ impl StateStore {
             if previous != Some(&*record) && stamp.is_none() {
                 stamp = Some(self.current_record_stamp()?);
             }
-            record.set_stamps(previous, stamp.as_ref().and_then(Option::as_ref));
+            record.set_stamps(previous, stamp.as_ref().and_then(Option::as_ref))?;
         }
         Ok(())
     }
@@ -146,7 +158,7 @@ impl StateStore {
                 .iter_mut()
                 .find(|record| record.id() == id)
                 .ok_or_else(|| anyhow::anyhow!("created graph record is missing"))?;
-            record.set_schema_version(REVIEW_SCHEMA_VERSION);
+            record.set_review_schema_version(REVIEW_SCHEMA_VERSION);
             Ok(record.clone())
         })
     }
@@ -156,8 +168,17 @@ impl StateStore {
         path: &Utf8Path,
         mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<T>,
     ) -> anyhow::Result<T> {
+        self.mutate_graph_record_with_etag(path, None, mutate)
+    }
+
+    pub(crate) fn mutate_graph_record_with_etag<T: GraphRecord>(
+        &self,
+        path: &Utf8Path,
+        expected_etag: Option<&str>,
+        mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<T>,
+    ) -> anyhow::Result<T> {
         if T::KIND != NodeType::Requirement && !crate::review::guard::writer_allows_path(path) {
-            return self.save_native_record(path, mutate);
+            return self.save_native_record(path, expected_etag, mutate);
         }
         self.mutate_graph_record_guarded(path, mutate)
             .map(|(_, record)| record)
@@ -190,11 +211,9 @@ impl StateStore {
         path: &Utf8Path,
         replacement: Vec<T>,
     ) -> anyhow::Result<()> {
-        let has_enrolled_record = replacement
-            .iter()
-            .any(|record| record.schema_version() == REVIEW_SCHEMA_VERSION);
+        let has_stored_record = !super::readers::read_jsonl::<T>(self, path)?.is_empty();
         if T::KIND != NodeType::Requirement
-            && has_enrolled_record
+            && has_stored_record
             && !crate::review::guard::writer_allows_path(path)
         {
             return self.replace_native_records(path, replacement);

@@ -20,6 +20,8 @@ macro_rules! update_input {
         pub struct $name {
             pub scope_id: ScopeId,
             pub id: StableId,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub expected_etag: Option<String>,
             $(pub $field: Option<$ty>,)*
             #[serde(default, skip_serializing_if = "Vec::is_empty")]
             pub clear_fields: Vec<$clear>,
