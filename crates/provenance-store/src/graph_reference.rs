@@ -1,4 +1,3 @@
-mod canonical;
 mod export;
 mod git;
 mod projection;
@@ -11,7 +10,6 @@ use serde::{Deserialize, Serialize};
 pub use export::{graph_digest, ExactExport};
 pub use projection::GraphExport;
 
-use canonical::{canonical_bytes, sha256};
 use git::{GitRepository, TreeSource};
 use projection::load_projection;
 
@@ -398,13 +396,20 @@ fn reference_identity(
     let framed = format!(
         "graph-reference-v1\0{repository_id}\0{store_path}\0{scope}\0{commit}\0{graph_digest}"
     );
-    format!("grf1_{}", sha256(framed.as_bytes()))
+    format!(
+        "grf1_{}",
+        crate::canonical_digest::sha256(framed.as_bytes())
+    )
 }
 
-fn incomplete(error: impl std::fmt::Display) -> GraphReferenceError {
+pub(super) fn incomplete(error: impl std::fmt::Display) -> GraphReferenceError {
     GraphReferenceError::Incomplete {
         detail: error.to_string(),
     }
+}
+
+fn canonical_bytes<T: Serialize>(value: &T) -> Result<Vec<u8>, GraphReferenceError> {
+    crate::canonical_digest::canonical_bytes(value).map_err(incomplete)
 }
 
 fn ensure_graph_schema_version(
