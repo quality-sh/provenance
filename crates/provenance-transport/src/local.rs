@@ -129,7 +129,8 @@ impl HostAccess for LocalAccess {
     }
 
     fn advertises(&self, operation: &str) -> bool {
-        catalog::definitions()
+        matches!(operation, "resolve-record" | "trace" | "impact")
+            || catalog::definitions()
             .iter()
             .any(|definition| definition.name == operation)
     }
