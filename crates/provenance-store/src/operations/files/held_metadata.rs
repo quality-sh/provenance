@@ -96,13 +96,12 @@ impl WindowsDacl {
     fn read(file: &File) -> Result<Self, Refusal> {
         use std::mem::MaybeUninit;
         use std::os::windows::io::AsRawHandle as _;
-        use windows_sys::Win32::Foundation::{ERROR_SUCCESS, HANDLE, HLOCAL};
+        use windows_sys::Win32::Foundation::{ERROR_SUCCESS, HANDLE, HLOCAL, LocalFree};
         use windows_sys::Win32::Security::Authorization::{GetSecurityInfo, SE_FILE_OBJECT};
         use windows_sys::Win32::Security::{
             GetAclInformation, ACL_SIZE_INFORMATION, AclSizeInformation,
             DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR,
         };
-        use windows_sys::Win32::System::Memory::LocalFree;
 
         let mut dacl = std::ptr::null_mut();
         let mut descriptor: PSECURITY_DESCRIPTOR = std::ptr::null_mut();
