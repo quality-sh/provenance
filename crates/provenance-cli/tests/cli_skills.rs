@@ -156,7 +156,7 @@ fn skills_install_copy_replaces_own_symlink_but_foreign_symlink_requires_force()
     std::os::unix::fs::symlink("../../elsewhere", &link).unwrap();
     install(dir.path(), &["--copy"])
         .failure()
-        .stderr(predicate::str::contains("rerun with --force"));
+        .stderr(predicate::str::contains("provenance skills install --force"));
     assert_eq!(
         std::fs::read_link(&link).unwrap(),
         PathBuf::from("../../elsewhere")
@@ -181,7 +181,7 @@ fn skills_install_refuses_a_file_where_a_skill_directory_belongs() {
         install(dir.path(), &arguments)
             .failure()
             .stderr(predicate::str::contains(
-                "exists and is not a skill directory; rerun with --force to overwrite",
+                "exists and is not a skill directory; run `provenance skills install --force`",
             ));
         assert_eq!(
             std::fs::read_to_string(&occupied).unwrap(),

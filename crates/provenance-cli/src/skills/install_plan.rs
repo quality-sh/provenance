@@ -158,6 +158,25 @@ impl InstallPlan {
     }
 }
 
+fn conflict_guidance(path: &Path) -> String {
+    let project = path
+        .ancestors()
+        .find(|ancestor| {
+            ancestor
+                .file_name()
+                .is_some_and(|name| name == ".agents" || name == ".claude")
+        })
+        .and_then(Path::parent);
+    match project {
+        Some(project) => format!(
+            "run `provenance skills install --force` with this working directory: {}",
+            project.display()
+        ),
+        None => "run `provenance skills install --force` from the target project directory"
+            .to_owned(),
+    }
+}
+
 pub(super) struct FileAction {
     path: PathBuf,
     before: FileSnapshot,
@@ -177,8 +196,9 @@ impl FileAction {
                 let verdict = classify_install(TargetState::Foreign, force);
                 if verdict == InstallVerdict::Refuse {
                     anyhow::bail!(
-                        "{} exists and differs; rerun with --force to overwrite",
-                        path.display()
+                        "{} exists and differs; {}",
+                        path.display(),
+                        conflict_guidance(&path)
                     );
                 }
                 anyhow::bail!("{} is not a regular file", path.display());
@@ -195,8 +215,9 @@ impl FileAction {
         let verdict = classify_install(state, force);
         if verdict == InstallVerdict::Refuse {
             anyhow::bail!(
-                "{} exists and differs; rerun with --force to overwrite",
-                path.display()
+                "{} exists and differs; {}",
+                path.display(),
+                conflict_guidance(&path)
             );
         }
         let status = if unchanged {
