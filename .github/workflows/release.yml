@@ -256,6 +256,10 @@ jobs:
           # Cargo generates the archive checksum. Keep this version fixed so
           # a later rerun can compare the same bytes with crates.io.
           toolchain: 1.98.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: node tools/skills/prepare.mjs
       - name: Verify packaged Rust workspace
         shell: bash
         run: |

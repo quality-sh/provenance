@@ -1,5 +1,7 @@
 #[path = "build/review_assets.rs"]
 mod review_assets;
+#[path = "build/skills.rs"]
+mod skills;
 
 // @provenance rule: rule_cargo_install_prints_init_step
 fn main() {
@@ -18,6 +20,10 @@ fn main() {
     );
     let output =
         std::path::PathBuf::from(std::env::var_os("OUT_DIR").expect("Cargo output directory"));
+    let crate_root = std::path::PathBuf::from(
+        std::env::var_os("CARGO_MANIFEST_DIR").expect("Cargo manifest directory"),
+    );
+    skills::generate(&crate_root, &output).expect("complete bundled skill sources");
     review_assets::generate(&root, &output.join("review_assets.rs"))
         .expect("valid review asset bundle");
     println!("cargo:warning=Next step: run cargo provenance init in your project.");
