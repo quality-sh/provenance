@@ -7,13 +7,21 @@ use serde_json::Value;
 
 pub(crate) mod authoring;
 mod authoring_mcp;
+pub mod api_port;
+mod api_mcp;
 mod discussion_port;
 mod get_port;
 mod search_port;
 pub use authoring::{Action, ActionError, TargetRoute};
+pub(super) use api_mcp::{call as call_api, tool as api_tool};
 pub(super) use authoring_mcp::{call as call_authoring, tools as authoring_tools};
+pub use api_port::HostApiPort;
 pub use discussion_port::HostDiscussionPort;
 pub use get_port::HostGetPort;
+
+pub(crate) fn api_is_available(host: &crate::StatementHost) -> bool {
+    api_port::is_available(host)
+}
 
 pub(crate) fn discussion_is_available(host: &crate::StatementHost, action: Action) -> bool {
     discussion_port::is_available(host, action)
