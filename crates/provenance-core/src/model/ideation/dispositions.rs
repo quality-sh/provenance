@@ -3,6 +3,11 @@ use serde::{Deserialize, Serialize};
 use super::{CanonicalArtifactType, DispositionDecision, IdentityType};
 use crate::model::ids::{SchemaVersion, ScopeId, StableId};
 
+/// An approval lacks the evidence required for acceptance.
+#[derive(Debug, thiserror::Error)]
+#[error("accepted proposal must be asserted before disposition")]
+pub struct ApprovalEvidenceRequired;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]

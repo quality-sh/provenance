@@ -284,6 +284,7 @@ export const FAILURE_STATUS = new Map([
   ['schema_version', 400], ['invalid_commit_pin', 400], ['scope_mismatch', 400],
   ['empty_message_body', 400], ['unsupported_thread_parent', 400], ['statement_invalid', 400],
   ['invalid_declaration', 400], ['invalid_update', 400], ['missing_reference', 400],
+  ['approval_evidence_required', 400],
   ['statement_rejected', 400], ['invalid_verification_target', 400], ['invalid_completion', 400],
   ['record_too_large', 400],
 ]);
