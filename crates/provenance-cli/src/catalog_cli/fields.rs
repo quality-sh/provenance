@@ -276,4 +276,18 @@ mod tests {
             .unwrap();
         assert!(schema_input(&schema, &matches, &[]).is_err());
     }
+
+    #[test]
+    fn undeclared_numeric_storage_is_an_error() {
+        let schema = json!({"properties": {"page": {"type": "integer"}}});
+        let command = Command::new("test").arg(
+            Arg::new("page")
+                .long("page")
+                .value_parser(clap::value_parser!(usize)),
+        );
+        let matches = command
+            .try_get_matches_from(["test", "--page", "2"])
+            .unwrap();
+        assert!(schema_input(&schema, &matches, &[]).is_err());
+    }
 }
