@@ -28,7 +28,7 @@ fn tool(host: &crate::StatementHost, action: Action) -> Option<Tool> {
     );
     let mut tool = Tool::new(
         action.as_str(),
-        description(action),
+        action.description(),
         input
             .as_object()
             .expect("target action input schema is an object")
@@ -42,17 +42,6 @@ fn tool(host: &crate::StatementHost, action: Action) -> Option<Tool> {
             .into(),
     );
     Some(tool)
-}
-
-const fn description(action: Action) -> &'static str {
-    match action {
-        Action::Create => "Create the target ID as an explicit record type.",
-        Action::Update => "Update the existing target while preserving omitted fields.",
-        Action::Answer => "Answer the target Question.",
-        Action::Claim => "Claim the target Topic.",
-        Action::Release => "Release the target Topic claim.",
-        Action::Submit => "Submit the target Requirement for review.",
-    }
 }
 
 fn input_schema(action: Action, definitions: &[(NodeType, &'static Definition)]) -> Value {
@@ -235,7 +224,7 @@ pub async fn call(
 
 fn action_error(error: &ActionError) -> CallToolResult {
     let kind = match error {
-        ActionError::InvalidOptions => "invalid_options",
+        ActionError::InvalidOptions | ActionError::KindSelection => "invalid_options",
         ActionError::NotFound => "not_found",
         ActionError::AmbiguousIdentity => "ambiguous_identity",
         ActionError::AccessDenied => "access_denied",
