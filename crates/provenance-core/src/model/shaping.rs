@@ -132,6 +132,10 @@ pub struct Question {
     /// The verb that resolves this question, chosen when the question is minted.
     #[serde(alias = "resolutionMethod")]
     pub resolution_method: ResolutionMethod,
+    #[relation(target = Question, flow = none)]
+    #[serde(default)]
+    #[column(json)]
+    pub depends_on: Vec<StableId>,
     pub status: QuestionStatus,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[column(json)]

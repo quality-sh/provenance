@@ -156,6 +156,7 @@ pub(super) fn question(
     status: QuestionStatus,
 ) -> Question {
     Question {
+        depends_on: Vec::new(),
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id(),
         id: sid(id),
