@@ -142,7 +142,7 @@ async fn list(ctx: &ReadContext, query: DiscussionListQuery) -> anyhow::Result<D
             parent_id,
             status,
             version,
-            opening,
+            &opening,
             truncated,
         )?;
         let size = serde_json::to_vec(&entry)?.len();
@@ -168,7 +168,7 @@ fn summary(
     parent_id: String,
     status: String,
     version: i64,
-    opening: String,
+    opening: &str,
     truncated: i64,
 ) -> anyhow::Result<DiscussionSummary> {
     let opening_excerpt = opening.chars().take(EXCERPT_CHARS).collect();
@@ -232,7 +232,7 @@ async fn conversation(
             limit: query.limit,
             cursor: query.cursor,
         },
-        Some(query.allowed_parent_kinds),
+        Some(&query.allowed_parent_kinds),
     )
     .await?;
     Ok(DiscussionConversation {

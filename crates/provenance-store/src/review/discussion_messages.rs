@@ -1,6 +1,6 @@
 use crate::operations::{
     read_policy::ReadPolicy,
-    reader::{self, Cursor, ReadContext, PAGE_BYTES, RECORD_BYTES},
+    reader::{self, Cursor, Position, ReadContext, PAGE_BYTES, RECORD_BYTES},
 };
 use camino::Utf8Path;
 use provenance_core::{
@@ -103,23 +103,9 @@ async fn message(
 pub(super) async fn messages(
     ctx: &ReadContext,
     query: DiscussionMessagesQuery,
-    allowed_parent_kinds: Option<Vec<provenance_core::NodeType>>,
+    allowed_parent_kinds: Option<&[provenance_core::NodeType]>,
 ) -> anyhow::Result<DiscussionMessagesPage> {
-    let (cursor, mut position) = if let Some(kinds) = &allowed_parent_kinds {
-        Cursor::open(
-            ctx,
-            "discussion-conversation",
-            &(&query.parent, &query.selector, query.limit, kinds),
-            query.cursor.as_deref(),
-        )?
-    } else {
-        Cursor::open(
-            ctx,
-            "review-discussion-messages",
-            &(&query.parent, &query.selector, query.limit),
-            query.cursor.as_deref(),
-        )?
-    };
+    let (cursor, mut position) = message_cursor(ctx, &query, allowed_parent_kinds)?;
     ctx.snapshot().bound_page_work().await?;
     super::discussion_reads::check_parent(ctx, &query.parent).await?;
     for family in ["review_journal", "messages", "threads"] {
@@ -209,4 +195,25 @@ pub(super) async fn messages(
         entries,
         next_cursor: None,
     })
+}
+
+fn message_cursor(
+    ctx: &ReadContext,
+    query: &DiscussionMessagesQuery,
+    allowed_parent_kinds: Option<&[provenance_core::NodeType]>,
+) -> anyhow::Result<(Cursor, Position)> {
+    match allowed_parent_kinds {
+        Some(kinds) => Cursor::open(
+            ctx,
+            "discussion-conversation",
+            &(&query.parent, &query.selector, query.limit, kinds),
+            query.cursor.as_deref(),
+        ),
+        None => Cursor::open(
+            ctx,
+            "review-discussion-messages",
+            &(&query.parent, &query.selector, query.limit),
+            query.cursor.as_deref(),
+        ),
+    }
 }
