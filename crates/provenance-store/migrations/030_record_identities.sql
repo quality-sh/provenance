@@ -4,4 +4,4 @@ CREATE TABLE record_identities (
     node_type TEXT NOT NULL,
     PRIMARY KEY (scope_id, node_type, id)
 );
-CREATE INDEX idx_record_identities_id ON record_identities(id);
+CREATE UNIQUE INDEX idx_record_identities_id ON record_identities(id);
