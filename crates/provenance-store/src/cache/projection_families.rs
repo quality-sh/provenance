@@ -213,4 +213,18 @@ mod tests {
         );
         assert_eq!(ProjectionFamily::SynthesisPackets.graph_field(), None);
     }
+
+    #[test]
+    fn catalog_registers_each_family_operation() {
+        let registered = crate::operations::catalog::registered_operation_names_for_test();
+        for family in ProjectionFamily::ALL {
+            for operation in family.catalog_operation_names() {
+                assert!(
+                    registered.contains(operation),
+                    "{} operation {operation} is absent from the catalog",
+                    family.family_name()
+                );
+            }
+        }
+    }
 }
