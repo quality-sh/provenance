@@ -1,6 +1,7 @@
 //! Declarations of the commands that install skills and render reports.
 
-use super::{json_format, Declaration, Field, Fields, REPO, SCOPE};
+use super::{json_format, Declaration, Field, Fields};
+use crate::report::{ReportBuildInput, ReportRenderInput};
 use serde::Deserialize;
 
 /// One workspace command.
@@ -41,28 +42,6 @@ pub struct SkillsInstallInput {
     pub format: String,
 }
 
-/// The `report render` input.
-#[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct ReportRenderInput {
-    pub input: String,
-    pub format: String,
-    pub output: Option<String>,
-}
-
-/// The `report build` input.
-#[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct ReportBuildInput {
-    pub repo: String,
-    pub base: String,
-    pub head: String,
-    pub repository: String,
-    pub scope: String,
-    pub path: Option<String>,
-    pub output: Option<String>,
-}
-
 macro_rules! schema_fn {
     ($name:ident, $input:ty) => {
         fn $name() -> serde_json::Value {
@@ -101,7 +80,6 @@ const REPORT_RENDER_FIELDS: &[Field] = &[
 ];
 
 const REPORT_BUILD_FIELDS: &[Field] = &[
-    REPO,
     Field::text("base")
         .required()
         .doc("Older endpoint of the comparison range"),
@@ -111,11 +89,11 @@ const REPORT_BUILD_FIELDS: &[Field] = &[
     Field::text("repository")
         .required()
         .doc("Repository identity in `owner/name` form for report links"),
-    SCOPE,
     Field::text("path").doc(
         "Scan this path instead of the repository root; a partial scan is recorded as incomplete",
     ),
     Field::text("output").doc("Write the envelope JSON to this file instead of standard output"),
+    JSON_FORMAT,
 ];
 
 pub(super) const fn declaration(command: WorkspaceCommand) -> Declaration {
@@ -144,6 +122,7 @@ pub(super) const fn declaration(command: WorkspaceCommand) -> Declaration {
             "report build",
             "Build a report envelope from a real repository at a named base and head",
             Fields::new(REPORT_BUILD_FIELDS, report_build_schema),
-        ),
+        )
+        .bound(),
     }
 }

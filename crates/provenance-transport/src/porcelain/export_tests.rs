@@ -1,5 +1,5 @@
 use super::{render_export, ScopeExport};
-use crate::output::OutputFormat;
+use provenance_porcelain::export::ExportFormat;
 use provenance_core::{NodeType, ScopeId, StableId, Thread, ThreadParent, ThreadStatus};
 
 fn thread(id: &str) -> Thread {
@@ -34,7 +34,7 @@ fn export_with_threads(threads: Vec<Thread>) -> ScopeExport {
 fn jsonl_writes_one_line_for_each_record_of_each_collection() {
     let threads = vec![thread("thread_a"), thread("thread_b")];
     let rendered =
-        render_export(OutputFormat::Jsonl, &export_with_threads(threads.clone())).unwrap();
+        render_export(ExportFormat::Jsonl, &export_with_threads(threads.clone())).unwrap();
     assert!(rendered.ends_with('\n'));
     let lines: Vec<serde_json::Value> = rendered
         .lines()
@@ -50,7 +50,7 @@ fn jsonl_writes_one_line_for_each_record_of_each_collection() {
 #[test]
 fn json_output_reads_back_as_the_same_export() {
     let exported = export_with_threads(vec![thread("thread_a")]);
-    let rendered = render_export(OutputFormat::Json, &exported).unwrap();
+    let rendered = render_export(ExportFormat::Json, &exported).unwrap();
     assert!(rendered.ends_with("}\n"));
     let read_back: ScopeExport = serde_json::from_str(&rendered).unwrap();
     assert_eq!(read_back.scope, "default");
@@ -61,18 +61,18 @@ fn json_output_reads_back_as_the_same_export() {
 fn the_summary_formats_count_each_collection() {
     let exported = export_with_threads(vec![thread("thread_a")]);
     assert_eq!(
-        render_export(OutputFormat::Markdown, &exported).unwrap(),
+        render_export(ExportFormat::Markdown, &exported).unwrap(),
         "# Provenance Export\n\n- Scope: default\n- Sources: 0\n- Domains: 0\n\
          - Requirements: 0\n- Boundaries: 0\n- Topics: 0\n- Questions: 0\n\
          - Resolutions: 0\n- Rules: 0\n- Proposals: 0\n"
     );
     assert_eq!(
-        render_export(OutputFormat::Toon, &exported).unwrap(),
+        render_export(ExportFormat::Toon, &exported).unwrap(),
         "scope: default\nsources: 0\ndomains: 0\nrequirements: 0\nboundaries: 0\n\
          topics: 0\nquestions: 0\nresolutions: 0\nrules: 0\nproposals: 0\n"
     );
     assert_eq!(
-        render_export(OutputFormat::Table, &exported).unwrap(),
+        render_export(ExportFormat::Table, &exported).unwrap(),
         "scope\tsources\tdomains\trequirements\tboundaries\ttopics\tquestions\t\
          resolutions\trules\tproposals\ndefault\t0\t0\t0\t0\t0\t0\t0\t0\t0\n"
     );
