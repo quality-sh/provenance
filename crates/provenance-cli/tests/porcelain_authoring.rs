@@ -1,63 +1,17 @@
-use assert_cmd::Command;
+mod porcelain_authoring_support;
+
 use predicates::prelude::PredicateBooleanExt as _;
 use provenance_macros::verifies;
-use serde_json::Value;
-
-fn provenance() -> Command {
-    Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
-}
-fn initialized_repo() -> (tempfile::TempDir, String) {
-    let directory = tempfile::tempdir().unwrap();
-    let repo = directory.path().to_string_lossy().into_owned();
-    provenance()
-        .args([
-            "init",
-            "--path",
-            &repo,
-            "--scope",
-            "default",
-            "--path-prefix",
-            ".",
-        ])
-        .assert()
-        .success();
-    (directory, repo)
-}
-
-fn json_output(arguments: &[&str]) -> Value {
-    let output = provenance().args(arguments).output().unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    serde_json::from_slice(&output.stdout).unwrap()
-}
-
-fn json_stdin_output(arguments: &[&str], input: &Value) -> Value {
-    let output = provenance()
-        .args(arguments)
-        .write_stdin(serde_json::to_vec(input).unwrap())
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    serde_json::from_slice(&output.stdout).unwrap()
-}
+use porcelain_authoring_support::{initialized_repo, json_output, json_stdin_output, provenance};
 
 #[test]
 #[verifies("rule_porcelain_cli_target_action_order", examples)]
 #[verifies("rule_porcelain_create_names_new_record", examples)]
-#[verifies("rule_porcelain_parent_is_separate_input", examples)]
-#[verifies("rule_porcelain_relationship_patch_modes", examples)]
-fn target_first_create_uses_the_target_type_and_separate_parent_fields() {
+fn target_first_create_uses_the_target_id_and_requires_an_explicit_type() {
     let (_directory, repo) = initialized_repo();
 
     let source = json_output(&[
-        "source_parent",
+        "source_target",
         "create",
         "--type",
         "source",
@@ -70,8 +24,27 @@ fn target_first_create_uses_the_target_type_and_separate_parent_fields() {
         "--format",
         "json",
     ]);
-    assert_eq!(source["data"]["id"], "source_parent");
+    assert_eq!(source["data"]["id"], "source_target");
     assert_eq!(source["data"]["source_type"], "policy");
+
+    provenance()
+        .args([
+            "source_without_type",
+            "create",
+            "--repo",
+            &repo,
+            "--name",
+            "Missing type",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("create requires --type"));
+}
+
+#[test]
+#[verifies("rule_porcelain_parent_is_separate_input", examples)]
+fn target_first_create_keeps_the_parent_separate_from_the_child_id() {
+    let (_directory, repo) = initialized_repo();
 
     let parent = json_output(&[
         "req_parent",
@@ -86,19 +59,6 @@ fn target_first_create_uses_the_target_type_and_separate_parent_fields() {
         "json",
     ]);
     assert_eq!(parent["data"]["id"], "req_parent");
-
-    json_output(&[
-        "req_dependency",
-        "create",
-        "--type",
-        "requirement",
-        "--repo",
-        &repo,
-        "--statement",
-        "The dependency requirement exists.",
-        "--format",
-        "json",
-    ]);
 
     let child = json_output(&[
         "req_child",
@@ -116,43 +76,99 @@ fn target_first_create_uses_the_target_type_and_separate_parent_fields() {
     ]);
     assert_eq!(child["data"]["id"], "req_child");
     assert_eq!(child["data"]["refines"], "req_parent");
+}
 
-    let delta = json_stdin_output(
+#[test]
+#[verifies("rule_porcelain_relationship_patch_modes", examples)]
+fn relationship_updates_preserve_unmodified_members_until_explicit_replacement() {
+    let (_directory, repo) = initialized_repo();
+    for (id, statement) in [
+        ("req_first", "The first dependency exists."),
+        ("req_second", "The second dependency exists."),
+        ("req_replacement", "The replacement dependency exists."),
+    ] {
+        json_output(&[
+            id,
+            "create",
+            "--type",
+            "requirement",
+            "--repo",
+            &repo,
+            "--statement",
+            statement,
+            "--format",
+            "json",
+        ]);
+    }
+
+    let target = json_output(&[
+        "req_target",
+        "create",
+        "--type",
+        "requirement",
+        "--repo",
+        &repo,
+        "--statement",
+        "Relationship patches preserve members that they do not name.",
+        "--depends-on",
+        "req_first",
+        "--format",
+        "json",
+    ]);
+    assert_eq!(target["data"]["depends_on"], serde_json::json!(["req_first"]));
+
+    let added = json_stdin_output(
         &[
-            "req_child",
+            "req_target",
             "update",
             "--repo",
             &repo,
             "--if-match",
-            child["data"]["edit"]["etag"].as_str().unwrap(),
+            target["data"]["edit"]["etag"].as_str().unwrap(),
             "--stdin",
             "--format",
             "json",
         ],
-        &serde_json::json!({"relationships":{"depends_on":{"add":["req_dependency"]}}}),
+        &serde_json::json!({"relationships":{"depends_on":{"add":["req_second"]}}}),
     );
     assert_eq!(
-        delta["data"]["depends_on"],
-        serde_json::json!(["req_dependency"])
+        added["data"]["depends_on"],
+        serde_json::json!(["req_first", "req_second"])
     );
+
+    let removed = json_stdin_output(
+        &[
+            "req_target",
+            "update",
+            "--repo",
+            &repo,
+            "--if-match",
+            added["data"]["edit"]["etag"].as_str().unwrap(),
+            "--stdin",
+            "--format",
+            "json",
+        ],
+        &serde_json::json!({"relationships":{"depends_on":{"remove":["req_first"]}}}),
+    );
+    assert_eq!(removed["data"]["depends_on"], serde_json::json!(["req_second"]));
 
     let replacement = json_stdin_output(
         &[
-            "req_child",
+            "req_target",
             "update",
             "--repo",
             &repo,
             "--if-match",
-            delta["data"]["edit"]["etag"].as_str().unwrap(),
+            removed["data"]["edit"]["etag"].as_str().unwrap(),
             "--stdin",
             "--format",
             "json",
         ],
-        &serde_json::json!({"relationships":{"depends_on":["req_parent"]}}),
+        &serde_json::json!({"relationships":{"depends_on":["req_replacement"]}}),
     );
     assert_eq!(
         replacement["data"]["depends_on"],
-        serde_json::json!(["req_parent"])
+        serde_json::json!(["req_replacement"])
     );
 }
 
@@ -277,7 +293,7 @@ fn named_action_repo() -> (tempfile::TempDir, String) {
 #[test]
 #[verifies("rule_porcelain_existing_action_infers_kind", examples)]
 #[verifies("rule_porcelain_named_domain_actions", examples)]
-fn target_first_topic_actions_keep_the_existing_domain_preconditions() {
+fn target_first_topic_actions_infer_kind_and_update_claim_state() {
     let (_directory, repo) = named_action_repo();
     let claimed = json_output(&[
         "topic_actions",
@@ -304,7 +320,7 @@ fn target_first_topic_actions_keep_the_existing_domain_preconditions() {
 #[test]
 #[verifies("rule_porcelain_existing_action_infers_kind", examples)]
 #[verifies("rule_porcelain_named_domain_actions", examples)]
-fn target_first_question_actions_keep_the_existing_domain_preconditions() {
+fn target_first_question_actions_infer_kind_and_reject_a_mismatched_action() {
     let (_directory, repo) = named_action_repo();
     let answered = json_output(&[
         "question_actions",
@@ -336,7 +352,7 @@ fn target_first_question_actions_keep_the_existing_domain_preconditions() {
 #[test]
 #[verifies("rule_porcelain_existing_action_infers_kind", examples)]
 #[verifies("rule_porcelain_named_domain_actions", examples)]
-fn target_first_requirement_submit_keeps_the_existing_domain_preconditions() {
+fn target_first_requirement_submit_infers_kind_and_records_the_submission() {
     let (_directory, repo) = named_action_repo();
     let submitted = json_stdin_output(
         &[
@@ -365,7 +381,7 @@ fn target_first_requirement_submit_keeps_the_existing_domain_preconditions() {
 
 #[test]
 #[verifies("rule_porcelain_update_keeps_preconditions", examples)]
-fn target_first_mutations_refuse_bad_identity_and_stale_versions() {
+fn target_first_mutations_keep_parent_version_and_existence_preconditions() {
     let (_directory, repo) = initialized_repo();
     provenance()
         .args([

@@ -1,37 +1,79 @@
-use assert_cmd::Command;
+mod porcelain_authoring_support;
+
+use axum::http::HeaderMap;
 use provenance_macros::verifies;
+use provenance_store::operations::catalog::{
+    ContextResolver, ExecutionNeeds, PreparedContext, RequestedContext,
+};
+use provenance_transport::{HostAccess, StatementHost};
+use rmcp::ServiceExt as _;
 use serde_json::{json, Value};
+use std::{collections::BTreeSet, sync::Arc};
 
-fn provenance() -> Command {
-    Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
+use porcelain_authoring_support::{initialized_repo, json_output, provenance};
+
+struct AdvertiseAll;
+
+impl ContextResolver for AdvertiseAll {
+    fn prepare(
+        &self,
+        _: &'static str,
+        _: RequestedContext,
+        _: ExecutionNeeds,
+    ) -> Result<PreparedContext, provenance_core::protocol::failure::OperationFailure> {
+        Err(provenance_core::protocol::failure::OperationFailure::UnavailableNeeds)
+    }
 }
 
-fn initialized_repo() -> (tempfile::TempDir, String) {
-    let directory = tempfile::tempdir().unwrap();
-    let repo = directory.path().to_string_lossy().into_owned();
-    provenance()
-        .args([
-            "init",
-            "--path",
-            &repo,
-            "--scope",
-            "default",
-            "--path-prefix",
-            ".",
-        ])
-        .assert()
-        .success();
-    (directory, repo)
+impl HostAccess for AdvertiseAll {
+    fn authenticate(
+        &self,
+        _: &HeaderMap,
+    ) -> Result<(), provenance_core::protocol::failure::OperationFailure> {
+        Ok(())
+    }
+
+    fn advertises(&self, _: &str) -> bool {
+        true
+    }
+
+    fn bound_identity(&self) -> Option<(String, String)> {
+        None
+    }
 }
 
-fn json_output(arguments: &[&str]) -> Value {
-    let output = provenance().args(arguments).output().unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    serde_json::from_slice(&output.stdout).unwrap()
+#[tokio::test]
+#[verifies("rule_porcelain_action_names_match", examples)]
+async fn target_first_action_names_match_on_the_live_cli_and_mcp_surfaces() {
+    let expected = BTreeSet::from(["answer", "claim", "create", "release", "submit", "update"]);
+    let cli = expected
+        .iter()
+        .filter_map(|action| {
+            provenance()
+                .args(["record_target", action, "--help"])
+                .output()
+                .unwrap()
+                .status
+                .success()
+                .then_some(*action)
+        })
+        .collect::<BTreeSet<_>>();
+
+    let host = StatementHost::with_access(Arc::new(AdvertiseAll));
+    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
+    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let client = ().serve(client_io).await.unwrap();
+    let tools = client.list_all_tools().await.unwrap();
+    let mcp = tools
+        .iter()
+        .filter_map(|tool| expected.contains(tool.name.as_ref()).then_some(tool.name.as_ref()))
+        .collect::<BTreeSet<_>>();
+
+    assert_eq!(cli, expected);
+    assert_eq!(mcp, expected);
+
+    client.cancel().await.unwrap();
+    server.await.unwrap().cancel().await.unwrap();
 }
 
 #[test]
