@@ -65,6 +65,12 @@ async fn mcp_get_runs_through_the_composed_service() {
     let tools = client.list_all_tools().await.unwrap();
     let get = tools.iter().find(|tool| tool.name == "get").unwrap();
     let output_schema = get.output_schema.as_ref().expect("get output schema");
+    let validator = jsonschema::JSONSchema::compile(&json!(output_schema)).unwrap();
+    let invalid_record = json!({
+        "record": {"id":"req_shared", "kind":"requirement", "value":42},
+        "view":"record", "related":[], "detail":null, "bounds":null
+    });
+    assert!(!validator.is_valid(&invalid_record), "record payload must be typed");
     assert_eq!(output_schema["type"], "object");
     assert_eq!(output_schema["additionalProperties"], false);
     assert_eq!(
