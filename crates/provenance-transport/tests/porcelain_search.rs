@@ -283,3 +283,64 @@ async fn global_search_denial_hides_and_refuses_named_search() {
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
 }
+
+// Regression evidence for lifecycle labels through the public MCP tool.
+#[tokio::test]
+async fn mcp_search_shows_each_record_lifecycle() {
+    let repository = Repository::new("The shared graph is searchable.");
+    repository.all_kinds();
+    let host = StatementHost::with_fixture_access(access(&repository));
+    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
+    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let client = ().serve(client_io).await.unwrap();
+    for (target, data) in [
+        ("rule_shared", json!({"status":"deprecated"})),
+        (
+            "question_shared",
+            json!({"status":"answered", "answer":"Use the current state."}),
+        ),
+    ] {
+        let mut arguments = json!({"target":target,"data":data});
+        if target == "question_shared" {
+            let current = client
+                .call_tool(
+                    CallToolRequestParams::new("api").with_arguments(
+                        json!({"path":"questions/question_shared"})
+                            .as_object()
+                            .unwrap()
+                            .clone(),
+                    ),
+                )
+                .await
+                .unwrap();
+            assert_ne!(current.is_error, Some(true), "{current:?}");
+            arguments["if_match"] =
+                current.structured_content.as_ref().unwrap()["data"]["edit"]["etag"].clone();
+        }
+        let updated = client
+            .call_tool(
+                CallToolRequestParams::new("update")
+                    .with_arguments(arguments.as_object().unwrap().clone()),
+            )
+            .await
+            .unwrap();
+        assert_ne!(updated.is_error, Some(true), "{updated:?}");
+    }
+    let result = call(&client, json!({})).await;
+    assert_ne!(result.is_error, Some(true), "{result:?}");
+    let readable = &result.content[0].as_text().unwrap().text;
+    for expected in [
+        "source source_shared\n",
+        "requirement req_shared · active",
+        "resolution resolution_shared · draft",
+        "rule rule_shared · deprecated",
+        "topic topic_shared · open",
+        "question question_shared · answered",
+        "domain domain_shared\n",
+        "boundary boundary_shared\n",
+    ] {
+        assert!(readable.contains(expected), "{readable}");
+    }
+    client.cancel().await.unwrap();
+    server.await.unwrap().cancel().await.unwrap();
+}
