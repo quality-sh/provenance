@@ -369,3 +369,5 @@ pub fn response(result: Result<ureq::Response, ureq::Error>) -> ureq::Response {
 pub fn list_discussions(host: &Host) -> ureq::Response {
     response(request(host, "GET", "/discussion-containers", true).call())
 }
+
+pub mod events;
