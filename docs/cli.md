@@ -111,6 +111,23 @@ The review host binds one repository, one scope, and one credential to each
 connection. See [review-host.md](review-host.md). Import and export operate on a
 complete scope. They remain separate from resource writes.
 
+## Agent guidance
+
+`provenance prime` introduces the Provenance domain. It explains Requirements,
+Rules, Resolutions, Sources, and code bindings. It does not read project records,
+inspect installed skills, scan code, or update a cache.
+
+The default output is Markdown. `provenance prime --format json` returns an
+object with a `guidance` string that contains the same text. This replaces the
+former project-state JSON fields, including `rules`, `requirements`, `threads`,
+and `skills`. Use resource reads for project records and `coverage scan` for
+code bindings. The SDK prime state query keeps its existing contract.
+
+The old `--repo`, `--scope`, and `--include-threads` options remain accepted for
+compatibility but have no effect on guidance. MCP supplies the same domain
+content in server instructions and shared tool descriptions. MCP has no prime
+tool. Each MCP client controls how it presents server instructions.
+
 ## Dictionary setup
 
 Statement checks use the project dictionary when the local dictionary index is

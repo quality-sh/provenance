@@ -149,13 +149,17 @@ pub enum Command {
         #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
         format: JsonFormat,
     },
+    /// Introduce Provenance domain concepts and actions.
     Prime {
+        /// Deprecated: accepted for compatibility; guidance does not use a repository.
         #[arg(long, default_value = ".")]
         repo: Utf8PathBuf,
+        /// Deprecated: accepted for compatibility; guidance does not use a scope.
         #[arg(long, default_value = "default")]
         scope: String,
         #[arg(long, value_enum, default_value_t = ReportFormat::Markdown)]
         format: ReportFormat,
+        /// Deprecated: accepted for compatibility; guidance does not include project threads.
         #[arg(long)]
         include_threads: bool,
     },
