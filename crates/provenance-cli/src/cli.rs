@@ -2,51 +2,6 @@ pub mod workspace;
 
 use clap::Parser;
 
-/// How the caller runs provenance, so init prints commands that the caller can run.
-#[derive(Clone, Copy, Debug, Default)]
-pub enum InvocationChannel {
-    #[default]
-    Native,
-    Typescript,
-}
-
-impl InvocationChannel {
-    /// The channel that one `--invocation-channel` value names.
-    pub fn from_flag(value: &str) -> Option<Self> {
-        match value {
-            "native" => Some(Self::Native),
-            "typescript" => Some(Self::Typescript),
-            _ => None,
-        }
-    }
-}
-
-/// The package manager that runs the TypeScript package.
-#[derive(Clone, Copy, Debug)]
-pub enum PackageManager {
-    Npm,
-    Pnpm,
-    Yarn,
-    Bun,
-    Deno,
-    Nub,
-}
-
-impl PackageManager {
-    /// The package manager that one `--package-manager` value names.
-    pub fn from_flag(value: &str) -> Option<Self> {
-        Some(match value {
-            "npm" => Self::Npm,
-            "pnpm" => Self::Pnpm,
-            "yarn" => Self::Yarn,
-            "bun" => Self::Bun,
-            "deno" => Self::Deno,
-            "nub" => Self::Nub,
-            _ => return None,
-        })
-    }
-}
-
 // The root parser. Every command under it comes from the registry. A doc comment here
 // would become the about line of `provenance --help`.
 #[derive(Parser)]

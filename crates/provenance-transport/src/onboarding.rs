@@ -1,4 +1,4 @@
-use crate::cli::{InvocationChannel, PackageManager};
+use provenance_porcelain::init::{InvocationChannel, PackageManager};
 use anyhow::Context;
 use provenance_macros::rule;
 use pulldown_cmark::{Event, HeadingLevel, Parser, Tag};

@@ -312,7 +312,7 @@ fn spool_dir() -> PathBuf {
     }
     // Capture must not fail for lack of context: no HOME means the spool
     // degrades to the temp dir rather than erroring out.
-    crate::skills::home_dir().map_or_else(
+    provenance_transport::skills::home_dir().map_or_else(
         |_| std::env::temp_dir().join("provenance-dogfood"),
         |home| home.join(".provenance").join("dogfood"),
     )

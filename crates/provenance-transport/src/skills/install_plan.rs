@@ -1,5 +1,5 @@
 use super::install_decision::{classify_install, InstallVerdict, TargetEntry, TargetState};
-use super::{file_report, FileInstallReport, FileStatus, InstallReport};
+use super::{file_report, EmbeddedSkill, FileInstallReport, FileStatus, InstallReport};
 use crate::atomic_file::{ensure_managed_directory, FileRollbackJournal, FileSnapshot};
 use provenance_macros::rule;
 use std::path::{Path, PathBuf};
@@ -33,7 +33,11 @@ pub(super) enum InstallRequest {
 }
 
 impl InstallPlan {
-    pub(super) fn build(base: &Path, request: InstallRequest) -> anyhow::Result<Self> {
+    pub(super) fn build(
+        skills: &'static [EmbeddedSkill],
+        base: &Path,
+        request: InstallRequest,
+    ) -> anyhow::Result<Self> {
         let (global, force, copy, cleanup_agents) = match request {
             InstallRequest::Init => (false, false, false, false),
             InstallRequest::Standalone {
@@ -48,7 +52,7 @@ impl InstallPlan {
         ensure_managed_directory(base, &canonical_dir)?;
         ensure_managed_directory(base, &claude_dir)?;
         let mut canonical = Vec::new();
-        for skill in super::EMBEDDED_SKILLS {
+        for skill in skills {
             canonical.push(FileAction::managed(
                 canonical_dir.join(skill.directory).join("SKILL.md"),
                 super::render::skill_file(skill).into_bytes(),
@@ -60,7 +64,7 @@ impl InstallPlan {
         let mut claude = Vec::new();
         let mut link_mode = if copy { "copy" } else { "symlink" };
         let mut fallback_reason = None;
-        for skill in super::EMBEDDED_SKILLS {
+        for skill in skills {
             let action =
                 ClaudeAction::plan(skill, &canonical_dir, &claude_dir, force, copy, &guidance)?;
             if action.uses_copy_fallback() && !copy {

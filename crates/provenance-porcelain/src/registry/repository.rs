@@ -2,9 +2,11 @@
 //! repository files.
 
 use super::{json_format, Declaration, Field, Fields, Relation};
+use crate::cargo_init::CargoInitInput;
 use crate::dictionary::{DictionaryImportInput, DictionaryStatusInput};
 use crate::export::ExportInput;
 use crate::import::ImportInput;
+use crate::init::InitInput;
 use crate::materialize::MaterializeInput;
 use crate::schema::SchemaShowInput;
 use crate::validate::ValidateInput;
@@ -23,30 +25,6 @@ pub enum RepositoryCommand {
     SchemaShow,
     DictionaryImport,
     DictionaryStatus,
-}
-
-/// The `init` input.
-#[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct InitInput {
-    pub path: String,
-    pub scope: Option<String>,
-    pub path_prefix: Option<String>,
-    #[serde(default)]
-    pub disposition_actor_id: Vec<String>,
-    #[serde(default)]
-    pub clear_disposition_actors: bool,
-    pub ste_pdf: Option<String>,
-    pub invocation_channel: String,
-    pub package_manager: Option<String>,
-}
-
-/// The `__cargo-init` input that the cargo plugin passes on.
-#[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct CargoInitInput {
-    pub package: Option<String>,
-    pub ste_pdf: Option<String>,
 }
 
 /// The `merge-jsonl` input.

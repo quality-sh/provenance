@@ -5,6 +5,7 @@ use std::io::{Error, ErrorKind};
 fn legacy_parent_change_refuses_the_planned_cleanup() {
     let directory = tempfile::tempdir().unwrap();
     InstallPlan::build(
+        crate::skills::TEST_SKILLS,
         directory.path(),
         InstallRequest::Standalone {
             global: false,
@@ -32,7 +33,12 @@ fn legacy_parent_change_refuses_the_planned_cleanup() {
         .replace(env!("CARGO_PKG_VERSION"), "0.2.1");
     std::fs::write(&canonical, &prior).unwrap();
     std::fs::remove_dir_all(directory.path().join(".claude")).unwrap();
-    let plan = InstallPlan::build(directory.path(), InstallRequest::Init).unwrap();
+    let plan = InstallPlan::build(
+        crate::skills::TEST_SKILLS,
+        directory.path(),
+        InstallRequest::Init,
+    )
+    .unwrap();
     std::fs::write(legacy.join("user.txt"), "user\n").unwrap();
 
     let Err(error) = plan.apply() else {
@@ -51,7 +57,12 @@ fn legacy_parent_change_refuses_the_planned_cleanup() {
 #[test]
 fn symlink_creation_failure_uses_the_preplanned_copy() {
     let directory = tempfile::tempdir().unwrap();
-    let mut plan = InstallPlan::build(directory.path(), InstallRequest::Init).unwrap();
+    let mut plan = InstallPlan::build(
+        crate::skills::TEST_SKILLS,
+        directory.path(),
+        InstallRequest::Init,
+    )
+    .unwrap();
     let action = plan.claude.remove(0);
     let mut rollback = FileRollbackJournal::default();
 
@@ -80,6 +91,7 @@ fn rollback_restores_a_force_displaced_claude_directory() {
     std::fs::create_dir_all(&displaced).unwrap();
     std::fs::write(displaced.join("user.txt"), "preserve me\n").unwrap();
     let mut plan = InstallPlan::build(
+        crate::skills::TEST_SKILLS,
         directory.path(),
         InstallRequest::Standalone {
             global: false,
@@ -110,6 +122,7 @@ fn force_displacement_refuses_same_kind_content_changed_after_planning() {
     std::fs::create_dir_all(&displaced).unwrap();
     std::fs::write(displaced.join("user.txt"), "planned\n").unwrap();
     let mut plan = InstallPlan::build(
+        crate::skills::TEST_SKILLS,
         directory.path(),
         InstallRequest::Standalone {
             global: false,

@@ -357,7 +357,7 @@ mod tests {
         let canonical = base.join(".agents/skills");
         let claude = base.join(".claude/skills");
         let action = ClaudeAction::plan(
-            &crate::skills::EMBEDDED_SKILLS[0],
+            &crate::skills::TEST_SKILLS[0],
             &canonical,
             &claude,
             false,
