@@ -331,6 +331,19 @@ async fn mcp_search_shows_each_record_lifecycle() {
     ] {
         assert!(readable.contains(expected), "{readable}");
     }
+    let archived = client.call_tool(
+        CallToolRequestParams::new("update").with_arguments(json!({
+            "target":"rule_shared", "data":{
+                "status":"archived",
+                "archived_in_commit":{"commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+            }
+        }).as_object().unwrap().clone())
+    ).await.unwrap();
+    assert_ne!(archived.is_error, Some(true), "{archived:?}");
+    let hidden = call(&client, json!({"node_types":["rule"]})).await;
+    assert_eq!(hidden.structured_content.as_ref().unwrap()["nodes"], json!([]));
+    let included = call(&client, json!({"node_types":["rule"], "exclude_terminal":false})).await;
+    assert!(included.content[0].as_text().unwrap().text.contains("rule rule_shared · archived"));
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
 }
