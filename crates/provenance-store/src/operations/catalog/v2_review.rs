@@ -1,15 +1,13 @@
 //! Resource adapters for the guarded Requirement review interface.
 use super::{
-    failures::ReadError, ContextKind, ExecutionNeed, ExecutionNeeds, Operation, OperationFuture,
-    PreparedContext,
+    shapes::{scoped_read_operation, scoped_write_operation},
+    ExecutionNeed,
 };
 use crate::{
-    layout::ProvenanceLayout,
     review,
     state_store::{
         CreateRequirementInput, RequirementClearField, StateStore, UpdateRequirementInput,
     },
-    write_error::WriteError,
 };
 use provenance_core::{
     review::{CycleEntry, RequirementDecisionState, RequirementEditState},
@@ -51,35 +49,15 @@ pub struct GetRequirementRequest {
     pub id: StableId,
 }
 
-pub struct GetRequirementV2;
-impl Operation for GetRequirementV2 {
-    type Request = GetRequirementRequest;
-    type Success = RequirementResource;
-    type Failure = ReadError;
-    const NAME: &'static str = "get-requirement-v2";
-    const CONTEXT: ContextKind = ContextKind::Scope;
-    const FAILURE_STATUSES: &'static [u16] = &[409];
-    fn needs(_: &Self::Request) -> ExecutionNeeds {
-        &[ExecutionNeed::GraphStorage]
-    }
-    fn failure_status(error: &ReadError) -> u16 {
-        error.status()
-    }
-    fn run(
-        context: PreparedContext,
-        request: Self::Request,
-    ) -> OperationFuture<Self::Success, Self::Failure> {
-        Box::pin(async move {
-            let context = context.scope()?;
-            resource(
-                &StateStore::new(ProvenanceLayout::new(context.root)),
-                &context.scope,
-                &request.id,
-            )
-            .map_err(Into::into)
-        })
-    }
-}
+scoped_read_operation!(
+    pub GetRequirementV2,
+    "get-requirement-v2",
+    GetRequirementRequest,
+    RequirementResource,
+    &[409],
+    &[ExecutionNeed::GraphStorage],
+    |store, scope, request| resource(store, scope, &request.id)
+);
 
 #[derive(Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -101,53 +79,38 @@ pub struct CreateRequirementRequest {
     pub origin: Option<provenance_core::threads::DiscussionOrigin>,
 }
 
-pub struct CreateRequirementV2;
-impl Operation for CreateRequirementV2 {
-    type Request = CreateRequirementRequest;
-    type Success = RequirementResource;
-    type Failure = WriteError;
-    const NAME: &'static str = "create-requirement-v2";
-    const MUTATES: bool = true;
-    const CONTEXT: ContextKind = ContextKind::Scope;
-    const FAILURE_STATUSES: &'static [u16] = &[409];
-    fn needs(_: &Self::Request) -> ExecutionNeeds {
-        &[ExecutionNeed::GraphStorage, ExecutionNeed::Dictionary]
+scoped_write_operation!(
+    pub CreateRequirementV2,
+    "create-requirement-v2",
+    CreateRequirementRequest,
+    RequirementResource,
+    &[409],
+    &[ExecutionNeed::GraphStorage, ExecutionNeed::Dictionary],
+    |store, scope, request| {
+        let snapshot = store.create_review_requirement_resource(
+            review::CreateReviewRequirement {
+                request_id: request.request_id,
+                actor: request.actor,
+                origin: request.origin,
+                create: CreateRequirementInput {
+                    scope_id: scope,
+                    id: request.id,
+                    statement: request.statement,
+                    description: request.description,
+                    status: request.status,
+                    domain_id: request.domain_id,
+                    refines: request.refines,
+                    depends_on: request.depends_on,
+                    supersedes: request.supersedes,
+                    spawned_by: request.spawned_by,
+                    origin_thread: request.origin_thread,
+                    origin_message: request.origin_message,
+                },
+            },
+        )?;
+        Ok(resource_from(snapshot))
     }
-    fn failure_status(error: &WriteError) -> u16 {
-        error.status()
-    }
-    fn run(
-        context: PreparedContext,
-        request: Self::Request,
-    ) -> OperationFuture<Self::Success, Self::Failure> {
-        Box::pin(async move {
-            let context = context.scope()?;
-            let scope = context.scope;
-            let store = StateStore::new(ProvenanceLayout::new(context.root));
-            let snapshot =
-                store.create_review_requirement_resource(review::CreateReviewRequirement {
-                    request_id: request.request_id,
-                    actor: request.actor,
-                    origin: request.origin,
-                    create: CreateRequirementInput {
-                        scope_id: scope,
-                        id: request.id,
-                        statement: request.statement,
-                        description: request.description,
-                        status: request.status,
-                        domain_id: request.domain_id,
-                        refines: request.refines,
-                        depends_on: request.depends_on,
-                        supersedes: request.supersedes,
-                        spawned_by: request.spawned_by,
-                        origin_thread: request.origin_thread,
-                        origin_message: request.origin_message,
-                    },
-                })?;
-            Ok(resource_from(snapshot))
-        })
-    }
-}
+);
 
 #[derive(Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -168,30 +131,15 @@ pub struct UpdateRequirementRequest {
     pub id: StableId,
 }
 
-pub struct UpdateRequirementV2;
-impl Operation for UpdateRequirementV2 {
-    type Request = UpdateRequirementRequest;
-    type Success = RequirementResource;
-    type Failure = WriteError;
-    const NAME: &'static str = "update-requirement-v2";
-    const MUTATES: bool = true;
-    const CONTEXT: ContextKind = ContextKind::Scope;
-    const FAILURE_STATUSES: &'static [u16] = &[409];
-    fn needs(_: &Self::Request) -> ExecutionNeeds {
-        &[ExecutionNeed::GraphStorage, ExecutionNeed::Dictionary]
-    }
-    fn failure_status(error: &WriteError) -> u16 {
-        error.status()
-    }
-    fn run(
-        context: PreparedContext,
-        request: Self::Request,
-    ) -> OperationFuture<Self::Success, Self::Failure> {
-        Box::pin(async move {
-            let context = context.scope()?;
-            let scope = context.scope;
-            let store = StateStore::new(ProvenanceLayout::new(context.root));
-            let snapshot = store.save_requirement_resource(review::SaveRequirement {
+scoped_write_operation!(
+    pub UpdateRequirementV2,
+    "update-requirement-v2",
+    UpdateRequirementRequest,
+    RequirementResource,
+    &[409],
+    &[ExecutionNeed::GraphStorage, ExecutionNeed::Dictionary],
+    |store, scope, request| {
+        let snapshot = store.save_requirement_resource(review::SaveRequirement {
                 request_id: request.request_id,
                 actor: request.actor,
                 expected_etag: request.expected_etag,
@@ -207,39 +155,17 @@ impl Operation for UpdateRequirementV2 {
                     domain_id: request.domain_id,
                     clear_fields: request.clear_fields,
                 },
-            })?;
-            Ok(resource_from(snapshot))
-        })
+        })?;
+        Ok(resource_from(snapshot))
     }
-}
+);
 
 macro_rules! decision {
     ($name:ident, $wire:literal, $request:ty, $method:ident) => {
-        pub struct $name;
-        impl Operation for $name {
-            type Request = $request;
-            type Success = CycleEntry;
-            type Failure = WriteError;
-            const NAME: &'static str = $wire;
-            const MUTATES: bool = true;
-            const CONTEXT: ContextKind = ContextKind::Scope;
-            const FAILURE_STATUSES: &'static [u16] = &[409];
-            fn needs(_: &Self::Request) -> ExecutionNeeds {
-                &[ExecutionNeed::GraphStorage]
-            }
-            fn failure_status(error: &WriteError) -> u16 {
-                error.status()
-            }
-            fn run(
-                context: PreparedContext,
-                request: Self::Request,
-            ) -> OperationFuture<Self::Success, Self::Failure> {
-                Box::pin(async move {
-                    let context = context.scope()?;
-                    Ok(StateStore::new(ProvenanceLayout::new(context.root)).$method(request)?)
-                })
-            }
-        }
+        scoped_write_operation!(
+            pub $name, $wire, $request, CycleEntry, &[409], &[ExecutionNeed::GraphStorage],
+            |store, _scope, request| store.$method(request)
+        );
     };
 }
 decision!(
@@ -281,34 +207,14 @@ pub struct WithdrawRequirementReviewRequest {
 
 macro_rules! addressed_decision {
     ($name:ident, $wire:literal, $request:ty, $input:ty, $method:ident, $convert:expr) => {
-        pub struct $name;
-        impl Operation for $name {
-            type Request = $request;
-            type Success = CycleEntry;
-            type Failure = WriteError;
-            const NAME: &'static str = $wire;
-            const MUTATES: bool = true;
-            const CONTEXT: ContextKind = ContextKind::Scope;
-            const FAILURE_STATUSES: &'static [u16] = &[409];
-            fn needs(_: &Self::Request) -> ExecutionNeeds {
-                &[ExecutionNeed::GraphStorage]
+        scoped_write_operation!(
+            pub $name, $wire, $request, CycleEntry, &[409], &[ExecutionNeed::GraphStorage],
+            |store, _scope, request| {
+                let requirement_id = request.requirement_id.clone();
+                let input: $input = ($convert)(request);
+                store.$method(&requirement_id, input)
             }
-            fn failure_status(error: &WriteError) -> u16 {
-                error.status()
-            }
-            fn run(
-                context: PreparedContext,
-                request: Self::Request,
-            ) -> OperationFuture<Self::Success, Self::Failure> {
-                Box::pin(async move {
-                    let context = context.scope()?;
-                    let requirement_id = request.requirement_id.clone();
-                    let input: $input = ($convert)(request);
-                    Ok(StateStore::new(ProvenanceLayout::new(context.root))
-                        .$method(&requirement_id, input)?)
-                })
-            }
-        }
+        );
     };
 }
 

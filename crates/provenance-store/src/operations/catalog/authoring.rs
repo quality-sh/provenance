@@ -1,9 +1,8 @@
 //! Authoring and verification use the native Store implementation.
-use super::{ExecutionNeed, ExecutionNeeds, Operation, OperationFuture, PreparedContext};
+use super::{shapes::scoped_command_operation, ExecutionNeed};
 use crate::state_store::{
     BeginVerificationInput, CompleteVerificationInput, TypedSpecInput, TypedSpecResult,
 };
-use crate::write_error::WriteError;
 use provenance_core::protocol::failure::{InvalidInputReason, OperationFailure};
 
 fn external_file(file: &camino::Utf8Path, field: &str) -> Result<(), OperationFailure> {
@@ -32,25 +31,11 @@ fn verification_file(input: &BeginVerificationInput) -> Result<(), OperationFail
 
 macro_rules! operation {
     ($name:ident, $wire:literal, $request:ty, $success:ty, $mutates:literal, $validate:expr, $handler:expr, [$($need:ident),*]) => {
-        pub struct $name;
-        impl Operation for $name {
-            type Request = $request;
-            type Success = $success;
-            type Failure = WriteError;
-            const NAME: &'static str = $wire;
-            const CONTEXT: super::ContextKind = super::ContextKind::Scope;
-            const MUTATES: bool = $mutates;
-            const FAILURE_STATUSES: &'static [u16] = &[409];
-            fn failure_status(error: &WriteError) -> u16 { error.status() }
-            fn validate_external(request: &Self::Request) -> Result<(), OperationFailure> { ($validate)(request) }
-            fn needs(_: &Self::Request) -> ExecutionNeeds { &[$(ExecutionNeed::$need),*] }
-            fn run(context: PreparedContext, request: Self::Request) -> OperationFuture<Self::Success, Self::Failure> {
-                Box::pin(async move {
-                    let context = context.scope()?;
-                    Ok(($handler)(context, request)?)
-                })
-            }
-        }
+        scoped_command_operation!(
+            pub $name, $wire, $request, $success, mutates = $mutates, &[409],
+            &[$(ExecutionNeed::$need),*], validate = $validate,
+            |context, request| ($handler)(context, request)
+        );
     };
 }
 operation!(
