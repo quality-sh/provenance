@@ -29,16 +29,6 @@ struct ShapingRecords {
 }
 
 impl Cascade {
-    pub(super) fn extend_review_records(
-        &self,
-        records: &mut Vec<provenance_core::review::ReviewRecord>,
-    ) {
-        records.extend(self.resolutions.iter().cloned().map(Into::into));
-        records.extend(self.topics.iter().cloned().map(Into::into));
-        records.extend(self.questions.iter().cloned().map(Into::into));
-        records.extend(self.boundaries.iter().cloned().map(Into::into));
-    }
-
     pub(super) fn prepare(
         store: &StateStore,
         scope: &ScopeId,

@@ -1,13 +1,13 @@
 //! Guarded journal writes for typed-spec changes to enrolled graph records.
 
-use super::{classifier, guard, journal, save::RecordEvidenceContext};
+use super::{classifier, journal, save::RecordEvidenceContext};
 use crate::{
-    cache::review_families, canonical_digest, publication::with_staged_state, shards,
-    state_store::StateStore,
+    cache::review_families, canonical_digest, publication::with_staged_state,
+    state_store::StateStore, write_error::SourceFailure,
 };
 use provenance_core::{
     review::{ReviewEntry, ReviewRecord, REVIEW_SCHEMA_VERSION},
-    NodeType, ScopeId, StableId,
+    ScopeId, StableId,
 };
 
 struct TypedChange {
@@ -21,23 +21,21 @@ impl StateStore {
         &self,
         scope: &ScopeId,
         actor: &str,
-        desired: &[ReviewRecord],
         publish: impl FnOnce(&Self) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
         anyhow::ensure!(
             !actor.trim().is_empty(),
             "invalid typed-spec review identity"
         );
-        let changes = self.typed_changes(scope, desired)?;
-        if changes.is_empty() {
-            return publish(self);
-        }
         with_staged_state(&self.layout, false, |layout| {
             let staged = Self::new(layout.clone());
+            let result = publish(&staged)?;
+            let desired = review_families::review_records(&staged, scope)?;
+            let changes = self.typed_changes(scope, &desired)?;
             for change in &changes {
                 staged.commit_typed_change(actor, change)?;
             }
-            publish(&staged)
+            Ok(result)
         })
     }
 
@@ -56,10 +54,16 @@ impl StateStore {
                 .iter()
                 .find(|record| record.kind() == before.kind() && record.id() == before.id())
                 .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "cannot delete enrolled {} {} through typed-spec apply",
-                        before.kind().as_str(),
-                        before.id().as_str()
+                    SourceFailure::wrap(
+                        crate::write_error::WriteFailure::EnrolledRecordDeletionConflict {
+                            record_kind: before.kind(),
+                            record_id: before.id().clone(),
+                        },
+                        anyhow::anyhow!(
+                            "cannot delete enrolled {} {} through typed-spec apply",
+                            before.kind().as_str(),
+                            before.id().as_str()
+                        ),
                     )
                 })?;
             if journal::record_digest(&before)? == journal::record_digest(after)? {
@@ -78,20 +82,6 @@ impl StateStore {
     }
 
     fn commit_typed_change(&self, actor: &str, change: &TypedChange) -> anyhow::Result<()> {
-        let scope = change.before.scope_id();
-        let kind = change.before.kind();
-        let id = change.before.id();
-        let path = shards::path_for(&self.layout, scope, kind);
-        guard::with_writer(&path, id.as_str(), || {
-            self.mutate_jsonl_records(&path, |records: &mut Vec<serde_json::Value>| {
-                let record = records
-                    .iter_mut()
-                    .find(|record| record["id"] == id.as_str())
-                    .ok_or_else(|| anyhow::anyhow!("typed-spec record left the scope"))?;
-                *record = serde_json::to_value(&change.after)?;
-                Ok(())
-            })
-        })?;
         let intent_digest = typed_intent(actor, &change.before, &change.after)?;
         let request_id = StableId::new(canonical_digest::sha256(
             format!("typed-spec-review\u{1f}{intent_digest}").as_bytes(),
@@ -120,20 +110,7 @@ fn review_records(
     layout: &crate::layout::ProvenanceLayout,
     scope: &ScopeId,
 ) -> anyhow::Result<Vec<ReviewRecord>> {
-    let mut records = Vec::new();
-    for kind in NodeType::ALL {
-        let path = shards::path_for(layout, scope, kind);
-        let text = match std::fs::read_to_string(path) {
-            Ok(text) => text,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
-            Err(error) => return Err(error.into()),
-        };
-        for line in text.lines() {
-            let value = serde_json::from_str(line)?;
-            records.push(review_families::deserialize_record(kind, &value)?);
-        }
-    }
-    Ok(records)
+    review_families::review_records(&StateStore::new(layout.clone()), scope)
 }
 
 fn typed_intent(

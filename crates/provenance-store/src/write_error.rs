@@ -30,6 +30,10 @@ pub enum WriteFailure {
     OwnershipConflict {
         conflicts: Vec<ReconciledResource>,
     },
+    EnrolledRecordDeletionConflict {
+        record_kind: provenance_core::NodeType,
+        record_id: provenance_core::StableId,
+    },
     MissingReference,
     ResourceNotFound,
     DiscussionVersionConflict,
@@ -141,6 +145,7 @@ impl WriteError {
             WriteFailure::RecordOwnershipConflict
             | WriteFailure::AlreadyExists
             | WriteFailure::OwnershipConflict { .. }
+            | WriteFailure::EnrolledRecordDeletionConflict { .. }
             | WriteFailure::RequirementEditConflict { .. }
             | WriteFailure::ReviewSubmissionConflict { .. }
             | WriteFailure::DiscussionVersionConflict
