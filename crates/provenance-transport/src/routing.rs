@@ -108,29 +108,36 @@ pub async fn invoke(
         &matched.path,
     )?;
     let value = response::success(value, matched.definition, &bound.response)?;
-    let etag = matched
-        .definition
-        .registration
-        .controls
-        .etag
-        .as_ref()
-        .map(|binding| -> Result<String, ErasedFailure> {
-            let value = value
-                .pointer(&format!("/data{}", binding.pointer))
+    let etag = if query.contains_key("query") {
+        None
+    } else {
+        matched
+            .definition
+            .registration
+            .controls
+            .etag
+            .as_ref()
+            .map(|binding| -> Result<String, ErasedFailure> {
+                let value = value
+                    .pointer(&format!("/data{}", binding.pointer))
+                    .ok_or_else(|| {
+                        ErasedFailure::new(
+                            Some(matched.definition.name),
+                            OperationFailure::Internal,
+                        )
+                    })?;
+                let text = if binding.numeric {
+                    value.as_u64().map(|value| value.to_string())
+                } else {
+                    value.as_str().map(str::to_owned)
+                }
                 .ok_or_else(|| {
                     ErasedFailure::new(Some(matched.definition.name), OperationFailure::Internal)
                 })?;
-            let text = if binding.numeric {
-                value.as_u64().map(|value| value.to_string())
-            } else {
-                value.as_str().map(str::to_owned)
-            }
-            .ok_or_else(|| {
-                ErasedFailure::new(Some(matched.definition.name), OperationFailure::Internal)
-            })?;
-            Ok(format!("\"{text}\""))
-        })
-        .transpose()?;
+                Ok(format!("\"{text}\""))
+            })
+            .transpose()?
+    };
     Ok((value, etag))
 }
 

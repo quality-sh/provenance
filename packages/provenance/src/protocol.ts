@@ -38,9 +38,9 @@ export type TypedSpecDiagnostic = NonNullable<ApplyResult["diagnostics"]>[number
 export type RuleEvidence = PlanResult["affected_rules"][number]["evidence"];
 export type ReviewReason = NonNullable<RuleEvidence["reasons"]>[number];
 
-export type NodeType = Schemas["ListRulesSuccessSearchGraphNode"]["node_type"];
-export type Direction = Schemas["GetRuleSuccessNeighborsDirection"];
-export type GraphNode = Schemas["ListRulesSuccessSearchGraphNode"];
+export type NodeType = Schemas["ListRulesSuccessGraphNode"]["node_type"];
+export type Direction = Schemas["GetRuleSuccessDirection"];
+export type GraphNode = Schemas["ListRulesSuccessGraphNode"];
 export type Stamp = Schemas["GetRuleSuccessResponseMetaStamp"];
 export type StampPolicy = Stamp["policy"];
 export type LiveWord = Stamp["live"][number];
@@ -71,18 +71,18 @@ type ResourceGetResponses = {
 };
 export type GetResponse<Kind extends NodeType = NodeType> = ResourceGetResponses[Kind];
 export type SearchResponse = { data: { items: GraphNode[] }; meta: ResponseMeta };
-export type Neighbor = Schemas["GetRuleSuccessNeighborsNeighbor"];
+export type Neighbor = Schemas["GetRuleSuccessNeighbor"];
 export type NeighborsResponse = { data: { id: string; neighbors: Neighbor[] }; meta: ResponseMeta };
-export type TracedNode = Schemas["GetRuleSuccessTraceTracedNode"];
+export type TracedNode = Schemas["GetRuleSuccessTracedNode"];
 export type TraceResponse = { data: { id: string; max_depth: number; nodes: TracedNode[] }; meta: ResponseMeta };
-export type AffectedRule = Schemas["GetRuleSuccessImpactAffectedRule"];
+export type AffectedRule = Schemas["GetRuleSuccessAffectedRule"];
 export type ImpactResponse = { data: { id: string; affected_rules: AffectedRule[]; scan_cut: boolean }; meta: ResponseMeta };
 export type ResolveSymbolResponse = SearchResponse;
 export type EvidenceResponse = Schemas["GetRuleEvidenceSuccess"];
-export type EvidenceDiffSite = Schemas["ListRulesSuccessStaleEvidenceDiffSite"];
+export type EvidenceDiffSite = Schemas["ListRulesSuccessEvidenceDiffSite"];
 export type EvidenceDiffState = EvidenceDiffSite["state"];
 export type EvidenceSiteKind = EvidenceDiffSite["kind"];
-export type EvidenceDiffSummary = Schemas["ListRulesSuccessStaleEvidenceDiffSummary"];
+export type EvidenceDiffSummary = Schemas["ListRulesSuccessEvidenceDiffSummary"];
 export type StaleResponse = { data: { items: EvidenceDiffSite[] }; meta: ResponseMeta };
 export type QueryEnvelope = { meta: ResponseMeta };
 export type ImplementationSite = AffectedRule["implementations"][number];
