@@ -127,6 +127,34 @@ impl StatementHost {
         .await
     }
 
+    pub(crate) async fn invoke_scope_typed<O>(
+        &self,
+        request: O::Request,
+    ) -> Result<O::Success, provenance_core::protocol::failure::OperationError<O::Failure>>
+    where
+        O: provenance_store::operations::catalog::Operation,
+    {
+        use provenance_core::protocol::failure::{OperationError, OperationFailure};
+        use provenance_core::protocol::repository::RepositoryScope;
+        use provenance_store::operations::catalog::RequestedContext;
+
+        if !self.advertises(O::NAME) {
+            return Err(OperationError::Common(OperationFailure::AccessDenied));
+        }
+        let (repository, scope) = self
+            .bound_identity()
+            .ok_or(OperationError::Common(OperationFailure::UnavailableNeeds))?;
+        provenance_store::operations::catalog::invoke_authorized_native_typed::<O>(
+            self.access.clone(),
+            RequestedContext::Scope(RepositoryScope {
+                repository,
+                scope,
+            }),
+            request,
+        )
+        .await
+    }
+
     fn admit(&self) -> Result<OwnedSemaphorePermit, FailureEnvelope> {
         self.ingress
             .clone()

@@ -46,7 +46,7 @@ pub async fn dispatch_get(
     Ok(())
 }
 
-fn local_host(repo: &str, scope: &str) -> anyhow::Result<provenance_transport::StatementHost> {
+pub fn local_host(repo: &str, scope: &str) -> anyhow::Result<provenance_transport::StatementHost> {
     let root = std::fs::canonicalize(repo)?;
     let access = provenance_transport::LocalAccess::new(
         &root,

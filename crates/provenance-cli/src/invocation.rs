@@ -4,10 +4,12 @@ use provenance_cli::porcelain;
 use provenance_core::protocol::{SearchQuery, QUERY_DEFAULT_LIMIT};
 use provenance_core::{NodeType, SDK_PROTOCOL_VERSION};
 use provenance_porcelain::action::{validate_target, Action};
+use provenance_porcelain::discussion::DiscussionAction;
 use provenance_porcelain::get::View;
 
 pub mod grammar;
-use grammar::{CatalogArgs, SearchArgs, SearchCommand, TargetArgs};
+mod discussion;
+use grammar::{CatalogArgs, DiscussionsArgs, SearchArgs, SearchCommand, TargetArgs};
 
 #[cfg(test)]
 mod tests;
@@ -18,6 +20,8 @@ pub enum Invocation {
     Catalog(catalog_cli::Invocation),
     Get(GetInvocation),
     Search(SearchArgs),
+    DiscussionRoot(DiscussionsArgs),
+    DiscussionTarget(TargetArgs, DiscussionAction, clap::ArgMatches),
     Target(TargetInvocation),
 }
 
@@ -55,6 +59,11 @@ impl Invocation {
             debug_assert_eq!(args.command, "search");
             return Ok(Self::Search(args.args));
         }
+        if word == "discussions" {
+            let args = DiscussionsArgs::try_parse_from(arguments)
+                .unwrap_or_else(|error| error.exit());
+            return Ok(Self::DiscussionRoot(args));
+        }
         if Cli::command()
             .get_subcommands()
             .any(|command| command.get_name() == word)
@@ -77,6 +86,9 @@ impl Invocation {
             .try_get_matches_from(arguments)
             .unwrap_or_else(|error| error.exit());
         let args = TargetArgs::from_matches(&matches);
+        if let Some(action) = args.action.as_deref().and_then(DiscussionAction::parse) {
+            return Ok(Self::DiscussionTarget(args, action, matches));
+        }
         let format = args.common.format();
         let context = args.common.context();
         if args.action.as_deref().is_none_or(|action| action == "get") {
@@ -129,6 +141,8 @@ impl Invocation {
                 .await
             }
             Self::Search(args) => args.dispatch().await,
+            Self::DiscussionRoot(args) => discussion::dispatch_root(args).await,
+            Self::DiscussionTarget(args, action, matches) => discussion::dispatch_target(args, action, &matches).await,
             Self::Target(invocation) => invocation.dispatch().await,
         }
     }

@@ -7,6 +7,7 @@ use clap::{
 use provenance_cli::porcelain;
 use provenance_core::NodeType;
 use provenance_porcelain::action::Action;
+use provenance_porcelain::discussion::DiscussionAction;
 use provenance_porcelain::get::View;
 
 // Shared options for the Porcelain and catalog grammars.
@@ -66,6 +67,24 @@ pub(super) struct SearchCommand {
 }
 
 #[derive(Parser)]
+#[command(name = "provenance", about = "List or read addressed Discussions")]
+pub struct DiscussionsArgs {
+    #[arg(value_parser = ["discussions"])]
+    pub command: String,
+    pub discussion_id: Option<String>,
+    #[arg(value_parser = ["get"])]
+    pub action: Option<String>,
+    #[command(flatten)]
+    pub common: Common,
+    #[arg(long, value_parser = ["active", "resolved", "all"])]
+    pub status: Option<String>,
+    #[arg(long)]
+    pub limit: Option<usize>,
+    #[arg(long, allow_hyphen_values = true)]
+    pub cursor: Option<String>,
+}
+
+#[derive(Parser)]
 #[command(name = "provenance", about = "Work with records in one scope")]
 pub struct CatalogArgs {
     #[command(flatten)]
@@ -103,10 +122,26 @@ pub(super) struct TargetArgs {
     pub limit: Option<usize>,
     #[arg(long)]
     pub stdin: bool,
+    #[arg(long, value_parser = ["active", "resolved", "all"])]
+    pub status: Option<String>,
+    #[arg(long, allow_hyphen_values = true)]
+    pub cursor: Option<String>,
+    #[arg(long, allow_hyphen_values = true)]
+    pub body: Option<String>,
+    #[arg(long, allow_hyphen_values = true)]
+    pub actor: Option<String>,
+    #[arg(long, allow_hyphen_values = true)]
+    pub request_id: Option<String>,
+    #[arg(long)]
+    pub expected_version: Option<String>,
+    #[arg(long, value_parser = ["user", "assistant", "system"])]
+    pub role: Option<String>,
 }
 
 fn target_actions() -> PossibleValuesParser {
-    PossibleValuesParser::new(std::iter::once("get").chain(Action::ALL.map(Action::as_str)))
+    PossibleValuesParser::new(std::iter::once("get")
+        .chain(Action::ALL.map(Action::as_str))
+        .chain(DiscussionAction::ALL.map(DiscussionAction::as_str)))
 }
 
 fn get_views() -> PossibleValuesParser {
