@@ -128,7 +128,7 @@ pub struct TargetArgs {
     pub limit: Option<usize>,
     #[arg(long)]
     pub stdin: bool,
-    #[arg(long, value_parser = ["active", "resolved", "all"])]
+    #[arg(long)]
     pub status: Option<String>,
     #[arg(long, allow_hyphen_values = true)]
     pub cursor: Option<String>,
