@@ -1,8 +1,8 @@
 mod porcelain_authoring_support;
 
+use porcelain_authoring_support::{initialized_repo, json_output, json_stdin_output, provenance};
 use predicates::prelude::PredicateBooleanExt as _;
 use provenance_macros::verifies;
-use porcelain_authoring_support::{initialized_repo, json_output, json_stdin_output, provenance};
 
 #[test]
 #[verifies("rule_porcelain_cli_target_action_order", examples)]
@@ -118,7 +118,10 @@ fn relationship_updates_preserve_unmodified_members_until_explicit_replacement()
             "depends_on":["req_first"]
         }),
     );
-    assert_eq!(target["data"]["depends_on"], serde_json::json!(["req_first"]));
+    assert_eq!(
+        target["data"]["depends_on"],
+        serde_json::json!(["req_first"])
+    );
 
     let added = json_stdin_output(
         &[
@@ -153,7 +156,10 @@ fn relationship_updates_preserve_unmodified_members_until_explicit_replacement()
         ],
         &serde_json::json!({"relationships":{"depends_on":{"remove":["req_first"]}}}),
     );
-    assert_eq!(removed["data"]["depends_on"], serde_json::json!(["req_second"]));
+    assert_eq!(
+        removed["data"]["depends_on"],
+        serde_json::json!(["req_second"])
+    );
 
     let replacement = json_stdin_output(
         &[
