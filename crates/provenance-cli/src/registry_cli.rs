@@ -6,7 +6,9 @@ use clap::{
     Arg, ArgAction, ArgMatches, Command,
 };
 use provenance_cli::cli_options::{self, flag_name, GLOBAL_OPTIONS, GROUP_DESCRIPTIONS};
-use provenance_porcelain::registry::{self, Declaration, Field, FieldValue, Input, Relation};
+use provenance_porcelain::registry::{
+    self, Binding, Declaration, Field, FieldValue, Input, Relation,
+};
 use serde_json::{Map, Value};
 use std::collections::BTreeSet;
 
@@ -72,11 +74,14 @@ fn arg(field: &Field, positional: bool) -> Arg {
 /// The CLI options of a bound command: each repository option whose name is not a
 /// field of the command.
 fn bound_options(declaration: &Declaration) -> Vec<Arg> {
-    if !declaration.bound {
-        return Vec::new();
-    }
+    let scoped = match declaration.bound {
+        Binding::None => return Vec::new(),
+        Binding::Repository => false,
+        Binding::Scope => true,
+    };
     GLOBAL_OPTIONS
         .iter()
+        .filter(|option| scoped || option.name != "scope")
         .filter(|option| {
             !declaration
                 .input

@@ -13,25 +13,24 @@ mod porcelain_fields;
 mod repository;
 mod workspace;
 
-pub use crate::dictionary::DictionaryImportInput;
+pub use crate::dictionary::{DictionaryImportInput, DictionaryStatusInput};
+pub use crate::export::ExportInput;
+pub use crate::graph_reference::{ReferenceInput, ReferenceIssueInput};
 pub use crate::import::ImportInput;
 pub use crate::materialize::MaterializeInput;
+pub use crate::report::{ReportBuildInput, ReportRenderInput};
+pub use crate::schema::SchemaShowInput;
 pub use crate::swarm_backtrace::SwarmBacktraceLandInput;
+pub use crate::validate::ValidateInput;
 pub use dogfood::{
     DogfoodCommand, DogfoodListInput, DogfoodNoteInput, DogfoodReportInput, DogfoodSimulateInput,
     TriageHandleInput, TriageListInput, TriageReopenInput,
 };
 pub use fields::{json_format, Field, FieldValue, Fields, Relation, REPO, SCOPE};
-pub use graph::{GraphCommand, ReferenceInput, ReferenceIssueInput};
+pub use graph::GraphCommand;
 pub use porcelain::{PrimeFormat, PrimeInput};
-pub use repository::{
-    CargoInitInput, DictionaryStatusInput, ExportInput, InitInput, MergeJsonlInput,
-    RepositoryCommand, SchemaShowInput, ValidateInput,
-};
-pub use workspace::{
-    ReportBuildInput, ReportRenderInput, SkillsInstallInput, SkillsListInput, SkillsShowInput,
-    WorkspaceCommand,
-};
+pub use repository::{CargoInitInput, InitInput, MergeJsonlInput, RepositoryCommand};
+pub use workspace::{SkillsInstallInput, SkillsListInput, SkillsShowInput, WorkspaceCommand};
 
 use crate::action::Action;
 use provenance_macros::rule;
@@ -116,9 +115,19 @@ pub struct Declaration {
     pub input: Input,
     /// Programs run this command, so a consumer does not document it for people.
     pub internal: bool,
-    /// The command runs on the repository and scope that the consumer binds, so its
-    /// fields do not name them.
-    pub bound: bool,
+    /// What the command runs on that the consumer binds, so its fields do not name it.
+    pub bound: Binding,
+}
+
+/// What of its place a command takes from the consumer, not from its fields.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Binding {
+    /// The fields give all that the command reads.
+    None,
+    /// The command reads the files of the bound repository and no scope.
+    Repository,
+    /// The command works on the bound repository and scope.
+    Scope,
 }
 
 impl Declaration {
@@ -130,14 +139,21 @@ impl Declaration {
             grammar: Grammar::Name,
             input: Input::Fields(fields),
             internal: false,
-            bound: false,
+            bound: Binding::None,
         }
     }
 
     /// This command, on the repository and scope that the consumer binds.
     #[must_use]
     pub const fn bound(mut self) -> Self {
-        self.bound = true;
+        self.bound = Binding::Scope;
+        self
+    }
+
+    /// This command, on the files of the repository that the consumer binds.
+    #[must_use]
+    pub const fn bound_repository(mut self) -> Self {
+        self.bound = Binding::Repository;
         self
     }
 

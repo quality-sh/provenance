@@ -15,13 +15,18 @@ pub mod api;
 pub mod check;
 pub mod dictionary;
 pub mod discussion;
+pub mod export;
 pub mod get;
+pub mod graph_reference;
 pub mod guidance;
 pub mod import;
 pub mod materialize;
 pub mod registry;
+pub mod report;
+pub mod schema;
 pub mod search;
 pub mod swarm_backtrace;
+pub mod validate;
 
 /// The future of one port call: the output, or the failure that the port reports.
 pub type WorkFuture<'a, T, F> =

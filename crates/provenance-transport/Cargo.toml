@@ -21,10 +21,12 @@ tempfile = { workspace = true, optional = true }
 axum.workspace = true
 camino.workspace = true
 fs2.workspace = true
+jsonschema.workspace = true
 provenance-core.workspace = true
 provenance-macros.workspace = true
 provenance-porcelain.workspace = true
 provenance-contract.workspace = true
+provenance-report.workspace = true
 provenance-scanner.workspace = true
 provenance-ste100.workspace = true
 provenance-store = { workspace = true, features = ["schema"] }
