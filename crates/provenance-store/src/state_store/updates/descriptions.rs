@@ -87,7 +87,7 @@ impl StateStore {
 
     pub fn update_domain(&self, input: UpdateDomainInput) -> anyhow::Result<Domain> {
         let path = shards::domains_path(&self.layout, &input.scope_id);
-        self.mutate_jsonl_records(&path, |records: &mut Vec<Domain>| {
+        self.mutate_graph_record(&path, |records: &mut Vec<Domain>| {
             if let Some(name) = &input.name {
                 required_text(name)?;
                 if records.iter().any(|r| r.id != input.id && r.name == *name) {
@@ -129,7 +129,7 @@ impl StateStore {
                 required_text(statement)?;
             }
             let path = shards::boundaries_path(&self.layout, &input.scope_id);
-            self.mutate_jsonl_records(&path, |records: &mut Vec<Boundary>| {
+            self.mutate_graph_record(&path, |records: &mut Vec<Boundary>| {
                 let record = records
                     .iter_mut()
                     .find(|r| r.id == input.id)

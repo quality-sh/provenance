@@ -2,14 +2,12 @@ use super::{
     inputs::{RuleClearField, SourceClearField, UpdateRuleInput, UpdateSourceInput},
     missing, optional, owner_matches, required_text, set, validate_final_relations,
 };
-use crate::{publication::with_staged_state, review, shards, state_store::StateStore};
+use crate::{review, shards, state_store::StateStore};
 use provenance_core::{validate_optional_commit_pin, Rule, Source};
 
 impl StateStore {
     pub fn update_source(&self, input: UpdateSourceInput) -> anyhow::Result<Source> {
-        with_staged_state(&self.layout, false, |layout| {
-            Self::new(layout.clone()).prepare_source_update(input)
-        })
+        self.prepare_source_update(input)
     }
 
     fn prepare_source_update(&self, input: UpdateSourceInput) -> anyhow::Result<Source> {
@@ -81,9 +79,7 @@ impl StateStore {
     }
 
     pub fn update_rule(&self, input: UpdateRuleInput) -> anyhow::Result<Rule> {
-        with_staged_state(&self.layout, false, |layout| {
-            Self::new(layout.clone()).prepare_rule_update(input)
-        })
+        self.prepare_rule_update(input)
     }
 
     fn prepare_rule_update(&self, input: UpdateRuleInput) -> anyhow::Result<Rule> {
