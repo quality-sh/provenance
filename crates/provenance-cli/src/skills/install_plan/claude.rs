@@ -354,3 +354,39 @@ fn refuse_claude(
         ),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn symlink_failure_reports_the_copied_child_file() {
+        let temporary = tempfile::tempdir().unwrap();
+        let base = temporary.path();
+        let canonical = base.join(".agents/skills");
+        let claude = base.join(".claude/skills");
+        let action = ClaudeAction::plan(
+            &crate::skills::EMBEDDED_SKILLS[0],
+            &canonical,
+            &claude,
+            false,
+            false,
+        )
+        .unwrap();
+        let mut rollback = FileRollbackJournal::within(base);
+        let (reports, reason) = action
+            .apply_with(
+                |_, _| Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "denied")),
+                &mut rollback,
+            )
+            .unwrap();
+        assert!(reason.unwrap().contains("failed to symlink"));
+        assert_eq!(reports.len(), 1);
+        assert_eq!(reports[0].status, FileStatus::Installed);
+        assert_eq!(
+            std::path::Path::new(&reports[0].path),
+            claude.join("provenance-fork-tournament/SKILL.md")
+        );
+        assert!(claude.join("provenance-fork-tournament/SKILL.md").exists());
+    }
+}

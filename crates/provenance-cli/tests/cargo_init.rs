@@ -7,6 +7,8 @@ use std::path::Path;
 #[path = "cargo_init/support.rs"]
 mod support;
 use support::CargoFixture;
+#[path = "cargo_init/presentation.rs"]
+mod presentation;
 
 #[test]
 #[verifies("rule_cargo_init_selects_workspace_package", examples)]
