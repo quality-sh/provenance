@@ -1,6 +1,6 @@
 use super::{
-    ensure_new_ids_assignable, read_jsonl_unlocked, read_message_shards_unlocked, serde_name,
-    StateStore,
+    ensure_new_ids_assignable, overlay_records, read_jsonl_unlocked,
+    read_message_shards_unlocked, serde_name, IdeationLandingBatch, StateStore,
 };
 use crate::cache::ProjectionFamily;
 use crate::jsonl::write_jsonl_atomic_under_publication;
@@ -39,14 +39,14 @@ macro_rules! define_scope_shards {
                 validate_threads(shards.threads)?;
                 self.ensure_import_ids_unique(
                     scope,
-                    shards.sources.iter().map(|record| &record.id)
-                        .chain(shards.requirements.iter().map(|record| &record.id))
-                        .chain(shards.resolutions.iter().map(|record| &record.id))
-                        .chain(shards.rules.iter().map(|record| &record.id))
-                        .chain(shards.topics.iter().map(|record| &record.id))
-                        .chain(shards.questions.iter().map(|record| &record.id))
-                        .chain(shards.domains.iter().map(|record| &record.id))
-                        .chain(shards.boundaries.iter().map(|record| &record.id)),
+                    shards.sources.iter().map(|record| (NodeType::Source, &record.id))
+                        .chain(shards.requirements.iter().map(|record| (NodeType::Requirement, &record.id)))
+                        .chain(shards.resolutions.iter().map(|record| (NodeType::Resolution, &record.id)))
+                        .chain(shards.rules.iter().map(|record| (NodeType::Rule, &record.id)))
+                        .chain(shards.topics.iter().map(|record| (NodeType::Topic, &record.id)))
+                        .chain(shards.questions.iter().map(|record| (NodeType::Question, &record.id)))
+                        .chain(shards.domains.iter().map(|record| (NodeType::Domain, &record.id)))
+                        .chain(shards.boundaries.iter().map(|record| (NodeType::Boundary, &record.id))),
                     &[
                         NodeType::Source,
                         NodeType::Requirement,
@@ -81,28 +81,29 @@ macro_rules! define_scope_shards {
                     shards.messages,
                     |record| record.id.as_str(),
                 )?;
+                let ideation = read_ideation_records_unlocked(self, scope)?;
                 ensure_new_ids_assignable(
-                    &read_jsonl_unlocked(&shards::contributions_path(&self.layout, scope))?,
+                    &ideation.contributions,
                     shards.contributions,
                     |record| record.id.as_str(),
                 )?;
                 ensure_new_ids_assignable(
-                    &read_jsonl_unlocked(&shards::synthesis_packets_path(&self.layout, scope))?,
+                    &ideation.synthesis_packets,
                     shards.synthesis_packets,
                     |record| record.id.as_str(),
                 )?;
                 ensure_new_ids_assignable(
-                    &read_jsonl_unlocked(&shards::proposal_cards_path(&self.layout, scope))?,
+                    &ideation.proposals,
                     shards.proposal_cards,
                     |record| record.id.as_str(),
                 )?;
                 ensure_new_ids_assignable(
-                    &read_jsonl_unlocked(&shards::assertion_records_path(&self.layout, scope))?,
+                    &ideation.assertions,
                     shards.assertion_records,
                     |record| record.id.as_str(),
                 )?;
                 ensure_new_ids_assignable(
-                    &read_jsonl_unlocked(&shards::dispositions_path(&self.layout, scope))?,
+                    &ideation.dispositions,
                     shards.dispositions,
                     |record| record.id.as_str(),
                 )?;
@@ -140,6 +141,42 @@ define_scope_shards! {
     proposal_cards: ProposalCard => ProposalCards,
     assertion_records: AssertionRecord => AssertionRecords,
     dispositions: DispositionRecord => Dispositions,
+}
+
+struct StoredIdeationRecords {
+    contributions: Vec<Contribution>,
+    synthesis_packets: Vec<SynthesisPacket>,
+    proposals: Vec<ProposalCard>,
+    assertions: Vec<AssertionRecord>,
+    dispositions: Vec<DispositionRecord>,
+}
+
+fn read_ideation_records_unlocked(
+    store: &StateStore,
+    scope: &ScopeId,
+) -> anyhow::Result<StoredIdeationRecords> {
+    let layout = &store.layout;
+    let mut records = StoredIdeationRecords {
+        contributions: read_jsonl_unlocked(&shards::contributions_path(layout, scope))?,
+        synthesis_packets: read_jsonl_unlocked(&shards::synthesis_packets_path(layout, scope))?,
+        proposals: read_jsonl_unlocked(&shards::proposal_cards_path(layout, scope))?,
+        assertions: read_jsonl_unlocked(&shards::assertion_records_path(layout, scope))?,
+        dispositions: read_jsonl_unlocked(&shards::dispositions_path(layout, scope))?,
+    };
+    records.dispositions.extend(super::readers::read_legacy_dispositions_unlocked(
+        &shards::legacy_promotion_decisions_path(layout, scope),
+    )?);
+    let landings: Vec<IdeationLandingBatch> = super::readers::read_ideation_landings_unlocked(
+        &shards::ideation_landings_path(layout, scope),
+    )?;
+    for batch in landings {
+        overlay_records(&mut records.contributions, batch.contributions, |r| r.id.as_str());
+        overlay_records(&mut records.synthesis_packets, batch.synthesis_packets, |r| r.id.as_str());
+        overlay_records(&mut records.proposals, batch.proposals, |r| r.id.as_str());
+        overlay_records(&mut records.assertions, batch.assertions, |r| r.id.as_str());
+        overlay_records(&mut records.dispositions, batch.dispositions, |r| r.id.as_str());
+    }
+    Ok(records)
 }
 
 fn validate_threads(threads: &[Thread]) -> anyhow::Result<()> {
