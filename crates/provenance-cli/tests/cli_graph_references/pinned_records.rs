@@ -34,7 +34,7 @@ fn issue_rejects_unsupported_pinned_record_schema_versions() {
     std::fs::write(
         &source_path,
         source.replace(
-            &format!("\"schema_version\":{}", SUPPORTED_SCHEMA_VERSION.0),
+            &format!("\"schema_version\":{}", REVIEW_SCHEMA_VERSION.0),
             &format!("\"schema_version\":{}", REVIEW_SCHEMA_VERSION.0 + 1),
         ),
     )

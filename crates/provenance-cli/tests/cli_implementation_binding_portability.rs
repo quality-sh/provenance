@@ -4,6 +4,9 @@ use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use serde_json::{json, Value};
 use std::path::Path;
 
+#[path = "export_fixture_support/mod.rs"]
+mod export_fixture_support;
+
 fn provenance() -> Command {
     Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
 }
@@ -106,6 +109,7 @@ fn write_implementation_bindings(repo: &Path, bindings: &[Value]) {
 }
 
 fn export(repo: &Path, output: &Path) -> Value {
+    export_fixture_support::make_default_scope_portable(repo);
     provenance()
         .args([
             "export",
