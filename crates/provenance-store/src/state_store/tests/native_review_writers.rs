@@ -405,10 +405,11 @@ fn graph_record_replacement_captures_an_occurrence() {
         .unwrap();
 
     let entries = store.review_entries(&scope).unwrap();
-    let source = entries
+    let mut source = entries
         .iter()
         .filter(|entry| entry.record_kind == NodeType::Source)
         .collect::<Vec<_>>();
+    source.sort_by_key(|entry| entry.sequence);
     assert_eq!(source.len(), 2);
     assert_eq!(source[1].outcome, SaveOutcome::Changed);
 }
