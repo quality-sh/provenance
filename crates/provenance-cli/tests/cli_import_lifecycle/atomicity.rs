@@ -53,7 +53,10 @@ fn import_keeps_a_command_keyword_id_that_is_already_stored() {
     import_scope(&repo, &exported).success();
     let after = dir.path().join("after.json");
     export_scope(&repo, &after).success();
-    assert_eq!(std::fs::read(after).unwrap(), std::fs::read(exported).unwrap());
+    assert_eq!(
+        std::fs::read(after).unwrap(),
+        std::fs::read(exported).unwrap()
+    );
 }
 
 #[test]
