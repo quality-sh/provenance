@@ -215,6 +215,32 @@ question. They are context that has become decision-relevant because the turn en
 explicit territory; do not infer further territory from titles or graph proximity. If
 lifecycle consultation fails, the topic claim is not persisted.
 
+### Recover before each turn
+
+Before each shaping turn, read the stored Topic and selected Question again. Repeat
+these reads after a restart, a saved handoff, or context compaction:
+
+```sh
+provenance topics <topic_id> get --scope <scope> --format json
+provenance questions <question_id> get --scope <scope> --format json
+```
+
+Check that the Question belongs to the selected Topic and is open. Check both claims
+against your actor and the claim required by its method. Read `resolution_method` from
+the Question. A Topic claim does not select a method for its Questions. A mixed-method
+Topic can require a different method for the next Question.
+
+If a required claim is absent, claim the item before work, then read it again. If another
+actor holds a required claim, stop work on that item. If recovery is incomplete, stop
+selection and recover the missing records. Read all pages of the Topic and Question
+collections when you need the map; a partial page cannot establish that work is absent.
+Do not use conversation memory as a substitute for these reads.
+
+Apply the stored method to the selected Question. Record each accepted answer and its
+resulting artifacts before the next turn, then read the stored state again. A proposed
+answer that the human refuses remains unresolved. After a restart or compaction, recover
+accepted decisions from the graph before you continue the dialogue.
+
 ### 3. Resolve and land as you go
 
 For each question, use the method on the question.
