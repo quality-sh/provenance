@@ -6,6 +6,7 @@ pub mod workspace;
 
 pub use ideation::{IdeationArtifactKind, SchemaCommand};
 
+#[cfg(feature = "dogfood")]
 use crate::output::JsonFormat;
 #[cfg(feature = "dogfood")]
 use camino::Utf8PathBuf;
@@ -80,23 +81,9 @@ pub struct Cli {
     pub command: Command,
 }
 
+/// The built-in commands that the registry does not declare yet.
 #[derive(Subcommand)]
 pub enum Command {
-    Docs {
-        #[command(subcommand)]
-        command: workspace::DocsCommand,
-    },
-    /// Serve local review assets and authorized repository operations.
-    Review(crate::review::Options),
-    /// Deterministic report rendering from a versioned report envelope.
-    Report {
-        #[command(subcommand)]
-        command: report::ReportCommand,
-    },
-    Skills {
-        #[command(subcommand)]
-        command: workspace::SkillsCommand,
-    },
     /// Dev-build-only: record pain-point notes about provenance itself.
     #[cfg(feature = "dogfood")]
     Dogfood {

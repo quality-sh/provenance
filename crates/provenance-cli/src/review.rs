@@ -5,26 +5,20 @@ use provenance_review::{HostOptions, RepositoryScope, StartedHost};
 use serde_json::json;
 use std::{io::Write, path::PathBuf, sync::Arc};
 
-#[derive(clap::Args)]
+/// The `provenance review` options.
 pub struct Options {
     /// Repository with an initialized Provenance manifest.
-    #[arg(long)]
-    repo: PathBuf,
+    pub repo: PathBuf,
     /// Opaque repository target exposed to the browser.
-    #[arg(long)]
-    repository_id: String,
-    #[arg(long)]
-    scope: String,
+    pub repository_id: String,
+    pub scope: String,
     /// Loopback port. Zero selects an available port.
-    #[arg(long, default_value_t = 0)]
-    port: u16,
+    pub port: u16,
     /// Do not open the review page in a browser.
-    #[arg(long)]
-    no_open: bool,
+    pub no_open: bool,
     /// Reuse the running host for this repository and scope, or start one in the background
     /// that keeps running after this command returns. Prints where the review page is served.
-    #[arg(long)]
-    detach: bool,
+    pub detach: bool,
 }
 
 pub async fn run(options: Options) -> anyhow::Result<()> {
