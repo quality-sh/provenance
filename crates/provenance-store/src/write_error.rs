@@ -25,6 +25,11 @@ pub enum WriteFailure {
     },
     MissingReference,
     ResourceNotFound,
+    DiscussionVersionConflict,
+    DiscussionMembershipMismatch,
+    DiscussionClosed,
+    DiscussionResolved,
+    DiscussionIntentChanged,
     StatementRejected {
         diagnostics: Vec<TypedSpecDiagnostic>,
     },
@@ -129,6 +134,10 @@ impl WriteError {
             WriteFailure::RecordOwnershipConflict
             | WriteFailure::AlreadyExists
             | WriteFailure::OwnershipConflict { .. }
+            | WriteFailure::DiscussionVersionConflict
+            | WriteFailure::DiscussionClosed
+            | WriteFailure::DiscussionResolved
+            | WriteFailure::DiscussionIntentChanged
             | WriteFailure::AlreadyComplete => 409,
             _ => 400,
         }
