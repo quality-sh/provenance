@@ -11,59 +11,128 @@ use provenance_core::SUPPORTED_SCHEMA_VERSION;
 mod collaboration;
 mod table;
 
-/// The record families the ownership check walks. One variant per
-/// `require_scope!` line, and one per record-bearing field of
-/// `GraphExport`; `family_count_of` below ties the two together.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum RecordFamily {
-    Source,
-    Domain,
-    Requirement,
-    Boundary,
-    Topic,
-    Question,
-    Resolution,
-    Rule,
-    VerificationBinding,
-    ImplementationBinding,
+macro_rules! define_export_test_inventory {
+    (
+        export { $(
+            $export_variant:ident {
+                record: $export_type:ty,
+                field: $export_field:ident,
+                path: $export_path:ident,
+                meta: $export_meta:tt,
+                node: [$($export_node:tt)*],
+                reader: $export_reader:tt,
+                id: $export_id:ident,
+                loader: [$($export_loader:tt)*],
+                graph: [export(
+                    $export_kind:literal,
+                    $export_test_kind:ident,
+                    $export_fixture:ident,
+                    $export_record_id:literal
+                )],
+                import: [$($export_import:tt)*],
+                catalog: [$($export_catalog:tt)*],
+                route: [$($export_route:tt)*]
+            };
+        )* }
+        canonical { $($canonical:tt)* }
+        bindings { $(
+            $binding_variant:ident {
+                record: $binding_type:ty,
+                field: $binding_field:ident,
+                path: $binding_path:ident,
+                meta: $binding_meta:tt,
+                node: [$($binding_node:tt)*],
+                reader: $binding_reader:tt,
+                id: $binding_id:ident,
+                loader: [$($binding_loader:tt)*],
+                graph: [$binding_phase:ident(
+                    $binding_kind:literal,
+                    $binding_test_kind:ident,
+                    $binding_fixture:ident,
+                    $binding_record_id:literal
+                )],
+                import: [$($binding_import:tt)*],
+                catalog: [$($binding_catalog:tt)*],
+                route: [$($binding_route:tt)*]
+            };
+        )* }
+        internal { $($internal:tt)* }
+    ) => {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        enum RecordFamily {
+            $($export_test_kind,)*
+            $($binding_test_kind,)*
+        }
+
+        fn all_families() -> Vec<RecordFamily> {
+            vec![
+                $(RecordFamily::$export_test_kind,)*
+                $(RecordFamily::$binding_test_kind,)*
+            ]
+        }
+
+        const fn record_id(family: RecordFamily) -> &'static str {
+            match family {
+                $(RecordFamily::$export_test_kind => $export_record_id,)*
+                $(RecordFamily::$binding_test_kind => $binding_record_id,)*
+            }
+        }
+
+        fn graph_in_scope(scope: &ScopeId, populated: &[RecordFamily]) -> GraphExport {
+            let holds = |family: RecordFamily| populated.contains(&family);
+            GraphExport {
+                schema_version: 1,
+                scope: Scope {
+                    id: scope.clone(),
+                    path_prefix: RepoPathPrefix::new("."),
+                },
+                $($export_field: holds(RecordFamily::$export_test_kind)
+                    .then(|| $export_fixture(scope)).into_iter().collect(),)*
+                $($binding_field: holds(RecordFamily::$binding_test_kind)
+                    .then(|| $binding_fixture(scope)).into_iter().collect(),)*
+            }
+        }
+
+        fn move_family_to_scope(
+            graph: &mut GraphExport,
+            family: RecordFamily,
+            scope: &ScopeId,
+        ) {
+            match family {
+                $(RecordFamily::$export_test_kind => {
+                    for record in &mut graph.$export_field {
+                        record.scope_id = scope.clone();
+                    }
+                },)*
+                $(RecordFamily::$binding_test_kind => {
+                    for record in &mut graph.$binding_field {
+                        record.scope_id = scope.clone();
+                    }
+                },)*
+            }
+        }
+
+        fn family_count_of(graph: &GraphExport) -> usize {
+            let GraphExport {
+                schema_version: _,
+                scope: _,
+                $($export_field,)*
+                $($binding_field,)*
+            } = graph;
+            let counts = [
+                $($export_field.len(),)*
+                $($binding_field.len(),)*
+            ];
+            assert!(
+                counts.iter().all(|count| *count == 1),
+                "the fixture must hold one record of each family, got {counts:?}"
+            );
+            counts.len()
+        }
+    };
 }
 
-// Built from an exhaustive match so that adding a RecordFamily variant
-// fails compilation until the new family joins the chain, keeping the
-// exhaustion proof below complete.
-fn all_families() -> Vec<RecordFamily> {
-    let mut all = vec![RecordFamily::Source];
-    while let Some(next) = match all.last().unwrap() {
-        RecordFamily::Source => Some(RecordFamily::Domain),
-        RecordFamily::Domain => Some(RecordFamily::Requirement),
-        RecordFamily::Requirement => Some(RecordFamily::Boundary),
-        RecordFamily::Boundary => Some(RecordFamily::Topic),
-        RecordFamily::Topic => Some(RecordFamily::Question),
-        RecordFamily::Question => Some(RecordFamily::Resolution),
-        RecordFamily::Resolution => Some(RecordFamily::Rule),
-        RecordFamily::Rule => Some(RecordFamily::VerificationBinding),
-        RecordFamily::VerificationBinding => Some(RecordFamily::ImplementationBinding),
-        RecordFamily::ImplementationBinding => None,
-    } {
-        all.push(next);
-    }
-    all
-}
-
-const fn record_id(family: RecordFamily) -> &'static str {
-    match family {
-        RecordFamily::Source => "source_pinned",
-        RecordFamily::Domain => "domain_pinned",
-        RecordFamily::Requirement => "req_pinned",
-        RecordFamily::Boundary => "boundary_pinned",
-        RecordFamily::Topic => "topic_pinned",
-        RecordFamily::Question => "question_pinned",
-        RecordFamily::Resolution => "res_pinned",
-        RecordFamily::Rule => "rule_pinned",
-        RecordFamily::VerificationBinding => "verification_binding_pinned",
-        RecordFamily::ImplementationBinding => "implementation_binding_pinned",
-    }
-}
+crate::cache::family_table::record_family_rows!(define_export_test_inventory);
 
 fn stable_id(family: RecordFamily) -> StableId {
     StableId::new(record_id(family)).unwrap()
@@ -249,156 +318,6 @@ fn implementation_binding_record(scope: &ScopeId) -> ImplementationBinding {
         file: "src/pinned.ts".into(),
         symbol: "pinnedImplementation".into(),
     }
-}
-
-/// A graph claiming `scope`, holding exactly one record of each named
-/// family and nothing else. Every record sits in the claimed scope.
-fn graph_in_scope(scope: &ScopeId, populated: &[RecordFamily]) -> GraphExport {
-    let holds = |family: RecordFamily| populated.contains(&family);
-    GraphExport {
-        schema_version: 1,
-        scope: Scope {
-            id: scope.clone(),
-            path_prefix: RepoPathPrefix::new("."),
-        },
-        sources: holds(RecordFamily::Source)
-            .then(|| source_record(scope))
-            .into_iter()
-            .collect(),
-        domains: holds(RecordFamily::Domain)
-            .then(|| domain_record(scope))
-            .into_iter()
-            .collect(),
-        requirements: holds(RecordFamily::Requirement)
-            .then(|| requirement_record(scope))
-            .into_iter()
-            .collect(),
-        boundaries: holds(RecordFamily::Boundary)
-            .then(|| boundary_record(scope))
-            .into_iter()
-            .collect(),
-        topics: holds(RecordFamily::Topic)
-            .then(|| topic_record(scope))
-            .into_iter()
-            .collect(),
-        questions: holds(RecordFamily::Question)
-            .then(|| question_record(scope))
-            .into_iter()
-            .collect(),
-        resolutions: holds(RecordFamily::Resolution)
-            .then(|| resolution_record(scope))
-            .into_iter()
-            .collect(),
-        rules: holds(RecordFamily::Rule)
-            .then(|| rule_record(scope))
-            .into_iter()
-            .collect(),
-        verification_bindings: holds(RecordFamily::VerificationBinding)
-            .then(|| verification_binding_record(scope))
-            .into_iter()
-            .collect(),
-        implementation_bindings: holds(RecordFamily::ImplementationBinding)
-            .then(|| implementation_binding_record(scope))
-            .into_iter()
-            .collect(),
-    }
-}
-
-/// Moves every record of one family into another scope, leaving the rest
-/// of the graph alone.
-fn move_family_to_scope(graph: &mut GraphExport, family: RecordFamily, scope: &ScopeId) {
-    match family {
-        RecordFamily::Source => {
-            for record in &mut graph.sources {
-                record.scope_id = scope.clone();
-            }
-        }
-        RecordFamily::Domain => {
-            for record in &mut graph.domains {
-                record.scope_id = scope.clone();
-            }
-        }
-        RecordFamily::Requirement => {
-            for record in &mut graph.requirements {
-                record.scope_id = scope.clone();
-            }
-        }
-        RecordFamily::Boundary => {
-            for record in &mut graph.boundaries {
-                record.scope_id = scope.clone();
-            }
-        }
-        RecordFamily::Topic => {
-            for record in &mut graph.topics {
-                record.scope_id = scope.clone();
-            }
-        }
-        RecordFamily::Question => {
-            for record in &mut graph.questions {
-                record.scope_id = scope.clone();
-            }
-        }
-        RecordFamily::Resolution => {
-            for record in &mut graph.resolutions {
-                record.scope_id = scope.clone();
-            }
-        }
-        RecordFamily::Rule => {
-            for record in &mut graph.rules {
-                record.scope_id = scope.clone();
-            }
-        }
-        RecordFamily::VerificationBinding => {
-            for record in &mut graph.verification_bindings {
-                record.scope_id = scope.clone();
-            }
-        }
-        RecordFamily::ImplementationBinding => {
-            for record in &mut graph.implementation_bindings {
-                record.scope_id = scope.clone();
-            }
-        }
-    }
-}
-
-/// Counts the record families a graph carries, by destructuring
-/// `GraphExport` exhaustively. Adding a record-bearing field to
-/// `GraphExport` fails compilation here, and the count assertion in the
-/// exhaustion proof then fails until the new family joins `RecordFamily`
-/// and the fixture. The domain of the proof is therefore the field list
-/// the `require_scope!` macro walks, not a hand-kept list.
-fn family_count_of(graph: &GraphExport) -> usize {
-    let GraphExport {
-        schema_version: _,
-        scope: _,
-        sources,
-        domains,
-        requirements,
-        boundaries,
-        topics,
-        questions,
-        resolutions,
-        rules,
-        verification_bindings,
-        implementation_bindings,
-    } = graph;
-    let counts = [
-        sources.len(),
-        domains.len(),
-        requirements.len(),
-        boundaries.len(),
-        topics.len(),
-        questions.len(),
-        resolutions.len(),
-        rules.len(),
-        verification_bindings.len(),
-        implementation_bindings.len(),
-    ];
-    assert!(
-        counts.iter().all(|count| *count == 1),
-        "the fully populated fixture must hold exactly one record of every family, got {counts:?}"
-    );
-    counts.len()
 }
 
 #[test]
