@@ -186,7 +186,7 @@ export class Harness {
     const started = await this.page("/requirements/req_notifications/discussions", {
       actor: "reviewer", role: "user", body: "discussion_probe", declared_by: null,
     });
-    await this.page(`/requirements/req_notifications/discussions/${started.id}/messages`, {
+    await this.page(`/requirements/req_notifications/discussions/${started.discussion_id}/messages`, {
       actor: "reviewer", role: "user", body: "reply_probe", declared_by: null,
     }, { "If-Match": '"1"' });
   }
