@@ -6,7 +6,7 @@ use std::{
 };
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
-const MAX_FRAME_BYTES: usize = 4 * super::MAX_BODY_BYTES;
+const MAX_FRAME_BYTES: usize = 4 * provenance_transport::MAX_BODY_BYTES;
 
 pub struct BoundedIo<T> {
     inner: T,

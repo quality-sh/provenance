@@ -1,6 +1,7 @@
 #![cfg(feature = "test-fixture")]
 
 mod support {
+    #[path = "../../../provenance-transport/tests/support/records.rs"]
     pub mod records;
 }
 
@@ -48,7 +49,7 @@ async fn non_create_schema_excludes_a_writable_but_unreadable_kind() {
     let access = writable_access(&repository).deny_operation("get-source");
     let host = StatementHost::with_fixture_access(access);
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
 
     let tools = client.list_all_tools().await.unwrap();
@@ -96,7 +97,7 @@ async fn non_create_schema_and_dispatch_deny_a_hidden_mutation() {
     let access = writable_access(&repository).deny_operation("update-source");
     let host = StatementHost::with_fixture_access(access);
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
 
     let tools = client.list_all_tools().await.unwrap();
@@ -143,7 +144,7 @@ async fn no_resolvable_kind_hides_non_create_tools_but_keeps_create_executable()
     }
     let host = StatementHost::with_fixture_access(access);
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
 
     let tools = client.list_all_tools().await.unwrap();
@@ -185,7 +186,7 @@ async fn hidden_resolver_hides_non_create_tools_without_hiding_create() {
     let access = writable_access(&repository).deny_operation(catalog::ResolveRecord::NAME);
     let host = StatementHost::with_fixture_access(access);
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
 
     let tools = client.list_all_tools().await.unwrap();

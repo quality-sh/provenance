@@ -1,7 +1,9 @@
 #![cfg(feature = "test-fixture")]
 
 mod support {
+    #[path = "../../../provenance-transport/tests/support/check_port.rs"]
     pub mod check_port;
+    #[path = "../../../provenance-transport/tests/support/records.rs"]
     pub mod records;
 }
 
@@ -74,7 +76,7 @@ async fn every_mcp_tool_family_uses_the_error_envelope() {
     let host =
         StatementHost::with_fixture_access(access).with_check_port(Arc::new(FixtureCheckPort));
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
     let tools = client.list_all_tools().await.unwrap();
     let get_schema = tools

@@ -1,5 +1,6 @@
 use assert_cmd::Command;
 use provenance_macros::verifies;
+use provenance_mcp::Client;
 use provenance_porcelain::check::{
     BindingContext, BindingPolicy, Category, CategoryRun, CheckInput, PortFuture, Refusal,
 };
@@ -30,57 +31,31 @@ fn local_host(path: &std::path::Path) -> provenance_transport::StatementHost {
     provenance_transport::StatementHost::with_access(Arc::new(access.unwrap()))
 }
 
-async fn assert_get_readable(
-    client: &rmcp::service::RunningService<rmcp::RoleClient, ()>,
-    repo: &str,
-    name: &str,
-) {
-    use rmcp::model::CallToolRequestParams;
-
+async fn assert_get_readable(client: &Client, repo: &str, name: &str) {
     let cli = provenance()
         .args(["source_live_inventory", name, "--repo", repo])
         .output()
         .unwrap();
     assert!(cli.status.success());
     let mcp = client
-        .call_tool(
-            CallToolRequestParams::new(name.to_owned()).with_arguments(
-                json!({"target":"source_live_inventory"})
-                    .as_object()
-                    .unwrap()
-                    .clone(),
-            ),
-        )
-        .await
-        .unwrap();
+        .call(name, json!({"target":"source_live_inventory"}))
+        .await;
     assert_eq!(
         String::from_utf8(cli.stdout).unwrap().trim_end(),
-        mcp.content[0].as_text().unwrap().text
+        mcp["content"][0]["text"]
     );
 }
 
-async fn assert_check_readable(
-    client: &rmcp::service::RunningService<rmcp::RoleClient, ()>,
-    repo: &str,
-    name: &str,
-) {
-    use rmcp::model::CallToolRequestParams;
-
+async fn assert_check_readable(client: &Client, repo: &str, name: &str) {
     let cli = provenance()
         .args([name, "--repo", repo, "--graph"])
         .output()
         .unwrap();
     assert!(cli.status.success());
-    let mcp = client
-        .call_tool(
-            CallToolRequestParams::new(name.to_owned())
-                .with_arguments(json!({"categories":["graph"]}).as_object().unwrap().clone()),
-        )
-        .await
-        .unwrap();
+    let mcp = client.call(name, json!({"categories":["graph"]})).await;
     assert_eq!(
         String::from_utf8(cli.stdout).unwrap().trim_end(),
-        mcp.content[0].as_text().unwrap().text
+        mcp["content"][0]["text"]
     );
 }
 
@@ -113,24 +88,23 @@ impl provenance_porcelain::check::CheckPort for EmptyCheckPort {
 
 #[tokio::test]
 async fn cli_uses_the_names_from_the_live_mcp_inventory() {
-    use rmcp::{model::CallToolRequestParams, ServiceExt as _};
-
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path().to_string_lossy().into_owned();
     init_with_source(&repo);
     let host = local_host(directory.path()).with_check_port(Arc::new(EmptyCheckPort));
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
-    let client = ().serve(client_io).await.unwrap();
-    let tools = client.list_all_tools().await.unwrap();
+    let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
+    let client = Client::connect(client_io).await.unwrap();
+    let tools = client.tools().await;
     let get_name = tools
         .iter()
-        .find(|tool| tool.input_schema.get("required") == Some(&json!(["target"])))
+        .find(|tool| tool["inputSchema"]["required"] == json!(["target"]))
+        .unwrap()["name"]
+        .as_str()
         .unwrap()
-        .name
-        .to_string();
-    let get_tool = tools.iter().find(|tool| tool.name == get_name).unwrap();
-    let get_schema = json!(get_tool.output_schema.as_ref().unwrap());
+        .to_owned();
+    let get_tool = tools.iter().find(|tool| tool["name"] == get_name).unwrap();
+    let get_schema = get_tool["outputSchema"].clone();
     let get_validator = compile(&get_schema).unwrap();
     let invalid_record = json!({
         "record": {"id":"source_live_inventory", "kind":"source", "value":42},
@@ -143,14 +117,14 @@ async fn cli_uses_the_names_from_the_live_mcp_inventory() {
     let check_name = tools
         .iter()
         .find(|tool| {
-            tool.input_schema
-                .get("properties")
-                .and_then(|properties| properties.get("categories"))
+            tool["inputSchema"]["properties"]
+                .get("categories")
                 .is_some()
         })
+        .unwrap()["name"]
+        .as_str()
         .unwrap()
-        .name
-        .to_string();
+        .to_owned();
 
     let cli_get = provenance()
         .args([
@@ -166,18 +140,9 @@ async fn cli_uses_the_names_from_the_live_mcp_inventory() {
     assert!(cli_get.status.success());
     let cli_get: serde_json::Value = serde_json::from_slice(&cli_get.stdout).unwrap();
     let mcp_get = client
-        .call_tool(
-            CallToolRequestParams::new(get_name.clone()).with_arguments(
-                json!({"target":"source_live_inventory"})
-                    .as_object()
-                    .unwrap()
-                    .clone(),
-            ),
-        )
-        .await
-        .unwrap()
-        .structured_content
-        .unwrap();
+        .call(&get_name, json!({"target":"source_live_inventory"}))
+        .await["structuredContent"]
+        .clone();
     for field in ["record", "view", "related", "detail", "bounds"] {
         assert_eq!(cli_get[field], mcp_get[field], "get field {field}");
     }
@@ -190,14 +155,9 @@ async fn cli_uses_the_names_from_the_live_mcp_inventory() {
     assert!(cli_check.status.success());
     let cli_check: serde_json::Value = serde_json::from_slice(&cli_check.stdout).unwrap();
     let mcp_check = client
-        .call_tool(
-            CallToolRequestParams::new(check_name.clone())
-                .with_arguments(json!({"categories":["graph"]}).as_object().unwrap().clone()),
-        )
-        .await
-        .unwrap()
-        .structured_content
-        .unwrap();
+        .call(&check_name, json!({"categories":["graph"]}))
+        .await["structuredContent"]
+        .clone();
     assert_eq!(cli_check["categories"], mcp_check["categories"]);
     assert_check_readable(&client, &repo, &check_name).await;
     client.cancel().await.unwrap();
@@ -218,15 +178,13 @@ fn cli_get_error(repo: &str, args: &[&str]) -> serde_json::Value {
 #[tokio::test]
 #[verifies("rule_mcp_get_failure_matches_cli", examples)]
 async fn mcp_get_failures_are_the_cli_json_refusals() {
-    use rmcp::{model::CallToolRequestParams, ServiceExt as _};
-
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path().to_string_lossy().into_owned();
     init_with_source(&repo);
     let host = local_host(directory.path());
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
-    let client = ().serve(client_io).await.unwrap();
+    let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
+    let client = Client::connect(client_io).await.unwrap();
     let limit = json!({"target":"source_live_inventory","limit":5});
     let depth = json!({"target":"source_live_inventory","view":"children","max_depth":0});
     let unknown = json!({"target":"source_live_inventory","unknown":true});
@@ -238,15 +196,9 @@ async fn mcp_get_failures_are_the_cli_json_refusals() {
         ("source_live_inventory get --limit 5", unknown),
     ] {
         let cli = cli_get_error(&repo, &cli.split(' ').collect::<Vec<_>>());
-        let mcp = client
-            .call_tool(
-                CallToolRequestParams::new("get")
-                    .with_arguments(arguments.as_object().unwrap().clone()),
-            )
-            .await
-            .unwrap();
-        assert_eq!(mcp.is_error, Some(true), "{arguments}");
-        assert_eq!(mcp.structured_content.unwrap()["error"], cli, "{arguments}");
+        let mcp = client.call("get", arguments.clone()).await;
+        assert_eq!(mcp["isError"], true, "{arguments}");
+        assert_eq!(mcp["structuredContent"]["error"], cli, "{arguments}");
     }
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
@@ -284,27 +236,22 @@ fn init_with_bound_code(repo: &str) {
 #[tokio::test]
 #[verifies("rule_search_file_same_on_cli_and_mcp", examples)]
 async fn cli_and_mcp_file_search_return_the_same_result() {
-    use rmcp::{model::CallToolRequestParams, ServiceExt as _};
-
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path().to_string_lossy().into_owned();
     init_with_bound_code(&repo);
     let host = local_host(directory.path());
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
-    let client = ().serve(client_io).await.unwrap();
-    let tools = client.list_all_tools().await.unwrap();
-    let search = tools.iter().find(|tool| tool.name == "search").unwrap();
+    let server = tokio::spawn(async move { provenance_mcp::serve(host, server_io).await.unwrap() });
+    let client = Client::connect(client_io).await.unwrap();
+    let tools = client.tools().await;
+    let search = tools.iter().find(|tool| tool["name"] == "search").unwrap();
     for field in ["file", "symbol", "line"] {
-        assert!(search.input_schema["properties"][field].is_object());
+        assert!(search["inputSchema"]["properties"][field].is_object());
     }
     // The search schemas are generated as JSON Schema 2020-12 and sent without `$schema`.
-    let output = json!(search.output_schema.as_ref().unwrap());
+    let output = search["outputSchema"].clone();
     let validator = jsonschema::draft202012::new(&output).unwrap();
-    let call = |arguments: serde_json::Value| {
-        let arguments = arguments.as_object().unwrap().clone();
-        client.call_tool(CallToolRequestParams::new("search").with_arguments(arguments))
-    };
+    let call = |arguments: serde_json::Value| client.call("search", arguments);
 
     let lookup = "search --file code.rs --symbol pay";
     let cli_json = cli(&repo, lookup, &["--format", "json"]);
@@ -312,20 +259,19 @@ async fn cli_and_mcp_file_search_return_the_same_result() {
     let cli_json: serde_json::Value = serde_json::from_slice(&cli_json.stdout).unwrap();
     let cli_text = cli(&repo, lookup, &[]);
     let mcp = call(json!({"file":"code.rs","symbol":"pay"})).await;
-    let mcp = mcp.unwrap();
-    assert_ne!(mcp.is_error, Some(true), "{mcp:?}");
-    let structured = mcp.structured_content.as_ref().unwrap();
+    assert_ne!(mcp["isError"], true, "{mcp}");
+    let structured = &mcp["structuredContent"];
     assert_eq!(&cli_json, structured);
     assert_eq!(cli_json["nodes"][0]["id"], "rule_pay");
     assert!(validator.is_valid(structured), "{structured}");
     let cli_text = String::from_utf8(cli_text.stdout).unwrap();
-    assert_eq!(cli_text.trim_end(), mcp.content[0].as_text().unwrap().text);
+    assert_eq!(cli_text.trim_end(), mcp["content"][0]["text"]);
 
     let cli_refusal = cli(&repo, "search --symbol pay", &[]);
     assert!(!cli_refusal.status.success());
-    let mcp_refusal = call(json!({"symbol":"pay"})).await.unwrap();
-    assert_eq!(mcp_refusal.is_error, Some(true), "{mcp_refusal:?}");
-    let error = &mcp_refusal.structured_content.as_ref().unwrap()["error"];
+    let mcp_refusal = call(json!({"symbol":"pay"})).await;
+    assert_eq!(mcp_refusal["isError"], true, "{mcp_refusal}");
+    let error = &mcp_refusal["structuredContent"]["error"];
     let message = error["message"].as_str().unwrap();
     assert!(message.contains("search --file <path>"), "{message}");
     let cli_message = String::from_utf8(cli_refusal.stderr).unwrap();

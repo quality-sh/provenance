@@ -9,11 +9,11 @@ mod codex;
 mod review_host_support;
 
 use provenance_macros::verifies;
+use provenance_mcp::Client;
 use review_host_support::{
     follow::{create, page_rule},
     Host,
 };
-use rmcp::{model::CallToolRequestParams, ServiceExt as _};
 use serde_json::{json, Value};
 use std::{
     path::Path,
@@ -79,7 +79,11 @@ fn mcp_host_process() {
             let (stream, _) = listener.accept().await.unwrap();
             let context = provenance_cli::repo_context::RepoContext::new(repo.as_str(), "default");
             let host = context.local_host().unwrap();
-            let _ = host.serve_mcp(stream).await.unwrap().waiting().await;
+            let _ = provenance_mcp::serve(host, stream)
+                .await
+                .unwrap()
+                .waiting()
+                .await;
         });
 }
 
@@ -97,18 +101,15 @@ async fn cli_and_mcp_notify_share_one_registration() {
     let sockets = tempfile::tempdir().unwrap();
     let socket = sockets.path().join("mcp.sock");
     let _process = mcp_process(&host, &codex, repo.path(), &socket);
-    let client = ().serve(connect(&socket).await).await.unwrap();
+    let client = Client::connect(connect(&socket).await).await.unwrap();
     let cli = |notify: &str, thread: &str| {
         codex::notify(&host, &codex, repo.path(), "req_notify", notify, thread)
     };
     let mcp = |notify: &'static str, thread: &str| {
         let arguments = json!({"target":"req_notify", "view":"review",
             "notify": {"client": notify, "thread": thread}});
-        let call = client.call_tool(
-            CallToolRequestParams::new("get")
-                .with_arguments(arguments.as_object().unwrap().clone()),
-        );
-        async move { call.await.unwrap().structured_content.unwrap() }
+        let call = client.call("get", arguments);
+        async move { call.await["structuredContent"].clone() }
     };
 
     let by_cli = codex::registration(&cli("codex", &thread));
