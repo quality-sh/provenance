@@ -47,3 +47,28 @@ impl<P: SearchPort> crate::Porcelain<P> {
         self.port.search(request).await
     }
 }
+
+/// Render one bounded search page without repeating full record payloads.
+#[must_use]
+pub fn render_readable(response: &QueryResponse<SearchResult>) -> String {
+    let result = &response.result;
+    let mut lines = vec![format!("search: {} returned", result.nodes.len())];
+    for node in &result.nodes {
+        lines.push(format!(
+            "- {} {}\n  {}",
+            node.node_type().as_str(),
+            node.id().as_str(),
+            node.searchable_text().get(1).copied().unwrap_or("")
+        ));
+    }
+    lines.push(format!(
+        "bounds: limit={} has_more={} continuation={}",
+        result.limit,
+        result.has_more,
+        result.next_cursor.as_deref().unwrap_or("none")
+    ));
+    if let Some(error) = &response.freshness_error {
+        lines.push(format!("warning: freshness: {error}"));
+    }
+    lines.join("\n")
+}

@@ -257,7 +257,7 @@ pub(crate) async fn call_search(
     let service = provenance_porcelain::Porcelain::new(HostSearchPort::new(host.clone()));
     match service.search(request).await {
         Ok(response) => {
-            let summary = render_search_readable(&response);
+            let summary = provenance_porcelain::search::render_readable(&response);
             let mut result = CallToolResult::structured(
                 serde_json::to_value(response).expect("search result is JSON"),
             );
@@ -266,32 +266,6 @@ pub(crate) async fn call_search(
         }
         Err(error) => search_error(&error),
     }
-}
-
-/// Render one bounded search page without repeating full record payloads.
-pub fn render_search_readable(
-    response: &provenance_core::protocol::QueryResponse<provenance_core::protocol::SearchResult>,
-) -> String {
-    let result = &response.result;
-    let mut lines = vec![format!("search: {} returned", result.nodes.len())];
-    for node in &result.nodes {
-        lines.push(format!(
-            "- {} {}\n  {}",
-            node.node_type().as_str(),
-            node.id().as_str(),
-            node.searchable_text().get(1).copied().unwrap_or("")
-        ));
-    }
-    lines.push(format!(
-        "bounds: limit={} has_more={} continuation={}",
-        result.limit,
-        result.has_more,
-        result.next_cursor.as_deref().unwrap_or("none")
-    ));
-    if let Some(error) = &response.freshness_error {
-        lines.push(format!("warning: freshness: {error}"));
-    }
-    lines.join("\n")
 }
 
 fn search_error(error: &provenance_porcelain::search::SearchError) -> CallToolResult {

@@ -1,5 +1,5 @@
 use super::{local_host, OutputFormat};
-use provenance_core::protocol::{QueryResponse, SearchQuery, SearchResult, QUERY_DEFAULT_LIMIT};
+use provenance_core::protocol::{SearchQuery, QUERY_DEFAULT_LIMIT};
 use provenance_core::{NodeType, SDK_PROTOCOL_VERSION};
 use std::fmt::{Display, Formatter};
 
@@ -71,33 +71,10 @@ pub async fn dispatch_search(
     let rendered = if format == Some(OutputFormat::Json) {
         serde_json::to_string_pretty(&response)?
     } else {
-        render_readable(&response)
+        provenance_porcelain::search::render_readable(&response)
     };
     println!("{rendered}");
     Ok(())
-}
-
-fn render_readable(response: &QueryResponse<SearchResult>) -> String {
-    let result = &response.result;
-    let mut lines = vec![format!("search: {} returned", result.nodes.len())];
-    for node in &result.nodes {
-        lines.push(format!(
-            "- {} {}\n  {}",
-            node.node_type().as_str(),
-            node.id().as_str(),
-            node.searchable_text().get(1).copied().unwrap_or("")
-        ));
-    }
-    lines.push(format!(
-        "bounds: limit={} has_more={} continuation={}",
-        result.limit,
-        result.has_more,
-        result.next_cursor.as_deref().unwrap_or("none")
-    ));
-    if let Some(error) = &response.freshness_error {
-        lines.push(format!("warning: freshness: {error}"));
-    }
-    lines.join("\n")
 }
 
 /// Print the root-search grammar without opening a repository.
