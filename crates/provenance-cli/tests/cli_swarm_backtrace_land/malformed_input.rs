@@ -109,6 +109,7 @@ fn swarm_backtrace_land_rejects_bad_proposal_confidence_before_writing() {
             "confidence must be between 0.0 and 1.0",
         ));
 
+    crate::export_fixture_support::make_default_scope_portable(&repo);
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
