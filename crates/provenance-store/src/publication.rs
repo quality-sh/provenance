@@ -9,6 +9,7 @@ mod durability;
 mod guard;
 mod read_only;
 mod recovery;
+mod source_edit;
 mod staged;
 pub use durability::{sync_directory, sync_tree};
 pub use guard::{publication_guard, PublicationGuard};
@@ -71,7 +72,8 @@ pub(crate) fn with_repository_publication_checked<R>(
     let _lock = guard::LockedPublicationFile::acquire(&lock_path)?;
     let _held_lock = HeldPublicationLock::new(key);
     check()?;
-    prepare_import_transactions_dir(layout)?;
+    prepare_transaction_dirs(layout)?;
+    source_edit::recover_pending_source_edit(layout)?;
     recover_pending_publication(layout).and_then(|()| operation())
 }
 
@@ -106,9 +108,10 @@ fn canonical_utf8(path: &Utf8Path, description: &str) -> anyhow::Result<Utf8Path
         .map_err(|path| anyhow::anyhow!("{description} is not UTF-8: {}", path.display()))
 }
 
-fn prepare_import_transactions_dir(layout: &ProvenanceLayout) -> anyhow::Result<()> {
+fn prepare_transaction_dirs(layout: &ProvenanceLayout) -> anyhow::Result<()> {
     create_real_directory(&layout.import_transactions_dir())?;
-    canonical_transactions_dir(layout).map(|_| ())
+    canonical_transactions_dir(layout)?;
+    create_real_directory(&layout.source_edit_transactions_dir())
 }
 
 impl crate::state_store::StateStore {
