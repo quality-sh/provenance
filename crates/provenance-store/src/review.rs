@@ -37,7 +37,7 @@ mod path_tests;
 mod discussion_input;
 pub use discussion_input::{DiscussionAction, WriteDiscussion};
 mod discussion_target;
-pub use discussion_target::{TargetDiscussionAction, TargetDiscussionWrite};
+pub use discussion_target::TargetDiscussionWrite;
 mod discussion_state;
 mod discussion_writes;
 

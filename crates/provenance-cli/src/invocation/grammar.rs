@@ -5,7 +5,7 @@ use clap::{
     ArgAction, ArgMatches, Args, Command, CommandFactory, FromArgMatches, Parser,
 };
 use provenance_cli::porcelain;
-use provenance_core::{threads::DiscussionStatusFilter, NodeType};
+use provenance_core::NodeType;
 use provenance_porcelain::action::Action;
 use provenance_porcelain::get::View;
 
@@ -72,12 +72,6 @@ pub struct DiscussionsArgs {
     pub action: Option<String>,
     #[command(flatten)]
     pub common: Common,
-    #[arg(long, value_parser = discussion_statuses())]
-    pub status: Option<DiscussionStatusFilter>,
-    #[arg(long)]
-    pub limit: Option<usize>,
-    #[arg(long, allow_hyphen_values = true)]
-    pub cursor: Option<String>,
 }
 
 #[derive(Parser)]
@@ -173,11 +167,6 @@ fn get_views() -> PossibleValuesParser {
     PossibleValuesParser::new(View::ALL.map(View::as_str))
 }
 
-fn discussion_statuses() -> impl TypedValueParser<Value = DiscussionStatusFilter> {
-    PossibleValuesParser::new(DiscussionStatusFilter::ALL.map(DiscussionStatusFilter::as_str))
-        .map(|word| DiscussionStatusFilter::parse(&word).expect("declared Discussion status"))
-}
-
 impl TargetArgs {
     pub fn from_matches(matches: &ArgMatches) -> Self {
         Self::from_arg_matches(matches).unwrap_or_else(|error| error.exit())
@@ -235,4 +224,15 @@ pub fn target_command() -> Command {
 
 pub fn catalog_command() -> Command {
     CatalogArgs::command()
+}
+
+pub fn discussions_command() -> anyhow::Result<Command> {
+    crate::catalog_cli::fields::augment_schemas(
+        DiscussionsCommand::command(),
+        [
+            provenance_porcelain::discussion::input_schema(Action::Discussions),
+            provenance_porcelain::discussion::input_schema(Action::Discussion),
+        ],
+        &["parent", "discussion_id"],
+    )
 }

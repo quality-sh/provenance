@@ -25,16 +25,35 @@ impl StateStore {
     /// Creates a distinct Discussion root or changes one addressed Discussion.
     #[rule("rule_record_comments_have_separate_reply_threads")]
     pub fn write_discussion(&self, input: WriteDiscussion) -> anyhow::Result<DiscussionEntry> {
+        self.with_repository_publication(|| self.write_discussion_in_publication(input, None))
+    }
+
+    pub(super) fn write_discussion_in_publication(
+        &self,
+        input: WriteDiscussion,
+        resolved_head: Option<DiscussionEntry>,
+    ) -> anyhow::Result<DiscussionEntry> {
         let digest = intent(&input)?;
-        self.with_repository_publication(|| {
-            self.authorize_discussion(&input)?;
-            if let Some(receipt) = self.discussion_receipt(&input)? { return Ok(receipt); }
-            let heads = self.discussion_heads(&input.scope_id)?;
-            let head = match &input.action {
-                DiscussionAction::Start { .. } => None,
-                DiscussionAction::Reply { discussion_id, expected_version, .. }
-                | DiscussionAction::SetStatus { discussion_id, expected_version, .. } => {
-                    let head = heads
+        self.authorize_discussion(&input)?;
+        if let Some(receipt) = self.discussion_receipt(&input)? {
+            return Ok(receipt);
+        }
+        let head = match &input.action {
+            DiscussionAction::Start { .. } => None,
+            DiscussionAction::Reply {
+                discussion_id,
+                expected_version,
+                ..
+            }
+            | DiscussionAction::SetStatus {
+                discussion_id,
+                expected_version,
+                ..
+            } => {
+                let head = if let Some(head) = resolved_head {
+                    head
+                } else {
+                    self.discussion_heads(&input.scope_id)?
                         .into_iter()
                         .find(|e| e.discussion_id == *discussion_id)
                         .ok_or_else(|| {
@@ -42,7 +61,13 @@ impl StateStore {
                                 crate::write_error::WriteFailure::ResourceNotFound,
                                 anyhow::anyhow!("Discussion does not exist"),
                             )
-                        })?;
+                        })?
+                };
+                crate::write_error::ensure!(
+                    ResourceNotFound,
+                    head.discussion_id == *discussion_id,
+                    "Discussion does not exist"
+                );
                     crate::write_error::ensure!(
                         DiscussionMembershipMismatch,
                         head.parent == input.parent,
@@ -95,7 +120,6 @@ impl StateStore {
                     })
                 })
             })
-        })
     }
 
     /// Changes one Discussion without changing siblings or its Thread status.

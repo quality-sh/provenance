@@ -184,6 +184,8 @@ pub fn ensure_only_fields(matches: &ArgMatches, allowed: &[&str]) {
         "action",
         "collection",
         "address",
+        "command",
+        "discussion_id",
     ];
     for id in matches.ids() {
         let name = id.as_str();

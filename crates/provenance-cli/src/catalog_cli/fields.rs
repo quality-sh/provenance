@@ -1,4 +1,4 @@
-use clap::{builder::PossibleValuesParser, Arg, ArgAction, Command};
+use clap::{Arg, ArgAction, Command};
 use provenance_store::operations::catalog::{Definition, Parameter};
 use serde_json::{Map, Value};
 use std::collections::BTreeSet;
@@ -165,48 +165,23 @@ pub fn augment_schemas(
         .filter_map(|argument| argument.get_long().map(str::to_owned))
         .collect::<BTreeSet<_>>();
     for schema in schemas {
-        for (field, declaration) in schema_properties(&schema)? {
+        for field in schema_properties(&schema)?.keys() {
             if bound.contains(&field.as_str()) {
                 continue;
             }
             let name = cli_name(field);
             if registered.insert(name.clone()) {
-                let mut argument = Arg::new(name.clone())
-                    .long(name)
-                    .num_args(1)
-                    .allow_hyphen_values(true)
-                    .action(ArgAction::Set);
-                if let Some(values) = enum_values(&schema, declaration) {
-                    argument = argument.value_parser(PossibleValuesParser::new(values));
-                }
-                command = command.arg(argument);
+                command = command.arg(
+                    Arg::new(name.clone())
+                        .long(name)
+                        .num_args(1)
+                        .allow_hyphen_values(true)
+                        .action(ArgAction::Set),
+                );
             }
         }
     }
     Ok(command)
-}
-
-fn enum_values(root: &Value, declaration: &Value) -> Option<Vec<String>> {
-    if let Some(name) = declaration
-        .get("$ref")
-        .and_then(Value::as_str)
-        .and_then(|reference| reference.strip_prefix("#/$defs/"))
-    {
-        return root
-            .get("$defs")
-            .and_then(|defs| defs.get(name))
-            .and_then(|schema| enum_values(root, schema));
-    }
-    declaration
-        .get("enum")
-        .and_then(Value::as_array)
-        .map(|values| {
-            values
-                .iter()
-                .filter_map(Value::as_str)
-                .map(str::to_owned)
-                .collect()
-        })
 }
 
 /// Bind supplied CLI flags using the typed input schema for one keyword.
@@ -229,31 +204,71 @@ pub fn schema_input(
             continue;
         }
         let name = cli_name(field);
-        let parsed = if name == "limit" {
-            matches
-                .try_get_one::<usize>(&name)
-                .ok()
-                .flatten()
-                .copied()
-                .map(Value::from)
-        } else {
-            matches
-                .try_get_one::<String>(&name)
-                .ok()
-                .flatten()
-                .map(|raw| {
-                    provenance_store::operations::catalog::parse_schema_value_in(
-                        schema,
-                        declaration,
-                        raw,
-                    )
-                    .map_err(|_| anyhow::anyhow!("invalid value for --{name}"))
-                })
-                .transpose()?
+        let raw = match matches.try_get_one::<String>(&name) {
+            Ok(value) => value.cloned(),
+            Err(_) => match matches.try_get_one::<usize>(&name) {
+                Ok(value) => value.map(usize::to_string),
+                Err(_) => anyhow::bail!("incompatible CLI storage for --{name}"),
+            },
         };
+        let parsed = raw
+            .as_deref()
+            .map(|raw| {
+                provenance_store::operations::catalog::parse_schema_value_in(
+                    schema,
+                    declaration,
+                    raw,
+                )
+                .map_err(|_| anyhow::anyhow!("invalid value for --{name}"))
+            })
+            .transpose()?;
         if let Some(parsed) = parsed {
             input.insert(field.clone(), parsed);
         }
     }
     Ok(input)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn selected_schema_validates_shared_flag_in_either_declaration_order() {
+        let first = json!({"properties": {"status": {"type": "string", "enum": ["alpha"]}}});
+        let second = json!({"properties": {"status": {"type": "string", "enum": ["beta"]}}});
+        for schemas in [[first.clone(), second.clone()], [second.clone(), first.clone()]] {
+            let command = augment_schemas(Command::new("test"), schemas, &[]).unwrap();
+            for (schema, accepted, rejected) in [
+                (&first, "alpha", "beta"),
+                (&second, "beta", "alpha"),
+            ] {
+                let matches = command
+                    .clone()
+                    .try_get_matches_from(["test", "--status", accepted])
+                    .unwrap();
+                assert_eq!(schema_input(schema, &matches, &[]).unwrap()["status"], accepted);
+                let matches = command
+                    .clone()
+                    .try_get_matches_from(["test", "--status", rejected])
+                    .unwrap();
+                assert!(schema_input(schema, &matches, &[]).is_err());
+            }
+        }
+    }
+
+    #[test]
+    fn incompatible_clap_storage_is_an_error() {
+        let schema = json!({"properties": {"value": {"type": "string"}}});
+        let command = Command::new("test").arg(
+            Arg::new("value")
+                .long("value")
+                .value_parser(clap::value_parser!(bool)),
+        );
+        let matches = command
+            .try_get_matches_from(["test", "--value", "true"])
+            .unwrap();
+        assert!(schema_input(&schema, &matches, &[]).is_err());
+    }
 }
