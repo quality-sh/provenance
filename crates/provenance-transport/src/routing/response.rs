@@ -96,3 +96,68 @@ fn move_page_meta(object: &mut Map<String, Value>, meta: &mut Map<String, Value>
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use provenance_core::protocol::{QUERY_RESPONSE_BYTES, SDK_PROTOCOL_VERSION};
+    use provenance_store::operations::catalog;
+
+    fn search_binding() -> (&'static catalog::Definition, catalog::ResponseBinding) {
+        let definition = catalog::definitions()
+            .into_iter()
+            .find(|definition| definition.path == "/rules")
+            .unwrap();
+        let binding = definition
+            .registration
+            .queries
+            .iter()
+            .find(|query| query.name == "search")
+            .unwrap()
+            .response
+            .clone();
+        (definition, binding)
+    }
+
+    fn raw_search(payload: String) -> Value {
+        json!({
+            "protocol_version": SDK_PROTOCOL_VERSION,
+            "operation": "search",
+            "stamp": {
+                "serial": 1,
+                "digest": "digest",
+                "instance_id": "instance",
+                "derivation": 1,
+                "policy": "catch_up_failed",
+                "attested": ["rules"],
+                "live": []
+            },
+            "freshness_error": "catch-up failed; answer uses the stored projection",
+            "freshness_cause": "catch_up_failed",
+            "next_cursor": null,
+            "limit": 50,
+            "has_more": false,
+            "nodes": [{"node_type": "rule", "id": "rule_large", "statement": payload}]
+        })
+    }
+
+    #[test]
+    fn finalized_public_envelope_accepts_the_limit_and_refuses_one_byte_more() {
+        let (definition, binding) = search_binding();
+        let empty = success(raw_search(String::new()), definition, &binding).unwrap();
+        let remaining = QUERY_RESPONSE_BYTES - empty.bytes().len();
+
+        let at_limit = success(raw_search("x".repeat(remaining)), definition, &binding).unwrap();
+        assert_eq!(at_limit.bytes().len(), QUERY_RESPONSE_BYTES);
+        assert_eq!(
+            at_limit.value()["meta"]["freshness_cause"],
+            "catch_up_failed"
+        );
+
+        let failure = success(raw_search("x".repeat(remaining + 1)), definition, &binding)
+            .unwrap_err();
+        assert_eq!(failure.status_code(), 409);
+        assert_eq!(failure.error, json!({"kind": "page_budget_exceeded"}));
+        assert!(serde_json::to_vec(&failure).unwrap().len() <= QUERY_RESPONSE_BYTES);
+    }
+}
