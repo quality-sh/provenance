@@ -7,6 +7,10 @@
 skills/** text eol=lf
 .github/scripts/** text eol=lf
 
+# The surface pins are compared byte for byte with the help and schema text.
+crates/provenance-cli/tests/fixtures/surface_names/** text eol=lf
+crates/provenance-mcp/tests/fixtures/surface_names/** text eol=lf
+
 # Other tracked Claude skills retain LF on every platform.
 .claude/skills/** text eol=lf
 

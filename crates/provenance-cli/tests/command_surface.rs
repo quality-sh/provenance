@@ -84,6 +84,7 @@ fn mcp_shows(tools: &BTreeMap<String, Value>, name: &str) -> bool {
 /// properties, and each other registry command does not appear there.
 #[tokio::test]
 #[verifies("rule_porcelain_interface_shows_recorded_commands", exhaustion)]
+#[verifies("rule_mcp_shared_command_in_one_tool", exhaustion)]
 async fn registry_commands_appear_on_both_interfaces() {
     let (repo, path) = support::review_paths::init();
     let tools = tools(repo.path()).await;
