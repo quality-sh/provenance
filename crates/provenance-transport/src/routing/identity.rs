@@ -12,6 +12,9 @@ pub(super) fn reject(
     let Some(object) = data.as_object() else {
         return Ok(());
     };
+    if object.get("context").is_some_and(Value::is_object) {
+        return Err(invalid(Some("context")));
+    }
     let mut bound = definition
         .registration
         .request
