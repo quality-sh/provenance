@@ -483,3 +483,45 @@ only its current document comparison state. It does not recover notification
 order, intermediate edits or removed transient records after an absence. Saved
 decisions and Messages remain in the graph. Delivery does not prove that a model
 processed a message.
+
+## Codex mailbox adapter
+
+Use an App Server that exposes the experimental `thread/queue/add` method. The
+installed client schema can be generated with
+`codex app-server generate-json-schema --experimental --out /tmp/codex-schema`.
+The adapter binds one existing loaded thread to one repository, scope and root.
+It checks the thread's repository before it starts the stream.
+
+Create a configuration file with `clientEndpoint`, `threadId`, `repository`,
+`scope` and `rootId`. `clientEndpoint` is a WebSocket URL. Use loopback `ws` or
+remote `wss`; credentials and query parameters are refused in the URL. Put an
+App Server bearer, when required, in `PROVENANCE_CODEX_TOKEN`. The Provenance
+launch key stays in the per-user cache. Neither credential belongs in arguments
+or graph files. Put the compiled `provenance` command on PATH, then run:
+
+```sh
+bun tools/agent-notifications/codex.ts /absolute/path/to/configuration.json
+```
+
+The adapter sends current-state messages in stream order, including reset and
+continuity data. Each message has a distinct `clientUserMessageId`. Standard
+output records the queue acceptance and its returned queue identity. Acceptance
+does not prove model completion. The adapter calls the queue method; the client
+controls when it runs the model, including automatic delivery while idle and
+queued delivery while busy.
+
+A lost or invalid acknowledgement stops delivery and identifies the uncertain
+message on stderr. The adapter does not resend it. Client loss stops the CLI
+stream. Host loss queues the disconnected state when the client is available,
+then exits with failure. Ctrl-C stops the adapter and its child stream. There is
+no scheduled reconnect, delivery journal or durable replay.
+
+Run `bun test tools/agent-notifications/test/codex.test.ts` with the compiled CLI
+path in `PROVENANCE_TEST_BIN` and Codex on PATH. The harness starts the real host,
+stream and App Server. A local inference fixture records the actual model input
+and returns a fixed answer. It does not call an external model. The public
+transcript proves decision, Question and reply delivery. Other tests check busy
+queue order, repository binding, host loss and a deliberately lost response.
+`cargo test -p provenance-cli --test cli_agent_notifications` runs the same
+harness with pinned Bun and Codex tools through npm; maintainer hosts use the
+Cargo shim for that command.

@@ -1,0 +1,8 @@
+{
+  "name": "provenance-agent-notifications",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:codex": "bun test test/codex.test.ts"
+  }
+}
