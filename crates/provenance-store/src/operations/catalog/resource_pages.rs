@@ -1,10 +1,7 @@
 //! Revision-bound pages for resource collection routes.
 
-use super::failures::ReadError;
 use super::v2_review_reads::ReadResult;
-use super::{
-    ContextKind, ExecutionNeed, ExecutionNeeds, Operation, OperationFuture, PreparedContext,
-};
+use super::{shapes::graph_read_operation, ExecutionNeed};
 use crate::cache::read::payloads::{PayloadRow, ProposalPayloadRow};
 use crate::operations::reader::{self, Cursor, Position, ReadContext, PAGE_BYTES};
 use provenance_core::model::ProjectionRow;
@@ -204,39 +201,28 @@ async fn verification_binding_page(
 
 macro_rules! page_operation {
     ($name:ident, $wire:literal, $request:ty, $result:ty, $page:expr) => {
-        pub struct $name;
-        impl Operation for $name {
-            type Request = $request;
-            type Success = ReadResult<ResourcePage<$result>>;
-            type Failure = ReadError;
-            const NAME: &'static str = $wire;
-            const CONTEXT: ContextKind = ContextKind::Scoped;
-            const FAILURE_STATUSES: &'static [u16] = &[409];
-            fn needs(_: &Self::Request) -> ExecutionNeeds {
+        graph_read_operation!(
+            pub $name,
+            $wire,
+            $request,
+            ReadResult<ResourcePage<$result>>,
+            &[409],
+            |_| {
                 &[
                     ExecutionNeed::GraphStorage,
                     ExecutionNeed::ProjectionMaintenance,
                 ]
+            },
+            |read, request| async move {
+                Ok(
+                    reader::answer(&read.root, &read.scope, read.policy, move |ctx| {
+                        Box::pin($page(ctx, $wire, request))
+                    })
+                    .await?
+                    .into(),
+                )
             }
-            fn failure_status(error: &ReadError) -> u16 {
-                error.status()
-            }
-            fn run(
-                context: PreparedContext,
-                request: Self::Request,
-            ) -> OperationFuture<Self::Success, Self::Failure> {
-                Box::pin(async move {
-                    let read = context.graph()?;
-                    Ok(
-                        reader::answer(&read.root, &read.scope, read.policy, move |ctx| {
-                            Box::pin($page(ctx, $wire, request))
-                        })
-                        .await?
-                        .into(),
-                    )
-                })
-            }
-        }
+        );
     };
 }
 
@@ -342,36 +328,25 @@ fact_page_operation!(
     provenance_core::DispositionRecord
 );
 
-pub struct PageVerificationBindingsV2;
-impl Operation for PageVerificationBindingsV2 {
-    type Request = VerificationPageRequest;
-    type Success = ReadResult<ResourcePage<provenance_core::VerificationBinding>>;
-    type Failure = ReadError;
-    const NAME: &'static str = "page-verification-bindings-v2";
-    const CONTEXT: ContextKind = ContextKind::Scoped;
-    const FAILURE_STATUSES: &'static [u16] = &[409];
-    fn needs(_: &Self::Request) -> ExecutionNeeds {
+graph_read_operation!(
+    pub PageVerificationBindingsV2,
+    "page-verification-bindings-v2",
+    VerificationPageRequest,
+    ReadResult<ResourcePage<provenance_core::VerificationBinding>>,
+    &[409],
+    |_| {
         &[
             ExecutionNeed::GraphStorage,
             ExecutionNeed::ProjectionMaintenance,
         ]
+    },
+    |read, request| async move {
+        Ok(
+            reader::answer(&read.root, &read.scope, read.policy, move |ctx| {
+                Box::pin(verification_binding_page(ctx, request))
+            })
+            .await?
+            .into(),
+        )
     }
-    fn failure_status(error: &ReadError) -> u16 {
-        error.status()
-    }
-    fn run(
-        context: PreparedContext,
-        request: Self::Request,
-    ) -> OperationFuture<Self::Success, Self::Failure> {
-        Box::pin(async move {
-            let read = context.graph()?;
-            Ok(
-                reader::answer(&read.root, &read.scope, read.policy, move |ctx| {
-                    Box::pin(verification_binding_page(ctx, request))
-                })
-                .await?
-                .into(),
-            )
-        })
-    }
-}
+);

@@ -1,20 +1,11 @@
 //! Resource adapters for review history and addressed Discussions.
-use super::{
-    failures::ReadError, ContextKind, ExecutionNeed, ExecutionNeeds, Operation, OperationFuture,
-    PreparedContext,
-};
-use crate::{
-    layout::ProvenanceLayout, operations::read_policy::ReadPolicy, review, state_store::StateStore,
-    write_error::WriteError,
-};
+use super::{shapes::graph_read_operation, ExecutionNeed};
+use crate::review;
 pub use provenance_core::threads::DiscussionResultPage;
 use provenance_core::{
     review::{EvidencePage, EvidenceQuery, ReviewEntry, ReviewHistoryQuery},
-    threads::{
-        DiscussionEntry, DiscussionGroup, DiscussionMessagesQuery, DiscussionQuery,
-        DiscussionSelector,
-    },
-    Message, ScopeId, StableId, ThreadParent,
+    threads::{DiscussionGroup, DiscussionMessagesQuery, DiscussionQuery, DiscussionSelector},
+    Message, StableId, ThreadParent,
 };
 use serde::{Deserialize, Serialize};
 
@@ -46,6 +37,24 @@ impl<T> From<provenance_core::protocol::Stamped<T>> for ReadResult<T> {
             freshness_error: value.freshness_error,
         }
     }
+}
+
+macro_rules! review_read {
+    ($name:ident, $wire:literal, $request:ty, $success:ty,
+     |$read:ident, $input:ident| $body:expr) => {
+        graph_read_operation!(
+            pub $name,
+            $wire,
+            $request,
+            $success,
+            &[409],
+            |_| &[
+                ExecutionNeed::GraphStorage,
+                ExecutionNeed::ProjectionMaintenance,
+            ],
+            |$read, $input| $body
+        );
+    };
 }
 
 #[derive(Deserialize)]
@@ -88,49 +97,31 @@ const fn limit() -> usize {
     50
 }
 
-pub struct ReviewHistoryV2;
-impl Operation for ReviewHistoryV2 {
-    type Request = HistoryRequest;
-    type Success = ReadResult<DiscussionResultPage<ReviewEntry>>;
-    type Failure = ReadError;
-    const NAME: &'static str = "review-history-v2";
-    const CONTEXT: ContextKind = ContextKind::Scoped;
-    const FAILURE_STATUSES: &'static [u16] = &[409];
-    fn needs(_: &Self::Request) -> ExecutionNeeds {
-        &[
-            ExecutionNeed::GraphStorage,
-            ExecutionNeed::ProjectionMaintenance,
-        ]
-    }
-    fn failure_status(error: &ReadError) -> u16 {
-        error.status()
-    }
-    fn run(
-        context: PreparedContext,
-        request: Self::Request,
-    ) -> OperationFuture<Self::Success, Self::Failure> {
-        Box::pin(async move {
-            let read = context.graph()?;
-            let limit = request.limit;
-            let page = review::read_history(
-                &read.root,
-                &read.scope,
-                read.policy,
-                ReviewHistoryQuery {
-                    requirement_id: request.requirement_id,
-                    limit: request.limit,
-                    cursor: request.cursor,
-                },
-            )
-            .await?;
-            Ok(ReadResult {
-                result: discussion_result(page.result.entries, page.result.next_cursor, limit),
-                stamp: page.stamp,
-                freshness_error: page.freshness_error,
-            })
+review_read!(
+    ReviewHistoryV2,
+    "review-history-v2",
+    HistoryRequest,
+    ReadResult<DiscussionResultPage<ReviewEntry>>,
+    |read, request| async move {
+        let limit = request.limit;
+        let page = review::read_history(
+            &read.root,
+            &read.scope,
+            read.policy,
+            ReviewHistoryQuery {
+                requirement_id: request.requirement_id,
+                limit: request.limit,
+                cursor: request.cursor,
+            },
+        )
+        .await?;
+        Ok(ReadResult {
+            result: discussion_result(page.result.entries, page.result.next_cursor, limit),
+            stamp: page.stamp,
+            freshness_error: page.freshness_error,
         })
     }
-}
+);
 
 #[derive(Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -140,63 +131,45 @@ pub struct HistoryEntryRequest {
     pub entry_id: StableId,
 }
 
-pub struct ReviewHistoryEntryV2;
-impl Operation for ReviewHistoryEntryV2 {
-    type Request = HistoryEntryRequest;
-    type Success = ReviewEntry;
-    type Failure = ReadError;
-    const NAME: &'static str = "review-history-entry-v2";
-    const CONTEXT: ContextKind = ContextKind::Scoped;
-    const FAILURE_STATUSES: &'static [u16] = &[409];
-    fn needs(_: &Self::Request) -> ExecutionNeeds {
-        &[
-            ExecutionNeed::GraphStorage,
-            ExecutionNeed::ProjectionMaintenance,
-        ]
-    }
-    fn failure_status(error: &ReadError) -> u16 {
-        error.status()
-    }
-    fn run(
-        context: PreparedContext,
-        request: Self::Request,
-    ) -> OperationFuture<Self::Success, Self::Failure> {
-        Box::pin(async move {
-            let read = context.graph()?;
-            let mut cursor = None;
-            loop {
-                let page = review::read_history(
-                    &read.root,
-                    &read.scope,
-                    read.policy,
-                    ReviewHistoryQuery {
-                        requirement_id: request.requirement_id.clone(),
-                        limit: 200,
-                        cursor,
-                    },
-                )
-                .await?;
-                if let Some(entry) = page
-                    .result
-                    .entries
-                    .into_iter()
-                    .find(|entry| entry.id == request.entry_id)
-                {
-                    return Ok(entry);
-                }
-                match page.result.next_cursor {
-                    Some(next) => cursor = Some(next),
-                    None => {
-                        return Err(anyhow::Error::new(
-                            provenance_core::protocol::read_failure::ReadFailure::ResourceNotFound,
-                        )
-                        .into())
-                    }
+review_read!(
+    ReviewHistoryEntryV2,
+    "review-history-entry-v2",
+    HistoryEntryRequest,
+    ReviewEntry,
+    |read, request| async move {
+        let mut cursor = None;
+        loop {
+            let page = review::read_history(
+                &read.root,
+                &read.scope,
+                read.policy,
+                ReviewHistoryQuery {
+                    requirement_id: request.requirement_id.clone(),
+                    limit: 200,
+                    cursor,
+                },
+            )
+            .await?;
+            if let Some(entry) = page
+                .result
+                .entries
+                .into_iter()
+                .find(|entry| entry.id == request.entry_id)
+            {
+                return Ok(entry);
+            }
+            match page.result.next_cursor {
+                Some(next) => cursor = Some(next),
+                None => {
+                    return Err(anyhow::Error::new(
+                        provenance_core::protocol::read_failure::ReadFailure::ResourceNotFound,
+                    )
+                    .into())
                 }
             }
-        })
+        }
     }
-}
+);
 
 /// The published evidence side of a review outcome. The enum is the whole
 /// contract: wire values outside `before` and `after` are unrepresentable, so
@@ -221,46 +194,28 @@ pub struct HistoryEvidenceRequest {
     pub offset: u64,
 }
 
-pub struct ReviewEvidenceV2;
-impl Operation for ReviewEvidenceV2 {
-    type Request = HistoryEvidenceRequest;
-    type Success = ReadResult<EvidencePage>;
-    type Failure = ReadError;
-    const NAME: &'static str = "review-evidence-v2";
-    const CONTEXT: ContextKind = ContextKind::Scoped;
-    const FAILURE_STATUSES: &'static [u16] = &[409];
-    fn needs(_: &Self::Request) -> ExecutionNeeds {
-        &[
-            ExecutionNeed::GraphStorage,
-            ExecutionNeed::ProjectionMaintenance,
-        ]
+review_read!(
+    ReviewEvidenceV2,
+    "review-evidence-v2",
+    HistoryEvidenceRequest,
+    ReadResult<EvidencePage>,
+    |read, request| async move {
+        Ok(review::read_evidence(
+            &read.root,
+            &read.scope,
+            read.policy,
+            EvidenceQuery {
+                requirement_id: request.requirement_id,
+                entry_id: request.entry_id,
+                before: request.side == ReviewEvidenceSide::Before,
+                field: request.field,
+                offset: request.offset,
+            },
+        )
+        .await?
+        .into())
     }
-    fn failure_status(error: &ReadError) -> u16 {
-        error.status()
-    }
-    fn run(
-        context: PreparedContext,
-        request: Self::Request,
-    ) -> OperationFuture<Self::Success, Self::Failure> {
-        Box::pin(async move {
-            let read = context.graph()?;
-            Ok(review::read_evidence(
-                &read.root,
-                &read.scope,
-                read.policy,
-                EvidenceQuery {
-                    requirement_id: request.requirement_id,
-                    entry_id: request.entry_id,
-                    before: request.side == ReviewEvidenceSide::Before,
-                    field: request.field,
-                    offset: request.offset,
-                },
-            )
-            .await?
-            .into())
-        })
-    }
-}
+);
 
 #[derive(Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -272,49 +227,31 @@ pub struct DiscussionsRequest {
     pub cursor: Option<String>,
 }
 
-pub struct ReviewDiscussionsV2;
-impl Operation for ReviewDiscussionsV2 {
-    type Request = DiscussionsRequest;
-    type Success = ReadResult<DiscussionResultPage<DiscussionGroup>>;
-    type Failure = ReadError;
-    const NAME: &'static str = "review-discussions-v2";
-    const CONTEXT: ContextKind = ContextKind::Scoped;
-    const FAILURE_STATUSES: &'static [u16] = &[409];
-    fn needs(_: &Self::Request) -> ExecutionNeeds {
-        &[
-            ExecutionNeed::GraphStorage,
-            ExecutionNeed::ProjectionMaintenance,
-        ]
-    }
-    fn failure_status(error: &ReadError) -> u16 {
-        error.status()
-    }
-    fn run(
-        context: PreparedContext,
-        request: Self::Request,
-    ) -> OperationFuture<Self::Success, Self::Failure> {
-        Box::pin(async move {
-            let read = context.graph()?;
-            let limit = request.limit;
-            let page = review::read_discussions(
-                &read.root,
-                &read.scope,
-                read.policy,
-                DiscussionQuery {
-                    parent: request.parent,
-                    limit: request.limit,
-                    cursor: request.cursor,
-                },
-            )
-            .await?;
-            Ok(ReadResult {
-                result: discussion_result(page.result.entries, page.result.next_cursor, limit),
-                stamp: page.stamp,
-                freshness_error: page.freshness_error,
-            })
+review_read!(
+    ReviewDiscussionsV2,
+    "review-discussions-v2",
+    DiscussionsRequest,
+    ReadResult<DiscussionResultPage<DiscussionGroup>>,
+    |read, request| async move {
+        let limit = request.limit;
+        let page = review::read_discussions(
+            &read.root,
+            &read.scope,
+            read.policy,
+            DiscussionQuery {
+                parent: request.parent,
+                limit: request.limit,
+                cursor: request.cursor,
+            },
+        )
+        .await?;
+        Ok(ReadResult {
+            result: discussion_result(page.result.entries, page.result.next_cursor, limit),
+            stamp: page.stamp,
+            freshness_error: page.freshness_error,
         })
     }
-}
+);
 
 #[derive(Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -327,50 +264,32 @@ pub struct DiscussionMessagesRequest {
     pub cursor: Option<String>,
 }
 
-pub struct ReviewDiscussionMessagesV2;
-impl Operation for ReviewDiscussionMessagesV2 {
-    type Request = DiscussionMessagesRequest;
-    type Success = ReadResult<DiscussionResultPage<Message>>;
-    type Failure = ReadError;
-    const NAME: &'static str = "review-discussion-messages-v2";
-    const CONTEXT: ContextKind = ContextKind::Scoped;
-    const FAILURE_STATUSES: &'static [u16] = &[409];
-    fn needs(_: &Self::Request) -> ExecutionNeeds {
-        &[
-            ExecutionNeed::GraphStorage,
-            ExecutionNeed::ProjectionMaintenance,
-        ]
-    }
-    fn failure_status(error: &ReadError) -> u16 {
-        error.status()
-    }
-    fn run(
-        context: PreparedContext,
-        request: Self::Request,
-    ) -> OperationFuture<Self::Success, Self::Failure> {
-        Box::pin(async move {
-            let read = context.graph()?;
-            let limit = request.limit;
-            let page = review::read_discussion_messages(
-                &read.root,
-                &read.scope,
-                read.policy,
-                DiscussionMessagesQuery {
-                    parent: request.parent,
-                    selector: request.selector,
-                    limit: request.limit,
-                    cursor: request.cursor,
-                },
-            )
-            .await?;
-            Ok(ReadResult {
-                result: discussion_result(page.result.entries, page.result.next_cursor, limit),
-                stamp: page.stamp,
-                freshness_error: page.freshness_error,
-            })
+review_read!(
+    ReviewDiscussionMessagesV2,
+    "review-discussion-messages-v2",
+    DiscussionMessagesRequest,
+    ReadResult<DiscussionResultPage<Message>>,
+    |read, request| async move {
+        let limit = request.limit;
+        let page = review::read_discussion_messages(
+            &read.root,
+            &read.scope,
+            read.policy,
+            DiscussionMessagesQuery {
+                parent: request.parent,
+                selector: request.selector,
+                limit: request.limit,
+                cursor: request.cursor,
+            },
+        )
+        .await?;
+        Ok(ReadResult {
+            result: discussion_result(page.result.entries, page.result.next_cursor, limit),
+            stamp: page.stamp,
+            freshness_error: page.freshness_error,
         })
     }
-}
+);
 
 #[derive(Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -381,92 +300,24 @@ pub struct DiscussionMessageRequest {
     pub message_id: StableId,
 }
 
-pub struct ReviewDiscussionMessageV2;
-impl Operation for ReviewDiscussionMessageV2 {
-    type Request = DiscussionMessageRequest;
-    type Success = ReadResult<Message>;
-    type Failure = ReadError;
-    const NAME: &'static str = "review-discussion-message-v2";
-    const CONTEXT: ContextKind = ContextKind::Scoped;
-    const FAILURE_STATUSES: &'static [u16] = &[409];
-    fn needs(_: &Self::Request) -> ExecutionNeeds {
-        &[
-            ExecutionNeed::GraphStorage,
-            ExecutionNeed::ProjectionMaintenance,
-        ]
+review_read!(
+    ReviewDiscussionMessageV2,
+    "review-discussion-message-v2",
+    DiscussionMessageRequest,
+    ReadResult<Message>,
+    |read, request| async move {
+        Ok(review::read_discussion_message(
+            &read.root,
+            &read.scope,
+            read.policy,
+            request.parent,
+            request.selector,
+            request.message_id,
+        )
+        .await?
+        .into())
     }
-    fn failure_status(error: &ReadError) -> u16 {
-        error.status()
-    }
-    fn run(
-        context: PreparedContext,
-        request: Self::Request,
-    ) -> OperationFuture<Self::Success, Self::Failure> {
-        Box::pin(async move {
-            let read = context.graph()?;
-            Ok(review::read_discussion_message(
-                &read.root,
-                &read.scope,
-                read.policy,
-                request.parent,
-                request.selector,
-                request.message_id,
-            )
-            .await?
-            .into())
-        })
-    }
-}
-
-#[derive(Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-pub struct WriteDiscussionRequest {
-    pub scope_id: ScopeId,
-    pub parent: ThreadParent,
-    pub request_id: StableId,
-    pub actor: String,
-    pub declared_by: Option<String>,
-    pub action: review::DiscussionAction,
-}
-
-pub struct WriteDiscussionV2;
-impl Operation for WriteDiscussionV2 {
-    type Request = WriteDiscussionRequest;
-    type Success = DiscussionEntry;
-    type Failure = WriteError;
-    const NAME: &'static str = "write-discussion-v2";
-    const MUTATES: bool = true;
-    const CONTEXT: ContextKind = ContextKind::Scope;
-    const FAILURE_STATUSES: &'static [u16] = &[409];
-    fn needs(_: &Self::Request) -> ExecutionNeeds {
-        &[ExecutionNeed::GraphStorage]
-    }
-    fn failure_status(error: &WriteError) -> u16 {
-        error.status()
-    }
-    fn run(
-        context: PreparedContext,
-        request: Self::Request,
-    ) -> OperationFuture<Self::Success, Self::Failure> {
-        Box::pin(async move {
-            let context = context.scope()?;
-            if request.scope_id != context.scope {
-                return Err(anyhow::anyhow!("request scope does not match selected scope").into());
-            }
-            StateStore::new(ProvenanceLayout::new(context.root))
-                .write_discussion(review::WriteDiscussion {
-                    scope_id: request.scope_id,
-                    parent: request.parent,
-                    request_id: request.request_id,
-                    actor: request.actor,
-                    declared_by: request.declared_by,
-                    action: request.action,
-                })
-                .map_err(Into::into)
-        })
-    }
-}
+);
 
 pub fn parent(kind: &str, id: StableId) -> anyhow::Result<ThreadParent> {
     Ok(ThreadParent {
@@ -474,6 +325,3 @@ pub fn parent(kind: &str, id: StableId) -> anyhow::Result<ThreadParent> {
         node_id: id,
     })
 }
-
-#[allow(dead_code)]
-fn keep_types(_: (DiscussionGroup, Message, ReadPolicy)) {}
