@@ -5,20 +5,31 @@ use super::{
 use crate::{review, shards, state_store::StateStore};
 use provenance_core::{
     validate_optional_confidence_score, validate_resolution_input_content, Resolution,
+    ResolutionInput,
 };
+
+fn validate_inputs(
+    inputs: Option<Vec<ResolutionInput>>,
+) -> anyhow::Result<Option<Vec<ResolutionInput>>> {
+    if let Some(values) = &inputs {
+        for value in values {
+            validate_resolution_input_content(&value.reference, &value.summary)
+                .map_err(|error| invalid(&error.to_string()))?;
+        }
+    }
+    Ok(inputs)
+}
 
 impl StateStore {
     pub fn update_resolution(&self, input: UpdateResolutionInput) -> anyhow::Result<Resolution> {
-        self.prepare_resolution_update(input)
+        self.write_resolution_update(input)
     }
 
-    fn prepare_resolution_update(
-        &self,
-        input: UpdateResolutionInput,
-    ) -> anyhow::Result<Resolution> {
+    fn write_resolution_update(&self, input: UpdateResolutionInput) -> anyhow::Result<Resolution> {
         let scope = input.scope_id.clone();
         let path = shards::resolutions_path(&self.layout, &input.scope_id);
         let expected_etag = input.expected_etag.clone();
+        let inputs = validate_inputs(input.inputs)?;
         let record = self.mutate_graph_record_with_etag(
             &path,
             expected_etag.as_deref(),
@@ -61,11 +72,7 @@ impl StateStore {
                 set(&mut record.position, input.position);
                 set(&mut record.rationale, input.rationale);
                 set(&mut record.status, input.status);
-                if let Some(inputs) = input.inputs {
-                    for value in &inputs {
-                        validate_resolution_input_content(&value.reference, &value.summary)
-                            .map_err(|error| invalid(&error.to_string()))?;
-                    }
+                if let Some(inputs) = inputs {
                     record.inputs = inputs;
                 }
                 optional(
