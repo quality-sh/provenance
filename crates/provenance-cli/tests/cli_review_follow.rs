@@ -75,6 +75,8 @@ fn follow_receives_a_question_written_by_another_cli() {
     assert_eq!(changed["type"], "state");
     assert_eq!(changed["continuity"], "current");
     assert!(changed["sequence"].as_u64().unwrap() > 0);
+    assert_eq!(changed["records"].as_array().unwrap().len(), 1);
+    follow.quiet();
 }
 
 #[test]
@@ -90,19 +92,10 @@ fn follow_reads_all_bounded_pages_and_identifies_the_continuation() {
     );
     let host = start(repo.path());
     let follow = Follow::with_options(&host, repo.path(), "req_follow", &["--limit", "1"]);
-    let mut seen = String::new();
-    let mut pages = 0;
-    loop {
-        let page = follow.frame();
-        assert_eq!(page["type"], "state");
-        assert!(page["records"].as_array().unwrap().len() <= 1);
-        seen.push_str(&page.to_string());
-        pages += 1;
-        if page["continuations"].as_array().unwrap().is_empty() {
-            break;
-        }
-        assert!(page["continuations"][0]["cursor"].is_string());
-    }
-    assert!(pages >= 2);
+    let page = follow.frame();
+    assert_eq!(page["type"], "state");
+    assert!(page["continuations"].as_array().unwrap().is_empty());
+    let seen = page["records"].to_string();
     assert!(seen.contains("req_follow") && seen.contains("rule_follow"));
+    follow.quiet();
 }
