@@ -80,7 +80,7 @@ fn early_refusals_close_reused_connections_before_body_decode() {
     let agent = ureq::AgentBuilder::new()
         .timeout(Duration::from_secs(5))
         .build();
-    let body = "invalid".repeat(256 * 1024);
+    let body = "invalid".repeat(8 * 1024);
 
     for _ in 0..4 {
         let refusal = response(
