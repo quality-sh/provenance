@@ -40,8 +40,8 @@ fn padded(value: &Value) -> String {
     format!("  {}  ", serde_json::to_string(value).unwrap())
 }
 
-fn state_snapshot(fixture: &Fixture) -> BTreeMap<PathBuf, Vec<u8>> {
-    let root = fixture.dir.path().join(".provenance/state");
+fn repository_snapshot(fixture: &Fixture) -> BTreeMap<PathBuf, Vec<u8>> {
+    let root = fixture.dir.path().join(".provenance");
     let mut files = BTreeMap::new();
     collect_files(&root, &root, &mut files);
     files
@@ -99,16 +99,12 @@ async fn create_keeps_every_unrelated_source_row_byte_for_byte() {
         .unwrap();
 
     let after = raw_rows(&fixture, "sources", "source.jsonl");
-    for expected in before {
-        assert!(
-            after.contains(&expected),
-            "missing untouched row: {expected}"
-        );
-    }
-    assert!(after
-        .iter()
-        .map(|row| serde_json::from_str::<Value>(row).unwrap())
-        .any(|record| record == created));
+    assert_eq!(after.len(), before.len() + 1);
+    assert_eq!(&after[..before.len()], before);
+    assert_eq!(
+        serde_json::from_str::<Value>(after.last().unwrap()).unwrap(),
+        created
+    );
 }
 
 #[tokio::test]
@@ -150,7 +146,9 @@ async fn resolution_create_keeps_unrelated_superseded_by_exactly() {
     });
     fixture.call("create-resolution", new).await.unwrap();
 
-    assert!(raw_rows(&fixture, "resolutions", "res.jsonl").contains(&expected));
+    let after = raw_rows(&fixture, "resolutions", "res.jsonl");
+    assert_eq!(after.len(), 2);
+    assert_eq!(after[0], expected);
 }
 
 #[tokio::test]
@@ -190,7 +188,13 @@ async fn source_reference_edit_keeps_an_unrelated_requirement_exactly() {
         )
         .unwrap();
 
-    assert_eq!(raw_rows(&fixture, "requirements", "req.jsonl")[0], expected);
+    let after = raw_rows(&fixture, "requirements", "req.jsonl");
+    assert_eq!(after.len(), 2);
+    assert_eq!(after[0], expected);
+    assert_eq!(
+        serde_json::from_str::<Value>(&after[1]).unwrap()["id"],
+        "req_two"
+    );
 }
 
 #[tokio::test]
@@ -245,7 +249,7 @@ async fn target_edit_with_nested_unknown_data_is_refused_without_publication() {
         "req.jsonl",
         std::slice::from_ref(&original),
     );
-    let before = state_snapshot(&fixture);
+    let before = repository_snapshot(&fixture);
 
     let error = fixture
         .call(
@@ -256,5 +260,5 @@ async fn target_edit_with_nested_unknown_data_is_refused_without_publication() {
         .unwrap_err();
 
     assert_ne!(error["kind"], "unknown_operation");
-    assert_eq!(state_snapshot(&fixture), before);
+    assert_eq!(repository_snapshot(&fixture), before);
 }

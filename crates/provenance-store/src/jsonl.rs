@@ -303,6 +303,34 @@ mod tests {
     }
 
     #[test]
+    fn mutation_refuses_a_changed_row_with_a_repeated_unknown_field() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = camino::Utf8Path::from_path(dir.path()).unwrap();
+        let path = root.join("records.jsonl");
+        std::fs::write(
+            &path,
+            "{\"schema_version\":2,\"id\":\"one\",\"detail\":{\"known\":\"value\"},\"extension\":1,\"extension\":2}\n",
+        )
+        .unwrap();
+        let before = std::fs::read(&path).unwrap();
+
+        let message = mutate_jsonl_locked(
+            &path,
+            &root.join("records.lock"),
+            |records: &mut Vec<NestedRecord>| {
+                records[0].detail.known = "changed".into();
+                Ok(())
+            },
+        )
+        .unwrap_err()
+        .to_string();
+
+        assert!(message.contains("repeated unknown field"), "{message}");
+        assert!(message.contains("extension"), "{message}");
+        assert_eq!(std::fs::read(path).unwrap(), before);
+    }
+
+    #[test]
     fn unsupported_version_refusal_precedes_mutation_and_keeps_the_shard() {
         let dir = tempfile::tempdir().unwrap();
         let root = camino::Utf8Path::from_path(dir.path()).unwrap();

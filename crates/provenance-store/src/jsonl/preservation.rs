@@ -5,6 +5,7 @@ pub(super) struct RawRecord {
     line: String,
     known: serde_json::Value,
     unknown: serde_json::Map<String, serde_json::Value>,
+    repeated_unknown: Option<String>,
     nested_unknown: Option<String>,
     line_number: usize,
 }
@@ -16,13 +17,19 @@ impl RawRecord {
         line_number: usize,
     ) -> anyhow::Result<(T, Self)> {
         let mut top_level_unknown = Vec::new();
+        let mut repeated_unknown = None;
         let mut nested_unknown = None;
         let mut deserializer = serde_json::Deserializer::from_str(line);
         let record = serde_ignored::deserialize(&mut deserializer, |path| match path {
             serde_ignored::Path::Map {
                 parent: serde_ignored::Path::Root,
                 key,
-            } => top_level_unknown.push(key),
+            } => {
+                if repeated_unknown.is_none() && top_level_unknown.contains(&key) {
+                    repeated_unknown = Some(key.clone());
+                }
+                top_level_unknown.push(key);
+            }
             other => {
                 if nested_unknown.is_none() {
                     nested_unknown = Some(other.to_string());
@@ -40,6 +47,7 @@ impl RawRecord {
                 line: line.to_owned(),
                 known,
                 unknown,
+                repeated_unknown,
                 nested_unknown,
                 line_number,
             },
@@ -55,6 +63,12 @@ impl RawRecord {
     }
 
     fn changed_line<T: Serialize>(self, path: &Utf8Path, record: &T) -> anyhow::Result<String> {
+        if let Some(field) = self.repeated_unknown {
+            anyhow::bail!(
+                "{path} line {}: repeated unknown field `{field}` cannot survive a typed record change",
+                self.line_number
+            );
+        }
         if let Some(field) = self.nested_unknown {
             anyhow::bail!(
                 "{path} line {}: nested unknown field `{field}` cannot survive a typed record change",
