@@ -152,9 +152,29 @@ macro_rules! family_reader {
 
 macro_rules! define_export_readers {
     (
-        export { $($variant:ident: $record:ty, $field:ident, $path:ident, $suffix:literal, $table:literal, [$($node:tt)*], $list:ident, [$closed:ident], $id:ident, [$($loader:tt)*], [$($catalog:tt)*];)* }
+        export { $(
+            $variant:ident {
+                record: $record:ty,
+                field: $field:ident,
+                path: $path:ident,
+                node: [$($node:tt)*],
+                reader: $list:ident,
+                closed: [$closed:ident],
+                $($export_rest:tt)*
+            };
+        )* }
         canonical { $($canonical:tt)* }
-        bindings { $($binding_variant:ident: $binding_record:ty, $binding_field:ident, $binding_path:ident, $binding_suffix:literal, $binding_table:literal, [$($binding_node:tt)*], $binding_list:ident, [$binding_closed:ident], $binding_id:ident, [$($binding_loader:tt)*], [$($binding_catalog:tt)*];)* }
+        bindings { $(
+            $binding_variant:ident {
+                record: $binding_record:ty,
+                field: $binding_field:ident,
+                path: $binding_path:ident,
+                node: [$($binding_node:tt)*],
+                reader: $binding_list:ident,
+                closed: [$binding_closed:ident],
+                $($binding_rest:tt)*
+            };
+        )* }
         internal { $($internal:tt)* }
     ) => {
         $(family_reader!($variant, $record, $path, $list, $closed);)*

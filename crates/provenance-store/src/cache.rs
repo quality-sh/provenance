@@ -1,6 +1,6 @@
 pub(crate) mod connection;
 pub(crate) mod family_table;
-pub(crate) mod family_table_legacy;
+pub(crate) mod family_views;
 mod gaps;
 mod health;
 mod impact;
@@ -16,7 +16,7 @@ pub use connection::{
     open_cache, open_cache_with, open_existing_cache, open_immutable_cache, open_stored_cache,
     CacheConnection, WalSwitchRetry,
 };
-pub(crate) use family_table_legacy::record_families;
+pub(crate) use family_views::record_families;
 pub use gaps::*;
 pub use health::*;
 pub use impact::*;
