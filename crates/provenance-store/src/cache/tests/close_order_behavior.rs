@@ -78,7 +78,7 @@ fn a_read_closes_while_the_only_blocking_worker_waits_for_its_guard() {
         let waiters = Arc::new(Mutex::new(Vec::new()));
         let waiters_in_probe = Arc::clone(&waiters);
         let waiter_layout = layout.clone();
-        crate::test_probes::arm("run_migrations_under_guard", move || {
+        crate::test_probes::arm("prepare_current_schema_under_guard", move || {
             let (entered_tx, entered_rx) = std::sync::mpsc::channel();
             let waiter = start_publication_waiter(&waiter_layout, &entered_tx);
             entered_rx
@@ -95,7 +95,7 @@ fn a_read_closes_while_the_only_blocking_worker_waits_for_its_guard() {
         )
         .await
         .expect("the read must finish while the only blocking worker waits for its guard");
-        crate::test_probes::disarm("run_migrations_under_guard");
+        crate::test_probes::disarm("prepare_current_schema_under_guard");
         assert!(
             answer.is_err(),
             "the injected freshness failure must surface: {answer:?}"
@@ -116,7 +116,7 @@ fn a_materialization_closes_while_every_blocking_worker_waits_for_its_guard() {
         let waiters = Arc::new(Mutex::new(Vec::new()));
         let waiters_in_probe = Arc::clone(&waiters);
         let waiter_layout = layout.clone();
-        crate::test_probes::arm("run_migrations_under_guard", move || {
+        crate::test_probes::arm("prepare_current_schema_under_guard", move || {
             let (entered_tx, entered_rx) = std::sync::mpsc::channel();
             for _ in 0..WORKERS {
                 let waiter = start_publication_waiter(&waiter_layout, &entered_tx);
@@ -135,8 +135,8 @@ fn a_materialization_closes_while_every_blocking_worker_waits_for_its_guard() {
                 "the materialization must finish while every blocking worker waits for its guard",
             )
             .expect("the materialization itself must succeed");
-        crate::test_probes::disarm("run_migrations_under_guard");
-        assert!(!report.migrations_applied.is_empty());
+        crate::test_probes::disarm("prepare_current_schema_under_guard");
+        assert!(report.cache_recreated);
         join_waiters(&waiters).await;
     });
     runtime.shutdown_timeout(Duration::from_secs(2));

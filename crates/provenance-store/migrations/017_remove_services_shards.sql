@@ -1,1 +1,0 @@
--- Retained migration history. Cache migrations do not modify canonical state.
