@@ -202,7 +202,18 @@ fn sorted_bytes<T: serde::Serialize>(
 
 #[cfg(test)]
 mod tests {
-    use super::ProjectionFamily;
+    use super::{ProjectionFamily, FAMILIES};
+
+    #[test]
+    fn every_projection_family_has_one_plain_metadata_row() {
+        assert_eq!(ProjectionFamily::ALL.len(), FAMILIES.len());
+        for (family, metadata) in ProjectionFamily::ALL.into_iter().zip(FAMILIES) {
+            assert_eq!(family, metadata.family);
+            assert_eq!(family.family_name(), metadata.table_name);
+            assert_eq!(family.shard_suffix(), metadata.shard_suffix);
+            assert_eq!(family.node_type(), metadata.node_type);
+        }
+    }
 
     #[test]
     fn family_metadata_keeps_stable_storage_and_export_names_together() {
