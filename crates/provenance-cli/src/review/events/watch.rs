@@ -66,6 +66,11 @@ impl Observation {
             if reattach {
                 let mut watcher = watcher.lock().unwrap();
                 let _ = watcher.unwatch(layout.state_dir().as_std_path());
+                let _ = watcher.unwatch(layout.provenance_dir().as_std_path());
+                watcher.watch(
+                    layout.provenance_dir().as_std_path(),
+                    RecursiveMode::NonRecursive,
+                )?;
                 watcher.watch(layout.state_dir().as_std_path(), RecursiveMode::Recursive)?;
             }
             ReviewStateSnapshot::read(&guard)
@@ -85,14 +90,23 @@ impl Observation {
             };
             if notice.lost {
                 baseline = None;
-                subscribers.unavailable("file change notifications were lost");
-                continue;
             }
             // Finish a started guarded read before shutdown joins the observer.
-            let read = self.read(notice.reattach).await;
+            let first = self.read(notice.reattach || notice.lost).await;
+            let mut reset_reason = notice.lost.then_some("file-events-lost");
+            let read = match first {
+                Ok(current) => Ok(current),
+                Err(_) => {
+                    baseline = None;
+                    reset_reason.get_or_insert("observation-recovered");
+                    self.read(true).await
+                }
+            };
             match read {
                 Ok(current) => {
-                    if let Some(previous) = &baseline {
+                    if let Some(reason) = reset_reason {
+                        subscribers.reset(reason);
+                    } else if let Some(previous) = &baseline {
                         subscribers.changed(current.changes_since(previous));
                     } else {
                         subscribers.reset("observation-recovered");
@@ -102,7 +116,7 @@ impl Observation {
                 }
                 Err(error) => {
                     baseline = None;
-                    subscribers.unavailable(&format!("{error:#}"));
+                    subscribers.unavailable("observation-failed", &format!("{error:#}"));
                 }
             }
         }
