@@ -23,6 +23,22 @@ pub const GET_OPTIONS: &[Field] = &[
     Field::switch("no_open").doc("Print the review link and do not open it in a browser."),
 ];
 
+/// The CLI help of each field whose CLI meaning is more than its porcelain doc, by field
+/// name. The CLI reads the `thread` default from the Codex session environment.
+pub const FIELD_HELP: &[(&str, &str)] = &[(
+    "thread",
+    "The Codex thread UUID for --notify. The default is CODEX_THREAD_ID.",
+)];
+
+/// The CLI help of a field: its CLI help, else its porcelain doc.
+pub fn field_help(field: &Field) -> Option<&'static str> {
+    FIELD_HELP
+        .iter()
+        .find(|(name, _)| *name == field.name)
+        .map(|(_, help)| *help)
+        .or(field.doc)
+}
+
 /// The relations of the get options with each other and with the get fields.
 pub const GET_OPTION_RELATIONS: &[Relation] = &[
     Relation::Requires("follow", "view"),

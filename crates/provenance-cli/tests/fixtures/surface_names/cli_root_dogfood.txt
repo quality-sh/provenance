@@ -13,9 +13,9 @@ Commands:
   dictionary       
   graph-reference  
   swarm-backtrace  
+  docs             
   skills           
   report           Deterministic report rendering from a versioned report envelope
-  docs             
   review           Serve local review assets and authorized repository operations
   mcp              Serve the MCP tools for one repository on standard input and output
   dogfood          Dev-build-only: record pain-point notes about provenance itself
