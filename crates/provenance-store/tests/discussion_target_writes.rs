@@ -50,6 +50,18 @@ fn failure(result: anyhow::Result<provenance_core::threads::DiscussionEntry>) ->
 }
 
 #[test]
+fn addressed_reply_contract_has_only_reply_fields() {
+    let request: TargetDiscussionWrite = serde_json::from_value(json!({
+        "scope_id":"default", "request_id":"reply_request", "actor":"ben",
+        "declared_by":null, "allowed_parent_kinds":["requirement"],
+        "discussion_id":"discussion_a", "expected_version":1,
+        "role":"user", "body":"A reply."
+    }))
+    .unwrap();
+    assert_eq!(request.request_id.as_str(), "reply_request");
+}
+
+#[test]
 fn target_reply_changes_only_its_discussion() {
     let (_temp, store) = fixture();
     let a = store.write_target_discussion(start("a")).unwrap();

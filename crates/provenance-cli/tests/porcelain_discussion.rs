@@ -131,7 +131,14 @@ fn discussion_help_and_errors_keep_the_discussion_grammar() {
     assert!(String::from_utf8_lossy(&wrong_field.stderr).contains("unsupported option --body"));
     let invalid = run(&["discussions", "--status", "draft"]);
     assert!(!invalid.status.success());
-    assert!(String::from_utf8_lossy(&invalid.stderr).contains("possible values"));
+    assert!(String::from_utf8_lossy(&invalid.stderr).contains("invalid value for --status"));
+    let invalid_target = run(&["req_a", "discussions", "--status", "draft"]);
+    assert!(!invalid_target.status.success());
+    assert!(String::from_utf8_lossy(&invalid_target.stderr).contains("invalid value for --status"));
+    let wrong_list_field = run(&["discussions", "--expected-version", "1"]);
+    assert!(!wrong_list_field.status.success());
+    assert!(String::from_utf8_lossy(&wrong_list_field.stderr)
+        .contains("unsupported option --expected-version"));
     let addressed = run(&["discussions", "some_id", "invented"]);
     assert!(!addressed.status.success());
     assert!(String::from_utf8_lossy(&addressed.stderr).contains("possible values: get"));
