@@ -302,3 +302,11 @@ fn bounded(test: impl FnOnce() + Send + 'static) {
         .recv_timeout(std::time::Duration::from_secs(45))
         .expect("the page-write test must finish within 45 seconds");
 }
+
+// Implementation aid: preserve assertion diagnostics from the bounded test thread.
+#[test]
+fn bounded_preserves_the_test_panic() {
+    let panic = std::panic::catch_unwind(|| bounded(|| panic!("original test failure")))
+        .expect_err("the bounded test must propagate its panic");
+    assert_eq!(panic.downcast_ref::<&str>(), Some(&"original test failure"));
+}
