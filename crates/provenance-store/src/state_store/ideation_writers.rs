@@ -4,7 +4,8 @@ use super::{
 };
 use crate::shards;
 use provenance_core::{
-    validate_optional_confidence_score, Contribution, SynthesisPacket, SUPPORTED_SCHEMA_VERSION,
+    ensure_record_id_assignable, validate_optional_confidence_score, Contribution,
+    SynthesisPacket, SUPPORTED_SCHEMA_VERSION,
 };
 
 impl StateStore {
@@ -66,6 +67,9 @@ impl StateStore {
             uncertainty,
             open_questions,
         } = input;
+        if !self.list_contributions(&scope_id)?.iter().any(|record| record.id == id) {
+            ensure_record_id_assignable(&id)?;
+        }
         for claim in &material_claims {
             validate_optional_confidence_score(claim.confidence)?;
         }
@@ -203,6 +207,9 @@ impl StateStore {
             suggested_artifacts,
             required_human_decisions,
         } = input;
+        if !self.list_synthesis_packets(&scope_id)?.iter().any(|record| record.id == id) {
+            ensure_record_id_assignable(&id)?;
+        }
         self.ensure_synthesis_target(&scope_id, &id, &target)?;
         let synthesis_packet = SynthesisPacket {
             schema_version: SUPPORTED_SCHEMA_VERSION,

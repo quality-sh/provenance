@@ -1,14 +1,13 @@
 //! CLI-owned bindings for shared Porcelain capabilities.
 
 use provenance_porcelain::check::{Category, CheckInput, CheckOutcome};
-use provenance_porcelain::get::{GetInput, GetOutcome, View};
+use provenance_porcelain::get::{GetInput, GetOutcome};
 use std::{
-    fmt::{Display, Formatter},
     net::{Ipv4Addr, SocketAddr},
 };
 
 mod search;
-pub use search::{dispatch_search, parse_search, print_search_help, SearchCommand};
+pub use search::dispatch_search;
 
 /// An explicit CLI output format.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -16,18 +15,6 @@ pub enum OutputFormat {
     /// Emit JSON result data.
     Json,
 }
-
-/// An invalid CLI Porcelain binding.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct BindingError;
-
-impl Display for BindingError {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str("unsupported read options")
-    }
-}
-
-impl std::error::Error for BindingError {}
 
 /// Translate the live CLI selector fields into one semantic check request.
 pub fn check_input_from_selectors(graph: bool, statements: bool, bindings: bool) -> CheckInput {
@@ -69,40 +56,6 @@ pub fn render_check(outcome: &CheckOutcome) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n")
-}
-
-/// Translate CLI-owned get words into one semantic request.
-pub fn parse_get(words: &[&str]) -> Result<GetInput, BindingError> {
-    let (target, mut index) = match words {
-        [target, rest @ ..] if !target.is_empty() && rest.first().copied() != Some("get") => {
-            (*target, 1)
-        }
-        [target, "get", ..] if !target.is_empty() => (*target, 2),
-        _ => return Err(BindingError),
-    };
-    let mut input = GetInput::new(target, View::Record);
-    while index < words.len() {
-        let value = words.get(index + 1).copied().ok_or(BindingError)?;
-        match words[index] {
-            "--view" => {
-                input.view = match value {
-                    "record" => View::Record,
-                    "children" => View::Children,
-                    "grounding" => View::Grounding,
-                    "impact" => View::Impact,
-                    _ => return Err(BindingError),
-                };
-            }
-            "--depth" => input.max_depth = Some(value.parse().map_err(|_| BindingError)?),
-            "--kind" => input
-                .returned_kinds
-                .push(provenance_core::NodeType::parse(value).map_err(|_| BindingError)?),
-            "--limit" => input.limit = Some(value.parse().map_err(|_| BindingError)?),
-            _ => return Err(BindingError),
-        }
-        index += 2;
-    }
-    Ok(input)
 }
 
 /// Run one fully parsed target-first Porcelain get command.

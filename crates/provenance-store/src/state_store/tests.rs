@@ -77,6 +77,7 @@ mod manifest;
 mod proposal_surfaces;
 mod proposals;
 mod references;
+mod reserved_ids;
 mod scope_ingestion;
 mod shaping;
 mod source_requirements;

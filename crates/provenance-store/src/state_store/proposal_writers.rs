@@ -4,8 +4,9 @@ use super::{
 };
 use crate::shards;
 use provenance_core::{
-    validate_optional_confidence_score, AssertionRecord, DispositionRecord, PromotionState,
-    ProposalCard, ProposalType, ScopeId, StableId, SUPPORTED_SCHEMA_VERSION,
+    ensure_record_id_assignable, validate_optional_confidence_score, AssertionRecord,
+    DispositionRecord, PromotionState, ProposalCard, ProposalType, ScopeId, StableId,
+    SUPPORTED_SCHEMA_VERSION,
 };
 use provenance_macros::rule;
 
@@ -133,6 +134,7 @@ impl StateStore {
     }
 
     fn write_assertion(&self, input: CreateAssertionInput) -> anyhow::Result<AssertionRecord> {
+        ensure_record_id_assignable(&input.id)?;
         let assertion = AssertionRecord {
             schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: input.scope_id.clone(),
@@ -177,6 +179,7 @@ impl StateStore {
 
     fn write_proposal_card(&self, input: CreateProposalCardInput) -> anyhow::Result<ProposalCard> {
         let candidate = proposal_from_input(input)?;
+        ensure_record_id_assignable(&candidate.id)?;
         anyhow::ensure!(
             candidate.proposal_type != ProposalType::RecordRevision
                 || crate::review::guard::writer_allows(
@@ -243,6 +246,7 @@ impl StateStore {
             canonical_artifact,
             external_action,
         };
+        ensure_record_id_assignable(&disposition.id)?;
         let proposals = self.list_proposal_definitions(&scope_id)?;
         let assertions = self.list_assertion_records(&scope_id)?;
         let mut dispositions = self.list_dispositions(&scope_id)?;

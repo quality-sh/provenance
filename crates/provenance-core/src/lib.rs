@@ -9,7 +9,7 @@ pub mod scope;
 pub mod threads;
 
 pub use model::{
-    disposition_requires_prior_assertion, effective_proposal_state,
+    disposition_requires_prior_assertion, effective_proposal_state, ensure_record_id_assignable,
     ensure_supported_schema_version, is_shipped_legacy_disposition_audit,
     packet_qualifies_proposal, validate_assertion_intrinsic, validate_commit_pin,
     validate_confidence_score, validate_disposition_admissible, validate_disposition_intrinsic,
@@ -30,7 +30,7 @@ pub use model::{
     SuggestedArtifactChange, SynthesisPacket, Thread, ThreadParent, ThreadStatus, Topic,
     TopicStatus, UncertaintyLevel, UncertaintyRating, UnsupportedRecommendation,
     UnsupportedSpeculation, VerificationBinding, VerificationMethod, VerificationRun,
-    VerificationRunStatus, SUPPORTED_SCHEMA_VERSION,
+    VerificationRunStatus, RESERVED_RECORD_IDS, SUPPORTED_SCHEMA_VERSION,
 };
 pub use protocol::{EngineInfo, SDK_PROTOCOL_VERSION};
 
