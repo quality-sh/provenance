@@ -299,6 +299,7 @@ pub(super) fn declaration(command: Command) -> Declaration {
             flags: PRIME_FLAGS,
         },
         Command::Action(action) => action_declaration(action),
+        Command::Repository(command) => super::repository::declaration(command),
     }
 }
 
@@ -401,10 +402,10 @@ mod tests {
     /// Implementation aid: the typed CLI inputs have one schema property for each flag.
     #[test]
     fn typed_cli_inputs_have_a_property_for_each_flag() {
-        for command in [Command::Get, Command::Check, Command::Prime] {
+        for command in Command::ALL {
             let declaration = command.declaration();
             let Input::Typed(schema) = declaration.cli_input else {
-                panic!("{command:?} has a typed CLI input");
+                continue;
             };
             let schema = schema();
             let properties = schema["properties"].as_object().unwrap();

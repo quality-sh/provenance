@@ -41,6 +41,13 @@ fn arg(flag: &Flag) -> Arg {
     }
     arg.allow_hyphen_values(flag.hyphen_values)
         .hide(flag.hidden)
+        .required(flag.required)
+        .global(flag.global)
+}
+
+/// The command with the shared repository options that the porcelain parsers take.
+pub fn with_global_flags(command: Command) -> Command {
+    command.args(registry::GLOBAL_FLAGS.iter().map(arg))
 }
 
 fn value_parser(flag: &Flag) -> ValueParser {
@@ -89,16 +96,44 @@ fn parse_catalog_limit(value: &str) -> Result<usize, String> {
     }
 }
 
-/// The subcommand of one word command, as `provenance <word>` shows it.
-pub fn subcommand(command: registry::Command) -> Command {
+/// Adds one word command to `root` under its words, as `provenance <words...>` shows it.
+/// The first of two words is a group that needs one of its commands.
+pub fn add_subcommand(root: Command, command: registry::Command) -> Command {
     let declaration = command.declaration();
     let CliForm::Words(words) = declaration.cli_form else {
         panic!("{} is not a word command", declaration.name);
     };
-    Command::new(*words.last().expect("a word command has a word"))
-        .about(declaration.description)
+    let (word, group) = words.split_last().expect("a word command has a word");
+    let mut leaf = Command::new(*word)
         .hide(declaration.hidden)
-        .args(args(&declaration))
+        .args(args(&declaration));
+    if !declaration.description.is_empty() {
+        leaf = leaf.about(declaration.description);
+    }
+    match group {
+        [] => root.subcommand(leaf),
+        [group] if root.find_subcommand(group).is_some() => {
+            root.mut_subcommand(*group, |parent| parent.subcommand(leaf))
+        }
+        [group] => root.subcommand(
+            Command::new(*group)
+                .subcommand_required(true)
+                .arg_required_else_help(true)
+                .subcommand(leaf),
+        ),
+        _ => panic!("{} has more than two words", declaration.name),
+    }
+}
+
+/// The words of the selected subcommands and the matches of the last one.
+pub fn selected(matches: &ArgMatches) -> (Vec<&str>, &ArgMatches) {
+    let mut words = Vec::new();
+    let mut leaf = matches;
+    while let Some((word, next)) = leaf.subcommand() {
+        words.push(word);
+        leaf = next;
+    }
+    (words, leaf)
 }
 
 /// The root parser of one word command that reads the shared repository options, as
@@ -112,10 +147,7 @@ pub fn root_word_command(command: registry::Command) -> Command {
         .required(true)
         .value_name("COMMAND")
         .value_parser(PossibleValuesParser::new(words.iter().copied()));
-    let common = <crate::invocation::grammar::Common as clap::Args>::augment_args(Command::new(
-        "provenance",
-    ));
-    common
+    with_global_flags(Command::new("provenance"))
         .about(declaration.description)
         .arg(word)
         .args(args(&declaration))

@@ -59,7 +59,12 @@ async fn registry_commands_appear_on_both_interfaces() {
                 for flag in declaration.flags.iter().filter(|flag| !flag.hidden) {
                     let shown = if flag.kind == provenance_porcelain::registry::FlagKind::Positional
                     {
-                        format!("[{}]", flag.field_id().to_uppercase())
+                        let name = flag.field_id().to_uppercase();
+                        if flag.required {
+                            format!("<{name}>")
+                        } else {
+                            format!("[{name}]")
+                        }
                     } else {
                         format!("--{}", flag.name)
                     };
@@ -90,6 +95,52 @@ async fn registry_commands_appear_on_both_interfaces() {
             Presence::Absent { reason } => {
                 assert!(!reason.is_empty(), "{command:?}");
                 assert!(!tools.contains_key(declaration.name), "{command:?}");
+            }
+        }
+    }
+}
+
+/// The registry command that `provenance <words...>` selects, and its help.
+fn registry_command(words: &[&str]) -> (Command, String) {
+    let command = Command::find(Interface::Cli, words)
+        .unwrap_or_else(|| panic!("provenance {} is not a registry command", words.join(" ")));
+    (command, help(words))
+}
+
+/// The repository commands come from the registry, and their help shows each declared flag.
+#[test]
+#[verifies("rule_porcelain_interface_shows_recorded_commands", examples)]
+fn repository_commands_are_registry_commands() {
+    let commands: &[&[&str]] = &[
+        &["init"],
+        &["__cargo-init"],
+        &["materialize"],
+        &["export"],
+        &["import"],
+        &["merge-jsonl"],
+        &["validate"],
+        &["schema", "show"],
+        &["dictionary", "import"],
+        &["dictionary", "status"],
+    ];
+    for words in commands {
+        let (command, help) = registry_command(words);
+        assert!(
+            !command.is_present(Interface::Mcp),
+            "{command:?} is CLI-only"
+        );
+        for flag in command
+            .declaration()
+            .flags
+            .iter()
+            .filter(|flag| !flag.hidden)
+        {
+            if flag.kind != provenance_porcelain::registry::FlagKind::Positional {
+                let shown = format!("--{}", flag.name);
+                assert!(
+                    help.contains(&shown),
+                    "{words:?} help lacks {shown}:\n{help}"
+                );
             }
         }
     }
