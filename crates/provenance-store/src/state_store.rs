@@ -31,7 +31,6 @@ mod verification_runs;
 mod writers;
 pub use updates::*;
 
-pub use access::GuardedStore;
 pub use ideation_batches::{
     assertion_cites_contribution, assertion_cites_synthesis,
     ensure_asserted_contribution_unchanged, ensure_asserted_synthesis_unchanged, CONTRIBUTION_KIND,
@@ -60,10 +59,9 @@ pub use typed_statement_policy::TypedSpecWriteError;
 use crate::{layout::ProvenanceLayout, shards};
 use ideation_batches::overlay_records;
 use provenance_core::{
-    ensure_record_id_assignable, ensure_supported_schema_version, AssertionRecord, Boundary,
-    Contribution, DispositionRecord, Domain, ImplementationBinding, Manifest, Message,
-    ProposalCard, Question, Requirement, Resolution, Rule, SchemaVersion, Scope, ScopeId, Source,
-    SynthesisPacket, Thread, Topic, VerificationBinding,
+    ensure_record_id_assignable, ensure_supported_schema_version, AssertionRecord, Contribution,
+    DispositionRecord, ImplementationBinding, Manifest, Message, ProposalCard, Rule, SchemaVersion,
+    Scope, ScopeId, SynthesisPacket, Thread, VerificationBinding,
 };
 
 fn ensure_new_ids_assignable<T>(
@@ -125,6 +123,42 @@ pub struct IdeationLandingBatch {
 pub struct PostMessageResult {
     pub thread: Thread,
     pub message: Message,
+}
+
+macro_rules! family_reader {
+    (Rules, $record:ty, $path:ident, $list:ident, $closed:ident) => {
+        pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
+            validate_rule_archives(read_jsonl(self, &shards::$path(&self.layout, scope))?)
+        }
+
+        pub(crate) fn $closed(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
+            validate_rule_archives(read_jsonl_closed(
+                self,
+                &shards::$path(&self.layout, scope),
+            )?)
+        }
+    };
+    ($variant:ident, $record:ty, $path:ident, $list:ident, $closed:ident) => {
+        pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
+            read_jsonl(self, &shards::$path(&self.layout, scope))
+        }
+
+        pub(crate) fn $closed(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
+            read_jsonl_closed(self, &shards::$path(&self.layout, scope))
+        }
+    };
+}
+
+macro_rules! define_export_readers {
+    (
+        export { $($variant:ident: $record:ty, $field:ident, $path:ident, $suffix:literal, $table:literal, [$($node:tt)*], $list:ident, [$closed:ident], $id:ident, [$($loader:tt)*], [$($catalog:tt)*];)* }
+        canonical { $($canonical:tt)* }
+        bindings { $($binding_variant:ident: $binding_record:ty, $binding_field:ident, $binding_path:ident, $binding_suffix:literal, $binding_table:literal, [$($binding_node:tt)*], $binding_list:ident, [$binding_closed:ident], $binding_id:ident, [$($binding_loader:tt)*], [$($binding_catalog:tt)*];)* }
+        internal { $($internal:tt)* }
+    ) => {
+        $(family_reader!($variant, $record, $path, $list, $closed);)*
+        $(family_reader!($binding_variant, $binding_record, $binding_path, $binding_list, $binding_closed);)*
+    };
 }
 
 impl StateStore {
@@ -191,39 +225,8 @@ impl StateStore {
         })
     }
 
-    pub fn list_sources(&self, scope: &ScopeId) -> anyhow::Result<Vec<Source>> {
-        read_jsonl(self, &shards::sources_path(&self.layout, scope))
-    }
-    pub fn list_requirements(&self, scope: &ScopeId) -> anyhow::Result<Vec<Requirement>> {
-        read_jsonl(self, &shards::requirements_path(&self.layout, scope))
-    }
-    pub fn list_domains(&self, scope: &ScopeId) -> anyhow::Result<Vec<Domain>> {
-        read_jsonl(self, &shards::domains_path(&self.layout, scope))
-    }
-    pub fn list_boundaries(&self, scope: &ScopeId) -> anyhow::Result<Vec<Boundary>> {
-        read_jsonl(self, &shards::boundaries_path(&self.layout, scope))
-    }
-    pub fn list_topics(&self, scope: &ScopeId) -> anyhow::Result<Vec<Topic>> {
-        read_jsonl(self, &shards::topics_path(&self.layout, scope))
-    }
-    pub fn list_questions(&self, scope: &ScopeId) -> anyhow::Result<Vec<Question>> {
-        read_jsonl(self, &shards::questions_path(&self.layout, scope))
-    }
-    pub fn list_resolutions(&self, scope: &ScopeId) -> anyhow::Result<Vec<Resolution>> {
-        read_jsonl(self, &shards::resolutions_path(&self.layout, scope))
-    }
-    pub fn list_rules(&self, scope: &ScopeId) -> anyhow::Result<Vec<Rule>> {
-        validate_rule_archives(read_jsonl(self, &shards::rules_path(&self.layout, scope))?)
-    }
-    pub fn list_verification_bindings(
-        &self,
-        scope: &ScopeId,
-    ) -> anyhow::Result<Vec<VerificationBinding>> {
-        read_jsonl(
-            self,
-            &shards::verification_bindings_path(&self.layout, scope),
-        )
-    }
+    crate::cache::record_families!(define_export_readers);
+
     pub fn active_verification_bindings(
         &self,
         scope: &ScopeId,
@@ -233,15 +236,6 @@ impl StateStore {
             .into_iter()
             .collect())
     }
-    pub fn list_implementation_bindings(
-        &self,
-        scope: &ScopeId,
-    ) -> anyhow::Result<Vec<ImplementationBinding>> {
-        read_jsonl(
-            self,
-            &shards::implementation_bindings_path(&self.layout, scope),
-        )
-    }
     pub fn active_implementation_bindings(
         &self,
         scope: &ScopeId,
@@ -250,51 +244,6 @@ impl StateStore {
             .list_implementation_bindings(scope)?
             .into_iter()
             .collect())
-    }
-    pub(crate) fn closed_sources(&self, scope: &ScopeId) -> anyhow::Result<Vec<Source>> {
-        read_jsonl_closed(self, &shards::sources_path(&self.layout, scope))
-    }
-    pub(crate) fn closed_requirements(&self, scope: &ScopeId) -> anyhow::Result<Vec<Requirement>> {
-        read_jsonl_closed(self, &shards::requirements_path(&self.layout, scope))
-    }
-    pub(crate) fn closed_domains(&self, scope: &ScopeId) -> anyhow::Result<Vec<Domain>> {
-        read_jsonl_closed(self, &shards::domains_path(&self.layout, scope))
-    }
-    pub(crate) fn closed_boundaries(&self, scope: &ScopeId) -> anyhow::Result<Vec<Boundary>> {
-        read_jsonl_closed(self, &shards::boundaries_path(&self.layout, scope))
-    }
-    pub(crate) fn closed_topics(&self, scope: &ScopeId) -> anyhow::Result<Vec<Topic>> {
-        read_jsonl_closed(self, &shards::topics_path(&self.layout, scope))
-    }
-    pub(crate) fn closed_questions(&self, scope: &ScopeId) -> anyhow::Result<Vec<Question>> {
-        read_jsonl_closed(self, &shards::questions_path(&self.layout, scope))
-    }
-    pub(crate) fn closed_resolutions(&self, scope: &ScopeId) -> anyhow::Result<Vec<Resolution>> {
-        read_jsonl_closed(self, &shards::resolutions_path(&self.layout, scope))
-    }
-    pub(crate) fn closed_rules(&self, scope: &ScopeId) -> anyhow::Result<Vec<Rule>> {
-        validate_rule_archives(read_jsonl_closed(
-            self,
-            &shards::rules_path(&self.layout, scope),
-        )?)
-    }
-    pub(crate) fn closed_verification_bindings(
-        &self,
-        scope: &ScopeId,
-    ) -> anyhow::Result<Vec<VerificationBinding>> {
-        read_jsonl_closed(
-            self,
-            &shards::verification_bindings_path(&self.layout, scope),
-        )
-    }
-    pub(crate) fn closed_implementation_bindings(
-        &self,
-        scope: &ScopeId,
-    ) -> anyhow::Result<Vec<ImplementationBinding>> {
-        read_jsonl_closed(
-            self,
-            &shards::implementation_bindings_path(&self.layout, scope),
-        )
     }
     pub fn list_threads(&self, scope: &ScopeId) -> anyhow::Result<Vec<Thread>> {
         read_jsonl(self, &shards::threads_path(&self.layout, scope))
