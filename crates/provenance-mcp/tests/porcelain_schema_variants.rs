@@ -9,7 +9,9 @@ use serde_json::{json, Value};
 
 #[allow(dead_code)]
 mod support {
+    #[path = "../../../provenance-transport/tests/support/records.rs"]
     pub mod records;
+    #[path = "../../../provenance-transport/tests/support/resource_http.rs"]
     pub mod resource_http;
 }
 
@@ -187,7 +189,8 @@ async fn emitted_get_schema_accepts_each_canonical_record_and_tagged_related_kin
     let host = support::resource_http::host(&repository, false);
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
     let server_host = host.clone();
-    let server = tokio::spawn(async move { server_host.serve_mcp(server_io).await.unwrap() });
+    let server =
+        tokio::spawn(async move { provenance_mcp::serve(server_host, server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
     let tools = client.list_all_tools().await.unwrap();
     let get = tools.iter().find(|tool| tool.name == "get").unwrap();

@@ -1,19 +1,19 @@
 //! MCP envelope bindings for the shared api action.
 
-use crate::StatementHost;
 use provenance_porcelain::api::{
     render_discovery_readable, ApiArguments, ApiError, ApiOutcome, ApiRequest,
 };
+use provenance_transport::StatementHost;
 use rmcp::model::{CallToolResult, ContentBlock, Tool};
 use serde_json::Value;
 
 pub fn tool() -> Tool {
-    crate::mcp_surface::tool(
+    crate::surface::tool(
         "api",
         provenance_porcelain::api::API_DESCRIPTION,
         provenance_porcelain::api::input_schema(),
         provenance_porcelain::api::output_schema(),
-        crate::mcp_surface::SchemaDeclaration::Remove,
+        crate::surface::SchemaDeclaration::Remove,
     )
 }
 
@@ -64,5 +64,5 @@ fn rejected_field(arguments: &serde_json::Map<String, Value>) -> Option<String> 
 }
 
 fn refused(error: &ApiError) -> CallToolResult {
-    crate::mcp_surface::envelope_error(&error.failure)
+    crate::surface::envelope_error(&error.failure)
 }
