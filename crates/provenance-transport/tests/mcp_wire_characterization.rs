@@ -229,3 +229,35 @@ async fn typed_refusal_and_unknown_tool_keep_their_shape() {
         })
     );
 }
+
+/// The refusal that each tool returns for one input it does not accept.
+/// The list has one row for each porcelain tool and one oversized input.
+const REFUSALS: &[(&str, &str)] = &[];
+
+#[tokio::test]
+async fn each_tool_refusal_keeps_its_text() {
+    let repository = Repository::new("The shared graph is readable.");
+    let mut wire = Wire::start(full_host(&repository));
+    wire.initialize("2025-06-18").await;
+    let mut calls = PORCELAIN_TOOL_NAMES
+        .iter()
+        .map(|name| (*name, json!({"name":name,"arguments":{"unknown_field":1}})))
+        .collect::<Vec<_>>();
+    let oversized = "x".repeat(provenance_transport::MAX_BODY_BYTES + 1);
+    calls.push((
+        "too_large",
+        json!({"name":"get","arguments":{"id":oversized}}),
+    ));
+    let mut observed = Vec::new();
+    for (label, call) in calls {
+        let response = wire.request("tools/call", call).await;
+        let text = response["result"].to_string();
+        println!("REFUSAL {label} {text}");
+        observed.push((label, text));
+    }
+    let expected = REFUSALS
+        .iter()
+        .map(|(label, text)| (*label, (*text).to_owned()))
+        .collect::<Vec<_>>();
+    assert_eq!(observed, expected);
+}
