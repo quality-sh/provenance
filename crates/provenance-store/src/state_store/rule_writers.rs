@@ -7,7 +7,10 @@ use provenance_core::{NodeType, Resolution, Rule, SUPPORTED_SCHEMA_VERSION};
 
 impl StateStore {
     pub fn create_resolution(&self, input: CreateResolutionInput) -> anyhow::Result<Resolution> {
-        self.with_repository_publication(|| self.write_resolution(input))
+        let path = shards::resolutions_path(&self.layout, &input.scope_id);
+        let scope = input.scope_id.clone();
+        let id = input.id.clone();
+        self.create_native_record(&path, &scope, &id, |store| store.write_resolution(input))
     }
 
     fn write_resolution(&self, input: CreateResolutionInput) -> anyhow::Result<Resolution> {
@@ -88,7 +91,10 @@ impl StateStore {
     }
 
     pub fn create_rule(&self, input: CreateRuleInput) -> anyhow::Result<Rule> {
-        self.with_repository_publication(|| self.write_rule(input))
+        let path = shards::rules_path(&self.layout, &input.scope_id);
+        let scope = input.scope_id.clone();
+        let id = input.id.clone();
+        self.create_native_record(&path, &scope, &id, |store| store.write_rule(input))
     }
 
     fn write_rule(&self, input: CreateRuleInput) -> anyhow::Result<Rule> {

@@ -1,7 +1,9 @@
 //! Stamp changed record content while the canonical publication lock is held.
 use camino::Utf8Path;
 use provenance_core::{
-    model::relations::RelationOwner, Requirement, Resolution, Rule, Source, Stamp,
+    model::relations::RelationOwner,
+    review::{ReviewRecord, REVIEW_SCHEMA_VERSION},
+    Requirement, Resolution, Rule, SchemaVersion, Source, Stamp,
 };
 use serde::{de::DeserializeOwned, Serialize};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
@@ -10,12 +12,19 @@ use super::read_budget::{ensure_slice_within_read_budget, ensure_within_read_bud
 use super::StateStore;
 
 pub trait GraphRecord:
-    RelationOwner + Clone + PartialEq + DeserializeOwned + Serialize + ReadBudget
+    RelationOwner
+    + Clone
+    + Into<ReviewRecord>
+    + PartialEq
+    + DeserializeOwned
+    + Serialize
+    + ReadBudget
 {
     fn validate_write(&self, _previous: Option<&Self>) -> anyhow::Result<()> {
         Ok(())
     }
     fn set_stamps(&mut self, _previous: Option<&Self>, _stamp: Option<&Stamp>) {}
+    fn set_schema_version(&mut self, version: SchemaVersion);
 }
 
 macro_rules! stamps {
@@ -30,17 +39,28 @@ macro_rules! stamps {
         }
     };
 }
+macro_rules! schema_version {
+    () => {
+        fn set_schema_version(&mut self, version: SchemaVersion) {
+            self.schema_version = version;
+        }
+    };
+}
 impl GraphRecord for Source {
     stamps!();
+    schema_version!();
 }
 impl GraphRecord for Requirement {
     stamps!();
+    schema_version!();
 }
 impl GraphRecord for Resolution {
     stamps!();
+    schema_version!();
 }
 impl GraphRecord for Rule {
     stamps!();
+    schema_version!();
     fn validate_write(&self, previous: Option<&Self>) -> anyhow::Result<()> {
         previous
             .map_or_else(|| self.validate_archive(), |r| self.validate_transition(r))
@@ -52,9 +72,18 @@ impl GraphRecord for Rule {
             })
     }
 }
-impl GraphRecord for provenance_core::Boundary {}
-impl GraphRecord for provenance_core::Topic {}
-impl GraphRecord for provenance_core::Question {}
+impl GraphRecord for provenance_core::Domain {
+    schema_version!();
+}
+impl GraphRecord for provenance_core::Boundary {
+    schema_version!();
+}
+impl GraphRecord for provenance_core::Topic {
+    schema_version!();
+}
+impl GraphRecord for provenance_core::Question {
+    schema_version!();
+}
 
 impl StateStore {
     fn current_record_stamp(&self) -> anyhow::Result<Option<Stamp>> {
@@ -94,6 +123,21 @@ impl StateStore {
             record.set_stamps(previous, stamp.as_ref().and_then(Option::as_ref));
         }
         Ok(())
+    }
+
+    pub(crate) fn enroll_graph_record<T: GraphRecord>(
+        &self,
+        path: &Utf8Path,
+        id: &provenance_core::StableId,
+    ) -> anyhow::Result<T> {
+        self.mutate_graph_record(path, |records: &mut Vec<T>| {
+            let record = records
+                .iter_mut()
+                .find(|record| record.id() == id)
+                .ok_or_else(|| anyhow::anyhow!("created graph record is missing"))?;
+            record.set_schema_version(REVIEW_SCHEMA_VERSION);
+            Ok(record.clone())
+        })
     }
 
     pub(crate) fn mutate_graph_record<T: GraphRecord>(

@@ -7,7 +7,13 @@ use provenance_core::{
 
 impl StateStore {
     pub fn create_source(&self, input: CreateSourceInput) -> anyhow::Result<Source> {
-        self.with_repository_publication(|| {
+        let path = shards::sources_path(&self.layout, &input.scope_id);
+        let scope = input.scope_id.clone();
+        let id = input.id.clone();
+        self.create_native_record(&path, &scope, &id, |store| store.write_source(input))
+    }
+
+    fn write_source(&self, input: CreateSourceInput) -> anyhow::Result<Source> {
             let CreateSourceInput {
                 scope_id,
                 id,
@@ -30,8 +36,8 @@ impl StateStore {
             }
             crate::test_probes::at("source_supersedes_validated")?;
             let supersedes = sorted_ids(supersedes);
-            let path = shards::sources_path(&self.layout, &scope_id);
-            self.mutate_graph_record(&path, |records: &mut Vec<Source>| {
+        let path = shards::sources_path(&self.layout, &scope_id);
+        self.mutate_graph_record(&path, |records: &mut Vec<Source>| {
                 let source = Source {
                     created: None,
                     updated: None,
@@ -60,7 +66,6 @@ impl StateStore {
                 records.push(source.clone());
                 records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
                 Ok(source)
-            })
         })
     }
 

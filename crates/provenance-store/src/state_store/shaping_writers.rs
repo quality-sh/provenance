@@ -23,7 +23,10 @@ use artifact_links::sort_artifact_links;
 
 impl StateStore {
     pub fn create_boundary(&self, input: CreateBoundaryInput) -> anyhow::Result<Boundary> {
-        self.with_repository_publication(|| self.write_boundary(input))
+        let path = shards::boundaries_path(&self.layout, &input.scope_id);
+        let scope = input.scope_id.clone();
+        let id = input.id.clone();
+        self.create_native_record(&path, &scope, &id, |store| store.write_boundary(input))
     }
 
     fn write_boundary(&self, input: CreateBoundaryInput) -> anyhow::Result<Boundary> {
@@ -52,7 +55,7 @@ impl StateStore {
             );
         }
         let path = shards::boundaries_path(&self.layout, &scope_id);
-        self.mutate_jsonl_records(&path, |records: &mut Vec<Boundary>| {
+        self.mutate_graph_record(&path, |records: &mut Vec<Boundary>| {
             let boundary = Boundary {
                 schema_version: SUPPORTED_SCHEMA_VERSION,
                 scope_id: scope_id.clone(),
@@ -74,7 +77,10 @@ impl StateStore {
     }
 
     pub fn create_topic(&self, input: CreateTopicInput) -> anyhow::Result<Topic> {
-        self.with_repository_publication(|| self.write_topic(input))
+        let path = shards::topics_path(&self.layout, &input.scope_id);
+        let scope = input.scope_id.clone();
+        let id = input.id.clone();
+        self.create_native_record(&path, &scope, &id, |store| store.write_topic(input))
     }
 
     fn write_topic(&self, input: CreateTopicInput) -> anyhow::Result<Topic> {
@@ -97,7 +103,7 @@ impl StateStore {
         self.validate_artifact_links(&scope_id, &links)?;
         sort_artifact_links(&mut links);
         let path = shards::topics_path(&self.layout, &scope_id);
-        self.mutate_jsonl_records(&path, |records: &mut Vec<Topic>| {
+        self.mutate_graph_record(&path, |records: &mut Vec<Topic>| {
             let topic = Topic {
                 schema_version: SUPPORTED_SCHEMA_VERSION,
                 scope_id: scope_id.clone(),
@@ -122,7 +128,10 @@ impl StateStore {
     }
 
     pub fn create_question(&self, input: CreateQuestionInput) -> anyhow::Result<Question> {
-        self.with_repository_publication(|| self.write_question(input))
+        let path = shards::questions_path(&self.layout, &input.scope_id);
+        let scope = input.scope_id.clone();
+        let id = input.id.clone();
+        self.create_native_record(&path, &scope, &id, |store| store.write_question(input))
     }
 
     fn write_question(&self, input: CreateQuestionInput) -> anyhow::Result<Question> {
@@ -168,7 +177,7 @@ impl StateStore {
         self.validate_artifact_links(&scope_id, &links)?;
         sort_artifact_links(&mut links);
         let path = shards::questions_path(&self.layout, &scope_id);
-        self.mutate_jsonl_records(&path, |records: &mut Vec<Question>| {
+        self.mutate_graph_record(&path, |records: &mut Vec<Question>| {
             let question = Question {
                 schema_version: SUPPORTED_SCHEMA_VERSION,
                 scope_id: scope_id.clone(),
