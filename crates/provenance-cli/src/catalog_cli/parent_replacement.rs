@@ -1,11 +1,16 @@
 //! Selected parent replacement through two guarded Requirement updates.
 use axum::http::{HeaderMap, Method};
+use provenance_core::protocol::failure::ErasedFailure;
 use provenance_macros::rule;
 use provenance_transport::StatementHost;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 
 /// Adds the new parent before it removes the selected old parent.
+///
+/// The current parents select the steps: a Requirement that already has the
+/// new parent and not the old one is a finished replacement, and a
+/// Requirement that has neither parent is refused before any write.
 #[rule("rule_move_replaces_only_selected_parent")]
 #[rule("rule_move_preserves_identity_and_descendants")]
 #[rule("rule_supersede_swaps_selected_child_parent")]
@@ -14,8 +19,8 @@ pub(super) async fn replace(
     path: &str,
     mut data: Value,
     headers: HeaderMap,
-    old: &str,
-    new: &str,
+    (old, new): (&str, &str),
+    guidance: impl Fn(&ErasedFailure) -> anyhow::Error,
 ) -> anyhow::Result<Value> {
     provenance_core::StableId::new(old)?;
     provenance_core::StableId::new(new)?;
@@ -35,39 +40,40 @@ pub(super) async fn replace(
             HeaderMap::new(),
         )
         .await
-        .map_err(anyhow::Error::new)?;
-    let mut first_headers = headers;
-    if !first_headers.contains_key("if-match") {
-        first_headers.insert(
-            "if-match",
-            read["data"]["edit"]["etag"]
-                .as_str()
-                .ok_or_else(|| anyhow::anyhow!("Requirement read has no ETag"))?
-                .parse()?,
+        .map_err(|failure| guidance(&failure))?;
+    let parents = read["data"]["refines"].as_array();
+    let has = |id: &str| parents.is_some_and(|parents| parents.iter().any(|parent| parent == id));
+    let (has_old, has_new) = (has(old), has(new));
+    if !has_old {
+        anyhow::ensure!(
+            has_new,
+            "{old} is not a parent of this Requirement; nothing changed"
         );
+        return Ok(read);
     }
-    data["relationships"] = json!({"refines":{"add":[new]}});
-    let added = host
-        .invoke_resource(
-            Method::PATCH,
-            path,
-            data.clone(),
-            BTreeMap::new(),
-            first_headers,
-        )
-        .await
-        .map_err(anyhow::Error::new)?;
-    // Use the first write's guard so a concurrent edit refuses the removal.
-    let mut second_headers = HeaderMap::new();
-    second_headers.insert(
-        "if-match",
-        added["data"]["edit"]["etag"]
-            .as_str()
-            .ok_or_else(|| anyhow::anyhow!("Requirement read has no ETag"))?
-            .parse()?,
-    );
+    let mut guard = headers;
+    if !guard.contains_key("if-match") {
+        guard.insert("if-match", etag(&read)?);
+    }
+    if !has_new {
+        data["relationships"] = json!({"refines":{"add":[new]}});
+        let added = host
+            .invoke_resource(Method::PATCH, path, data.clone(), BTreeMap::new(), guard)
+            .await
+            .map_err(|failure| guidance(&failure))?;
+        // Use the first write's guard so a concurrent edit refuses the removal.
+        guard = HeaderMap::new();
+        guard.insert("if-match", etag(&added)?);
+    }
     data["relationships"] = json!({"refines":{"remove":[old]}});
-    host.invoke_resource(Method::PATCH, path, data, BTreeMap::new(), second_headers)
+    host.invoke_resource(Method::PATCH, path, data, BTreeMap::new(), guard)
         .await
-        .map_err(anyhow::Error::new)
+        .map_err(|failure| guidance(&failure))
+}
+
+fn etag(record: &Value) -> anyhow::Result<axum::http::HeaderValue> {
+    Ok(record["data"]["edit"]["etag"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("Requirement read has no ETag"))?
+        .parse()?)
 }
