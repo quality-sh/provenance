@@ -1,5 +1,5 @@
 use super::{OutputIdentity, OutputState, PublicationOutput, TransactionDirectory};
-use crate::safe_fs::{ChildKind, Directory};
+use provenance_store::operations::files::{ChildKind, Directory};
 use crate::wiki::publish::PublishError;
 use camino::Utf8Path;
 use provenance_macros::rule;

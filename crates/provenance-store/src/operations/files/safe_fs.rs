@@ -18,40 +18,40 @@ pub enum ChildKind {
 }
 
 impl Directory {
-    pub(super) fn open(path: &Path, role: &str) -> std::io::Result<Self> {
+    pub fn open(path: &Path, role: &str) -> std::io::Result<Self> {
         open_directory_no_follow(path, role).map(|file| Self {
             file,
             path: path.to_path_buf(),
         })
     }
 
-    pub(super) const fn from_file(file: File, path: PathBuf) -> Self {
+    pub const fn from_file(file: File, path: PathBuf) -> Self {
         Self { file, path }
     }
 
-    pub(super) const fn as_file(&self) -> &File {
+    pub const fn as_file(&self) -> &File {
         &self.file
     }
 
-    pub(super) fn try_clone(&self) -> std::io::Result<Self> {
+    pub fn try_clone(&self) -> std::io::Result<Self> {
         Ok(Self {
             file: self.file.try_clone()?,
             path: self.path.clone(),
         })
     }
 
-    pub(super) fn into_file(self) -> File {
+    pub fn into_file(self) -> File {
         self.file
     }
 
-    pub(super) fn open_child(&self, leaf: &str) -> std::io::Result<Self> {
+    pub fn open_child(&self, leaf: &str) -> std::io::Result<Self> {
         open_child_directory_no_follow(&self.file, leaf).map(|file| Self {
             file,
             path: self.path.join(leaf),
         })
     }
 
-    pub(super) fn create_child(&self, leaf: &str) -> std::io::Result<Self> {
+    pub fn create_child(&self, leaf: &str) -> std::io::Result<Self> {
         fs_at::OpenOptions::default()
             .mkdir_at(&self.file, leaf)
             .map(|file| Self {
@@ -60,12 +60,12 @@ impl Directory {
             })
     }
 
-    pub(super) fn child_kind(&self, leaf: &str) -> std::io::Result<Option<ChildKind>> {
+    pub fn child_kind(&self, leaf: &str) -> std::io::Result<Option<ChildKind>> {
         child_kind(&self.file, leaf)
     }
 
-    pub(super) fn rename_no_replace(&self, from: &str, to: &str) -> std::io::Result<()> {
-        rename_no_replace_at(&self.file, &self.path, from, to)
+    pub fn rename_no_replace(&self, from: &str, to: &str) -> std::io::Result<()> {
+        rename_no_replace_at(&self.file, from, to)
     }
 }
 
@@ -287,7 +287,6 @@ pub fn rename_no_replace(from: &Path, to: &Path) -> std::io::Result<()> {
 #[cfg(windows)]
 fn rename_no_replace_at(
     parent: &File,
-    parent_path: &Path,
     from: &str,
     to: &str,
 ) -> std::io::Result<()> {
@@ -304,8 +303,7 @@ fn rename_no_replace_at(
     let mut options = fs_at::OpenOptions::default();
     options.desired_access(DELETE_ACCESS).follow(false);
     let source = options.open_path_at(parent, from)?;
-    let destination = parent_path.join(to);
-    let name: Vec<u16> = OsStr::new(&destination).encode_wide().collect();
+    let name: Vec<u16> = OsStr::new(to).encode_wide().collect();
     let name_bytes = name
         .len()
         .checked_mul(size_of::<u16>())
@@ -318,7 +316,7 @@ fn rename_no_replace_at(
     unsafe {
         info.write(FILE_RENAME_INFO {
             Anonymous: FILE_RENAME_INFO_0 { Flags: 0 },
-            RootDirectory: 0 as HANDLE,
+            RootDirectory: parent.as_raw_handle() as HANDLE,
             FileNameLength: u32::try_from(name_bytes)
                 .map_err(|_| std::io::ErrorKind::InvalidInput)?,
             FileName: [0],
@@ -344,7 +342,6 @@ fn rename_no_replace_at(
 #[cfg(any(target_os = "linux", target_os = "android", target_os = "freebsd"))]
 fn rename_no_replace_at(
     parent: &File,
-    _parent_path: &Path,
     from: &str,
     to: &str,
 ) -> std::io::Result<()> {
@@ -354,7 +351,6 @@ fn rename_no_replace_at(
 #[cfg(target_os = "macos")]
 fn rename_no_replace_at(
     parent: &File,
-    _parent_path: &Path,
     from: &str,
     to: &str,
 ) -> std::io::Result<()> {
@@ -387,7 +383,6 @@ pub fn rename_no_replace(_from: &Path, _to: &Path) -> std::io::Result<()> {
 )))]
 fn rename_no_replace_at(
     _parent: &File,
-    _parent_path: &Path,
     _from: &str,
     _to: &str,
 ) -> std::io::Result<()> {
@@ -406,6 +401,10 @@ fn unsupported_rename() -> std::io::Result<()> {
         std::io::ErrorKind::Unsupported,
         "atomic no-replace rename is unavailable on this platform",
     ))
+}
+
+pub(crate) fn rename_no_replace_in(parent: &File, from: &str, to: &str) -> std::io::Result<()> {
+    rename_no_replace_at(parent, from, to)
 }
 
 #[cfg(test)]

@@ -3,6 +3,14 @@ use camino::{Utf8Path, Utf8PathBuf};
 use provenance_scanner::{FileScan, Language};
 #[path = "files/native.rs"]
 mod native;
+#[path = "files/safe_fs.rs"]
+mod safe_fs;
+pub use safe_fs::{rename_no_replace, ChildKind, Directory};
+#[cfg(any(unix, windows))]
+#[path = "files/held.rs"]
+mod held;
+#[cfg(any(unix, windows))]
+pub use held::{FileIdentity, HeldRepositoryFile, PreparedRepositoryFile};
 use std::{fs::File, io::Read};
 #[cfg(test)]
 #[path = "files/tests.rs"]
@@ -29,6 +37,16 @@ pub enum FileAccessRefusal {
     Unavailable,
     #[error("repository file read failed: {0}")]
     Read(#[source] std::io::Error),
+    #[error("repository file exceeds the {limit}-byte limit")]
+    TooLarge { limit: usize },
+    #[error("repository file is not valid UTF-8")]
+    InvalidUtf8,
+    #[error("repository file changed after it was read")]
+    Changed,
+    #[error("repository file write failed: {0}")]
+    Write(#[source] std::io::Error),
+    #[error("repository file restore failed: {0}")]
+    Restore(#[source] std::io::Error),
 }
 
 pub(crate) struct OpenedRepositoryFile {
@@ -36,7 +54,7 @@ pub(crate) struct OpenedRepositoryFile {
     pub file: File,
 }
 
-pub(crate) struct RepositoryFiles {
+pub struct RepositoryFiles {
     path: Utf8PathBuf,
     #[cfg(any(unix, windows))]
     directory: File,
@@ -93,6 +111,15 @@ impl RepositoryFiles {
             language,
             &content,
         )))
+    }
+    #[cfg(any(unix, windows))]
+    pub fn read_bounded(
+        &self,
+        relative: &Utf8Path,
+        limit: usize,
+    ) -> Result<HeldRepositoryFile, FileAccessRefusal> {
+        validate_relative(relative)?;
+        held::open(&self.directory, relative, limit)
     }
     pub fn scan_tree(&self, limit: usize) -> Result<(Vec<FileScan>, bool), FileAccessRefusal> {
         #[cfg(any(unix, windows))]
