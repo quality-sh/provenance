@@ -71,7 +71,7 @@ fn parent() -> ThreadParent {
 }
 
 #[tokio::test]
-async fn discussion_members_are_direct_and_both_message_lists_paginate() {
+async fn discussion_members_are_direct_and_addressed_messages_paginate() {
     let repo = Repository::new("The shared graph is readable.");
     repo.all_kinds();
     let scope = ScopeId::new("default").unwrap();
@@ -134,7 +134,40 @@ async fn discussion_members_are_direct_and_both_message_lists_paginate() {
     assert_eq!(status, 200, "{second}");
     assert_eq!(second["data"]["items"].as_array().unwrap().len(), 1);
     assert_eq!(second["meta"]["limit"], 1);
+    let (status, changed) = call(
+        &host,
+        "GET",
+        &format!("{base}?limit=2&cursor={cursor}"),
+        None,
+    )
+    .await;
+    assert_eq!(status, 409, "{changed}");
+    assert_eq!(changed["error"]["kind"], "cursor_invalid");
 
+    let (status, default_page) = call(&host, "GET", &format!("{base}?limit=50"), None).await;
+    assert_eq!(status, 200, "{default_page}");
+    assert_eq!(default_page["meta"]["limit"], 50);
+    assert_eq!(default_page["meta"]["has_more"], true);
+    let default_cursor = default_page["meta"]["next_cursor"].as_str().unwrap();
+    let (status, default_second) = call(
+        &host,
+        "GET",
+        &format!("{base}?cursor={default_cursor}"),
+        None,
+    )
+    .await;
+    assert_eq!(status, 200, "{default_second}");
+    assert_eq!(default_second["meta"]["limit"], 50);
+    assert_eq!(default_second["meta"]["has_more"], false);
+    assert_eq!(default_second["data"]["items"].as_array().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn legacy_message_lists_paginate_and_refuse_changed_limits() {
+    let repo = Repository::new("The shared graph is readable.");
+    repo.all_kinds();
+    let scope = ScopeId::new("default").unwrap();
+    let store = StateStore::new(repo.layout.clone());
     let legacy_first = store
         .post_thread_message(PostMessageInput {
             scope_id: scope.clone(),
@@ -157,6 +190,8 @@ async fn discussion_members_are_direct_and_both_message_lists_paginate() {
             body: "Legacy two".into(),
         })
         .unwrap();
+
+    let host = host(&repo);
     let legacy = format!(
         "/requirements/req_shared/discussion-containers/{}/legacy-messages",
         legacy_first.thread.id.as_str()
@@ -167,10 +202,19 @@ async fn discussion_members_are_direct_and_both_message_lists_paginate() {
     assert_eq!(first["meta"]["limit"], 1);
     assert_eq!(first["meta"]["has_more"], true);
     let cursor = first["meta"]["next_cursor"].as_str().unwrap();
-    let (status, second) = call(&host, "GET", &format!("{legacy}?cursor={cursor}"), None).await;
+    let (status, changed) = call(&host, "GET", &format!("{legacy}?cursor={cursor}"), None).await;
+    assert_eq!(status, 409, "{changed}");
+    assert_eq!(changed["error"]["kind"], "cursor_invalid");
+    let (status, second) = call(
+        &host,
+        "GET",
+        &format!("{legacy}?limit=1&cursor={cursor}"),
+        None,
+    )
+    .await;
     assert_eq!(status, 200, "{second}");
     assert_eq!(second["data"]["items"].as_array().unwrap().len(), 1);
-    assert_eq!(second["meta"]["limit"], 50);
+    assert_eq!(second["meta"]["limit"], 1);
     assert_eq!(second["meta"]["has_more"], false);
     assert!(second["meta"]["next_cursor"].is_null());
 }
