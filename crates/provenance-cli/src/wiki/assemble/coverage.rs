@@ -1,49 +1,12 @@
 use crate::wiki::model::{CodeScan, ImplementationBinding, VerificationSite};
-use provenance_core::coverage::{
-    AnnotationResult, BindingResult, CoverageReport, SiteCore, SiteRole,
-};
+use provenance_core::coverage::{CoverageReport, CoverageSite, SiteRole};
 
 use super::context::Assembler;
 
-#[derive(Clone, Copy)]
-enum ScannedSite<'a> {
-    Annotation(&'a AnnotationResult),
-    Binding(&'a BindingResult),
-}
-
-impl<'a> ScannedSite<'a> {
-    const fn core(self) -> &'a SiteCore {
-        match self {
-            Self::Annotation(site) => &site.site,
-            Self::Binding(site) => &site.site,
-        }
-    }
-
-    fn symbol(self) -> Option<&'a str> {
-        match self {
-            Self::Annotation(site) => site.function_name.as_deref(),
-            Self::Binding(site) => site.item_name.as_deref(),
-        }
-    }
-
-    fn location(self, assembler: &Assembler<'_>) -> crate::wiki::links::EvidenceRef {
-        let site = self.core();
-        let reference = format!("{}:{}", site.file_path, site.line);
-        assembler.resolver.resolve_at(
-            &reference,
-            assembler
-                .coverage
-                .and_then(|report| report.commit.as_deref()),
-        )
-    }
-}
-
-fn scanned_sites(report: &CoverageReport) -> impl Iterator<Item = ScannedSite<'_>> {
-    report
-        .bindings
-        .iter()
-        .map(ScannedSite::Binding)
-        .chain(report.annotations.iter().map(ScannedSite::Annotation))
+fn native_first(report: &CoverageReport) -> Vec<CoverageSite<'_>> {
+    let mut sites = report.sites().collect::<Vec<_>>();
+    sites.sort_by_key(|site| matches!(site, CoverageSite::Annotation(_)));
+    sites
 }
 
 impl Assembler<'_> {
@@ -57,18 +20,18 @@ impl Assembler<'_> {
 
     pub(super) fn implementations(&self, rule_id: &str) -> Vec<ImplementationBinding> {
         let scanned = self.coverage.and_then(|report| {
-            scanned_sites(report).find(|site| {
+            native_first(report).into_iter().find(|site| {
                 let core = site.core();
                 core.rule_id == rule_id
-                    && core.role() == SiteRole::Implementation
-                    && core.is_current()
+                    && site.role() == SiteRole::Implementation
+                    && site.is_current()
             })
         });
         let mut implementations = Vec::new();
         if let Some(site) = scanned {
             implementations.push(ImplementationBinding {
                 symbol: site.symbol().map(str::to_string),
-                location: site.location(self),
+                location: self.site_location(site),
             });
         }
         for binding in self
@@ -93,24 +56,24 @@ impl Assembler<'_> {
 
     pub(super) fn verification_sites(&self, rule_id: &str) -> Vec<VerificationSite> {
         let implementation_file = self.coverage.and_then(|report| {
-            scanned_sites(report)
-                .map(ScannedSite::core)
+            native_first(report)
+                .into_iter()
                 .find(|site| {
-                    site.rule_id == rule_id
+                    site.core().rule_id == rule_id
                         && site.role() == SiteRole::Implementation
                         && site.is_current()
                 })
-                .map(|site| &site.file_path)
+                .map(|site| &site.core().file_path)
         });
         let mut sites = self
             .coverage
             .into_iter()
-            .flat_map(scanned_sites)
+            .flat_map(native_first)
             .filter(|site| {
                 let core = site.core();
                 core.rule_id == rule_id
-                    && core.role() == SiteRole::Verification
-                    && core.is_current()
+                    && site.role() == SiteRole::Verification
+                    && site.is_current()
             })
             .map(|site| VerificationSite {
                 method: site
@@ -119,7 +82,7 @@ impl Assembler<'_> {
                     .clone()
                     .expect("verification sites have a method"),
                 symbol: site.symbol().map(str::to_string),
-                location: site.location(self),
+                location: self.site_location(site),
                 outside_implementation_module: implementation_file
                     .is_some_and(|file| file != &site.core().file_path),
             })
@@ -146,5 +109,14 @@ impl Assembler<'_> {
             }
         }
         sites
+    }
+
+    fn site_location(&self, site: CoverageSite<'_>) -> crate::wiki::links::EvidenceRef {
+        let site = site.core();
+        let reference = format!("{}:{}", site.file_path, site.line);
+        self.resolver.resolve_at(
+            &reference,
+            self.coverage.and_then(|report| report.commit.as_deref()),
+        )
     }
 }

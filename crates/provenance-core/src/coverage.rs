@@ -250,6 +250,41 @@ impl DerefMut for BindingResult {
     }
 }
 
+/// A borrowed coverage site, independent of its source syntax.
+#[derive(Debug, Clone, Copy)]
+pub enum CoverageSite<'a> {
+    Annotation(&'a AnnotationResult),
+    Binding(&'a BindingResult),
+}
+
+impl<'a> CoverageSite<'a> {
+    pub const fn core(self) -> &'a SiteCore {
+        match self {
+            Self::Annotation(site) => &site.site,
+            Self::Binding(site) => &site.site,
+        }
+    }
+
+    pub fn symbol(self) -> Option<&'a str> {
+        match self {
+            Self::Annotation(site) => site.function_name.as_deref(),
+            Self::Binding(site) => site.item_name.as_deref(),
+        }
+    }
+
+    pub const fn role(self) -> SiteRole {
+        self.core().role()
+    }
+
+    pub const fn anchor_state(self) -> AnchorState {
+        self.core().anchor_state
+    }
+
+    pub const fn is_current(self) -> bool {
+        self.core().is_current()
+    }
+}
+
 #[derive(serde::Serialize)]
 struct SerializedSite<'a, D> {
     rule_id: &'a str,
@@ -388,6 +423,14 @@ impl CoverageReport {
             bindings,
             verification_bindings: Vec::new(),
         }
+    }
+
+    /// Iterate through annotations first and then native bindings.
+    pub fn sites(&self) -> impl DoubleEndedIterator<Item = CoverageSite<'_>> {
+        self.annotations
+            .iter()
+            .map(CoverageSite::Annotation)
+            .chain(self.bindings.iter().map(CoverageSite::Binding))
     }
 }
 
