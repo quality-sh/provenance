@@ -1,11 +1,8 @@
 //! MCP schemas and result rendering for target-first authoring.
 
-use super::{
-    authoring::{render_readable, Action, ActionError},
-    get_port,
-};
+use super::authoring::{render_readable, Action, ActionError};
 use provenance_core::NodeType;
-use provenance_store::operations::catalog::{self, Definition};
+use provenance_store::operations::catalog::Definition;
 use rmcp::model::{CallToolResult, Content, Tool};
 use serde_json::{json, Map, Value};
 
@@ -17,12 +14,7 @@ pub fn tools(host: &crate::StatementHost) -> Vec<Tool> {
 }
 
 fn tool(host: &crate::StatementHost, action: Action) -> Option<Tool> {
-    if action != Action::Create && !get_port::is_resolver_available(host) {
-        return None;
-    }
-    let definitions = catalog::target_definitions(action)
-        .filter(|(_, definition)| host.advertises(definition.name))
-        .collect::<Vec<_>>();
+    let definitions = host.executable_target_definitions(action);
     if definitions.is_empty() {
         return None;
     }
@@ -246,6 +238,7 @@ fn action_error(error: &ActionError) -> CallToolResult {
         ActionError::InvalidOptions => "invalid_options",
         ActionError::NotFound => "not_found",
         ActionError::AmbiguousIdentity => "ambiguous_identity",
+        ActionError::AccessDenied => "access_denied",
         ActionError::Operation(_) => "operation_failed",
     };
     CallToolResult::structured_error(json!({
