@@ -16,6 +16,7 @@ use provenance_macros::rule;
 use sqlx::{QueryBuilder, Sqlite};
 
 const EXCERPT_CHARS: usize = 240;
+const EXCERPT_PREFIX_BYTES: usize = EXCERPT_CHARS * 4;
 
 /// Lists addressed Discussions in one scope or under one parent.
 #[rule("rule_porcelain_discussions_list_scope_or_parent")]
@@ -92,7 +93,11 @@ async fn list(ctx: &ReadContext, query: DiscussionListQuery) -> anyhow::Result<D
     let mut sql = QueryBuilder::<Sqlite>::new(
         "SELECT j.discussion_id,j.parent_type,j.parent_id,\
          json_extract(j.payload,'$.status'),j.version,\
-         substr(m.body,1,241),length(m.body)>240 \
+         substr(CAST(m.body AS BLOB),1,",
+    );
+    sql.push_bind(i64::try_from(EXCERPT_PREFIX_BYTES)?);
+    sql.push(
+        "),length(CAST(m.body AS BLOB)) \
          FROM review_journal j \
          JOIN review_journal first ON first.scope_id=j.scope_id \
            AND first.discussion_id=j.discussion_id AND first.version=1 \
@@ -122,7 +127,7 @@ async fn list(ctx: &ReadContext, query: DiscussionListQuery) -> anyhow::Result<D
     sql.push(" AND NOT EXISTS(SELECT 1 FROM review_journal newer WHERE newer.scope_id=j.scope_id AND newer.discussion_id=j.discussion_id AND newer.version>j.version) ORDER BY j.discussion_id LIMIT ")
         .push_bind(i64::try_from(query.limit + 1)?);
     let mut tx = ctx.snapshot().connection().await;
-    let rows: Vec<(String, String, String, String, i64, String, i64)> = sql
+    let rows: Vec<(String, String, String, String, i64, Vec<u8>, i64)> = sql
         .build_query_as()
         .fetch_all(&mut **tx)
         .await
@@ -132,7 +137,7 @@ async fn list(ctx: &ReadContext, query: DiscussionListQuery) -> anyhow::Result<D
     let row_count = rows.len();
     let mut entries = Vec::new();
     let mut bytes = 0;
-    for (id, kind, parent_id, status, version, opening, truncated) in rows {
+    for (id, kind, parent_id, status, version, opening, body_bytes) in rows {
         if entries.len() == query.limit {
             break;
         }
@@ -143,7 +148,7 @@ async fn list(ctx: &ReadContext, query: DiscussionListQuery) -> anyhow::Result<D
             status,
             version,
             &opening,
-            truncated,
+            body_bytes,
         )?;
         let size = serde_json::to_vec(&entry)?.len();
         if bytes + size > PAGE_BYTES - 16_384 {
@@ -168,10 +173,19 @@ fn summary(
     parent_id: String,
     status: String,
     version: i64,
-    opening: &str,
-    truncated: i64,
+    opening: &[u8],
+    body_bytes: i64,
 ) -> anyhow::Result<DiscussionSummary> {
-    let opening_excerpt = opening.chars().take(EXCERPT_CHARS).collect();
+    let prefix = match std::str::from_utf8(opening) {
+        Ok(prefix) => prefix,
+        Err(error) if error.error_len().is_none() => {
+            std::str::from_utf8(&opening[..error.valid_up_to()])?
+        }
+        Err(error) => return Err(error.into()),
+    };
+    let opening_excerpt = prefix.chars().take(EXCERPT_CHARS).collect();
+    let excerpt_truncated = usize::try_from(body_bytes)? > opening.len()
+        || prefix.chars().nth(EXCERPT_CHARS).is_some();
     Ok(DiscussionSummary {
         discussion_id: StableId::new(id)?,
         parent: ThreadParent {
@@ -181,7 +195,7 @@ fn summary(
         status: serde_json::from_value(serde_json::Value::String(status))?,
         version: u64::try_from(version)?,
         opening_excerpt,
-        excerpt_truncated: truncated != 0,
+        excerpt_truncated,
     })
 }
 
