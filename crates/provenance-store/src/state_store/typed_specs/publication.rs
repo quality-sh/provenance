@@ -2,7 +2,7 @@ use provenance_core::{ImplementationBinding, NodeType, Requirement, Rule, ScopeI
 
 use super::{cascade::Cascade, replace_records};
 use crate::state_store::{ReconciledResource, StateStore, TypedSpecResult};
-use crate::{shards, write_error::publication_started};
+use crate::shards;
 
 pub(super) struct Replacement {
     pub sources: Vec<Source>,
@@ -51,18 +51,8 @@ impl Replacement {
             &self.requirements,
             &self.rules,
         )?;
-        let mut desired = self
-            .sources
-            .iter()
-            .cloned()
-            .map(Into::into)
-            .chain(self.requirements.iter().cloned().map(Into::into))
-            .chain(self.rules.iter().cloned().map(Into::into))
-            .collect::<Vec<_>>();
-        desired.extend(store.list_domains(scope)?.into_iter().map(Into::into));
-        self.cascade.extend_review_records(&mut desired);
         store
-            .publish_typed_spec(scope, &result.declared_by, &desired, |store| {
+            .publish_typed_spec(scope, &result.declared_by, |store| {
                 store.replace_graph_records(
                     &shards::sources_path(&store.layout, scope),
                     self.sources,
@@ -82,6 +72,5 @@ impl Replacement {
                 self.cascade.publish(store, scope)?;
                 store.raise_requirement_reviews(scope, requirement_resources, rule_resources)
             })
-            .map_err(publication_started)
     }
 }
