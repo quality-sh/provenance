@@ -47,6 +47,12 @@ pub struct NullClearBinding {
     pub clear_name: &'static str,
 }
 
+#[derive(Clone)]
+pub struct ArgumentAlias {
+    pub argument: &'static str,
+    pub field: &'static str,
+}
+
 #[derive(Clone, Default)]
 pub struct RequestBinding {
     pub body: BodyBinding,
@@ -56,6 +62,7 @@ pub struct RequestBinding {
     pub scope_field: Option<&'static str>,
     pub query: Vec<Parameter>,
     pub null_clears: Vec<NullClearBinding>,
+    pub argument_aliases: Vec<ArgumentAlias>,
 }
 
 #[derive(Clone)]

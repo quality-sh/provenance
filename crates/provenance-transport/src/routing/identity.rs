@@ -12,10 +12,7 @@ pub(super) fn reject(
     let Some(object) = data.as_object() else {
         return Ok(());
     };
-    if object.get("context").is_some_and(Value::is_object) {
-        return Err(invalid(Some("context")));
-    }
-    let bound = definition
+    let mut bound = definition
         .registration
         .request
         .path
@@ -55,9 +52,6 @@ pub(super) fn reject(
                 .iter()
                 .map(|binding| binding.field),
         );
-    let repeated = ["repository", "scope", "context"]
-        .into_iter()
-        .chain(bound)
-        .find(|name| object.contains_key(*name));
+    let repeated = bound.find(|name| object.contains_key(*name));
     repeated.map_or(Ok(()), |field| Err(invalid(Some(field))))
 }

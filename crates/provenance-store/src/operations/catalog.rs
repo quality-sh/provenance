@@ -36,9 +36,9 @@ pub use v2_review_reads::*;
 pub use authoring::{Apply, BeginVerification, CompleteVerification, Plan};
 #[cfg(feature = "schema")]
 pub use binding::{
-    BodyBinding, Controls, HandlerBinding, HeaderBinding, NullClearBinding, ParentBinding,
-    PathBinding, QueryRequestBinding, QueryRoute, Registration, RequestBinding, ResponseBinding,
-    ResponseSelection, SelectorBinding,
+    ArgumentAlias, BodyBinding, Controls, HandlerBinding, HeaderBinding, NullClearBinding,
+    ParentBinding, PathBinding, QueryRequestBinding, QueryRoute, Registration, RequestBinding,
+    ResponseBinding, ResponseSelection, SelectorBinding,
 };
 pub use context::{
     ContextKind, ContextResolver, ExecutionNeed, ExecutionNeeds, PreparedContext, PreparedRead,
