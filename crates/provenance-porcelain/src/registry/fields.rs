@@ -19,6 +19,10 @@ pub enum FieldValue {
     CatalogLimit,
     /// A TCP port number.
     Port,
+    /// Name and value pairs, each given as the name, this separator, and the value.
+    Pairs(char),
+    /// One JSON object.
+    Object,
 }
 
 /// One field of a command input, in the order that the command documents it.
@@ -44,6 +48,8 @@ pub struct Field {
     pub internal: bool,
     /// The command refuses to run without this field.
     pub required: bool,
+    /// Giving this field changes state outside the records that the command reads.
+    pub writes: bool,
 }
 
 impl Field {
@@ -58,6 +64,7 @@ impl Field {
             leading_hyphen: false,
             internal: false,
             required: false,
+            writes: false,
         }
     }
 
@@ -113,6 +120,12 @@ impl Field {
     }
 
     #[must_use]
+    pub const fn writes(mut self) -> Self {
+        self.writes = true;
+        self
+    }
+
+    #[must_use]
     pub const fn required(mut self) -> Self {
         self.required = true;
         self
@@ -128,9 +141,11 @@ pub enum Relation {
     Conflicts(&'static str, &'static str),
 }
 
-/// The input of a command as fields: their order, the fields that name the target of
-/// the command, the relations between them, and the schema of the typed input that
-/// the fields make, when the command reads one.
+/// The input of a command as fields.
+///
+/// It holds their order, the fields that name the target of the command, the relations
+/// between them, and the schema of the typed input that the fields make, when the
+/// command reads one.
 #[derive(Clone, Copy, Debug)]
 pub struct Fields {
     pub fields: &'static [Field],

@@ -5,7 +5,6 @@ use provenance_transport::repository::RepoContext;
 /// Runs one API action with the selected context and applies discovery filters
 /// and limits before rendering.
 #[provenance_macros::rule("rule_porcelain_api_uses_context")]
-#[provenance_macros::rule("rule_cli_api_discovery_filter_limit")]
 #[provenance_macros::rule("rule_porcelain_output_reports_bounds")]
 pub async fn dispatch_api(
     repo: &str,
@@ -19,28 +18,9 @@ pub async fn dispatch_api(
     let service = host.porcelain().api();
     match service.execute_api(request).await {
         Ok(ApiOutcome::Catalog(catalog)) => {
-            let total = catalog.routes.len();
-            let needle = filter.map(str::to_ascii_lowercase);
-            let mut routes = catalog
-                .routes
-                .into_iter()
-                .filter(|route| {
-                    needle.as_ref().is_none_or(|needle| {
-                        format!(
-                            "{} {} {}",
-                            route.method.as_str(),
-                            route.path,
-                            route.description
-                        )
-                        .to_ascii_lowercase()
-                        .contains(needle)
-                    })
-                })
-                .collect::<Vec<_>>();
-            let matching = routes.len();
-            if let Some(limit) = limit {
-                routes.truncate(limit);
-            }
+            let selection = catalog.select(filter, limit);
+            let (total, matching, mut routes) =
+                (selection.total, selection.matching, selection.routes);
             if format == Some(OutputFormat::Json) {
                 let returned = routes.len();
                 println!(

@@ -108,8 +108,8 @@ fn api_arguments_select_methods_bodies_queries_and_headers() {
         path: Some("/requirements".into()),
         method: Some(ApiMethod::Post),
         query: BTreeMap::from([("limit".into(), "5".into())]),
-        headers: BTreeMap::from([("Idempotency-Key".into(), "key-one".into())]),
-        body: body(&json!({"statement": "One statement."})),
+        header: BTreeMap::from([("Idempotency-Key".into(), "key-one".into())]),
+        input: body(&json!({"statement": "One statement."})),
     };
     let ApiRequest::Invoke(input) = ApiRequest::from(arguments).expect("valid request") else {
         panic!("a path selects one invocation");
@@ -152,17 +152,17 @@ fn arguments_refuse_call_options_without_a_path() {
     );
     assert_eq!(
         refused_field(ApiArguments {
-            headers: BTreeMap::from([("Accept".into(), "json".into())]),
+            header: BTreeMap::from([("Accept".into(), "json".into())]),
             ..Default::default()
         }),
-        "headers"
+        "header"
     );
     assert_eq!(
         refused_field(ApiArguments {
-            body: body(&json!({})),
+            input: body(&json!({})),
             ..Default::default()
         }),
-        "body"
+        "input"
     );
 }
 
@@ -184,17 +184,17 @@ fn header_names_that_differ_only_in_case_refuse() {
     let arguments = ApiArguments {
         path: Some("requirements/req_one".into()),
         method: Some(ApiMethod::Patch),
-        headers: BTreeMap::from([
+        header: BTreeMap::from([
             ("If-Match".into(), "\"1\"".into()),
             ("if-match".into(), "\"2\"".into()),
         ]),
-        body: body(&json!({"description": "One description."})),
+        input: body(&json!({"description": "One description."})),
         ..Default::default()
     };
     let error = ApiRequest::from(arguments).expect_err("one header name, two values");
     assert_eq!(error.kind, ApiErrorKind::InvalidOptions);
     assert_eq!(error.failure["error"]["kind"], "invalid_input");
-    assert_eq!(error.failure["error"]["field"], "headers");
+    assert_eq!(error.failure["error"]["field"], "header");
 }
 
 #[tokio::test]

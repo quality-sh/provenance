@@ -15,7 +15,7 @@ pub fn tool() -> Tool {
         Command::Api.declaration().name,
         Command::Api.declaration().description,
         Effect::Plumbing,
-        provenance_porcelain::api::input_schema(),
+        crate::derived::input_schema(provenance_porcelain::registry::Command::Api),
         provenance_porcelain::api::output_schema(),
         SchemaDeclaration::Remove,
     )

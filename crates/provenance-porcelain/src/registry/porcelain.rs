@@ -55,31 +55,36 @@ pub(super) fn declaration(command: Command) -> Declaration {
             description: SEARCH_DESCRIPTION,
             grammar: Grammar::Name,
             internal: false,
-            input: Input::Fields(Fields::untyped(SEARCH_FIELDS)),
+            bound: true,
+            input: Input::Fields(Fields::new(SEARCH_FIELDS, crate::search::input_schema)),
         },
         Command::Api => Declaration {
             name: "api",
             description: crate::api::API_DESCRIPTION,
             grammar: Grammar::Name,
             internal: false,
-            input: Input::Fields(Fields::untyped(API_FIELDS).target(&["path"])),
+            bound: true,
+            input: Input::Fields(
+                Fields::new(API_FIELDS, crate::api::input_schema).target(&["path"]),
+            ),
         },
         Command::Check => Declaration {
             name: "check",
             description: CHECK_DESCRIPTION,
             grammar: Grammar::Name,
             internal: false,
+            bound: true,
             input: Input::Fields(
-                Fields::new(CHECK_FIELDS, super::arguments::check_schema)
-                    .relations(CHECK_RELATIONS),
+                Fields::new(CHECK_FIELDS, crate::check::input_schema).relations(CHECK_RELATIONS),
             ),
         },
         Command::Trace => Declaration {
             name: "trace",
             description: TRACE_DESCRIPTION,
             grammar: Grammar::Target,
-            input: Input::Fields(Fields::untyped(TRACE_FIELDS)),
+            input: Input::Fields(Fields::new(TRACE_FIELDS, crate::get::trace_input_schema)),
             internal: false,
+            bound: true,
         },
         Command::Change => Declaration {
             name: "change",
@@ -87,12 +92,14 @@ pub(super) fn declaration(command: Command) -> Declaration {
             grammar: Grammar::Name,
             input: Input::None,
             internal: false,
+            bound: true,
         },
         Command::Prime => Declaration {
             name: "prime",
             description: PRIME_DESCRIPTION,
             grammar: Grammar::Name,
             internal: false,
+            bound: false,
             input: Input::Fields(Fields::new(PRIME_FIELDS, prime_schema)),
         },
         Command::Action(action) => action_declaration(action),
@@ -112,9 +119,10 @@ const fn get_declaration() -> Declaration {
         description: GET_DESCRIPTION,
         grammar: Grammar::Target,
         input: Input::Fields(
-            Fields::new(GET_FIELDS, super::arguments::get_schema).relations(GET_RELATIONS),
+            Fields::new(GET_FIELDS, crate::get::input_schema).relations(GET_RELATIONS),
         ),
         internal: false,
+        bound: true,
     }
 }
 
@@ -171,5 +179,6 @@ const fn action_declaration(action: Action) -> Declaration {
         grammar,
         input,
         internal: false,
+        bound: true,
     }
 }

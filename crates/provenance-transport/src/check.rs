@@ -1,16 +1,20 @@
 //! The repository adapter of the check command: each check category over the working
 //! tree and the graph of one repository.
 
+use crate::coverage::ReportFormat;
 use crate::repository::{initialization_hint, is_not_initialized, RepoContext};
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{ensure_supported_schema_version, Manifest};
 use provenance_macros::rule;
-use provenance_porcelain::check::{Category, CategoryRun, CheckPort, Finding, PortFuture, Refusal};
+use provenance_porcelain::check::{
+    Category, CategoryRun, CheckInput, CheckPort, Finding, PortFuture, Refusal, ReportFileFormat,
+};
 use provenance_store::dictionary_reference::{resolve_project_dictionary, DictionaryResolution};
 use provenance_store::layout::ProvenanceLayout;
 use provenance_store::repository::declared_scope;
 use provenance_store::state_store::StateStore;
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 mod bindings;
 mod gaps;
@@ -227,6 +231,33 @@ impl CheckPort for RepositoryCheckPort {
             .await
             .map_err(|error| format!("check worker failed: {error}"))?
         })
+    }
+
+    /// This port with the strict gate, the base commit, and the bindings fields of
+    /// one check. An undeclared scope refuses the check.
+    fn with_options(&self, input: &CheckInput) -> Result<Option<Arc<dyn CheckPort>>, String> {
+        if let Some(scope) = &input.scope {
+            ensure_declared_scope(&self.context.repo, scope).map_err(|error| error.to_string())?;
+        }
+        if !input.has_run_options() {
+            return Ok(None);
+        }
+        let format = match input.output_format.unwrap_or_default() {
+            ReportFileFormat::Json => ReportFormat::Json,
+            ReportFileFormat::Markdown => ReportFormat::Markdown,
+        };
+        let mut port = self.clone();
+        port.strict = input.strict;
+        port.base.clone_from(&input.base);
+        port.bindings = BindingOptions {
+            path: input.path.clone().map(Utf8PathBuf::from),
+            baseline: input.baseline.clone().map(Utf8PathBuf::from),
+            output: input
+                .output
+                .clone()
+                .map(|output| (Utf8PathBuf::from(output), format)),
+        };
+        Ok(Some(Arc::new(port)))
     }
 }
 

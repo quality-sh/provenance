@@ -121,7 +121,7 @@ async fn mcp_serves_the_tools_of_the_cli_repository() {
     assert_eq!(text(&get), cli_get.trim_end());
     results.push(get);
 
-    let check = client.call("check", json!({"categories":["graph"]})).await;
+    let check = client.call("check", json!({"graph": true})).await;
     let cli_check = cli(&["check", "--repo", &repo, "--graph"]);
     assert_eq!(text(&check), cli_check.trim_end());
     results.push(check);
@@ -403,7 +403,7 @@ async fn mcp_check_docs_matches_the_cli_check_docs() {
     let result = wire
         .request(
             "tools/call",
-            json!({"name":"check","arguments":{"categories":["docs"]}}),
+            json!({"name":"check","arguments":{"docs": true}}),
         )
         .await;
     let output = provenance()
