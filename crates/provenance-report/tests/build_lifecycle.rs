@@ -39,6 +39,7 @@ fn commit(repo: &Path) -> String {
             "-c",
             "commit.gpgsign=false",
             "commit",
+            "--allow-empty",
             "-qm",
             "Record graph state",
         ],
