@@ -1,12 +1,12 @@
 //! Composed repository checks for human-facing interfaces.
 
 use provenance_macros::rule;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::sync::Arc;
 use std::{future::Future, pin::Pin};
 
 /// A distinct repository check category.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Category {
     Graph,
@@ -14,17 +14,30 @@ pub enum Category {
     Bindings,
 }
 
-const ALL_CATEGORIES: &[Category] = &[Category::Graph, Category::Statements, Category::Bindings];
+impl Category {
+    pub const ALL: [Self; 3] = [Self::Graph, Self::Statements, Self::Bindings];
+}
 
 /// The categories selected for one check.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct CheckInput {
+    #[serde(rename = "categories", default, deserialize_with = "deserialize_categories")]
     selectors: Vec<Category>,
+    #[serde(skip)]
     scope: Option<String>,
 }
 
+fn deserialize_categories<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<Category>, D::Error> {
+    let mut categories = Vec::<Category>::deserialize(deserializer)?;
+    categories.sort_unstable();
+    categories.dedup();
+    Ok(categories)
+}
+
 /// One actionable check finding.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct Finding {
     pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -32,27 +45,29 @@ pub struct Finding {
 }
 
 /// Commit selection used by one strict statement check.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct StatementContext {
     pub candidate_commit: String,
     pub base_commit: Option<String>,
 }
 
 /// Repository policy for Rule binding findings.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum BindingPolicy {
     Warning,
     Error,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct BindingContext {
     pub policy: BindingPolicy,
 }
 
 /// Typed context emitted by category computations.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, schemars::JsonSchema)]
 #[serde(untagged)]
 pub enum CategoryContext {
     Statements(StatementContext),
@@ -103,7 +118,7 @@ impl Finding {
 }
 
 /// The result state of one selected category.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Status {
     Passed,
@@ -112,7 +127,8 @@ pub enum Status {
 }
 
 /// The findings and state of one selected category.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct CategoryReport {
     pub category: Category,
     pub status: Status,
@@ -199,7 +215,8 @@ impl CategoryReport {
 }
 
 /// The semantic result of one complete check request.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct CheckOutcome {
     pub categories: Vec<CategoryReport>,
 }
@@ -240,11 +257,42 @@ impl CheckInput {
     /// Return selected categories, or all categories when none were selected.
     pub fn categories(&self) -> &[Category] {
         if self.selectors.is_empty() {
-            ALL_CATEGORIES
+            &Category::ALL
         } else {
             &self.selectors
         }
     }
+}
+
+fn schema<T: schemars::JsonSchema>() -> serde_json::Value {
+    let mut value = serde_json::to_value(
+        schemars::generate::SchemaSettings::draft2020_12()
+            .into_generator()
+            .into_root_schema_for::<T>(),
+    ).expect("typed check schema is JSON");
+    value.as_object_mut().expect("schema is an object").remove("$schema");
+    value
+}
+
+/// The schema of the same request that the check service deserializes.
+pub fn input_schema() -> serde_json::Value {
+    schema::<CheckInput>()
+}
+
+/// The schema of the result emitted by the check service.
+pub fn output_schema() -> serde_json::Value {
+    schema::<CheckOutcome>()
+}
+
+/// Render category results for terminal and MCP readers.
+pub fn render_readable(outcome: &CheckOutcome) -> String {
+    outcome.categories.iter().flat_map(|report| {
+        let heading = format!("{:?}: {:?}", report.category, report.status).to_ascii_lowercase();
+        std::iter::once(heading)
+            .chain(report.findings.iter().map(|finding| format!("  - {}", finding.message)))
+            .chain(report.unavailable_reason.iter().map(|reason| format!("  - {reason}")))
+            .collect::<Vec<_>>()
+    }).collect::<Vec<_>>().join("\n")
 }
 
 impl<P: CheckPort> crate::Porcelain<P> {
