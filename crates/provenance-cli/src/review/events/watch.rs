@@ -1,7 +1,8 @@
 use super::subscribers::Subscribers;
 use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
 use provenance_store::{
-    layout::ProvenanceLayout, publication::publication_guard, review_changes::ReviewStateSnapshot,
+    cache::ProjectionFamily, layout::ProvenanceLayout, publication::publication_guard,
+    review_changes::ReviewStateSnapshot, state_store::StateStore,
 };
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -66,7 +67,26 @@ impl Observation {
             if reattach {
                 let mut watcher = watcher.lock().unwrap();
                 let _ = watcher.unwatch(layout.state_dir().as_std_path());
+                let _ = watcher.unwatch(layout.provenance_dir().as_std_path());
+                watcher.watch(
+                    layout.provenance_dir().as_std_path(),
+                    RecursiveMode::NonRecursive,
+                )?;
                 watcher.watch(layout.state_dir().as_std_path(), RecursiveMode::Recursive)?;
+            }
+            require_regular_file(layout.manifest_path().as_std_path())?;
+            require_regular_file(layout.provenance_dir().join("settings.json").as_std_path())?;
+            let manifest = StateStore::under_guard(&guard).manifest()?;
+            for scope in &manifest.scopes {
+                for family in ProjectionFamily::ALL {
+                    require_regular_file(
+                        layout
+                            .scopes_dir()
+                            .join(scope.id.as_str())
+                            .join(family.shard_suffix())
+                            .as_std_path(),
+                    )?;
+                }
             }
             ReviewStateSnapshot::read(&guard)
         })
@@ -85,14 +105,22 @@ impl Observation {
             };
             if notice.lost {
                 baseline = None;
-                subscribers.unavailable("file change notifications were lost");
-                continue;
             }
             // Finish a started guarded read before shutdown joins the observer.
-            let read = self.read(notice.reattach).await;
+            let first = self.read(notice.reattach || notice.lost).await;
+            let mut reset_reason = notice.lost.then_some("file-events-lost");
+            let read = if let Ok(current) = first {
+                Ok(current)
+            } else {
+                baseline = None;
+                reset_reason.get_or_insert("observation-recovered");
+                self.read(true).await
+            };
             match read {
                 Ok(current) => {
-                    if let Some(previous) = &baseline {
+                    if let Some(reason) = reset_reason {
+                        subscribers.reset(reason);
+                    } else if let Some(previous) = &baseline {
                         subscribers.changed(current.changes_since(previous));
                     } else {
                         subscribers.reset("observation-recovered");
@@ -102,7 +130,7 @@ impl Observation {
                 }
                 Err(error) => {
                     baseline = None;
-                    subscribers.unavailable(&format!("{error:#}"));
+                    subscribers.unavailable("observation-failed", &format!("{error:#}"));
                 }
             }
         }
@@ -145,6 +173,19 @@ impl Observation {
             },
         }
     }
+}
+
+fn require_regular_file(path: &std::path::Path) -> anyhow::Result<()> {
+    match std::fs::symlink_metadata(path) {
+        Ok(metadata) => anyhow::ensure!(
+            metadata.is_file(),
+            "state path is not a regular file: {}",
+            path.display()
+        ),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.into()),
+    }
+    Ok(())
 }
 
 fn relevant(event: &Event, layout: &ProvenanceLayout) -> bool {

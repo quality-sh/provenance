@@ -378,3 +378,26 @@ Git remains the source for history.
 
 Page refresh, draft retention, and navigation acknowledgement are separate page
 work. These host frames do not yet make the existing page refresh automatically.
+
+## Notification loss and recovery
+
+Native queue overflow, `need_rescan`, and the host event queue's overflow
+invalidate the previous snapshot. The host attaches fresh parent and child
+watches and reads current canonical state under the publication guard before
+it sends `reset` with reason `file-events-lost`. It does not compare the new
+snapshot with a baseline that can have missed changes.
+
+A failed snapshot or watch attachment gets one immediate recovery attempt.
+There is no delay or timer. If the attempt fails, connected readers receive
+`reset` with reason `observation-failed`, then their sockets close. The host
+reports unavailable updates on stderr. Event upgrades return 503 while
+observation is unavailable. A later file event can restore observation. The
+host then reads fully and sends `observation-recovered`; new connections receive
+ready at the current sequence and must read current data.
+
+A subscriber that loses queued frames gets `subscriber-loss` and disconnects.
+This reset also reaches other connected readers, so their sequence stays valid.
+Clients must treat every reset and any epoch or sequence gap as a full-read
+request. The feed cannot recover missed event count, order, or intermediate
+values. On shutdown, observation stops and a started guarded read finishes.
+The existing operation drain still waits for writes.

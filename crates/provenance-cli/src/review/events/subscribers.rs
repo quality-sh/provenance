@@ -77,26 +77,29 @@ impl Subscribers {
         }
     }
 
-    pub fn reset(&self, reason: &str) {
-        Self::reset_locked(&mut self.inner.lock().unwrap(), reason);
+    pub fn reset(&self, reason: &str) -> Frame {
+        Self::reset_locked(&mut self.inner.lock().unwrap(), reason)
     }
 
-    fn reset_locked(state: &mut State, reason: &str) {
+    fn reset_locked(state: &mut State, reason: &str) -> Frame {
         state.sequence += 1;
-        let _ = state.sender.send(Some(Frame::Reset {
+        let frame = Frame::Reset {
             epoch: state.epoch.clone(),
             sequence: state.sequence,
             reason: reason.to_owned(),
-        }));
+        };
+        let _ = state.sender.send(Some(frame.clone()));
+        frame
     }
 
-    pub fn unavailable(&self, error: &str) {
+    pub fn unavailable(&self, reason: &str, error: &str) {
         let mut state = self.inner.lock().unwrap();
         if state.available {
+            Self::reset_locked(&mut state, reason);
             eprintln!("Live review updates are unavailable: {error}");
+            state.available = false;
+            let _ = state.sender.send(None);
         }
-        state.available = false;
-        let _ = state.sender.send(None);
     }
 
     pub fn stop(&self) {
