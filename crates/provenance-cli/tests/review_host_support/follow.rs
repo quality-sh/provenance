@@ -61,16 +61,25 @@ impl Follow {
         .unwrap()
     }
     pub fn until(&self, text: &str) -> Value {
+        self.until_all(&[text])
+    }
+    pub fn until_all(&self, texts: &[&str]) -> Value {
         let deadline = std::time::Instant::now() + Duration::from_secs(15);
         loop {
             let line = self
                 .lines
                 .recv_timeout(deadline.saturating_duration_since(std::time::Instant::now()))
                 .expect("saved change must reach follow");
-            if line.contains(text) {
+            if texts.iter().all(|text| line.contains(text)) {
                 return serde_json::from_str(&line).unwrap();
             }
         }
+    }
+    pub fn quiet(&self) {
+        assert!(matches!(
+            self.lines.recv_timeout(Duration::from_millis(250)),
+            Err(mpsc::RecvTimeoutError::Timeout)
+        ));
     }
 }
 impl Drop for Follow {

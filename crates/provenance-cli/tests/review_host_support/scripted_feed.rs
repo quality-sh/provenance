@@ -17,6 +17,7 @@ use tokio::sync::{mpsc, oneshot};
 pub struct Feed {
     pub epoch: String,
     sender: mpsc::UnboundedSender<Value>,
+    pub closed: std::sync::mpsc::Receiver<bool>,
     stop: Option<oneshot::Sender<()>>,
     worker: Option<std::thread::JoinHandle<()>>,
     _registration: LocalHostRegistration,
@@ -46,6 +47,7 @@ impl Feed {
         let (sender, receiver) = mpsc::unbounded_channel::<Value>();
         let receiver = Arc::new(Mutex::new(Some(receiver)));
         let (stop, stopped) = oneshot::channel();
+        let (closed_sender, closed) = std::sync::mpsc::channel();
         let worker = std::thread::spawn(move || {
             tokio::runtime::Runtime::new().unwrap().block_on(async move {
                 let app = Router::new()
@@ -53,6 +55,7 @@ impl Feed {
                     .route("/review-events", get(move |headers: axum::http::HeaderMap, upgrade: WebSocketUpgrade| {
                         assert_eq!(headers["x-provenance-launch-key"], key);
                         let mut frames = receiver.lock().unwrap().take().unwrap();
+                        let closed_sender = closed_sender.clone();
                         async move { upgrade.on_upgrade(move |mut socket| async move {
                             loop {
                                 tokio::select! {
@@ -60,7 +63,11 @@ impl Feed {
                                         Some(frame) => if socket.send(Message::Text(frame.to_string())).await.is_err() { break; },
                                         None => break,
                                     },
-                                    incoming = socket.recv() => if matches!(incoming, None | Some(Err(_) | Ok(Message::Close(_)))) { break; },
+                                    incoming = socket.recv() => match incoming {
+                                        Some(Ok(Message::Close(_))) => { let _ = closed_sender.send(true); break; },
+                                        None | Some(Err(_)) => { let _ = closed_sender.send(false); break; },
+                                        Some(Ok(_)) => {},
+                                    },
                                 }
                             }
                         }).into_response() }
@@ -72,6 +79,7 @@ impl Feed {
         Self {
             epoch,
             sender,
+            closed,
             stop: Some(stop),
             worker: Some(worker),
             _registration: registration,
@@ -81,7 +89,7 @@ impl Feed {
     pub fn send(&self, frame: Value) {
         self.sender.send(frame).unwrap();
     }
-    pub fn follow(&self, root: &Path) -> Follow {
+    pub fn command(&self, root: &Path) -> std::process::Command {
         let mut command = std::process::Command::new(assert_cmd::cargo::cargo_bin("provenance"));
         use_user_cache(&mut command, self.cache.path());
         command.args([
@@ -95,7 +103,10 @@ impl Feed {
             "--repo",
             root.to_str().unwrap(),
         ]);
-        Follow::spawn(command)
+        command
+    }
+    pub fn follow(&self, root: &Path) -> Follow {
+        Follow::spawn(self.command(root))
     }
 }
 impl Drop for Feed {

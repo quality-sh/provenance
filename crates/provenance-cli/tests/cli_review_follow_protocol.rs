@@ -53,3 +53,29 @@ fn unknown_host_frame_is_a_protocol_error() {
     assert_eq!(error["type"], "disconnected");
     assert_eq!(error["continuity"], "unknown");
 }
+
+#[test]
+// Implementation aid: a broken output pipe must close the WebSocket before command failure.
+fn output_failure_closes_the_host_socket() {
+    use std::process::Stdio;
+    let repo = repository();
+    create(repo.path(), "req_follow", "requirement", &[]);
+    let feed = scripted_feed::Feed::start(repo.path());
+    feed.send(json!({"type":"ready", "epoch":feed.epoch, "sequence":0}));
+    let mut child = feed
+        .command(repo.path())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    drop(child.stdout.take());
+    let closed = feed
+        .closed
+        .recv_timeout(review_host_support::waits::LIMIT)
+        .unwrap();
+    assert!(
+        closed,
+        "output failure must send a Close frame, not only TCP EOF"
+    );
+    assert!(!child.wait().unwrap().success());
+}
