@@ -9,7 +9,7 @@ pub(super) fn displace_to_backup(path: &Path) -> std::io::Result<PathBuf> {
             ".{name}.provenance-{}-{attempt}.backup",
             std::process::id(),
         ));
-        match crate::safe_fs::rename_no_replace(path, &backup) {
+        match provenance_store::operations::files::rename_no_replace(path, &backup) {
             Ok(()) => return Ok(backup),
             Err(error) if error.kind() == ErrorKind::AlreadyExists => {}
             Err(error) => return Err(error),
