@@ -7,7 +7,8 @@
 use super::units::{self, Unit};
 use super::{family_rows, relation_rows, stamp, validation};
 use crate::cache::{open_cache, revision_digest_from_stored_rows, ProjectionFamily};
-use crate::{layout::ProvenanceLayout, migrations, publication};
+use crate::current_schema::{self, Compatibility};
+use crate::{layout::ProvenanceLayout, publication};
 use provenance_core::ScopeId;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -32,7 +33,7 @@ pub struct CatchUpReport {
     pub units_hashed: u64,
     pub families_rederived: u64,
     pub rows_written: u64,
-    pub migrations_applied: Vec<String>,
+    pub cache_recreated: bool,
 }
 
 pub async fn catch_up_state(layout: &ProvenanceLayout) -> anyhow::Result<CatchUpReport> {
@@ -51,9 +52,10 @@ pub async fn catch_up_with_guard(
     pool: &sqlx::SqlitePool,
     layout: &ProvenanceLayout,
 ) -> anyhow::Result<CatchUpReport> {
-    crate::test_probes::at("run_migrations_under_guard")?;
-    let migrations_applied = migrations::run_migrations(pool, layout).await?;
-    crate::test_probes::at("catch_up_after_migrations")?;
+    crate::test_probes::at("prepare_current_schema_under_guard")?;
+    if current_schema::compatibility(pool).await? == Compatibility::RebuildRequired {
+        return rebuild(guard, pool).await;
+    }
     let stored: Option<(i64, String)> = sqlx::query_as(
         "SELECT serial, digest FROM projection_revision ORDER BY serial DESC LIMIT 1",
     )
@@ -63,10 +65,10 @@ pub async fn catch_up_with_guard(
     // A database with no revision, or one whose schema just moved, is
     // rebuilt under the same guard.
     let Some((stored_serial, stored_digest)) = stored else {
-        return rebuild(guard, layout, pool, migrations_applied).await;
+        return rebuild(guard, pool).await;
     };
-    if !migrations_applied.is_empty() || validation::version_changed(pool).await? {
-        return rebuild(guard, layout, pool, migrations_applied).await;
+    if validation::version_changed(pool).await? {
+        return rebuild(guard, pool).await;
     }
 
     let (stored_units, mut content) = load_stored_digests(pool).await?;
@@ -85,7 +87,7 @@ pub async fn catch_up_with_guard(
         units_hashed: 0,
         families_rederived: 0,
         rows_written: 0,
-        migrations_applied,
+        cache_recreated: false,
     };
     let mut tx = pool.begin().await?;
 
@@ -267,11 +269,9 @@ async fn rederive_scope(
 
 async fn rebuild(
     guard: &publication::PublicationGuard,
-    layout: &ProvenanceLayout,
     pool: &sqlx::SqlitePool,
-    migrations_applied: Vec<String>,
 ) -> anyhow::Result<CatchUpReport> {
-    let report = super::materialize_with_guard(guard, layout).await?;
+    let report = super::materialize_on_pool_with_guard(guard, pool).await?;
     let (serial, digest): (i64, String) = sqlx::query_as(
         "SELECT serial, digest FROM projection_revision ORDER BY serial DESC LIMIT 1",
     )
@@ -285,6 +285,6 @@ async fn rebuild(
         units_hashed: 0,
         families_rederived: 0,
         rows_written: report.records_loaded,
-        migrations_applied,
+        cache_recreated: report.cache_recreated,
     })
 }

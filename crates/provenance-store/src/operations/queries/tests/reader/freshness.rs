@@ -124,8 +124,7 @@ async fn a_read_only_checkout_answers_at_its_serial() {
     assert!(stamped.freshness_error.is_some());
 }
 
-/// A cache file from before migration 018: the migration table stops at
-/// 017 and no revision table exists.
+/// An incompatible cache has neither the current marker nor a revision.
 async fn old_database(store: &test_stores::TestStore) {
     use sqlx::{Connection, SqliteConnection};
     let layout = store.layout();
@@ -134,24 +133,15 @@ async fn old_database(store: &test_stores::TestStore) {
         .filename(layout.cache_db_path())
         .create_if_missing(true);
     let mut connection = SqliteConnection::connect_with(&options).await.unwrap();
-    sqlx::query(
-        "CREATE TABLE _schema_migrations (id TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
-    )
+    sqlx::query("CREATE TABLE legacy_cache (value TEXT)")
     .execute(&mut connection)
     .await
     .unwrap();
-    for id in 1..=17 {
-        sqlx::query("INSERT INTO _schema_migrations (id) VALUES (?)")
-            .bind(format!("{id:03}"))
-            .execute(&mut connection)
-            .await
-            .unwrap();
-    }
     connection.close().await.unwrap();
 }
 
 #[tokio::test]
-async fn annotate_only_refuses_a_database_behind_on_migrations_by_type() {
+async fn annotate_only_refuses_an_incompatible_database_by_type() {
     let store = test_stores::seeded_queries();
     old_database(&store).await;
     let refused = get_through(
@@ -170,7 +160,33 @@ async fn annotate_only_refuses_a_database_behind_on_migrations_by_type() {
     assert!(refused.to_string().contains("provenance materialize"));
 }
 
-/// When the freshness step fails before it can migrate, the read falls
+#[tokio::test]
+async fn annotate_only_refuses_an_incompatible_current_schema_without_writing() {
+    let store = test_stores::seeded_queries();
+    catch_up_state(&store.layout()).await.unwrap();
+    let pool = open_cache(&store.layout()).await.unwrap();
+    sqlx::query("UPDATE _cache_metadata SET schema_digest = 'incompatible'")
+        .execute(pool.pool())
+        .await
+        .unwrap();
+    pool.close().await.unwrap();
+    let before = std::fs::read(store.layout().cache_db_path()).unwrap();
+
+    let refused = get_through(
+        &store,
+        ReadPolicy::with_freshness(FreshnessPolicy::AnnotateOnly),
+    )
+    .await
+    .unwrap_err();
+
+    assert!(matches!(
+        refused.downcast_ref::<crate::operations::reader::ReadRefusal>(),
+        Some(crate::operations::reader::ReadRefusal::SchemaBehind { .. })
+    ));
+    assert_eq!(std::fs::read(store.layout().cache_db_path()).unwrap(), before);
+}
+
+/// When the freshness step fails before it can rebuild, the read falls
 /// back to the stored file; an old file holds no revision table, and the
 /// refusal must still be the typed one that names materialize.
 #[tokio::test]
@@ -178,7 +194,7 @@ async fn a_pre_stamp_database_refuses_and_names_materialize_when_catch_up_fails(
     let store = test_stores::seeded_queries();
     old_database(&store).await;
     // A file where the lock directory belongs makes the guard fail before
-    // catch-up can run a migration.
+    // catch-up can rebuild the cache.
     let locks = store.layout().cache_dir().join("locks");
     std::fs::remove_dir_all(&locks).unwrap();
     std::fs::write(&locks, b"").unwrap();
@@ -197,28 +213,19 @@ async fn a_pre_stamp_database_refuses_and_names_materialize_when_catch_up_fails(
     assert!(!text.contains("no such table"), "{text}");
 }
 
-/// A migration that committed before its rebuild ran leaves a revision
-/// row beside empty tables and no family digests. `catch_up` heals that
-/// window before it answers; `annotate_only` runs no freshness step, so
-/// it must refuse instead of answering over empty tables.
+/// A revision beside no family digests is incomplete. `catch_up` heals
+/// it before it answers. `annotate_only` does not write, so it refuses.
 #[tokio::test]
 #[verifies("rule_annotate_only_refuses_a_half_migrated_projection", examples)]
-async fn annotate_only_refuses_a_half_migrated_database() {
+async fn annotate_only_refuses_an_incomplete_database() {
     let store = test_stores::seeded_queries();
     catch_up_state(&store.layout()).await.unwrap();
     let pool = open_cache(&store.layout()).await.unwrap();
-    sqlx::query("DELETE FROM _schema_migrations WHERE id IN (?, ?, ?)")
-        .bind(crate::migrations::RECORD_COLUMNS_MIGRATION_ID)
-        .bind(crate::migrations::RECORD_DELETION_MIGRATION_ID)
-        .bind(crate::migrations::RECORD_STAMPS_MIGRATION_ID)
+    sqlx::query("DELETE FROM projection_family_digests")
         .execute(pool.pool())
         .await
         .unwrap();
     pool.close().await.unwrap();
-    crate::test_probes::crash_at("catch_up_after_migrations");
-    let crashed = catch_up_state(&store.layout()).await.unwrap_err();
-    crate::test_probes::disarm("catch_up_after_migrations");
-    assert!(crashed.to_string().contains("injected crash"), "{crashed}");
 
     let refused = get_through(
         &store,
