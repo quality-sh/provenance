@@ -1,6 +1,7 @@
 use super::catch_up_behavior::assert_catch_up_equals_rebuild;
 use super::fixtures::{create_requirement, seeded_layout};
 use crate::cache::{catch_up_state, materialize_state, open_cache};
+use crate::current_schema::{self, Compatibility};
 use crate::state_store::StateStore;
 use provenance_macros::verifies;
 
@@ -71,6 +72,40 @@ async fn an_incompatible_cache_is_recreated_from_canonical_state() {
     assert!(report.cache_recreated);
     assert_eq!(requirements, 1);
     assert_ne!(schema_digest(cache.pool()).await, "incompatible");
+    cache.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn a_current_digest_does_not_hide_a_missing_table() {
+    let (_dir, layout, _scope) = seeded_layout();
+    materialize_state(&layout).await.unwrap();
+    let cache = open_cache(&layout).await.unwrap();
+    sqlx::query("DROP TABLE relations")
+        .execute(cache.pool())
+        .await
+        .unwrap();
+
+    assert_eq!(
+        current_schema::compatibility(cache.pool()).await.unwrap(),
+        Compatibility::RebuildRequired
+    );
+    cache.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn a_current_digest_does_not_hide_a_missing_index() {
+    let (_dir, layout, _scope) = seeded_layout();
+    materialize_state(&layout).await.unwrap();
+    let cache = open_cache(&layout).await.unwrap();
+    sqlx::query("DROP INDEX idx_relations_in")
+        .execute(cache.pool())
+        .await
+        .unwrap();
+
+    assert_eq!(
+        current_schema::compatibility(cache.pool()).await.unwrap(),
+        Compatibility::RebuildRequired
+    );
     cache.close().await.unwrap();
 }
 
