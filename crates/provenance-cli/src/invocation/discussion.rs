@@ -37,7 +37,7 @@ pub async fn dispatch_root(args: DiscussionsArgs) -> anyhow::Result<()> {
         service
             .discussions(ListInput {
                 parent: None,
-                status: status(args.status.as_deref()),
+                status: args.status.unwrap_or_default(),
                 limit: args.limit,
                 cursor: args.cursor,
             })
@@ -122,11 +122,11 @@ pub async fn dispatch_target(
 }
 
 fn status(status: Option<&str>) -> DiscussionStatusFilter {
-    match status {
-        Some("resolved") => DiscussionStatusFilter::Resolved,
-        Some("all") => DiscussionStatusFilter::All,
-        _ => DiscussionStatusFilter::Active,
-    }
+    status.map_or(DiscussionStatusFilter::default(), |word| {
+        DiscussionStatusFilter::parse(word).unwrap_or_else(|| {
+            crate::catalog_cli::usage_error(format!("invalid Discussion status {word}"))
+        })
+    })
 }
 
 fn role(role: Option<&str>) -> anyhow::Result<MessageRole> {

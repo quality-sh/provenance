@@ -15,6 +15,22 @@ pub enum DiscussionStatusFilter {
     All,
 }
 
+impl DiscussionStatusFilter {
+    pub const ALL: [Self; 3] = [Self::Active, Self::Resolved, Self::All];
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Active => "active",
+            Self::Resolved => "resolved",
+            Self::All => "all",
+        }
+    }
+
+    pub fn parse(word: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|status| status.as_str() == word)
+    }
+}
+
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

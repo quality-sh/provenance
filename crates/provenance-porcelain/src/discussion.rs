@@ -354,9 +354,5 @@ const fn status_word(status: DiscussionStatus) -> &'static str {
 }
 
 const fn status_filter_word(status: DiscussionStatusFilter) -> &'static str {
-    match status {
-        DiscussionStatusFilter::Active => "active",
-        DiscussionStatusFilter::Resolved => "resolved",
-        DiscussionStatusFilter::All => "all",
-    }
+    status.as_str()
 }
