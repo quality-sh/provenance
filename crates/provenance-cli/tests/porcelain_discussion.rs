@@ -47,6 +47,12 @@ fn cli_discussion_actions_use_one_scope_and_preserve_receipt_identity() {
         "--statement",
         "A discussion has one parent.",
     ]);
+    success(&[
+        "requirements", "create", "--repo", repo, "--id", "discussions",
+        "--statement", "A graph ID can match this command word.",
+    ]);
+    let keyword_record = json(&["discussions", "get", "--repo", repo, "--format", "json"]);
+    assert_eq!(keyword_record["record"]["id"], "discussions");
 
     let start = json(&[
         "req_a",
