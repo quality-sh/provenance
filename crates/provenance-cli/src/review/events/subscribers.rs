@@ -95,7 +95,9 @@ impl Subscribers {
     pub fn page_changed(&self, mut changes: ReviewChanges) {
         let mut state = self.inner.lock().unwrap();
         changes.scopes.retain(|scope| scope.scope == state.scope);
-        if !changes.scopes.is_empty() {
+        if changes.configuration_changed {
+            Self::reset_locked(&mut state, "page-capture-failed");
+        } else if !changes.scopes.is_empty() {
             state.native_sequence += 1;
             let _ = state.native.send(Some(Frame::Reviewed {
                 epoch: state.epoch.clone(),

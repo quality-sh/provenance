@@ -55,21 +55,20 @@ fn failed_publication_leaves_the_saved_document_and_stream_unchanged() {
         .path()
         .join(".provenance/state/scopes/default/requirements/req.jsonl");
     let before = std::fs::read(&shard).unwrap();
-    let output = waits::output(host.cli().args([
-        "requirements",
-        "req_follow",
-        "update",
-        "--statement",
-        "The system records the changed statement.",
-        "--if-match",
-        &format!("sha256:{}", "0".repeat(64)),
-        "--repo",
-        repo.path().to_str().unwrap(),
-    ]));
-    assert_eq!(output.status.code(), Some(1));
-    assert!(
-        String::from_utf8_lossy(&output.stderr).contains("\"kind\":\"requirement_edit_conflict\"")
+    let response = review_host_support::response(
+        page_request(&host, "PATCH", "/requirements/req_follow")
+            .set("If-Match", &format!("\"sha256:{}\"", "0".repeat(64)))
+            .send_string(
+                &serde_json::json!({"data":{
+                    "statement":"The system records the changed statement."
+                }})
+                .to_string(),
+            ),
     );
+    assert_eq!(response.status(), 409);
+    let failure: serde_json::Value =
+        serde_json::from_str(&response.into_string().unwrap()).unwrap();
+    assert_eq!(failure["error"]["kind"], "requirement_edit_conflict");
     assert_eq!(std::fs::read(shard).unwrap(), before);
     follow.quiet();
 }
