@@ -1,7 +1,7 @@
 use super::*;
 use provenance_core::Manifest;
 
-async fn enroll(host: &StatementHost) -> String {
+async fn enroll(host: &StatementHost) -> (String, String) {
     let (status, read, etag) = call(host, "GET", "/requirements/req_shared", None, &[]).await;
     assert_eq!(status, 200, "{read}");
     let etag = etag.unwrap();
@@ -17,15 +17,20 @@ async fn enroll(host: &StatementHost) -> String {
     )
     .await;
     assert_eq!(status, 200, "{saved}");
-    saved["data"]["edit"]["revision"]
+    let revision = saved["data"]["edit"]["revision"]
         .as_str()
         .unwrap()
-        .to_owned()
+        .to_owned();
+    let proposal = saved["data"]["decision"]["pending"]["proposal_id"]
+        .as_str()
+        .expect("the edit response returns its submission identity")
+        .to_owned();
+    assert_eq!(saved["data"]["decision"]["pending"]["revision"], revision);
+    (revision, proposal)
 }
 
 async fn submit(host: &StatementHost) -> String {
-    let revision = enroll(host).await;
-    submit_at(host, &revision).await
+    enroll(host).await.1
 }
 
 async fn submit_at(host: &StatementHost, revision: &str) -> String {
@@ -52,7 +57,7 @@ async fn submit_at(host: &StatementHost, revision: &str) -> String {
     proposal
 }
 
-async fn edit(host: &StatementHost, key: &str, description: &str) -> String {
+async fn edit(host: &StatementHost, key: &str, description: &str) -> (String, String) {
     let (_, _, etag) = call(host, "GET", "/requirements/req_shared", None, &[]).await;
     let (status, saved, _) = call(
         host,
@@ -63,10 +68,16 @@ async fn edit(host: &StatementHost, key: &str, description: &str) -> String {
     )
     .await;
     assert_eq!(status, 200, "{saved}");
-    saved["data"]["edit"]["revision"]
+    let revision = saved["data"]["edit"]["revision"]
         .as_str()
         .unwrap()
-        .to_owned()
+        .to_owned();
+    let proposal = saved["data"]["decision"]["pending"]["proposal_id"]
+        .as_str()
+        .expect("the edit response returns its submission identity")
+        .to_owned();
+    assert_eq!(saved["data"]["decision"]["pending"]["revision"], revision);
+    (revision, proposal)
 }
 
 fn conflict(submission: Option<&str>, revision: &str) -> Value {
@@ -196,8 +207,8 @@ async fn review_withdraw_dispatches_for_a_real_submission() {
 async fn submit_conflicts_return_the_typed_http_envelope() {
     let repo = Repository::new("The shared graph is readable.");
     let host = host(&repo);
-    let revision_1 = enroll(&host).await;
-    let revision_2 = edit(&host, "edit-current", "Current revision.").await;
+    let (revision_1, _) = enroll(&host).await;
+    let (revision_2, automatic) = edit(&host, "edit-current", "Current revision.").await;
     let body = |revision: &str| {
         json!({"data":{
             "actor":"agent", "declared_by":null, "title":"Review", "summary":"Review it.",
@@ -214,9 +225,8 @@ async fn submit_conflicts_return_the_typed_http_envelope() {
     )
     .await;
     assert_eq!(status, 409);
-    assert_eq!(stale, conflict(None, &revision_2));
+    assert_eq!(stale, conflict(Some(&automatic), &revision_2));
 
-    let proposal = submit_at(&host, &revision_2).await;
     let (status, repeated, _) = call(
         &host,
         "POST",
@@ -226,10 +236,31 @@ async fn submit_conflicts_return_the_typed_http_envelope() {
     )
     .await;
     assert_eq!(status, 409);
-    assert_eq!(repeated, conflict(Some(&proposal), &revision_2));
+    assert_eq!(repeated, conflict(Some(&automatic), &revision_2));
+
+    let path = format!("/requirements/req_shared/submissions/{automatic}/withdraw");
+    assert_eq!(
+        call(
+            &host,
+            "POST",
+            &path,
+            Some(json!({"data":{"actor":"agent","declared_by":null,"reason":null}})),
+            &[],
+        )
+        .await
+        .0,
+        200
+    );
+    let proposal = submit_at(&host, &revision_2).await;
+    assert_ne!(proposal, automatic);
 }
 
-async fn assert_terminal_conflicts(host: &StatementHost, proposal: &str, revision: &str) {
+async fn assert_terminal_conflicts(
+    host: &StatementHost,
+    proposal: &str,
+    current: Option<&str>,
+    revision: &str,
+) {
     let paths = [
         (
             "decide",
@@ -247,7 +278,7 @@ async fn assert_terminal_conflicts(host: &StatementHost, proposal: &str, revisio
         let path = format!("/requirements/req_shared/submissions/{proposal}/{action}");
         let (status, value, _) = call(host, "POST", &path, Some(body), &[]).await;
         assert_eq!(status, 409, "{value}");
-        assert_eq!(value, conflict(None, revision));
+        assert_eq!(value, conflict(current, revision));
     }
 }
 
@@ -266,8 +297,8 @@ async fn terminal_review_conflicts_share_the_http_envelope() {
     allow_reviewer(&stale_repo);
     let stale_host = host(&stale_repo);
     let stale = submit(&stale_host).await;
-    let stale_revision = edit(&stale_host, "supersede", "Superseded.").await;
-    assert_terminal_conflicts(&stale_host, &stale, &stale_revision).await;
+    let (stale_revision, current) = edit(&stale_host, "supersede", "Superseded.").await;
+    assert_terminal_conflicts(&stale_host, &stale, Some(&current), &stale_revision).await;
 
     let withdrawn_repo = Repository::new("The shared graph is readable.");
     allow_reviewer(&withdrawn_repo);
@@ -289,7 +320,7 @@ async fn terminal_review_conflicts_share_the_http_envelope() {
         .0,
         200
     );
-    assert_terminal_conflicts(&withdrawn_host, &withdrawn, &revision).await;
+    assert_terminal_conflicts(&withdrawn_host, &withdrawn, None, &revision).await;
 
     let decided_repo = Repository::new("The shared graph is readable.");
     allow_reviewer(&decided_repo);
@@ -313,5 +344,5 @@ async fn terminal_review_conflicts_share_the_http_envelope() {
         .0,
         200
     );
-    assert_terminal_conflicts(&decided_host, &decided, &revision).await;
+    assert_terminal_conflicts(&decided_host, &decided, None, &revision).await;
 }
