@@ -141,7 +141,8 @@ impl StateStore {
         self.apply_requirement_update(input.update)?;
         if let Some(relationships) = input.relationships {
             crate::test_probes::at("requirement_relationships_expanding")?;
-            let final_sets = relationships.expand(before)?;
+            relationships.validate(self, &scope, before)?;
+            let final_sets = relationships.expand(before);
             self.replace_review_relationships(&scope, &id, final_sets)?;
         }
         let path = shards::requirements_path(&self.layout, &scope);
