@@ -28,12 +28,6 @@ fn search_text(node: &GraphNode) -> String {
         .join(SEARCH_TEXT_SEPARATOR)
 }
 
-/// The search text of one kind's records, through the `GraphNode`
-/// variant that carries the kind.
-pub(super) fn kind_search<K: Clone>(wrap: fn(Box<K>) -> GraphNode) -> impl Fn(&K) -> String + Sync {
-    move |record| search_text(&wrap(Box::new(record.clone())))
-}
-
 /// The insert for one record, with the search column when the table has
 /// one.
 fn insert_sql<K: ProjectionRow>(with_search_text: bool) -> String {
@@ -64,23 +58,49 @@ fn bind<'q>(
 
 /// Writes the records of one kind or integration family. `search_text`
 /// is given for a kind table and absent for an integration table.
-pub(super) async fn load_kind<K: ProjectionRow + serde::de::DeserializeOwned>(
+async fn load<K: Clone + ProjectionRow + serde::de::DeserializeOwned>(
     tx: &mut Transaction<'_, Sqlite>,
     bytes: &[u8],
-    search_text: Option<&(dyn Fn(&K) -> String + Sync)>,
+    wrap: Option<fn(Box<K>) -> GraphNode>,
 ) -> anyhow::Result<u64> {
-    let sql = insert_sql::<K>(search_text.is_some());
+    let sql = insert_sql::<K>(wrap.is_some());
     let mut loaded = 0;
     for record in serde_json::from_slice::<Vec<K>>(bytes)? {
+        let node = wrap.map(|wrap| wrap(Box::new(record.clone())));
         let mut query = sqlx::query(&sql);
         for value in record.row()? {
             query = bind(query, value);
         }
-        if let Some(search_text) = search_text {
-            query = query.bind(search_text(&record));
+        if let Some(node) = &node {
+            query = query.bind(search_text(node));
         }
         query.execute(&mut **tx).await?;
+        if let Some(node) = node {
+            sqlx::query(
+                "INSERT INTO record_identities (scope_id, id, node_type) VALUES (?, ?, ?)",
+            )
+            .bind(node.scope_id().as_str())
+            .bind(node.id().as_str())
+            .bind(node.node_type().as_str())
+            .execute(&mut **tx)
+            .await?;
+        }
         loaded += 1;
     }
     Ok(loaded)
+}
+
+pub(super) async fn load_record<K: Clone + ProjectionRow + serde::de::DeserializeOwned>(
+    tx: &mut Transaction<'_, Sqlite>,
+    bytes: &[u8],
+    wrap: fn(Box<K>) -> GraphNode,
+) -> anyhow::Result<u64> {
+    load(tx, bytes, Some(wrap)).await
+}
+
+pub(super) async fn load_kind<K: Clone + ProjectionRow + serde::de::DeserializeOwned>(
+    tx: &mut Transaction<'_, Sqlite>,
+    bytes: &[u8],
+) -> anyhow::Result<u64> {
+    load::<K>(tx, bytes, None).await
 }
