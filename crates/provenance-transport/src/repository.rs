@@ -151,10 +151,11 @@ fn enclosing_repository(repo: &Utf8Path) -> Option<Utf8PathBuf> {
         .map(Utf8Path::to_path_buf)
 }
 
-/// The record kinds of `target` in `scope`, read under the read-only marker: the read
-/// takes no publication lock and runs no recovery, so it never waits for another
-/// command and never writes to the repository. While a publication runs, the answer
-/// is best-effort.
+/// The record kinds of `target` in `scope`, read under the read-only marker.
+///
+/// The read takes no publication lock and runs no recovery, so it never waits for
+/// another command and never writes to the repository. While a publication runs, the
+/// answer is best-effort.
 pub fn read_only_record_kinds(
     repo: &Utf8Path,
     scope: &ScopeId,

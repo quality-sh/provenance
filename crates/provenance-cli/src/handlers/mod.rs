@@ -1,7 +1,6 @@
 use crate::cli;
 use crate::output::{self, JsonFormat};
 use crate::registry_cli::BoundContext;
-use camino::Utf8PathBuf;
 use provenance_cli::servers::{DocsServeInput, McpInput, ReviewInput, Server};
 use provenance_porcelain::export::Document;
 use provenance_porcelain::init::InitReport;
@@ -406,13 +405,6 @@ pub(super) async fn server_command(input: ServerInput) -> anyhow::Result<()> {
         }
         ServerInput::Mcp(input) => mcp::handle(input).await,
     }
-}
-
-/// Runs a synchronous handler on a blocking thread and waits for it.
-async fn run_blocking(
-    handler: impl FnOnce() -> anyhow::Result<()> + Send + 'static,
-) -> anyhow::Result<()> {
-    tokio::task::spawn_blocking(handler).await?
 }
 
 #[cfg(test)]
