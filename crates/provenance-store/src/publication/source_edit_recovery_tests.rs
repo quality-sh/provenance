@@ -191,3 +191,26 @@ fn final_marker_clears_when_cleanup_lost_its_result() {
     );
     assert!(!layout.source_edit_marker_path().exists());
 }
+
+#[test]
+fn failed_rollback_retains_material_and_restart_finishes_the_edit() {
+    let temp = fixture();
+    let root = Utf8Path::from_path(temp.path()).unwrap();
+    test_probes::crash_at("repository_file_after_backup_check");
+    test_probes::crash_at("state_before_rollback");
+
+    let result = std::panic::catch_unwind(|| publish(root));
+    test_probes::disarm("repository_file_after_backup_check");
+    test_probes::disarm("state_before_rollback");
+
+    assert!(result.is_err());
+    let layout = ProvenanceLayout::new(root);
+    assert!(layout.source_edit_marker_path().exists());
+    with_repository_publication(&layout, || Ok(())).unwrap();
+    assert_eq!(std::fs::read(root.join("source.txt")).unwrap(), AFTER);
+    assert_eq!(
+        std::fs::read(layout.state_dir().join("value")).unwrap(),
+        AFTER
+    );
+    assert!(!layout.source_edit_marker_path().exists());
+}
