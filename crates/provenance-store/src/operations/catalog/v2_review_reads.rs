@@ -11,8 +11,8 @@ use provenance_core::{
     protocol::failure::{InvalidInputReason, OperationFailure},
     review::{EvidencePage, EvidenceQuery, ReviewEntry, ReviewHistoryPage, ReviewHistoryQuery},
     threads::{
-        DiscussionEntry, DiscussionGroup, DiscussionMessagesPage, DiscussionMessagesQuery,
-        DiscussionPage, DiscussionQuery, DiscussionSelector,
+        DiscussionEntry, DiscussionGroup, DiscussionMessagesQuery, DiscussionQuery,
+        DiscussionSelector,
     },
     Message, ScopeId, StableId, ThreadParent,
 };
@@ -24,6 +24,28 @@ pub struct ReadResult<T> {
     pub result: T,
     pub stamp: provenance_core::protocol::Stamp,
     pub freshness_error: Option<String>,
+}
+
+#[derive(Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub struct DiscussionResultPage<T> {
+    pub entries: Vec<T>,
+    pub limit: usize,
+    pub has_more: bool,
+    pub next_cursor: Option<String>,
+}
+
+fn discussion_result<T>(
+    entries: Vec<T>,
+    next_cursor: Option<String>,
+    limit: usize,
+) -> DiscussionResultPage<T> {
+    DiscussionResultPage {
+        entries,
+        limit,
+        has_more: next_cursor.is_some(),
+        next_cursor,
+    }
 }
 impl<T> From<provenance_core::protocol::Stamped<T>> for ReadResult<T> {
     fn from(value: provenance_core::protocol::Stamped<T>) -> Self {
@@ -256,7 +278,7 @@ pub struct DiscussionsRequest {
 pub struct ReviewDiscussionsV2;
 impl Operation for ReviewDiscussionsV2 {
     type Request = DiscussionsRequest;
-    type Success = ReadResult<DiscussionPage>;
+    type Success = ReadResult<DiscussionResultPage<DiscussionGroup>>;
     type Failure = ReadError;
     const NAME: &'static str = "review-discussions-v2";
     const CONTEXT: ContextKind = ContextKind::Scoped;
@@ -276,7 +298,8 @@ impl Operation for ReviewDiscussionsV2 {
     ) -> OperationFuture<Self::Success, Self::Failure> {
         Box::pin(async move {
             let read = context.graph()?;
-            Ok(review::read_discussions(
+            let limit = request.limit;
+            let page = review::read_discussions(
                 &read.root,
                 &read.scope,
                 read.policy,
@@ -286,8 +309,12 @@ impl Operation for ReviewDiscussionsV2 {
                     cursor: request.cursor,
                 },
             )
-            .await?
-            .into())
+            .await?;
+            Ok(ReadResult {
+                result: discussion_result(page.result.entries, page.result.next_cursor, limit),
+                stamp: page.stamp,
+                freshness_error: page.freshness_error,
+            })
         })
     }
 }
@@ -306,7 +333,7 @@ pub struct DiscussionMessagesRequest {
 pub struct ReviewDiscussionMessagesV2;
 impl Operation for ReviewDiscussionMessagesV2 {
     type Request = DiscussionMessagesRequest;
-    type Success = ReadResult<DiscussionMessagesPage>;
+    type Success = ReadResult<DiscussionResultPage<Message>>;
     type Failure = ReadError;
     const NAME: &'static str = "review-discussion-messages-v2";
     const CONTEXT: ContextKind = ContextKind::Scoped;
@@ -326,7 +353,8 @@ impl Operation for ReviewDiscussionMessagesV2 {
     ) -> OperationFuture<Self::Success, Self::Failure> {
         Box::pin(async move {
             let read = context.graph()?;
-            Ok(review::read_discussion_messages(
+            let limit = request.limit;
+            let page = review::read_discussion_messages(
                 &read.root,
                 &read.scope,
                 read.policy,
@@ -337,8 +365,12 @@ impl Operation for ReviewDiscussionMessagesV2 {
                     cursor: request.cursor,
                 },
             )
-            .await?
-            .into())
+            .await?;
+            Ok(ReadResult {
+                result: discussion_result(page.result.entries, page.result.next_cursor, limit),
+                stamp: page.stamp,
+                freshness_error: page.freshness_error,
+            })
         })
     }
 }

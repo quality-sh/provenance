@@ -319,6 +319,30 @@ async fn relationship_patches_accept_deltas_and_final_sets_atomically() {
 }
 
 #[tokio::test]
+async fn resolution_context_is_record_data_but_object_context_is_identity_injection() {
+    let repo = Repository::new("The shared graph is readable.");
+    let host = host(&repo);
+    let mut declared = resolution("resolution_context", "req_shared");
+    declared["context"] = json!("Codebase scan");
+    let created = create(&host, "/resolutions", None, declared).await;
+    assert_eq!(created["data"]["context"], "Codebase scan");
+
+    let mut injected = resolution("resolution_injected", "req_shared");
+    injected["context"] = json!({"repository":"other","scope":"default"});
+    let (status, failure, _) = call(
+        &host,
+        "POST",
+        "/resolutions",
+        Some(json!({"data":injected})),
+        &[],
+    )
+    .await;
+    assert_eq!(status, 400, "{failure}");
+    assert_eq!(failure["error"]["kind"], "invalid_input");
+    assert_eq!(failure["error"]["field"], "context");
+}
+
+#[tokio::test]
 async fn review_decide_dispatches_and_checks_the_addressed_requirement() {
     let repo = Repository::new("The shared graph is readable.");
     allow_reviewer(&repo);
@@ -347,6 +371,7 @@ async fn review_decide_dispatches_and_checks_the_addressed_requirement() {
     )
     .await;
     assert_eq!(wrong_status, 400, "{wrong}");
+    assert_eq!(wrong["error"]["kind"], "invalid_update");
     let (status, value, _) = call(
         &host,
         "POST",
