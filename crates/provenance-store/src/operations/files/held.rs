@@ -1,13 +1,26 @@
+use super::held_metadata::{identity, FileMetadata};
 use super::{platform, safe_fs, RepositoryFileRefusal as Refusal, Utf8Path, Utf8PathBuf};
 use sha2::{Digest as _, Sha256};
-use std::fs::{File, Permissions};
-use std::io::{Read as _, Write as _};
+use std::fs::File;
+use std::io::{Read as _, Seek as _, Write as _};
 use std::path::PathBuf;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct FileIdentity {
-    volume: u64,
-    file: u64,
+pub use super::held_metadata::FileIdentity;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BackupRetentionReason {
+    OriginalChanged,
+    VerificationFailed,
+    RemovalFailed,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum RepositoryFileInstall {
+    Installed,
+    InstalledBackupKept {
+        backup: String,
+        reason: BackupRetentionReason,
+    },
 }
 
 pub struct HeldRepositoryFile {
@@ -18,13 +31,19 @@ pub struct HeldRepositoryFile {
     bytes: Vec<u8>,
     digest: [u8; 32],
     identity: FileIdentity,
-    permissions: Permissions,
+    metadata: FileMetadata,
 }
 
 pub struct PreparedRepositoryFile {
     parent: File,
     parent_identity: FileIdentity,
     leaf: String,
+    file: File,
+    identity: FileIdentity,
+    digest: [u8; 32],
+    target_leaf: String,
+    target_identity: FileIdentity,
+    target_digest: [u8; 32],
     remove_on_drop: bool,
 }
 
@@ -55,20 +74,29 @@ impl HeldRepositoryFile {
             );
             match create_new(&self.parent, &leaf) {
                 Ok(mut file) => {
-                    let prepared = (|| {
+                    let mut cleanup = CreatedLeaf::new(&self.parent, &leaf);
+                    let prepared: Result<(File, FileIdentity), Refusal> = (|| {
                         file.write_all(bytes).map_err(Refusal::Write)?;
-                        file.set_permissions(self.permissions.clone())
-                            .map_err(Refusal::Write)?;
-                        file.sync_all().map_err(Refusal::Write)
+                        self.metadata.apply(&file)?;
+                        file.sync_all().map_err(Refusal::Write)?;
+                        probe_io("repository_file_clone_parent").map_err(Refusal::Write)?;
+                        let parent = self.parent.try_clone().map_err(Refusal::Write)?;
+                        let file_identity = identity(&file)?;
+                        Ok((parent, file_identity))
                     })();
-                    if let Err(error) = prepared {
-                        let _ = unlink(&self.parent, &leaf);
-                        return Err(error);
-                    }
+                    let (parent, file_identity) = prepared?;
+                    cleanup.disarm();
+                    drop(cleanup);
                     return Ok(PreparedRepositoryFile {
-                        parent: self.parent.try_clone().map_err(Refusal::Write)?,
+                        parent,
                         parent_identity,
                         leaf,
+                        file,
+                        identity: file_identity,
+                        digest: Sha256::digest(bytes).into(),
+                        target_leaf: self.leaf.clone(),
+                        target_identity: self.identity.clone(),
+                        target_digest: self.digest,
                         remove_on_drop: true,
                     });
                 }
@@ -82,33 +110,69 @@ impl HeldRepositoryFile {
         )))
     }
 
-    pub fn compare_and_swap(&self, mut prepared: PreparedRepositoryFile) -> Result<(), Refusal> {
-        if identity(&self.parent)? != prepared.parent_identity {
-            return Err(Refusal::Denied);
+    pub fn compare_and_swap(
+        &self,
+        mut prepared: PreparedRepositoryFile,
+    ) -> Result<RepositoryFileInstall, Refusal> {
+        if !self.anchor_matches()
+            || identity(&self.parent)? != prepared.parent_identity
+            || prepared.target_leaf != self.leaf
+            || prepared.target_identity != self.identity
+            || prepared.target_digest != self.digest
+        {
+            return Err(Refusal::Changed);
         }
         let backup = self.displace_to_backup()?;
         match self.matches_backup(&backup) {
             Ok(true) => {}
             Ok(false) => {
-                restore(&self.parent, &self.parent_path, &backup, &self.leaf)?;
+                restore(&self.parent, &backup, &self.leaf)?;
                 return Err(Refusal::Changed);
             }
             Err(error) => {
-                restore(&self.parent, &self.parent_path, &backup, &self.leaf)?;
+                restore(&self.parent, &backup, &self.leaf)?;
                 return Err(error);
             }
         }
-        if let Err(error) = safe_fs::rename_no_replace_in(
-            &prepared.parent,
-            &self.parent_path,
-            &prepared.leaf,
-            &self.leaf,
-        ) {
-            restore(&self.parent, &self.parent_path, &backup, &self.leaf)?;
+        if let Err(error) = probe_io("repository_file_after_backup_check") {
+            restore(&self.parent, &backup, &self.leaf)?;
+            return Err(Refusal::Write(error));
+        }
+        if !prepared.matches_entry()? {
+            restore(&self.parent, &backup, &self.leaf)?;
+            return Err(Refusal::Changed);
+        }
+        if let Err(error) =
+            safe_fs::rename_no_replace_in(&prepared.parent, &prepared.leaf, &self.leaf)
+        {
+            restore(&self.parent, &backup, &self.leaf)?;
             return Err(write_refusal(error));
         }
         prepared.remove_on_drop = false;
-        unlink(&self.parent, &backup).map_err(Refusal::Write)
+        match self.matches_backup(&backup) {
+            Ok(true) => {}
+            Ok(false) => {
+                return Ok(RepositoryFileInstall::InstalledBackupKept {
+                    backup,
+                    reason: BackupRetentionReason::OriginalChanged,
+                });
+            }
+            Err(_) => {
+                return Ok(RepositoryFileInstall::InstalledBackupKept {
+                    backup,
+                    reason: BackupRetentionReason::VerificationFailed,
+                });
+            }
+        }
+        if probe_io("repository_file_unlink_backup").is_err()
+            || unlink(&self.parent, &backup).is_err()
+        {
+            return Ok(RepositoryFileInstall::InstalledBackupKept {
+                backup,
+                reason: BackupRetentionReason::RemovalFailed,
+            });
+        }
+        Ok(RepositoryFileInstall::Installed)
     }
 
     fn displace_to_backup(&self) -> Result<String, Refusal> {
@@ -118,12 +182,7 @@ impl HeldRepositoryFile {
                 self.leaf,
                 uuid::Uuid::new_v4().simple()
             );
-            match safe_fs::rename_no_replace_in(
-                &self.parent,
-                &self.parent_path,
-                &self.leaf,
-                &backup,
-            ) {
+            match safe_fs::rename_no_replace_in(&self.parent, &self.leaf, &backup) {
                 Ok(()) => return Ok(backup),
                 Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -152,12 +211,40 @@ impl HeldRepositoryFile {
         let digest: [u8; 32] = Sha256::digest(bytes).into();
         Ok(current_identity == self.identity && digest == self.digest)
     }
+
+    fn anchor_matches(&self) -> bool {
+        safe_fs::Directory::open(&self.parent_path, "repository file parent")
+            .and_then(|directory| {
+                identity(directory.as_file()).map_err(|error| std::io::Error::other(error.to_string()))
+            })
+            .is_ok_and(|current| identity(&self.parent).is_ok_and(|held| current == held))
+    }
+}
+
+impl PreparedRepositoryFile {
+    fn matches_entry(&mut self) -> Result<bool, Refusal> {
+        let entry = match platform::regular(&self.parent, &self.leaf).map_err(Refusal::from) {
+            Ok(file) => file,
+            Err(Refusal::Denied | Refusal::Missing) => return Ok(false),
+            Err(error) => return Err(error),
+        };
+        let (entry_bytes, entry_identity, _) = match read(entry, usize::MAX) {
+            Ok(read) => read,
+            Err(Refusal::TooLarge { .. } | Refusal::InvalidUtf8) => return Ok(false),
+            Err(error) => return Err(error),
+        };
+        let (held_bytes, held_identity, _) = read_clone(&mut self.file, usize::MAX)?;
+        Ok(entry_identity == self.identity
+            && held_identity == self.identity
+            && Sha256::digest(entry_bytes).as_slice() == self.digest
+            && Sha256::digest(held_bytes).as_slice() == self.digest)
+    }
 }
 
 impl Drop for PreparedRepositoryFile {
     fn drop(&mut self) {
-        if self.remove_on_drop {
-            let _ = unlink(&self.parent, &self.leaf);
+        if self.remove_on_drop && entry_has_identity(&self.parent, &self.leaf, &self.identity) {
+            let _ = unlink_temp(&self.parent, &self.leaf);
         }
     }
 }
@@ -170,7 +257,7 @@ pub(super) fn open(
 ) -> Result<HeldRepositoryFile, Refusal> {
     let (parent, leaf) = platform::open_parent(root, relative).map_err(Refusal::from)?;
     let file = platform::regular(&parent, &leaf).map_err(Refusal::from)?;
-    let (bytes, identity, permissions) = read(file, limit)?;
+    let (bytes, identity, metadata) = read(file, limit)?;
     Ok(HeldRepositoryFile {
         relative: relative.to_owned(),
         parent,
@@ -181,20 +268,33 @@ pub(super) fn open(
         digest: Sha256::digest(&bytes).into(),
         bytes,
         identity,
-        permissions,
+        metadata,
     })
 }
 
-fn read(mut file: File, limit: usize) -> Result<(Vec<u8>, FileIdentity, Permissions), Refusal> {
+fn read(mut file: File, limit: usize) -> Result<(Vec<u8>, FileIdentity, FileMetadata), Refusal> {
+    read_inner(&mut file, limit)
+}
+
+fn read_clone(
+    file: &mut File,
+    limit: usize,
+) -> Result<(Vec<u8>, FileIdentity, FileMetadata), Refusal> {
+    read_inner(file, limit)
+}
+
+fn read_inner(file: &mut File, limit: usize) -> Result<(Vec<u8>, FileIdentity, FileMetadata), Refusal> {
     let metadata = file.metadata().map_err(Refusal::Read)?;
     if metadata.len() > u64::try_from(limit).unwrap_or(u64::MAX) {
         return Err(Refusal::TooLarge { limit });
     }
     let identity = identity(&file)?;
-    let permissions = metadata.permissions();
+    let file_metadata = FileMetadata::read(file)?;
+    probe_io("repository_file_after_metadata").map_err(Refusal::Read)?;
+    file.rewind().map_err(Refusal::Read)?;
     let read_limit = u64::try_from(limit).unwrap_or(u64::MAX).saturating_add(1);
     let mut bytes = Vec::with_capacity(limit.min(64 * 1024));
-    std::io::Read::by_ref(&mut file)
+    std::io::Read::by_ref(&mut *file)
         .take(read_limit)
         .read_to_end(&mut bytes)
         .map_err(Refusal::Read)?;
@@ -202,12 +302,13 @@ fn read(mut file: File, limit: usize) -> Result<(Vec<u8>, FileIdentity, Permissi
         return Err(Refusal::TooLarge { limit });
     }
     std::str::from_utf8(&bytes).map_err(|_| Refusal::InvalidUtf8)?;
-    Ok((bytes, identity, permissions))
+    Ok((bytes, identity, file_metadata))
 }
 
 fn create_new(parent: &File, leaf: &str) -> std::io::Result<File> {
     let mut options = fs_at::OpenOptions::default();
     options
+        .read(true)
         .write(fs_at::OpenOptionsWriteMode::Write)
         .create_new(true)
         .follow(false);
@@ -220,11 +321,50 @@ fn unlink(parent: &File, leaf: &str) -> std::io::Result<()> {
 
 fn restore(
     parent: &File,
-    parent_path: &std::path::Path,
     backup: &str,
     leaf: &str,
 ) -> Result<(), Refusal> {
-    safe_fs::rename_no_replace_in(parent, parent_path, backup, leaf).map_err(Refusal::Restore)
+    safe_fs::rename_no_replace_in(parent, backup, leaf).map_err(Refusal::Restore)
+}
+
+fn entry_has_identity(parent: &File, leaf: &str, expected: &FileIdentity) -> bool {
+    platform::regular(parent, leaf)
+        .ok()
+        .and_then(|file| identity(&file).ok())
+        .is_some_and(|current| &current == expected)
+}
+
+fn unlink_temp(parent: &File, leaf: &str) -> std::io::Result<()> {
+    probe_io("repository_file_unlink_temp")?;
+    unlink(parent, leaf)
+}
+
+fn probe_io(label: &str) -> std::io::Result<()> {
+    crate::test_probes::at(label).map_err(std::io::Error::other)
+}
+
+struct CreatedLeaf<'a> {
+    parent: &'a File,
+    leaf: &'a str,
+    armed: bool,
+}
+
+impl<'a> CreatedLeaf<'a> {
+    const fn new(parent: &'a File, leaf: &'a str) -> Self {
+        Self { parent, leaf, armed: true }
+    }
+
+    fn disarm(&mut self) {
+        self.armed = false;
+    }
+}
+
+impl Drop for CreatedLeaf<'_> {
+    fn drop(&mut self) {
+        if self.armed {
+            let _ = unlink_temp(self.parent, self.leaf);
+        }
+    }
 }
 
 fn write_refusal(error: std::io::Error) -> Refusal {
@@ -234,36 +374,4 @@ fn write_refusal(error: std::io::Error) -> Refusal {
         | std::io::ErrorKind::InvalidInput => Refusal::Denied,
         _ => Refusal::Write(error),
     }
-}
-
-#[cfg(unix)]
-fn identity(file: &File) -> Result<FileIdentity, Refusal> {
-    use std::os::unix::fs::MetadataExt as _;
-    let metadata = file.metadata().map_err(Refusal::Read)?;
-    Ok(FileIdentity {
-        volume: metadata.dev(),
-        file: metadata.ino(),
-    })
-}
-
-#[cfg(windows)]
-fn identity(file: &File) -> Result<FileIdentity, Refusal> {
-    use std::mem::MaybeUninit;
-    use std::os::windows::io::AsRawHandle as _;
-    use windows_sys::Win32::Foundation::HANDLE;
-    use windows_sys::Win32::Storage::FileSystem::{
-        GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION,
-    };
-    let mut information = MaybeUninit::<BY_HANDLE_FILE_INFORMATION>::uninit();
-    if unsafe {
-        GetFileInformationByHandle(file.as_raw_handle() as HANDLE, information.as_mut_ptr())
-    } == 0
-    {
-        return Err(Refusal::Read(std::io::Error::last_os_error()));
-    }
-    let information = unsafe { information.assume_init() };
-    Ok(FileIdentity {
-        volume: u64::from(information.dwVolumeSerialNumber),
-        file: (u64::from(information.nFileIndexHigh) << 32) | u64::from(information.nFileIndexLow),
-    })
 }
