@@ -1,4 +1,5 @@
 mod assets;
+mod events;
 pub mod launch;
 
 use anyhow::Context;
@@ -49,9 +50,17 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         uuid::Uuid::new_v4().simple(),
         uuid::Uuid::new_v4().simple()
     );
+    let canonical_repo =
+        options
+            .repo
+            .canonicalize()
+            .map_err(|_| OperationFailure::InvalidInput {
+                field: None,
+                reason: provenance_core::protocol::failure::InvalidInputReason::InvalidValue,
+            })?;
     let access = Arc::new(
         LocalAccess::new(
-            &options.repo,
+            &canonical_repo,
             &options.repository_id,
             &options.scope,
             &token,
@@ -83,6 +92,17 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         &token,
         launch::LaunchKey::publish(&identity.instance_nonce)?,
     );
+    let events = events::ReviewEvents::start(
+        provenance_store::layout::ProvenanceLayout::new(
+            camino::Utf8PathBuf::from_path_buf(canonical_repo)
+                .map_err(|_| anyhow::anyhow!("repository path is not UTF-8"))?,
+        ),
+        options.scope.clone(),
+        identity.instance_nonce.clone(),
+        access.clone(),
+        codes.clone(),
+    )
+    .await;
     let config = json!({
         "endpoint": endpoint, "repositoryId": options.repository_id, "scope": options.scope,
         "compatibility": provenance_core::protocol::host::COMPATIBILITY,
@@ -110,6 +130,7 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
             LAUNCH_SESSION_ROUTE,
             post(launch::open_session).with_state(codes.clone()),
         )
+        .merge(events.router())
         .fallback(assets::serve)
         .layer(middleware::from_fn_with_state(
             (access, codes.clone()),
@@ -126,7 +147,7 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
     );
     std::io::stdout().flush()?;
     open_review_page(&endpoint, &codes, options.no_open)?;
-    serve(listener, router, host, signals).await
+    serve(listener, router, host, events, signals).await
 }
 
 /// Opens the review page signed in, or tells the person which link to open.
@@ -161,6 +182,7 @@ async fn serve(
     listener: tokio::net::TcpListener,
     router: axum::Router,
     host: StatementHost,
+    events: events::ReviewEvents,
     mut signals: ShutdownSignals,
 ) -> anyhow::Result<()> {
     let (stop, stopped) = tokio::sync::oneshot::channel();
@@ -177,11 +199,13 @@ async fn serve(
             None
         }
     };
+    events.stop();
     eprintln!("Review host is stopping. Wait for active operations, or send a second signal to force exit; writes may be incomplete.");
     let result = tokio::select! {
         result = async {
             // Join started operations before limiting the remaining HTTP drain.
             host.shutdown().await;
+            events.shutdown().await;
             match result {
                 Some(result) => result,
                 None => tokio::time::timeout(Duration::from_secs(1), &mut server)
