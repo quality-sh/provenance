@@ -27,7 +27,13 @@ function launchPage(hash = '#launch=code-1') {
       const body = path === '/review-launch/session' ? { bearer: 'session-bearer' } : config;
       return { ok: true, json: async () => body };
     },
-    mount(_root, options) { mounted.push(options); mountedPage(); return () => {}; },
+    mount(_root, options) {
+      mounted.push(options);
+      mountedPage();
+      return { dispose() {}, refresh() {}, showRecord: async () => {} };
+    },
+    openEvents: () => ({ onmessage: null, onclose: null, send() {}, close() {} }),
+    onWake() {},
   });
   return { events, receivers, mounted, mounting };
 }
@@ -67,4 +73,43 @@ test('a page without a launch code connects through the cookie', async () => {
   assert.deepEqual(page.mounted, [
     { ...config, bearer: '', rootId: 'req_root', focusId: 'rule_child' },
   ]);
+});
+
+// @provenance rule: rule_review_link_reuses_connected_page
+test('a review link shows its record in the mounted page and acknowledges it', async () => {
+  const shown: unknown[] = [];
+  const addresses: string[] = [];
+  let mounts = 0;
+  let socket!: { onmessage: ((event: { data: unknown }) => void) | null; sent: string[] };
+  let mountedPage!: () => void;
+  const mounting = new Promise<void>(resolve => { mountedPage = resolve; });
+  const elements = new Map(['root', 'selection', 'requirement', 'status'].map(id => [id, fakeElement()]));
+  bootstrapReviewPage({
+    document: { getElementById: id => elements.get(id) },
+    location: { origin, pathname: '/', search: '?root=req_root', hash: '' },
+    history: { replaceState(_data, _unused, url) { addresses.push(url); } },
+    fetch: async () => ({ ok: true, json: async () => config }),
+    mount() {
+      mounts++;
+      mountedPage();
+      return {
+        dispose() {},
+        refresh() {},
+        showRecord: async (rootId, focusId) => { shown.push([rootId, focusId]); },
+      };
+    },
+    openEvents: () => {
+      socket = { onmessage: null, sent: [] };
+      return { ...{ onclose: null, close() {} }, get onmessage() { return socket.onmessage; },
+        set onmessage(value) { socket.onmessage = value; }, send(text: string) { socket.sent.push(text); } };
+    },
+    onWake() {},
+  });
+  await mounting;
+  socket.onmessage?.({ data: JSON.stringify({ type: 'show-record', requestId: 'r1', rootId: 'req_other', focusId: 'rule_b' }) });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(mounts, 1);
+  assert.deepEqual(shown, [['req_other', 'rule_b']]);
+  assert.deepEqual(addresses, ['/?root=req_other&focus=rule_b']);
+  assert.deepEqual(socket.sent.map(text => JSON.parse(text)), [{ type: 'ack', requestId: 'r1' }]);
 });

@@ -209,7 +209,7 @@ impl LaunchCodes {
         }
     }
 
-    fn holds_key(&self, supplied: &str) -> bool {
+    pub(super) fn holds_key(&self, supplied: &str) -> bool {
         constant_time_eq(self.inner.key.value.as_bytes(), supplied.as_bytes())
     }
 }

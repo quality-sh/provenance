@@ -64,6 +64,10 @@ prints the link without the code. With `--format json` the output is
 browser, it prints the launch link and `"opened": false`. If no host is
 running, the command explains how to start one instead of returning a URL.
 
+When a review page is connected to the host, the command shows the record in
+that page instead of a new browser tab. See
+[Review links in a connected page](#review-links-in-a-connected-page).
+
 In an app that shows web pages, the agent runs
 `provenance RECORD_ID --review-link --no-open --format json` and opens
 `review_url` in the app. Write output keeps a `review_url` without a launch
@@ -152,13 +156,16 @@ get a new link with `provenance <record-id> --review-link`.
 
 The CLI checks these conditions in this order:
 
-1. `--no-open`: the CLI does not open a browser.
-2. An SSH session (`SSH_CONNECTION`, `SSH_CLIENT`, or `SSH_TTY` is set): the
-   CLI does not open a browser.
-3. Linux without `DISPLAY` or `WAYLAND_DISPLAY`: the CLI does not open a
+1. `--no-open`: the CLI does not open a browser, and it does not move a
+   connected page.
+2. A connected review page acknowledges the record: the CLI does not open a
    browser.
-4. `BROWSER` is set: the CLI starts that program with one argument.
-5. Otherwise the `open` crate opens the page with the default program. On
+3. An SSH session (`SSH_CONNECTION`, `SSH_CLIENT`, or `SSH_TTY` is set): the
+   CLI does not open a browser.
+4. Linux without `DISPLAY` or `WAYLAND_DISPLAY`: the CLI does not open a
+   browser.
+5. `BROWSER` is set: the CLI starts that program with one argument.
+6. Otherwise the `open` crate opens the page with the default program. On
    Windows, Explorer opens it.
 
 The CLI does not wait for the opener to exit. A process that cannot start counts
@@ -376,8 +383,53 @@ sequence gap, or reconnect also requires a full current-state read. Clients must
 subscribe before data reads and retain invalidations that arrive during a read.
 Git remains the source for history.
 
-Page refresh, draft retention, and navigation acknowledgement are separate page
-work. These host frames do not yet make the existing page refresh automatically.
+## Page refresh and drafts
+
+The page opens `/review-events` after it reads its configuration and before it
+mounts the review document, so a save between the two is not lost. Ready,
+reset, a new epoch, a sequence gap, and a reconnect read all active data again:
+the document, search, opened record details, discussions, and history. The page
+also reads its configuration again. When the reviewer settings changed, the
+status line asks the person to select Open / Refresh.
+
+A changed frame reads the document and search again, and the details,
+discussions, and history of the changed records. Details of other records are
+not read again. A changed family without record details, such as a discussion
+message, reads all open details again. A read in progress starts again, so an
+invalidation that arrives during a read is kept.
+
+An open edit, an open rejection or question, and a new-discussion comment are
+drafts. A reread or a remount keeps each draft with the ETag or pending
+submission that was current when the draft opened. A save of a stale draft gets
+the existing typed conflict. Only Override uses the current guard that the
+conflict returns; Discard closes the draft.
+
+When the socket closes, the page connects again once at once. If that attempt
+closes too, the status line says that live updates stopped. The page connects
+again when it is online or active again, or when the person selects
+Open / Refresh. There is no timer or polling.
+
+## Review links in a connected page
+
+`POST /review-navigation` takes `{"launchKey", "rootId", "focusId"}`. Only the
+holder of the launch key can call it. The host sends this frame to the most
+recently connected page:
+
+```json
+{"type":"show-record","requestId":"...","rootId":"req_example","focusId":"rule_example"}
+```
+
+The page shows the record and answers `{"type":"ack","requestId":"..."}`. Only
+the page that received a request can acknowledge it. The host then answers
+`{"shown": true}`. With no connected page, or when that page disconnects first,
+the host answers `{"shown": false}` and the CLI opens the browser as before. The
+wait has no deadline. When the CLI stops waiting, the host removes the request.
+
+A record in the open document is selected at once. Another Requirement opens
+only after the person saves or cancels the open drafts in the current document.
+Until then the page shows that a review link waits, and the CLI waits. A newer
+review link replaces a waiting one, and the page acknowledges both when it
+shows the newer record.
 
 ## Notification loss and recovery
 

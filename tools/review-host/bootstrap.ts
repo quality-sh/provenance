@@ -1,5 +1,6 @@
+import { connectEvents, type EventSocket } from './events.ts';
 import {
-  CONNECTION_REFUSED, createSession, type ReviewConfig, type ReviewMountOptions,
+  CONNECTION_REFUSED, createSession, type ReviewConfig, type ReviewHandle, type ReviewMountOptions,
 } from './session.ts';
 
 const LAUNCH_SESSION_ROUTE = '/review-launch/session';
@@ -39,8 +40,24 @@ interface BootstrapDependencies {
     redirect: 'error';
     cache: 'no-store';
   }) => Promise<FetchResponse>;
-  readonly mount: (root: BrowserElement, options: ReviewMountOptions) => () => void;
+  readonly mount: (root: BrowserElement, options: ReviewMountOptions) => ReviewHandle;
+  /** Opens the host's event socket. */
+  readonly openEvents: () => EventSocket;
+  /** Calls the listener when the page is online or active again. */
+  readonly onWake: (listener: () => void) => void;
 }
+
+/** Tells the person that the page does not show later saves until it reconnects. */
+export const LIVE_UPDATES_PAUSED =
+  'Live updates stopped. They start again when this page is active, or select Open / Refresh.';
+
+/** Tells the person that a reviewer setting changed and how to apply it. */
+export const SETTINGS_CHANGED =
+  'Reviewer settings changed. Select Open / Refresh to apply them; unsaved drafts close.';
+
+const sameActors = (left: ReviewConfig, right: ReviewConfig) =>
+  left.dispositionActorIds.length === right.dispositionActorIds.length &&
+  left.dispositionActorIds.every((id, index) => right.dispositionActorIds[index] === id);
 
 function element(document: BrowserDocument, id: string): BrowserElement {
   const found = document.getElementById(id);
@@ -88,9 +105,33 @@ export function bootstrapReviewPage(dependencies: BootstrapDependencies) {
   if (location.hash !== '') {
     dependencies.history.replaceState(null, '', `${location.pathname}${location.search}`);
   }
+  let configuration: (() => Promise<ReviewConfig>) | undefined;
+  let current: ReviewConfig | undefined;
+  const events = connectEvents({
+    open: dependencies.openEvents,
+    refresh: change => {
+      session.refresh(change);
+      if (change._tag !== 'Everything' || !configuration) return;
+      // The configuration can change with the settings, so a full read reads it too.
+      void configuration().then(next => {
+        if (current && !sameActors(current, next)) status.textContent = SETTINGS_CHANGED;
+      }, () => {});
+    },
+    showRecord: (rootId, focusId) => {
+      const search = new URLSearchParams({ root: rootId, ...(focusId === undefined ? {} : { focus: focusId }) });
+      dependencies.history.replaceState(null, '', `${location.pathname}?${search}`);
+      return session.show(rootId, focusId);
+    },
+    live: () => session.restoreStatus(),
+    paused: () => { status.textContent = LIVE_UPDATES_PAUSED; },
+  });
+  dependencies.onWake(events.wake);
   const session = createSession({
     mount: options => dependencies.mount(root, options),
-    connected: () => {
+    connected: config => {
+      current = config;
+      // Subscribe before the page reads, so no save between them is lost.
+      events.start();
       selection.hidden = linkedRoot !== null;
       if (linkedRoot !== null) session.open(linkedRoot, linkedFocus);
       else requirement.focus();
@@ -100,6 +141,7 @@ export function bootstrapReviewPage(dependencies: BootstrapDependencies) {
   selection.addEventListener('submit', event => {
     event.preventDefault();
     session.open(requirement.value.trim());
+    events.wake();
   });
 
   void (async () => {
@@ -112,12 +154,13 @@ export function bootstrapReviewPage(dependencies: BootstrapDependencies) {
       if (!launch.ok) throw new Error('Launch refused');
       bearer = sessionBearer(await launch.json());
     }
-    await session.connect(bearer, async () => {
+    configuration = async () => {
       const response = await fetch('/review-config', {
         headers: bearer ? { authorization: `Bearer ${bearer}` } : {}, redirect: 'error', cache: 'no-store',
       });
       if (!response.ok) throw new Error('Access refused');
       return reviewConfig(await response.json(), location.origin);
-    });
+    };
+    await session.connect(bearer, configuration);
   })().catch(() => { status.textContent = CONNECTION_REFUSED; });
 }
