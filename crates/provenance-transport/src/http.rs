@@ -87,6 +87,11 @@ async fn invoke(State(host): State<StatementHost>, request: Request) -> Response
         Ok(query) => query,
         Err(error) => return failure::response(error),
     };
+    let page_write = request
+        .extensions()
+        .get::<crate::ReviewPageWrite>()
+        .is_some()
+        && matched.definition.mutates();
     let headers = request.headers().clone();
     let expects_body = matched.definition.request_schema().is_some();
     let Ok(bytes) = (tokio::select! {
@@ -100,7 +105,7 @@ async fn invoke(State(host): State<StatementHost>, request: Request) -> Response
         Ok(data) => data,
         Err(error) => return failure::response(error),
     };
-    match routing::invoke(&host, &matched, data, query, &headers).await {
+    match routing::invoke(&host, &matched, data, query, &headers, page_write).await {
         Ok((value, etag)) => {
             let mut response = (
                 [(axum::http::header::CONTENT_TYPE, "application/json")],

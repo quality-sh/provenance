@@ -179,20 +179,22 @@ impl LaunchCodes {
     }
 
     /// Supplies the bearer to existing routes after a valid session cookie.
-    pub(super) fn authenticate_cookie(&self, headers: &mut HeaderMap) {
+    pub(super) fn authenticate_cookie(&self, headers: &mut HeaderMap) -> bool {
         if headers.get_all(header::AUTHORIZATION).iter().count() > 1 {
-            return;
+            return false;
         }
         let mut supplied = None;
         for header in headers.get_all(header::COOKIE) {
-            let Ok(value) = header.to_str() else { return };
+            let Ok(value) = header.to_str() else {
+                return false;
+            };
             for part in value.split(';') {
                 let Some((name, value)) = part.trim().split_once('=') else {
                     continue;
                 };
                 if name == self.inner.cookie_name {
                     if supplied.is_some() {
-                        return;
+                        return false;
                     }
                     supplied = Some(value);
                 }
@@ -206,7 +208,9 @@ impl LaunchCodes {
                 HeaderValue::from_str(&format!("Bearer {}", self.inner.bearer))
                     .expect("generated bearer header"),
             );
+            return true;
         }
+        false
     }
 
     pub(super) fn holds_key(&self, supplied: &str) -> bool {
