@@ -61,7 +61,7 @@ async fn api_selects_methods_bodies_and_headers_for_one_public_mutation() {
         .call(json!({
             "path": "sources",
             "method": "post",
-            "body": {"id": "source_api", "name": "Created by api", "source_type": "document", "supersedes": []}
+            "input": {"id": "source_api", "name": "Created by api", "source_type": "document", "supersedes": []}
         }))
         .await;
     assert_ne!(created.is_error, Some(true), "{created:?}");
@@ -135,7 +135,7 @@ async fn api_mutations_keep_the_operation_specific_preconditions() {
         .call(json!({
             "path": "requirements",
             "method": "post",
-            "body": {"id": "req_api", "statement": "One statement.", "actor": "api",
+            "input": {"id": "req_api", "statement": "One statement.", "actor": "api",
                      "status": "active", "depends_on": [], "supersedes": []}
         }))
         .await;
@@ -146,7 +146,7 @@ async fn api_mutations_keep_the_operation_specific_preconditions() {
         .call(json!({
             "path": "requirements/req_shared",
             "method": "patch",
-            "body": {"description": "One description."}
+            "input": {"description": "One description."}
         }))
         .await;
     let refused = refusal(&no_version);
@@ -164,8 +164,8 @@ async fn api_mutations_keep_the_operation_specific_preconditions() {
         json!({
             "path": "requirements/req_shared",
             "method": "patch",
-            "headers": {"If-Match": etag},
-            "body": {"actor": "api", "description": description}
+            "header": {"If-Match": etag},
+            "input": {"actor": "api", "description": description}
         })
     };
 
@@ -200,13 +200,13 @@ async fn api_refuses_header_names_that_differ_only_in_case() {
         .call(json!({
             "path": "requirements/req_shared",
             "method": "patch",
-            "headers": {"If-Match": "\"1\"", "if-match": "\"2\""},
-            "body": {"actor": "api", "description": "One description."}
+            "header": {"If-Match": "\"1\"", "if-match": "\"2\""},
+            "input": {"actor": "api", "description": "One description."}
         }))
         .await;
     let refused = refusal(&refused);
     assert_eq!(refused["kind"], "invalid_input");
-    assert_eq!(refused["field"], "headers");
+    assert_eq!(refused["field"], "header");
 
     session.shutdown().await;
 }

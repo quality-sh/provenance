@@ -4,9 +4,7 @@ use provenance_macros::rule;
 use camino::Utf8PathBuf;
 use provenance_porcelain::check::{Category, CategoryReport, CheckInput, Status};
 use provenance_porcelain::get::{GetInput, GetOutcome};
-use provenance_porcelain::registry::{CheckArguments, ReportFileFormat};
-use provenance_transport::check::{BindingOptions, RepositoryCheckPort};
-use provenance_transport::coverage::ReportFormat;
+use provenance_transport::check::RepositoryCheckPort;
 use provenance_transport::repository::RepoContext;
 use provenance_transport::StatementHost;
 
@@ -60,43 +58,21 @@ pub fn place(context: &RepoContext) -> provenance_review::RepositoryScope {
 /// Runs the check command with the repository check adapter, prints the report, and
 /// fails when a category refuses.
 #[rule("rule_ste_strict_committed_statement_gate")]
-pub async fn dispatch_check(input: CheckArguments) -> anyhow::Result<()> {
-    let repo = Utf8PathBuf::from(&input.repo);
+pub async fn dispatch_check(repo: &str, json: bool, input: CheckInput) -> anyhow::Result<()> {
+    let repo = Utf8PathBuf::from(repo);
     if let Some(scope) = &input.scope {
         // An undeclared scope refuses the whole check before any category runs.
         provenance_transport::check::ensure_declared_scope(&repo, scope)?;
     }
-    let format = match input.output_format.unwrap_or_default() {
-        ReportFileFormat::Json => ReportFormat::Json,
-        ReportFileFormat::Markdown => ReportFormat::Markdown,
-    };
-    let bindings = BindingOptions {
-        path: input.path.clone().map(Utf8PathBuf::from),
-        baseline: input.baseline.clone().map(Utf8PathBuf::from),
-        output: input
-            .output
-            .clone()
-            .map(|output| (Utf8PathBuf::from(output), format)),
-    };
-    let mut check = input.statement.clone().into_iter().fold(
-        CheckInput::new(input.categories()),
-        CheckInput::with_statement,
-    );
-    if let Some(scope) = input.scope.clone() {
-        check = check.in_scope(scope);
+    if let Err(reason) = input.validate() {
+        anyhow::bail!("unsupported check options: {reason}");
     }
-    if bindings.is_set() && !check.categories().contains(&Category::Bindings) {
-        anyhow::bail!(
-            "unsupported check options: --path, --baseline, --output, and --output-format \
-             apply only to the bindings check; add --bindings"
-        );
-    }
-    let port =
-        RepositoryCheckPort::new(repo, input.strict, input.base.clone()).with_bindings(bindings);
+    let check = input;
+    let port = RepositoryCheckPort::new(repo, false, None);
     let report = provenance_porcelain::Porcelain::new(port)
         .check(check)
         .await;
-    if input.format.is_some() {
+    if json {
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else {
         println!("{}", render_check(&report));

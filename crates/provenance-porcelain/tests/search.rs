@@ -152,7 +152,7 @@ async fn filter_only_search_uses_the_canonical_query_and_result() {
     let port = RecordingPort::default();
     let service = Porcelain::new(port.clone());
     let query = SearchInput {
-        node_types: vec![NodeType::Requirement, NodeType::Rule],
+        kind: vec![NodeType::Requirement, NodeType::Rule],
         limit: Some(7),
         ..SearchInput::default()
     };
@@ -279,8 +279,8 @@ async fn file_search_reads_the_code_lookup_and_returns_rules_as_nodes() {
         file: Some("code.rs".into()),
         symbol: Some("pay".into()),
         line: Some(2),
-        node_types: vec![NodeType::Rule],
-        exclude_terminal: Some(false),
+        kind: vec![NodeType::Rule],
+        include_terminal: Some(true),
         cursor: Some("next".into()),
         ..SearchInput::default()
     };
@@ -319,18 +319,18 @@ async fn code_lookup_refusals_happen_before_the_port() {
         (
             SearchInput {
                 file: file(),
-                node_types: vec![NodeType::Rule, NodeType::Requirement],
+                kind: vec![NodeType::Rule, NodeType::Requirement],
                 ..SearchInput::default()
             },
-            "node_types",
+            "kind",
         ),
         (
             SearchInput {
                 file: file(),
-                exclude_terminal: Some(true),
+                include_terminal: Some(false),
                 ..SearchInput::default()
             },
-            "exclude_terminal",
+            "include_terminal",
         ),
         (
             SearchInput {

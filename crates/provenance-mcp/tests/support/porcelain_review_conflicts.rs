@@ -11,8 +11,8 @@ async fn edit(session: &ApiSession, description: &str) -> (String, String) {
     let saved = session
         .call(json!({
             "path":"requirements/req_shared", "method":"patch",
-            "headers":{"If-Match":etag},
-            "body":{"actor":"agent","description":description}
+            "header":{"If-Match":etag},
+            "input":{"actor":"agent","description":description}
         }))
         .await;
     assert_ne!(saved.is_error, Some(true), "{saved:?}");
@@ -33,7 +33,7 @@ async fn submit(session: &ApiSession, revision: &str) -> CallToolResult {
     session
         .call(json!({
             "path":"requirements/req_shared/submit", "method":"post",
-            "body":{"actor":"agent", "declared_by":null, "title":"Review", "summary":"Review it.",
+            "input":{"actor":"agent", "declared_by":null, "title":"Review", "summary":"Review it.",
                 "confidence":null, "source_ids":[], "evidence_references":[], "builds_on":[],
                 "expected_revision":revision, "revises":null}
         }))
@@ -81,7 +81,7 @@ async fn terminal(session: &ApiSession, proposal: &str, action: &str) -> CallToo
     session
         .call(json!({"path":format!(
         "requirements/req_shared/submissions/{proposal}/{action}"),
-        "method":"post", "body":body}))
+        "method":"post", "input":body}))
         .await
 }
 
