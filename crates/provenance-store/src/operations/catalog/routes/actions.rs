@@ -75,7 +75,6 @@ fn requirement_reviews(out: &mut Vec<Definition>) {
         )
         .path_field("id", "requirement_id")
         .scope("scope_id")
-        .header("Idempotency-Key", "request_id", false)
         .target(TargetAction::Submit, Some(NodeType::Requirement)),
     );
     out.push(
@@ -89,8 +88,7 @@ fn requirement_reviews(out: &mut Vec<Definition>) {
             vec![schema::path("id"), schema::path("proposal_id")],
         )
         .path_field("id", "requirement_id")
-        .scope("scope_id")
-        .header("Idempotency-Key", "request_id", false),
+        .scope("scope_id"),
     );
     out.push(
         backed::<operation::WithdrawRequirementReviewV2>(
@@ -103,8 +101,7 @@ fn requirement_reviews(out: &mut Vec<Definition>) {
             vec![schema::path("id"), schema::path("proposal_id")],
         )
         .path_field("id", "requirement_id")
-        .scope("scope_id")
-        .header("Idempotency-Key", "request_id", false),
+        .scope("scope_id"),
     );
 }
 

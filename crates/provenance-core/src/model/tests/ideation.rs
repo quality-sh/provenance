@@ -3,6 +3,7 @@ use super::ideation::dispositions::DispositionRecord;
 use super::ideation::proposals::ProposalCard;
 use super::ideation::synthesis::SynthesisPacket;
 use super::ideation::{DispositionDecision, PromotionState};
+use crate::validate_disposition_intrinsic;
 
 #[test]
 #[allow(clippy::too_many_lines)]
@@ -342,4 +343,42 @@ fn public_disposition_model_rejects_legacy_persisted_field_names() {
         disposition_error.contains("unknown field"),
         "{disposition_error}"
     );
+}
+
+#[test]
+fn accepted_and_deferred_dispositions_allow_no_rationale() {
+    for decision in ["accepted", "deferred"] {
+        let disposition: DispositionRecord = serde_json::from_value(serde_json::json!({
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+            "scope_id": "default",
+            "id": format!("disposition_{decision}"),
+            "proposal_id": "proposal_a",
+            "decision": decision,
+            "actor": {"identity_type": "human", "id": "reviewer"}
+        }))
+        .unwrap();
+        validate_disposition_intrinsic(&disposition).unwrap();
+    }
+}
+
+#[test]
+fn rejected_dispositions_require_a_nonempty_rationale() {
+    for rationale in [None, Some(""), Some("   ")] {
+        let mut value = serde_json::json!({
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+            "scope_id": "default",
+            "id": "disposition_rejected",
+            "proposal_id": "proposal_a",
+            "decision": "rejected",
+            "actor": {"identity_type": "human", "id": "reviewer"}
+        });
+        if let Some(rationale) = rationale {
+            value["rationale"] = serde_json::json!(rationale);
+        }
+        let disposition: DispositionRecord = serde_json::from_value(value).unwrap();
+        let error = validate_disposition_intrinsic(&disposition)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("rejected disposition rationale"), "{error}");
+    }
 }

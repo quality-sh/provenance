@@ -44,27 +44,19 @@ impl StateStore {
             "invalid review request identity"
         );
         let digest = request_digest(&input)?;
+        let request_id = journal::new_id();
         let scope = input.scope_id.clone();
         self.with_repository_publication(move || {
             anyhow::ensure!(
                 self.manifest()?.scopes.iter().any(|s| s.id == scope),
                 "review scope is not in the manifest"
             );
-            if let Some(receipt) = super::decision_state::replay(
-                self,
-                &scope,
-                &input.request_id,
-                &input.actor,
-                &digest,
-            )? {
-                return Ok(receipt);
-            }
             let record = self.requirement(&scope, &input.requirement_id)?;
             owner_matches(&record, input.declared_by.as_deref())?;
             self.validated_review_entries(&scope)?;
             with_staged_state(&self.layout, false, |layout| {
                 guard::with_writer(&shards::proposal_cards_path(layout, &scope), "*", || {
-                    Self::new(layout.clone()).commit_submission(input, digest)
+                    Self::new(layout.clone()).commit_submission(input, request_id, digest)
                 })
             })
         })
@@ -73,6 +65,7 @@ impl StateStore {
     fn commit_submission(
         &self,
         input: SubmitRequirementReview,
+        request_id: StableId,
         digest: String,
     ) -> anyhow::Result<CycleEntry> {
         let scope = input.scope_id.clone();
@@ -145,7 +138,7 @@ impl StateStore {
             disposition_id: None,
             feedback_message_id: None,
             actor: input.actor,
-            request_id: input.request_id,
+            request_id,
             intent_digest: digest,
         };
         write_receipt(self, &entry)?;
@@ -184,6 +177,7 @@ impl StateStore {
     ) -> anyhow::Result<CycleEntry> {
         let actor = input.actor.id.clone();
         let digest = request_digest(&input)?;
+        let request_id = journal::new_id();
         let scope = input.scope_id.clone();
         self.with_repository_publication(move || {
             anyhow::ensure!(
@@ -195,11 +189,6 @@ impl StateStore {
             validate_submission_address(&proposal, &facts, &input.proposal_id, addressed.as_ref())?;
             let requirement_id = &proposal.traceability.target.artifact_id;
             self.requirement(&scope, requirement_id)?;
-            if let Some(receipt) =
-                super::decision_state::replay(self, &scope, &input.request_id, &actor, &digest)?
-            {
-                return Ok(receipt);
-            }
             if facts.is_withdrawn(&input.proposal_id) || facts.is_decided(&input.proposal_id) {
                 return Err(SourceFailure::wrap(
                     facts.conflict_failure(self, &scope, requirement_id)?,
@@ -207,7 +196,7 @@ impl StateStore {
                 ));
             }
             with_staged_state(&self.layout, false, |layout| {
-                Self::new(layout.clone()).commit_decision(input, digest)
+                Self::new(layout.clone()).commit_decision(input, request_id, digest)
             })
         })
     }
@@ -215,20 +204,20 @@ impl StateStore {
     fn commit_decision(
         &self,
         input: DecideRequirementReview,
+        request_id: StableId,
         digest: String,
     ) -> anyhow::Result<CycleEntry> {
         let DecideRequirementReview {
             scope_id: scope,
-            request_id,
             actor,
             proposal_id,
-            disposition_id,
             decision,
             rationale,
             canonical_artifact,
             feedback,
             declared_by,
         } = input;
+        let disposition_id = journal::new_id();
         let proposal = review_submission(self, &scope, &proposal_id)?;
         let requirement_id = proposal.traceability.target.artifact_id.clone();
         let binding = proposal
@@ -368,6 +357,7 @@ impl StateStore {
             );
         }
         let digest = request_digest(&input)?;
+        let request_id = journal::new_id();
         let scope = input.scope_id.clone();
         self.with_repository_publication(move || {
             anyhow::ensure!(
@@ -380,11 +370,6 @@ impl StateStore {
             let record = self.requirement(&scope, &proposal.traceability.target.artifact_id)?;
             let requirement_id = &proposal.traceability.target.artifact_id;
             owner_matches(&record, input.declared_by.as_deref())?;
-            if let Some(receipt) =
-                super::decision_state::replay(self, &scope, &input.request_id, &input.actor, &digest)?
-            {
-                return Ok(receipt);
-            }
             let binding = proposal
                 .record_revision
                 .as_ref()
@@ -403,7 +388,7 @@ impl StateStore {
                 ));
             }
             with_staged_state(&self.layout, false, |layout| {
-                Self::new(layout.clone()).commit_withdrawal(input, digest)
+                Self::new(layout.clone()).commit_withdrawal(input, request_id, digest)
             })
         })
     }
@@ -411,6 +396,7 @@ impl StateStore {
     fn commit_withdrawal(
         &self,
         input: WithdrawRequirementReview,
+        request_id: StableId,
         digest: String,
     ) -> anyhow::Result<CycleEntry> {
         let scope = input.scope_id.clone();
@@ -427,7 +413,7 @@ impl StateStore {
             disposition_id: None,
             feedback_message_id: None,
             actor: input.actor,
-            request_id: input.request_id,
+            request_id,
             intent_digest: digest,
         };
         write_receipt(self, &entry)?;
