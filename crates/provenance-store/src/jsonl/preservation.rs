@@ -140,7 +140,8 @@ impl<T: Serialize> LoadedRecords<T> {
     /// Turns the saved records back into shard lines.
     ///
     /// A record the mutation did not change keeps its raw line, so stored
-    /// content this build does not own survives untouched rows byte for byte.
+    /// JSON line content this build does not own survives untouched rows
+    /// unchanged. The writer normalizes line terminators to `\n`.
     /// A changed record is matched to its stored row by its unique id, and
     /// the row's top-level unknown members are carried onto the new line. The
     /// write is refused when a changed row holds stored data that cannot be

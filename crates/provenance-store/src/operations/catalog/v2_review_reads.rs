@@ -8,7 +8,6 @@ use crate::{
     write_error::WriteError,
 };
 use provenance_core::{
-    protocol::failure::{InvalidInputReason, OperationFailure},
     review::{EvidencePage, EvidenceQuery, ReviewEntry, ReviewHistoryQuery},
     threads::{
         DiscussionEntry, DiscussionGroup, DiscussionMessagesQuery, DiscussionQuery,
@@ -207,13 +206,24 @@ impl Operation for ReviewHistoryEntryV2 {
     }
 }
 
+/// The published evidence side of a review outcome. The enum is the whole
+/// contract: wire values outside `before` and `after` are unrepresentable, so
+/// the request carries no second string validation.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ReviewEvidenceSide {
+    Before,
+    After,
+}
+
 #[derive(Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct HistoryEvidenceRequest {
     pub requirement_id: StableId,
     pub entry_id: StableId,
-    pub side: String,
+    pub side: ReviewEvidenceSide,
     pub field: Option<String>,
     #[serde(default)]
     pub offset: u64,
@@ -227,16 +237,6 @@ impl Operation for ReviewEvidenceV2 {
     const NAME: &'static str = "review-evidence-v2";
     const CONTEXT: ContextKind = ContextKind::Scoped;
     const FAILURE_STATUSES: &'static [u16] = &[409];
-    fn validate_external(request: &Self::Request) -> Result<(), OperationFailure> {
-        if matches!(request.side.as_str(), "before" | "after") {
-            Ok(())
-        } else {
-            Err(OperationFailure::InvalidInput {
-                field: Some("side".into()),
-                reason: InvalidInputReason::InvalidValue,
-            })
-        }
-    }
     fn needs(_: &Self::Request) -> ExecutionNeeds {
         &[
             ExecutionNeed::GraphStorage,
@@ -259,7 +259,7 @@ impl Operation for ReviewEvidenceV2 {
                 EvidenceQuery {
                     requirement_id: request.requirement_id,
                     entry_id: request.entry_id,
-                    before: request.side == "before",
+                    before: request.side == ReviewEvidenceSide::Before,
                     field: request.field,
                     offset: request.offset,
                 },

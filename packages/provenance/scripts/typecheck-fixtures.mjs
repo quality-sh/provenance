@@ -27,6 +27,10 @@ assert.equal(queryEnvelope.status, 0, queryEnvelope.stdout + queryEnvelope.stder
 const queryContract = typecheck("query-contract");
 assert.equal(queryContract.status, 0, queryContract.stdout + queryContract.stderr);
 
+const queryParameterClosed = typecheck("query-parameter-closed");
+const queryParameterOutput = queryParameterClosed.stdout + queryParameterClosed.stderr;
+assert.equal(queryParameterClosed.status, 0, queryParameterOutput);
+
 const contextValid = typecheck("context-valid");
 assert.equal(contextValid.status, 0, contextValid.stdout + contextValid.stderr);
 

@@ -64,6 +64,44 @@ test('connection pins the complete compatibility tuple and bound identity', asyn
   assert.equal(identityError._tag, 'IdentityMismatchError');
 });
 
+test('metadata refusal remains a typed Effect error with status and payload', async () => {
+  const failure = { error: { kind: 'unauthenticated' as const }, meta: {} };
+  const error = await Effect.runPromise(Effect.flip(EffectHttpClient.connect({
+    baseUrl: 'http://localhost',
+    bearer: 'wrong-secret',
+    fetch: async () => Response.json(failure, { status: 401 }),
+  })));
+  assert.equal(error._tag, 'OperationError');
+  if (error._tag === 'OperationError') {
+    assert.equal(error.status, 401);
+    assert.deepEqual(error.failure, failure);
+  }
+});
+
+test('malformed metadata refusal JSON remains a malformed Effect response', async () => {
+  const error = await Effect.runPromise(Effect.flip(EffectHttpClient.connect({
+    baseUrl: 'http://localhost',
+    fetch: async () => new Response('{', { status: 401 }),
+  })));
+  assert.equal(error._tag, 'MalformedResponseError');
+});
+
+test('schema-invalid metadata refusal remains a malformed Effect response', async () => {
+  const error = await Effect.runPromise(Effect.flip(EffectHttpClient.connect({
+    baseUrl: 'http://localhost',
+    fetch: async () => Response.json({ error: { kind: 'not_declared' }, meta: {} }, { status: 401 }),
+  })));
+  assert.equal(error._tag, 'MalformedResponseError');
+});
+
+test('metadata transport loss remains an Effect connection error', async () => {
+  const error = await Effect.runPromise(Effect.flip(EffectHttpClient.connect({
+    baseUrl: 'http://localhost',
+    fetch: async () => { throw new TypeError('fixture unavailable'); },
+  })));
+  assert.equal(error._tag, 'ConnectionError');
+});
+
 test('a declared failure remains a typed operation error', async () => {
   const client = await Effect.runPromise(EffectHttpClient.connect({ baseUrl: 'http://localhost', fetch: async (_url, init) => {
     if (init?.method !== 'POST') return metadata();

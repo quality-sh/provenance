@@ -347,3 +347,37 @@ fn scope_import_preserves_a_keyword_id_from_a_legacy_disposition() {
     assert!(!staged.layout.publication_lock_path().exists());
     assert_eq!(staged.list_dispositions(&scope).unwrap(), vec![old]);
 }
+
+#[test]
+fn oversized_import_refuses_before_replacing_a_legacy_keyword_record() {
+    let (_dir, live, staged, scope, _) = staged_store();
+    let old: provenance_core::Source = serde_json::from_value(serde_json::json!({
+        "schema_version": provenance_core::SUPPORTED_SCHEMA_VERSION.0,
+        "scope_id": "default", "id": "search", "name": "Old source",
+        "source_type": "document"
+    }))
+    .unwrap();
+    let old_path = shards::sources_path(&staged.layout, &scope);
+    seed_shard(&old_path, std::slice::from_ref(&old));
+    let old_bytes = std::fs::read(&old_path).unwrap();
+    let mut large = old.clone();
+    large.id = StableId::new("source_large").unwrap();
+    large.name = "x".repeat(crate::cache::read::page::RESOURCE_RECORD_BYTES);
+    let incoming = [old.clone(), large];
+
+    let error = with_repository_publication(&live.layout, || {
+        staged.import_scope(
+            &scope,
+            &ScopeShards {
+                sources: &incoming,
+                ..ScopeShards::default()
+            },
+        )
+    })
+    .unwrap_err();
+
+    assert!(error.to_string().contains("supported read"), "{error}");
+    assert_eq!(std::fs::read(&old_path).unwrap(), old_bytes);
+    assert_eq!(staged.list_sources(&scope).unwrap(), vec![old]);
+    assert!(!staged.layout.publication_lock_path().exists());
+}
