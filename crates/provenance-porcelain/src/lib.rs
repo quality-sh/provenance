@@ -6,6 +6,7 @@
 
 pub mod action;
 pub mod check;
+pub mod discussion;
 pub mod get;
 pub mod search;
 
