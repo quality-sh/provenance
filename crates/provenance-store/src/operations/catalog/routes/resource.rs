@@ -127,7 +127,7 @@ macro_rules! resource {
             .scope("scope_id")
             .cli_defaults($update_defaults)
             .argument_aliases($update_aliases)
-            .null_clears($nullable),
+            .public_patch($nullable),
         );
     }};
 }
