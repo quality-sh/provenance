@@ -201,15 +201,12 @@ async fn mcp_trace_tool_matches_trace_view_and_cli() {
         .unwrap();
 
     let tool = client
-        .call(
-            "trace",
-            json!({"target":"rule_overtime_pay", "max_depth":6}),
-        )
+        .call("trace", json!({"target":"rule_overtime_pay", "depth":6}))
         .await;
     let view = client
         .call(
             "get",
-            json!({"target":"rule_overtime_pay", "view":"trace", "max_depth":6}),
+            json!({"target":"rule_overtime_pay", "view":"trace", "depth":6}),
         )
         .await;
     assert_ne!(tool["isError"], json!(true), "{tool}");

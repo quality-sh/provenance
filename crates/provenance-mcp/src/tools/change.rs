@@ -32,7 +32,13 @@ pub fn input(host: &StatementHost) -> ActionInput {
         }
     }
     if porcelain.notify_is_available() {
-        input = input.with_action(NOTIFY, provenance_porcelain::get::notify_input_schema());
+        input = input.with_action(
+            NOTIFY,
+            crate::derived::writes_schema(
+                Command::Get,
+                provenance_porcelain::get::notify_input_schema(),
+            ),
+        );
     }
     input
 }

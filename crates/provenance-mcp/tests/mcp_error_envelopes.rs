@@ -135,7 +135,7 @@ async fn every_mcp_tool_family_uses_the_error_envelope() {
             }),
         ),
         ("discussion", "discussions", json!({})),
-        ("check", "check", json!({"categories":["graph"]})),
+        ("check", "check", json!({"graph": true})),
     ] {
         let result = call(&client, tool, arguments).await;
         assert_ne!(result.is_error, Some(true), "{family}: {result:?}");

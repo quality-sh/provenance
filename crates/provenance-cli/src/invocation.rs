@@ -19,7 +19,7 @@ use grammar::{
 };
 use provenance_cli::exposed;
 use provenance_cli::servers::Server;
-use provenance_porcelain::registry::CheckArguments;
+use provenance_porcelain::check::CheckInput;
 use provenance_porcelain::registry::{self, PrimeInput};
 
 #[cfg(test)]
@@ -29,7 +29,7 @@ mod tests;
 
 /// One command selected from a declared grammar.
 pub enum Invocation {
-    Check(CheckArguments),
+    Check(CheckInput, crate::registry_cli::BoundContext),
     Prime(PrimeInput),
     Repository(RepositoryInput, bool),
     Graph(GraphInput),
@@ -152,6 +152,7 @@ impl Invocation {
             Some(registry::Command::Check) => Self::Check(
                 crate::registry_cli::input(&registry::Command::Check.declaration(), selected)
                     .unwrap_or_else(|error| catalog_cli::usage_error(error)),
+                crate::registry_cli::bound_context(selected),
             ),
             Some(registry::Command::Prime) => Self::Prime(
                 crate::registry_cli::input(&registry::Command::Prime.declaration(), selected)
@@ -228,8 +229,8 @@ impl Invocation {
             catalog_cli::ensure_only_fields(&matches, &["kind", "depth", "limit"]);
             let input = provenance_porcelain::get::TraceInput {
                 target: args.target,
-                max_depth: args.depth,
-                returned_kinds: args.kind,
+                depth: args.depth,
+                kind: args.kind,
                 limit: args.limit,
             };
             return Ok(Self::Get(GetInvocation {
@@ -261,10 +262,10 @@ impl Invocation {
                     .and_then(View::parse)
                     .unwrap_or_default(),
             );
-            input.max_depth = args.depth;
-            input.returned_kinds = args.kind;
+            input.depth = args.depth;
+            input.kind = args.kind;
             input.limit = args.limit;
-            input.notify = notify(&matches)?;
+            (input.notify, input.thread) = notify(&matches)?;
             return Ok(Self::Get(GetInvocation {
                 context,
                 format,
@@ -292,7 +293,7 @@ impl Invocation {
     /// `{error,meta}` object instead of text.
     pub fn json_output(&self) -> bool {
         let format = match self {
-            Self::Check(_)
+            Self::Check(..)
             | Self::Prime(_)
             | Self::Repository(..)
             | Self::Graph(_)
@@ -312,7 +313,7 @@ impl Invocation {
 
     pub async fn dispatch(self) -> anyhow::Result<()> {
         match self {
-            Self::Check(input) => handlers::check_command(input).await,
+            Self::Check(input, context) => handlers::check_command(input, context).await,
             Self::Prime(input) => handlers::prime_command(&input),
             Self::Repository(input, quiet) => handlers::repository_command(input, quiet).await,
             Self::Graph(input) => handlers::graph_command(input),
@@ -389,15 +390,15 @@ impl SearchArgs {
                 anyhow::anyhow!("the root search query does not declare exclude_terminal")
             })?;
         // A file search returns every bound Rule, so only a text search takes the default.
-        let exclude_terminal = if self.include_terminal {
-            Some(crate::read_policy::exclude_terminal(true))
+        let include_terminal = if self.include_terminal {
+            Some(true)
         } else {
-            self.file.is_none().then_some(default_exclude_terminal)
+            self.file.is_none().then_some(!default_exclude_terminal)
         };
         let query = SearchInput {
             text: self.text,
-            node_types: self.kind,
-            exclude_terminal,
+            kind: self.kind,
+            include_terminal,
             cursor: self.cursor,
             limit: self.limit,
             file: self.file,
@@ -467,10 +468,15 @@ fn refuse_collection_word(word: &str) -> ! {
 }
 
 /// Reads `--notify` and its thread: `--thread`, else `CODEX_THREAD_ID` from a Codex session.
-fn notify(matches: &clap::ArgMatches) -> anyhow::Result<Option<provenance_porcelain::get::Notify>> {
-    use provenance_porcelain::get::{Notify, NotifyClient};
+fn notify(
+    matches: &clap::ArgMatches,
+) -> anyhow::Result<(
+    Option<provenance_porcelain::get::NotifyClient>,
+    Option<String>,
+)> {
+    use provenance_porcelain::get::NotifyClient;
     let Some(client) = matches.get_one::<String>("notify") else {
-        return Ok(None);
+        return Ok((None, None));
     };
     let client = if client == "off" {
         NotifyClient::Off
@@ -485,5 +491,5 @@ fn notify(matches: &clap::ArgMatches) -> anyhow::Result<Option<provenance_porcel
     let Some(thread) = thread else {
         anyhow::bail!("--notify needs --thread or the CODEX_THREAD_ID environment variable");
     };
-    Ok(Some(Notify { client, thread }))
+    Ok((Some(client), Some(thread)))
 }
