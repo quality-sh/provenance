@@ -72,7 +72,14 @@ The turn loop, against an anchor requirement:
    requirements that can't produce a rule, open questions and unexplored topics.
 2. **Claim** — at method-dependent granularity (see table below). Claiming happens
    before any work so concurrent sessions skip claimed items.
-3. **Recover before each turn** — read the stored Topic and selected Question again.
+3. **Recover before each turn** — at the start of every turn, read the full stored
+   Topic and each Question that the turn will work on, before the first write or
+   Question work. This includes accepted answers supplied by the owner. Read the
+   Topic again for note-only, audit, and handoff turns. Run record get commands
+   without output filters; keep claim and method fields visible. Do not pipe these
+   reads through grep, rg, jq, sed, head, or another filter. A previous turn's read,
+   a claim command, or a handoff does not replace these reads. If output is cut
+   short, repeat the read with enough output capacity before work.
    Check the Topic claim, Question claim, Topic membership, status, and Question method.
    Repeat these reads after a restart or context compaction. A Topic claim does not
    select a method: each Question has its own method. Stop work on the selected item
@@ -81,6 +88,8 @@ The turn loop, against an anchor requirement:
    for the bounded shaping summary. Use it for selection only when `complete` is true.
    A filtered, depth-limited, truncated, or unchecked read is incomplete. Use record
    reads and all collection pages to recover the missing data.
+   If the owner directly settles a prototype Question before prototypes are made,
+   record the choice and why it settles the Question without prototypes.
 4. **Resolve and land as you go** — each question is recorded the moment it resolves,
    before the dialogue moves on. Expect fan-out (see below).
 5. **Graduate fog** the answers made sharp; update or kill questions the decisions

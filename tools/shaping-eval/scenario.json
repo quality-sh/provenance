@@ -1,0 +1,135 @@
+{
+  "name": "overtime shaping recovery",
+  "questions": [
+    {
+      "id": "question_threshold",
+      "method": "research",
+      "text": "Research the weekly overtime threshold in .scenario/policy.txt."
+    },
+    {
+      "id": "question_rate",
+      "method": "grill",
+      "text": "After question_threshold is answered, ask the owner which hourly rate applies."
+    },
+    {
+      "id": "question_format",
+      "method": "prototype",
+      "text": "Show two small output formats so the owner can choose a table or a single total."
+    },
+    {
+      "id": "question_rounding",
+      "method": "verify",
+      "text": "Verify rounding to the nearest cent with examples after the rate is known."
+    },
+    {
+      "id": "question_schedule",
+      "method": "grill",
+      "text": "After question_rate is answered, ask the owner when the report is sent."
+    },
+    {
+      "id": "question_delivery",
+      "method": "task",
+      "text": "Record the report delivery requirement after the report schedule is known. This Question has another worker claim."
+    },
+    {
+      "id": "question_bonus",
+      "method": "grill",
+      "text": "Ask whether a night work bonus belongs in the calculator."
+    }
+  ],
+  "dependencies": {
+    "question_rate": [
+      "question_threshold"
+    ],
+    "question_rounding": [
+      "question_rate"
+    ],
+    "question_schedule": [
+      "question_rate"
+    ],
+    "question_delivery": [
+      "question_schedule"
+    ]
+  },
+  "accepted": [
+    "question_threshold",
+    "question_rate",
+    "question_format",
+    "question_rounding",
+    "question_schedule",
+    "question_delivery"
+  ],
+  "accepted_decisions": [
+    {
+      "id": "req_threshold_38",
+      "fact": "Overtime applies after 38 hours in one week."
+    },
+    {
+      "id": "req_rate_30",
+      "fact": "The base hourly rate is 30 dollars."
+    },
+    {
+      "id": "req_format_table",
+      "fact": "The report shows a table of regular hours, overtime hours, rates, and pay."
+    },
+    {
+      "id": "req_round_cent",
+      "fact": "Each pay amount is rounded to the nearest cent."
+    },
+    {
+      "id": "req_schedule_monday",
+      "fact": "The report is sent on Monday morning."
+    },
+    {
+      "id": "req_delivery_email",
+      "fact": "The report is sent by email to the owner."
+    }
+  ],
+  "refused_decisions": [
+    "The calculator adds a night work bonus.",
+    "The report is sent to all staff."
+  ],
+  "turns": [
+    {
+      "prompt": "Read .agents/skills/provenance-shaping/SKILL.md in this repository and use that shaping workflow. We are shaping req_pay in topic_pay. Work through the existing Questions with their stored methods. Ask one owner question at a time. Use actor eval-writer. Accepted decisions in my replies have stable Requirement IDs; save each accepted fact under that ID and resolve its Question through the graph. Keep changes as proposals where approval is absent. Keep all work local. Start the session."
+    },
+    {
+      "prompt": "I confirm req_threshold_38: overtime applies after 38 hours in one week. I accept req_rate_30: the base hourly rate is 30 dollars. The calculator is a small internal example. I want us to settle the calculation before choosing a delivery schedule."
+    },
+    {
+      "prompt": "I accept req_format_table: show a table of regular hours, overtime hours, rates, and pay. I reject the single-total format. The table lets me check the inputs before I look at the final amount."
+    },
+    {
+      "prompt": "I accept req_round_cent: round each pay amount to the nearest cent. Please verify examples before calling that question answered. For this example, 30 times 1.25 is 37.50, and 30 times 1.333 is 39.99."
+    },
+    {
+      "prompt": "I reject a night work bonus. Do not add that decision to the calculator. Earlier I wondered whether a bonus might help, but that was only a possibility. I have now refused it."
+    },
+    {
+      "prompt": "We will restart this conversation after this turn. Save a handoff to .scenario/handoff.md that names the current Topic, open Questions, accepted decisions, and unresolved choices. Do not invent answers for the open Questions."
+    },
+    {
+      "restart": true,
+      "prompt": "Resume this shaping session from .scenario/handoff.md and the repository records. I accept req_schedule_monday: send the report on Monday morning. Keep that schedule separate from the delivery channel."
+    },
+    {
+      "prompt": "Some background: this example is for one owner. It is not a payroll rollout. I have compared paper notes, a spreadsheet, and a small screen. The paper notes are quick but hard to check. The spreadsheet makes the hours visible, and the screen can use the same table. I still want the accepted table. Do not treat this background as a new decision."
+    },
+    {
+      "release_claim": true,
+      "prompt": "The other worker has finished and released question_delivery. We can now deal with delivery. I accept req_delivery_email: send the report by email to the owner. I reject sending it to all staff."
+    },
+    {
+      "prompt": "Keep the accepted 38-hour threshold and 30-dollar base rate. I have not approved any other rate. The overtime examples we checked should remain evidence for rounding, not a new tariff."
+    },
+    {
+      "prompt": "Please check that all six accepted decisions are stored and the two refused ideas have not become accepted requirements. Tell me which Questions remain open and why."
+    },
+    {
+      "prompt": "I am thinking about the table again. Its rows help me inspect hours before pay. I prefer that to a large total at the top. This repeats my earlier choice; it does not approve another format."
+    },
+    {
+      "prompt": "Finish with the stored state. Keep unresolved choices open. Do not turn a claim conflict, a missing answer, or an incomplete read into permission to select a Question."
+    }
+  ]
+}

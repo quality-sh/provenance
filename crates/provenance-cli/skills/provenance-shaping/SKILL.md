@@ -217,8 +217,18 @@ lifecycle consultation fails, the topic claim is not persisted.
 
 ### Recover before each turn
 
-Before each shaping turn, read the stored Topic and selected Question again. Repeat
-these reads after a restart, a saved handoff, or context compaction:
+At the start of EVERY shaping turn, read the stored Topic claim and the stored
+method of each Question that you will work on in that turn. Do this before the
+first graph write or Question work, including when the owner has already supplied
+an accepted answer. A read in the previous turn does not count. Repeat the reads
+after a restart, a saved handoff, or context compaction.
+
+Run these commands without output filters. Read the full JSON output. Do not pipe
+recovery reads through grep, rg, jq, sed, head, or another filter. Do not extract
+only the Question text, status, or answer: the claim and resolution_method fields
+must remain visible. If output is cut short, repeat the record read with enough
+output capacity before work. Read every selected Question, even if you will settle
+several Questions from one owner reply:
 
 ```sh
 provenance topics <topic_id> get --scope <scope> --format json
@@ -246,7 +256,14 @@ order, not priority. Claims restrict work, not discovery. Create or replace
 `depends_on` through JSON input; an empty list clears it. Use prerequisites only
 where order affects the answer.
 
-Apply the stored method to the selected Question. Record each accepted answer and its
+Use the same fresh Topic read before a turn that only adds a thread note, checks
+saved decisions, or writes a handoff. Such turns do not need a Question read unless
+they work on a Question. A claim command or remembered handoff does not replace
+the required get commands.
+
+Apply the stored method to the selected Question. If the owner directly chooses
+an answer to a prototype Question before prototypes are made, record that direct
+choice and explain why it settles the Question without prototypes. Record each accepted answer and its
 resulting artifacts before the next turn, then read the stored state again. A proposed
 answer that the human refuses remains unresolved. After a restart or compaction, recover
 accepted decisions from the graph before you continue the dialogue.
