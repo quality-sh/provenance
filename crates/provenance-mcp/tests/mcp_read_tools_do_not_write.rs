@@ -137,8 +137,8 @@ fn read_calls(discussion_id: &Value) -> Vec<(&'static str, Value)> {
     for view in ["children", "trace"] {
         calls.push((
             "get",
-            json!({"target": "req_shared", "view": view, "limit": 5, "max_depth": 2,
-                   "returned_kinds": ["requirement", "source"]}),
+            json!({"target": "req_shared", "view": view, "limit": 5, "depth": 2,
+                   "kind": ["requirement", "source"]}),
         ));
     }
     for view in ["impact", "review"] {
@@ -150,22 +150,22 @@ fn read_calls(discussion_id: &Value) -> Vec<(&'static str, Value)> {
     calls.extend([
         (
             "trace",
-            json!({"target": "req_shared", "limit": 5, "max_depth": 2,
-                   "returned_kinds": ["source"]}),
+            json!({"target": "req_shared", "limit": 5, "depth": 2,
+                   "kind": ["source"]}),
         ),
         (
             "search",
-            json!({"text": "shared", "node_types": ["requirement"], "limit": 5,
-                   "exclude_terminal": true}),
+            json!({"text": "shared", "kind": ["requirement"], "limit": 5,
+                   "include_terminal": false}),
         ),
         (
             "search",
             json!({"file": "src/lib.rs", "symbol": "run", "line": 1, "limit": 5,
-                   "exclude_terminal": false}),
+                   "include_terminal": true}),
         ),
         (
             "check",
-            json!({"categories": ["graph", "statements", "bindings", "gaps"],
+            json!({"graph": true, "statements": true, "bindings": true, "gaps": true,
                    "statement": "The pump stops."}),
         ),
         (

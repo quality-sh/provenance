@@ -23,7 +23,7 @@ pub type SymbolFuture<'a> = Pin<
     Box<dyn Future<Output = Result<QueryResponse<ResolveSymbolResult>, SearchError>> + Send + 'a>,
 >;
 
-/// The one search request read by the CLI flags and the MCP tool.
+/// The one search request. Its fields are the search fields.
 #[derive(Clone, Debug, Default, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SearchInput {
@@ -32,11 +32,12 @@ pub struct SearchInput {
     pub text: Option<String>,
     /// Record kinds to return.
     #[serde(default)]
-    pub node_types: Vec<NodeType>,
-    /// Omit terminal records. A text search sets true when omitted; a file search
-    /// returns every bound Rule and refuses true.
+    pub kind: Vec<NodeType>,
+    /// Include archived and other terminal records. A text search omits them when this
+    /// field is not given; a search with a file returns every bound Rule and refuses
+    /// false.
     #[serde(default)]
-    pub exclude_terminal: Option<bool>,
+    pub include_terminal: Option<bool>,
     /// The continuation from an earlier page of the same search.
     #[serde(default)]
     pub cursor: Option<String>,
@@ -90,7 +91,7 @@ impl Display for SearchError {
     #[provenance_macros::rule("rule_search_refusal_names_query")]
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::InvalidOptions { reason } => write!(formatter, "{reason}; run `provenance search --text <query>` or `provenance search --kind <kind>`; MCP JSON: {{\"text\": \"<query>\"}} or {{\"node_types\": [\"<kind>\"]}}"),
+            Self::InvalidOptions { reason } => write!(formatter, "{reason}; run `provenance search --text <query>` or `provenance search --kind <kind>`; MCP JSON: {{\"text\": \"<query>\"}} or {{\"kind\": [\"<kind>\"]}}"),
             Self::InvalidCodeLookup { field, reason } => write!(formatter, "{field}: {reason}; run `provenance search --file <path> [--symbol <name>] [--line <n>]`; MCP JSON: {{\"file\": \"<path>\", \"symbol\": \"<name>\"}}"),
             Self::AccessDenied => formatter.write_str("search access denied"),
             Self::Operation { message, .. } => formatter.write_str(message),
@@ -123,9 +124,9 @@ impl<P: SearchPort> crate::Porcelain<P> {
         let request = SearchQuery {
             protocol_version: Some(SDK_PROTOCOL_VERSION),
             cursor: input.cursor,
-            exclude_terminal: input.exclude_terminal.unwrap_or(true),
+            exclude_terminal: !input.include_terminal.unwrap_or(false),
             text: input.text,
-            node_types: input.node_types,
+            node_types: input.kind,
             limit: input.limit.unwrap_or(QUERY_DEFAULT_LIMIT),
         };
         request
@@ -185,16 +186,16 @@ fn code_lookup_request(input: SearchInput) -> Result<ResolveSymbolQuery, SearchE
             "a search with a file cannot also have text",
         ));
     }
-    if input.node_types.iter().any(|kind| *kind != NodeType::Rule) {
+    if input.kind.iter().any(|kind| *kind != NodeType::Rule) {
         return Err(code_lookup_refusal(
-            "node_types",
+            "kind",
             "a search with a file returns only Rules",
         ));
     }
-    if input.exclude_terminal == Some(true) {
+    if input.include_terminal == Some(false) {
         return Err(code_lookup_refusal(
-            "exclude_terminal",
-            "a search with a file returns every bound Rule; omit exclude_terminal or set it to false",
+            "include_terminal",
+            "a search with a file returns every bound Rule; omit include_terminal or set it to true",
         ));
     }
     let request = ResolveSymbolQuery {
