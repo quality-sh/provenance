@@ -8,7 +8,15 @@ fn edited_skill_error_names_recovery_in_the_target_project() {
     let project = temporary.path().join("target project; literal");
     std::fs::create_dir(&caller).unwrap();
     let path = project.to_str().unwrap();
-    let init_args = ["init", "--path", path, "--scope", "default", "--path-prefix", "."];
+    let init_args = [
+        "init",
+        "--path",
+        path,
+        "--scope",
+        "default",
+        "--path-prefix",
+        ".",
+    ];
 
     Command::cargo_bin("provenance")
         .unwrap()

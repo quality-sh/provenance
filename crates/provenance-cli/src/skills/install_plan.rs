@@ -61,14 +61,8 @@ impl InstallPlan {
         let mut link_mode = if copy { "copy" } else { "symlink" };
         let mut fallback_reason = None;
         for skill in super::EMBEDDED_SKILLS {
-            let action = ClaudeAction::plan(
-                skill,
-                &canonical_dir,
-                &claude_dir,
-                force,
-                copy,
-                &guidance,
-            )?;
+            let action =
+                ClaudeAction::plan(skill, &canonical_dir, &claude_dir, force, copy, &guidance)?;
             if action.uses_copy_fallback() && !copy {
                 link_mode = "copy-fallback";
                 fallback_reason.get_or_insert_with(|| action.fallback_reason());
@@ -176,7 +170,10 @@ fn conflict_guidance(base: &Path, global: bool, copy: bool) -> String {
     if global {
         format!("run `{command}`")
     } else {
-        format!("run `{command}` with this working directory: {}", base.display())
+        format!(
+            "run `{command}` with this working directory: {}",
+            base.display()
+        )
     }
 }
 
@@ -203,11 +200,7 @@ impl FileAction {
             _ => {
                 let verdict = classify_install(TargetState::Foreign, force);
                 if verdict == InstallVerdict::Refuse {
-                    anyhow::bail!(
-                        "{} exists and differs; {}",
-                        path.display(),
-                        guidance
-                    );
+                    anyhow::bail!("{} exists and differs; {}", path.display(), guidance);
                 }
                 anyhow::bail!("{} is not a regular file", path.display());
             }
@@ -222,11 +215,7 @@ impl FileAction {
         };
         let verdict = classify_install(state, force);
         if verdict == InstallVerdict::Refuse {
-            anyhow::bail!(
-                "{} exists and differs; {}",
-                path.display(),
-                guidance
-            );
+            anyhow::bail!("{} exists and differs; {}", path.display(), guidance);
         }
         let status = if unchanged {
             FileStatus::Unchanged

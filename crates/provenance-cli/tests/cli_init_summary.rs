@@ -264,7 +264,8 @@ fn failed_dictionary_acquisition_keeps_init_successful_and_warns_even_when_quiet
     );
     assert!(output.stdout.is_empty());
     let warning = String::from_utf8(output.stderr).unwrap();
-    assert!(warning.contains("Warning: the official Issue 9 asset is unavailable"));
+    assert!(warning.contains("Warning: the official Issue 9 dictionary could not be added"));
+    assert!(warning.contains("request the official Issue 9 PDF"));
     assert!(warning.contains("provenance dictionary import --pdf <path>"));
     assert!(repo.join(".provenance/state/manifest.json").exists());
     assert!(!repo.join(".provenance/state/dictionary.json").exists());
@@ -303,7 +304,8 @@ fn dictionary_warning_precedes_the_final_handoff_in_a_combined_stream() {
         .unwrap();
     assert!(status.success());
     let terminal = std::fs::read_to_string(output_path).unwrap();
-    assert!(terminal.contains("Warning: the official Issue 9 asset is unavailable"));
+    assert!(terminal.contains("Warning: the official Issue 9 dictionary could not be added"));
+    assert!(terminal.contains("request the official Issue 9 PDF"));
     assert!(terminal.ends_with("Have your agent run provenance prime to get acclimated.\n"));
 }
 

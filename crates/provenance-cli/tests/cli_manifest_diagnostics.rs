@@ -77,7 +77,10 @@ fn init_keeps_schema_validation_wording() {
     assert!(!output.status.success());
     assert!(output.stdout.is_empty());
     let stderr = String::from_utf8(output.stderr).unwrap();
-    assert!(stderr.contains("manifest schema_version must be"), "{stderr}");
+    assert!(
+        stderr.contains("manifest schema_version must be"),
+        "{stderr}"
+    );
     assert!(!stderr.contains("failed to parse manifest"), "{stderr}");
     assert_eq!(std::fs::read_to_string(&manifest).unwrap(), unsupported);
 }
