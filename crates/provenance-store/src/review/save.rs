@@ -12,12 +12,12 @@ use provenance_core::review::{
 use provenance_core::{Requirement, ScopeId, StableId};
 use provenance_macros::rule;
 
-struct RecordEvidenceContext {
-    head: Option<ReviewEntry>,
-    actor: String,
-    request_id: StableId,
-    intent_digest: String,
-    origin: Option<provenance_core::threads::DiscussionOrigin>,
+pub(super) struct RecordEvidenceContext {
+    pub(super) head: Option<ReviewEntry>,
+    pub(super) actor: String,
+    pub(super) request_id: StableId,
+    pub(super) intent_digest: String,
+    pub(super) origin: Option<provenance_core::threads::DiscussionOrigin>,
 }
 
 impl StateStore {
@@ -187,7 +187,7 @@ impl StateStore {
         Ok(entry)
     }
 
-    fn commit_record_evidence(
+    pub(super) fn commit_record_evidence(
         &self,
         before: &ReviewRecord,
         after: &ReviewRecord,
