@@ -82,6 +82,7 @@ pub fn target_command() -> anyhow::Result<Command> {
         definitions,
         &[
             "repo", "scope", "format", "quiet", "type", "view", "depth", "kind", "limit", "stdin",
+            "status", "cursor", "body", "actor", "request-id", "expected-version", "role",
         ],
     )
 }
