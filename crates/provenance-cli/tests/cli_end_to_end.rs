@@ -1,6 +1,9 @@
 use assert_cmd::Command;
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
+#[path = "export_fixture_support/mod.rs"]
+mod export_fixture_support;
+
 #[test]
 fn import_export_roundtrip_cli_exports_imports_checks_and_merges_local_state() {
     let dir = tempfile::tempdir().unwrap();
@@ -13,6 +16,7 @@ fn import_export_roundtrip_cli_exports_imports_checks_and_merges_local_state() {
 
     init(&repo);
     create_graph(&repo);
+    export_fixture_support::make_default_scope_portable(&repo);
 
     Command::cargo_bin("provenance")
         .unwrap()
