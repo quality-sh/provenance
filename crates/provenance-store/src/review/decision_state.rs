@@ -222,6 +222,26 @@ impl CycleFacts {
             .cloned()
             .next_back())
     }
+
+    pub(super) fn conflict_failure(
+        &self,
+        store: &StateStore,
+        scope: &ScopeId,
+        requirement: &StableId,
+    ) -> anyhow::Result<crate::write_error::WriteFailure> {
+        let record = store.requirement(scope, requirement)?;
+        let current_revision = store
+            .head(&record)?
+            .ok_or_else(|| anyhow::anyhow!("the submitted record has no review history"))?
+            .revision;
+        let current_submission = self
+            .pending_submission(store, scope, requirement)?
+            .map(|entry| entry.proposal_id);
+        Ok(crate::write_error::WriteFailure::ReviewSubmissionConflict {
+            current_submission,
+            current_revision,
+        })
+    }
 }
 
 /// The proposal must be a bound review submission of a Requirement, because

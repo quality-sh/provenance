@@ -111,7 +111,7 @@ impl StateStore {
                 .unwrap_or(journal::etag(&record, None)?);
             if input.expected_etag != current_etag {
                 return Err(SourceFailure::wrap(
-                    WriteFailure::InvalidUpdate,
+                    WriteFailure::RequirementEditConflict { current_etag },
                     anyhow::anyhow!("stale Requirement edit etag"),
                 ));
             }
