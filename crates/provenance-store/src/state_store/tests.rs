@@ -76,6 +76,7 @@ mod legacy_coexistence;
 mod manifest;
 mod proposal_surfaces;
 mod proposals;
+mod read_budget;
 mod references;
 mod scope_ingestion;
 mod shaping;

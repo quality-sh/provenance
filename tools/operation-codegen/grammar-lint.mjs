@@ -279,6 +279,7 @@ const FAILURE_STATUS = new Map([
   ['empty_message_body', 400], ['unsupported_thread_parent', 400], ['statement_invalid', 400],
   ['invalid_declaration', 400], ['invalid_update', 400], ['missing_reference', 400],
   ['statement_rejected', 400], ['invalid_verification_target', 400], ['invalid_completion', 400],
+  ['record_too_large', 400],
 ]);
 
 function failureKinds(document, schema, seen = new Set(), kinds = new Set()) {
