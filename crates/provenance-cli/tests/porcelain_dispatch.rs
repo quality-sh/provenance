@@ -293,4 +293,3 @@ fn a_bare_get_lookup_error_is_returned_without_command_fallback() {
         .stderr(predicates::str::contains("record does not exist"))
         .stderr(predicates::str::contains("unrecognized subcommand").not());
 }
-

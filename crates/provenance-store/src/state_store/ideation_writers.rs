@@ -4,8 +4,8 @@ use super::{
 };
 use crate::shards;
 use provenance_core::{
-    ensure_record_id_assignable, validate_optional_confidence_score, Contribution,
-    SynthesisPacket, SUPPORTED_SCHEMA_VERSION,
+    ensure_record_id_assignable, validate_optional_confidence_score, Contribution, SynthesisPacket,
+    SUPPORTED_SCHEMA_VERSION,
 };
 
 impl StateStore {
@@ -67,7 +67,11 @@ impl StateStore {
             uncertainty,
             open_questions,
         } = input;
-        if !self.list_contributions(&scope_id)?.iter().any(|record| record.id == id) {
+        if !self
+            .list_contributions(&scope_id)?
+            .iter()
+            .any(|record| record.id == id)
+        {
             ensure_record_id_assignable(id.as_str())?;
         }
         for claim in &material_claims {
@@ -207,7 +211,11 @@ impl StateStore {
             suggested_artifacts,
             required_human_decisions,
         } = input;
-        if !self.list_synthesis_packets(&scope_id)?.iter().any(|record| record.id == id) {
+        if !self
+            .list_synthesis_packets(&scope_id)?
+            .iter()
+            .any(|record| record.id == id)
+        {
             ensure_record_id_assignable(id.as_str())?;
         }
         self.ensure_synthesis_target(&scope_id, &id, &target)?;

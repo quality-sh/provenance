@@ -1,8 +1,8 @@
-use super::{serde_name, StateStore};
+use super::{ensure_new_ids_assignable, serde_name, StateStore};
 use crate::cache::ProjectionFamily;
 use crate::jsonl::write_jsonl_atomic_under_publication;
 use provenance_core::{
-    ensure_record_id_assignable, AssertionRecord, Boundary, Contribution, DispositionRecord,
+    AssertionRecord, Boundary, Contribution, DispositionRecord,
     Domain, ImplementationBinding, Message, NodeType, ProposalCard, Question, Requirement,
     Resolution, Rule, ScopeId, Source, SynthesisPacket, Thread, ThreadStatus, Topic,
     VerificationBinding,
@@ -12,7 +12,7 @@ macro_rules! define_scope_shards {
     ($($field:ident: $record:ty => $family:ident),+ $(,)?) => {
         /// The complete canonical shard contents for one scope import.
         ///
-        /// Each slice replaces one shard. An empty slice creates an empty shard.
+            /// Each slice replaces one shard. An empty slice creates an empty shard.
         #[derive(Default)]
         pub struct ScopeShards<'a> {
             $(pub $field: &'a [$record],)+
@@ -25,8 +25,8 @@ macro_rules! define_scope_shards {
             /// method does not acquire that lock. The caller must remove the old scope directory and
             /// apply the freeze, STE, and repository checks before it publishes the staged state.
             ///
-            /// This method does not write the manifest, requirement reviews, the review journal, or
-            /// ideation landings.
+            /// This method replaces the scope directory. It does not write the manifest,
+            /// requirement reviews, the review journal, or ideation landings.
             pub fn import_scope(
                 &self,
                 scope: &ScopeId,
@@ -54,17 +54,18 @@ macro_rules! define_scope_shards {
                         NodeType::Boundary,
                     ],
                 )?;
-                for id in shards.verification_bindings.iter().map(|record| &record.id)
-                    .chain(shards.implementation_bindings.iter().map(|record| &record.id))
-                    .chain(shards.threads.iter().map(|record| &record.id))
-                    .chain(shards.messages.iter().map(|record| &record.id))
-                    .chain(shards.contributions.iter().map(|record| &record.id))
-                    .chain(shards.synthesis_packets.iter().map(|record| &record.id))
-                    .chain(shards.proposal_cards.iter().map(|record| &record.id))
-                    .chain(shards.assertion_records.iter().map(|record| record.id.as_stable_id()))
-                    .chain(shards.dispositions.iter().map(|record| &record.id))
-                {
-                    ensure_record_id_assignable(id.as_str())?;
+                ensure_new_ids_assignable(&self.list_verification_bindings(scope)?, shards.verification_bindings, |record| record.id.as_str())?;
+                ensure_new_ids_assignable(&self.list_implementation_bindings(scope)?, shards.implementation_bindings, |record| record.id.as_str())?;
+                ensure_new_ids_assignable(&self.list_threads(scope)?, shards.threads, |record| record.id.as_str())?;
+                ensure_new_ids_assignable(&self.list_messages(scope)?, shards.messages, |record| record.id.as_str())?;
+                ensure_new_ids_assignable(&self.list_contributions(scope)?, shards.contributions, |record| record.id.as_str())?;
+                ensure_new_ids_assignable(&self.list_synthesis_packets(scope)?, shards.synthesis_packets, |record| record.id.as_str())?;
+                ensure_new_ids_assignable(&self.list_proposal_definitions(scope)?, shards.proposal_cards, |record| record.id.as_str())?;
+                ensure_new_ids_assignable(&self.list_assertion_records(scope)?, shards.assertion_records, |record| record.id.as_str())?;
+                ensure_new_ids_assignable(&self.list_dispositions(scope)?, shards.dispositions, |record| record.id.as_str())?;
+                let scope_dir = self.layout.scopes_dir().join(scope.as_str());
+                if scope_dir.exists() {
+                    std::fs::remove_dir_all(&scope_dir)?;
                 }
                 $(
                     write_jsonl_atomic_under_publication(
