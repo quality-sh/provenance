@@ -112,16 +112,12 @@ impl Invocation {
             .as_deref()
             .and_then(provenance_transport::porcelain::Action::parse)
             .ok_or_else(|| anyhow::anyhow!("unsupported target action"))?;
-        let kind = args
-            .record_type
-            .as_deref()
-            .map(NodeType::parse)
-            .transpose()
-            .map_err(|_| anyhow::anyhow!("unsupported record type"))?;
-        anyhow::ensure!(
-            (action == provenance_transport::porcelain::Action::Create) == kind.is_some(),
-            "create requires --type and existing-record actions infer it"
-        );
+        let kind = args.record_type;
+        if (action == provenance_transport::porcelain::Action::Create) != kind.is_some() {
+            catalog_cli::usage_error(
+                "create requires --type and existing-record actions infer it without --type",
+            );
+        }
         Ok(Self::Target(TargetInvocation {
             context,
             format,
