@@ -5,6 +5,15 @@ use std::time::{Duration, Instant};
 
 #[test]
 fn failed_freshness_closes_with_one_busy_blocking_worker() {
+    failed_freshness_close(Duration::ZERO);
+}
+
+#[test]
+fn failed_freshness_close_allows_slow_setup() {
+    failed_freshness_close(Duration::from_millis(500));
+}
+
+fn failed_freshness_close(setup_delay: Duration) {
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .max_blocking_threads(1)
@@ -15,6 +24,11 @@ fn failed_freshness_closes_with_one_busy_blocking_worker() {
         let root = camino::Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
         let layout = ProvenanceLayout::new(root.clone());
         let scope = provenance_core::ScopeId::new("default").unwrap();
+        let guard = crate::publication::publication_guard(&layout).await.unwrap();
+        let release_setup = tokio::spawn(async move {
+            tokio::time::sleep(setup_delay).await;
+            drop(guard);
+        });
         let waiter = Arc::new(Mutex::new(None));
         let waiter_out = Arc::clone(&waiter);
         crate::test_probes::arm("run_migrations_under_guard", move || {
@@ -41,6 +55,7 @@ fn failed_freshness_closes_with_one_busy_blocking_worker() {
             ),
         ).await;
         let elapsed = started.elapsed();
+        release_setup.await.unwrap();
         crate::test_probes::disarm("run_migrations_under_guard");
         println!("blocking_workers=1 read_timed_out={} cycle=read_holds_publication_lock/worker_waits_publication_lock/read_close_waits_worker", result.is_err());
         let timed_out = result.is_err();
