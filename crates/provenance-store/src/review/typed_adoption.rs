@@ -1,6 +1,6 @@
 //! Guarded journal writes for typed-spec changes to enrolled graph records.
 
-use super::{classifier, journal, save::RecordEvidenceContext};
+use super::{classifier, guard, journal, save::RecordEvidenceContext};
 use crate::{
     cache::review_families, canonical_digest, publication::with_staged_state,
     state_store::StateStore, write_error::SourceFailure,
@@ -29,7 +29,8 @@ impl StateStore {
         );
         with_staged_state(&self.layout, false, |layout| {
             let staged = Self::new(layout.clone());
-            let result = publish(&staged)?;
+            let paths = review_families::review_paths(layout, scope);
+            let result = guard::with_writers(&paths, "*", || publish(&staged))?;
             let desired = review_families::review_records(&staged, scope)?;
             let changes = self.typed_changes(scope, &desired)?;
             for change in &changes {
