@@ -165,7 +165,7 @@ impl StateStore {
         target: Option<StableId>,
     ) -> anyhow::Result<T>
     where
-        T: GraphRecord,
+        T: GraphRecord + RelationOwner,
     {
         let decl = declared::<T>(name);
         let path = shards::path_for(&self.layout, scope_id, T::OWNER);
@@ -214,7 +214,7 @@ impl StateStore {
         target: StableId,
     ) -> anyhow::Result<T>
     where
-        T: GraphRecord,
+        T: GraphRecord + RelationOwner,
     {
         let decl = declared::<T>(name);
         let path = shards::path_for(&self.layout, scope_id, T::OWNER);
@@ -262,7 +262,7 @@ impl StateStore {
         target: &StableId,
     ) -> anyhow::Result<T>
     where
-        T: GraphRecord,
+        T: GraphRecord + RelationOwner,
     {
         let decl = declared::<T>(name);
         let path = shards::path_for(&self.layout, scope_id, T::OWNER);
