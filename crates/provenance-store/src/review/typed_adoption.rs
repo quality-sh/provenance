@@ -31,7 +31,7 @@ impl StateStore {
             !actor.trim().is_empty(),
             "invalid typed-spec review identity"
         );
-        let changes = self.typed_changes(scope, desired)?;
+        let changes = self.typed_changes(scope, &desired)?;
         if changes.is_empty() {
             return publish(self);
         }
@@ -47,7 +47,7 @@ impl StateStore {
     fn typed_changes(
         &self,
         scope: &ScopeId,
-        desired: Vec<ReviewRecord>,
+        desired: &[ReviewRecord],
     ) -> anyhow::Result<Vec<TypedChange>> {
         let current = review_records(&self.layout, scope)?;
         let mut changes = Vec::new();
