@@ -72,6 +72,44 @@ fn health_rejects_invalid_manifests() {
 }
 
 #[test]
+fn health_rejects_a_manifest_without_scopes() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let state = root.join(".provenance/state");
+    std::fs::create_dir_all(&state).unwrap();
+    std::fs::write(
+        state.join("manifest.json"),
+        serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scopes": []})
+            .to_string(),
+    )
+    .unwrap();
+
+    command(root, &["health"])
+        .failure()
+        .stderr(contains("manifest must contain at least one scope"));
+
+    write_manifest(root, SUPPORTED_SCHEMA_VERSION.0);
+    command(root, &["health"]).success();
+}
+
+#[test]
+fn stale_publication_lock_does_not_create_recovery_state() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let locks = root.join(".provenance/cache/locks");
+    std::fs::create_dir_all(&locks).unwrap();
+    let lock = locks.join("repository.publication.lock");
+    std::fs::write(&lock, "existing lock").unwrap();
+
+    command(root, &["health"])
+        .failure()
+        .stderr(contains("provenance init"));
+    assert_eq!(std::fs::read(&lock).unwrap(), b"existing lock");
+    assert!(!root.join(".provenance/cache/import-transactions").exists());
+    assert!(!root.join(".provenance/state").exists());
+}
+
+#[test]
 fn a_manifest_directory_is_invalid_state() {
     let directory = tempfile::tempdir().unwrap();
     std::fs::create_dir_all(directory.path().join(".provenance/state/manifest.json")).unwrap();

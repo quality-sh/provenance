@@ -120,3 +120,27 @@ fn missing_manifest_gives_init_guidance_before_graph_reads_or_catalog_writes() {
         assert!(!root.join(".provenance/state/scopes").exists());
     }
 }
+
+#[cfg(target_os = "linux")]
+#[test]
+fn init_reports_a_failed_summary_after_publishing_state() {
+    let temporary = tempfile::tempdir().unwrap();
+    let root = temporary.path();
+    let asset_dir = root.join("asset-cache");
+    std::fs::create_dir_all(&asset_dir).unwrap();
+    std::fs::write(
+        asset_dir.join("ASD-STE100_ISSUE9.pdf"),
+        dictionary_support::dictionary_pdf(),
+    )
+    .unwrap();
+    let mut command = Command::cargo_bin("provenance").unwrap();
+    command
+        .current_dir(root)
+        .env("PROVENANCE_STE100_ASSET_DIR", asset_dir)
+        .env("PROVENANCE_STE100_INDEX_DIR", root.join("dictionary-indexes"))
+        .arg("init")
+        .stdout(std::fs::File::create("/dev/full").unwrap());
+
+    command.assert().failure().stderr(contains("No space left on device"));
+    assert!(root.join(".provenance/state/manifest.json").is_file());
+}
