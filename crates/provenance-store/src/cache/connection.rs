@@ -273,6 +273,7 @@ async fn complete(pool: SqlitePool, immutable: bool) -> anyhow::Result<()> {
 /// for the lock never occupies a blocking worker; publication waiters can
 /// hold them all while this close waits.
 async fn acquire_close_lock(path: &Path) -> anyhow::Result<File> {
+    tokio::task::spawn_blocking(|| ()).await?;
     let file = OpenOptions::new()
         .read(true)
         .write(true)
