@@ -61,7 +61,7 @@ pub use ideation::{
     CreateAssertion, CreateDisposition, CreateProposal, ListAssertions, ListDispositions,
     ListProposals,
 };
-pub use invoke::{invoke, invoke_typed, invoke_with};
+pub use invoke::{invoke, invoke_authorized_typed, invoke_typed, invoke_with};
 #[cfg(feature = "schema")]
 pub use schema::{
     definitions, parse_parameter_value, parse_schema_value, parse_schema_value_in,
@@ -72,7 +72,7 @@ pub use statement::CheckStatement;
 #[cfg(test)]
 mod tests;
 
-pub use records::{Get, Info, Neighbors, ReadDocument, Search, Trace};
+pub use records::{Get, Info, Neighbors, ReadDocument, ResolveRecord, Search, Trace};
 
 /// Lookup uses registry identities without deriving or cloning wire schemas.
 pub fn contains(operation: &str) -> bool {

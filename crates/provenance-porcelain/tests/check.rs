@@ -1,6 +1,7 @@
 use provenance_macros::verifies;
 use provenance_porcelain::check::{
-    Category, CategoryReport, CheckInput, CheckPort, Finding, PortFuture, Status,
+    BindingContext, BindingPolicy, Category, CategoryContext, CategoryReport, CategoryRun,
+    CheckInput, CheckPort, Finding, PortFuture, Refusal, StatementContext, Status,
 };
 use provenance_porcelain::Porcelain;
 
@@ -20,10 +21,28 @@ struct FixturePort;
 impl CheckPort for FixturePort {
     fn run<'a>(&'a self, category: Category, _: Option<&'a str>) -> PortFuture<'a> {
         Box::pin(async move {
-            Ok(match category {
+            let findings = match category {
                 Category::Graph => vec![Finding::new("dangling requirement reference")],
                 Category::Statements => vec![Finding::new("statement uses an unapproved term")],
                 Category::Bindings => vec![Finding::new("active rule has no verification")],
+            };
+            Ok(match category {
+                Category::Graph => CategoryRun::Graph {
+                    findings,
+                    refusal: Refusal::None,
+                },
+                Category::Statements => CategoryRun::Statements {
+                    findings,
+                    context: None,
+                    refusal: Refusal::None,
+                },
+                Category::Bindings => CategoryRun::Bindings {
+                    findings,
+                    context: BindingContext {
+                        policy: BindingPolicy::Warning,
+                    },
+                    refusal: Refusal::None,
+                },
             })
         })
     }
@@ -47,10 +66,13 @@ async fn output_keeps_each_category_and_its_findings_separate() {
                 Category::Statements,
                 vec![Finding::new("statement uses an unapproved term")]
             ),
-            CategoryReport::findings(
-                Category::Bindings,
-                vec![Finding::new("active rule has no verification")]
-            ),
+            CategoryReport::from_run(CategoryRun::Bindings {
+                findings: vec![Finding::new("active rule has no verification")],
+                context: BindingContext {
+                    policy: BindingPolicy::Warning,
+                },
+                refusal: Refusal::None,
+            }),
         ]
     );
     assert!(outcome
@@ -79,6 +101,7 @@ async fn a_category_that_cannot_run_is_unavailable_not_passed() {
         outcome.categories[0].unavailable_reason.as_deref(),
         Some("source scanner is not installed")
     );
+    assert!(outcome.categories[0].refuses());
 }
 
 #[test]
@@ -111,15 +134,37 @@ fn findings_can_keep_surface_neutral_structured_details() {
 #[test]
 #[verifies("rule_porcelain_check_categories", examples)]
 fn category_reports_keep_computation_context() {
-    let report = CategoryReport::with_context(
-        Category::Statements,
-        Vec::new(),
-        serde_json::json!({"candidate_commit": "abc123", "base_commit": "def456"}),
-    );
+    let report = CategoryReport::from_run(CategoryRun::Statements {
+        findings: Vec::new(),
+        context: Some(StatementContext {
+            candidate_commit: "abc123".into(),
+            base_commit: Some("def456".into()),
+        }),
+        refusal: Refusal::None,
+    });
 
-    assert_eq!(
-        report.context.as_ref().unwrap()["candidate_commit"],
-        "abc123"
-    );
+    let Some(CategoryContext::Statements(context)) = report.context.as_ref() else {
+        panic!("statement context")
+    };
+    assert_eq!(context.candidate_commit, "abc123");
     assert_eq!(report.status, Status::Passed);
+}
+
+#[test]
+fn category_run_keeps_typed_binding_policy_and_refusal_together() {
+    let run = CategoryRun::Bindings {
+        findings: vec![Finding::new("active rule has no verification")],
+        context: BindingContext {
+            policy: BindingPolicy::Error,
+        },
+        refusal: Refusal::Findings,
+    };
+
+    let report = CategoryReport::from_run(run);
+
+    assert!(report.refuses());
+    let Some(CategoryContext::Bindings(context)) = report.context else {
+        panic!("binding context")
+    };
+    assert_eq!(context.policy, BindingPolicy::Error);
 }
