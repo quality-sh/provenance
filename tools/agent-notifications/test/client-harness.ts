@@ -93,7 +93,7 @@ export class Harness {
   errors: string[] = [];
   constructor() { mkdirSync(this.repository); }
   holdInference() { this.blocked = new Promise(resolve => this.release = resolve); }
-  async start() {
+  async start(withCodex = true) {
     await command(["init", "--path", this.repository, "--disposition-actor-id", "reviewer"], this.env);
     await this.create("req_notifications", "requirement", ["--statement", "The agent receives saved changes."]);
     await this.create("topic_notifications", "topic", ["--requirement-id", "req_notifications", "--title", "Agent messages"]);
@@ -102,6 +102,7 @@ export class Harness {
     const lines = createInterface({ input: Readable.fromWeb(host.stdout as any) });
     await deadline(new Promise(resolve => lines.once("line", line => resolve(JSON.parse(line)))), "review host startup");
     this.drain(host.stderr);
+    if (!withCodex) return this;
     this.server = Bun.serve({ port: 0, fetch: async request => {
       this.requests.push(await request.json());
       for (const notify of this.requestListeners) notify();

@@ -525,3 +525,47 @@ queue order, repository binding, host loss and a deliberately lost response.
 `cargo test -p provenance-cli --test cli_agent_notifications` runs the same
 harness with pinned Bun and Codex tools through npm; maintainer hosts use the
 Cargo shim for that command.
+
+## Claude Code channel adapter
+
+The one-way channel declares the experimental `claude/channel` capability and
+sends `notifications/claude/channel`. It adds no Provenance MCP operation or
+reply tool. Each notification contains the current-state frame as `content`,
+with repository, scope, root, epoch, sequence, type and continuity metadata.
+The adapter starts the stream after MCP initialization. Closing session stdin
+stops the child stream. Host loss sends disconnected/unknown, then stops with
+failure. Transport acceptance does not acknowledge model processing. There is
+no automatic resend or durable replay.
+
+Install the declared dependency with
+`npm install --prefix tools/agent-notifications --package-lock=false`. Create a
+selection file with `repository`, `scope` and `rootId`. Put `provenance` on the
+session's PATH. Add this server to an MCP configuration, with absolute paths:
+
+```json
+{
+  "mcpServers": {
+    "provenance": {
+      "command": "bun",
+      "args": ["/absolute/repository/tools/agent-notifications/claude.ts", "/absolute/selection.json"]
+    }
+  }
+}
+```
+
+Start an interactive development session with
+`claude --dangerously-load-development-channels server:provenance --mcp-config /absolute/mcp.json`.
+Accept development-channel consent only for the server you created and inspected.
+The development flag is ignored in print mode. Organization policy still applies;
+Team and Enterprise administrators must enable channels. Events queue in session
+order while busy and group on the next turn. Policy can silently drop an event.
+These are [Claude Code channel limits](https://code.claude.com/docs/en/channels-reference).
+
+`bun test tools/agent-notifications/test/claude.test.ts` checks the public MCP
+transport against the real host and CLI stream. The Cargo shim can run this test
+through `cli_agent_notifications`. For model-visible evidence, run
+`PROVENANCE_TEST_BIN=/absolute/provenance bun test tools/agent-notifications/test/claude-session.test.ts`
+on a Linux host with `script`, an authenticated Claude account, and development
+channels permitted by account policy. This separate interactive check uses the
+real Claude session. It checks saved decisions, Questions, replies, busy delivery,
+reset and session closure. It does not run in an unauthenticated CI account.
