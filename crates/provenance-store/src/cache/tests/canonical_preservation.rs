@@ -3,6 +3,7 @@ use crate::cache::{catch_up_state, materialize_empty_state, materialize_state, o
 use crate::layout::ProvenanceLayout;
 use crate::migrations::REMOVE_SERVICES_SHARDS_MIGRATION_ID;
 use provenance_core::{RepoPathPrefix, Scope, ScopeId};
+use std::collections::BTreeMap;
 
 const LEGACY_BYTES: &[u8] = b"{\"legacy\":\"service\"}\n";
 const SENTINEL_BYTES: &[u8] = b"external sentinel\n";
@@ -59,6 +60,31 @@ fn add_linked_scope(layout: &ProvenanceLayout) {
     .unwrap();
 }
 
+fn canonical_bytes(layout: &ProvenanceLayout) -> BTreeMap<String, Vec<u8>> {
+    fn collect(root: &std::path::Path, path: &std::path::Path, files: &mut BTreeMap<String, Vec<u8>>) {
+        for entry in std::fs::read_dir(path).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if path.is_dir() {
+                collect(root, &path, files);
+            } else if path.is_file() {
+                files.insert(
+                    path.strip_prefix(root).unwrap().to_string_lossy().into_owned(),
+                    std::fs::read(path).unwrap(),
+                );
+            }
+        }
+    }
+
+    let mut files = BTreeMap::new();
+    collect(
+        layout.state_dir().as_std_path(),
+        layout.state_dir().as_std_path(),
+        &mut files,
+    );
+    files
+}
+
 #[tokio::test]
 async fn fresh_cache_initialization_preserves_canonical_services_files() {
     let (_directory, layout, _scope) = empty_layout();
@@ -105,4 +131,22 @@ async fn existing_cache_catch_up_preserves_canonical_services_files_before_a_lat
         error.to_string().contains("unsupported state entry"),
         "{error}"
     );
+}
+
+#[tokio::test]
+async fn incompatible_cache_rebuild_keeps_canonical_state_byte_identical() {
+    let (_directory, layout, _scope) = empty_layout();
+    materialize_state(&layout).await.unwrap();
+    let before = canonical_bytes(&layout);
+    let cache = open_cache(&layout).await.unwrap();
+    sqlx::query("UPDATE _cache_metadata SET schema_digest = 'incompatible'")
+        .execute(cache.pool())
+        .await
+        .unwrap();
+    cache.close().await.unwrap();
+
+    let report = catch_up_state(&layout).await.unwrap();
+
+    assert!(report.cache_recreated);
+    assert_eq!(canonical_bytes(&layout), before);
 }

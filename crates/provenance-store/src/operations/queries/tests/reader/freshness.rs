@@ -170,6 +170,32 @@ async fn annotate_only_refuses_a_database_behind_on_migrations_by_type() {
     assert!(refused.to_string().contains("provenance materialize"));
 }
 
+#[tokio::test]
+async fn annotate_only_refuses_an_incompatible_current_schema_without_writing() {
+    let store = test_stores::seeded_queries();
+    catch_up_state(&store.layout()).await.unwrap();
+    let pool = open_cache(&store.layout()).await.unwrap();
+    sqlx::query("UPDATE _cache_metadata SET schema_digest = 'incompatible'")
+        .execute(pool.pool())
+        .await
+        .unwrap();
+    pool.close().await.unwrap();
+    let before = std::fs::read(store.layout().cache_db_path()).unwrap();
+
+    let refused = get_through(
+        &store,
+        ReadPolicy::with_freshness(FreshnessPolicy::AnnotateOnly),
+    )
+    .await
+    .unwrap_err();
+
+    assert!(matches!(
+        refused.downcast_ref::<crate::operations::reader::ReadRefusal>(),
+        Some(crate::operations::reader::ReadRefusal::SchemaBehind { .. })
+    ));
+    assert_eq!(std::fs::read(store.layout().cache_db_path()).unwrap(), before);
+}
+
 /// When the freshness step fails before it can migrate, the read falls
 /// back to the stored file; an old file holds no revision table, and the
 /// refusal must still be the typed one that names materialize.
