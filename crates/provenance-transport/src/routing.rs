@@ -107,7 +107,7 @@ pub async fn invoke(
         &bound.response,
         bound.query_response,
     )?;
-    let etag = if query.contains_key("query") {
+    let etag = if bound.query_response {
         None
     } else {
         matched
