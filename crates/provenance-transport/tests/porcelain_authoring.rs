@@ -26,9 +26,8 @@ async fn call(
 }
 
 #[tokio::test]
-#[verifies("rule_porcelain_action_names_match", examples)]
 #[verifies("rule_porcelain_mcp_target_argument", examples)]
-async fn mcp_target_first_authoring_uses_registered_schemas() {
+async fn mcp_target_first_authoring_publishes_target_and_type_schemas() {
     let repository = Repository::new("The shared graph is readable.");
     let host = support::resource_http::host(&repository, true);
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
@@ -254,7 +253,7 @@ async fn mcp_target_first_requirement_submit_uses_the_target() {
 #[tokio::test]
 #[verifies("rule_porcelain_existing_action_infers_kind", examples)]
 #[verifies("rule_porcelain_named_domain_actions", examples)]
-async fn mcp_named_actions_infer_kind_and_keep_domain_refusals() {
+async fn mcp_named_actions_infer_kinds_and_refuse_invalid_targets() {
     let repository = Repository::new("The shared graph is readable.");
     repository.all_kinds();
     let host = support::resource_http::host(&repository, true);
