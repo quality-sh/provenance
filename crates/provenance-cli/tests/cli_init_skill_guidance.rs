@@ -55,3 +55,47 @@ fn edited_skill_error_names_recovery_in_the_target_project() {
         .assert()
         .success();
 }
+
+#[test]
+fn global_copy_conflict_guidance_keeps_the_install_mode() {
+    let temporary = tempfile::tempdir().unwrap();
+    let caller = temporary.path().join("caller");
+    let home = temporary.path().join("home");
+    std::fs::create_dir_all(&caller).unwrap();
+    std::fs::create_dir_all(&home).unwrap();
+    let args = ["skills", "install", "--global", "--copy"];
+
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .current_dir(&caller)
+        .env("HOME", &home)
+        .args(args)
+        .assert()
+        .success();
+    let skill = home.join(".agents/skills/provenance-shaping/SKILL.md");
+    let original = std::fs::read(&skill).unwrap();
+    let edited = [original.as_slice(), b"\nUser edit.\n"].concat();
+    std::fs::write(&skill, &edited).unwrap();
+
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .current_dir(&caller)
+        .env("HOME", &home)
+        .args(args)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "run `provenance skills install --global --copy --force`",
+        ));
+    assert_eq!(std::fs::read(&skill).unwrap(), edited);
+
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .current_dir(&caller)
+        .env("HOME", &home)
+        .args(["skills", "install", "--global", "--copy", "--force"])
+        .assert()
+        .success();
+    assert_eq!(std::fs::read(&skill).unwrap(), original);
+    assert!(!caller.join(".agents").exists());
+}
