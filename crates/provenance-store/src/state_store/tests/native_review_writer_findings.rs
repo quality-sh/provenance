@@ -3,7 +3,8 @@ use super::{
     seeded_requirement_store,
 };
 use crate::state_store::{
-    EditQuestionInput, UpdateResolutionInput, UpdateRuleInput, UpdateSourceInput, UpdateTopicInput,
+    EditQuestionInput, UpdateBoundaryInput, UpdateDomainInput, UpdateRequirementInput,
+    UpdateResolutionInput, UpdateRuleInput, UpdateSourceInput, UpdateTopicInput,
 };
 use provenance_core::review::{SaveOutcome, REVIEW_SCHEMA_VERSION};
 use provenance_core::{NodeType, SchemaVersion, Source};
@@ -135,6 +136,65 @@ fn shaping_claims_keep_revisions_and_text_changes_them() {
         )
         .unwrap();
     assert_lifecycle_then_content(&entries(&store, &scope, NodeType::Question));
+}
+
+#[test]
+fn domain_color_and_requirement_status_keep_revisions() {
+    let (_dir, store, scope) = seeded_requirement_store();
+    seed_native_records(&store, &scope);
+    store
+        .update_domain(
+            serde_json::from_value::<UpdateDomainInput>(serde_json::json!({
+                "scope_id":"default", "id":"domain_native", "color":"blue"
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+    store
+        .update_domain(
+            serde_json::from_value::<UpdateDomainInput>(serde_json::json!({
+                "scope_id":"default", "id":"domain_native", "name":"Domain B"
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+    assert_lifecycle_then_content(&entries(&store, &scope, NodeType::Domain));
+
+    store
+        .update_requirement(
+            serde_json::from_value::<UpdateRequirementInput>(serde_json::json!({
+                "scope_id":"default", "id":"req_overtime", "status":"deprecated"
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+    store
+        .update_requirement(
+            serde_json::from_value::<UpdateRequirementInput>(serde_json::json!({
+                "scope_id":"default", "id":"req_overtime", "statement":"Overtime is recorded."
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+    assert_lifecycle_then_content(&entries(&store, &scope, NodeType::Requirement));
+}
+
+#[test]
+fn boundary_content_change_creates_a_revision() {
+    let (_dir, store, scope) = seeded_requirement_store();
+    seed_native_records(&store, &scope);
+    store
+        .update_boundary(
+            serde_json::from_value::<UpdateBoundaryInput>(serde_json::json!({
+                "scope_id":"default", "id":"boundary_native", "statement":"Boundary B"
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+    let entries = entries(&store, &scope, NodeType::Boundary);
+    assert_eq!(entries.len(), 2);
+    assert_eq!(entries[1].outcome, SaveOutcome::Changed);
+    assert_ne!(entries[1].revision, entries[0].revision);
 }
 
 #[test]
