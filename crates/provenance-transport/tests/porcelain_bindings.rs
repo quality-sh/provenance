@@ -58,7 +58,6 @@ async fn host_get_port_returns_a_record_through_the_resource_path() {
 
 #[cfg(feature = "test-fixture")]
 #[tokio::test]
-#[verifies("rule_porcelain_action_names_match", conformance)]
 #[verifies("rule_porcelain_mcp_target_argument", examples)]
 #[verifies("rule_porcelain_mcp_readable_structured", examples)]
 async fn mcp_get_runs_through_the_composed_service() {
@@ -143,6 +142,38 @@ async fn mcp_get_readable_content_includes_related_records_and_bounds() {
     assert!(readable.contains("rule_shared"), "{readable}");
     assert!(readable.contains("bounds:"), "{readable}");
     assert!(readable.contains("limit=7"), "{readable}");
+    client.cancel().await.unwrap();
+    server.await.unwrap().cancel().await.unwrap();
+}
+
+#[cfg(feature = "test-fixture")]
+#[tokio::test]
+async fn mcp_get_rejects_a_returned_kind_outside_the_closed_set() {
+    use rmcp::{model::CallToolRequestParams, ServiceExt as _};
+
+    let repository = support::records::Repository::new("The shared graph is readable.");
+    let host = support::resource_http::host(&repository, false);
+    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
+    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let client = ().serve(client_io).await.unwrap();
+
+    let result = client
+        .call_tool(
+            CallToolRequestParams::new("get").with_arguments(
+                json!({"target":"req_shared","view":"children","returned_kinds":["dinosaur"]})
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+            ),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(result.is_error, Some(true));
+    assert_eq!(
+        result.structured_content.unwrap()["error"]["kind"],
+        "invalid_options"
+    );
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
 }
@@ -278,7 +309,6 @@ impl provenance_porcelain::check::CheckPort for CheckFixturePort {
 }
 
 #[tokio::test]
-#[verifies("rule_porcelain_action_names_match", conformance)]
 #[verifies("rule_porcelain_check_categories", examples)]
 #[verifies("rule_porcelain_mcp_readable_structured", examples)]
 async fn mcp_check_uses_its_separately_injected_port() {

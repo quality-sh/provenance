@@ -4,7 +4,6 @@ use serde_json::Value;
 use std::io::Write as _;
 
 #[test]
-#[verifies("rule_porcelain_action_names_match", conformance)]
 fn cli_check_selector_runs_and_renders_only_the_selected_category() {
     let directory = tempfile::tempdir().unwrap();
     Command::cargo_bin("provenance")
