@@ -1,6 +1,7 @@
 use provenance_core::{
-    QuestionStatus, RepoPathPrefix, RequirementStatus, ResolutionMethod, ResolutionStatus,
-    RuleSeverity, RuleStatus, SourceType, StableId, TopicStatus,
+    Boundary, Domain, ImplementationBinding, Question, QuestionStatus, RepoPathPrefix, Requirement,
+    RequirementStatus, Resolution, ResolutionMethod, ResolutionStatus, Rule, RuleSeverity,
+    RuleStatus, Source, SourceType, StableId, Topic, TopicStatus, VerificationBinding,
 };
 use provenance_macros::verifies;
 
@@ -8,6 +9,7 @@ use super::*;
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 mod collaboration;
+mod table;
 
 /// The record families the ownership check walks. One variant per
 /// `require_scope!` line, and one per record-bearing field of
