@@ -138,7 +138,7 @@ async fn call_catalog_tool(
             Ok(call) => call,
             Err(failure) => return mcp_surface::failure_result(failure),
         };
-        match routing::invoke(host, &matched, data, query, &headers).await {
+        match routing::invoke(host, &matched, data, query, &headers, false).await {
             Ok((value, _)) => CallToolResult::structured(value.into_value()),
             Err(failure) => mcp_surface::failure_result(failure),
         }

@@ -64,6 +64,12 @@ jobs:
       - run: sfw npm ci --prefix tools/operation-codegen
       - run: node tools/operation-codegen/ensure-generated.mjs
       - run: cargo build --workspace --all-features
+      - name: Verify public notification adapters
+        if: startsWith(github.ref, 'refs/heads/agent-ci/build-artifact/')
+        run: |
+          sfw npm ci --no-audit --no-fund --prefix tools/agent-notifications
+          npm run typecheck --prefix tools/agent-notifications
+          npm test --prefix tools/agent-notifications
       - name: Upload dev binary
         if: startsWith(github.ref, 'refs/heads/agent-ci/build-artifact/')
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
