@@ -4,7 +4,6 @@ use provenance_cli::porcelain;
 use provenance_core::protocol::{SearchQuery, QUERY_DEFAULT_LIMIT};
 use provenance_core::{NodeType, SDK_PROTOCOL_VERSION};
 use provenance_porcelain::action::{validate_target, Action};
-use provenance_porcelain::discussion::DiscussionAction;
 use provenance_porcelain::get::View;
 
 mod discussion;
@@ -24,7 +23,7 @@ pub enum Invocation {
     Get(GetInvocation),
     Search(SearchArgs),
     DiscussionRoot(DiscussionsArgs),
-    DiscussionTarget(TargetArgs, DiscussionAction, Box<clap::ArgMatches>),
+    DiscussionTarget(TargetArgs, Action, Box<clap::ArgMatches>),
     Target(TargetInvocation),
 }
 
@@ -95,8 +94,10 @@ impl Invocation {
             .try_get_matches_from(arguments)
             .unwrap_or_else(|error| error.exit());
         let args = TargetArgs::from_matches(&matches);
-        if let Some(TargetVerb::Discussion(action)) = args.action {
-            return Ok(Self::DiscussionTarget(args, action, Box::new(matches)));
+        if let Some(TargetVerb::Action(action)) = args.action {
+            if Action::DISCUSSION.contains(&action) {
+                return Ok(Self::DiscussionTarget(args, action, Box::new(matches)));
+            }
         }
         let format = args.common.format();
         let context = args.common.context();
@@ -118,7 +119,7 @@ impl Invocation {
                 input,
             }));
         }
-        let Some(TargetVerb::Record(action)) = args.action else {
+        let Some(TargetVerb::Action(action)) = args.action else {
             anyhow::bail!("unsupported target action");
         };
         let kind = args.record_type;

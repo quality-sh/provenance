@@ -198,6 +198,8 @@ async fn named_mcp_discussion_actions_share_structured_and_readable_results() {
             .is_valid(list.structured_content.as_ref().unwrap())
     );
     let entry = &list.structured_content.as_ref().unwrap()["result"]["entries"][0];
+    assert_eq!(list.structured_content.as_ref().unwrap()["result"]["limit"], 50);
+    assert_eq!(list.structured_content.as_ref().unwrap()["result"]["has_more"], false);
     assert_eq!(entry["discussion_id"], id);
     assert_eq!(entry["opening_excerpt"], "Opening text");
     let readable = &list.content[0].as_text().unwrap().text;
@@ -213,6 +215,7 @@ async fn named_mcp_discussion_actions_share_structured_and_readable_results() {
         conversation.structured_content.as_ref().unwrap()["result"]["head"]["version"],
         1
     );
+    assert_eq!(conversation.structured_content.as_ref().unwrap()["result"]["messages"]["limit"], 50);
     let replied = call(
         &client,
         "reply",

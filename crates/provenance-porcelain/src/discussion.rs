@@ -3,54 +3,35 @@
 use provenance_core::{
     protocol::{Stamp, Stamped},
     threads::{
-        DiscussionConversation, DiscussionEntry, DiscussionListPage, DiscussionStatus,
-        DiscussionStatusFilter,
+        DiscussionConversationResult, DiscussionEntry, DiscussionResultPage,
+        DiscussionStatus, DiscussionStatusFilter, DiscussionSummary,
     },
     MessageRole, ScopeId, StableId, ThreadParent,
 };
+use crate::action::{Action, ActionError};
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, future::Future, pin::Pin};
-
-/// One explicit Discussion action. Default graph get remains separate.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum DiscussionAction {
-    Discussions,
-    Discussion,
-    Discuss,
-    Reply,
-}
-
-impl DiscussionAction {
-    pub const ALL: [Self; 4] = [
-        Self::Discussions,
-        Self::Discussion,
-        Self::Discuss,
-        Self::Reply,
-    ];
-
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Discussions => "discussions",
-            Self::Discussion => "discussion",
-            Self::Discuss => "discuss",
-            Self::Reply => "reply",
-        }
-    }
-
-    pub fn parse(word: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|action| action.as_str() == word)
-    }
-}
+use serde_json::Value;
+use std::{future::Future, pin::Pin};
 
 /// Input JSON schema for one named Discussion action.
-pub fn input_schema(action: DiscussionAction) -> serde_json::Value {
+pub fn input_schema(action: Action) -> serde_json::Value {
     let schema = match action {
-        DiscussionAction::Discussions => schemars::schema_for!(ListInput),
-        DiscussionAction::Discussion => schemars::schema_for!(ConversationInput),
-        DiscussionAction::Discuss => schemars::schema_for!(StartInput),
-        DiscussionAction::Reply => schemars::schema_for!(ReplyInput),
+        Action::Discussions => schemars::schema_for!(ListInput),
+        Action::Discussion => schemars::schema_for!(ConversationInput),
+        Action::Discuss => schemars::schema_for!(StartInput),
+        Action::Reply => schemars::schema_for!(ReplyInput),
+        _ => unreachable!("record actions use registered operation schemas"),
     };
     serde_json::to_value(schema).expect("Discussion input schema is JSON")
+}
+
+/// The target field names the record parent or the independent Discussion ID.
+pub const fn target_field(action: Action) -> &'static str {
+    match action {
+        Action::Discussions | Action::Discuss => "parent",
+        Action::Discussion | Action::Reply => "discussion_id",
+        _ => unreachable!("record actions use registered target bindings"),
+    }
 }
 
 /// The shared typed result schema.
@@ -114,14 +95,14 @@ pub enum DiscussionOutcome {
         scope_id: ScopeId,
         parent: Option<ThreadParent>,
         status: DiscussionStatusFilter,
-        result: DiscussionListPage,
+        result: DiscussionResultPage<DiscussionSummary>,
         limit: usize,
         has_more: bool,
         stamp: Option<Stamp>,
         freshness_error: Option<String>,
     },
     Conversation {
-        result: DiscussionConversation,
+        result: DiscussionConversationResult,
         limit: usize,
         has_more: bool,
         stamp: Option<Stamp>,
@@ -132,36 +113,14 @@ pub enum DiscussionOutcome {
     },
 }
 
-/// A refusal from validation, host grants, or a canonical operation.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum DiscussionError {
-    InvalidOptions,
-    AccessDenied,
-    Operation {
-        message: String,
-        detail: serde_json::Value,
-    },
-}
 
-impl Display for DiscussionError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::InvalidOptions => formatter.write_str("unsupported Discussion options"),
-            Self::AccessDenied => formatter.write_str("Discussion access denied"),
-            Self::Operation { message, .. } => formatter.write_str(message),
-        }
-    }
-}
-
-impl std::error::Error for DiscussionError {}
-
-pub type PortFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, DiscussionError>> + Send + 'a>>;
+pub type PortFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, ActionError>> + Send + 'a>>;
 
 /// A list answer and the scope selected by the trusted host.
 #[derive(Clone, Debug)]
 pub struct ListAnswer {
     pub scope_id: ScopeId,
-    pub page: Stamped<DiscussionListPage>,
+    pub page: Stamped<DiscussionResultPage<DiscussionSummary>>,
 }
 
 /// Canonical Discussion operations provided by the bound host.
@@ -170,17 +129,32 @@ pub trait DiscussionPort: Send + Sync {
     fn conversation(
         &self,
         input: ConversationInput,
-    ) -> PortFuture<'_, Stamped<DiscussionConversation>>;
+    ) -> PortFuture<'_, Stamped<DiscussionConversationResult>>;
     fn start(&self, input: StartInput) -> PortFuture<'_, DiscussionEntry>;
     fn reply(&self, input: ReplyInput) -> PortFuture<'_, DiscussionEntry>;
 }
 
 impl<P: DiscussionPort> crate::Porcelain<P> {
+    /// Parse and run one declared Discussion action for any host consumer.
+    pub async fn execute_discussion(
+        &self,
+        action: Action,
+        arguments: Value,
+    ) -> Result<DiscussionOutcome, ActionError> {
+        match action {
+            Action::Discussions => self.discussions(parse_input(arguments)?).await,
+            Action::Discussion => self.conversation(parse_input(arguments)?).await,
+            Action::Discuss => self.discuss(parse_input(arguments)?).await,
+            Action::Reply => self.reply(parse_input(arguments)?).await,
+            _ => Err(ActionError::InvalidOptions),
+        }
+    }
+
     /// List addressed Discussions after the host selects permitted parent kinds.
     pub async fn discussions(
         &self,
         input: ListInput,
-    ) -> Result<DiscussionOutcome, DiscussionError> {
+    ) -> Result<DiscussionOutcome, ActionError> {
         let limit = checked_limit(input.limit)?;
         let parent = input.parent.clone();
         let status = input.status;
@@ -197,7 +171,7 @@ impl<P: DiscussionPort> crate::Porcelain<P> {
             scope_id,
             parent,
             status,
-            has_more: result.next_cursor.is_some(),
+            has_more: result.has_more,
             result,
             limit,
             stamp: Some(stamp),
@@ -209,7 +183,7 @@ impl<P: DiscussionPort> crate::Porcelain<P> {
     pub async fn conversation(
         &self,
         input: ConversationInput,
-    ) -> Result<DiscussionOutcome, DiscussionError> {
+    ) -> Result<DiscussionOutcome, ActionError> {
         let limit = checked_limit(input.limit)?;
         let Stamped {
             result,
@@ -217,7 +191,7 @@ impl<P: DiscussionPort> crate::Porcelain<P> {
             freshness_error,
         } = self.port.conversation(input).await?;
         Ok(DiscussionOutcome::Conversation {
-            has_more: result.messages.next_cursor.is_some(),
+            has_more: result.messages.has_more,
             result,
             limit,
             stamp: Some(stamp),
@@ -226,26 +200,30 @@ impl<P: DiscussionPort> crate::Porcelain<P> {
     }
 
     /// Start one Discussion through the canonical publication operation.
-    pub async fn discuss(&self, input: StartInput) -> Result<DiscussionOutcome, DiscussionError> {
+    pub async fn discuss(&self, input: StartInput) -> Result<DiscussionOutcome, ActionError> {
         Ok(DiscussionOutcome::Written {
             receipt: self.port.start(input).await?,
         })
     }
 
     /// Reply through the canonical publication operation.
-    pub async fn reply(&self, input: ReplyInput) -> Result<DiscussionOutcome, DiscussionError> {
+    pub async fn reply(&self, input: ReplyInput) -> Result<DiscussionOutcome, ActionError> {
         Ok(DiscussionOutcome::Written {
             receipt: self.port.reply(input).await?,
         })
     }
 }
 
-fn checked_limit(limit: Option<usize>) -> Result<usize, DiscussionError> {
+fn parse_input<T: serde::de::DeserializeOwned>(value: Value) -> Result<T, ActionError> {
+    serde_json::from_value(value).map_err(|_| ActionError::InvalidOptions)
+}
+
+fn checked_limit(limit: Option<usize>) -> Result<usize, ActionError> {
     let limit = limit.unwrap_or(50);
     (1..=200)
         .contains(&limit)
         .then_some(limit)
-        .ok_or(DiscussionError::InvalidOptions)
+        .ok_or(ActionError::InvalidOptions)
 }
 
 /// Render the fields that identify a Discussion and the bounds of its page.

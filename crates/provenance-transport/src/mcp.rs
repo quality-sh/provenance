@@ -73,7 +73,10 @@ impl ServerHandler for StatementHost {
         if request.name == "search" && crate::porcelain::search_is_available(self) {
             return call_search(self, request.arguments).await;
         }
-        if let Some(action) = crate::porcelain::DiscussionAction::parse(&request.name) {
+        if let Some(action) = crate::porcelain::Action::DISCUSSION
+            .into_iter()
+            .find(|action| action.as_str() == request.name)
+        {
             return call_discussion(self, action, request.arguments).await;
         }
         if request.name == "check" {
@@ -104,7 +107,10 @@ impl ServerHandler for StatementHost {
             }
             return Ok(crate::porcelain::call_check(self, port.clone(), arguments).await);
         }
-        if let Some(action) = crate::porcelain::Action::parse(&request.name) {
+        if let Some(action) = crate::porcelain::Action::RECORD
+            .into_iter()
+            .find(|action| action.as_str() == request.name)
+        {
             return call_authoring_action(self, action, request.arguments).await;
         }
         let Some(definition) = catalog::definitions()
@@ -156,7 +162,7 @@ impl ServerHandler for StatementHost {
 
 async fn call_discussion(
     host: &StatementHost,
-    action: crate::porcelain::DiscussionAction,
+    action: crate::porcelain::Action,
     arguments: Option<serde_json::Map<String, Value>>,
 ) -> Result<CallToolResult, ErrorData> {
     if !crate::porcelain::discussion_is_available(host, action) {
