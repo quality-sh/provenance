@@ -89,6 +89,7 @@ fn mcp_query_schema_validates_only_the_selected_request_shape() {
 
     for value in [
         json!({}),
+        json!({"query":"search"}),
         json!({"query":"search", "text":"bounded"}),
         json!({"query":"stale", "base":"main"}),
         json!({"query":"resolve-symbol", "file":"src/lib.rs"}),
@@ -96,7 +97,6 @@ fn mcp_query_schema_validates_only_the_selected_request_shape() {
         assert!(validator.is_valid(&value), "valid query shape: {value}");
     }
     for value in [
-        json!({"query":"search"}),
         json!({"query":"stale"}),
         json!({"query":"resolve-symbol"}),
         json!({"query":"search", "text":"bounded", "base":"main"}),

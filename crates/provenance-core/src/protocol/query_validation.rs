@@ -73,10 +73,22 @@ impl SearchQuery {
     pub fn validate(&self) -> Result<(), QueryValidation> {
         version(self.protocol_version)?;
         check("limit", super::ensure_limit(self.limit))?;
+        if self
+            .text
+            .as_deref()
+            .is_some_and(|text| text.trim().is_empty())
+        {
+            return check(
+                "text",
+                Err(anyhow::anyhow!("search text must not be empty")),
+            );
+        }
         check(
             "text",
-            if self.text.trim().is_empty() {
-                Err(anyhow::anyhow!("search text must not be empty"))
+            if self.text.is_none() && self.node_types.is_empty() {
+                Err(anyhow::anyhow!(
+                    "search requires text or at least one filter"
+                ))
             } else {
                 Ok(())
             },
@@ -136,5 +148,37 @@ impl super::ReadDocumentQuery {
     pub fn validate(&self) -> Result<(), QueryValidation> {
         check("limit", super::ensure_limit(self.limit))?;
         id(&self.id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::NodeType;
+
+    fn search(value: serde_json::Value) -> SearchQuery {
+        serde_json::from_value(value).unwrap()
+    }
+
+    #[test]
+    fn search_accepts_each_supported_predicate_combination() {
+        for value in [
+            serde_json::json!({"text":"needle"}),
+            serde_json::json!({"node_types":["requirement"]}),
+            serde_json::json!({"text":"needle", "node_types":["requirement"]}),
+        ] {
+            search(value).validate().unwrap();
+        }
+    }
+
+    #[test]
+    fn search_refuses_no_predicates_and_supplied_blank_text() {
+        assert!(search(serde_json::json!({})).validate().is_err());
+        assert!(search(serde_json::json!({
+            "text":"  ",
+            "node_types":[NodeType::Requirement]
+        }))
+        .validate()
+        .is_err());
     }
 }
