@@ -27,15 +27,9 @@ fn modern_lifecycle_coexists_with_frozen_shipped_records() {
     let existing = store.manifest().unwrap();
     let mut actor_ids = existing.disposition_actor_ids.clone();
     actor_ids.push("reviewer".into());
-    let manifest = crate::repository_init::plan_manifest(
-        Some(existing),
-        None,
-        None,
-        actor_ids,
-        false,
-        None,
-    )
-    .unwrap();
+    let manifest =
+        crate::repository_init::plan_manifest(Some(existing), None, None, actor_ids, false, None)
+            .unwrap();
     std::fs::write(
         store.layout.manifest_path(),
         serde_json::to_vec(&manifest).unwrap(),
