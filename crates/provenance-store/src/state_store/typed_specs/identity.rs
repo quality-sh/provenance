@@ -15,14 +15,6 @@ use sha2::{Digest, Sha256};
 use super::super::{TypedRequirementInput, TypedRuleInput, TypedSourceInput};
 use super::rule_addresses::migration_candidates;
 
-pub(super) fn source_address(spec: &str, key: &str) -> anyhow::Result<DeclarationAddress> {
-    addresses::source_address(spec, key)
-}
-
-pub(super) fn requirement_address(spec: &str, key: &str) -> anyhow::Result<DeclarationAddress> {
-    addresses::requirement_address(spec, key)
-}
-
 pub(super) fn source_identity(input: &TypedSourceInput) -> (&str, Option<&str>) {
     (&input.key, input.id.as_deref())
 }
@@ -209,7 +201,7 @@ pub(super) fn owned_declaration_ids<'a, T: 'a>(
 mod tests {
     use std::collections::BTreeMap;
 
-    use super::{declaration_ids, requirement_address, rule_declaration_ids};
+    use super::{addresses, declaration_ids, rule_declaration_ids};
     use crate::state_store::typed_specs::rule_address;
     use crate::state_store::TypedRuleInput;
     use provenance_core::StableId;
@@ -271,7 +263,7 @@ mod tests {
     #[test]
     #[verifies("rule_rust_store_owns_persistent_identity", examples)]
     fn an_existing_address_keeps_its_canonical_id() {
-        let address = requirement_address("share-links", "sharing").unwrap();
+        let address = addresses::requirement_address("share-links", "sharing").unwrap();
         let mut existing = BTreeMap::new();
         existing.insert(address, StableId::new("req_existing").unwrap());
 
@@ -289,7 +281,7 @@ mod tests {
 
     #[test]
     fn an_existing_address_cannot_be_remapped_to_another_explicit_id() {
-        let address = requirement_address("share-links", "sharing").unwrap();
+        let address = addresses::requirement_address("share-links", "sharing").unwrap();
         let mut existing = BTreeMap::new();
         existing.insert(address, StableId::new("req_existing").unwrap());
 
