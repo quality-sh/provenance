@@ -12,8 +12,10 @@ use provenance_macros::rule;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, future::Future, pin::Pin};
 
+mod notify;
 mod shaping;
 mod wire;
+pub use notify::{Notify, NotifyClient, NotifyPort, Registration, NO_REVIEW_HOST};
 pub use shaping::{BlockedQuestion, BlockedReason, Claim, QuestionState, SessionSummary};
 pub use wire::{
     input_schema, notify_input_schema, notify_output_schema, output_schema, render_readable,
@@ -68,7 +70,9 @@ impl View {
     }
 }
 
-/// One semantic known-record request.
+/// One semantic known-record request: the target and the get fields.
+// Each bool is one switch field.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct GetInput {
@@ -78,15 +82,23 @@ pub struct GetInput {
     pub view: View,
     #[serde(default)]
     #[schemars(range(min = 1))]
-    pub max_depth: Option<usize>,
+    pub depth: Option<usize>,
     #[serde(default)]
-    pub returned_kinds: Vec<NodeType>,
+    pub kind: Vec<NodeType>,
     #[serde(default)]
     #[schemars(range(min = 1))]
     pub limit: Option<usize>,
-    /// Registers a client thread for review changes, or ends its registration.
     #[serde(default)]
-    pub notify: Option<Notify>,
+    pub follow: bool,
+    #[serde(default)]
+    pub review_link: bool,
+    #[serde(default)]
+    pub notify: Option<NotifyClient>,
+    #[serde(default)]
+    #[schemars(length(min = 1))]
+    pub thread: Option<String>,
+    #[serde(default)]
+    pub no_open: bool,
 }
 
 impl GetInput {
@@ -94,57 +106,24 @@ impl GetInput {
         Self {
             target: target.into(),
             view,
-            max_depth: None,
-            returned_kinds: Vec::new(),
+            depth: None,
+            kind: Vec::new(),
             limit: None,
+            follow: false,
+            review_link: false,
             notify: None,
+            thread: None,
+            no_open: false,
         }
     }
-}
 
-/// The refusal message when no review host serves the repository and scope.
-pub const NO_REVIEW_HOST: &str = "no review host is running for this repository and scope";
-
-/// The client that gets review changes: `codex` registers a thread, `off` ends the
-/// registration of that thread.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, schemars::JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum NotifyClient {
-    Codex,
-    Off,
-}
-
-/// One notify request for a client thread.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct Notify {
-    pub client: NotifyClient,
-    /// The Codex thread UUID.
-    #[schemars(length(min = 1))]
-    pub thread: String,
-}
-
-/// The result of one notify request. `accepted` is true when Codex accepted the full
-/// document message into the thread queue. It does not show that the agent read it.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct Registration {
-    pub client: NotifyClient,
-    pub thread: String,
-    pub registered: bool,
-    pub accepted: bool,
-    #[serde(default)]
-    pub removed: bool,
-}
-
-/// Sends a notify request to the review host of the repository and scope.
-pub trait NotifyPort: Send + Sync {
-    fn register<'a>(
-        &'a self,
-        root: &'a str,
-        limit: usize,
-        notify: &'a Notify,
-    ) -> PortFuture<'a, Registration>;
+    /// The notify request of the `notify` and `thread` fields.
+    pub fn notify_request(&self) -> Option<Notify> {
+        self.notify.map(|client| Notify {
+            client,
+            thread: self.thread.clone().unwrap_or_default(),
+        })
+    }
 }
 
 /// The bound and continuation state of a potentially incomplete result.
@@ -408,13 +387,13 @@ impl<P: GetPort> crate::Porcelain<P> {
                         target: input.target,
                         kind: record.node_type(),
                         view: input.view,
-                        max_depth: input.max_depth.unwrap_or(1),
+                        max_depth: input.depth.unwrap_or(1),
                         limit: input.limit.unwrap_or(50),
                     })
                     .await?;
                 if let Some(summary) = &mut traversal.shaping {
-                    if !input.returned_kinds.is_empty()
-                        || input.max_depth.is_some()
+                    if !input.kind.is_empty()
+                        || input.depth.is_some()
                         || record_metadata.as_ref().is_none_or(|metadata| {
                             metadata.freshness_error.is_some()
                                 || !same_revision(metadata, traversal.response_metadata.as_ref())
@@ -424,8 +403,7 @@ impl<P: GetPort> crate::Porcelain<P> {
                     }
                 }
                 traversal.records.retain(|candidate| {
-                    input.returned_kinds.is_empty()
-                        || input.returned_kinds.contains(&candidate.node.node_type())
+                    input.kind.is_empty() || input.kind.contains(&candidate.node.node_type())
                 });
                 if input.view == View::Children {
                     ViewResult::Children(traversal)
@@ -439,10 +417,10 @@ impl<P: GetPort> crate::Porcelain<P> {
             View::Review => {
                 let limit = input.limit.unwrap_or(50);
                 let mut review = self.port.review(&record, limit).await?;
-                if let Some(notify) = &input.notify {
+                if let Some(notify) = input.notify_request() {
                     review.notify = Some(
                         self.port
-                            .notify(record.id().as_str(), limit, notify)
+                            .notify(record.id().as_str(), limit, &notify)
                             .await?,
                     );
                 }
@@ -470,17 +448,25 @@ fn validate(input: &GetInput) -> Result<(), ReadError> {
     if input.target.is_empty() {
         return Err(ReadError::InvalidOptions);
     }
-    let has_traversal_options = input.max_depth.is_some() || !input.returned_kinds.is_empty();
+    let has_traversal_options = input.depth.is_some() || !input.kind.is_empty();
     let unsupported = match input.view {
         View::Record => has_traversal_options || input.limit.is_some(),
         View::Children | View::Trace => false,
         View::Impact | View::Review => has_traversal_options,
     };
-    let notify_refused = input
-        .notify
-        .as_ref()
-        .is_some_and(|notify| input.view != View::Review || notify.thread.is_empty());
-    if unsupported || notify_refused || input.max_depth == Some(0) || input.limit == Some(0) {
+    let notify_refused = match input.notify {
+        Some(_) => input.view != View::Review || input.thread.as_deref().is_none_or(str::is_empty),
+        None => input.thread.is_some(),
+    };
+    // The follow and review link fields need a stream or the review host, so this read
+    // refuses them; a consumer that has them answers those fields before it reads.
+    let delivered = input.follow || input.review_link || input.no_open;
+    if unsupported
+        || notify_refused
+        || delivered
+        || input.depth == Some(0)
+        || input.limit == Some(0)
+    {
         return Err(ReadError::InvalidOptions);
     }
     Ok(())

@@ -1,9 +1,12 @@
 //! Composed repository checks for human-facing interfaces.
 
 use provenance_macros::rule;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::{future::Future, pin::Pin};
+
+mod input;
+pub use input::{CheckInput, ReportFileFormat};
 
 /// A distinct repository check category.
 #[derive(
@@ -32,42 +35,6 @@ impl Category {
     ];
     /// The categories of a check that selects none.
     pub const DEFAULT: [Self; 3] = [Self::Graph, Self::Statements, Self::Bindings];
-}
-
-/// The categories selected for one check, and the statement it examines in
-/// place of the committed statements.
-///
-/// The CLI builds this request from its flags and the MCP tool deserializes
-/// it, so both surfaces take the one `statement` field.
-#[rule("rule_porcelain_check_statement_field_shared")]
-#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, schemars::JsonSchema)]
-#[schemars(
-    description = "The categories to check, and a statement to check in place of the \
-                          committed statements."
-)]
-#[serde(deny_unknown_fields)]
-pub struct CheckInput {
-    #[serde(
-        rename = "categories",
-        default,
-        deserialize_with = "deserialize_categories"
-    )]
-    #[schemars(extend("uniqueItems" = true))]
-    selectors: Vec<Category>,
-    /// Check this statement instead of the committed statements.
-    #[serde(default)]
-    statement: Option<String>,
-    #[serde(skip)]
-    scope: Option<String>,
-}
-
-fn deserialize_categories<'de, D: Deserializer<'de>>(
-    deserializer: D,
-) -> Result<Vec<Category>, D::Error> {
-    let mut categories = Vec::<Category>::deserialize(deserializer)?;
-    categories.sort_unstable();
-    categories.dedup();
-    Ok(categories)
 }
 
 /// One actionable check finding.
@@ -306,6 +273,16 @@ pub trait CheckPort: Send + Sync {
         let _ = (statement, scope);
         Box::pin(async { Err("this host does not check a supplied statement".to_owned()) })
     }
+
+    /// This port with the run options of one check: `strict`, `base`, `scope`, and the
+    /// bindings fields. `None` keeps this port. A port without run options refuses them.
+    fn with_options(&self, input: &CheckInput) -> Result<Option<Arc<dyn CheckPort>>, String> {
+        if input.has_run_options() {
+            Err("this host does not take the strict, base, path, baseline, or output fields".into())
+        } else {
+            Ok(None)
+        }
+    }
 }
 
 impl CheckPort for Arc<dyn CheckPort> {
@@ -316,50 +293,9 @@ impl CheckPort for Arc<dyn CheckPort> {
     fn check_statement<'a>(&'a self, statement: &'a str, scope: Option<&'a str>) -> PortFuture<'a> {
         self.as_ref().check_statement(statement, scope)
     }
-}
 
-impl CheckInput {
-    /// Create a request from explicit selectors.
-    pub fn new(selectors: impl IntoIterator<Item = Category>) -> Self {
-        let mut selectors = selectors.into_iter().collect::<Vec<_>>();
-        selectors.sort_unstable();
-        selectors.dedup();
-        Self {
-            selectors,
-            statement: None,
-            scope: None,
-        }
-    }
-
-    /// Check this statement instead of the committed statements.
-    #[must_use]
-    pub fn with_statement(mut self, statement: impl Into<String>) -> Self {
-        self.statement = Some(statement.into());
-        self
-    }
-
-    /// Bind a trusted host-selected scope to this request.
-    #[must_use]
-    pub fn in_scope(mut self, scope: impl Into<String>) -> Self {
-        self.scope = Some(scope.into());
-        self
-    }
-
-    /// Return the categories to run, in run order. A bare check selects the default
-    /// categories.
-    /// A supplied statement selects the statements category, and the
-    /// selectors add to it.
-    pub fn categories(&self) -> Vec<Category> {
-        let mut categories = match (self.selectors.is_empty(), &self.statement) {
-            (false, _) => self.selectors.clone(),
-            (true, Some(_)) => Vec::new(),
-            (true, None) => Category::DEFAULT.to_vec(),
-        };
-        if self.statement.is_some() && !categories.contains(&Category::Statements) {
-            categories.push(Category::Statements);
-            categories.sort_unstable();
-        }
-        categories
+    fn with_options(&self, input: &CheckInput) -> Result<Option<Arc<dyn CheckPort>>, String> {
+        self.as_ref().with_options(input)
     }
 }
 
@@ -420,14 +356,26 @@ impl<P: CheckPort> crate::Porcelain<P> {
     #[rule("rule_porcelain_check_supplied_statement_selects_statements")]
     #[rule("rule_check_reports_gaps")]
     pub async fn check(&self, input: CheckInput) -> CheckOutcome {
+        let configured = match self.port.with_options(&input) {
+            Ok(configured) => configured,
+            Err(reason) => {
+                let categories = input
+                    .categories()
+                    .into_iter()
+                    .map(|category| CategoryReport::unavailable(category, reason.clone()))
+                    .collect();
+                return CheckOutcome { categories };
+            }
+        };
+        let port: &dyn CheckPort = configured.as_deref().unwrap_or(&self.port);
         let scope = input.scope.as_deref();
         let mut categories = Vec::new();
         for category in input.categories() {
             let run = match (category, input.statement.as_deref()) {
                 (Category::Statements, Some(statement)) => {
-                    self.port.check_statement(statement, scope).await
+                    port.check_statement(statement, scope).await
                 }
-                _ => self.port.run(category, scope).await,
+                _ => port.run(category, scope).await,
             };
             let report = match run {
                 Ok(run) => CategoryReport::from_run(run),

@@ -29,7 +29,7 @@ pub fn search_tool() -> rmcp::model::Tool {
         Command::Search.declaration().name,
         Command::Search.declaration().description,
         Effect::Reads,
-        provenance_porcelain::search::input_schema(),
+        crate::derived::input_schema(Command::Search),
         provenance_porcelain::search::output_schema(),
         SchemaDeclaration::Remove,
     )
@@ -40,7 +40,7 @@ pub fn get_tool() -> rmcp::model::Tool {
         Command::Get.declaration().name,
         Command::Get.declaration().description,
         Effect::Reads,
-        provenance_porcelain::get::input_schema(),
+        crate::derived::input_schema(Command::Get),
         provenance_porcelain::get::output_schema(),
         SchemaDeclaration::Keep,
     )
@@ -51,7 +51,7 @@ pub fn trace_tool() -> rmcp::model::Tool {
         Command::Trace.declaration().name,
         Command::Trace.declaration().description,
         Effect::Reads,
-        provenance_porcelain::get::trace_input_schema(),
+        crate::derived::input_schema(Command::Trace),
         provenance_porcelain::get::output_schema(),
         SchemaDeclaration::Keep,
     )
@@ -62,22 +62,32 @@ pub fn check_tool() -> rmcp::model::Tool {
         Command::Check.declaration().name,
         Command::Check.declaration().description,
         Effect::Reads,
-        provenance_porcelain::check::input_schema(),
+        crate::derived::input_schema(Command::Check),
         provenance_porcelain::check::output_schema(),
         SchemaDeclaration::Keep,
     )
 }
 
 pub async fn call_check(host: &StatementHost, arguments: Map<String, Value>) -> CallToolResult {
-    let Ok(arguments) = serde_json::from_value::<CheckInput>(Value::Object(arguments)) else {
+    let Ok(mut input) = serde_json::from_value::<CheckInput>(Value::Object(arguments)) else {
         return get_error("invalid_options", "unsupported check options");
     };
-    let service = host.porcelain().check();
-    let mut input = arguments;
-    if let Some((_, scope)) = host.bound_identity() {
-        input = input.in_scope(scope);
+    if let Err(reason) = input.validate() {
+        return get_error(
+            "invalid_options",
+            &format!("unsupported check options: {reason}"),
+        );
     }
-    let outcome = service.check(input).await;
+    // The caller can read only the scope that the server binds.
+    if let Some((_, scope)) = host.bound_identity() {
+        match &input.scope {
+            Some(asked) if *asked != scope => {
+                return get_error("access_denied", "this server checks only its bound scope");
+            }
+            _ => input = input.in_scope(scope),
+        }
+    }
+    let outcome = host.porcelain().check().check(input).await;
     let summary = provenance_porcelain::check::render_readable(&outcome);
     let mut result =
         CallToolResult::structured(serde_json::to_value(outcome).expect("check outcome is JSON"));

@@ -16,9 +16,11 @@ pub fn request(args: &ApiArgs) -> Result<ApiRequest, ApiError> {
     let arguments = ApiArguments {
         path: args.path.clone(),
         method: args.method,
+        input: args.input.as_ref().map(|_| serde_json::Map::new()),
+        header: pairs(&args.headers, ':', "header", "headers use NAME: VALUE")?,
         query: pairs(&args.queries, '=', "query", "query options use NAME=VALUE")?,
-        headers: pairs(&args.headers, ':', "headers", "headers use NAME: VALUE")?,
-        body: args.input.as_ref().map(|_| serde_json::Map::new()),
+        filter: args.filter.clone(),
+        limit: args.limit,
     };
     let mut request = ApiRequest::from(arguments)?;
     if let (ApiRequest::Invoke(input), Some(source)) = (&mut request, args.input.as_deref()) {

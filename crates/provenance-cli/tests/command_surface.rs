@@ -12,7 +12,7 @@ use provenance_cli::exposed as cli;
 use provenance_cli::servers::{Server, SERVERS};
 use provenance_macros::verifies;
 use provenance_mcp::exposed::{self as mcp, Place};
-use provenance_porcelain::registry::{Command, Declaration, Field, Grammar};
+use provenance_porcelain::registry::{Command, Declaration, Field, Grammar, Input};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use support::surface::{help, tools, words};
@@ -165,6 +165,54 @@ async fn shared_commands_have_one_name_and_target_form() {
             "{command:?} target form"
         );
     }
+}
+
+/// For each porcelain command with a typed input, the CLI flags and the MCP properties
+/// are the fields of that one input. The CLI shows each field as `--kebab-case`; MCP
+/// shows the same field under its `snake_case` name, as a property of the listed tool or
+/// of the schema that MCP derives for a command it does not list. A field that writes is
+/// a property of the change action that writes it, not of the read tool.
+#[tokio::test]
+#[verifies("rule_shared_command_same_name_and_grammar", exhaustion)]
+async fn cli_flags_and_mcp_properties_come_from_one_field_list() {
+    let (repo, _) = support::review_paths::init();
+    let tools = tools(repo.path()).await;
+    let change = properties(&tools["change"]["inputSchema"]);
+    let notify_listed = values(&tools, "change", "action").contains(&"notify");
+    let mut compared = 0;
+    for command in Command::ALL {
+        let declaration = command.declaration();
+        let Input::Fields(fields) = declaration.input else {
+            continue;
+        };
+        if fields.schema.is_none() {
+            continue;
+        }
+        let mut mcp = if mcp_place(*command) == Some(Place::Tool) {
+            properties(&tools[declaration.name]["inputSchema"])
+        } else {
+            properties(&provenance_mcp::derived::input_schema(*command))
+        };
+        assert_eq!(
+            mcp.remove("target"),
+            declaration.grammar.takes_target(),
+            "{command:?} target"
+        );
+        for field in fields.fields.iter().filter(|field| field.writes) {
+            if notify_listed {
+                assert!(change.contains(field.name), "{command:?}: change lacks {}", field.name);
+            }
+            assert!(mcp.insert(field.name.to_owned()), "{command:?}: {} reads", field.name);
+        }
+        let cli = fields.fields.iter().map(flag_name).collect::<BTreeSet<_>>();
+        let mcp = mcp
+            .iter()
+            .map(|property| property.replace('_', "-"))
+            .collect::<BTreeSet<_>>();
+        assert_eq!(cli, mcp, "{command:?}");
+        compared += 1;
+    }
+    assert!(compared > 30, "only {compared} commands have a typed input");
 }
 
 /// How the help shows one field: a target field as a positional argument, and each

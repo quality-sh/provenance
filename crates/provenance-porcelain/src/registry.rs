@@ -5,7 +5,6 @@
 //! the handlers stay behind the existing ports. Each consumer keeps its own list of the
 //! commands that it shows, and shows each one from this declaration by one rule.
 
-mod arguments;
 mod dogfood;
 mod fields;
 mod graph;
@@ -14,7 +13,6 @@ mod porcelain_fields;
 mod repository;
 mod workspace;
 
-pub use arguments::{CheckArguments, CheckFormat, GetArguments, ReportFileFormat};
 pub use dogfood::{
     DogfoodCommand, DogfoodListInput, DogfoodNoteInput, DogfoodReportInput, DogfoodSimulateInput,
     TriageHandleInput, TriageListInput, TriageReopenInput,
@@ -115,6 +113,9 @@ pub struct Declaration {
     pub input: Input,
     /// Programs run this command, so a consumer does not document it for people.
     pub internal: bool,
+    /// The command runs on the repository and scope that the consumer binds, so its
+    /// fields do not name them.
+    pub bound: bool,
 }
 
 impl Declaration {
@@ -126,6 +127,7 @@ impl Declaration {
             grammar: Grammar::Name,
             input: Input::Fields(fields),
             internal: false,
+            bound: false,
         }
     }
 
