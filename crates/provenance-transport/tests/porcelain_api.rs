@@ -4,7 +4,10 @@ mod support {
     pub mod records;
 }
 
-use provenance_porcelain::api::{ApiArguments, ApiMethod, ApiOutcome, ApiRequest};
+use jsonschema::JSONSchema;
+use provenance_porcelain::api::{
+    output_schema, ApiArguments, ApiMethod, ApiOutcome, ApiRequest,
+};
 use provenance_porcelain::Porcelain;
 use provenance_store::operations::catalog;
 use provenance_transport::fixture::{FixtureAccess, Target};
@@ -239,15 +242,30 @@ async fn api_discovery_describes_the_live_catalog_routes() {
         })
         .unwrap();
     assert_eq!(member["description"], definition.description);
-    assert_eq!(member["response_schema"], definition.mcp_output_schema());
-    let names = member["parameters"]
+    let variants = member["variants"].as_array().unwrap();
+    assert_eq!(variants.len(), 4, "one base and three member queries");
+    let base = variants
+        .iter()
+        .find(|variant| variant["selector"].is_null())
+        .unwrap();
+    let names = base["parameters"]
         .as_array()
         .unwrap()
         .iter()
         .map(|parameter| parameter["name"].as_str().unwrap())
         .collect::<Vec<_>>();
-    assert!(names.contains(&"id"));
-    assert!(names.contains(&"limit"));
+    assert_eq!(names, ["id"], "the member base variant binds only the path");
+    let base_success = base["success_schema"].as_object().unwrap();
+    assert_eq!(
+        base_success,
+        definition.success_schema().as_object().unwrap(),
+        "the base variant publishes the canonical response schema"
+    );
+    let neighbors = variants
+        .iter()
+        .find(|variant| variant["selector"] == "neighbors")
+        .unwrap();
+    assert_ne!(neighbors["success_schema"], base["success_schema"]);
 
     let create = routes
         .iter()
@@ -350,4 +368,190 @@ async fn host_api_port_maps_canonical_failures_for_direct_callers() {
         provenance_porcelain::api::ApiErrorKind::MethodNotAllowed
     );
     assert_eq!(method.failure["error"]["kind"], "method_not_allowed");
+}
+
+fn names_of(parameters: &[provenance_porcelain::api::ApiParameter]) -> Vec<&str> {
+    parameters.iter().map(|parameter| parameter.name.as_str()).collect()
+}
+
+#[tokio::test]
+async fn api_discovery_preserves_query_variant_contracts() {
+    let repository = Repository::new("The shared graph is readable.");
+    repository.all_kinds();
+    let service = Porcelain::new(HostApiPort::new(host(&repository)));
+
+    let ApiOutcome::Catalog(catalog) = service.execute_api(ApiRequest::Discover).await.unwrap()
+    else {
+        panic!("discovery returns the catalog");
+    };
+
+    let rules = catalog
+        .routes
+        .iter()
+        .find(|route| route.path == "/rules" && route.method == ApiMethod::Get)
+        .expect("the rules list route is described");
+    let selectors = rules
+        .variants
+        .iter()
+        .map(|variant| variant.selector.as_deref())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        selectors,
+        vec![None, Some("search"), Some("stale"), Some("resolve-symbol")]
+    );
+
+    let base = rules
+        .variants
+        .iter()
+        .find(|variant| variant.selector.is_none())
+        .unwrap();
+    let base_names = names_of(&base.parameters);
+    assert!(base_names.contains(&"limit"));
+    assert!(base_names.contains(&"cursor"));
+    for flattened in ["base", "head", "symbol", "file", "line", "text"] {
+        assert!(
+            !base_names.contains(&flattened),
+            "the base variant must not advertise {flattened}"
+        );
+    }
+
+    let resolve_symbol = rules
+        .variants
+        .iter()
+        .find(|variant| variant.selector.as_deref() == Some("resolve-symbol"))
+        .unwrap();
+    let symbol_names = names_of(&resolve_symbol.parameters);
+    assert!(symbol_names.contains(&"file"));
+    assert!(resolve_symbol
+        .parameters
+        .iter()
+        .any(|parameter| parameter.name == "file" && parameter.required));
+    assert!(symbol_names.contains(&"symbol"));
+    assert!(
+        !symbol_names.contains(&"base"),
+        "resolve-symbol must not inherit the stale query parameters"
+    );
+    assert!(!resolve_symbol.success_schema.is_null());
+    assert!(!resolve_symbol.failure_schema.is_null());
+
+    let stale = rules
+        .variants
+        .iter()
+        .find(|variant| variant.selector.as_deref() == Some("stale"))
+        .unwrap();
+    let stale_names = names_of(&stale.parameters);
+    assert!(stale_names.contains(&"base"));
+    assert!(stale_names.contains(&"head"));
+    assert!(!stale.success_schema.is_null());
+    assert!(!stale.failure_schema.is_null());
+    assert_ne!(
+        stale.success_schema, base.success_schema,
+        "each variant keeps its own response schema"
+    );
+
+    let member = catalog
+        .routes
+        .iter()
+        .find(|route| route.path == "/requirements/{id}" && route.method == ApiMethod::Get)
+        .expect("the requirement member route is described");
+    let member_selectors = member
+        .variants
+        .iter()
+        .map(|variant| variant.selector.as_deref())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        member_selectors,
+        vec![None, Some("trace"), Some("neighbors"), Some("impact")]
+    );
+    let member_base = member
+        .variants
+        .iter()
+        .find(|variant| variant.selector.is_none())
+        .unwrap();
+    assert!(names_of(&member_base.parameters).contains(&"id"));
+}
+
+#[tokio::test]
+async fn api_query_selector_invocations_follow_the_variant_contracts() {
+    let repository = Repository::new("The shared rule is readable.");
+    repository.all_kinds();
+    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
+    let bound = host(&repository);
+    let server = tokio::spawn(async move { bound.serve_mcp(server_io).await.unwrap() });
+    let client = ().serve(client_io).await.unwrap();
+
+    let searched = call_api_tool(
+        &client,
+        json!({
+            "path": "rules",
+            "query": {"query": "search", "text": "readable"}
+        }),
+    )
+    .await;
+    assert_ne!(searched.is_error, Some(true), "{searched:?}");
+    let items = searched.structured_content.as_ref().unwrap()["data"]["items"]
+        .as_array()
+        .unwrap();
+    assert!(items
+        .iter()
+        .any(|item| item["id"].as_str() == Some("rule_shared")));
+
+    let neighbors = call_api_tool(
+        &client,
+        json!({
+            "path": "requirements/req_shared",
+            "query": {"query": "neighbors", "limit": "5"}
+        }),
+    )
+    .await;
+    assert_ne!(neighbors.is_error, Some(true), "{neighbors:?}");
+    assert!(neighbors
+        .structured_content
+        .as_ref()
+        .unwrap()
+        .get("data")
+        .is_some());
+
+    let wrong_selector = call_api_tool(
+        &client,
+        json!({"path": "requirements/req_shared", "query": {"query": "stale"}}),
+    )
+    .await;
+    assert_eq!(wrong_selector.is_error, Some(true), "{wrong_selector:?}");
+    assert_eq!(error_kind(&wrong_selector), "invalid_input");
+
+    client.cancel().await.unwrap();
+    server.await.unwrap().cancel().await.unwrap();
+}
+
+#[tokio::test]
+async fn mcp_api_outputs_validate_against_the_published_schema() {
+    let repository = Repository::new("The shared graph is readable.");
+    repository.all_kinds();
+    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
+    let bound = host(&repository);
+    let server = tokio::spawn(async move { bound.serve_mcp(server_io).await.unwrap() });
+    let client = ().serve(client_io).await.unwrap();
+
+    // Compilation resolves every #/$defs/ reference in the published schema;
+    // a dangling reference fails here before any output is validated.
+    let published = JSONSchema::compile(&output_schema())
+        .expect("the published api output schema compiles");
+
+    let discovery = call_api_tool(&client, json!({})).await;
+    let structured = discovery.structured_content.as_ref().unwrap();
+    assert!(
+        published.is_valid(structured),
+        "discovery output violates the published schema: {discovery:?}"
+    );
+
+    let invoked = call_api_tool(&client, json!({"path": "sources/source_shared"})).await;
+    let structured = invoked.structured_content.as_ref().unwrap();
+    assert!(
+        published.is_valid(structured),
+        "invocation output violates the published schema: {invoked:?}"
+    );
+
+    client.cancel().await.unwrap();
+    server.await.unwrap().cancel().await.unwrap();
 }
