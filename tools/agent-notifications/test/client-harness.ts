@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { Readable } from "node:stream";
@@ -95,6 +95,8 @@ export class Harness {
   children: Subprocess[] = [];
   rpc!: Rpc;
   endpoint!: string;
+  hostEndpoint!: string;
+  cookie!: string;
   requests: any[] = [];
   requestThreads: (string | null)[] = [];
   requestListeners = new Set<() => void>();
@@ -113,7 +115,13 @@ export class Harness {
     const host = Bun.spawn([binary, "review", "--repo", this.repository, "--repository-id", "test", "--scope", "default", "--no-open"], { env: this.env, stdout: "pipe", stderr: "pipe" });
     this.children.push(host);
     const lines = createInterface({ input: Readable.fromWeb(host.stdout as any) });
-    await deadline(new Promise(resolve => lines.once("line", line => resolve(JSON.parse(line)))), "review host startup");
+    const config: any = await deadline(new Promise(resolve => lines.once("line", line => resolve(JSON.parse(line)))), "review host startup");
+    this.hostEndpoint = config.endpoint;
+    const launchKey = readFileSync(join(this.env.XDG_CACHE_HOME, "provenance", "review-launch", `${config.instanceNonce}.key`), "utf8");
+    const issued = await fetch(`${this.hostEndpoint}/review-launch/code`, { method: "POST", body: JSON.stringify({ launchKey }) }).then(response => response.json()) as any;
+    const session = await fetch(`${this.hostEndpoint}/review-launch/session`, { method: "POST", body: JSON.stringify({ code: issued.code }) });
+    if (!session.ok) throw new Error(`Page session refused (${session.status})`);
+    this.cookie = session.headers.get("set-cookie")!.split(";")[0];
     this.drain(host.stderr);
     if (!withCodex) return this;
     this.server = Bun.serve({ port: 0, fetch: async request => {
@@ -160,7 +168,7 @@ export class Harness {
     return command([id, "create", "--type", type, ...fields, "--repo", this.repository], this.env);
   }
   async question(id: string) {
-    await this.create(id, "question", ["--topic-id", "topic_notifications", "--question", `Question ${id}`, "--resolution-method", "research"]);
+    await this.page("/questions", { id, topic_id: "topic_notifications", question: `Question ${id}`, resolution_method: "research", status: "open", links: [] });
   }
   async reset() {
     await command(["init", "--path", this.repository, "--disposition-actor-id", "reviewer", "--disposition-actor-id", "another-reviewer"], this.env);
@@ -168,16 +176,30 @@ export class Harness {
   async decision() {
     const review = JSON.parse(await command(["req_notifications", "get", "--view", "review", "--format", "json", "--repo", this.repository], this.env));
     const proposal = review.review.decision.pending.proposal_id;
-    await command(["requirements", "req_notifications", "submissions", proposal, "decide", "--stdin", "--format", "json", "--repo", this.repository], this.env, JSON.stringify({
+    await this.page(`/requirements/req_notifications/submissions/${proposal}/decide`, {
       actor: { identity_type: "human", id: "reviewer" }, decision: "accepted", rationale: null,
       canonical_artifact: { artifact_type: "requirement", artifact_id: "req_notifications" },
       feedback: null, declared_by: null,
-    }));
+    });
   }
   async reply() {
-    const started = JSON.parse(await command(["req_notifications", "discuss", "--body", "discussion_probe", "--format", "json", "--repo", this.repository], this.env));
-    await command([started.receipt.discussion_id, "reply", "--body", "reply_probe", "--expected-version", "1", "--format", "json", "--repo", this.repository], this.env);
+    const started = await this.page("/requirements/req_notifications/discussions", {
+      actor: "reviewer", role: "user", body: "discussion_probe", declared_by: null,
+    });
+    await this.page(`/requirements/req_notifications/discussions/${started.id}/messages`, {
+      actor: "reviewer", role: "user", body: "reply_probe", declared_by: null,
+    }, { "If-Match": '"1"' });
   }
+  async page(path: string, data: unknown, headers: Record<string, string> = {}) {
+    const response = await fetch(`${this.hostEndpoint}${path}`, {
+      method: "POST", headers: { "Content-Type": "application/json", Cookie: this.cookie, Origin: this.hostEndpoint, ...headers },
+      body: JSON.stringify({ data }),
+    });
+    const value: any = await response.json();
+    if (!response.ok) throw new Error(`Page write failed (${response.status}): ${JSON.stringify(value)}`);
+    return value.data;
+  }
+
   startAdapter(threadId: string, clientEndpoint = this.endpoint) {
     const config = join(this.directory, "adapter.json");
     writeFileSync(config, JSON.stringify({ clientEndpoint, threadId, repository: this.repository, scope: "default", rootId: "req_notifications" }));

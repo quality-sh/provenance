@@ -1,6 +1,7 @@
 //! Canonical record changes read under the repository publication guard.
 mod diff;
 mod snapshot;
+mod page;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
