@@ -10,13 +10,19 @@ use verification_state::load_validation_state;
 
 pub(super) use provenance_store::evidence_anchors as anchors;
 
+#[cfg(test)]
 pub(super) fn coverage_scan(
     repo: &camino::Utf8Path,
     path: &Utf8PathBuf,
     scope: &str,
     validate_rules: bool,
 ) -> anyhow::Result<provenance_core::coverage::CoverageScan> {
-    coverage_scan_against(repo, path, scope, validate_rules, None)
+    Ok(coverage_scan_against(repo, path, scope, validate_rules, None)?.scan)
+}
+
+pub(super) struct CoverageScanOutcome {
+    pub(super) scan: provenance_core::coverage::CoverageScan,
+    pub(super) governed_finding_count: usize,
 }
 
 fn coverage_scan_against(
@@ -25,7 +31,7 @@ fn coverage_scan_against(
     scope: &str,
     validate_rules: bool,
     baseline: Option<&camino::Utf8Path>,
-) -> anyhow::Result<provenance_core::coverage::CoverageScan> {
+) -> anyhow::Result<CoverageScanOutcome> {
     let scanned = provenance_scanner::scan_path_with_content(path)?;
     coverage_scan_from_scanned_against(repo, path, scope, validate_rules, &scanned, baseline)
 }
@@ -35,7 +41,7 @@ pub(super) fn coverage_scan_from_scanned(
     path: &Utf8PathBuf,
     scope: &str,
     scanned: &[provenance_scanner::FileScanWithContent],
-) -> anyhow::Result<provenance_core::coverage::CoverageScan> {
+) -> anyhow::Result<CoverageScanOutcome> {
     coverage_scan_from_scanned_against(repo, path, scope, true, scanned, None)
 }
 
@@ -46,7 +52,7 @@ fn coverage_scan_from_scanned_against(
     validate_rules: bool,
     scanned: &[provenance_scanner::FileScanWithContent],
     baseline: Option<&camino::Utf8Path>,
-) -> anyhow::Result<provenance_core::coverage::CoverageScan> {
+) -> anyhow::Result<CoverageScanOutcome> {
     let scans = scanned
         .iter()
         .map(|file| file.scan.clone())
@@ -57,6 +63,7 @@ fn coverage_scan_from_scanned_against(
     // location. Derived Rule findings are joined on after, without one.
     let mut warnings = parse_warnings(&scans);
     warnings.extend(validation.warnings);
+    let mut governed_finding_count = 0;
     if validate_rules {
         let completeness = if provenance_scanner::scan_covers_repository(repo, path) {
             provenance_scanner::RuleEvidenceCompleteness::Complete
@@ -70,6 +77,7 @@ fn coverage_scan_from_scanned_against(
             &validation.bindings,
             completeness,
         );
+        governed_finding_count = facts.governed_finding_count();
         warnings.extend(rule_evidence_warnings(facts));
     }
     let results = provenance_scanner::coverage_results(&scans);
@@ -98,7 +106,10 @@ fn coverage_scan_from_scanned_against(
             .with_context(|| format!("parse coverage baseline {baseline}"))?;
         anchors::reconcile(&mut report, &baseline, repo, path, validate_rules);
     }
-    Ok(report)
+    Ok(CoverageScanOutcome {
+        scan: report,
+        governed_finding_count,
+    })
 }
 
 /// What the parser complained about while reading the files: the legacy
@@ -230,12 +241,8 @@ fn scan_commit(repo: &camino::Utf8Path, scans: &[provenance_scanner::FileScan]) 
 /// here, and Rule severity metadata plays no part in the decision.
 fn binding_finding_refusal(
     policy: provenance_store::settings::BindingFindingsSeverity,
-    warnings: &[provenance_core::coverage::ValidationWarning],
+    governed: usize,
 ) -> Option<String> {
-    let governed = warnings
-        .iter()
-        .filter(|warning| warning.binding_finding)
-        .count();
     let severity = match policy {
         provenance_store::settings::BindingFindingsSeverity::Warning => {
             provenance_scanner::BindingFindingSeverity::Warning
@@ -267,26 +274,26 @@ pub(super) fn handle(command: CoverageCommand) -> anyhow::Result<()> {
             )?
             .coverage
             .binding_findings;
-            let report = if let Some(baseline) = baseline.as_deref() {
+            let outcome = if let Some(baseline) = baseline.as_deref() {
                 coverage_scan_against(&repo, &path, &scope, validate_rules, Some(baseline))?
             } else {
-                coverage_scan(&repo, &path, &scope, validate_rules)?
+                coverage_scan_against(&repo, &path, &scope, validate_rules, None)?
             };
             if let Some(output_path) = output {
-                let rendered = render_coverage(format, &report)?;
+                let rendered = render_coverage(format, &outcome.scan)?;
                 std::fs::write(output_path, rendered)?;
             } else if matches!(format, ReportFormat::Markdown) {
-                print!("{}", render_coverage(format, &report)?);
+                print!("{}", render_coverage(format, &outcome.scan)?);
             } else {
-                output::print_json(&report)?;
+                output::print_json(&outcome.scan)?;
             }
-            if let Some(message) = binding_finding_refusal(policy, &report.warnings) {
+            if let Some(message) = binding_finding_refusal(policy, outcome.governed_finding_count) {
                 anyhow::bail!("{message}");
             }
-            if strict && !report.warnings.is_empty() {
+            if strict && !outcome.scan.warnings.is_empty() {
                 anyhow::bail!(
                     "coverage scan found {} warning(s); rerun without --strict to inspect",
-                    report.warnings.len()
+                    outcome.scan.warnings.len()
                 );
             }
         }

@@ -58,6 +58,14 @@ fn scanned_binding(rule_id: &str, verification: Option<Verification>) -> FileSca
     }
 }
 
+fn scanned_comment(source: &str) -> FileScan {
+    provenance_scanner::scan_file(
+        Utf8PathBuf::from("src/lib.rs").as_path(),
+        Language::Rust,
+        source,
+    )
+}
+
 fn typed_implementation(rule_id: &str) -> ImplementationBinding {
     ImplementationBinding {
         schema_version: SUPPORTED_SCHEMA_VERSION,
@@ -100,6 +108,7 @@ fn incomplete_evidence_withholds_absence_facts() {
 
 #[test]
 #[verifies("rule_active_rule_requires_verification", examples)]
+#[verifies("rule_active_rule_reports_missing_implementation", examples)]
 fn complete_evidence_reports_each_active_rule_absence() {
     let facts = derive_rule_evidence_facts(
         &[rule("rule_claims", RuleStatus::Active)],
@@ -111,6 +120,78 @@ fn complete_evidence_reports_each_active_rule_absence() {
 
     assert_eq!(facts.unimplemented, ["rule_claims"]);
     assert_eq!(facts.unverified, ["rule_claims"]);
+    assert_eq!(facts.governed_finding_count(), 1);
+
+    let verified = scanned_binding("rule_claims", Some(Verification::Examples));
+    let implementation_only_absence = derive_rule_evidence_facts(
+        &[rule("rule_claims", RuleStatus::Active)],
+        &[verified],
+        &[],
+        &[],
+        RuleEvidenceCompleteness::Complete,
+    );
+
+    assert_eq!(implementation_only_absence.unimplemented, ["rule_claims"]);
+    assert!(implementation_only_absence.unverified.is_empty());
+    assert_eq!(implementation_only_absence.governed_finding_count(), 0);
+    assert!(!binding_findings_fail(
+        BindingFindingSeverity::Error,
+        implementation_only_absence.governed_finding_count()
+    ));
+}
+
+#[test]
+fn portable_comment_implementation_satisfies_implementation() {
+    let scan = scanned_comment("// @provenance rule: rule_claims\nfn groups_claims() {}\n");
+
+    let facts = derive_rule_evidence_facts(
+        &[rule("rule_claims", RuleStatus::Active)],
+        &[scan],
+        &[],
+        &[],
+        RuleEvidenceCompleteness::Complete,
+    );
+
+    assert!(facts.unimplemented.is_empty(), "{facts:#?}");
+    assert_eq!(facts.unverified, ["rule_claims"]);
+}
+
+#[test]
+fn portable_comment_verification_satisfies_only_verification() {
+    let scan = scanned_comment(
+        "// @provenance rule: rule_claims\n// @provenance verification: examples\nfn checks_claims() {}\n",
+    );
+
+    let facts = derive_rule_evidence_facts(
+        &[rule("rule_claims", RuleStatus::Active)],
+        &[scan],
+        &[],
+        &[],
+        RuleEvidenceCompleteness::Complete,
+    );
+
+    assert_eq!(facts.unimplemented, ["rule_claims"]);
+    assert!(facts.unverified.is_empty(), "{facts:#?}");
+}
+
+#[test]
+fn inactive_rule_with_portable_comment_marker_reports_current_binding() {
+    let scan = scanned_comment("// @provenance rule: rule_old\nfn old_claims() {}\n");
+
+    let facts = derive_rule_evidence_facts(
+        &[rule("rule_old", RuleStatus::Deprecated)],
+        &[scan],
+        &[],
+        &[],
+        RuleEvidenceCompleteness::Complete,
+    );
+
+    assert_eq!(facts.inactive_current.len(), 1, "{facts:#?}");
+    assert_eq!(facts.inactive_current[0].rule_id, "rule_old");
+    assert_eq!(
+        facts.inactive_current[0].origin,
+        InactiveBindingOrigin::Scanned
+    );
 }
 
 #[test]
