@@ -221,48 +221,98 @@ For each question, use the method on the question.
 
 #### `grill`
 
-Ask one precise question at a time and offer a recommended answer. When the human accepts,
-land immediately before asking the next question.
+Ask one precise question at a time and offer a recommended answer. Record the
+answer before the next question. Select records from its meaning, not from a fixed
+sequence of commands.
 
-Do not land a rich answer as a bare answered-question. Fan out into the graph:
+1. Read the Question's Topic and its Requirement. Select the lowest Requirement
+   whose obligation the answer concerns. Read its children before selecting it.
+   If the answer concerns a different child, use that child for the discussion and
+   new records. The session anchor is a map entry point, not the default parent.
+2. Select only the records that the answer implies:
+   - An answer that supplies a fact needs only a Question answer.
+   - A broad obligation needs a Requirement.
+   - A precise atomic behavioural obligation needs a Rule under its Requirement.
+   - A choice among alternatives needs a Resolution. State the unresolved problem
+     in context, the choice in position, and the comparative reasons in rationale.
+     Put source quotations in citations or inputs, not in place of those reasons.
+3. Check each additional record for added meaning. Do not create a Requirement or
+   Rule solely to repeat a Resolution position. Identical text requires a meaning
+   check, not a mandatory rewrite. A precise obligation can correctly appear in a
+   position and a Rule when the Rule adds an independently needed obligation.
+4. Read review acceptance for the current content revision separately from lifecycle.
+   A chat answer, a lifecycle value, and `made_by` do not prove that acceptance.
+   Omit guessed authorship. Keep proposals proposed until the graph records review.
+   An active Rule with a proposed Resolution can have independent grounding in a
+   Requirement or Source; that pair of lifecycle values alone is not a defect.
+
+Record the dialogue on the selected Requirement:
 
 ```sh
-provenance requirements <anchor_requirement_id> discussions create --scope <scope> \
+provenance requirements <relevant_requirement_id> discussions create --scope <scope> \
   --role user \
   --body "Q <question_id>: <human answer>" \
   --format json
+```
 
+For a choice among alternatives only:
+
+```sh
 provenance resolutions create --scope <scope> \
   --id res_<stable_slug> \
   --title "<decision title>" \
-  --requirement-id <anchor_requirement_id> \
-  --position "<accepted position>" \
-  --rationale "<why, including rejected alternatives>" \
+  --requirement-id <relevant_requirement_id> \
+  --context "<problem that remains without this choice>" \
+  --position "<selected alternative>" \
+  --rationale "<why this alternative meets the need better than the others>" \
   --status proposed \
-  --made-by "<human or actor>" \
-  --format json
-
-provenance requirements create --scope <scope> \
-  --id req_<spawned_slug> \
-  --statement "<spawned requirement>" \
-  --status discovery \
-  --format json
-
-provenance requirements req_<spawned_slug> update --scope <scope> \
-  --relationships-json '{"spawned_by":"res_<stable_slug>"}' \
-  --if-match <etag> \
-  --format json
-
-provenance questions <question_id> answer --scope <scope> \
-  --answer "<short answer gist; canonical decision is res_<stable_slug>>" \
-  --resolution-id res_<stable_slug> \
   --format json
 ```
 
-Only create the artifacts the answer actually implies. If it only answers the question,
-`questions <id> answer` is enough. If it implies a Requirement, Boundary, contradiction, or
-source gap, land that too before continuing. If it implies a Rule, land the Rule and any
-known bindings—next.
+Create a child Requirement only for a separate broad obligation. Its `refines`
+relationship identifies the parent. Add `spawned_by` only if a Resolution produced
+that obligation; it does not replace `refines`.
+
+```sh
+provenance requirements create --scope <scope> \
+  --id req_<child_slug> \
+  --statement "<additional broad obligation>" \
+  --status discovery \
+  --format json
+
+provenance requirements req_<child_slug> update --scope <scope> \
+  --relationships-json '{"refines":"<relevant_requirement_id>","spawned_by":"res_<stable_slug>"}' \
+  --if-match <etag> \
+  --format json
+```
+
+For a direct Requirement, omit `spawned_by`. For a direct Rule, use the Rule
+commands below without `--resolution-id`. Answer the Question with references to
+records actually created. Add `--resolution-id` only when a Resolution exists:
+
+```sh
+provenance questions <question_id> answer --scope <scope> \
+  --answer "<answer with references to the resulting records, if any>" \
+  --format json
+```
+
+Examples:
+
+- Direct Requirement: "The owner can set the mascot appearance." Add a child
+  Requirement under appearance. No alternatives were compared, so no Resolution
+  is needed.
+- Direct Rule: "A share link expires after seven days." Add the atomic Rule under
+  link expiry. Do not invent a Resolution producer.
+- Choice with no spawned record: select a robot instead of an animal because the
+  robot can show a repair state without suggesting injury. Record the unresolved
+  visual problem, the choice, and that reason in one Resolution under appearance.
+- Choice with a separate obligation: select configurable expiry instead of a fixed
+  duration because owners need different access periods. A separate Requirement
+  says owners can configure expiry. It refines link access and is spawned by the
+  Resolution. Do not add another Requirement that just says configurable expiry
+  was selected.
+
+Land any Boundary, contradiction, or source gap that the answer also implies.
 
 ##### Landing a Rule and its bindings
 
@@ -287,7 +337,7 @@ change the artifact's kind.
    ```sh
    provenance rules create --scope <scope> \
      --id rule_<stable_slug> \
-     --requirement-id <anchor_requirement_id> \
+     --requirement-id <relevant_requirement_id> \
      --statement "<atomic behavioural obligation, in one clause>" \
      --severity high \
      --format json
@@ -491,7 +541,8 @@ Before moving to the next question, verify the current answer has been handled:
 - each precise atomic behavioural obligation is landed as a Rule; any known primary
   implementation and evidence carry `#[rule]` and `#[verifies]` bindings, and
   `coverage scan --validate-rules` reports any remaining absence honestly;
-- spawned requirements are created and tied back with `spawned_by` or `refines`;
+- child Requirements add meaning and use `refines` for their parent; `spawned_by`
+  names only a producing Resolution;
 - boundaries/out-of-scope rejections are explicit;
 - source references and evidence are attached where they exist;
 - proposal definitions remain immutable `proposed` records; assertion lineage uses assertion

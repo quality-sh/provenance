@@ -30,7 +30,8 @@ either all get the identical loop. There is no separate map/epic/project concept
 
 The map is an **index, not a store**. A session loads it low-res — the anchor requirement,
 decisions so far (resolutions, gisted one line each), the fog, and the frontier — and zooms
-into full artifact bodies on demand. A decision lives in exactly one place: its resolution.
+into full artifact bodies on demand. An obligation lives in a Requirement or Rule. A choice among alternatives lives in
+a Resolution. The session anchor does not determine where every new record belongs.
 
 ### Fog of war
 
@@ -109,24 +110,40 @@ minted, telling the next session what to do. This complements the content-noun t
 
 ## Landing fan-out
 
-One answer routinely lands as **multiple graph mutations**, not a bare answered-question.
-Worked example — anchor: *"Provenance docs shareable via short-lived link"*; question:
-*"How long is short-lived?"* (method: grill). The answer lands as:
+An answer creates only the records its meaning requires. A fact can answer a Question
+without a Resolution. A broad obligation creates a Requirement. A precise atomic
+behavioural obligation creates a Rule. A choice among alternatives creates a Resolution.
+A Resolution states the unresolved problem in context, the choice in position, and the
+comparative reasons in rationale. Source quotations belong in citations or inputs.
 
-- a **Resolution**: "7-day default, configurable ceiling" — position + rationale;
-- which **produces** a **Rule**: "share links MUST expire ≤ 30 days" (severity: high),
-  later bound to its primary production implementation with
-  `#[rule("rule_share_link_expiry")]`;
-- and **spawns** a **Requirement**: "expiry configuration";
-- and **graduates fog**: "access auditing" is now statable as a question
-  ("should link accesses be logged as provenance events?").
+Read the Question's Topic and its Requirement, then select the lowest Requirement whose
+obligation the answer concerns. Read its children before selection. Use that Requirement
+for the discussion and new records. Re-select when the answer concerns another child.
 
-Landing an answer as a bare answered-question when it implies resolutions, rules, or
-requirements **starves the graph**. The dialogue itself persists as a Thread on the
-requirement; candidate artifacts land as **proposals** for human promotion (see below).
+A spawned record must add meaning beyond the position. Do not automatically create a
+Requirement and Rule for each Resolution. Identical statements require a meaning check;
+rewriting the words does not remove a repeated obligation. A precise obligation can
+correctly occur in a position and an independently needed Rule.
 
-Every statement landed this way — resolution, rule, requirement, or source — follows the
-specificity discipline in the `provenance-grounded-writing` skill before it lands, not only at the leaf.
+Examples:
+
+- "The owner can set the mascot appearance" creates a direct child Requirement under
+  appearance. No choice among alternatives needs to be recorded.
+- "A share link expires after seven days" creates a direct Rule under link expiry.
+  A Requirement alone can ground it; a Resolution producer is optional.
+- Selecting a robot instead of an animal to show repair without suggesting injury
+  creates a Resolution under appearance. No separate obligation requires a spawned record.
+- Selecting configurable expiry instead of a fixed duration can produce a separate
+  Requirement that owners can configure expiry. Its parent link is `refines`; its
+  producing Resolution link is `spawned_by`. These links have different meanings.
+
+Read acceptance for the current content revision from review records. Read lifecycle
+separately. Answer text and `made_by` prove neither acceptance nor lifecycle. Omit guessed
+authorship. An independently grounded active Rule can coexist with a proposed Resolution;
+that pair of lifecycle values alone does not show unsupported behaviour.
+
+Record the dialogue on the relevant Requirement thread and answer the actual Question.
+Apply `provenance-grounded-writing` before each record write.
 
 ## Fork tournaments (`prototype`)
 
