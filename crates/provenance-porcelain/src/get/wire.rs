@@ -66,6 +66,8 @@ struct GetWire<'a> {
     review: Option<&'a Review>,
     bounds: Option<&'a Bounds>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    shaping: Option<&'a super::SessionSummary>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     record_metadata: Option<&'a ResponseMeta>,
     #[serde(skip_serializing_if = "Option::is_none")]
     view_metadata: Option<&'a ResponseMeta>,
@@ -93,6 +95,7 @@ impl GetOutcome {
             detail: self.impact(),
             review: self.review(),
             bounds: self.bounds(),
+            shaping: self.shaping(),
             record_metadata: self.record_metadata.as_ref(),
             view_metadata: self.view_metadata(),
         }
@@ -153,6 +156,12 @@ pub fn render_readable(outcome: &GetOutcome) -> serde_json::Result<String> {
                 ))
                 .collect::<Vec<_>>()
                 .join("\n")
+        ));
+    }
+    if let Some(summary) = outcome.shaping() {
+        sections.push(format!(
+            "shaping:\n{}",
+            serde_json::to_string_pretty(summary)?
         ));
     }
     if let Some(detail) = outcome.impact() {

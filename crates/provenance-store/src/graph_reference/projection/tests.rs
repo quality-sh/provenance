@@ -227,6 +227,7 @@ fn topic_record(scope: &ScopeId) -> Topic {
 
 fn question_record(scope: &ScopeId) -> Question {
     Question {
+        depends_on: Vec::new(),
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: stable_id(RecordFamily::Question),
