@@ -70,7 +70,7 @@ impl StateStore {
         })
     }
 
-    fn commit_submission(
+    pub(super) fn commit_submission(
         &self,
         input: SubmitRequirementReview,
         request_id: StableId,

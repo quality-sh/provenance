@@ -34,14 +34,14 @@ impl StateStore {
 
     /// Publishes a Requirement edit, its evidence, and its request receipt together.
     pub fn save_requirement(&self, input: SaveRequirement) -> anyhow::Result<ReviewEntry> {
-        self.save_requirement_with_origin(input, None, |_, entry| Ok(entry))
+        self.save_requirement_with_origin(input, None, false, |_, entry| Ok(entry))
     }
 
     pub(crate) fn save_requirement_resource(
         &self,
         input: SaveRequirement,
     ) -> anyhow::Result<super::RequirementResourceSnapshot> {
-        self.save_requirement_with_origin(input, None, |store, entry| {
+        self.save_requirement_with_origin(input, None, true, |store, entry| {
             store.requirement_resource_snapshot_unlocked(&entry.scope_id, &entry.requirement_id)
         })
     }
@@ -55,13 +55,14 @@ impl StateStore {
         input: SaveRequirement,
         origin: provenance_core::threads::DiscussionOrigin,
     ) -> anyhow::Result<ReviewEntry> {
-        self.save_requirement_with_origin(input, Some(origin), |_, entry| Ok(entry))
+        self.save_requirement_with_origin(input, Some(origin), false, |_, entry| Ok(entry))
     }
 
     fn save_requirement_with_origin<R>(
         &self,
         mut input: SaveRequirement,
         origin: Option<provenance_core::threads::DiscussionOrigin>,
+        submit: bool,
         complete: impl FnOnce(&Self, ReviewEntry) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
         anyhow::ensure!(
@@ -120,8 +121,14 @@ impl StateStore {
                 let path = shards::requirements_path(layout, scope);
                 let record_id = record.id.clone();
                 guard::with_writer(&path, record_id.as_str(), || {
-                    let entry =
-                        staged.commit_requirement(input, &record, head, intent_digest, origin)?;
+                    let entry = staged.commit_requirement(
+                        input,
+                        &record,
+                        head,
+                        intent_digest,
+                        origin,
+                        submit,
+                    )?;
                     complete(&staged, entry)
                 })
             })
@@ -135,6 +142,7 @@ impl StateStore {
         head: Option<ReviewEntry>,
         intent_digest: String,
         origin: Option<provenance_core::threads::DiscussionOrigin>,
+        submit: bool,
     ) -> anyhow::Result<ReviewEntry> {
         let scope = before.scope_id.clone();
         let id = before.id.clone();
@@ -212,6 +220,9 @@ impl StateStore {
             &journal::entry_path(&self.layout, &scope, &entry.request_id),
             &entry,
         )?;
+        if submit && entry.outcome == SaveOutcome::Changed {
+            self.commit_automatic_submission(&after, &entry)?;
+        }
         Ok(entry)
     }
 }

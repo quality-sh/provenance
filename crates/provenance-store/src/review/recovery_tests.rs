@@ -51,7 +51,7 @@ fn crash_child() {
     let store = open(Utf8Path::new(&root));
     let input = input(&store, "crash_request");
     test_probes::arm(phase, || std::process::exit(86));
-    store.save_requirement(input).unwrap();
+    store.save_requirement_resource(input).unwrap();
     panic!("crash phase was not reached");
 }
 
@@ -65,7 +65,11 @@ fn crash_between_edit_and_submission_publishes_neither_half() {
         .pending
         .unwrap();
     let status = std::process::Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", "review::recovery_tests::crash_child", "--nocapture"])
+        .args([
+            "--exact",
+            "review::recovery_tests::crash_child",
+            "--nocapture",
+        ])
         .env("PROVENANCE_REVIEW_CRASH_ROOT", root.as_str())
         .env(
             "PROVENANCE_REVIEW_CRASH_PHASE",
@@ -79,7 +83,11 @@ fn crash_between_edit_and_submission_publishes_neither_half() {
 
     let store = open(root);
     assert_eq!(
-        store.requirement(&scope(), &id()).unwrap().description.as_deref(),
+        store
+            .requirement(&scope(), &id())
+            .unwrap()
+            .description
+            .as_deref(),
         Some("baseline")
     );
     assert!(!journal_entry_exists(&store, "crash_request"));
