@@ -4,33 +4,16 @@ use crate::StatementHost;
 use provenance_porcelain::api::{
     render_discovery_readable, ApiArguments, ApiError, ApiOutcome, ApiRequest,
 };
-use provenance_porcelain::Porcelain;
 use rmcp::model::{CallToolResult, Content, Tool};
 use serde_json::Value;
 
 pub fn tool() -> Tool {
-    let mut input = provenance_porcelain::api::input_schema();
-    input.as_object_mut().map(|object| object.remove("$schema"));
-    let mut output = provenance_porcelain::api::output_schema();
-    output
-        .as_object_mut()
-        .map(|object| object.remove("$schema"));
-    let mut tool = Tool::new(
+    crate::mcp_surface::tool(
         "api",
         provenance_porcelain::api::API_DESCRIPTION,
-        input
-            .as_object()
-            .expect("api input schema is an object")
-            .clone(),
-    );
-    tool.output_schema = Some(
-        output
-            .as_object()
-            .expect("api output schema is an object")
-            .clone()
-            .into(),
-    );
-    tool
+        provenance_porcelain::api::input_schema(),
+        provenance_porcelain::api::output_schema(),
+    )
 }
 
 /// Parse one api tool call's structured arguments and run the shared action,
@@ -53,7 +36,7 @@ pub async fn call(
         Ok(request) => request,
         Err(error) => return refused(&error),
     };
-    let service = Porcelain::new(crate::porcelain::HostApiPort::new(host.clone()));
+    let service = host.porcelain().api();
     match service.execute_api(request).await {
         Ok(ApiOutcome::Catalog(catalog)) => {
             let mut result = CallToolResult::structured(
@@ -80,5 +63,5 @@ fn rejected_field(arguments: &serde_json::Map<String, Value>) -> Option<String> 
 }
 
 fn refused(error: &ApiError) -> CallToolResult {
-    CallToolResult::structured_error(error.failure.clone())
+    crate::mcp_surface::envelope_error(&error.failure)
 }
