@@ -25,6 +25,7 @@ path = "src/bin/cargo-provenance.rs"
 
 [dependencies]
 anyhow.workspace = true
+notify = "8.2"
 axum.workspace = true
 camino.workspace = true
 clap.workspace = true
