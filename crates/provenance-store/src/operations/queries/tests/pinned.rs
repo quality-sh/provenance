@@ -268,6 +268,7 @@ fn parse(file: &str) -> (Value, Vec<Value>) {
 async fn the_pinned_answers_match_the_committed_file_for_this_derivation() {
     let answers = answers().await;
     let fresh = digest(&answers);
+    println!("=== PIN pinned_answers.json\n{}=== END PIN pinned_answers.json", render(&answers, &fresh));
     if std::env::var("PROVENANCE_PINNED_WRITE").is_ok_and(|value| value == "1") {
         std::fs::write(pinned_path(), render(&answers, &fresh)).unwrap();
         eprintln!(
