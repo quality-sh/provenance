@@ -10,6 +10,11 @@ and run `node tools/operation-codegen/ensure-generated.mjs`. Remote Cargo checks
 and SDK build and test commands prepare generated source automatically. See
 `tools/operation-codegen/README.md` for the build and package flow.
 
+Before Cargo package or publish commands, run `node tools/skills/prepare.mjs`.
+The root `skills/<name>/SKILL.md` files are the bundled skill sources. Crate-local
+copies are generated package content. The shared generation command also prepares
+these copies. See `tools/skills/README.md`.
+
 ## Cargo checks on maintainer hosts
 
 On configured maintainer hosts, plain `cargo build`, `cargo check`, `cargo clippy`, and `cargo test` run in GitHub Actions. The command returns the CI result and pushes a public snapshot branch. Stage new files before a check, and keep secrets out of tracked files. Use `PROVENANCE_CI_LOCAL=1 cargo ...` for native Cargo or `PROVENANCE_CI_ARTIFACT=1 cargo build` to receive a dev CLI binary. Public clones do not enable the shim automatically.
