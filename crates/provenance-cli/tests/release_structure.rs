@@ -199,7 +199,7 @@ fn cli_package_contains_its_embedded_skills() {
 }
 
 #[test]
-fn crate_local_embedded_skills_are_checked_out_with_lf() {
+fn root_skill_sources_are_checked_out_with_lf() {
     let workspace = workspace_root();
     for skill in [
         "provenance-fork-tournament",
@@ -207,7 +207,7 @@ fn crate_local_embedded_skills_are_checked_out_with_lf() {
         "provenance-shaping",
         "provenance-swarm-backtrace",
     ] {
-        let path = format!("crates/provenance-cli/skills/{skill}/SKILL.md");
+        let path = format!("skills/{skill}/SKILL.md");
         let output = Command::new("git")
             .args(["check-attr", "eol", "--", &path])
             .current_dir(&workspace)

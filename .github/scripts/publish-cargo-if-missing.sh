@@ -69,6 +69,11 @@ esac
 
 # The release workflow checks tracked source before packaging. Generated source
 # remains outside Git and requires --allow-dirty for both publication steps.
+# Prepare generated CLI package members before either publish command.
+if [[ "$crate_name" == provenance-cli ]]; then
+  node tools/skills/prepare.mjs
+fi
+
 # Rehearse without a credential; the upload does not rebuild the package.
 env -u CARGO_REGISTRY_TOKEN \
   cargo publish --registry crates-io --dry-run --locked --allow-dirty --package "$crate_name"

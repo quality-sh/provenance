@@ -37,3 +37,19 @@ test('rejects a generated renderer even when force staged', async t => {
   assert.equal(staged.status, 0);
   assert.deepEqual(checkSourceControl(root), [path]);
 });
+
+// Implementation aid: the index gate must reject generated and installed skill files.
+test('rejects bundled output paths and permits root sources and unrelated skills', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'provenance-skills-index-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const names = ['provenance-fork-tournament', 'provenance-grounded-writing', 'provenance-shaping', 'provenance-swarm-backtrace'];
+  const outputs = names.flatMap(name => ['crates/provenance-cli/skills', '.agents/skills', '.claude/skills'].map(prefix => `${prefix}/${name}/SKILL.md`));
+  const sources = names.map(name => `skills/${name}/SKILL.md`);
+  for (const path of [...outputs, ...sources, '.agents/skills/unrelated/SKILL.md', '.claude/skills/unrelated/SKILL.md']) {
+    await mkdir(join(root, path, '..'), { recursive: true });
+    await writeFile(join(root, path), 'Fixture skill.\n');
+  }
+  assert.equal(spawnSync('git', ['init', '-q'], { cwd: root }).status, 0);
+  assert.equal(spawnSync('git', ['add', '-f', '.'], { cwd: root }).status, 0);
+  assert.deepEqual(checkSourceControl(root).sort(), outputs.sort());
+});

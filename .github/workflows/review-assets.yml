@@ -33,6 +33,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: node tools/review-host/prepare.ts crates/provenance-cli/review-assets-generated
       - run: node --test tools/review-host/*.test.ts
+      - run: node tools/skills/prepare.mjs
       - name: Check Cargo asset inclusion
         run: |
           cargo package --locked --allow-dirty -p provenance-cli --list > target/review-package-files
