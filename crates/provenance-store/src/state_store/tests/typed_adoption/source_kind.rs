@@ -54,14 +54,7 @@ fn fluent_adoption_of_an_external_integration_source_keeps_its_kind() {
     let (_dir, store, scope) = initialized_store();
     create_unowned_brief(&store, &scope);
     create_unowned_requirement(&store, &scope, REQUIREMENT_ID, REQUIREMENT_STATEMENT);
-    store
-        .add_source_reference(AddSourceReferenceInput {
-            scope_id: scope.clone(),
-            source_id: StableId::new(BRIEF_ID).unwrap(),
-            requirement_id: StableId::new(REQUIREMENT_ID).unwrap(),
-            clause: None,
-        })
-        .unwrap();
+    seed_plain_citation(&store, &scope, REQUIREMENT_ID, BRIEF_ID, None);
     let input = fluent_input();
 
     // `kind` adds no optional URL or reference metadata.

@@ -82,6 +82,10 @@ pub(super) fn entries() -> Vec<Entry> {
         register::<super::UpsertContribution>(),
         register::<super::CreateSynthesisPacket>(),
         register::<super::UpsertSynthesisPacket>(),
+        // Legacy Requirement write and relationship registrations. Their wire
+        // names stay until Phase 2b re-registers the catalog onto resource
+        // routes; every handler already publishes through the guarded journal
+        // write path (see review::authoring).
         register::<super::SetRequirementRefines>(),
         register::<super::ClearRequirementRefines>(),
         register::<super::AddRequirementDependsOn>(),

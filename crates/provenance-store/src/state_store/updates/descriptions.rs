@@ -12,7 +12,13 @@ use crate::{
 use provenance_core::{Boundary, Domain, NodeType, Requirement};
 
 impl StateStore {
-    pub fn update_requirement(&self, input: UpdateRequirementInput) -> anyhow::Result<Requirement> {
+    /// Applies one text-field update to the Requirement record and records the
+    /// Rule reviews a statement change raises. This is the record mutation the
+    /// guarded save publishes; it is not a write path of its own.
+    pub(crate) fn apply_requirement_update(
+        &self,
+        input: UpdateRequirementInput,
+    ) -> anyhow::Result<Requirement> {
         self.with_repository_publication(|| {
             if let Some(id) = &input.domain_id {
                 self.ensure_node_exists(&input.scope_id, NodeType::Domain, id, "domain_id")?;

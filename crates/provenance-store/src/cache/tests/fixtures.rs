@@ -5,7 +5,7 @@ use crate::state_store::{
     CreateTopicInput, StateStore,
 };
 use provenance_core::{
-    ArtifactLink, ArtifactLinkTargetType, Manifest, QuestionStatus, RepoPathPrefix,
+    ArtifactLink, ArtifactLinkTargetType, Manifest, QuestionStatus, RepoPathPrefix, Requirement,
     RequirementStatus, ResolutionMethod, ResolutionStatus, RuleSeverity, RuleStatus, ScopeId,
     SourceReference, SourceType, StableId, TopicStatus,
 };
@@ -47,8 +47,10 @@ pub fn seeded_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
         })
         .unwrap();
     create_source(&store, &scope, "source_schads");
+    // The projection fixtures stay outside the review journal: the record
+    // counts they pin describe graph state, not journal history.
     store
-        .create_requirement(CreateRequirementInput {
+        .write_requirement(CreateRequirementInput {
             scope_id: scope.clone(),
             id: sid("req_schads_overtime"),
             statement: "Overtime".into(),
@@ -147,7 +149,7 @@ fn seed_owner_chain(store: &StateStore, scope: &ScopeId) {
         })
         .unwrap();
     store
-        .create_requirement(CreateRequirementInput {
+        .write_requirement(CreateRequirementInput {
             scope_id: scope.clone(),
             id: sid("req_schads_overtime"),
             statement: "Overtime".into(),
@@ -279,8 +281,10 @@ pub fn create_requirement(
     id: &str,
     status: RequirementStatus,
 ) {
+    // Seeds a plain record: these fixtures pin projection and reader behavior
+    // over graph state, not journal history.
     store
-        .create_requirement(CreateRequirementInput {
+        .write_requirement(CreateRequirementInput {
             scope_id: scope.clone(),
             id: sid(id),
             statement: format!("{id} statement"),
@@ -345,12 +349,20 @@ pub fn create_resolution(store: &StateStore, scope: &ScopeId, id: &str, requirem
 }
 
 pub fn attach_source(store: &StateStore, scope: &ScopeId, requirement_id: &str, source_id: &str) {
+    // Seeds the citation on the plain record, so the projection fixtures stay
+    // outside the review journal.
+    let path = crate::shards::requirements_path(&store.layout, scope);
     store
-        .add_source_reference(AddSourceReferenceInput {
-            scope_id: scope.clone(),
-            source_id: sid(source_id),
-            requirement_id: sid(requirement_id),
-            clause: None,
+        .mutate_graph_record(&path, |records: &mut Vec<Requirement>| {
+            let record = records
+                .iter_mut()
+                .find(|record| record.id.as_str() == requirement_id)
+                .unwrap();
+            record.source_refs.push(SourceReference {
+                source_id: sid(source_id),
+                clause: None,
+            });
+            Ok(record.clone())
         })
         .unwrap();
 }
