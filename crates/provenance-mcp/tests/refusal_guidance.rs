@@ -1,8 +1,10 @@
 #![cfg(feature = "test-fixture")]
 mod support {
     pub mod mcp;
+    #[path = "../../../provenance-transport/tests/support/records.rs"]
     pub mod records;
     #[allow(dead_code)]
+    #[path = "../../../provenance-transport/tests/support/resource_http.rs"]
     pub mod resource_http;
 }
 
