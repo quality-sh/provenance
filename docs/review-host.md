@@ -331,3 +331,50 @@ invalid startup configuration, and shutdown with incomplete HTTP requests.
 Linux validation does not establish Windows or macOS signal and file-access
 behavior. Existing platform CI remains responsible for those checks. Native
 operation tests continue to use direct calls without a host credential.
+
+## Canonical state events
+
+`GET /review-events` opens a WebSocket for the selected repository and scope.
+It requires the host session cookie, one exact Host, and one exact Origin.
+A bearer token alone cannot open this route. Duplicate credentials, cross-site
+metadata, query credentials, and absolute request URLs are refused before upgrade.
+The content security policy permits the WebSocket at this host's exact port.
+
+The host uses native operating-system file events. It watches `.provenance`
+without recursion and `state` with recursion before the initial guarded read.
+It also observes `.provenance/settings.json` in its existing location. It ignores
+cache, registry, and read-access events. There is no polling, timed debounce,
+interval, or event log. The host captures the repository path at startup, so a
+later change to a repository symlink does not select another repository.
+
+Writers use the existing store, publication guards, and atomic renames. The host
+reads canonical records under the same publication guard on the blocking pool.
+It does not route CLI writes or change command admission. Native watcher failure
+reports that live updates are unavailable; other host operations keep their
+existing paths.
+
+Frames have these forms:
+
+```json
+{"type":"ready","epoch":"host-instance","sequence":0}
+{"type":"changed","epoch":"host-instance","sequence":1,"scopes":[{"scope":"default","records":[{"kind":"source","id":"source_example"}],"families":["source"]}]}
+{"type":"reset","epoch":"host-instance","sequence":2,"reason":"configuration-changed"}
+```
+
+The epoch identifies one host run. The sequence increases for each delta or
+reset, not for each file event. Subscription and ready capture occur under one
+mutex. Events that arrive during a read stay queued. A changed frame identifies
+added, changed, and deleted records. It contains no record content. A family with
+a graph node type uses that type's singular name; other families use their table
+name. Scope, kind, record ID, and family order follow byte order.
+
+Equal canonical records produce no duplicate delta. Guarded changes can merge
+into one delta. The feed does not promise intermediate states or replay after a
+disconnect. Manifest or settings changes produce a full-read reset. On ready or
+reset, a client must read its active data and configuration again. An epoch change,
+sequence gap, or reconnect also requires a full current-state read. Clients must
+subscribe before data reads and retain invalidations that arrive during a read.
+Git remains the source for history.
+
+Page refresh, draft retention, and navigation acknowledgement are separate page
+work. These host frames do not yet make the existing page refresh automatically.
