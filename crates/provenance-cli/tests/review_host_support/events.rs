@@ -137,3 +137,28 @@ fn source_with(mut command: std::process::Command, root: &Path, id: &str) {
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
+/// Waits through public upgrade refusals while native observation recovers.
+pub fn connect_when_available(host: &Host) -> Socket {
+    let headers = format!(
+        "Cookie: {}\r\nOrigin: {}\r\nSec-Fetch-Site: same-origin\r\n",
+        cookie(host),
+        host.config["endpoint"].as_str().unwrap()
+    );
+    let deadline = std::time::Instant::now() + Duration::from_secs(15);
+    loop {
+        let (status, socket) = upgrade(host, "/review-events", &headers);
+        if status == 101 {
+            return socket;
+        }
+        assert_eq!(
+            status, 503,
+            "only observation unavailability permits a retry"
+        );
+        assert!(
+            std::time::Instant::now() < deadline,
+            "native observation did not recover"
+        );
+        std::thread::sleep(Duration::from_millis(25));
+    }
+}
