@@ -186,6 +186,46 @@ fn resource_operations_have_unique_registered_contracts() {
 
 #[cfg(feature = "schema")]
 #[test]
+fn query_registrations_keep_typed_scalar_parameters() {
+    let definition = super::definitions()
+        .into_iter()
+        .find(|definition| definition.name == "list-rules")
+        .unwrap();
+    let stale = definition
+        .registration
+        .queries
+        .iter()
+        .find(|query| query.name == "stale")
+        .unwrap();
+    let base = stale
+        .parameters
+        .iter()
+        .find(|parameter| parameter.name == "base")
+        .unwrap();
+    assert_eq!(
+        super::parse_parameter_value(base, "0123456789abcdef").unwrap(),
+        json!("0123456789abcdef"),
+        "schema: {}",
+        base.schema
+    );
+    let member = super::definitions()
+        .into_iter()
+        .find(|definition| definition.name == "get-rule")
+        .unwrap();
+    let trace = member
+        .registration
+        .queries
+        .iter()
+        .find(|query| query.name == "trace")
+        .unwrap();
+    assert!(trace
+        .parameters
+        .iter()
+        .any(|parameter| parameter.name == "limit"));
+}
+
+#[cfg(feature = "schema")]
+#[test]
 fn repository_info_has_a_numeric_version_and_closed_request() {
     let definition = super::schema::raw_definition::<super::Info>();
     assert_eq!(
