@@ -88,6 +88,34 @@ fn init_prints_a_summary_that_separates_new_from_changed_files() {
 }
 
 #[test]
+fn existing_state_directory_reports_new_manifest_file_and_keeps_other_files() {
+    let temporary = tempfile::tempdir().unwrap();
+    let repo = temporary.path().join("repo");
+    let state = repo.join(".provenance/state");
+    std::fs::create_dir_all(&state).unwrap();
+    let sentinel = state.join("unrelated.txt");
+    std::fs::write(&sentinel, "keep this\n").unwrap();
+
+    let stdout = init(&repo).success().get_output().stdout.clone();
+    let stdout = String::from_utf8(stdout).unwrap();
+    assert!(stdout.contains(
+        "  .provenance/state/manifest.json (manifest for scope \"default\")\n"
+    ));
+    assert!(!stdout.contains("  .provenance/state ("));
+    assert!(state.join("manifest.json").is_file());
+    assert_eq!(std::fs::read_to_string(&sentinel).unwrap(), "keep this\n");
+
+    let manifest = std::fs::read(state.join("manifest.json")).unwrap();
+    let second = init(&repo).success().get_output().stdout.clone();
+    let second = String::from_utf8(second).unwrap();
+    assert!(second.contains("No change.\n"));
+    assert!(!second.contains("\nNew\n"));
+    assert!(!second.contains("\nChanged\n"));
+    assert_eq!(std::fs::read(state.join("manifest.json")).unwrap(), manifest);
+    assert_eq!(std::fs::read_to_string(&sentinel).unwrap(), "keep this\n");
+}
+
+#[test]
 #[verifies("rule_init_plans_all_project_writes", examples)]
 #[verifies("rule_init_owns_agents_provenance_section", examples)]
 fn init_on_an_existing_repository_reports_only_the_changed_files() {
