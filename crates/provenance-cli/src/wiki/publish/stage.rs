@@ -30,9 +30,10 @@ impl StageDirectory {
             .map_err(|error| PublishError::io("record staging directory identity", path, error))?;
         #[cfg(windows)]
         let identity = {
-            let handle = crate::safe_fs::Directory::open(path.as_std_path()).map_err(|error| {
-                PublishError::io("open staging directory identity", path, error)
-            })?;
+            let handle = crate::safe_fs::Directory::open(path.as_std_path(), "output parent")
+                .map_err(|error| {
+                    PublishError::io("open staging directory identity", path, error)
+                })?;
             StageIdentity::from_file(handle.as_file()).map_err(|error| {
                 PublishError::io("record staging directory identity", path, error)
             })?
@@ -144,7 +145,7 @@ pub(super) fn generate_and_replace(
 
 #[cfg(test)]
 pub(super) fn write_page(stage: &Utf8Path, route: &str, html: &str) -> Result<(), PublishError> {
-    let root = crate::safe_fs::Directory::open(stage.as_std_path())
+    let root = crate::safe_fs::Directory::open(stage.as_std_path(), "output parent")
         .map(crate::safe_fs::Directory::into_file)
         .map_err(|error| PublishError::io("open staging directory", stage, error))?;
     let stage_directory = StageDirectory::from_file(root, stage)?;

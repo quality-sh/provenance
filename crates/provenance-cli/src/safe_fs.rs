@@ -18,8 +18,8 @@ pub enum ChildKind {
 }
 
 impl Directory {
-    pub(super) fn open(path: &Path) -> std::io::Result<Self> {
-        open_directory_no_follow(path).map(|file| Self {
+    pub(super) fn open(path: &Path, role: &str) -> std::io::Result<Self> {
+        open_directory_no_follow(path, role).map(|file| Self {
             file,
             path: path.to_path_buf(),
         })
@@ -145,10 +145,7 @@ fn open_child_directory_no_follow(parent: &File, leaf: &str) -> std::io::Result<
     options.read(true).follow(false);
     let directory = options.open_dir_at(parent, leaf)?;
     if directory.metadata()?.file_attributes() & 0x0000_0400 != 0 {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "directory is a reparse point",
-        ));
+        return Err(reparse_point_error("directory"));
     }
     Ok(directory)
 }
@@ -161,7 +158,7 @@ fn open_child_directory_no_follow(parent: &File, leaf: &str) -> std::io::Result<
 }
 
 #[cfg(unix)]
-fn open_directory_no_follow(path: &Path) -> std::io::Result<File> {
+fn open_directory_no_follow(path: &Path, _role: &str) -> std::io::Result<File> {
     rustix::fs::openat(
         rustix::fs::CWD,
         path,
@@ -176,7 +173,7 @@ fn open_directory_no_follow(path: &Path) -> std::io::Result<File> {
 }
 
 #[cfg(windows)]
-fn open_directory_no_follow(path: &Path) -> std::io::Result<File> {
+fn open_directory_no_follow(path: &Path, role: &str) -> std::io::Result<File> {
     use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
     const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
     const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
@@ -188,17 +185,22 @@ fn open_directory_no_follow(path: &Path) -> std::io::Result<File> {
         .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
         .open(path)?;
     if directory.metadata()?.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "directory is a reparse point",
-        ));
+        return Err(reparse_point_error(role));
     }
     Ok(directory)
 }
 
 #[cfg(not(any(unix, windows)))]
-fn open_directory_no_follow(path: &Path) -> std::io::Result<File> {
+fn open_directory_no_follow(path: &Path, _role: &str) -> std::io::Result<File> {
     File::open(path)
+}
+
+#[cfg(any(windows, test))]
+fn reparse_point_error(role: &str) -> std::io::Error {
+    std::io::Error::new(
+        std::io::ErrorKind::InvalidInput,
+        format!("{role} is a reparse point"),
+    )
 }
 
 #[cfg(any(target_os = "linux", target_os = "android", target_os = "freebsd"))]
@@ -411,11 +413,23 @@ mod tests {
     use super::*;
 
     #[test]
+    fn reparse_point_messages_include_the_directory_role() {
+        assert_eq!(
+            reparse_point_error("output parent").to_string(),
+            "output parent is a reparse point"
+        );
+        assert_eq!(
+            reparse_point_error("directory").to_string(),
+            "directory is a reparse point"
+        );
+    }
+
+    #[test]
     fn directory_interface_classifies_children() {
         let temp = tempfile::tempdir().unwrap();
         std::fs::create_dir(temp.path().join("directory")).unwrap();
         std::fs::write(temp.path().join("file"), "content").unwrap();
-        let directory = Directory::open(temp.path()).unwrap();
+        let directory = Directory::open(temp.path(), "directory").unwrap();
 
         assert_eq!(directory.child_kind("missing").unwrap(), None);
         assert_eq!(
@@ -430,7 +444,7 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         std::fs::write(temp.path().join("source"), "source").unwrap();
         std::fs::write(temp.path().join("destination"), "destination").unwrap();
-        let directory = Directory::open(temp.path()).unwrap();
+        let directory = Directory::open(temp.path(), "directory").unwrap();
 
         let error = directory
             .rename_no_replace("source", "destination")
