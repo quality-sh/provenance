@@ -68,6 +68,19 @@ impl PublicationGuard {
     }
 }
 
+/// Holds one synchronous publication section and supplies its guarded read view.
+pub fn with_publication_guard<R>(
+    layout: &ProvenanceLayout,
+    operation: impl FnOnce(&PublicationGuard) -> anyhow::Result<R>,
+) -> anyhow::Result<R> {
+    super::with_repository_publication(layout, || {
+        operation(&PublicationGuard {
+            _lock: None,
+            layout: layout.clone(),
+        })
+    })
+}
+
 /// Acquires the publication lock for an async holder.
 ///
 /// The blocking wait runs on the blocking pool. Pending-publication recovery
