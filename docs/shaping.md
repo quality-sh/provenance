@@ -77,7 +77,10 @@ The turn loop, against an anchor requirement:
    Repeat these reads after a restart or context compaction. A Topic claim does not
    select a method: each Question has its own method. Stop work on the selected item
    if another actor holds a required claim, recovery is incomplete, or the Question
-   is no longer open. Use record reads and all collection pages to recover the map.
+   is no longer open. Read `provenance <topic_id> get --view children --format json`
+   for the bounded shaping summary. Use it for selection only when `complete` is true.
+   A filtered, depth-limited, truncated, or unchecked read is incomplete. Use record
+   reads and all collection pages to recover the missing data.
 4. **Resolve and land as you go** — each question is recorded the moment it resolves,
    before the dialogue moves on. Expect fan-out (see below).
 5. **Graduate fog** the answers made sharp; update or kill questions the decisions
@@ -85,6 +88,23 @@ The turn loop, against an anchor requirement:
 6. **Stop and hand off** — the turn ends at the first stop condition:
    context budget nearing its threshold, human done, a fork/verify spawn
    (two-phase boundary), or the topic drained.
+
+### Question prerequisites
+
+A Question can name same-Topic Questions in `depends_on`. Create and update accept
+this list through JSON input. An update replaces the list; `[]` clears it. IDs are
+stored once, in ID order. Missing, cross-Topic, self, and cyclic references are
+refused before the write is published. A prerequisite change is a content change
+and changes the review revision with the other Question content.
+
+Only an answered prerequisite permits readiness. An open, human-blocked, or
+archived prerequisite blocks the dependent Question. Closed and archived Topics
+have no ready Questions. Claims restrict work on an item; they do not hide it from
+discovery. Several ready IDs are choices. ID order is display order, not priority.
+
+The children view retains its records and adds Topic and Question claims, Question
+methods, ready IDs, and blocked reasons. The existing item limit and a 64 KiB
+summary limit bound the read. An incomplete summary cannot authorize selection.
 
 ### Invariants
 

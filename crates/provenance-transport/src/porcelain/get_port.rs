@@ -12,6 +12,9 @@ use provenance_porcelain::get::{
 };
 use provenance_store::operations::catalog::{self, Operation as _};
 
+#[path = "shaping_read.rs"]
+mod shaping_read;
+
 /// Typed graph operations adapted to the Porcelain read port.
 #[derive(Clone)]
 pub struct HostGetPort {
@@ -82,7 +85,7 @@ impl GetPort for HostGetPort {
                 .host
                 .invoke_scoped_typed::<catalog::Trace>(TraceQuery {
                     protocol_version: Some(SDK_PROTOCOL_VERSION),
-                    id: request.target,
+                    id: request.target.clone(),
                     node_type: Some(request.kind),
                     direction: if request.view == View::Children {
                         Direction::In
@@ -97,12 +100,22 @@ impl GetPort for HostGetPort {
                 .map_err(|error| operation_error(&error))?;
             let (mut result, mut metadata) = response_parts(response);
             let permitted = self.permitted_node_types();
+            let unfiltered_count = result.nodes.len();
             result
                 .nodes
                 .retain(|record| permitted.contains(&record.node.node_type()));
             metadata.limit = Some(result.limit);
             metadata.has_more = Some(result.has_more);
+            let shaping = shaping_read::summary(
+                &self.host,
+                &request,
+                &metadata,
+                result.has_more,
+                result.nodes.len() != unfiltered_count,
+            )
+            .await?;
             Ok(Traversal {
+                shaping,
                 records: result.nodes,
                 bounds: Bounds {
                     limit: result.limit,

@@ -50,6 +50,7 @@ fn assert_get_schema_edges(input: &JSONSchema, output: &JSONSchema, valid: &Valu
         record,
         result: provenance_porcelain::get::ViewResult::Children(
             provenance_porcelain::get::Traversal {
+                shaping: None,
                 records: Vec::new(),
                 bounds: provenance_porcelain::get::Bounds {
                     limit: 1,
