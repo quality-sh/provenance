@@ -209,6 +209,7 @@ macro_rules! define_imported_scope_shards {
                 import: [$export_import:ident],
                 catalog: [$($export_catalog:tt)*],
                 route: [$($export_route:tt)*]
+                $(, review: $export_review:ident)?
             };
         )* }
         canonical { $(
@@ -229,6 +230,7 @@ macro_rules! define_imported_scope_shards {
                 import: [$canonical_import:ident],
                 catalog: [$($canonical_catalog:tt)*],
                 route: [$($canonical_route:tt)*]
+                $(, review: $canonical_review:ident)?
             };
         )* }
         bindings { $(
@@ -249,6 +251,7 @@ macro_rules! define_imported_scope_shards {
                 import: [$binding_import:ident],
                 catalog: [$($binding_catalog:tt)*],
                 route: [$($binding_route:tt)*]
+                $(, review: $binding_review:ident)?
             };
         )* }
         internal { $($internal:tt)* }
