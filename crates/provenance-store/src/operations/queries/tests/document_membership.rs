@@ -126,7 +126,10 @@ async fn byte_limited_pages_continue_without_truncating_canonical_records() {
     }
     let root = root_of(&dir);
     let first = page(&root, "req_overtime", Value::Null).await.unwrap();
-    assert!(serde_json::to_vec(&first).unwrap().len() <= super::super::page::RESPONSE_BYTES);
+    assert!(
+        serde_json::to_vec(&first).unwrap().len()
+            <= provenance_core::protocol::QUERY_RESPONSE_BYTES
+    );
     assert!(first["entries"].as_array().unwrap().len() < 50);
     assert_eq!(first["has_more"], true);
     let all = entries(&root, "req_overtime").await;

@@ -25,21 +25,21 @@ pub(super) async fn evidence(
     let by_rule = [rule.as_str()];
     let implementations = snapshot
         .table::<ImplementationBinding>()
-        .by_field("rule_id", &by_rule)
+        .page_by_field("rule_id", &by_rule)
         .await?
         .into_iter()
         .take(request.limit + 1)
         .collect::<Vec<_>>();
     let verifications = snapshot
         .table::<VerificationBinding>()
-        .by_field("rule_id", &by_rule)
+        .page_by_field("rule_id", &by_rule)
         .await?
         .into_iter()
         .take(request.limit + 1)
         .collect::<Vec<_>>();
     let mut runs = ctx
         .live(Live::VerificationRuns)
-        .runs(&scope)?
+        .query_runs(&scope)?
         .into_iter()
         .filter(|run| run.rule_id == rule)
         .collect::<Vec<_>>();
@@ -55,7 +55,7 @@ pub(super) async fn evidence(
     // run are open.
     let mut reviews = snapshot
         .table::<RequirementReview>()
-        .by_field("rule_id", &by_rule)
+        .page_by_field("rule_id", &by_rule)
         .await?
         .into_iter()
         .filter(|review| review.cleared_at.is_none())
