@@ -1,4 +1,7 @@
-use provenance_core::protocol::{failure::OperationError, SearchQuery};
+use provenance_core::{
+    protocol::{failure::OperationError, SearchQuery},
+    NodeType,
+};
 use provenance_porcelain::search::{PortFuture, SearchError, SearchPort};
 use provenance_store::operations::catalog::{self, Operation as _};
 
@@ -17,7 +20,7 @@ impl HostSearchPort {
 impl SearchPort for HostSearchPort {
     fn search(&self, mut request: SearchQuery) -> PortFuture<'_> {
         Box::pin(async move {
-            let permitted = super::get_port::permitted_node_types(&self.host);
+            let permitted = permitted_node_types(&self.host);
             if permitted.is_empty() {
                 return Err(SearchError::AccessDenied);
             }
@@ -37,6 +40,27 @@ impl SearchPort for HostSearchPort {
     }
 }
 
+fn permitted_node_types(host: &crate::StatementHost) -> Vec<NodeType> {
+    catalog::definitions()
+        .iter()
+        .filter(|definition| host.advertises(definition.name))
+        .filter_map(|definition| {
+            definition
+                .registration
+                .queries
+                .iter()
+                .find(|query| query.name == catalog::Search::NAME)
+                .and_then(|query| query.request.node_type)
+                .and_then(|node_type| NodeType::parse(node_type).ok())
+        })
+        .fold(Vec::new(), |mut permitted, node_type| {
+            if !permitted.contains(&node_type) {
+                permitted.push(node_type);
+            }
+            permitted
+        })
+}
+
 fn operation_error(
     error: &OperationError<<catalog::Search as catalog::Operation>::Failure>,
 ) -> SearchError {
@@ -47,6 +71,5 @@ fn operation_error(
 }
 
 pub(super) fn is_available(host: &crate::StatementHost) -> bool {
-    host.advertises(catalog::Search::NAME)
-        && !super::get_port::permitted_node_types(host).is_empty()
+    host.advertises(catalog::Search::NAME) && !permitted_node_types(host).is_empty()
 }
