@@ -68,6 +68,22 @@ impl Socket {
         serde_json::from_slice(&bytes).unwrap()
     }
 
+    /// Sends a masked text frame, as a browser does.
+    pub fn send(&mut self, value: &Value) {
+        let payload = value.to_string().into_bytes();
+        assert!(payload.len() < 126);
+        let mask = [0x12, 0x34, 0x56, 0x78];
+        let mut bytes = vec![0x81, 0x80 | u8::try_from(payload.len()).unwrap()];
+        bytes.extend(mask);
+        bytes.extend(
+            payload
+                .iter()
+                .enumerate()
+                .map(|(index, byte)| byte ^ mask[index % 4]),
+        );
+        self.0.write_all(&bytes).unwrap();
+    }
+
     pub fn quiet(&mut self) {
         self.0
             .set_read_timeout(Some(Duration::from_millis(250)))
