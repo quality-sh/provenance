@@ -54,7 +54,7 @@ impl Baseline {
             }
             cursor = page.next_cursor;
             ordered.extend(records);
-            if cursor.is_none() {
+            if cursor.is_none() || limit == 1 {
                 break;
             }
         }

@@ -46,7 +46,7 @@ pub async fn run(context: &RepoContext, input: GetInput) -> anyhow::Result<()> {
             let incoming = tokio::select! {
                 signal = tokio::signal::ctrl_c() => {
                     signal.context("cannot install the Ctrl-C handler")?;
-                    return Ok(());
+                    anyhow::bail!("interrupt mutation");
                 },
                 frame = socket.next() => frame,
             };
@@ -74,7 +74,7 @@ pub async fn run(context: &RepoContext, input: GetInput) -> anyhow::Result<()> {
             tokio::select! {
                 signal = tokio::signal::ctrl_c() => {
                     signal.context("cannot install the Ctrl-C handler")?;
-                    return Ok(());
+                    anyhow::bail!("interrupt mutation");
                 },
                 result = async {
                     let frames = match baseline.reconcile(context, &input.target, limit, (&epoch, sequence), reset, selected.as_ref()).await {

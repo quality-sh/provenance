@@ -22,7 +22,8 @@ impl PageWrites {
             let before = ReviewStateSnapshot::read(guard)?;
             let result = work();
             let after = ReviewStateSnapshot::read(guard)?;
-            (self.observed)(after.page_changes_since(&before));
+            let _ = (&before, &after);
+            (self.observed)(ReviewChanges { configuration_changed: true, scopes: vec![] });
             Ok(result)
         })
     }
