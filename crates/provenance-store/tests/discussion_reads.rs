@@ -154,7 +154,7 @@ async fn missing_membership_is_a_conflict_instead_of_a_legacy_group() {
     let dir = provenance_store::layout::ProvenanceLayout::new(root)
         .scopes_dir()
         .join("default/review/journal");
-    for file in std::fs::read_dir(dir).unwrap() {
+    for file in std::fs::read_dir(&dir).unwrap() {
         std::fs::remove_file(file.unwrap().path()).unwrap();
     }
     assert!(read_discussions(
@@ -169,12 +169,18 @@ async fn missing_membership_is_a_conflict_instead_of_a_legacy_group() {
     )
     .await
     .is_err());
-    assert!(store
+    let threads_before = store.list_threads(&scope()).unwrap();
+    let messages_before = store.list_messages(&scope()).unwrap();
+    let error = store
         .write_discussion(write(
             "new",
             json!({"kind":"start","role":"user","body":"Should refuse"})
         ))
-        .is_err());
+        .unwrap_err();
+    assert!(format!("{error:#}").contains("no Discussion membership"));
+    assert_eq!(store.list_threads(&scope()).unwrap(), threads_before);
+    assert_eq!(store.list_messages(&scope()).unwrap(), messages_before);
+    assert_eq!(std::fs::read_dir(dir).unwrap().count(), 0);
 }
 
 #[tokio::test]
