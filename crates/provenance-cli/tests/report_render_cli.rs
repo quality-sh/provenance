@@ -26,10 +26,10 @@ fn unsupported_format_is_rejected_before_input_is_read() {
 }
 
 #[test]
-fn output_flag_writes_the_report_to_a_file() {
+fn json_format_writes_json_to_stdout_and_a_file() {
     let dir = TempDir::new().unwrap();
     let input = dir.path().join("envelope.json");
-    let output_path = dir.path().join("report.md");
+    let output_path = dir.path().join("report.json");
     let envelope = json!({
         "schema_version": 1,
         "repository": "quality-sh/provenance",
@@ -48,21 +48,39 @@ fn output_flag_writes_the_report_to_a_file() {
     });
     std::fs::write(&input, serde_json::to_vec_pretty(&envelope).unwrap()).unwrap();
 
-    let output = Command::cargo_bin("provenance")
+    let stdout_output = Command::cargo_bin("provenance")
         .unwrap()
         .args(["report", "render", "--input"])
         .arg(&input)
+        .args(["--format", "json"])
+        .output()
+        .unwrap();
+
+    assert!(
+        stdout_output.status.success(),
+        "render failed: {}",
+        String::from_utf8_lossy(&stdout_output.stderr)
+    );
+    let stdout_json: serde_json::Value = serde_json::from_slice(&stdout_output.stdout).unwrap();
+    assert!(!stdout_output.stdout.starts_with(b"# Provenance report"));
+
+    let file_output = Command::cargo_bin("provenance")
+        .unwrap()
+        .args(["report", "render", "--input"])
+        .arg(&input)
+        .args(["--format", "json"])
         .args(["--output"])
         .arg(&output_path)
         .output()
         .unwrap();
 
     assert!(
-        output.status.success(),
+        file_output.status.success(),
         "render failed: {}",
-        String::from_utf8_lossy(&output.stderr)
+        String::from_utf8_lossy(&file_output.stderr)
     );
-    let written = std::fs::read_to_string(&output_path).unwrap();
-    assert!(written.starts_with("# Provenance report"));
-    assert!(written.ends_with("no language model writes this report.\n"));
+    let written = std::fs::read(&output_path).unwrap();
+    let file_json: serde_json::Value = serde_json::from_slice(&written).unwrap();
+    assert!(!written.starts_with(b"# Provenance report"));
+    assert_eq!(file_json, stdout_json);
 }
