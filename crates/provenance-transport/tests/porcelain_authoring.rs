@@ -232,6 +232,21 @@ async fn mcp_target_first_requirement_submit_uses_the_target() {
     )
     .await;
     assert_ne!(requirement.is_error, Some(true), "{requirement:?}");
+    let automatic = requirement.structured_content.as_ref().unwrap()["data"]["decision"]["pending"]
+        ["proposal_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let withdrawn = call(
+        &client,
+        "withdraw-requirement-review",
+        json!({
+            "id":"req_mcp_target", "proposal_id":automatic,
+            "actor":"agent", "declared_by":null, "reason":null
+        }),
+    )
+    .await;
+    assert_ne!(withdrawn.is_error, Some(true), "{withdrawn:?}");
 
     let submitted = call(
         &client,
