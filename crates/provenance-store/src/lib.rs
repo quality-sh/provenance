@@ -1,6 +1,7 @@
 pub mod cache;
 pub mod canonical_digest;
 pub mod code_refs;
+pub mod current_schema;
 pub mod dictionary_reference;
 pub mod evidence_anchors;
 #[cfg(feature = "test-fixture")]
@@ -9,7 +10,6 @@ pub mod graph_reference;
 pub mod jsonl;
 pub mod layout;
 pub mod merge;
-pub mod migrations;
 pub mod operations;
 pub mod publication;
 pub mod review;

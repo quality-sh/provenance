@@ -211,9 +211,9 @@ async fn refuse_stale_refuses_a_half_migrated_projection() {
 }
 
 #[tokio::test]
-async fn refuse_stale_refuses_old_migrations_and_validation() {
+async fn refuse_stale_refuses_an_incompatible_schema_and_old_validation() {
     for sql in [
-        "DELETE FROM _schema_migrations",
+        "UPDATE _cache_metadata SET schema_digest = 'incompatible'",
         "UPDATE projection_validation SET version = 0",
     ] {
         let store = test_stores::seeded_queries();
