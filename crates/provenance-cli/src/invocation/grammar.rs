@@ -10,7 +10,7 @@ use provenance_porcelain::get::View;
 // Shared options for the Porcelain and catalog grammars.
 #[derive(Args)]
 #[group(skip)]
-pub(crate) struct Common {
+pub struct Common {
     #[arg(long, global = true, default_value = ".", allow_hyphen_values = true)]
     pub repo: String,
     #[arg(
@@ -27,7 +27,7 @@ pub(crate) struct Common {
 }
 
 impl Common {
-    pub(crate) fn context(&self) -> GlobalContext {
+    pub fn context(&self) -> GlobalContext {
         GlobalContext {
             repo: self.repo.clone(),
             scope: self.scope.clone(),
@@ -35,7 +35,7 @@ impl Common {
         }
     }
 
-    pub(crate) fn format(&self) -> Option<porcelain::OutputFormat> {
+    pub fn format(&self) -> Option<porcelain::OutputFormat> {
         self.format.map(|_| porcelain::OutputFormat::Json)
     }
 }
@@ -59,7 +59,7 @@ pub(super) struct SearchArgs {
 
 #[derive(Parser)]
 #[command(name = "provenance", about = "Work with records in one scope")]
-pub(crate) struct CatalogArgs {
+pub struct CatalogArgs {
     #[command(flatten)]
     pub common: Common,
     pub collection: String,
@@ -70,7 +70,7 @@ pub(crate) struct CatalogArgs {
 }
 
 impl CatalogArgs {
-    pub(crate) fn from_matches(matches: &ArgMatches) -> Self {
+    pub fn from_matches(matches: &ArgMatches) -> Self {
         Self::from_arg_matches(matches).unwrap_or_else(|error| error.exit())
     }
 }
@@ -154,10 +154,10 @@ pub(super) fn command_word(arguments: &[String]) -> Option<&str> {
     None
 }
 
-pub(crate) fn target_command() -> Command {
+pub fn target_command() -> Command {
     TargetArgs::command()
 }
 
-pub(crate) fn catalog_command() -> Command {
+pub fn catalog_command() -> Command {
     CatalogArgs::command()
 }

@@ -4,7 +4,7 @@ use provenance_cli::porcelain;
 use provenance_core::protocol::{SearchQuery, QUERY_DEFAULT_LIMIT};
 use provenance_core::{NodeType, SDK_PROTOCOL_VERSION};
 
-pub(crate) mod grammar;
+pub mod grammar;
 use grammar::{CatalogArgs, SearchArgs, TargetArgs};
 
 #[cfg(test)]
@@ -82,7 +82,7 @@ impl Invocation {
                 .try_get_matches_from(arguments)
                 .unwrap_or_else(|error| error.exit());
             let args = CatalogArgs::from_matches(&matches);
-            return Ok(Self::Catalog(catalog_cli::Invocation::new(args, &matches)?));
+            return Ok(Self::Catalog(catalog_cli::Invocation::new(&args, &matches)));
         }
 
         let command = catalog_cli::target_command()?;
@@ -93,7 +93,7 @@ impl Invocation {
         let format = args.common.format();
         let context = args.common.context();
         if args.action.as_deref().is_none_or(|action| action == "get") {
-            catalog_cli::ensure_only_fields(&matches, &["kind", "view", "depth", "limit"])?;
+            catalog_cli::ensure_only_fields(&matches, &["kind", "view", "depth", "limit"]);
             let mut input = provenance_porcelain::get::GetInput::new(
                 args.target,
                 args.view.unwrap_or_default().into(),
