@@ -1,28 +1,38 @@
 use provenance_macros::verifies;
 use provenance_porcelain::get::{
-    GetInput, GetPort, Impact, PortFuture, ReadError, Record, Traversal, TraversalRequest, View,
+    GetInput, GetPort, Impact, PortFuture, ReadError, RecordResolution, Traversal,
+    TraversalRequest, View, ViewResult,
 };
 use provenance_porcelain::Porcelain;
+use provenance_core::protocol::{GraphNode, ImpactResult, ResponseMeta, TracedNode};
 use serde_json::json;
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone)]
 struct FixturePort {
-    record: Record,
-    traversed: Vec<Record>,
+    record: GraphNode,
+    traversed: Vec<TracedNode>,
     request: Arc<Mutex<Option<TraversalRequest>>>,
-    impact: serde_json::Value,
+    impact: ImpactResult,
     has_more: bool,
     continuation: Option<String>,
     truncated: bool,
     resolves: Arc<Mutex<usize>>,
-    impact_record: Arc<Mutex<Option<Record>>>,
+    impact_record: Arc<Mutex<Option<GraphNode>>>,
 }
 
 impl GetPort for FixturePort {
-    fn resolve<'a>(&'a self, _: &'a str) -> PortFuture<'a, Option<Record>> {
+    fn resolve<'a>(&'a self, _: &'a str) -> PortFuture<'a, RecordResolution> {
         *self.resolves.lock().unwrap() += 1;
-        Box::pin(async { Ok(Some(self.record.clone())) })
+        Box::pin(async {
+            Ok(RecordResolution::Found {
+                node: self.record.clone(),
+                metadata: Some(ResponseMeta {
+                    freshness_error: Some("record catch-up failed".into()),
+                    ..ResponseMeta::default()
+                }),
+            })
+        })
     }
 
     fn traverse(&self, request: TraversalRequest) -> PortFuture<'_, Traversal> {
@@ -37,12 +47,12 @@ impl GetPort for FixturePort {
                     continuation: self.continuation.clone(),
                     truncated: self.truncated,
                 },
-                response_metadata: Some(json!({"stamp": "view"})),
+                response_metadata: Some(ResponseMeta::default()),
             })
         })
     }
 
-    fn impact<'a>(&'a self, record: &'a Record, limit: usize) -> PortFuture<'a, Impact> {
+    fn impact<'a>(&'a self, record: &'a GraphNode, limit: usize) -> PortFuture<'a, Impact> {
         *self.impact_record.lock().unwrap() = Some(record.clone());
         Box::pin(async move {
             Ok(Impact {
@@ -54,10 +64,10 @@ impl GetPort for FixturePort {
                     continuation: self.continuation.clone(),
                     truncated: self.truncated,
                 },
-                response_metadata: Some(json!({
-                    "stamp": "impact",
-                    "freshness_error": "catch-up failed"
-                })),
+                response_metadata: Some(ResponseMeta {
+                    freshness_error: Some("catch-up failed".into()),
+                    ..ResponseMeta::default()
+                }),
             })
         })
     }
@@ -65,14 +75,10 @@ impl GetPort for FixturePort {
 
 fn service() -> Porcelain<FixturePort> {
     Porcelain::new(FixturePort {
-        record: Record::new(
-            "req_alpha",
-            "requirement",
-            json!({"id": "req_alpha", "statement": "Keep the interface clear."}),
-        ),
+        record: node("req_alpha", "requirement"),
         traversed: Vec::new(),
         request: Arc::new(Mutex::new(None)),
-        impact: json!(null),
+        impact: impact("req_alpha", 50),
         has_more: false,
         continuation: None,
         truncated: false,
@@ -81,8 +87,43 @@ fn service() -> Porcelain<FixturePort> {
     })
 }
 
-fn record(id: &str, kind: &str) -> Record {
-    Record::new(id, kind, json!({"id": id}))
+fn node(id: &str, kind: &str) -> GraphNode {
+    let value = match kind {
+        "requirement" => json!({
+            "node_type": "requirement", "schema_version": 2, "scope_id": "default",
+            "id": id, "statement": "Keep the interface clear.", "status": "active"
+        }),
+        "resolution" => json!({
+            "node_type": "resolution", "schema_version": 2, "scope_id": "default",
+            "id": id, "title": "Decision", "position": "Use the typed graph.",
+            "rationale": "One graph contract is enough.", "status": "draft",
+            "inputs": [], "requirement_ids": [], "review_on": null
+        }),
+        "rule" => json!({
+            "node_type": "rule", "schema_version": 2, "scope_id": "default",
+            "id": id, "statement": "Keep the typed graph.", "status": "active",
+            "severity": "high", "requirement_ids": []
+        }),
+        _ => panic!("unsupported fixture kind"),
+    };
+    serde_json::from_value(value).unwrap()
+}
+
+fn traced(id: &str, kind: &str, depth: usize) -> TracedNode {
+    TracedNode {
+        depth,
+        node: node(id, kind),
+    }
+}
+
+fn impact(id: &str, limit: usize) -> ImpactResult {
+    ImpactResult {
+        id: id.into(),
+        limit,
+        has_more: false,
+        affected_rules: Vec::new(),
+        scan_cut: false,
+    }
 }
 
 #[tokio::test]
@@ -90,13 +131,10 @@ fn record(id: &str, kind: &str) -> Record {
 async fn children_select_depth_and_returned_kinds() {
     let request = Arc::new(Mutex::new(None));
     let porcelain = Porcelain::new(FixturePort {
-        record: record("req_root", "requirement"),
-        traversed: vec![
-            record("req_child", "requirement"),
-            record("rule_leaf", "rule"),
-        ],
+        record: node("req_root", "requirement"),
+        traversed: vec![traced("req_child", "requirement", 1), traced("rule_leaf", "rule", 2)],
         request: request.clone(),
-        impact: json!(null),
+        impact: impact("req_root", 50),
         has_more: false,
         continuation: None,
         truncated: false,
@@ -109,7 +147,9 @@ async fn children_select_depth_and_returned_kinds() {
 
     let outcome = porcelain.get(input).await.unwrap();
 
-    assert_eq!(outcome.related, vec![record("rule_leaf", "rule")]);
+    let ViewResult::Children(traversal) = outcome.result else { panic!("children view") };
+    assert_eq!(traversal.records.len(), 1);
+    assert_eq!(traversal.records[0].node.id().as_str(), "rule_leaf");
     let sent = request.lock().unwrap().clone().unwrap();
     assert_eq!(sent.max_depth, 2);
 }
@@ -119,13 +159,10 @@ async fn children_select_depth_and_returned_kinds() {
 async fn returned_kind_filter_does_not_limit_intermediate_traversal() {
     let request = Arc::new(Mutex::new(None));
     let porcelain = Porcelain::new(FixturePort {
-        record: record("req_root", "requirement"),
-        traversed: vec![
-            record("res_middle", "resolution"),
-            record("rule_leaf", "rule"),
-        ],
+        record: node("req_root", "requirement"),
+        traversed: vec![traced("res_middle", "resolution", 1), traced("rule_leaf", "rule", 2)],
         request: request.clone(),
-        impact: json!(null),
+        impact: impact("req_root", 50),
         has_more: false,
         continuation: None,
         truncated: false,
@@ -138,7 +175,8 @@ async fn returned_kind_filter_does_not_limit_intermediate_traversal() {
 
     let outcome = porcelain.get(input).await.unwrap();
 
-    assert_eq!(outcome.related, vec![record("rule_leaf", "rule")]);
+    let ViewResult::Children(traversal) = outcome.result else { panic!("children view") };
+    assert_eq!(traversal.records[0].node.id().as_str(), "rule_leaf");
     assert_eq!(request.lock().unwrap().as_ref().unwrap().max_depth, 2);
 }
 
@@ -146,10 +184,10 @@ async fn returned_kind_filter_does_not_limit_intermediate_traversal() {
 #[verifies("rule_porcelain_get_has_grounding_impact", examples)]
 async fn grounding_and_impact_are_identified_named_views() {
     let grounding = Porcelain::new(FixturePort {
-        record: record("rule_alpha", "rule"),
-        traversed: vec![record("req_alpha", "requirement")],
+        record: node("rule_alpha", "rule"),
+        traversed: vec![traced("req_alpha", "requirement", 1)],
         request: Arc::new(Mutex::new(None)),
-        impact: json!(null),
+        impact: impact("rule_alpha", 50),
         has_more: false,
         continuation: None,
         truncated: false,
@@ -160,11 +198,10 @@ async fn grounding_and_impact_are_identified_named_views() {
     .await
     .unwrap();
     let impact = Porcelain::new(FixturePort {
-        record: record("req_alpha", "requirement")
-            .with_response_metadata(json!({"stamp": "record"})),
+        record: node("req_alpha", "requirement"),
         traversed: Vec::new(),
         request: Arc::new(Mutex::new(None)),
-        impact: json!({"affected_rules": ["rule_alpha"]}),
+        impact: impact("req_alpha", 50),
         has_more: false,
         continuation: None,
         truncated: false,
@@ -175,16 +212,11 @@ async fn grounding_and_impact_are_identified_named_views() {
     .await
     .unwrap();
 
-    assert_eq!(grounding.view, View::Grounding);
-    assert_eq!(grounding.related, vec![record("req_alpha", "requirement")]);
-    assert_eq!(impact.view, View::Impact);
-    assert_eq!(impact.detail.unwrap()["affected_rules"][0], "rule_alpha");
-    assert_eq!(impact.record_metadata.unwrap()["stamp"], "record");
-    assert_eq!(impact.view_metadata.as_ref().unwrap()["stamp"], "impact");
-    assert_eq!(
-        impact.view_metadata.unwrap()["freshness_error"],
-        "catch-up failed"
-    );
+    let ViewResult::Grounding(traversal) = grounding.result else { panic!("grounding view") };
+    assert_eq!(traversal.records[0].node.id().as_str(), "req_alpha");
+    let ViewResult::Impact(impact) = impact.result else { panic!("impact view") };
+    assert_eq!(impact.detail.id, "req_alpha");
+    assert_eq!(impact.response_metadata.unwrap().freshness_error.as_deref(), Some("catch-up failed"));
 }
 
 #[tokio::test]
@@ -203,10 +235,10 @@ async fn read_rejects_options_that_its_view_does_not_support() {
 #[verifies("rule_porcelain_output_reports_bounds", examples)]
 async fn incomplete_read_reports_its_bound_and_continuation() {
     let porcelain = Porcelain::new(FixturePort {
-        record: record("req_root", "requirement"),
+        record: node("req_root", "requirement"),
         traversed: Vec::new(),
         request: Arc::new(Mutex::new(None)),
-        impact: json!({"affected_rules": ["rule_child"]}),
+        impact: impact("req_root", 1),
         has_more: true,
         continuation: Some("next-page".into()),
         truncated: false,
@@ -216,7 +248,9 @@ async fn incomplete_read_reports_its_bound_and_continuation() {
     let mut input = GetInput::new("req_root", View::Impact);
     input.limit = Some(1);
 
-    let bounds = porcelain.get(input).await.unwrap().bounds.unwrap();
+    let outcome = porcelain.get(input).await.unwrap();
+    let ViewResult::Impact(impact) = outcome.result else { panic!("impact view") };
+    let bounds = impact.bounds;
 
     assert_eq!(bounds.limit, 1);
     assert_eq!(bounds.max_depth, None);
@@ -229,10 +263,10 @@ async fn impact_reuses_the_resolved_identity() {
     let resolves = Arc::new(Mutex::new(0));
     let impact_record = Arc::new(Mutex::new(None));
     let porcelain = Porcelain::new(FixturePort {
-        record: record("req_alpha", "requirement"),
+        record: node("req_alpha", "requirement"),
         traversed: Vec::new(),
         request: Arc::new(Mutex::new(None)),
-        impact: json!({"affected_rules": []}),
+        impact: impact("req_alpha", 50),
         has_more: false,
         continuation: None,
         truncated: false,
@@ -247,8 +281,8 @@ async fn impact_reuses_the_resolved_identity() {
 
     assert_eq!(*resolves.lock().unwrap(), 1);
     assert_eq!(
-        impact_record.lock().unwrap().as_ref().unwrap().kind,
-        "requirement"
+        impact_record.lock().unwrap().as_ref().unwrap().node_type(),
+        provenance_core::NodeType::Requirement
     );
 }
 
@@ -260,8 +294,8 @@ async fn get_resolves_a_record_from_its_id_alone() {
         .await
         .unwrap();
 
-    assert_eq!(outcome.record.id, "req_alpha");
-    assert_eq!(outcome.record.kind, "requirement");
+    assert_eq!(outcome.record.id().as_str(), "req_alpha");
+    assert_eq!(outcome.record.node_type(), provenance_core::NodeType::Requirement);
 }
 
 #[tokio::test]
@@ -272,13 +306,11 @@ async fn bare_get_returns_the_selected_record() {
         .await
         .unwrap();
 
-    assert_eq!(outcome.view, View::Record);
-    assert_eq!(
-        outcome.record.value["statement"],
-        "Keep the interface clear."
-    );
-    assert!(outcome.related.is_empty());
-    assert_eq!(outcome.bounds, None);
+    assert!(matches!(outcome.result, ViewResult::Record));
+    let encoded = serde_json::to_value(outcome).unwrap();
+    assert_eq!(encoded["record"]["value"]["statement"], "Keep the interface clear.");
+    assert_eq!(encoded["related"], json!([]));
+    assert_eq!(encoded["bounds"], json!(null));
 }
 
 #[allow(dead_code)]
