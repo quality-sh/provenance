@@ -55,6 +55,7 @@ impl ServerHandler for StatementHost {
             tools.push(crate::porcelain::check_tool());
         }
         tools.extend(crate::porcelain::authoring_tools(self));
+        tools.extend(crate::porcelain::discussion_tools(self));
         std::future::ready(Ok(ListToolsResult {
             tools,
             ..Default::default()
@@ -71,6 +72,25 @@ impl ServerHandler for StatementHost {
         }
         if request.name == "search" && crate::porcelain::search_is_available(self) {
             return call_search(self, request.arguments).await;
+        }
+        if let Some(action) = crate::porcelain::DiscussionAction::parse(&request.name) {
+            if !crate::porcelain::discussion_is_available(self, action) {
+                return Err(ErrorData::new(ErrorCode::METHOD_NOT_FOUND, "Unknown tool", None));
+            }
+            let _admission = match self.admit() {
+                Ok(permit) => permit,
+                Err(failure) => return Ok(error(failure)),
+            };
+            let arguments = request.arguments.unwrap_or_default();
+            if serde_json::to_vec(&arguments)
+                .map_err(|_| ErrorData::internal_error("Cannot encode input", None))?
+                .len() > MAX_BODY_BYTES
+            {
+                return Ok(error(ErasedFailure::new(None, OperationFailure::InvalidInput {
+                    field: None, reason: InvalidInputReason::TooLarge,
+                })));
+            }
+            return Ok(crate::porcelain::call_discussion(self, action, arguments).await);
         }
         if request.name == "check" {
             let Some(port) = self.check_port() else {
