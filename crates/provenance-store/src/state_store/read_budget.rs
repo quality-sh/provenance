@@ -154,7 +154,6 @@ macro_rules! payload_budget {
 }
 
 macro_rules! export_budget {
-    (ImplementationBindings, $record:ty) => {};
     ($variant:ident, $record:ty) => {
         projection_budget!($record);
     };
@@ -170,9 +169,15 @@ macro_rules! canonical_budget {
 
 macro_rules! define_family_budgets {
     (
-        export { $($export_variant:ident: $export_type:ty, $export_field:ident, $export_path:ident, $export_suffix:literal, $export_table:literal, [$($export_node:tt)*], $export_reader:ident, [$($export_closed:tt)*], $export_id:ident, [$($export_loader:tt)*], [$($export_catalog:tt)*];)* }
-        canonical { $($canonical_variant:ident: $canonical_type:ty, $canonical_field:ident, $canonical_path:ident, $canonical_suffix:literal, $canonical_table:literal, [$($canonical_node:tt)*], $canonical_reader:ident, [$($canonical_closed:tt)*], $canonical_id:ident, [$($canonical_loader:tt)*], [$($canonical_catalog:tt)*];)* }
-        bindings { $($binding_variant:ident: $binding_type:ty, $binding_field:ident, $binding_path:ident, $binding_suffix:literal, $binding_table:literal, [$($binding_node:tt)*], $binding_reader:ident, [$($binding_closed:tt)*], $binding_id:ident, [$($binding_loader:tt)*], [$($binding_catalog:tt)*];)* }
+        export { $(
+            $export_variant:ident { record: $export_type:ty, $($export_rest:tt)* };
+        )* }
+        canonical { $(
+            $canonical_variant:ident { record: $canonical_type:ty, $($canonical_rest:tt)* };
+        )* }
+        bindings { $(
+            $binding_variant:ident { record: $binding_type:ty, $($binding_rest:tt)* };
+        )* }
         internal { $($internal:tt)* }
     ) => {
         $(export_budget!($export_variant, $export_type);)*
