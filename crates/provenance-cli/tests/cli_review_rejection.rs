@@ -89,7 +89,7 @@ fn pending(host: &Host) -> String {
         host,
         "/resolutions/res_reject/submit",
         &json!({
-            "actor":"shaping_agent", "title":"Keep the result",
+            "actor":"shaping_agent", "declared_by":"shaping_agent", "title":"Keep the result",
             "summary":"The system stores each result.", "source_ids":[],
             "evidence_references":[], "builds_on":[]
         }),
