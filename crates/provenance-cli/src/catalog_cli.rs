@@ -342,14 +342,21 @@ fn input(
             }
         } else if let Some(request_schema) = &definition.request_schema {
             let field = flag.replace('-', "_");
-            let schema = body_field_schema(request_schema, &field)
+            let wire_field = definition
+                .registration
+                .request
+                .argument_aliases
+                .iter()
+                .find(|alias| alias.argument == field)
+                .map_or(field.as_str(), |alias| alias.field);
+            let schema = body_field_schema(request_schema, wire_field)
                 .ok_or_else(|| anyhow::anyhow!("unknown body field: --{flag}"))?;
             if value.starts_with('[') || value.starts_with('{') {
                 anyhow::bail!("arrays and objects must come from --stdin");
             }
             let parsed = catalog::parse_schema_value_in(request_schema, schema, value)
                 .map_err(|_| anyhow::anyhow!("invalid value for --{flag}"))?;
-            data.insert(field, parsed);
+            data.insert(wire_field.to_owned(), parsed);
         } else {
             query.insert(flag.replace('-', "_"), value.clone());
         }
@@ -404,7 +411,6 @@ fn input(
         data.entry("links").or_insert_with(|| json!([]));
     }
     if definition.name == "create-question" {
-        rename_scalar(&mut data, "method", "resolution_method");
         data.entry("status").or_insert_with(|| json!("open"));
         data.entry("links").or_insert_with(|| json!([]));
     }
@@ -441,12 +447,6 @@ fn body_field_schema<'a>(request: &'a Value, field: &str) -> Option<&'a Value> {
 fn move_scalar_to_singleton(data: &mut Map<String, Value>, source: &str, target: &str) {
     if let Some(value) = data.remove(source) {
         data.insert(target.to_owned(), json!([value]));
-    }
-}
-
-fn rename_scalar(data: &mut Map<String, Value>, source: &str, target: &str) {
-    if let Some(value) = data.remove(source) {
-        data.insert(target.to_owned(), value);
     }
 }
 
