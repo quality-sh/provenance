@@ -102,19 +102,7 @@ pub fn documents() -> (Value, Value) {
         let parameters = definition
             .parameters()
             .iter()
-            .map(|parameter| {
-                let mut document = json!({
-                    "name": parameter.name,
-                    "in": parameter.location,
-                    "required": parameter.required,
-                    "schema": parameter.schema,
-                });
-                if parameter.location == "query" && parameter.schema["type"] == "array" {
-                    document["style"] = json!("form");
-                    document["explode"] = json!(false);
-                }
-                document
-            })
+            .map(parameter_document)
             .collect::<Vec<_>>();
         let mut responses = Map::new();
         let mut success_response = json!({"description":"Operation result",
@@ -142,6 +130,36 @@ pub fn documents() -> (Value, Value) {
             operation["requestBody"] = json!({"required":true,
                 "content":{"application/json":{"schema":request}}});
         }
+        let variants = definition.query_variants();
+        if !variants.is_empty() {
+            operation["x-provenance-query-variants"] = Value::Array(
+                variants
+                    .into_iter()
+                    .map(|variant| {
+                        let suffix = variant.selector.map_or_else(
+                            || "Base".to_owned(),
+                            |selector| pascal(selector),
+                        );
+                        let success = component(
+                            &format!("{family}{suffix}Success"),
+                            variant.success_schema,
+                            &mut schemas,
+                        );
+                        let failure = component(
+                            &format!("{family}{suffix}Failure"),
+                            variant.failure_schema,
+                            &mut schemas,
+                        );
+                        json!({
+                            "selector": variant.selector,
+                            "parameters": variant.parameters.iter().map(parameter_document).collect::<Vec<_>>(),
+                            "success": success,
+                            "failure": failure,
+                        })
+                    })
+                    .collect(),
+            );
+        }
         paths
             .entry(definition.path.to_owned())
             .or_insert_with(|| json!({}))
@@ -163,6 +181,20 @@ pub fn documents() -> (Value, Value) {
             "paths":paths,"components":{"schemas":schemas}}),
         json!({"tools":tools}),
     )
+}
+
+fn parameter_document(parameter: &provenance_store::operations::catalog::Parameter) -> Value {
+    let mut document = json!({
+        "name": parameter.name,
+        "in": parameter.location,
+        "required": parameter.required,
+        "schema": parameter.schema,
+    });
+    if parameter.location == "query" && parameter.schema["type"] == "array" {
+        document["style"] = json!("form");
+        document["explode"] = json!(false);
+    }
+    document
 }
 
 fn add_metadata(paths: &mut Map<String, Value>, schemas: &mut Map<String, Value>) {

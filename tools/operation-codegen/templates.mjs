@@ -5,15 +5,49 @@ function operations(document) {
 const ref = schema => schema.$ref.split('/').at(-1);
 const propertyName = parameter => parameter.in === 'header'
   ? parameter.name.toLowerCase().replaceAll('-', '_') : parameter.name;
+const pascal = value => value.split(/[^a-zA-Z0-9]+/).filter(Boolean)
+  .map(part => part[0].toUpperCase() + part.slice(1)).join('');
+const queryVariants = op => op['x-provenance-query-variants'] ?? [];
+const variantStem = (op, variant) => `${pascal(op.operationId)}${variant.selector === null ? 'Base' : pascal(variant.selector)}`;
+const schemaName = schema => ref(schema);
+
+function tsType(parameter) {
+  const schema = parameter.schema;
+  if (typeof schema.const === 'string') return `'${schema.const.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`;
+  if (Array.isArray(schema.enum) && schema.enum.every(value => typeof value === 'string')) {
+    return schema.enum.map(value => `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`).join(' | ');
+  }
+  if (schema.type === 'integer' || schema.type === 'number') return 'number';
+  if (schema.type === 'boolean') return 'boolean';
+  if (schema.type === 'array') return 'string[]';
+  return 'string';
+}
+
+function tsFields(parameters) {
+  return parameters.map(parameter =>
+    `${JSON.stringify(propertyName(parameter))}${parameter.required ? '' : '?'}: ${tsType(parameter)}`);
+}
 
 function tsCall(op) {
-  const fields = (op.parameters ?? []).map(parameter =>
-    `${JSON.stringify(propertyName(parameter))}${parameter.required ? '' : '?'}: ${parameter.schema.type === 'integer' ? 'number' : parameter.schema.type === 'boolean' ? 'boolean' : parameter.schema.type === 'array' ? 'string[]' : 'string'}`);
+  const fields = tsFields(op.parameters ?? []);
   if (op.requestBody) {
     const request = ref(op.requestBody.content['application/json'].schema);
     fields.push(`data: components['schemas']['${request}']['data']`);
   }
   return `{ ${fields.join('; ')} }`;
+}
+
+function queryTypeDeclarations(op) {
+  return queryVariants(op).flatMap(variant => {
+    const stem = variantStem(op, variant);
+    const fields = tsFields(variant.parameters);
+    if (variant.selector === null) fields.push('"query"?: undefined');
+    return [
+      `export type ${stem}Input = { ${fields.join('; ')} };`,
+      `export type ${stem}Success = components['schemas']['${schemaName(variant.success)}'];`,
+      `export type ${stem}Failure = components['schemas']['${schemaName(variant.failure)}'];`,
+    ];
+  });
 }
 
 function tsRequest(path, method, op) {
@@ -38,10 +72,42 @@ ${query.map(parameter => `    if (call[${JSON.stringify(propertyName(parameter))
 
 export function typescriptClient(document, compatibility) {
   const routes = operations(document).filter(({ op }) => op.operationId !== 'metadata');
-  const failureTypes = [...new Set(routes.map(({ op }) => ref(op.responses['400'].content['application/json'].schema)))];
+  const failureTypes = [...new Set(routes.flatMap(({ op }) => queryVariants(op).length
+    ? queryVariants(op).map(variant => schemaName(variant.failure))
+    : [ref(op.responses['400'].content['application/json'].schema)]))];
+  const queryTypes = routes.flatMap(({ op }) => queryTypeDeclarations(op));
   const methods = routes.map(({ path, method, op }) => {
     const success = ref(op.responses['200'].content['application/json'].schema);
     const failure = ref(op.responses['400'].content['application/json'].schema);
+    const variants = queryVariants(op);
+    if (variants.length) {
+      const overloads = variants.map(variant => {
+        const stem = variantStem(op, variant);
+        return `  ${op.operationId}(call: ${stem}Input, options?: { signal?: AbortSignal }): Promise<${stem}Success>;`;
+      }).join('\n');
+      const successUnion = variants.map(variant => `${variantStem(op, variant)}Success`).join(' | ');
+      const failureUnion = variants.map(variant => `${variantStem(op, variant)}Failure`).join(' | ');
+      const contracts = variants.map(variant => {
+        const stem = variantStem(op, variant);
+        const condition = variant.selector === null
+          ? `call.query === undefined`
+          : `call.query === ${JSON.stringify(variant.selector)}`;
+        return `${condition} ? { success: validate.${schemaName(variant.success)}, failure: validate.${schemaName(variant.failure)} }`;
+      }).join(' : ');
+      return `${overloads}
+  async ${op.operationId}(call: ${tsCall(op)}, options: { signal?: AbortSignal } = {}): Promise<${successUnion}> {
+    const contract = ${contracts} : undefined;
+    if (contract === undefined) throw new TypeError('Invalid query selector');
+${tsRequest(path, method, op)}
+    const value = await readJson(response, '${op.operationId}', false, options.signal);
+    if (!response.ok) {
+      checked(value, contract.failure, '${op.operationId}', false);
+      throw new OperationError<${failureUnion}>(response.status, value as ${failureUnion});
+    }
+    checked(value, contract.success, '${op.operationId}', false);
+    return value as ${successUnion};
+  }`;
+    }
     return `  async ${op.operationId}(call: ${tsCall(op)}, options: { signal?: AbortSignal } = {}): Promise<components['schemas']['${success}']> {
 ${tsRequest(path, method, op)}
     const value = await readJson(response, '${op.operationId}', false, options.signal);
@@ -62,6 +128,7 @@ export type { components } from './schema.js';
 export const COMPATIBILITY = ${JSON.stringify(compatibility)} as const;
 export const PROTOCOL_VERSION = COMPATIBILITY.wire;
 export type OperationFailure = ${failureTypes.map(name => `components['schemas']['${name}']`).join(' | ')};
+${queryTypes.join('\n')}
 export class HttpClient {
   private constructor(private readonly baseUrl: string, private readonly fetcher: typeof fetch) {}
   static async connectWithBearer(baseUrl: string, bearer: string, fetcher: typeof fetch = fetch, options: { signal?: AbortSignal; repository?: string; scope?: string } = {}): Promise<HttpClient> {
@@ -106,6 +173,110 @@ function rustType(parameter) {
   const type = parameter.schema.type === 'integer' ? 'u64' : parameter.schema.type === 'boolean' ? 'bool' : parameter.schema.type === 'array' ? '&[&str]' : '&str';
   return parameter.required ? type : `Option<${type}>`;
 }
+
+function rustVariantType(parameter) {
+  const type = parameter.schema.type === 'integer' ? 'u64'
+    : parameter.schema.type === 'boolean' ? 'bool'
+      : parameter.schema.type === 'array' ? "&'a [&'a str]" : "&'a str";
+  return parameter.required ? type : `Option<${type}>`;
+}
+
+function rustQueryStatement(parameter) {
+  if (typeof parameter.schema.const === 'string') {
+    return `request = request.query(&[(${JSON.stringify(parameter.name)}, ${JSON.stringify(parameter.schema.const)})]);`;
+  }
+  const name = propertyName(parameter);
+  const value = parameter.schema.type === 'array' ? 'value.join(",")' : 'value.to_string()';
+  return parameter.required
+    ? `request = request.query(&[(${JSON.stringify(parameter.name)}, ${parameter.schema.type === 'array' ? `${name}.join(",")` : `${name}.to_string()`})]);`
+    : `if let Some(value) = ${name} { request = request.query(&[(${JSON.stringify(parameter.name)}, ${value})]); }`;
+}
+
+function rustVariantRequest(path, method, op, variant, operation) {
+  const parameters = variant.parameters;
+  const pathParameters = parameters.filter(parameter => parameter.in === 'path');
+  const queryParameters = parameters.filter(parameter => parameter.in === 'query');
+  const headerParameters = parameters.filter(parameter => parameter.in === 'header');
+  let setup = `let ${pathParameters.length ? 'mut ' : ''}url = self.base_url.clone() + "${path}";`;
+  for (const parameter of pathParameters) {
+    setup += `\n                url = url.replace("{${parameter.name}}", &runtime::path(${propertyName(parameter)}));`;
+  }
+  setup += `\n                let mut request = self.http.${method}(url);`;
+  for (const parameter of queryParameters) setup += `\n                ${rustQueryStatement(parameter)}`;
+  for (const parameter of headerParameters) {
+    setup += `\n                request = request.header(${JSON.stringify(parameter.name)}, ${propertyName(parameter)});`;
+  }
+  return `${setup}
+                let response = request.send().await.map_err(|cause| runtime::connection("${operation}", false, cause))?;`;
+}
+
+function rustQueryMethod(path, method, op) {
+  const variants = queryVariants(op);
+  const operation = op.operationId.replace(/[A-Z]/g, character => '_' + character.toLowerCase());
+  const operationStem = pascal(op.operationId);
+  const input = `${operationStem}Input`;
+  const output = `${operationStem}Output`;
+  const failure = `${operationStem}Failure`;
+  const imports = [...new Set(variants.flatMap(variant => [
+    schemaName(variant.success), schemaName(variant.failure),
+  ]))].sort();
+  const inputVariants = variants.map(variant => {
+    const name = variant.selector === null ? 'Base' : pascal(variant.selector);
+    const fields = variant.parameters
+      .filter(parameter => parameter.schema.const === undefined)
+      .map(parameter => `${propertyName(parameter)}: ${rustVariantType(parameter)}`);
+    return `    ${name} { ${fields.join(', ')} },`;
+  }).join('\n');
+  const outputs = variants.map(variant => {
+    const name = variant.selector === null ? 'Base' : pascal(variant.selector);
+    return `    ${name}(${schemaName(variant.success)}),`;
+  }).join('\n');
+  const failures = variants.map(variant => {
+    const name = variant.selector === null ? 'Base' : pascal(variant.selector);
+    return `    ${name}(${schemaName(variant.failure)}),`;
+  }).join('\n');
+  const arms = variants.map(variant => {
+    const name = variant.selector === null ? 'Base' : pascal(variant.selector);
+    const fields = variant.parameters.filter(parameter => parameter.schema.const === undefined)
+      .map(parameter => propertyName(parameter));
+    const pattern = fields.length ? ` { ${fields.join(', ')} }` : '';
+    const success = schemaName(variant.success);
+    const failed = schemaName(variant.failure);
+    return `            ${input}::${name}${pattern} => {
+                ${rustVariantRequest(path, method, op, variant, operation)}
+                let status = response.status();
+                let value = runtime::read_json(response, "${operation}", false).await?;
+                if !status.is_success() {
+                    runtime::validate(&value, "${failed}", "${operation}", false)?;
+                    let failure = runtime::decode(value, "${operation}", false)?;
+                    return Err(Error::Operation { status: status.as_u16(), failure: OperationFailure::${operationStem}(Box::new(${failure}::${name}(failure))) });
+                }
+                runtime::validate(&value, "${success}", "${operation}", false)?;
+                Ok(${output}::${name}(runtime::decode(value, "${operation}", false)?))
+            }`;
+  }).join(',\n');
+  return `// Generated from OpenAPI. Do not edit.
+use crate::types::{${imports.join(', ')}};
+pub enum ${input}<'a> {
+${inputVariants}
+}
+#[derive(Debug)]
+pub enum ${output} {
+${outputs}
+}
+#[derive(Debug, serde::Serialize)]
+pub enum ${failure} {
+${failures}
+}
+impl HttpClient {
+    pub async fn ${operation}(&self, call: ${input}<'_>) -> Result<${output}, Error> {
+        match call {
+${arms}
+        }
+    }
+}
+`;
+}
 function rustArgs(op) {
   const args = (op.parameters ?? []).map(parameter => `${propertyName(parameter)}: ${rustType(parameter)}`);
   if (op.requestBody) args.push(`call: &${ref(op.requestBody.content['application/json'].schema)}`);
@@ -139,10 +310,16 @@ export function rustClientFiles(document, compatibility) {
   const imports = new Set(['MetadataSuccess']);
   for (const { op } of routes) {
     if (op.requestBody) imports.add(ref(op.requestBody.content['application/json'].schema));
-    imports.add(ref(op.responses['200'].content['application/json'].schema));
-    imports.add(ref(op.responses['400'].content['application/json'].schema));
+    if (!queryVariants(op).length) {
+      imports.add(ref(op.responses['200'].content['application/json'].schema));
+      imports.add(ref(op.responses['400'].content['application/json'].schema));
+    }
   }
   const methods = Object.fromEntries(routes.map(({ path, method, op }) => {
+    if (queryVariants(op).length) {
+      const name = op.operationId.replace(/[A-Z]/g, c => '_' + c.toLowerCase());
+      return [`operations/${name}.rs`, rustQueryMethod(path, method, op)];
+    }
     const success = ref(op.responses['200'].content['application/json'].schema);
     const failure = ref(op.responses['400'].content['application/json'].schema);
     const variant = op.operationId[0].toUpperCase() + op.operationId.slice(1);
@@ -167,6 +344,7 @@ impl HttpClient {
   }));
   const failures = routes.map(({ op }) => {
     const variant = op.operationId[0].toUpperCase() + op.operationId.slice(1);
+    if (queryVariants(op).length) return `    ${variant}(Box<${variant}Failure>),`;
     return `    ${variant}(Box<${ref(op.responses['400'].content['application/json'].schema)}>),`;
   }).join('\n');
   const c = compatibility;
