@@ -196,6 +196,34 @@ fn the_error_policy_passes_once_the_active_rule_has_a_verification_site() {
 }
 
 #[test]
+#[verifies("rule_active_rule_reports_missing_implementation", examples)]
+fn the_error_policy_does_not_fail_for_only_a_missing_implementation() {
+    let repo = init_repo();
+    create_rule(repo.path(), "rule_unimplemented", "active");
+    set_binding_policy(repo.path(), "error");
+    std::fs::write(
+        repo.path().join("src_check.rs"),
+        "#[verifies(\"rule_unimplemented\", examples)]\nfn checks_the_rule() {}\n",
+    )
+    .unwrap();
+
+    let output = full_scan(repo.path()).output().unwrap();
+
+    assert!(output.status.success());
+    let findings = warnings(&output.stdout);
+    let finding = findings
+        .iter()
+        .find(|warning| {
+            warning["rule_id"] == "rule_unimplemented"
+                && warning["message"]
+                    .as_str()
+                    .is_some_and(|message| message.contains("has no implementation"))
+        })
+        .expect("the missing implementation must remain visible");
+    assert_eq!(finding["binding_finding"], json!(false));
+}
+
+#[test]
 #[verifies("rule_inactive_rules_have_no_current_bindings", examples)]
 fn the_error_policy_fails_on_a_deprecated_rule_with_a_current_typed_verification() {
     let repo = init_repo();

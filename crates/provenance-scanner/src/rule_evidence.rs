@@ -72,6 +72,7 @@ impl RuleEvidenceFacts {
 /// withholds absence facts but still reports current bindings to inactive
 /// Rules.
 #[rule("rule_active_rule_requires_verification")]
+#[rule("rule_active_rule_reports_missing_implementation")]
 #[rule("rule_inactive_rules_have_no_current_bindings")]
 pub fn derive_rule_evidence_facts(
     rules: &[Rule],

@@ -76,7 +76,7 @@ pub fn build_envelope(input: &BuildInput<'_>) -> anyhow::Result<ReportEnvelope> 
     let (verifications, implementations) =
         graph_snapshots::read_bindings(input.repo, &head, &scope)?;
 
-    let finding_records = collect_findings(&FindingInput {
+    let collected = collect_findings(&FindingInput {
         repo: input.repo,
         base: &base,
         head: &head,
@@ -92,13 +92,6 @@ pub fn build_envelope(input: &BuildInput<'_>) -> anyhow::Result<ReportEnvelope> 
         binding_severity: binding_severity(configured),
         completeness,
     })?;
-    let governed = finding_records
-        .iter()
-        .filter(|finding| {
-            finding.code == "active_rule_missing_verification"
-                || finding.code == "inactive_rule_current_binding"
-        })
-        .count();
     let graph_changes = if baseline == BaselineCompatibility::Compatible {
         graph_snapshots::diff_snapshots(&base_snapshot, &head_snapshot)
     } else {
@@ -121,10 +114,10 @@ pub fn build_envelope(input: &BuildInput<'_>) -> anyhow::Result<ReportEnvelope> 
         },
         policy: Some(crate::envelope::PolicyOutcome {
             mode: policy_mode(configured),
-            result: policy_result(configured, governed),
+            result: policy_result(configured, collected.governed_finding_count),
         }),
         graph_changes,
-        findings: finding_records,
+        findings: collected.records,
         // Verification-run facts are out of scope for this producer. A run
         // the layers cannot supply stays absent; it is never invented.
         verification_runs: Vec::new(),
@@ -180,7 +173,7 @@ fn read_snapshots(
 /// baseline facts. Absence needs a complete scan: an incomplete scan cannot
 /// clear an absence, so it never reports one. Comparative findings need a
 /// compatible baseline.
-fn collect_findings(input: &FindingInput<'_>) -> anyhow::Result<Vec<crate::envelope::Finding>> {
+fn collect_findings(input: &FindingInput<'_>) -> anyhow::Result<CollectedFindings> {
     let rules = &input.head_snapshot.rules;
     let mut finding_records = Vec::new();
     let completeness = match input.completeness {
@@ -194,6 +187,7 @@ fn collect_findings(input: &FindingInput<'_>) -> anyhow::Result<Vec<crate::envel
         input.verifications,
         completeness,
     );
+    let governed_finding_count = facts.governed_finding_count();
     finding_records.extend(findings::rule_evidence_findings(
         &facts,
         input.baseline_view,
@@ -217,7 +211,15 @@ fn collect_findings(input: &FindingInput<'_>) -> anyhow::Result<Vec<crate::envel
             )?);
         }
     }
-    Ok(finding_records)
+    Ok(CollectedFindings {
+        records: finding_records,
+        governed_finding_count,
+    })
+}
+
+struct CollectedFindings {
+    records: Vec<crate::envelope::Finding>,
+    governed_finding_count: usize,
 }
 
 /// The gathered facts one finding pass reads.
