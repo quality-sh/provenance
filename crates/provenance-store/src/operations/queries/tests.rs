@@ -10,6 +10,7 @@ use provenance_core::{
 };
 
 mod comparison;
+mod budgets;
 mod concurrent;
 mod cursor;
 mod dangling_targets;
