@@ -79,5 +79,13 @@ fn each_source_edit_phase_recovers_matching_file_and_state() {
         assert_eq!(std::fs::read(root.join("source.txt")).unwrap(), AFTER, "{phase}");
         assert_eq!(std::fs::read(layout.state_dir().join("value")).unwrap(), AFTER, "{phase}");
         assert!(!layout.source_edit_marker_path().exists(), "{phase}");
+        let names = std::fs::read_dir(root)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+        assert!(
+            !names.iter().any(|name| name.ends_with(".tmp")),
+            "{phase}: {names:?}"
+        );
     }
 }
