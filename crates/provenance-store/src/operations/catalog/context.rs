@@ -85,6 +85,14 @@ impl PreparedContext {
             scope: Some(scope),
         }
     }
+    /// Use native answer framing after a host has authorized this context.
+    #[must_use]
+    pub(super) fn into_native(mut self) -> Self {
+        if let Some(read) = &mut self.read {
+            read.external = false;
+        }
+        self
+    }
     pub(super) fn scope(self) -> Result<PreparedScope, OperationFailure> {
         self.scope.ok_or(OperationFailure::UnavailableNeeds)
     }
