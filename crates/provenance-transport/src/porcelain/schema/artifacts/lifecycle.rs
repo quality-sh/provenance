@@ -1,6 +1,6 @@
 use serde_json::{json, Value};
 
-pub(in crate::handlers::schema) fn assertion_schema() -> Value {
+pub(in crate::porcelain::schema) fn assertion_schema() -> Value {
     json!({
         "title": "Assertion",
         "type": "object",
@@ -16,7 +16,7 @@ pub(in crate::handlers::schema) fn assertion_schema() -> Value {
     })
 }
 
-pub(in crate::handlers::schema) fn disposition_schema() -> Value {
+pub(in crate::porcelain::schema) fn disposition_schema() -> Value {
     json!({
         "title": "Disposition",
         "type": "object",

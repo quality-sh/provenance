@@ -1,60 +1,59 @@
-use crate::{cli::ideation::IdeationArtifactKind, output};
+//! The validate adapter: one artifact file against its closed schema and its record checks.
+
+use super::swarm_backtrace::{validate_contribution_record, validate_proposal_card_record};
+use super::ArtifactPort;
 use anyhow::Context;
 use camino::Utf8Path;
 use provenance_core::{
     AssertionRecord, Contribution, DispositionRecord, ProposalCard, SynthesisPacket,
 };
+use provenance_porcelain::schema::Artifact;
+use provenance_porcelain::validate::{ValidateInput, ValidatePort, ValidationReport};
+use provenance_porcelain::WorkFuture;
 use provenance_store::graph_reference::{ExactExport, GraphReference};
-use provenance_transport::porcelain::{
-    validate_contribution_record, validate_proposal_card_record,
-};
-use serde::Serialize;
 
-#[derive(Serialize)]
-struct ValidationReport {
-    artifact: &'static str,
-    input: String,
-    valid: bool,
+impl ValidatePort for ArtifactPort {
+    type Failure = anyhow::Error;
+
+    fn validate(&self, input: ValidateInput) -> WorkFuture<'_, ValidationReport, anyhow::Error> {
+        Box::pin(async move {
+            validate_file(input.artifact, Utf8Path::new(&input.input))?;
+            Ok(ValidationReport {
+                artifact: input.artifact.name().to_owned(),
+                input: input.input,
+                valid: true,
+            })
+        })
+    }
 }
 
-pub(super) fn handle(artifact: IdeationArtifactKind, input: &Utf8Path) -> anyhow::Result<()> {
-    validate_file(artifact, input)?;
-    output::print_json(&ValidationReport {
-        artifact: artifact.name(),
-        input: input.to_string(),
-        valid: true,
-    })
-}
-
-pub(super) fn validate_file(
-    artifact: IdeationArtifactKind,
-    input: &Utf8Path,
-) -> anyhow::Result<()> {
+/// Reads one artifact file and runs the checks of its kind.
+fn validate_file(artifact: Artifact, input: &Utf8Path) -> anyhow::Result<()> {
     let json = std::fs::read_to_string(input).with_context(|| format!("failed to read {input}"))?;
     match artifact {
-        IdeationArtifactKind::Contribution => {
+        Artifact::Contribution => {
             let contribution: Contribution = serde_json::from_str(&json)?;
             validate_contribution_record(&contribution)?;
         }
-        IdeationArtifactKind::SynthesisPacket => {
+        Artifact::SynthesisPacket => {
             let _: SynthesisPacket = serde_json::from_str(&json)?;
         }
-        IdeationArtifactKind::Proposal => {
+        Artifact::Proposal => {
             let proposal: ProposalCard = serde_json::from_str(&json)?;
             validate_proposal_card_record(&proposal)?;
         }
-        IdeationArtifactKind::Assertion => {
+        Artifact::Assertion => {
             let assertion: AssertionRecord = serde_json::from_str(&json)?;
             provenance_core::validate_assertion_intrinsic(&assertion)?;
         }
-        IdeationArtifactKind::Disposition => {
+        Artifact::Disposition => {
             let disposition: DispositionRecord = serde_json::from_str(&json)?;
             provenance_core::validate_disposition_intrinsic(&disposition)?;
         }
-        IdeationArtifactKind::GraphReference => {
+        Artifact::GraphReference => {
             GraphReference::from_json(json.as_bytes())?;
         }
-        IdeationArtifactKind::GraphReferenceExport => {
+        Artifact::GraphReferenceExport => {
             let value = serde_json::from_str(&json)?;
             super::schema::validate_graph_reference_export(&value)?;
             ExactExport::from_json(json.as_bytes())?;

@@ -6,12 +6,12 @@ use super::{
     },
     schema_for,
 };
-use crate::cli::IdeationArtifactKind;
 use provenance_core::{
     ArtifactChangeType, ContributionStance, EvidenceQuality, IdeationEvidenceType,
     IdeationTargetType, PromotionState, ProposalType, SpeculationMarker, UncertaintyLevel,
 };
 use provenance_macros::verifies;
+use provenance_porcelain::schema::Artifact;
 use provenance_store::graph_reference::{graph_digest, GraphExport};
 use serde_json::{json, Value};
 
@@ -172,9 +172,9 @@ fn schema_enum_variant_arrays_are_exhaustive() {
 
 #[test]
 fn schema_show_enum_values_match_model_serialization() {
-    let contribution = schema_for(IdeationArtifactKind::Contribution);
-    let synthesis = schema_for(IdeationArtifactKind::SynthesisPacket);
-    let proposal = schema_for(IdeationArtifactKind::Proposal);
+    let contribution = schema_for(Artifact::Contribution);
+    let synthesis = schema_for(Artifact::SynthesisPacket);
+    let proposal = schema_for(Artifact::Proposal);
     let target_types = enum_names(&IDEATION_TARGET_TYPES);
     let evidence_types = enum_names(&IDEATION_EVIDENCE_TYPES);
     let change_types = enum_names(&ARTIFACT_CHANGE_TYPES);
@@ -343,7 +343,7 @@ fn minimal_exact_export_without_digest() -> Value {
 
 #[test]
 fn graph_reference_export_schema_validates_record_structure() {
-    let shown = schema_for(IdeationArtifactKind::GraphReferenceExport);
+    let shown = schema_for(Artifact::GraphReferenceExport);
     let schema = shown.get("schema").unwrap();
     let validator = jsonschema::draft7::new(schema).unwrap();
     let valid = minimal_exact_export();

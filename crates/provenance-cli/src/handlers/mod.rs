@@ -1,8 +1,9 @@
 use crate::cli;
-use crate::output::{self, JsonFormat, OutputFormat};
+use crate::output::{self, JsonFormat};
 use crate::registry_cli::BoundContext;
 use camino::Utf8PathBuf;
 use provenance_cli::servers::{DocsServeInput, McpInput, ReviewInput, Server};
+use provenance_porcelain::export::Document;
 use provenance_porcelain::registry::{
     self, CargoInitInput, DictionaryImportInput, DictionaryStatusInput, ExportInput, GraphCommand,
     ImportInput, InitInput, MaterializeInput, MergeJsonlInput, ReferenceInput, ReferenceIssueInput,
@@ -10,24 +11,18 @@ use provenance_porcelain::registry::{
     SkillsListInput, SkillsShowInput, SwarmBacktraceLandInput, ValidateInput, WorkspaceCommand,
 };
 use provenance_porcelain::Porcelain;
-use provenance_transport::porcelain::RepositoryPort;
+use provenance_transport::porcelain::{ArtifactPort, RepositoryPort};
 use provenance_transport::repository::RepoContext;
 
 mod cargo_init;
-mod dictionary;
 mod docs;
 #[cfg(feature = "dogfood")]
 mod dogfood;
-mod export;
-mod graph_reference;
 mod mcp;
 mod merge_jsonl;
 mod prime;
 mod repo;
-mod report;
-mod schema;
 mod skills;
-mod validate;
 
 #[cfg(feature = "dogfood")]
 #[allow(clippy::redundant_pub_crate)]
@@ -54,13 +49,13 @@ pub(super) enum RepositoryInput {
     Init(InitInput),
     CargoInit(CargoInitInput),
     Materialize(MaterializeInput, BoundContext),
-    Export(ExportInput),
+    Export(ExportInput, BoundContext),
     Import(ImportInput, BoundContext),
     MergeJsonl(MergeJsonlInput),
     Validate(ValidateInput),
     SchemaShow(SchemaShowInput),
     DictionaryImport(DictionaryImportInput, BoundContext),
-    DictionaryStatus(DictionaryStatusInput),
+    DictionaryStatus(DictionaryStatusInput, BoundContext),
 }
 
 impl RepositoryInput {
@@ -86,13 +81,13 @@ impl RepositoryInput {
             RepositoryCommand::Init => read!(Init),
             RepositoryCommand::CargoInit => read!(CargoInit),
             RepositoryCommand::Materialize => read!(Materialize, bound),
-            RepositoryCommand::Export => read!(Export),
+            RepositoryCommand::Export => read!(Export, bound),
             RepositoryCommand::Import => read!(Import, bound),
             RepositoryCommand::MergeJsonl => read!(MergeJsonl),
             RepositoryCommand::Validate => read!(Validate),
             RepositoryCommand::SchemaShow => read!(SchemaShow),
             RepositoryCommand::DictionaryImport => read!(DictionaryImport, bound),
-            RepositoryCommand::DictionaryStatus => read!(DictionaryStatus),
+            RepositoryCommand::DictionaryStatus => read!(DictionaryStatus, bound),
         })
     }
 }
@@ -135,11 +130,11 @@ pub(super) async fn repository_command(input: RepositoryInput, quiet: bool) -> a
                 provenance_porcelain::materialize::render_readable,
             )
         }
-        RepositoryInput::Export(input) => export::handle(
-            &RepoContext::new(input.repo, input.scope),
-            flag_value(&input.format, OutputFormat::from_flag)?,
-            input.output.map(Utf8PathBuf::from),
-        ),
+        RepositoryInput::Export(input, context) => {
+            let to_file = input.output.is_some();
+            print_document(to_file, &work(context).export(input).await?);
+            Ok(())
+        }
         RepositoryInput::Import(input, context) => {
             let json = context.json;
             let result = work(context).import(input).await?;
@@ -158,16 +153,11 @@ pub(super) async fn repository_command(input: RepositoryInput, quiet: bool) -> a
         }
         RepositoryInput::Validate(input) => {
             flag_value(&input.format, JsonFormat::from_flag)?;
-            validate::handle(
-                artifact(&input.artifact)?,
-                camino::Utf8Path::new(&input.input),
-            )
+            output::print_json(&Porcelain::new(ArtifactPort).validate(input).await?)
         }
         RepositoryInput::SchemaShow(input) => {
             flag_value(&input.format, JsonFormat::from_flag)?;
-            schema::handle(cli::SchemaCommand::Show {
-                artifact: artifact(&input.artifact)?,
-            })
+            output::print_json(&Porcelain::new(ArtifactPort).schema_show(input).await?)
         }
         RepositoryInput::DictionaryImport(input, context) => {
             let json = context.json;
@@ -178,9 +168,9 @@ pub(super) async fn repository_command(input: RepositoryInput, quiet: bool) -> a
                 provenance_porcelain::dictionary::render_import_readable,
             )
         }
-        RepositoryInput::DictionaryStatus(input) => {
+        RepositoryInput::DictionaryStatus(input, context) => {
             flag_value(&input.format, JsonFormat::from_flag)?;
-            dictionary::status(camino::Utf8Path::new(&input.repo))
+            output::print_json(&work(context).dictionary_status(input).await?)
         }
     }
 }
@@ -199,6 +189,13 @@ fn print<T: serde::Serialize>(
     }
 }
 
+/// Prints a document read, unless the read wrote it to the output file of its input.
+fn print_document(to_file: bool, document: &Document) {
+    if !to_file {
+        print!("{}", document.text);
+    }
+}
+
 /// The repository commands on the repository and scope of the CLI options.
 fn work(context: BoundContext) -> Porcelain<RepositoryPort> {
     Porcelain::new(RepositoryPort::new(RepoContext::new(
@@ -210,10 +207,10 @@ fn work(context: BoundContext) -> Porcelain<RepositoryPort> {
 /// The typed input of one graph command, read from its declared flags.
 #[allow(clippy::redundant_pub_crate)]
 pub(super) enum GraphInput {
-    ReferenceIssue(ReferenceIssueInput),
-    ReferenceShow(ReferenceInput),
-    ReferenceVerify(ReferenceInput),
-    ReferenceExactExport(ReferenceInput),
+    ReferenceIssue(ReferenceIssueInput, BoundContext),
+    ReferenceShow(ReferenceInput, BoundContext),
+    ReferenceVerify(ReferenceInput, BoundContext),
+    ReferenceExactExport(ReferenceInput, BoundContext),
     SwarmBacktraceLand(SwarmBacktraceLandInput, BoundContext),
 }
 
@@ -227,7 +224,10 @@ impl GraphInput {
         let declaration = registry::Command::Graph(command).declaration();
         macro_rules! read {
             ($variant:ident) => {
-                Self::$variant(crate::registry_cli::input(&declaration, matches)?)
+                Self::$variant(
+                    crate::registry_cli::input(&declaration, matches)?,
+                    crate::registry_cli::bound_context(matches),
+                )
             };
         }
         Ok(match command {
@@ -235,10 +235,7 @@ impl GraphInput {
             GraphCommand::ReferenceShow => read!(ReferenceShow),
             GraphCommand::ReferenceVerify => read!(ReferenceVerify),
             GraphCommand::ReferenceExactExport => read!(ReferenceExactExport),
-            GraphCommand::SwarmBacktraceLand => Self::SwarmBacktraceLand(
-                crate::registry_cli::input(&declaration, matches)?,
-                crate::registry_cli::bound_context(matches),
-            ),
+            GraphCommand::SwarmBacktraceLand => read!(SwarmBacktraceLand),
         })
     }
 }
@@ -246,28 +243,18 @@ impl GraphInput {
 /// Runs one graph command.
 #[allow(clippy::redundant_pub_crate)]
 pub(super) async fn graph_command(input: GraphInput) -> anyhow::Result<()> {
-    use cli::graph::GraphReferenceCommand;
-    let reference = |input: ReferenceInput| (input.repo.into(), input.reference.into());
     match input {
-        GraphInput::ReferenceIssue(input) => {
-            graph_reference::handle(GraphReferenceCommand::Issue {
-                context: RepoContext::new(input.repo, input.scope),
-                commit: input.commit,
-                correlation_system: input.correlation_system,
-                correlation_key: input.correlation_key,
-            })
+        GraphInput::ReferenceIssue(input, context) => {
+            output::print_json(&work(context).reference_issue(input).await?)
         }
-        GraphInput::ReferenceShow(input) => {
-            let (repo, reference) = reference(input);
-            graph_reference::handle(GraphReferenceCommand::Show { repo, reference })
+        GraphInput::ReferenceShow(input, context) => {
+            output::print_json(&work(context).reference_show(input).await?)
         }
-        GraphInput::ReferenceVerify(input) => {
-            let (repo, reference) = reference(input);
-            graph_reference::handle(GraphReferenceCommand::Verify { repo, reference })
+        GraphInput::ReferenceVerify(input, context) => {
+            output::print_json(&work(context).reference_verify(input).await?)
         }
-        GraphInput::ReferenceExactExport(input) => {
-            let (repo, reference) = reference(input);
-            graph_reference::handle(GraphReferenceCommand::ExactExport { repo, reference })
+        GraphInput::ReferenceExactExport(input, context) => {
+            output::print_json(&work(context).reference_exact_export(input).await?)
         }
         GraphInput::SwarmBacktraceLand(input, context) => {
             let json = context.json;
@@ -286,10 +273,6 @@ fn flag_value<T>(value: &str, parse: impl FnOnce(&str) -> Option<T>) -> anyhow::
     parse(value).ok_or_else(|| anyhow::anyhow!("unsupported value {value}"))
 }
 
-fn artifact(value: &str) -> anyhow::Result<cli::IdeationArtifactKind> {
-    flag_value(value, cli::IdeationArtifactKind::from_name)
-}
-
 /// The typed input of one workspace command, read from its declared flags.
 #[allow(clippy::redundant_pub_crate)]
 pub(super) enum WorkspaceInput {
@@ -297,7 +280,7 @@ pub(super) enum WorkspaceInput {
     SkillsShow(SkillsShowInput),
     SkillsInstall(SkillsInstallInput),
     ReportRender(ReportRenderInput),
-    ReportBuild(ReportBuildInput),
+    ReportBuild(ReportBuildInput, BoundContext),
 }
 
 impl WorkspaceInput {
@@ -312,21 +295,27 @@ impl WorkspaceInput {
             ($variant:ident) => {
                 Self::$variant(crate::registry_cli::input(&declaration, matches)?)
             };
+            ($variant:ident, bound) => {
+                Self::$variant(
+                    crate::registry_cli::input(&declaration, matches)?,
+                    crate::registry_cli::bound_context(matches),
+                )
+            };
         }
         Ok(match command {
             WorkspaceCommand::SkillsList => read!(SkillsList),
             WorkspaceCommand::SkillsShow => read!(SkillsShow),
             WorkspaceCommand::SkillsInstall => read!(SkillsInstall),
             WorkspaceCommand::ReportRender => read!(ReportRender),
-            WorkspaceCommand::ReportBuild => read!(ReportBuild),
+            WorkspaceCommand::ReportBuild => read!(ReportBuild, bound),
         })
     }
 }
 
 /// Runs one workspace command.
 #[allow(clippy::redundant_pub_crate)]
-pub(super) fn workspace_command(input: WorkspaceInput) -> anyhow::Result<()> {
-    use cli::{report::ReportCommand, workspace::SkillsCommand};
+pub(super) async fn workspace_command(input: WorkspaceInput) -> anyhow::Result<()> {
+    use cli::workspace::SkillsCommand;
     match input {
         WorkspaceInput::SkillsList(input) => {
             flag_value(&input.format, JsonFormat::from_flag)?;
@@ -343,20 +332,20 @@ pub(super) fn workspace_command(input: WorkspaceInput) -> anyhow::Result<()> {
                 force: input.force,
             })
         }
-        WorkspaceInput::ReportRender(input) => report::handle(ReportCommand::Render {
-            input: input.input.into(),
-            format: flag_value(&input.format, output::ReportFormat::from_flag)?,
-            output: input.output.map(Utf8PathBuf::from),
-        }),
-        WorkspaceInput::ReportBuild(input) => report::handle(ReportCommand::Build {
-            repo: input.repo.into(),
-            base: input.base,
-            head: input.head,
-            repository: input.repository,
-            scope: input.scope,
-            path: input.path.map(Utf8PathBuf::from),
-            output: input.output.map(Utf8PathBuf::from),
-        }),
+        WorkspaceInput::ReportRender(input) => {
+            let to_file = input.output.is_some();
+            print_document(
+                to_file,
+                &Porcelain::new(ArtifactPort).report_render(input).await?,
+            );
+            Ok(())
+        }
+        WorkspaceInput::ReportBuild(input, context) => {
+            flag_value(&input.format, JsonFormat::from_flag)?;
+            let to_file = input.output.is_some();
+            print_document(to_file, &work(context).report_build(input).await?);
+            Ok(())
+        }
     }
 }
 
@@ -424,6 +413,11 @@ async fn run_blocking(
 mod tests {
     use super::*;
 
+    /// The value names one variant of the input type of its field.
+    fn names<T: serde::de::DeserializeOwned>(value: &str) -> bool {
+        serde_json::from_value::<T>(serde_json::Value::from(value)).is_ok()
+    }
+
     /// Implementation aid: each value that a CLI-only registry flag declares converts to
     /// the CLI value that its handler takes.
     #[test]
@@ -446,16 +440,16 @@ mod tests {
                             if *command
                                 == registry::Command::Repository(RepositoryCommand::Export) =>
                         {
-                            OutputFormat::from_flag(value).is_some()
+                            names::<provenance_porcelain::export::ExportFormat>(value)
                         }
                         "format"
                             if *command
                                 == registry::Command::Workspace(WorkspaceCommand::ReportRender) =>
                         {
-                            output::ReportFormat::from_flag(value).is_some()
+                            names::<provenance_porcelain::report::ReportFormat>(value)
                         }
                         "format" => JsonFormat::from_flag(value).is_some(),
-                        "artifact" => artifact(value).is_ok(),
+                        "artifact" => names::<provenance_porcelain::schema::Artifact>(value),
                         "invocation_channel" => cli::InvocationChannel::from_flag(value).is_some(),
                         "package_manager" => cli::PackageManager::from_flag(value).is_some(),
                         #[cfg(feature = "dogfood")]

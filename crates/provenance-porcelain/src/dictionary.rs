@@ -56,3 +56,51 @@ pub fn render_import_readable(output: &DictionaryImportOutput) -> String {
         output.issue, output.approved_rows, output.unapproved_rows, output.data_sha256
     )
 }
+
+/// The `dictionary status` input.
+#[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DictionaryStatusInput {
+    pub format: String,
+}
+
+/// One status line for CI logs: the referenced identity, whether the index is present,
+/// and the analyzer that the statement checks use.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct DictionaryStatusOutput {
+    pub referenced: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub issue: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_sha256: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data_sha256: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extractor_version: Option<String>,
+    pub index_directory: Option<String>,
+    pub index_present: bool,
+    pub analyzer: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub load_problem: Option<String>,
+}
+
+/// The port that reports the dictionary reference of the bound repository.
+pub trait DictionaryStatusPort: Send + Sync {
+    /// The failure that this port reports.
+    type Failure;
+
+    fn dictionary_status(
+        &self,
+        input: DictionaryStatusInput,
+    ) -> WorkFuture<'_, DictionaryStatusOutput, Self::Failure>;
+}
+
+impl<P: DictionaryStatusPort> crate::Porcelain<P> {
+    /// The dictionary reference of the bound repository and the analyzer it selects.
+    pub async fn dictionary_status(
+        &self,
+        input: DictionaryStatusInput,
+    ) -> Result<DictionaryStatusOutput, P::Failure> {
+        self.port.dictionary_status(input).await
+    }
+}

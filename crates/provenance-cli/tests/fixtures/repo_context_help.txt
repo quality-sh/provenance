@@ -37,6 +37,8 @@ Options:
 ··········
 ······--correlation-key·<CORRELATION_KEY>
 ··········
+······--format·<FORMAT>
+··········[default:·json]·[possible·values:·json]
 ··-h,·--help
 ··········Print·help
 ===·swarm-backtrace-land·===
