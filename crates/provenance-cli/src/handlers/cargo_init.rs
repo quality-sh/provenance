@@ -14,6 +14,7 @@ const SDK_CRATE: &str = "provenance-sdk";
 pub(super) fn handle(
     requested_package: Option<&str>,
     ste_pdf: Option<Utf8PathBuf>,
+    quiet: bool,
 ) -> anyhow::Result<()> {
     let metadata = load_metadata()?;
     let package = select_package(&metadata, requested_package)?;
@@ -50,13 +51,24 @@ pub(super) fn handle(
         }
     };
 
-    println!(
-        "Initialized Provenance {} for Cargo package '{}' in {}.",
-        env!("CARGO_PKG_VERSION"),
-        package.name,
-        metadata.workspace_root
-    );
-    ending.print_dictionary();
+    let cargo_changes = cargo_rollback
+        .as_ref()
+        .map(|rollback| rollback.changes(metadata.workspace_root.as_std_path()))
+        .transpose()?
+        .unwrap_or_default();
+    ending
+        .for_cargo(
+            format!(
+                "Initialized Provenance for Cargo package '{}' in {}",
+                package.name, metadata.workspace_root
+            ),
+            format!(
+                "Provenance is already set up for Cargo package '{}' in {}. No change.",
+                package.name, metadata.workspace_root
+            ),
+            &cargo_changes,
+        )
+        .print(quiet);
     Ok(())
 }
 

@@ -45,7 +45,7 @@ fn the_simulation_passes_on_a_clean_sandbox_and_removes_it() {
         .stdout(predicate::str::contains("simulated onboarding"))
         // The loopback fixture, not the network, served the dictionary.
         .stdout(predicate::str::contains(
-            "Dictionary: Imported the Issue 9 dictionary from the official asset.",
+            "Have your agent run provenance prime to get acclimated.",
         ))
         .stdout(predicate::str::contains("requirements create"))
         .stdout(predicate::str::contains("coverage scan"))

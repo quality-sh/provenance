@@ -22,9 +22,7 @@ pub(super) fn init(path: &Utf8Path, options: InitOptions) -> anyhow::Result<()> 
     let quiet = options.quiet;
     let plan = prepare_init(path, options)?;
     let ending = plan.apply()?;
-    if !quiet {
-        ending.print();
-    }
+    ending.print(quiet);
     Ok(())
 }
 
@@ -115,12 +113,11 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
         &scope_ids,
         &planned,
         &skills_changes,
-        &invocation,
         &dictionary,
     )
     .map_or_else(
         || already_ending(&scope_ids, path, &dictionary),
-        |summary| InitEnding::Applied(Box::new(summary)),
+        |summary| InitEnding::applied(summary, dictionary.warning()),
     );
     let PlannedFiles {
         manifest_bytes,
@@ -194,16 +191,13 @@ fn already_ending(
     path: &Utf8Path,
     dictionary: &crate::ste_onboarding::Plan,
 ) -> InitEnding {
-    let dictionary = dictionary
-        .has_guidance()
-        .then(|| dictionary.dictionary_section());
-    InitEnding::Already {
-        line: format!(
+    InitEnding::already(
+        format!(
             "Provenance is already set up for {} in {path}. No change.",
             scope_phrase(scope_ids)
         ),
-        dictionary,
-    }
+        dictionary.warning(),
+    )
 }
 
 /// Builds the new-versus-changed inventory for the printed summary, or
@@ -213,7 +207,6 @@ fn build_summary(
     scope_ids: &[String],
     planned: &PlannedFiles,
     skills: &crate::skills::InitSkillChanges,
-    invocation: &crate::onboarding::Invocation,
     dictionary: &crate::ste_onboarding::Plan,
 ) -> Option<InitSummary> {
     let manifest_changed =
@@ -222,16 +215,19 @@ fn build_summary(
     let gitignore_changed =
         planned.gitignore_before.bytes() != Some(planned.gitignore_bytes.as_slice());
     let skills_unchanged = skills.canonical.is_unchanged() && skills.claude.is_unchanged();
-    if !manifest_changed && !agents_changed && !gitignore_changed && skills_unchanged {
+    let dictionary_change = dictionary.reference_change();
+    if !manifest_changed
+        && !agents_changed
+        && !gitignore_changed
+        && skills_unchanged
+        && dictionary_change.is_none()
+    {
         return None;
     }
-    let mut summary = InitSummary::new(
-        format!(
-            "Initialized Provenance for {} in {path}",
-            scope_phrase(scope_ids)
-        ),
-        Some(dictionary.dictionary_section()),
-    );
+    let mut summary = InitSummary::new(format!(
+        "Initialized Provenance for {} in {path}",
+        scope_phrase(scope_ids)
+    ));
     if manifest_changed {
         let note = format!("manifest for {}", scope_phrase(scope_ids));
         if planned.manifest_before.bytes().is_none() {
@@ -277,13 +273,19 @@ fn build_summary(
             summary.push_changed(".gitignore", "added one line");
         }
     }
-    let prefix = invocation.command_prefix();
-    let scope = scope_ids.first().map_or("default", String::as_str);
-    summary.push_step(format!("{prefix} prime --quiet"));
-    summary.push_step(format!("{prefix} check --quiet"));
-    summary.push_step(format!(
-        "{prefix} coverage scan --path . --scope {scope} --validate-rules"
-    ));
+    if let Some(existed) = dictionary_change {
+        if existed {
+            summary.push_changed(
+                ".provenance/state/dictionary.json",
+                "updated the dictionary reference",
+            );
+        } else {
+            summary.push_new(
+                ".provenance/state/dictionary.json",
+                "added the dictionary reference",
+            );
+        }
+    }
     Some(summary)
 }
 
