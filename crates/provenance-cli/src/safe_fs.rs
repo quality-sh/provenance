@@ -411,6 +411,18 @@ mod tests {
     use super::*;
 
     #[test]
+    fn reparse_point_messages_include_the_directory_role() {
+        assert_eq!(
+            reparse_point_error("output parent").to_string(),
+            "output parent is a reparse point"
+        );
+        assert_eq!(
+            reparse_point_error("directory").to_string(),
+            "directory is a reparse point"
+        );
+    }
+
+    #[test]
     fn directory_interface_classifies_children() {
         let temp = tempfile::tempdir().unwrap();
         std::fs::create_dir(temp.path().join("directory")).unwrap();
