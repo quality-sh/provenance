@@ -23,8 +23,8 @@ creation!(
     [GraphStorage]
 );
 creation!(
-    UpdateRequirement,
-    "update-requirement",
+    UpdateRequirementNative,
+    "update-requirement-native",
     UpdateRequirementInput,
     provenance_core::Requirement,
     update_requirement,

@@ -60,7 +60,7 @@ pub use context::{
     PreparedRepository, PreparedScope, RequestedContext,
 };
 pub use creation::{
-    AddSourceReference, CreateRequirement, CreateResolution, CreateRule, CreateSource,
+    AddSourceReference, CreateRequirementNative, CreateResolution, CreateRule, CreateSource,
     PostThreadMessage,
 };
 pub use discussions::{ListMessages, ListThreads};

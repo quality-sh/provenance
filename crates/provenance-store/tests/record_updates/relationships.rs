@@ -4,7 +4,7 @@ use serde_json::{json, Value};
 async fn create_requirement(fixture: &Fixture, id: &str) {
     fixture
         .call(
-            "create-requirement",
+            "create-requirement-native",
             json!({
                 "scope_id": "default",
                 "id": id,
