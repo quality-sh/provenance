@@ -36,24 +36,14 @@ async fn host_get_port_returns_a_record_through_the_resource_path() {
         .await
         .unwrap();
 
-    assert_eq!(outcome.record.id, "req_shared");
-    assert_eq!(outcome.record.kind, "requirement");
-    assert_eq!(outcome.record.value["id"], "req_shared");
-    assert!(
-        outcome.record_metadata.as_ref().unwrap().is_object(),
-        "metadata: {:?}",
-        outcome.record_metadata
-    );
+    assert_eq!(outcome.record.id().as_str(), "req_shared");
+    assert_eq!(outcome.record.node_type(), provenance_core::NodeType::Requirement);
+    assert!(outcome.record_metadata.as_ref().unwrap().stamp.is_some());
     let impact = porcelain
         .get(GetInput::new("req_shared", View::Impact))
         .await
         .unwrap();
-    assert!(impact
-        .view_metadata
-        .as_ref()
-        .unwrap()
-        .get("stamp")
-        .is_some());
+    assert!(impact.view_metadata().unwrap().stamp.is_some());
 }
 
 #[cfg(feature = "test-fixture")]
@@ -190,18 +180,33 @@ fn record_fixture_adds_a_scope_without_reusing_repository_ids() {
 #[test]
 #[verifies("rule_porcelain_mcp_readable_structured", examples)]
 fn mcp_readable_get_warns_when_the_record_or_view_is_stale() {
+    let record = serde_json::from_value(json!({
+        "node_type": "requirement", "schema_version": 2, "scope_id": "default",
+        "id": "req_stale", "statement": "Keep the graph typed.", "status": "active"
+    }))
+    .unwrap();
     let outcome = provenance_porcelain::get::GetOutcome {
-        record: provenance_porcelain::get::Record::new(
-            "req_stale",
-            "requirement",
-            json!({"id":"req_stale"}),
+        record,
+        result: provenance_porcelain::get::ViewResult::Children(
+            provenance_porcelain::get::Traversal {
+                records: Vec::new(),
+                bounds: provenance_porcelain::get::Bounds {
+                    limit: 50,
+                    max_depth: Some(1),
+                    has_more: false,
+                    continuation: None,
+                    truncated: false,
+                },
+                response_metadata: Some(provenance_core::protocol::ResponseMeta {
+                    freshness_error: Some("view catch-up failed".into()),
+                    ..Default::default()
+                }),
+            },
         ),
-        view: provenance_porcelain::get::View::Impact,
-        related: Vec::new(),
-        detail: None,
-        bounds: None,
-        record_metadata: Some(json!({"freshness_error":"record catch-up failed"})),
-        view_metadata: Some(json!({"freshness_error":"view catch-up failed"})),
+        record_metadata: Some(provenance_core::protocol::ResponseMeta {
+            freshness_error: Some("record catch-up failed".into()),
+            ..Default::default()
+        }),
     };
 
     let readable = provenance_transport::porcelain::render_get_readable(&outcome);
@@ -304,7 +309,7 @@ impl provenance_porcelain::check::CheckPort for CheckFixturePort {
         _: Option<&'a str>,
     ) -> provenance_porcelain::check::PortFuture<'a> {
         Box::pin(async move {
-            Ok(match category {
+            let findings = match category {
                 provenance_porcelain::check::Category::Statements => {
                     vec![provenance_porcelain::check::Finding::new(
                         "statement finding",
@@ -312,8 +317,36 @@ impl provenance_porcelain::check::CheckPort for CheckFixturePort {
                 }
                 provenance_porcelain::check::Category::Graph
                 | provenance_porcelain::check::Category::Bindings => Vec::new(),
-            })
+            };
+            Ok(category_run(category, findings))
         })
+    }
+}
+
+fn category_run(
+    category: provenance_porcelain::check::Category,
+    findings: Vec<provenance_porcelain::check::Finding>,
+) -> provenance_porcelain::check::CategoryRun {
+    use provenance_porcelain::check::{
+        BindingContext, BindingPolicy, Category, CategoryRun, Refusal,
+    };
+    match category {
+        Category::Graph => CategoryRun::Graph {
+            findings,
+            refusal: Refusal::None,
+        },
+        Category::Statements => CategoryRun::Statements {
+            findings,
+            context: None,
+            refusal: Refusal::None,
+        },
+        Category::Bindings => CategoryRun::Bindings {
+            findings,
+            context: BindingContext {
+                policy: BindingPolicy::Warning,
+            },
+            refusal: Refusal::None,
+        },
     }
 }
 
@@ -412,11 +445,11 @@ struct ScopeRecordingPort(Arc<Mutex<Option<String>>>);
 impl provenance_porcelain::check::CheckPort for ScopeRecordingPort {
     fn run<'a>(
         &'a self,
-        _: provenance_porcelain::check::Category,
+        category: provenance_porcelain::check::Category,
         scope: Option<&'a str>,
     ) -> provenance_porcelain::check::PortFuture<'a> {
         *self.0.lock().unwrap() = scope.map(str::to_owned);
-        Box::pin(async { Ok(Vec::new()) })
+        Box::pin(async move { Ok(category_run(category, Vec::new())) })
     }
 }
 

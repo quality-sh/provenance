@@ -49,6 +49,19 @@ pub struct GetQuery {
     pub id: String,
 }
 
+/// Resolve one repository-local ID without a kind selector.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResolveRecordQuery {
+    #[serde(default)]
+    pub protocol_version: Option<u32>,
+    pub id: String,
+    /// Kinds visible to the authorized caller.
+    #[serde(default)]
+    pub allowed_node_types: Vec<NodeType>,
+}
+
 /// Find records whose text contains a phrase.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize)]
