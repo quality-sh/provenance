@@ -1,205 +1,180 @@
-use std::collections::BTreeMap;
-
+use provenance_core::authoring::addresses;
 use provenance_core::{
     DeclarationAddress, Requirement, RequirementStatus, ScopeId, SourceReference, StableId,
     SUPPORTED_SCHEMA_VERSION,
 };
 
-use super::super::super::{
-    ReconcileState, ReconciledResource, TypedFieldChange, TypedRequirementInput, TypedResourceKind,
-};
-use super::super::deletion::delete_omitted_requirements;
-use super::super::identity::requirement_address;
-use super::changes::{changed, resource, state_after_change};
+use super::super::DesiredTypedIds;
+use super::changes::{changed, DeclarationRecord};
 use super::references;
+use crate::state_store::{TypedFieldChange, TypedRequirementInput, TypedResourceKind};
 
-pub(in crate::state_store::typed_specs) fn reconcile_requirements(
-    mut records: Vec<Requirement>,
-    spec: &str,
-    scope_id: &ScopeId,
-    owner: &str,
-    declarations: Vec<TypedRequirementInput>,
-    ids: &BTreeMap<String, StableId>,
-    source_ids: &BTreeMap<String, StableId>,
-) -> anyhow::Result<(Vec<Requirement>, Vec<ReconciledResource>)> {
-    let mut resources = Vec::new();
-    for declaration in declarations {
-        let id = ids[&declaration.key].clone();
-        let address = requirement_address(spec, &declaration.key)?;
-        let desired = desired_requirement(
-            scope_id,
-            owner,
-            &address,
-            &id,
-            &declaration,
-            source_ids,
-            ids,
-        )?;
-        let (state, changes) = upsert_requirement(&mut records, desired, &declaration, ids)?;
-        resources.push(resource(
-            TypedResourceKind::Requirement,
-            declaration.key,
-            None,
-            address,
-            id,
-            state,
-            changes,
-        ));
+impl DeclarationRecord for Requirement {
+    type Declaration = TypedRequirementInput;
+
+    const KIND: TypedResourceKind = TypedResourceKind::Requirement;
+
+    fn key(declaration: &Self::Declaration) -> &str {
+        &declaration.key
     }
-    delete_omitted_requirements(&mut records, &mut resources, spec, owner, ids);
-    records.sort_by(|left, right| left.id.as_str().cmp(right.id.as_str()));
-    Ok((records, resources))
-}
 
-pub(in crate::state_store::typed_specs) fn desired_requirement(
-    scope_id: &ScopeId,
-    owner: &str,
-    address: &DeclarationAddress,
-    id: &StableId,
-    declaration: &TypedRequirementInput,
-    source_ids: &BTreeMap<String, StableId>,
-    requirement_ids: &BTreeMap<String, StableId>,
-) -> anyhow::Result<Requirement> {
-    let source_refs = declaration
-        .sources
-        .iter()
-        .map(|key| SourceReference {
-            source_id: source_ids[key].clone(),
-            clause: None,
-        })
-        .collect();
-    let mut requirement = Requirement {
-        created: None,
-        updated: None,
-        schema_version: SUPPORTED_SCHEMA_VERSION,
-        scope_id: scope_id.clone(),
-        id: id.clone(),
-        declared_by: Some(owner.to_string()),
-        declaration_address: Some(address.clone()),
-
-        statement: declaration.statement.clone(),
-        description: declaration.description.clone(),
-        fog: None,
-        status: RequirementStatus::Active,
-        domain_id: None,
-        source_refs,
-        refines: None,
-        depends_on: Vec::new(),
-        supersedes: Vec::new(),
-        spawned_by: None,
-        origin_thread: None,
-        origin_message: None,
-    };
-    references::apply_requirement(&mut requirement, declaration, requirement_ids)?;
-    Ok(requirement)
-}
-
-fn upsert_requirement(
-    records: &mut Vec<Requirement>,
-    desired: Requirement,
-    declaration: &TypedRequirementInput,
-    requirement_ids: &BTreeMap<String, StableId>,
-) -> anyhow::Result<(ReconcileState, Vec<TypedFieldChange>)> {
-    let Some(existing) = records.iter_mut().find(|record| record.id == desired.id) else {
-        records.push(desired);
-        return Ok((ReconcileState::Created, Vec::new()));
-    };
-    let before = existing.clone();
-    *existing = reconciled_requirement(&before, desired, declaration, requirement_ids)?;
-    let changes = requirement_changes(&before, existing);
-    Ok((
-        state_after_change(before.declaration_address.as_ref(), existing, &before),
-        changes,
-    ))
-}
-
-/// The current record with the declaration's fields laid over it. Citations
-/// append; a reference field the declaration leaves out stays as it was.
-pub(in crate::state_store::typed_specs) fn reconciled_requirement(
-    current: &Requirement,
-    desired: Requirement,
-    declaration: &TypedRequirementInput,
-    requirement_ids: &BTreeMap<String, StableId>,
-) -> anyhow::Result<Requirement> {
-    let mut reconciled = current.clone();
-    reconciled.declared_by = desired.declared_by;
-    reconciled.declaration_address = desired.declaration_address;
-    reconciled.statement = desired.statement;
-    if desired.description.is_some() {
-        reconciled.description = desired.description;
+    fn address(spec: &str, declaration: &Self::Declaration) -> anyhow::Result<DeclarationAddress> {
+        addresses::requirement_address(spec, &declaration.key)
     }
-    for source in desired.source_refs {
-        if !reconciled
-            .source_refs
+
+    fn parent(_address: &DeclarationAddress) -> Option<String> {
+        None
+    }
+
+    fn desired_id<'a>(
+        _address: &DeclarationAddress,
+        declaration: &Self::Declaration,
+        ids: &'a DesiredTypedIds,
+    ) -> &'a StableId {
+        &ids.requirements[&declaration.key]
+    }
+
+    fn desired_contains(ids: &DesiredTypedIds, id: &StableId) -> bool {
+        ids.requirements.values().any(|desired| desired == id)
+    }
+
+    fn desired(
+        scope_id: &ScopeId,
+        owner: &str,
+        address: &DeclarationAddress,
+        id: &StableId,
+        declaration: &Self::Declaration,
+        ids: &DesiredTypedIds,
+    ) -> anyhow::Result<Self> {
+        let source_refs = declaration
+            .sources
             .iter()
-            .any(|existing| existing.source_id == source.source_id)
-        {
-            reconciled.source_refs.push(source);
-        }
+            .map(|key| SourceReference {
+                source_id: ids.sources[key].clone(),
+                clause: None,
+            })
+            .collect();
+        let mut requirement = Self {
+            created: None,
+            updated: None,
+            schema_version: SUPPORTED_SCHEMA_VERSION,
+            scope_id: scope_id.clone(),
+            id: id.clone(),
+            declared_by: Some(owner.to_string()),
+            declaration_address: Some(address.clone()),
+            statement: declaration.statement.clone(),
+            description: declaration.description.clone(),
+            fog: None,
+            status: RequirementStatus::Active,
+            domain_id: None,
+            source_refs,
+            refines: None,
+            depends_on: Vec::new(),
+            supersedes: Vec::new(),
+            spawned_by: None,
+            origin_thread: None,
+            origin_message: None,
+        };
+        references::apply_requirement(&mut requirement, declaration, &ids.requirements)?;
+        Ok(requirement)
     }
-    reconciled.source_refs.sort_by(|left, right| {
-        left.source_id
-            .as_str()
-            .cmp(right.source_id.as_str())
-            .then(left.clause.cmp(&right.clause))
-    });
-    references::apply_requirement(&mut reconciled, declaration, requirement_ids)?;
-    Ok(reconciled)
-}
 
-pub(in crate::state_store::typed_specs) fn requirement_changes(
-    before: &Requirement,
-    after: &Requirement,
-) -> Vec<TypedFieldChange> {
-    let mut changes = Vec::new();
-    changed(
-        &mut changes,
-        "declared_by",
-        &before.declared_by,
-        &after.declared_by,
-    );
-    changed(
-        &mut changes,
-        "address",
-        &before.declaration_address,
-        &after.declaration_address,
-    );
-    changed(
-        &mut changes,
-        "statement",
-        &before.statement,
-        &after.statement,
-    );
-    changed(
-        &mut changes,
-        "description",
-        &before.description,
-        &after.description,
-    );
-    changed(
-        &mut changes,
-        "sources",
-        &before.source_refs,
-        &after.source_refs,
-    );
-    changed(&mut changes, "refines", &before.refines, &after.refines);
-    changed(
-        &mut changes,
-        "depends_on",
-        &before.depends_on,
-        &after.depends_on,
-    );
-    changed(
-        &mut changes,
-        "supersedes",
-        &before.supersedes,
-        &after.supersedes,
-    );
-    changed(
-        &mut changes,
-        "spawned_by",
-        &before.spawned_by,
-        &after.spawned_by,
-    );
-    changes
+    fn reconciled(
+        &self,
+        desired: Self,
+        declaration: &Self::Declaration,
+        ids: &DesiredTypedIds,
+    ) -> anyhow::Result<Self> {
+        let mut reconciled = self.clone();
+        reconciled.declared_by = desired.declared_by;
+        reconciled.declaration_address = desired.declaration_address;
+        reconciled.statement = desired.statement;
+        if desired.description.is_some() {
+            reconciled.description = desired.description;
+        }
+        for source in desired.source_refs {
+            if !reconciled
+                .source_refs
+                .iter()
+                .any(|existing| existing.source_id == source.source_id)
+            {
+                reconciled.source_refs.push(source);
+            }
+        }
+        reconciled.source_refs.sort_by(|left, right| {
+            left.source_id
+                .as_str()
+                .cmp(right.source_id.as_str())
+                .then(left.clause.cmp(&right.clause))
+        });
+        references::apply_requirement(&mut reconciled, declaration, &ids.requirements)?;
+        Ok(reconciled)
+    }
+
+    fn changes(&self, after: &Self) -> Vec<TypedFieldChange> {
+        let mut changes = Vec::new();
+        changed(
+            &mut changes,
+            "declared_by",
+            &self.declared_by,
+            &after.declared_by,
+        );
+        changed(
+            &mut changes,
+            "address",
+            &self.declaration_address,
+            &after.declaration_address,
+        );
+        changed(&mut changes, "statement", &self.statement, &after.statement);
+        changed(
+            &mut changes,
+            "description",
+            &self.description,
+            &after.description,
+        );
+        changed(
+            &mut changes,
+            "sources",
+            &self.source_refs,
+            &after.source_refs,
+        );
+        changed(&mut changes, "refines", &self.refines, &after.refines);
+        changed(
+            &mut changes,
+            "depends_on",
+            &self.depends_on,
+            &after.depends_on,
+        );
+        changed(
+            &mut changes,
+            "supersedes",
+            &self.supersedes,
+            &after.supersedes,
+        );
+        changed(
+            &mut changes,
+            "spawned_by",
+            &self.spawned_by,
+            &after.spawned_by,
+        );
+        changes
+    }
+
+    fn stable_id(&self) -> &StableId {
+        &self.id
+    }
+
+    fn declared_by(&self) -> Option<&str> {
+        self.declared_by.as_deref()
+    }
+
+    fn declaration_address(&self) -> Option<&DeclarationAddress> {
+        self.declaration_address.as_ref()
+    }
+
+    fn copy_declaration_identity(&mut self, desired: &Self) {
+        self.declared_by.clone_from(&desired.declared_by);
+        self.declaration_address
+            .clone_from(&desired.declaration_address);
+    }
 }
