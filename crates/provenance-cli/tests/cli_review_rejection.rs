@@ -180,7 +180,7 @@ fn ids(document: &Value) -> Vec<&str> {
 #[verifies("rule_review_defaults_exclude_terminal_records", examples)]
 fn cli_rejection_removes_the_resolution_from_the_review_document() {
     let repo = repository_with_actors(&["reviewer"]);
-    create_resolution(repo.path());
+    create_resolution(repo.path(), Some("shaping_agent"));
     let host = start(repo.path());
     pending(&host);
     let before = document(&host);
