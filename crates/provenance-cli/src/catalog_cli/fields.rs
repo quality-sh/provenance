@@ -257,3 +257,47 @@ pub fn schema_input(
     }
     Ok(input)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn selected_schema_validates_shared_flag_in_either_declaration_order() {
+        let first = json!({"properties": {"status": {"type": "string", "enum": ["alpha"]}}});
+        let second = json!({"properties": {"status": {"type": "string", "enum": ["beta"]}}});
+        for schemas in [[first.clone(), second.clone()], [second.clone(), first.clone()]] {
+            let command = augment_schemas(Command::new("test"), schemas, &[]).unwrap();
+            for (schema, accepted, rejected) in [
+                (&first, "alpha", "beta"),
+                (&second, "beta", "alpha"),
+            ] {
+                let matches = command
+                    .clone()
+                    .try_get_matches_from(["test", "--status", accepted])
+                    .unwrap();
+                assert_eq!(schema_input(schema, &matches, &[]).unwrap()["status"], accepted);
+                let matches = command
+                    .clone()
+                    .try_get_matches_from(["test", "--status", rejected])
+                    .unwrap();
+                assert!(schema_input(schema, &matches, &[]).is_err());
+            }
+        }
+    }
+
+    #[test]
+    fn incompatible_clap_storage_is_an_error() {
+        let schema = json!({"properties": {"value": {"type": "string"}}});
+        let command = Command::new("test").arg(
+            Arg::new("value")
+                .long("value")
+                .value_parser(clap::value_parser!(bool)),
+        );
+        let matches = command
+            .try_get_matches_from(["test", "--value", "true"])
+            .unwrap();
+        assert!(schema_input(&schema, &matches, &[]).is_err());
+    }
+}
