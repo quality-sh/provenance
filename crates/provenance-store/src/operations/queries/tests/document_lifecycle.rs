@@ -9,6 +9,25 @@ use provenance_core::{
 };
 use serde_json::{json, Value};
 
+fn add_root_requirement(store: &StateStore, scope: &ScopeId, id: &str) {
+    store
+        .create_requirement(CreateRequirementInput {
+            scope_id: scope.clone(),
+            id: sid(id),
+            statement: format!("{id} statement"),
+            description: None,
+            status: RequirementStatus::Active,
+            domain_id: None,
+            refines: None,
+            depends_on: Vec::new(),
+            supersedes: Vec::new(),
+            spawned_by: None,
+            origin_thread: None,
+            origin_message: None,
+        })
+        .unwrap();
+}
+
 fn add_requirement(store: &StateStore, scope: &ScopeId, id: &str, parent: &str) {
     store
         .create_requirement(CreateRequirementInput {
@@ -59,6 +78,17 @@ fn add_resolution(
 }
 
 fn add_rule(store: &StateStore, scope: &ScopeId, id: &str, requirement: &str, status: RuleStatus) {
+    add_rule_links(store, scope, id, &[requirement], &[], status);
+}
+
+fn add_rule_links(
+    store: &StateStore,
+    scope: &ScopeId,
+    id: &str,
+    requirements: &[&str],
+    resolutions: &[&str],
+    status: RuleStatus,
+) {
     store
         .create_rule(CreateRuleInput {
             archived_in_commit: (status == RuleStatus::Archived).then(|| ArchivedStamp {
@@ -69,8 +99,8 @@ fn add_rule(store: &StateStore, scope: &ScopeId, id: &str, requirement: &str, st
             id: sid(id),
             name: None,
             description: None,
-            requirement_ids: vec![sid(requirement)],
-            resolution_ids: Vec::new(),
+            requirement_ids: requirements.iter().map(|id| sid(id)).collect(),
+            resolution_ids: resolutions.iter().map(|id| sid(id)).collect(),
             statement: format!("{id} statement"),
             status,
             severity: RuleSeverity::High,
@@ -235,8 +265,21 @@ async fn lifecycle_filter_pages_across_hidden_records_and_binds_the_cursor() {
         assert_eq!(answer["has_more"], true);
     }
 
-    let visible_rule = pages.iter().position(|id| id == "rule_a_visible").unwrap();
-    assert_eq!(pages[visible_rule + 1], "rule_d_visible");
+    assert_eq!(
+        pages,
+        [
+            "req_overtime",
+            "req_child",
+            "req_nested",
+            "res_superseded",
+            "rule_a_visible",
+            "rule_d_visible",
+            "boundary_no_backpay",
+            "domain_payroll",
+        ]
+    );
+    let unique: std::collections::HashSet<_> = pages.iter().collect();
+    assert_eq!(unique.len(), pages.len());
 
     let first = page(&root, None, 1, true).await.unwrap();
     let filtered_cursor = first["next_cursor"].as_str().unwrap();
@@ -247,4 +290,117 @@ async fn lifecycle_filter_pages_across_hidden_records_and_binds_the_cursor() {
         error.downcast_ref::<ReadFailure>(),
         Some(&ReadFailure::CursorInvalid)
     );
+
+    let first = page(&root, None, 1, false).await.unwrap();
+    let unfiltered_cursor = first["next_cursor"].as_str().unwrap();
+    let error = page(&root, Some(unfiltered_cursor), 1, true)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error.downcast_ref::<ReadFailure>(),
+        Some(&ReadFailure::CursorInvalid)
+    );
+}
+
+#[tokio::test]
+async fn lifecycle_filter_applies_to_each_record_without_hiding_visible_children() {
+    use crate::cache::tests::fixtures::append_record;
+
+    let (dir, store, scope) = seeded_store();
+    add_root_requirement(&store, &scope, "req_outside");
+    add_resolution(
+        &store,
+        &scope,
+        "res_reference_only",
+        "req_outside",
+        ResolutionStatus::Abandoned,
+    );
+    add_rule_links(
+        &store,
+        &scope,
+        "rule_visible_reference",
+        &["req_overtime"],
+        &["res_reference_only"],
+        RuleStatus::Active,
+    );
+    add_resolution(
+        &store,
+        &scope,
+        "res_hidden_parent",
+        "req_overtime",
+        ResolutionStatus::Abandoned,
+    );
+    add_rule_links(
+        &store,
+        &scope,
+        "rule_visible_hidden_parent",
+        &["req_outside"],
+        &["res_hidden_parent"],
+        RuleStatus::Active,
+    );
+    append_record(
+        &crate::shards::threads_path(&store.layout, &scope),
+        &json!({
+            "schema_version": 2,
+            "scope_id": "default",
+            "id": "thread_hidden_parent",
+            "parent": {"node_type": "resolution", "node_id": "res_hidden_parent"},
+            "status": "active",
+            "created_at": 1
+        }),
+    );
+    append_record(
+        &store
+            .layout
+            .state_dir()
+            .join("scopes/default/threads/2026-09.jsonl"),
+        &json!({
+            "schema_version": 2,
+            "scope_id": "default",
+            "id": "message_hidden_parent",
+            "thread_id": "thread_hidden_parent",
+            "role": "user",
+            "body": "Hidden discussion",
+            "created_at": 1,
+            "ai_metadata": {"logical": true}
+        }),
+    );
+
+    let answer = page(&root_of(&dir), None, 50, true).await.unwrap();
+    let encoded = serde_json::to_string(&answer["entries"]).unwrap();
+    assert!(encoded.contains("rule_visible_reference"));
+    assert!(encoded.contains("rule_visible_hidden_parent"));
+    for hidden in [
+        "res_reference_only",
+        "res_hidden_parent",
+        "thread_hidden_parent",
+        "message_hidden_parent",
+    ] {
+        assert!(!encoded.contains(hidden), "found {hidden}");
+    }
+}
+
+#[tokio::test]
+async fn terminal_decisions_do_not_consume_the_document_work_budget() {
+    use crate::cache::tests::fixtures::append_record;
+
+    let (dir, store, scope) = seeded_store();
+    add_resolution(
+        &store,
+        &scope,
+        "res_abandoned_seed",
+        "req_overtime",
+        ResolutionStatus::Abandoned,
+    );
+    let path = crate::shards::resolutions_path(&store.layout, &scope);
+    let mut record = serde_json::to_value(store.list_resolutions(&scope).unwrap()[0].clone()).unwrap();
+    for index in 0..4096 {
+        record["id"] = json!(format!("res_abandoned_{index:04}"));
+        append_record(&path, &record);
+    }
+
+    let answer = page(&root_of(&dir), None, 50, true).await.unwrap();
+    assert_eq!(answer["has_more"], false);
+    let encoded = serde_json::to_string(&answer["entries"]).unwrap();
+    assert!(!encoded.contains("res_abandoned"));
 }

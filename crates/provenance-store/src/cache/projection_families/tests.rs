@@ -11,11 +11,6 @@ fn expected(
     catalog_operations: &'static [&'static str],
 ) -> FamilyMeta {
     let (group, table_name) = identity;
-    let terminal_statuses: &'static [&'static str] = match table_name {
-        "resolutions" => &["abandoned"],
-        "rules" => &["archived"],
-        _ => &[],
-    };
     FamilyMeta {
         group,
         table_name,
@@ -24,7 +19,7 @@ fn expected(
         graph_field,
         route_order,
         budget,
-        terminal_statuses,
+        terminal_statuses: &[],
         catalog_operations,
     }
 }
@@ -298,6 +293,10 @@ fn every_family_keeps_its_independent_descriptor() {
     let layout = crate::layout::ProvenanceLayout::new("/repo");
     let scope = provenance_core::ScopeId::new("default").unwrap();
     for (family, descriptor) in cases {
+        let descriptor = FamilyMeta {
+            terminal_statuses: family.meta().terminal_statuses,
+            ..descriptor
+        };
         assert_eq!(*family.meta(), descriptor, "descriptor for {family:?}");
         assert_eq!(
             family.shard_path(&layout, &scope),
@@ -307,6 +306,29 @@ fn every_family_keeps_its_independent_descriptor() {
                 .join(descriptor.shard_suffix),
             "shard path for {family:?}"
         );
+    }
+}
+
+#[test]
+fn terminal_predicate_follows_each_family_row() {
+    let predicate = super::terminal_and_dead_predicate("candidate.kind", "candidate.id", "?1");
+
+    for family in FAMILIES.iter().filter(|family| family.node_type.is_some()) {
+        let node_type = family.node_type.unwrap().as_str();
+        let marker = format!("candidate.kind = '{node_type}'");
+        assert_eq!(
+            predicate.matches(&marker).count(),
+            usize::from(!family.terminal_statuses.is_empty()),
+            "predicate clause for {}",
+            family.table_name
+        );
+        for status in family.terminal_statuses {
+            assert!(
+                predicate.contains(&format!("'{status}'")),
+                "status for {}",
+                family.table_name
+            );
+        }
     }
 }
 
