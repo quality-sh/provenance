@@ -13,7 +13,7 @@ fn req() -> StableId {
     StableId::new("req_a").unwrap()
 }
 fn open(root: &Utf8Path) -> StateStore {
-    StateStore::new(ProvenanceLayout::new(root))
+    crate::test_support::store(ProvenanceLayout::new(root))
 }
 /// A repository that allowlists "reviewer" plus one enrolled record.
 fn fixture() -> tempfile::TempDir {

@@ -57,9 +57,13 @@ fn enrolled_scope_refuses_lossy_portability() {
         r#"{"schema_version":2,"scopes":[{"id":"default","path_prefix":"."}]}"#,
     )
     .unwrap();
-    assert!(StateStore::new(empty_layout)
-        .ensure_review_portable(&scope())
-        .is_ok());
+    assert!(
+        provenance_store::repository::Repository::open(empty.path(), "default")
+            .unwrap()
+            .store()
+            .ensure_review_portable(&scope())
+            .is_ok()
+    );
 
     let (_temp, store) = fixture();
     assert!(store.ensure_review_portable(&scope()).is_err());

@@ -29,10 +29,16 @@ fn review_schema_is_readable_only_for_requirements_and_manifest() {
     std::fs::create_dir_all(layout.state_dir()).unwrap();
     std::fs::write(
         layout.manifest_path(),
-        r#"{"schema_version":3,"scopes":[],"disposition_actor_ids":[]}"#,
+        r#"{"schema_version":3,"scopes":[{"id":"default","path_prefix":"."}],"disposition_actor_ids":[]}"#,
     )
     .unwrap();
-    assert!(StateStore::new(layout).manifest().is_ok());
+    assert!(
+        provenance_store::repository::Repository::open(root, "default")
+            .unwrap()
+            .store()
+            .manifest()
+            .is_ok()
+    );
     assert!(provenance_core::ensure_supported_schema_version(
         "proposal",
         provenance_core::SchemaVersion(3)
@@ -187,7 +193,9 @@ fn review_schema_is_readable_for_every_record_kind() {
         )
         .is_ok());
     }
-    let store = StateStore::new(layout);
+    let store = provenance_store::repository::Repository::open(root, "default")
+        .unwrap()
+        .store();
     let scope = ScopeId::new("default").unwrap();
     assert_eq!(store.list_sources(&scope).unwrap().len(), 1);
     assert_eq!(store.list_requirements(&scope).unwrap().len(), 1);

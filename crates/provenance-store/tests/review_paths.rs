@@ -35,7 +35,9 @@ async fn review_reads_and_projection_accept_a_symlinked_repository_parent() {
         .file_type()
         .is_symlink());
     let layout = ProvenanceLayout::new(&root);
-    let store = StateStore::new(layout.clone());
+    let store = provenance_store::repository::Repository::open(&root, "default")
+        .unwrap()
+        .store();
     store
         .save_requirement(save(&store, json!({"description":"saved"})))
         .unwrap();

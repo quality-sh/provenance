@@ -55,7 +55,7 @@ pub fn pinned_store_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
         initialized.status.success(),
         "initialize pinned fixture Git repository"
     );
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(layout.clone());
     seed_graph(&store, &scope);
     seed_shaping(&store, &scope);
     seed_integrations(&layout, &scope);

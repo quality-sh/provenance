@@ -76,7 +76,7 @@ async fn a_landed_ideation_batch_reaches_the_projection_through_catch_up() {
     let (_dir, layout, scope) = seeded_layout();
     materialize_state(&open(&layout)).await.unwrap();
 
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(layout.clone());
     let batch: IdeationLandingBatch = serde_json::from_value(serde_json::json!({
         "contributions": [{
             "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope.as_str(), "id": "contribution_landed",

@@ -205,7 +205,7 @@ async fn rematerialization_of_unchanged_state_keeps_digest_and_instance_and_adva
 fn revision_digest_reproduces_from_a_walk_of_the_family_table() {
     let (_dir, layout, scope) = seeded_layout();
     seed_integration_shards(&layout, scope.as_str());
-    let store = crate::state_store::StateStore::new(layout);
+    let store = crate::test_support::store(layout);
     let scopes = vec![scope.clone()];
     let assembled = revision_digest(&family_content_digests(&store, &scopes).unwrap()).unwrap();
 
@@ -265,7 +265,7 @@ async fn empty_state_materialization_stores_no_revision_and_no_instance() {
 #[tokio::test]
 async fn record_stamps_survive_projection_without_changing_content_digests() {
     let (_dir, layout, scope) = seeded_layout();
-    let store = crate::state_store::StateStore::new(layout.clone());
+    let store = crate::test_support::store(layout.clone());
     let before = family_content_digests(&store, std::slice::from_ref(&scope)).unwrap();
     for (family, table) in [
         (ProjectionFamily::Sources, "sources"),

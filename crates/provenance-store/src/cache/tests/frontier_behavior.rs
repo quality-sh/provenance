@@ -91,7 +91,7 @@ fn assert_gap(gaps: &[GapItem], kind: GapKind, node_type: NodeType, node_id: &st
 #[test]
 fn ordinary_prime_does_not_expand_into_a_global_proposal_queue() {
     let (_dir, layout, scope) = empty_layout();
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(layout.clone());
     store
         .create_proposal_card(CreateProposalCardInput {
             scope_id: scope,
@@ -134,7 +134,7 @@ fn ordinary_prime_does_not_expand_into_a_global_proposal_queue() {
 #[verifies("rule_graph_gaps", examples)]
 fn find_gaps_reports_the_frontier_taxonomy() {
     let (_dir, layout, scope) = empty_layout();
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(layout.clone());
     create_source(&store, &scope, "source_anchor");
     create_source(&store, &scope, "source_unused");
     // A reference the writers refuse arrives only by hand.
@@ -280,7 +280,7 @@ fn find_gaps_reports_the_frontier_taxonomy() {
 #[test]
 fn prime_renders_frontier_gap_subjects() {
     let (_dir, layout, scope) = empty_layout();
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(layout.clone());
     create_source(&store, &scope, "source_anchor");
     for id in [
         "req_contradicts_a",
@@ -309,7 +309,7 @@ fn prime_renders_frontier_gap_subjects() {
 #[verifies("rule_graph_gaps", examples)]
 fn prime_renders_blocked_on_human_questions_with_status() {
     let (_dir, layout, scope) = empty_layout();
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(layout.clone());
     create_source(&store, &scope, "source_anchor");
     create_requirement(
         &store,

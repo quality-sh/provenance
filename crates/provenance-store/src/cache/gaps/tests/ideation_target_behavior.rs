@@ -180,7 +180,7 @@ fn an_existing_dangling_target_is_a_gap_not_a_refusal() {
         ]
     );
 
-    let store = StateStore::new(layout);
+    let store = crate::test_support::store(layout);
     store
         .create_contribution(CreateContributionInput {
             scope_id: scope.clone(),

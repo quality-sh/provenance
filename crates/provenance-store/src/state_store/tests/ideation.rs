@@ -274,7 +274,7 @@ fn composite_ideation_list_holds_publication_lock_between_reads() {
     let (direct_read_tx, direct_read_rx) = std::sync::mpsc::channel();
     let (release_tx, release_rx) = std::sync::mpsc::channel();
     let reader = {
-        let store = store.clone();
+        let store = crate::test_support::store(store.layout.clone());
         let scope = scope.clone();
         std::thread::spawn(move || {
             store.list_contributions_after_direct_read(&scope, || {
@@ -288,7 +288,7 @@ fn composite_ideation_list_holds_publication_lock_between_reads() {
 
     let (published_tx, published_rx) = std::sync::mpsc::channel();
     let publisher = {
-        let store = store.clone();
+        let store = crate::test_support::store(store.layout.clone());
         let scope = scope.clone();
         std::thread::spawn(move || {
             store

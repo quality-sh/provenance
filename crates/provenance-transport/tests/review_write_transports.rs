@@ -112,7 +112,9 @@ async fn one_review_decision_has_one_result_through_http_mcp_and_the_native_stor
     input["scope_id"] = json!("default");
     input["proposal_id"] = json!(native_proposal);
     let input: DecideRecordReview = serde_json::from_value(input).unwrap();
-    let native = StateStore::new(native_repo.layout.clone())
+    let native = native_repo
+        .open()
+        .store()
         .decide_record_review_for(
             NodeType::Requirement,
             &StableId::new("req_shared").unwrap(),

@@ -15,7 +15,7 @@ use provenance_core::{RequirementStatus, ResolutionStatus, RuleSeverity, RuleSta
 /// `res_indirect` produces it while resolving `req_resolved`. Each
 /// requirement cites its own source.
 fn seed_two_producers(layout: &ProvenanceLayout, scope: &ScopeId) {
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(layout.clone());
     create_requirement(&store, scope, "req_direct", RequirementStatus::Active);
     create_requirement(&store, scope, "req_resolved", RequirementStatus::Active);
     create_source(&store, scope, "source_direct");

@@ -75,7 +75,7 @@ async fn discussion_members_are_direct_and_addressed_messages_paginate() {
     let repo = Repository::new("The shared graph is readable.");
     repo.all_kinds();
     let scope = ScopeId::new("default").unwrap();
-    let store = StateStore::new(repo.layout.clone());
+    let store = repo.open().store();
     let root = store
         .write_discussion(WriteDiscussion {
             scope_id: scope.clone(),
@@ -165,7 +165,7 @@ async fn legacy_message_lists_paginate_and_refuse_changed_limits() {
     let repo = Repository::new("The shared graph is readable.");
     repo.all_kinds();
     let scope = ScopeId::new("default").unwrap();
-    let store = StateStore::new(repo.layout.clone());
+    let store = repo.open().store();
     let legacy_first = store
         .post_thread_message(PostMessageInput {
             scope_id: scope.clone(),

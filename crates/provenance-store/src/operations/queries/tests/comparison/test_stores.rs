@@ -36,7 +36,7 @@ impl TestStore {
     }
 
     pub fn state_store(&self) -> StateStore {
-        StateStore::new(self.layout())
+        crate::test_support::store(self.layout())
     }
 
     /// The store's repository, opened for its scope.

@@ -75,7 +75,7 @@ fn orphan_rules(repo: &Repository) {
 }
 
 fn add_child(repo: &Repository, index: usize, description_bytes: usize) {
-    let store = StateStore::new(repo.layout.clone());
+    let store = repo.open().store();
     let scope = ScopeId::new("default").unwrap();
     store
         .create_requirement(CreateRequirementInput {

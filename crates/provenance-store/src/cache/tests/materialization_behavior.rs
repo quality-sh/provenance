@@ -131,7 +131,7 @@ async fn materialize_caches_generic_disposition_external_action() {
 #[tokio::test]
 async fn materialize_state_caches_fog_resolution_method_and_claim_state() {
     let (_dir, layout, scope) = seeded_layout();
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(layout.clone());
     store
         .set_requirement_fog(
             &scope,
@@ -204,7 +204,7 @@ async fn materialize_state_caches_fog_resolution_method_and_claim_state() {
 #[tokio::test]
 async fn materialize_state_caches_enriched_source_and_resolution_fields() {
     let (_dir, layout, scope) = empty_layout();
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(layout.clone());
     create_source(&store, &scope, "source_sah_2025");
     create_requirement(
         &store,

@@ -1,7 +1,5 @@
 use camino::{Utf8Path, Utf8PathBuf};
-use provenance_store::{
-    layout::ProvenanceLayout, publication::with_staged_state, state_store::StateStore,
-};
+use provenance_store::{layout::ProvenanceLayout, repository::Repository};
 use serde_json::json;
 use std::time::Instant;
 
@@ -44,8 +42,11 @@ fn representative_state_copy_and_save_cost() {
         let temp = tempfile::tempdir().unwrap();
         let layout = ProvenanceLayout::new(Utf8Path::from_path(temp.path()).unwrap());
         copy_tree(&source, &layout.state_dir());
-        let store = StateStore::new(layout.clone());
-        let scope = store.manifest().unwrap().scopes[0].id.clone();
+        let manifest: provenance_core::Manifest =
+            serde_json::from_slice(&std::fs::read(layout.manifest_path()).unwrap()).unwrap();
+        let repository = Repository::open(temp.path(), manifest.scopes[0].id.as_str()).unwrap();
+        let store = repository.store();
+        let scope = repository.scope().clone();
         let record = store
             .list_requirements(&scope)
             .unwrap()
@@ -65,7 +66,7 @@ fn representative_state_copy_and_save_cost() {
         let mut save_ms = Vec::new();
         for index in 0..5 {
             let start = Instant::now();
-            with_staged_state(&layout, true, |_| Ok(())).unwrap();
+            repository.stage(true, None, |_| Ok(())).unwrap();
             copy_ms.push(start.elapsed().as_secs_f64() * 1000.0);
             let input = serde_json::from_value(json!({"actor":"benchmark",
                 "expected_etag":store.requirement_edit_state(&scope, &record.id).unwrap().etag,

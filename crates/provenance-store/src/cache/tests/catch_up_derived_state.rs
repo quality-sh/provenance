@@ -55,7 +55,7 @@ async fn a_writer_path_disposition_moves_the_cards_effective_state() {
     materialize_state(&open(&layout)).await.unwrap();
     assert_eq!(effective_state(&layout).await, "asserted");
 
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(layout.clone());
     store
         .create_disposition(crate::state_store::CreateDispositionInput {
             scope_id: scope.clone(),

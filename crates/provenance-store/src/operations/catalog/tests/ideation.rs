@@ -35,7 +35,7 @@ fn initialized() -> (tempfile::TempDir, StateStore, ScopeId) {
         .unwrap(),
     )
     .unwrap();
-    (dir, StateStore::new(layout), scope)
+    (dir, crate::test_support::store(layout), scope)
 }
 
 /// One native repository and one repository reached only through the catalog

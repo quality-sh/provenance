@@ -88,7 +88,7 @@ async fn a_writer_commit_reaches_the_projection_on_the_next_pass() {
     let (serial_before, _) = latest_revision(pool.pool()).await;
     pool.close().await.unwrap();
 
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(layout.clone());
     create_source(&store, &scope, "source_after_stamp");
 
     let report = catch_up_state(&open(&layout)).await.unwrap();
@@ -106,7 +106,7 @@ async fn a_writer_commit_reaches_the_projection_on_the_next_pass() {
 async fn two_passes_over_unchanged_state_write_nothing_twice() {
     let (_dir, layout, scope) = seeded_layout();
     materialize_state(&open(&layout)).await.unwrap();
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(layout.clone());
     create_source(&store, &scope, "source_once");
     let first = catch_up_state(&open(&layout)).await.unwrap();
     assert!(first.rows_written > 0);
@@ -128,7 +128,7 @@ async fn two_passes_over_unchanged_state_write_nothing_twice() {
 async fn a_crash_after_commit_leaves_consistent_state_and_the_next_pass_finds_nothing() {
     let (_dir, layout, scope) = seeded_layout();
     materialize_state(&open(&layout)).await.unwrap();
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(layout.clone());
     create_source(&store, &scope, "source_before_crash");
 
     crate::test_probes::crash_at("catch_up_after_commit");
@@ -156,7 +156,7 @@ async fn a_crash_before_commit_leaves_the_previous_stamp_readable() {
     let pool = open_cache(&layout).await.unwrap();
     let before = latest_revision(pool.pool()).await;
     pool.close().await.unwrap();
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(layout.clone());
     create_source(&store, &scope, "source_uncommitted");
 
     crate::test_probes::crash_at("catch_up_before_commit");
@@ -180,7 +180,7 @@ async fn a_crash_before_commit_leaves_the_previous_stamp_readable() {
 async fn a_concurrent_rebuild_and_catch_up_yield_one_serial_progression() {
     let (_dir, layout, scope) = seeded_layout();
     materialize_state(&open(&layout)).await.unwrap();
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(layout.clone());
     create_source(&store, &scope, "source_contended");
 
     let rebuild_layout = layout.clone();
@@ -206,7 +206,7 @@ async fn a_concurrent_rebuild_and_catch_up_yield_one_serial_progression() {
 async fn total_cache_loss_restarts_the_serial_at_one_in_a_fresh_instance() {
     let (_dir, layout, scope) = seeded_layout();
     materialize_state(&open(&layout)).await.unwrap();
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(layout.clone());
     create_source(&store, &scope, "source_second_serial");
     catch_up_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
@@ -229,7 +229,7 @@ async fn total_cache_loss_restarts_the_serial_at_one_in_a_fresh_instance() {
 async fn a_lost_database_with_canonical_state_intact_rebuilds_at_one() {
     let (_dir, layout, scope) = seeded_layout();
     materialize_state(&open(&layout)).await.unwrap();
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(layout.clone());
     create_source(&store, &scope, "source_survives_db_loss");
     catch_up_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();

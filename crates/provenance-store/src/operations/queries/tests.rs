@@ -58,7 +58,7 @@ fn seeded_store() -> (tempfile::TempDir, StateStore, ScopeId) {
         .unwrap(),
     )
     .unwrap();
-    let store = StateStore::new(layout);
+    let store = crate::test_support::store(layout);
     store
         .create_domain(CreateDomainInput {
             scope_id: scope.clone(),

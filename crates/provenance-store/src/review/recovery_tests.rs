@@ -11,7 +11,7 @@ fn id() -> StableId {
     StableId::new("req_a").unwrap()
 }
 fn open(root: &Utf8Path) -> StateStore {
-    StateStore::new(ProvenanceLayout::new(root))
+    crate::test_support::store(ProvenanceLayout::new(root))
 }
 fn input(store: &StateStore, request: &str) -> SaveRequirement {
     serde_json::from_value(json!({"actor":"ben", "expected_etag":store.requirement_edit_state(&scope(), &id()).unwrap().etag,

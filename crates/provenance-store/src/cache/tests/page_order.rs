@@ -133,7 +133,7 @@ async fn id_pages_search_the_primary_key_without_a_sort() {
 #[tokio::test]
 async fn id_pages_return_every_id_in_order() {
     let (_dir, layout, scope) = seeded_layout();
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(layout.clone());
     for index in 0..10 {
         create_rule_of(
             &store,
@@ -213,7 +213,7 @@ async fn id_pages_return_every_id_in_order() {
 #[tokio::test]
 async fn the_window_that_reaches_an_over_long_id_refuses() {
     let (_dir, layout, scope) = seeded_layout();
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(layout.clone());
     for index in 0..9 {
         create_rule_of(
             &store,

@@ -16,7 +16,7 @@ fn store() -> (tempfile::TempDir, StateStore, ScopeId) {
         serde_json::to_string(&manifest).unwrap(),
     )
     .unwrap();
-    (dir, StateStore::new(layout), scope)
+    (dir, crate::test_support::store(layout), scope)
 }
 
 fn spec(requirement: &str) -> TypedSpecInput {

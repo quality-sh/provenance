@@ -208,7 +208,7 @@ async fn mcp_target_first_requirement_update_passes_relationship_deltas() {
 #[tokio::test]
 async fn mcp_target_first_requirement_submit_uses_the_target() {
     let repository = Repository::new("The shared graph is readable.");
-    let store = StateStore::new(repository.layout.clone());
+    let store = repository.open().store();
     let scope = ScopeId::new("default").unwrap();
     let requirement = StableId::new("req_shared").unwrap();
     let proposal = store

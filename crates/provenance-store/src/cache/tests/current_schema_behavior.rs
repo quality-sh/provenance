@@ -40,7 +40,7 @@ async fn a_compatible_cache_keeps_incremental_catch_up() {
     let (_dir, layout, scope) = seeded_layout();
     materialize_state(&open(&layout)).await.unwrap();
     create_requirement(
-        &StateStore::new(layout.clone()),
+        &crate::test_support::store(layout.clone()),
         &scope,
         "req_incremental",
         provenance_core::RequirementStatus::Active,
@@ -122,7 +122,7 @@ async fn an_interrupted_rebuild_leaves_only_the_previous_projection_readable() {
     let digest_before = schema_digest(cache.pool()).await;
     cache.close().await.unwrap();
     create_requirement(
-        &StateStore::new(layout.clone()),
+        &crate::test_support::store(layout.clone()),
         &scope,
         "req_interrupted",
         provenance_core::RequirementStatus::Active,

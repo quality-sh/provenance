@@ -264,20 +264,22 @@ fn page_changes_report_removed_records_after_scope_replacement() {
     bounded(|| {
         use provenance_core::ScopeId;
         use provenance_store::{
-            publication::{with_publication_guard, with_staged_state},
+            publication::with_publication_guard,
             review_changes::ReviewStateSnapshot,
             state_store::{ScopeShards, StateStore},
         };
         let repo = Repository::new("The graph is readable.");
         let scope = ScopeId::new("default").unwrap();
         let clear = || {
-            with_staged_state(&repo.layout, false, |layout| {
-                StateStore::new(layout.clone()).import_scope(&scope, &ScopeShards::default())
-            })
-            .unwrap();
+            repo.open()
+                .stage(false, None, |staged| {
+                    staged.import_scope(&scope, &ScopeShards::default())
+                })
+                .unwrap();
         };
         clear();
-        StateStore::new(repo.layout.clone())
+        repo.open()
+            .store()
             .create_source(
                 serde_json::from_value(json!({
                     "scope_id":"default", "id":"source_removed", "name":"The removed source",
