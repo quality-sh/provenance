@@ -25,7 +25,7 @@ fn seed_external_metadata(store: &StateStore, scope: &ScopeId) {
             description: Some("Metadata authored outside the typed spec".to_string()),
             status: RequirementStatus::Active,
             domain_id: None,
-            refines: None,
+            refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,

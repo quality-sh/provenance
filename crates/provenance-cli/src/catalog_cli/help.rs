@@ -38,6 +38,11 @@ pub(super) fn target(
             }) {
                 allowed.extend(fields::accepted_flags(&fields::declared(definition)?));
             }
+            if action == catalog::TargetAction::Update
+                && kind.is_none_or(|kind| kind == provenance_core::NodeType::Requirement)
+            {
+                allowed.extend(["replace_parent".into(), "with_parent".into()]);
+            }
             allowed.remove("id");
             allowed.remove("id-json");
             command = command.mut_args(|arg| {

@@ -387,7 +387,7 @@ async fn document_review_totals_exclude_a_pending_parent_reference() {
             description: None,
             status: provenance_core::RequirementStatus::Active,
             domain_id: None,
-            refines: Some(sid("req_overtime")),
+            refines: vec![sid("req_overtime")],
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,

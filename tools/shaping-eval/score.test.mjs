@@ -4,7 +4,7 @@ const { score, compare } = await import('./score.mjs');
 // Implementation aid: these examples check the evaluation rubric, not product behaviour.
 test('linked repeated text needs a meaning assessment; unrelated text does not', () => {
   assert.equal(typeof score, 'function');
-  const graph = { requirements: [{ id: 'parent', statement: 'Same' }, { id: 'child', statement: 'Same', refines: 'parent' }, { id: 'other', statement: 'Same' }], rules: [], resolutions: [] };
+  const graph = { requirements: [{ id: 'parent', statement: 'Same' }, { id: 'child', statement: 'Same', refines: ['parent'] }, { id: 'other', statement: 'Same' }], rules: [], resolutions: [] };
   assert.deepEqual(score(graph).findings.map(f => f.recordIds), [['parent', 'child']]);
   assert.equal(score(graph).findings[0].reviewerAssessment, null);
 });

@@ -304,7 +304,7 @@ fn a_relationship_only_review_save_updates_the_record_stamp() {
         "actor":"ben",
         "expected_etag":store.requirement_edit_state(&scope(), &id()).unwrap().etag,
         "update":{"scope_id":"default","id":"req_a"},
-        "relationships":{"refines":null,"depends_on":["req_b"],"supersedes":[],"spawned_by":null,"cites":[]}
+        "relationships":{"refines":[],"depends_on":["req_b"],"supersedes":[],"spawned_by":null,"cites":[]}
     })).unwrap();
     store.save_requirement(save).unwrap();
     let after = store.requirement(&scope(), &id()).unwrap();

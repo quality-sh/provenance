@@ -117,7 +117,11 @@ fn normalize(input: &mut CreateReviewRequirement) -> anyhow::Result<()> {
         serde_json::to_vec(&input)?.len() <= 1_048_576,
         "review request exceeds the operation byte budget"
     );
-    for ids in [&mut input.create.depends_on, &mut input.create.supersedes] {
+    for ids in [
+        &mut input.create.refines,
+        &mut input.create.depends_on,
+        &mut input.create.supersedes,
+    ] {
         ids.sort_by(|a, b| a.as_str().cmp(b.as_str()));
         ids.dedup();
     }

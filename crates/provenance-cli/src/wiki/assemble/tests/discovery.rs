@@ -181,7 +181,7 @@ fn domains_group_children_and_rules_by_their_root_requirement_domain() {
         vec![],
     );
     child.domain_id = None;
-    child.refines = Some(sid("req_root"));
+    child.refines = vec![sid("req_root")];
     state.requirements = vec![root, child];
     let mut invoice_rule = rule("rule_invoice", Some("Group invoices"));
     invoice_rule.requirement_ids = vec![sid("req_child")];
