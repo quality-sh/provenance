@@ -130,7 +130,7 @@ async fn upgrade(State(state): State<RouteState>, request: Request) -> Response 
         return super::refusal(OperationFailure::UnavailableNeeds);
     };
     upgrade
-        .on_upgrade(move |socket| connected(socket, subscription))
+        .on_upgrade(move |socket| connected(socket, subscription, state.subscribers))
         .into_response()
 }
 
@@ -142,7 +142,11 @@ fn metadata(headers: &HeaderMap, name: &str, expected: &str) -> bool {
     values.next().and_then(|value| value.to_str().ok()) == Some(expected) && values.next().is_none()
 }
 
-async fn connected(mut socket: WebSocket, mut subscription: Subscription) {
+async fn connected(
+    mut socket: WebSocket,
+    mut subscription: Subscription,
+    subscribers: Subscribers,
+) {
     if !send(&mut socket, &subscription.ready, &mut subscription.stopped).await {
         return;
     }
@@ -161,7 +165,12 @@ async fn connected(mut socket: WebSocket, mut subscription: Subscription) {
                     break;
                 }
             }
-            Ok(None) | Err(_) => break,
+            Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
+                let reset = subscribers.reset("subscriber-loss");
+                let _ = send(&mut socket, &reset, &mut subscription.stopped).await;
+                break;
+            }
+            Ok(None) | Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
         }
     }
     let _ = socket.send(Message::Close(None)).await;
