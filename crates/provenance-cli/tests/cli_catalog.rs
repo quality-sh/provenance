@@ -261,14 +261,14 @@ fn collection_cursors_refuse_a_changed_page_limit() {
 }
 
 #[test]
-fn action_named_ids_follow_the_id_then_action_grammar() {
+fn collection_member_actions_follow_the_id_then_action_grammar() {
     let (_directory, repo) = init();
-    create_source(&repo, "get");
-    create_source(&repo, "update");
+    create_source(&repo, "source_action_one");
+    create_source(&repo, "source_action_two");
 
     let updated = provenance()
         .args([
-            "sources", "get", "update", "--repo", &repo, "--name", "Changed", "--format", "json",
+            "sources", "source_action_one", "update", "--repo", &repo, "--name", "Changed", "--format", "json",
         ])
         .output()
         .unwrap();
@@ -278,12 +278,12 @@ fn action_named_ids_follow_the_id_then_action_grammar() {
         String::from_utf8_lossy(&updated.stderr)
     );
     let updated: Value = serde_json::from_slice(&updated.stdout).unwrap();
-    assert_eq!(updated["data"]["id"], "get");
+    assert_eq!(updated["data"]["id"], "source_action_one");
     assert_eq!(updated["data"]["name"], "Changed");
 
     let read = provenance()
         .args([
-            "sources", "update", "get", "--repo", &repo, "--format", "json",
+            "sources", "source_action_two", "get", "--repo", &repo, "--format", "json",
         ])
         .output()
         .unwrap();
@@ -293,7 +293,7 @@ fn action_named_ids_follow_the_id_then_action_grammar() {
         String::from_utf8_lossy(&read.stderr)
     );
     let read: Value = serde_json::from_slice(&read.stdout).unwrap();
-    assert_eq!(read["data"]["id"], "update");
+    assert_eq!(read["data"]["id"], "source_action_two");
 }
 
 #[test]
@@ -356,7 +356,7 @@ fn array_query_flags_use_the_registered_wire_encoding() {
 }
 
 #[test]
-fn member_reads_return_a_typed_refusal_for_unknown_query_parameters() {
+fn member_reads_return_usage_status_for_unknown_options() {
     let (_directory, repo) = init();
     create_source(&repo, "source_catalog_member");
 
@@ -373,9 +373,8 @@ fn member_reads_return_a_typed_refusal_for_unknown_query_parameters() {
             "json",
         ])
         .assert()
-        .failure()
-        .stderr(contains("\"kind\":\"invalid_input\""))
-        .stderr(contains("\"field\":\"stray\""));
+        .code(2)
+        .stderr(contains("unexpected argument '--stray'"));
 }
 
 #[test]

@@ -7,7 +7,7 @@ use provenance_cli::porcelain;
 use provenance_core::NodeType;
 use provenance_porcelain::get::View;
 
-/// Shared options for the Porcelain and catalog grammars.
+// Shared options for the Porcelain and catalog grammars.
 #[derive(Args)]
 #[group(skip)]
 pub(crate) struct Common {
@@ -58,7 +58,7 @@ pub(super) struct SearchArgs {
 }
 
 #[derive(Parser)]
-#[command(name = "provenance")]
+#[command(name = "provenance", about = "Work with records in one scope")]
 pub(crate) struct CatalogArgs {
     #[command(flatten)]
     pub common: Common,
@@ -96,7 +96,7 @@ impl From<GetView> for View {
 }
 
 #[derive(Parser)]
-#[command(name = "provenance")]
+#[command(name = "provenance", about = "Read or change one record")]
 pub(super) struct TargetArgs {
     #[command(flatten)]
     pub common: Common,

@@ -1,6 +1,8 @@
 use super::initialized_store;
 use crate::state_store::{CreateSourceInput, ScopeShards};
-use provenance_core::{Message, MessageRole, NodeType, SourceType, StableId, Thread, ThreadParent, ThreadStatus};
+use provenance_core::{
+    Message, MessageRole, NodeType, SourceType, StableId, Thread, ThreadParent, ThreadStatus,
+};
 use provenance_macros::verifies;
 
 #[test]
@@ -126,5 +128,8 @@ fn a_keyword_id_from_another_record_kind_is_not_preserved() {
         ..ScopeShards::default()
     };
     let error = store.import_scope(&scope, &shards).unwrap_err();
-    assert!(error.to_string().contains("reserved record ID search"), "{error}");
+    assert!(
+        error.to_string().contains("reserved record ID search"),
+        "{error}"
+    );
 }

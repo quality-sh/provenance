@@ -60,10 +60,9 @@ use crate::{layout::ProvenanceLayout, shards};
 use ideation_batches::overlay_records;
 use provenance_core::{
     ensure_record_id_assignable, ensure_supported_schema_version, AssertionRecord, Boundary,
-    Contribution, DispositionRecord,
-    Domain, ImplementationBinding, Manifest, Message, ProposalCard, Question, Requirement,
-    Resolution, Rule, SchemaVersion, Scope, ScopeId, Source, SynthesisPacket, Thread, Topic,
-    VerificationBinding,
+    Contribution, DispositionRecord, Domain, ImplementationBinding, Manifest, Message,
+    ProposalCard, Question, Requirement, Resolution, Rule, SchemaVersion, Scope, ScopeId, Source,
+    SynthesisPacket, Thread, Topic, VerificationBinding,
 };
 
 fn ensure_new_ids_assignable<T>(
