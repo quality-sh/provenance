@@ -4,7 +4,7 @@ use provenance_macros::Relations;
 #[derive(Relations)]
 pub struct Requirement {
     pub id: StableId,
-    pub refines: Option<StableId>,
+    pub refines: Vec<StableId>,
 }
 
 fn main() {}

@@ -96,7 +96,7 @@ fn generate(seed: u64) -> GeneratedGraph {
         record.domain_id = domain.as_deref().map(sid);
         if index > 0 {
             let parent = format!("req_{:02}", rng.below(index));
-            record.refines = Some(sid(&parent));
+            record.refines = vec![sid(&parent)];
             parents.entry(id.clone()).or_default().push(parent);
         }
         state.requirements.push(record);
@@ -294,7 +294,7 @@ fn a_refines_cycle_neither_hangs_nor_drops_records() {
             .iter_mut()
             .find(|record| record.id.as_str() == parent)
             .expect("the parent is a generated requirement");
-        parent_record.refines = Some(sid(&child));
+        parent_record.refines = vec![sid(&child)];
         graph.parents.insert(parent.clone(), vec![child.clone()]);
 
         let corpus = graph.corpus();

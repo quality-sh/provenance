@@ -33,7 +33,7 @@ fn repository() -> (tempfile::TempDir, ProvenanceLayout, Vec<u8>) {
             description: None,
             status: provenance_core::RequirementStatus::Discovery,
             domain_id: None,
-            refines: None,
+            refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,

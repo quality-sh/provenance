@@ -128,7 +128,7 @@ fn requirement_page_flags_missing_sources() {
 
 fn refining(id: &str, statement: &str, parent: &str) -> provenance_core::Requirement {
     let mut record = requirement(id, statement, RequirementStatus::Active, vec![]);
-    record.refines = Some(sid(parent));
+    record.refines = vec![sid(parent)];
     record
 }
 
@@ -248,7 +248,7 @@ fn requirement_and_unfinished_pages_anchor_a_dangling_refinement_at_its_owner() 
         RequirementStatus::Active,
         vec![],
     );
-    surviving.refines = Some(sid("req_missing_parent"));
+    surviving.refines = vec![sid("req_missing_parent")];
     surviving.depends_on = vec![sid("req_missing_dependency")];
     state.domains = vec![domain("domain_default", "Invoicing")];
     state.requirements = vec![surviving];

@@ -292,3 +292,15 @@ It rejects a prohibited route shape, request shape, response envelope, status,
 payload identity, or tool description before it writes generated output. The
 compatibility gate in `docs/compatibility-gate.md` remains independent and
 required.
+
+Requirement refinement parents use an ID list in `refines`. A record omits an empty
+list. An empty list identifies a root. Creation accepts a list. A relationship edit
+accepts a complete list or an `add`/`remove` delta. The scalar shape is not accepted.
+The protocol version stays unchanged. Both generated clients use this contract.
+
+For one selected child, the CLI accepts `update --replace-parent P --with-parent B`
+with `--actor`. It reads the child guard, adds B, reads the new guard, and removes P.
+An explicit `--if-match` controls the first write. A failed second write can leave
+both parents. A retry preserves the other parents. Each write uses the existing
+Requirement PATCH operation. The helper changes no descendant and does not declare
+supersession. A supersession declaration alone changes no child or prior status.
