@@ -271,7 +271,7 @@ fn a_required_list_keeps_its_last_entry() {
             supersedes: Vec::new(),
             position: "Pay it".into(),
             rationale: "The award says so".into(),
-            status: ResolutionStatus::Proposed,
+            status: ResolutionStatus::Approved,
             context: None,
             enforcement: None,
             confidence: None,

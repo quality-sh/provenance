@@ -31,7 +31,7 @@ fn seed_two_producers(layout: &ProvenanceLayout, scope: &ScopeId) {
             supersedes: Vec::new(),
             position: "Adopt".into(),
             rationale: "Settles the other requirement".into(),
-            status: ResolutionStatus::Proposed,
+            status: ResolutionStatus::Approved,
             context: None,
             enforcement: None,
             confidence: None,
