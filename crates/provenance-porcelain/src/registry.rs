@@ -6,8 +6,14 @@
 //! from them.
 
 mod porcelain;
+mod repository;
 
 pub use porcelain::{CheckCliInput, CheckFormat, GetCliInput, PrimeFormat, PrimeInput};
+pub use repository::{
+    CargoInitInput, DictionaryImportInput, DictionaryStatusInput, ExportInput, ImportInput,
+    InitInput, MaterializeInput, MergeJsonlInput, RepositoryCommand, SchemaShowInput,
+    ValidateInput,
+};
 
 use crate::action::Action;
 use provenance_macros::rule;
@@ -104,6 +110,10 @@ pub struct Flag {
     /// The value can start with `-`.
     pub hyphen_values: bool,
     pub hidden: bool,
+    /// The command refuses to run without this flag.
+    pub required: bool,
+    /// The subcommands after this flag also take it.
+    pub global: bool,
 }
 
 impl Flag {
@@ -119,7 +129,27 @@ impl Flag {
             values: &[],
             hyphen_values: false,
             hidden: false,
+            required: false,
+            global: false,
         }
+    }
+
+    #[must_use]
+    pub const fn hidden(mut self) -> Self {
+        self.hidden = true;
+        self
+    }
+
+    #[must_use]
+    pub const fn required(mut self) -> Self {
+        self.required = true;
+        self
+    }
+
+    #[must_use]
+    pub const fn global(mut self) -> Self {
+        self.global = true;
+        self
     }
 
     #[must_use]
@@ -165,10 +195,34 @@ impl Flag {
     }
 }
 
+const REPO: Flag = Flag::new("repo", FlagKind::Value).default(".");
+const SCOPE: Flag = Flag::new("scope", FlagKind::Value).default("default");
+
+/// The repository options that the porcelain commands and the commands after them take.
+pub const GLOBAL_FLAGS: &[Flag] = &[
+    REPO.hyphen_values().global(),
+    SCOPE.hyphen_values().global(),
+    json_format_flag(None).global(),
+    Flag::new("quiet", FlagKind::Switch).global(),
+];
+
+/// The repository and scope that a command opens.
+pub const REPO_FLAGS: &[Flag] = &[REPO, SCOPE];
+
+/// The `--format` flag of a command that renders only JSON.
+pub const fn json_format_flag(default: Option<&'static str>) -> Flag {
+    let flag = Flag::new("format", FlagKind::Value).values(&["json"]);
+    match default {
+        Some(default) => flag.default(default),
+        None => flag,
+    }
+}
+
 /// What one command is on each interface. It holds no handler.
 #[derive(Clone, Copy, Debug)]
 pub struct Declaration {
     pub name: &'static str,
+    /// The description. An empty description shows no about line in the CLI help.
     pub description: &'static str,
     pub cli_form: CliForm,
     pub cli_input: Input,
@@ -191,6 +245,7 @@ pub enum Command {
     Check,
     Prime,
     Action(Action),
+    Repository(RepositoryCommand),
 }
 
 impl Command {
@@ -211,6 +266,16 @@ impl Command {
         Self::Action(Action::Discussion),
         Self::Action(Action::Discuss),
         Self::Action(Action::Reply),
+        Self::Repository(RepositoryCommand::Init),
+        Self::Repository(RepositoryCommand::CargoInit),
+        Self::Repository(RepositoryCommand::Materialize),
+        Self::Repository(RepositoryCommand::Export),
+        Self::Repository(RepositoryCommand::Import),
+        Self::Repository(RepositoryCommand::MergeJsonl),
+        Self::Repository(RepositoryCommand::Validate),
+        Self::Repository(RepositoryCommand::SchemaShow),
+        Self::Repository(RepositoryCommand::DictionaryImport),
+        Self::Repository(RepositoryCommand::DictionaryStatus),
     ];
 
     /// The declaration of this command.
@@ -239,6 +304,18 @@ impl Command {
                     | Action::Discuss
                     | Action::Reply => Presence::Present,
                 },
+                Self::Repository(command) => match command {
+                    RepositoryCommand::Init
+                    | RepositoryCommand::CargoInit
+                    | RepositoryCommand::Materialize
+                    | RepositoryCommand::Export
+                    | RepositoryCommand::Import
+                    | RepositoryCommand::MergeJsonl
+                    | RepositoryCommand::Validate
+                    | RepositoryCommand::SchemaShow
+                    | RepositoryCommand::DictionaryImport
+                    | RepositoryCommand::DictionaryStatus => Presence::Present,
+                },
             },
             Interface::Mcp => match self {
                 Self::Get | Self::Search | Self::Api | Self::Check => Presence::Present,
@@ -256,6 +333,21 @@ impl Command {
                     | Action::Discussion
                     | Action::Discuss
                     | Action::Reply => Presence::Present,
+                },
+                Self::Repository(command) => match command {
+                    RepositoryCommand::Init
+                    | RepositoryCommand::CargoInit
+                    | RepositoryCommand::Materialize
+                    | RepositoryCommand::Export
+                    | RepositoryCommand::Import
+                    | RepositoryCommand::MergeJsonl
+                    | RepositoryCommand::Validate
+                    | RepositoryCommand::SchemaShow
+                    | RepositoryCommand::DictionaryImport
+                    | RepositoryCommand::DictionaryStatus => Presence::Absent {
+                        reason:
+                            "the command changes or reads repository files on the local machine",
+                    },
                 },
             },
         }
