@@ -2,6 +2,7 @@
 
 pub mod check;
 pub mod get;
+pub mod search;
 
 /// Shared Porcelain capabilities over a caller-supplied operation port.
 #[derive(Clone, Debug)]

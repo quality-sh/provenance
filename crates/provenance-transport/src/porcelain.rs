@@ -9,9 +9,11 @@ use serde_json::{Map, Value};
 pub(crate) mod authoring;
 mod authoring_mcp;
 mod get_port;
+mod search_port;
 pub use authoring::{render_readable as render_action_readable, Action, ActionError, TargetRoute};
 pub(super) use authoring_mcp::{call as call_authoring, tools as authoring_tools};
 pub use get_port::HostGetPort;
+pub use search_port::HostSearchPort;
 
 /// MCP input for the `check` Porcelain action.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq)]
@@ -30,6 +32,39 @@ impl CheckArguments {
 
 pub(crate) fn get_is_available(host: &crate::StatementHost) -> bool {
     get_port::is_available(host)
+}
+
+pub(crate) fn search_is_available(host: &crate::StatementHost) -> bool {
+    search_port::is_available(host)
+}
+
+pub(crate) fn search_tool() -> rmcp::model::Tool {
+    use provenance_store::operations::catalog;
+    let mut input = catalog::operation_request_schema::<catalog::Search>();
+    input.as_object_mut().map(|object| object.remove("$schema"));
+    if let Some(properties) = input.get_mut("properties").and_then(Value::as_object_mut) {
+        properties.remove("protocol_version");
+    }
+    if let Some(required) = input.get_mut("required").and_then(Value::as_array_mut) {
+        required.retain(|field| field != "protocol_version");
+    }
+    let mut output = catalog::operation_success_schema::<catalog::Search>();
+    output
+        .as_object_mut()
+        .map(|object| object.remove("$schema"));
+    let mut tool = rmcp::model::Tool::new(
+        "search",
+        "Find records across the permitted kinds in the bound scope.",
+        input.as_object().expect("search schema is an object").clone(),
+    );
+    tool.output_schema = Some(
+        output
+            .as_object()
+            .expect("search output schema is an object")
+            .clone()
+            .into(),
+    );
+    tool
 }
 
 pub(crate) fn get_tool() -> rmcp::model::Tool {
@@ -203,6 +238,71 @@ pub(crate) async fn call_get(
             &error.to_string(),
         ),
     }
+}
+
+/// Returns compact readable content and the canonical structured search result.
+pub(crate) async fn call_search(
+    host: &crate::StatementHost,
+    arguments: serde_json::Map<String, Value>,
+) -> CallToolResult {
+    let Ok(mut request) = serde_json::from_value::<provenance_core::protocol::SearchQuery>(
+        Value::Object(arguments),
+    ) else {
+        return get_error("invalid_options", "unsupported search options");
+    };
+    request.protocol_version = Some(provenance_core::SDK_PROTOCOL_VERSION);
+    let service = provenance_porcelain::Porcelain::new(HostSearchPort::new(host.clone()));
+    match service.search(request).await {
+        Ok(response) => {
+            let summary = render_search_readable(&response);
+            let mut result = CallToolResult::structured(
+                serde_json::to_value(response).expect("search result is JSON"),
+            );
+            result.content = vec![Content::text(summary)];
+            result
+        }
+        Err(error) => search_error(error),
+    }
+}
+
+/// Render one bounded search page without repeating full record payloads.
+pub fn render_search_readable(
+    response: &provenance_core::protocol::QueryResponse<provenance_core::protocol::SearchResult>,
+) -> String {
+    let result = &response.result;
+    let mut lines = vec![format!("search: {} returned", result.nodes.len())];
+    for node in &result.nodes {
+        lines.push(format!(
+            "- {} {}\n  {}",
+            node.node_type().as_str(),
+            node.id(),
+            node.searchable_text().get(1).copied().unwrap_or("")
+        ));
+    }
+    lines.push(format!(
+        "bounds: limit={} has_more={} continuation={}",
+        result.limit,
+        result.has_more,
+        result.next_cursor.as_deref().unwrap_or("none")
+    ));
+    if let Some(error) = &response.freshness_error {
+        lines.push(format!("warning: freshness: {error}"));
+    }
+    lines.join("\n")
+}
+
+fn search_error(error: provenance_porcelain::search::SearchError) -> CallToolResult {
+    use provenance_porcelain::search::SearchError;
+    let detail = match &error {
+        SearchError::InvalidOptions => serde_json::json!({
+            "kind":"invalid_input", "field":null, "reason":"invalid_value"
+        }),
+        SearchError::AccessDenied => serde_json::json!({"kind":"access_denied"}),
+        SearchError::Operation { detail, .. } => detail.clone(),
+    };
+    CallToolResult::structured_error(serde_json::json!({
+        "error": detail, "meta": {}, "message": error.to_string()
+    }))
 }
 
 pub fn render_get_readable(outcome: &provenance_porcelain::get::GetOutcome) -> String {

@@ -88,6 +88,16 @@ pub(super) struct RawDefinition {
     pub context: super::ContextKind,
 }
 
+/// Return the canonical request schema for one registered operation type.
+pub fn operation_request_schema<O: Operation>() -> Value {
+    raw_definition::<O>().request_schema
+}
+
+/// Return the canonical success schema for one registered operation type.
+pub fn operation_success_schema<O: Operation>() -> Value {
+    raw_definition::<O>().success_schema
+}
+
 impl Definition {
     pub const fn returns_etag(&self) -> bool {
         self.registration.controls.etag.is_some()

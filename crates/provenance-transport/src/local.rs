@@ -131,6 +131,7 @@ impl HostAccess for LocalAccess {
     fn advertises(&self, operation: &str) -> bool {
         [
             <catalog::ResolveRecord as catalog::Operation>::NAME,
+            <catalog::Search as catalog::Operation>::NAME,
             <catalog::Trace as catalog::Operation>::NAME,
             <catalog::Impact as catalog::Operation>::NAME,
         ]
