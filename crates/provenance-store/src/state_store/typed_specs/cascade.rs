@@ -157,6 +157,7 @@ impl Cascade {
         requirements: &[Requirement],
         rules: &[Rule],
     ) -> anyhow::Result<()> {
+        let domains = store.list_domains(scope)?;
         for disposition in store.list_dispositions(scope)? {
             let Some(artifact) = &disposition.canonical_artifact else {
                 continue;
@@ -172,6 +173,18 @@ impl Cascade {
                     contains_id(&self.resolutions, &artifact.artifact_id, |r| &r.id)
                 }
                 CanonicalArtifactType::Rule => contains_id(rules, &artifact.artifact_id, |r| &r.id),
+                CanonicalArtifactType::Domain => {
+                    contains_id(&domains, &artifact.artifact_id, |r| &r.id)
+                }
+                CanonicalArtifactType::Boundary => {
+                    contains_id(&self.boundaries, &artifact.artifact_id, |r| &r.id)
+                }
+                CanonicalArtifactType::Topic => {
+                    contains_id(&self.topics, &artifact.artifact_id, |r| &r.id)
+                }
+                CanonicalArtifactType::Question => {
+                    contains_id(&self.questions, &artifact.artifact_id, |r| &r.id)
+                }
             };
             anyhow::ensure!(
                 survives,
@@ -411,6 +424,10 @@ const fn canonical_kind(kind: CanonicalArtifactType) -> &'static str {
         CanonicalArtifactType::Requirement => "requirement",
         CanonicalArtifactType::Resolution => "resolution",
         CanonicalArtifactType::Rule => "rule",
+        CanonicalArtifactType::Domain => "domain",
+        CanonicalArtifactType::Boundary => "boundary",
+        CanonicalArtifactType::Topic => "topic",
+        CanonicalArtifactType::Question => "question",
     }
 }
 
