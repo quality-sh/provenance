@@ -40,7 +40,7 @@ fn failed_freshness_close(setup_delay: Duration) {
         let (started_tx, started_rx) = tokio::sync::oneshot::channel();
         let (finished_tx, finished_rx) = tokio::sync::oneshot::channel();
         let mut signals = Some((started_tx, finished_tx));
-        crate::test_probes::arm("run_migrations_under_guard", move || {
+        crate::test_probes::arm("prepare_current_schema_under_guard", move || {
             let (started_tx, finished_tx) = signals.take().context("the probe must run once")?;
             let competing_layout = layout.clone();
             let (entered_tx, entered_rx) = std::sync::mpsc::channel();
@@ -92,7 +92,7 @@ fn failed_freshness_close(setup_delay: Duration) {
         .and_then(std::convert::identity);
         // Both futures have been dropped, including the publication guard
         // on failure. Clean up before reporting an assertion failure.
-        crate::test_probes::disarm("run_migrations_under_guard");
+        crate::test_probes::disarm("prepare_current_schema_under_guard");
         release_setup.await?;
         let handle = waiter.lock().unwrap().take();
         let entered = handle.is_some();
@@ -127,7 +127,7 @@ fn materialization_closes_with_four_busy_blocking_workers() {
         let probe_layout = layout.clone();
         let waiters = Arc::new(Mutex::new(Vec::new()));
         let waiters_out = Arc::clone(&waiters);
-        crate::test_probes::arm("run_migrations_under_guard", move || {
+        crate::test_probes::arm("prepare_current_schema_under_guard", move || {
             let (entered_tx, entered_rx) = std::sync::mpsc::channel();
             for _ in 0..WORKERS {
                 let competing_layout = probe_layout.clone();
@@ -151,7 +151,7 @@ fn materialization_closes_with_four_busy_blocking_workers() {
         )
         .await;
         let elapsed = started.elapsed();
-        crate::test_probes::disarm("run_migrations_under_guard");
+        crate::test_probes::disarm("prepare_current_schema_under_guard");
         let timed_out = result.is_err();
         println!(
             "blocking_workers={WORKERS} materialization_timed_out={timed_out} fault_injected=false"

@@ -33,7 +33,7 @@ pub use traceability::*;
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct MaterializeReport {
     pub records_loaded: u64,
-    pub migrations_applied: Vec<String>,
+    pub cache_recreated: bool,
 }
 
 pub(crate) fn serde_name<T: serde::Serialize>(value: &T) -> anyhow::Result<String> {
