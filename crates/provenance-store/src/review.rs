@@ -7,6 +7,7 @@ pub(crate) mod relationships;
 mod resource_read;
 pub(crate) use resource_read::RequirementResourceSnapshot;
 mod save;
+pub(super) use save::RecordEvidenceContext;
 pub use input::{ListEdit, RequirementRelations, SaveRequirement};
 
 fn owner_matches(record: &provenance_core::Requirement, owner: Option<&str>) -> anyhow::Result<()> {
