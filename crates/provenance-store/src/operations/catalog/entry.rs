@@ -101,6 +101,7 @@ macro_rules! register_family_catalog {
             $list:ident,
             $list_wire:literal,
             $page:ident,
+            $page_wire:literal,
             $member:ident,
             $member_wire:literal
         )

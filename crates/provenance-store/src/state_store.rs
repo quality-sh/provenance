@@ -260,6 +260,7 @@ macro_rules! define_canonical_readers {
                 record: $record:ty,
                 field: $field:ident,
                 path: $path:ident,
+                meta: $meta:tt,
                 node: [$($node:tt)*],
                 reader: {
                     open: $reader:ident,
