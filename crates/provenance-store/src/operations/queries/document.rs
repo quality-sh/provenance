@@ -16,6 +16,17 @@ pub async fn read_document(
     policy: ReadPolicy,
     request: ReadDocumentQuery,
 ) -> anyhow::Result<Stamped<ReadDocumentResult>> {
+    read_document_answer(repo, scope, policy, request)
+        .await
+        .and_then(|answer| super::page::checked("read-document", answer))
+}
+
+pub(crate) async fn read_document_answer(
+    repo: Option<Utf8PathBuf>,
+    scope: &ScopeId,
+    policy: ReadPolicy,
+    request: ReadDocumentQuery,
+) -> anyhow::Result<Stamped<ReadDocumentResult>> {
     let answer = served(repo, scope, policy, move |ctx| {
         // Keep page errors until the freshness policy is checked.
         Box::pin(async move { Ok(read(ctx, request).await) })
@@ -24,14 +35,11 @@ pub async fn read_document(
     if answer.stamp.policy == StampPolicy::CatchUpFailed {
         return Err(ReadFailure::DocumentCatchUpFailed.into());
     }
-    super::page::checked(
-        "read-document",
-        Stamped {
-            result: answer.result?,
-            stamp: answer.stamp,
-            freshness_error: answer.freshness_error,
-        },
-    )
+    Ok(Stamped {
+        result: answer.result?,
+        stamp: answer.stamp,
+        freshness_error: answer.freshness_error,
+    })
 }
 
 pub(super) async fn read(
