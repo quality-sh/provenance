@@ -45,7 +45,7 @@ pub(super) async fn read(
 }
 
 async fn page(ctx: &ReadContext, request: ReadDocumentQuery) -> anyhow::Result<ReadDocumentResult> {
-    use crate::operations::reader::{PAGE_BYTES, RECORD_BYTES};
+    use crate::operations::reader::PAGE_BYTES;
     request
         .validate()
         .map_err(provenance_core::protocol::QueryValidation::into_native)?;
@@ -93,9 +93,6 @@ async fn page(ctx: &ReadContext, request: ReadDocumentQuery) -> anyhow::Result<R
         };
         if let Some(entry) = entry {
             let size = serde_json::to_vec(&entry)?.len();
-            if size > RECORD_BYTES {
-                return Err(ReadFailure::PageRecordTooLarge.into());
-            }
             if bytes + size > PAGE_BYTES {
                 has_more = true;
                 break;

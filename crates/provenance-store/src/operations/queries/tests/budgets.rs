@@ -2,13 +2,17 @@ use super::{root_of, seeded_store};
 use crate::operations::catalog::{
     self, ContextResolver, ExecutionNeeds, PreparedContext, PreparedRead, RequestedContext,
 };
-use crate::operations::{queries, read_policy::ReadPolicy};
+use crate::operations::{
+    queries,
+    read_policy::{FreshnessPolicy, ReadPolicy},
+};
+use provenance_core::model::ProjectionRow;
 use provenance_core::protocol::failure::OperationFailure;
 use provenance_core::protocol::{
-    read_failure::ReadFailure, Direction, EvidenceQuery, NeighborsQuery, QueryResponse, Stamp,
-    StampPolicy, Stamped, SDK_PROTOCOL_VERSION,
+    read_failure::ReadFailure, Direction, EvidenceQuery, GetQuery, NeighborsQuery, QueryResponse,
+    Stamp, StampPolicy, Stamped, SDK_PROTOCOL_VERSION,
 };
-use provenance_core::NodeType;
+use provenance_core::{NodeType, Rule};
 use provenance_macros::verifies;
 use serde::Serialize;
 use serde_json::json;
@@ -42,13 +46,13 @@ fn shared_response_check_counts_the_exact_serialized_query_envelope() {
     let empty = serde_json::to_vec(&QueryResponse::new("test", stamped_payload(String::new())))
         .unwrap()
         .len();
-    let remaining = super::super::page::RESPONSE_BYTES - empty;
+    let remaining = provenance_core::protocol::QUERY_RESPONSE_BYTES - empty;
     let at_limit = stamped_payload("x".repeat(remaining));
     assert_eq!(
         serde_json::to_vec(&QueryResponse::new("test", at_limit.clone()))
             .unwrap()
             .len(),
-        super::super::page::RESPONSE_BYTES
+        provenance_core::protocol::QUERY_RESPONSE_BYTES
     );
     super::super::page::checked("test", at_limit).unwrap();
 
@@ -125,7 +129,7 @@ async fn neighbors_keeps_an_under_budget_response_and_its_wire_envelope() {
         .iter()
         .any(|neighbor| neighbor.node.id().as_str() == "req_large_000"));
     let wire = serde_json::to_vec(&QueryResponse::new("neighbors", answer)).unwrap();
-    assert!(wire.len() <= super::super::page::RESPONSE_BYTES);
+    assert!(wire.len() <= provenance_core::protocol::QUERY_RESPONSE_BYTES);
 }
 
 #[tokio::test]
@@ -236,4 +240,109 @@ async fn evidence_refuses_one_record_over_the_record_budget() {
         error.downcast_ref::<ReadFailure>(),
         Some(&ReadFailure::PageRecordTooLarge)
     );
+}
+
+async fn set_rule_description_bytes(
+    store: &crate::state_store::StateStore,
+    id: &str,
+    description_bytes: usize,
+) -> usize {
+    let cache = crate::cache::open_cache(&store.layout).await.unwrap();
+    sqlx::query("UPDATE rules SET description = ? WHERE id = ?")
+        .bind("x".repeat(description_bytes))
+        .bind(id)
+        .execute(cache.pool())
+        .await
+        .unwrap();
+    let expression = crate::cache::read::page::byte_expression(Rule::COLUMNS);
+    let size: i64 = sqlx::query_scalar(&format!("SELECT {expression} FROM rules WHERE id = ?"))
+        .bind(id)
+        .fetch_one(cache.pool())
+        .await
+        .unwrap();
+    cache.close().await.unwrap();
+    usize::try_from(size).unwrap()
+}
+
+fn get_rule_query() -> GetQuery {
+    GetQuery {
+        protocol_version: Some(SDK_PROTOCOL_VERSION),
+        node_type: NodeType::Rule,
+        id: "rule_overtime".into(),
+    }
+}
+
+async fn get_rule_member(root: camino::Utf8PathBuf) -> serde_json::Value {
+    catalog::invoke_with(
+        "get-rule-v2",
+        SDK_PROTOCOL_VERSION,
+        json!({
+            "context": {"repository": "test", "scope": "default"},
+            "request": {"id": "rule_overtime"}
+        }),
+        Arc::new(Target(root)),
+    )
+    .await
+    .unwrap_or_else(|failure| {
+        panic!(
+            "member read failed with {}: {}",
+            failure.status_code(),
+            failure.error
+        )
+    })
+}
+
+#[tokio::test]
+#[verifies("rule_query_pages_bound_shared_reads", examples)]
+async fn stored_record_bytes_decide_query_eligibility_not_wrapper_bytes() {
+    let (dir, store, scope) = seeded_store();
+    crate::cache::tests::fixtures::create_rule_of(&store, &scope, "rule_overtime", "req_overtime");
+    let root = root_of(&dir);
+    queries::get(
+        Some(root.clone()),
+        &scope,
+        ReadPolicy::default(),
+        get_rule_query(),
+    )
+    .await
+    .unwrap();
+
+    let base = set_rule_description_bytes(&store, "rule_overtime", 0).await;
+    let description_bytes = crate::operations::reader::RECORD_BYTES - base;
+    let size = set_rule_description_bytes(&store, "rule_overtime", description_bytes).await;
+    assert_eq!(size, crate::operations::reader::RECORD_BYTES);
+
+    let answer = queries::get(
+        Some(root.clone()),
+        &scope,
+        ReadPolicy::with_freshness(FreshnessPolicy::AnnotateOnly),
+        get_rule_query(),
+    )
+    .await
+    .unwrap();
+    let node = answer.result.node.as_ref().unwrap();
+    assert!(
+        serde_json::to_vec(node).unwrap().len() > crate::operations::reader::RECORD_BYTES,
+        "the traversal wrapper must be larger than its stored row"
+    );
+    assert_eq!(
+        get_rule_member(root.clone()).await["result"]["id"],
+        "rule_overtime"
+    );
+
+    let size = set_rule_description_bytes(&store, "rule_overtime", description_bytes + 1).await;
+    assert_eq!(size, crate::operations::reader::RECORD_BYTES + 1);
+    let error = queries::get(
+        Some(root.clone()),
+        &scope,
+        ReadPolicy::with_freshness(FreshnessPolicy::AnnotateOnly),
+        get_rule_query(),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(
+        error.downcast_ref::<ReadFailure>(),
+        Some(&ReadFailure::PageRecordTooLarge)
+    );
+    assert_eq!(get_rule_member(root).await["result"]["id"], "rule_overtime");
 }
