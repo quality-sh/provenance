@@ -211,36 +211,6 @@ fn schema_properties(schema: &Value) -> anyhow::Result<&Map<String, Value>> {
         .ok_or_else(|| anyhow::anyhow!("declared input has no properties"))
 }
 
-/// Register flags from the same typed contracts that declare the MCP inputs.
-pub fn augment_schemas(
-    mut command: Command,
-    schemas: impl IntoIterator<Item = Value>,
-    bound: &[&str],
-) -> anyhow::Result<Command> {
-    let mut registered = command
-        .get_arguments()
-        .filter_map(|argument| argument.get_long().map(str::to_owned))
-        .collect::<BTreeSet<_>>();
-    for schema in schemas {
-        for field in schema_properties(&schema)?.keys() {
-            if bound.contains(&field.as_str()) {
-                continue;
-            }
-            let name = cli_name(field);
-            if registered.insert(name.clone()) {
-                command = command.arg(
-                    Arg::new(name.clone())
-                        .long(name)
-                        .num_args(1)
-                        .allow_hyphen_values(true)
-                        .action(ArgAction::Set),
-                );
-            }
-        }
-    }
-    Ok(command)
-}
-
 /// Bind supplied CLI flags using the typed input schema for one keyword.
 pub fn schema_input(
     schema: &Value,
@@ -375,7 +345,8 @@ mod tests {
             [first.clone(), second.clone()],
             [second.clone(), first.clone()],
         ] {
-            let command = augment_schemas(Command::new("test"), schemas, &[]).unwrap();
+            let command =
+                crate::registry_cli::augment_schemas(Command::new("test"), schemas, &[]).unwrap();
             for (schema, accepted, rejected) in
                 [(&first, "alpha", "beta"), (&second, "beta", "alpha")]
             {

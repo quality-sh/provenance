@@ -1,6 +1,7 @@
 //! The MCP server handler: lists and calls the porcelain tools of one statement host.
 
 use crate::{surface, tools};
+use provenance_porcelain::registry::{Command, Interface};
 use provenance_transport::{porcelain::Action, StatementHost};
 use rmcp::{
     model::{
@@ -34,27 +35,17 @@ impl ServerHandler for Server {
         info
     }
 
-    /// Lists the porcelain MCP tools.
+    /// Lists the porcelain MCP tools in registry order.
     fn list_tools(
         &self,
         _: Option<PaginatedRequestParams>,
         _: RequestContext<RoleServer>,
     ) -> impl Future<Output = Result<ListToolsResult, ErrorData>> + '_ {
-        let mut tools = Vec::new();
-        if self.0.porcelain().get_is_available() {
-            tools.push(tools::get_tool());
-        }
-        if self.0.porcelain().search_is_available() {
-            tools.push(tools::search_tool());
-        }
-        if self.0.porcelain().api_is_available() {
-            tools.push(tools::api_tool());
-        }
-        if self.0.check_port().is_some() {
-            tools.push(tools::check_tool());
-        }
-        tools.extend(tools::authoring_tools(&self.0));
-        tools.extend(tools::discussion_tools(&self.0));
+        let tools = Command::ALL
+            .iter()
+            .filter(|command| command.is_present(Interface::Mcp))
+            .filter_map(|command| tool(&self.0, *command))
+            .collect();
         std::future::ready(Ok(ListToolsResult {
             tools,
             ..Default::default()
@@ -68,53 +59,56 @@ impl ServerHandler for Server {
         request: CallToolRequestParams,
         _: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
-        if request.name == "get" && self.0.porcelain().get_is_available() {
-            return call_get(&self.0, request.arguments).await;
-        }
-        if request.name == "search" && self.0.porcelain().search_is_available() {
-            return call_search(&self.0, request.arguments).await;
-        }
-        if request.name == "api" {
-            if !self.0.porcelain().api_is_available() {
-                return Err(ErrorData::new(
-                    ErrorCode::METHOD_NOT_FOUND,
-                    "Unknown tool",
-                    None,
-                ));
+        let host = &self.0;
+        let arguments = request.arguments;
+        match Command::find(Interface::Mcp, &[request.name.as_ref()]) {
+            Some(Command::Get) if host.porcelain().get_is_available() => {
+                call_get(host, arguments).await
             }
-            return call_api_tool(&self.0, request.arguments).await;
+            Some(Command::Search) if host.porcelain().search_is_available() => {
+                call_search(host, arguments).await
+            }
+            Some(Command::Api) if host.porcelain().api_is_available() => {
+                call_api_tool(host, arguments).await
+            }
+            Some(Command::Check) => {
+                let Some(port) = host.check_port() else {
+                    return Err(unknown_tool());
+                };
+                surface::admitted_call(host, arguments, |arguments| {
+                    tools::call_check(host, port.clone(), arguments)
+                })
+                .await
+            }
+            Some(Command::Action(action)) if Action::DISCUSSION.contains(&action) => {
+                call_discussion(host, action, arguments).await
+            }
+            Some(Command::Action(action)) => call_authoring_action(host, action, arguments).await,
+            Some(Command::Get | Command::Search | Command::Api | Command::Prime) | None => {
+                Err(unknown_tool())
+            }
         }
-        if let Some(action) = Action::DISCUSSION
-            .into_iter()
-            .find(|action| action.as_str() == request.name)
-        {
-            return call_discussion(&self.0, action, request.arguments).await;
-        }
-        if request.name == "check" {
-            let Some(port) = self.0.check_port() else {
-                return Err(ErrorData::new(
-                    ErrorCode::METHOD_NOT_FOUND,
-                    "Unknown tool",
-                    None,
-                ));
-            };
-            return surface::admitted_call(&self.0, request.arguments, |arguments| {
-                tools::call_check(&self.0, port.clone(), arguments)
-            })
-            .await;
-        }
-        if let Some(action) = Action::RECORD
-            .into_iter()
-            .find(|action| action.as_str() == request.name)
-        {
-            return call_authoring_action(&self.0, action, request.arguments).await;
-        }
-        Err(ErrorData::new(
-            ErrorCode::METHOD_NOT_FOUND,
-            "Unknown tool",
-            None,
-        ))
     }
+}
+
+/// The tool of one registry command, when the host can run it.
+fn tool(host: &StatementHost, command: Command) -> Option<rmcp::model::Tool> {
+    let porcelain = host.porcelain();
+    match command {
+        Command::Get => porcelain.get_is_available().then(tools::get_tool),
+        Command::Search => porcelain.search_is_available().then(tools::search_tool),
+        Command::Api => porcelain.api_is_available().then(tools::api_tool),
+        Command::Check => host.check_port().is_some().then(tools::check_tool),
+        Command::Prime => None,
+        Command::Action(action) if Action::DISCUSSION.contains(&action) => porcelain
+            .discussion_is_available(action)
+            .then(|| tools::discussion_tool(action)),
+        Command::Action(action) => tools::authoring_tool(host, action),
+    }
+}
+
+fn unknown_tool() -> ErrorData {
+    ErrorData::new(ErrorCode::METHOD_NOT_FOUND, "Unknown tool", None)
 }
 
 async fn call_discussion(
@@ -123,11 +117,7 @@ async fn call_discussion(
     arguments: Option<serde_json::Map<String, Value>>,
 ) -> Result<CallToolResult, ErrorData> {
     if !host.porcelain().discussion_is_available(action) {
-        return Err(ErrorData::new(
-            ErrorCode::METHOD_NOT_FOUND,
-            "Unknown tool",
-            None,
-        ));
+        return Err(unknown_tool());
     }
     surface::admitted_call(host, arguments, |arguments| {
         tools::call_discussion(host, action, arguments)
