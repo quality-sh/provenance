@@ -2,9 +2,7 @@
 
 use provenance_porcelain::check::{Category, CheckInput, CheckOutcome};
 use provenance_porcelain::get::{GetInput, GetOutcome};
-use std::{
-    net::{Ipv4Addr, SocketAddr},
-};
+use std::net::{Ipv4Addr, SocketAddr};
 
 mod search;
 pub use search::dispatch_search;

@@ -7,12 +7,13 @@ use provenance_core::{
     Resolution, Rule, ScopeId, Source, SynthesisPacket, Thread, ThreadStatus, Topic,
     VerificationBinding,
 };
+use std::collections::HashSet;
 
 macro_rules! define_scope_shards {
     ($($field:ident: $record:ty => $family:ident),+ $(,)?) => {
         /// The complete canonical shard contents for one scope import.
         ///
-        /// Each slice replaces one shard. An empty slice creates an empty shard.
+            /// Each slice replaces one shard. An empty slice creates an empty shard.
         #[derive(Default)]
         pub struct ScopeShards<'a> {
             $(pub $field: &'a [$record],)+
@@ -25,8 +26,8 @@ macro_rules! define_scope_shards {
             /// method does not acquire that lock. The caller must remove the old scope directory and
             /// apply the freeze, STE, and repository checks before it publishes the staged state.
             ///
-            /// This method does not write the manifest, requirement reviews, the review journal, or
-            /// ideation landings.
+            /// This method replaces the scope directory. It does not write the manifest,
+            /// requirement reviews, the review journal, or ideation landings.
             pub fn import_scope(
                 &self,
                 scope: &ScopeId,
@@ -54,6 +55,7 @@ macro_rules! define_scope_shards {
                         NodeType::Boundary,
                     ],
                 )?;
+                let previous_ids = self.previous_noncanonical_ids(scope)?;
                 for id in shards.verification_bindings.iter().map(|record| &record.id)
                     .chain(shards.implementation_bindings.iter().map(|record| &record.id))
                     .chain(shards.threads.iter().map(|record| &record.id))
@@ -64,7 +66,13 @@ macro_rules! define_scope_shards {
                     .chain(shards.assertion_records.iter().map(|record| record.id.as_stable_id()))
                     .chain(shards.dispositions.iter().map(|record| &record.id))
                 {
-                    ensure_record_id_assignable(id.as_str())?;
+                    if !previous_ids.contains(id.as_str()) {
+                        ensure_record_id_assignable(id.as_str())?;
+                    }
+                }
+                let scope_dir = self.layout.scopes_dir().join(scope.as_str());
+                if scope_dir.exists() {
+                    std::fs::remove_dir_all(&scope_dir)?;
                 }
                 $(
                     write_jsonl_atomic_under_publication(
@@ -76,6 +84,21 @@ macro_rules! define_scope_shards {
             }
         }
     };
+}
+
+impl StateStore {
+    fn previous_noncanonical_ids(&self, scope: &ScopeId) -> anyhow::Result<HashSet<String>> {
+        Ok(self.list_verification_bindings(scope)?.into_iter().map(|record| record.id.as_str().to_owned())
+            .chain(self.list_implementation_bindings(scope)?.into_iter().map(|record| record.id.as_str().to_owned()))
+            .chain(self.list_threads(scope)?.into_iter().map(|record| record.id.as_str().to_owned()))
+            .chain(self.list_messages(scope)?.into_iter().map(|record| record.id.as_str().to_owned()))
+            .chain(self.list_contributions(scope)?.into_iter().map(|record| record.id.as_str().to_owned()))
+            .chain(self.list_synthesis_packets(scope)?.into_iter().map(|record| record.id.as_str().to_owned()))
+            .chain(self.list_proposal_definitions(scope)?.into_iter().map(|record| record.id.as_str().to_owned()))
+            .chain(self.list_assertion_records(scope)?.into_iter().map(|record| record.id.as_str().to_owned()))
+            .chain(self.list_dispositions(scope)?.into_iter().map(|record| record.id.as_str().to_owned()))
+            .collect())
+    }
 }
 
 define_scope_shards! {

@@ -1,6 +1,8 @@
 use super::GlobalContext;
 use crate::output::JsonFormat;
-use clap::{Args, ArgAction, ArgMatches, Command, CommandFactory, FromArgMatches, Parser, ValueEnum};
+use clap::{
+    ArgAction, ArgMatches, Args, Command, CommandFactory, FromArgMatches, Parser, ValueEnum,
+};
 use provenance_cli::porcelain;
 use provenance_core::NodeType;
 use provenance_porcelain::get::View;
@@ -10,7 +12,12 @@ use provenance_porcelain::get::View;
 pub(crate) struct Common {
     #[arg(long, global = true, default_value = ".", allow_hyphen_values = true)]
     pub repo: String,
-    #[arg(long, global = true, default_value = "default", allow_hyphen_values = true)]
+    #[arg(
+        long,
+        global = true,
+        default_value = "default",
+        allow_hyphen_values = true
+    )]
     pub scope: String,
     #[arg(long, global = true, value_enum)]
     pub format: Option<JsonFormat>,
@@ -128,8 +135,12 @@ pub(super) fn command_word(arguments: &[String]) -> Option<&str> {
             return arguments.get(index + 1).map(String::as_str);
         }
         if let Some(option) = word.strip_prefix("--") {
-            let (name, assigned) = option.split_once('=').map_or((option, false), |(name, _)| (name, true));
-            let declaration = common.get_arguments().find(|arg| arg.get_long() == Some(name))?;
+            let (name, assigned) = option
+                .split_once('=')
+                .map_or((option, false), |(name, _)| (name, true));
+            let declaration = common
+                .get_arguments()
+                .find(|arg| arg.get_long() == Some(name))?;
             let takes_value = !matches!(declaration.get_action(), &ArgAction::SetTrue);
             index += 1 + usize::from(takes_value && !assigned);
             continue;

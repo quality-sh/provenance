@@ -23,7 +23,10 @@ fn a_writer_refuses_a_command_keyword_as_a_new_record_id() {
             origin_message: None,
         })
         .unwrap_err();
-    assert!(error.to_string().contains("reserved record ID search"), "{error}");
+    assert!(
+        error.to_string().contains("reserved record ID search"),
+        "{error}"
+    );
     assert!(store.list_sources(&scope).unwrap().is_empty());
 }
 
@@ -54,7 +57,10 @@ fn scope_import_refuses_a_new_command_keyword_id() {
         ..ScopeShards::default()
     };
     let error = store.import_scope(&scope, &shards).unwrap_err();
-    assert!(error.to_string().contains("reserved record ID check"), "{error}");
+    assert!(
+        error.to_string().contains("reserved record ID check"),
+        "{error}"
+    );
 }
 
 #[test]
