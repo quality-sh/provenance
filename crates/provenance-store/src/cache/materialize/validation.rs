@@ -1,7 +1,7 @@
 use super::{relation_rows, units};
 use crate::cache::ProjectionFamily;
 use crate::publication::PublicationGuard;
-use crate::state_store::{GuardedStore, StateStore};
+use crate::state_store::StateStore;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::model::relations::RelationRow;
 use provenance_core::{Manifest, ScopeId};
@@ -18,16 +18,16 @@ pub(super) struct ScopeRecords {
     pub relations: Vec<RelationRow>,
 }
 
-pub(super) struct UnitReader<'g> {
-    store: GuardedStore<'g>,
+pub(super) struct UnitReader {
+    store: StateStore,
     state_dir: Utf8PathBuf,
     pub units_hashed: u64,
 }
 
-impl<'g> UnitReader<'g> {
+impl UnitReader {
     /// Catch-up and rebuild read the tree protected by the publication guard.
     #[rule("rule_catch_up_hashes_canonical_state_in_place")]
-    pub fn new(guard: &'g PublicationGuard) -> Self {
+    pub fn new(guard: &PublicationGuard) -> Self {
         Self {
             store: StateStore::under_guard(guard),
             state_dir: guard.layout().state_dir(),
@@ -85,7 +85,7 @@ impl<'g> UnitReader<'g> {
                 validate(&self.store, scope)?;
                 let mut families = Vec::new();
                 for family in ProjectionFamily::ALL {
-                    let (bytes, count) = family.guarded_records(&self.store, scope)?;
+                    let (bytes, count) = family.canonical_records(&self.store, scope)?;
                     families.push(FamilyRecords {
                         family,
                         bytes,
@@ -101,7 +101,7 @@ impl<'g> UnitReader<'g> {
     }
 }
 
-fn validate(store: &GuardedStore<'_>, scope: &ScopeId) -> anyhow::Result<()> {
+fn validate(store: &StateStore, scope: &ScopeId) -> anyhow::Result<()> {
     store.validate_ideation_scope(scope)?;
     store.validate_graph_scope(scope)
 }

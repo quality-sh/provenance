@@ -3,10 +3,7 @@
 use super::page::{id_page_sql, RESOURCE_RECORD_BYTES};
 use crate::operations::reader::ReadSnapshot;
 use provenance_core::protocol::read_failure::ReadFailure;
-use provenance_core::{
-    AssertionRecord, Contribution, DispositionRecord, Message, ProposalCard, StableId,
-    SynthesisPacket, Thread,
-};
+use provenance_core::{AssertionRecord, DispositionRecord, StableId};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use sqlx::Row;
@@ -23,22 +20,23 @@ pub trait PayloadRow: sealed::Sealed + DeserializeOwned + Serialize + Send {
 
 pub trait ProposalPayloadRow: PayloadRow + sealed::ProposalOwned {}
 
-macro_rules! payload_row {
-    ($type:ty, $table:literal) => {
-        impl sealed::Sealed for $type {}
-        impl PayloadRow for $type {
-            const TABLE: &'static str = $table;
-        }
+macro_rules! define_payload_rows {
+    (
+        export { $($export:tt)* }
+        canonical { $($variant:ident: $record:ty, $field:ident, $path:ident, $suffix:literal, $table:literal, [$($node:tt)*], $reader:ident, [$($closed:tt)*], $id:ident, [$($loader:tt)*], [$($catalog:tt)*];)* }
+        bindings { $($bindings:tt)* }
+        internal { $($internal:tt)* }
+    ) => {
+        $(
+            impl sealed::Sealed for $record {}
+            impl PayloadRow for $record {
+                const TABLE: &'static str = $table;
+            }
+        )*
     };
 }
 
-payload_row!(Thread, "threads");
-payload_row!(Message, "messages");
-payload_row!(Contribution, "contributions");
-payload_row!(SynthesisPacket, "synthesis_packets");
-payload_row!(ProposalCard, "proposal_cards");
-payload_row!(AssertionRecord, "assertion_records");
-payload_row!(DispositionRecord, "dispositions");
+crate::cache::record_families!(define_payload_rows);
 
 impl sealed::ProposalOwned for AssertionRecord {}
 impl sealed::ProposalOwned for DispositionRecord {}

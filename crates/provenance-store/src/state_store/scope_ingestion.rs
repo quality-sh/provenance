@@ -124,25 +124,22 @@ macro_rules! define_scope_shards {
     };
 }
 
-define_scope_shards! {
-    sources: Source => Sources,
-    domains: Domain => Domains,
-    requirements: Requirement => Requirements,
-    boundaries: Boundary => Boundaries,
-    topics: Topic => Topics,
-    questions: Question => Questions,
-    resolutions: Resolution => Resolutions,
-    rules: Rule => Rules,
-    verification_bindings: VerificationBinding => VerificationBindings,
-    implementation_bindings: ImplementationBinding => ImplementationBindings,
-    threads: Thread => Threads,
-    messages: Message => Messages,
-    contributions: Contribution => Contributions,
-    synthesis_packets: SynthesisPacket => SynthesisPackets,
-    proposal_cards: ProposalCard => ProposalCards,
-    assertion_records: AssertionRecord => AssertionRecords,
-    dispositions: DispositionRecord => Dispositions,
+macro_rules! define_imported_scope_shards {
+    (
+        export { $($export_variant:ident: $export_type:ty, $export_field:ident, $export_path:ident, $export_suffix:literal, $export_table:literal, [$($export_node:tt)*], $export_reader:ident, [$($export_closed:tt)*], $export_id:ident, [$($export_loader:tt)*], [$($export_catalog:tt)*];)* }
+        canonical { $($canonical_variant:ident: $canonical_type:ty, $canonical_field:ident, $canonical_path:ident, $canonical_suffix:literal, $canonical_table:literal, [$($canonical_node:tt)*], $canonical_reader:ident, [$($canonical_closed:tt)*], $canonical_id:ident, [$($canonical_loader:tt)*], [$($canonical_catalog:tt)*];)* }
+        bindings { $($binding_variant:ident: $binding_type:ty, $binding_field:ident, $binding_path:ident, $binding_suffix:literal, $binding_table:literal, [$($binding_node:tt)*], $binding_reader:ident, [$($binding_closed:tt)*], $binding_id:ident, [$($binding_loader:tt)*], [$($binding_catalog:tt)*];)* }
+        internal { $($internal:tt)* }
+    ) => {
+        define_scope_shards! {
+            $($export_field: $export_type => $export_variant,)*
+            $($canonical_field: $canonical_type => $canonical_variant,)*
+            $($binding_field: $binding_type => $binding_variant,)*
+        }
+    };
 }
+
+crate::cache::record_families!(define_imported_scope_shards);
 
 struct StoredIdeationRecords {
     contributions: Vec<Contribution>,

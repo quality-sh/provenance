@@ -72,7 +72,7 @@ pub(super) async fn materialize_with_guard(
 /// caller's pool.
 async fn rebuild_rows(
     pool: &SqlitePool,
-    reader: &mut validation::UnitReader<'_>,
+    reader: &mut validation::UnitReader,
     layout: &ProvenanceLayout,
     manifest: provenance_core::Manifest,
     global_digests: units::UnitDigests,
