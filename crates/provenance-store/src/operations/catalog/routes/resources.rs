@@ -324,6 +324,7 @@ macro_rules! register_family_routes {
                         import: [$($import:tt)*],
                         catalog: [$($catalog:tt)*],
                         route: [$($route:tt)*]
+                        $(, review: $review:ident)?
                     };
                 )*
             }

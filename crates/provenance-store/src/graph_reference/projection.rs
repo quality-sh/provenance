@@ -109,6 +109,7 @@ macro_rules! define_graph_projection {
                 import: [$($export_import:tt)*],
                 catalog: [$($export_catalog:tt)*],
                 route: [$($export_route:tt)*]
+                $(, review: $export_review:ident)?
             };
         )* }
         canonical { $($canonical:tt)* }
@@ -130,6 +131,7 @@ macro_rules! define_graph_projection {
                 import: [$($binding_import:tt)*],
                 catalog: [$($binding_catalog:tt)*],
                 route: [$($binding_route:tt)*]
+                $(, review: $binding_review:ident)?
             };
         )* }
         internal { $($internal:tt)* }

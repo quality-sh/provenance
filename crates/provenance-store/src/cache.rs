@@ -8,6 +8,7 @@ mod materialize;
 mod prime;
 mod projection_digest;
 pub(crate) mod projection_families;
+mod review_facts;
 pub mod read;
 pub(crate) mod review_families;
 mod traceability;
