@@ -97,7 +97,11 @@ fn publish<R>(
         marker.phase = SourceEditPhase::StateInstalled;
         write_marker(live, &marker)?;
         crate::test_probes::at("source_edit_state_installed")?;
-        held.compare_and_swap(prepared)?;
+        if let Err(error) = held.compare_and_swap(prepared) {
+            rollback_state(live, &staged, &backup)?;
+            finish(live, &transaction)?;
+            return Err(error.into());
+        }
         marker.phase = SourceEditPhase::FileInstalled;
         write_marker(live, &marker)?;
         crate::test_probes::at("source_edit_file_installed")?;
@@ -234,4 +238,19 @@ fn finish(layout: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<(
     std::fs::remove_dir_all(transaction)?;
     std::fs::remove_file(layout.source_edit_marker_path())?;
     sync_directory(&layout.cache_dir())
+}
+
+fn rollback_state(
+    live: &ProvenanceLayout,
+    staged: &ProvenanceLayout,
+    backup: &Utf8Path,
+) -> anyhow::Result<()> {
+    crate::test_probes::at("state_before_rollback")?;
+    if live.state_dir().exists() {
+        std::fs::rename(live.state_dir(), staged.state_dir())?;
+    }
+    if backup.exists() {
+        std::fs::rename(backup, live.state_dir())?;
+    }
+    sync_directory(&live.provenance_dir())
 }

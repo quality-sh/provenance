@@ -131,3 +131,27 @@ fn recovery_refuses_third_file_bytes_without_overwriting_them() {
     );
     assert!(layout.source_edit_marker_path().exists());
 }
+
+#[test]
+fn file_install_refusal_rolls_state_back_without_overwriting_external_bytes() {
+    let temp = fixture();
+    let root = Utf8Path::from_path(temp.path()).unwrap();
+    let source = root.join("source.txt");
+    let changed = source.clone();
+    test_probes::arm("source_edit_state_installed", move || {
+        std::fs::write(&changed, b"external\n").unwrap();
+        Ok(())
+    });
+
+    let result = std::panic::catch_unwind(|| publish(root));
+    test_probes::disarm("source_edit_state_installed");
+
+    assert!(result.is_err());
+    let layout = ProvenanceLayout::new(root);
+    assert_eq!(std::fs::read(source).unwrap(), b"external\n");
+    assert_eq!(
+        std::fs::read(layout.state_dir().join("value")).unwrap(),
+        BEFORE
+    );
+    assert!(!layout.source_edit_marker_path().exists());
+}
