@@ -9,6 +9,7 @@
 use super::comparison::requests::{self, Request};
 use super::comparison::test_stores::TestStore;
 use super::comparison::{served_value, strip_additive};
+use crate::cache::tests::fixtures::pinned_store::{LINKED_REQUIREMENT_ID, LINKED_RULE_ID};
 use crate::operations::read_policy::{FreshnessPolicy, ReadPolicy};
 use crate::operations::stamp::READ_DERIVATION;
 use provenance_core::protocol::{
@@ -67,8 +68,8 @@ pub(super) fn request_set(base: &str) -> Vec<Request> {
         get(NodeType::Boundary, "boundary_no_backpay"),
         get(NodeType::Requirement, "req_old_overtime"),
         get(NodeType::Requirement, "req_old_overtime"),
-        get(NodeType::Requirement, "twin_record"),
-        get(NodeType::Rule, "twin_record"),
+        get(NodeType::Requirement, LINKED_REQUIREMENT_ID),
+        get(NodeType::Rule, LINKED_RULE_ID),
         Request::Search(requests::search("over", Vec::new())),
         Request::Search(requests::search(
             "pay",
@@ -83,7 +84,7 @@ pub(super) fn request_set(base: &str) -> Vec<Request> {
         Request::Neighbors(requests::neighbors("topic_rates", 50)),
         Request::Neighbors(requests::neighbors("req_old_overtime", 50)),
         Request::Neighbors(requests::neighbors("question_threshold", 50)),
-        Request::Neighbors(requests::neighbors("twin_record", 50)),
+        Request::Neighbors(requests::neighbors(LINKED_REQUIREMENT_ID, 50)),
     ]);
     let mut named_origin = requests::neighbors("req_right", 50);
     named_origin.node_type = Some(NodeType::Requirement);
@@ -101,7 +102,7 @@ pub(super) fn request_set(base: &str) -> Vec<Request> {
         Request::Trace(requests::trace("req_top", 50)),
         Request::Trace(requests::trace("req_top", 50)),
         Request::Trace(requests::trace("req_overtime", 3)),
-        Request::Trace(requests::trace("twin_record", 50)),
+        Request::Trace(requests::trace(LINKED_REQUIREMENT_ID, 50)),
         impact("source_schads", 50),
         impact("req_overtime", 5),
         impact("rule_overtime_001", 50),
@@ -233,6 +234,7 @@ fn parse(file: &str) -> (Value, Vec<Value>) {
 async fn the_pinned_answers_match_the_committed_file_for_this_derivation() {
     let answers = answers().await;
     let fresh = digest(&answers);
+    eprintln!("PINNED_ANSWERS_START\n{}PINNED_ANSWERS_END", render(&answers, &fresh));
     if std::env::var("PROVENANCE_PINNED_WRITE").is_ok_and(|value| value == "1") {
         std::fs::write(pinned_path(), render(&answers, &fresh)).unwrap();
         eprintln!(
