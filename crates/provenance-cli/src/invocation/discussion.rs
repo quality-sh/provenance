@@ -33,9 +33,7 @@ pub async fn dispatch_root(
         input.insert("discussion_id".into(), json!(target));
     }
     let host = porcelain::local_host(&args.common.repo, &args.common.scope)?;
-    let service = provenance_porcelain::Porcelain::new(
-        provenance_transport::porcelain::HostDiscussionPort::new(host),
-    );
+    let service = host.porcelain().discussion();
     let outcome = service
         .execute_discussion(action, Value::Object(input))
         .await?;
@@ -57,14 +55,10 @@ pub async fn dispatch_target(
     .unwrap_or_else(|error| crate::catalog_cli::usage_error(error));
     let target = StableId::new(args.target)?;
     let host = porcelain::local_host(&args.common.repo, &args.common.scope)?;
-    let service = provenance_porcelain::Porcelain::new(
-        provenance_transport::porcelain::HostDiscussionPort::new(host.clone()),
-    );
+    let service = host.porcelain().discussion();
     let target_field = discussion::target_field(action);
     let identity = if target_field == "parent" {
-        let resolver = provenance_porcelain::Porcelain::new(
-            provenance_transport::porcelain::HostGetPort::new(host),
-        );
+        let resolver = host.porcelain().get();
         serde_json::to_value(resolver.select_parent(target.as_str()).await?)?
     } else {
         json!(target)

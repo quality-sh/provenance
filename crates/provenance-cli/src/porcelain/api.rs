@@ -11,9 +11,7 @@ pub async fn dispatch_api(
     request: ApiRequest,
 ) -> anyhow::Result<()> {
     let host = local_host(repo, scope)?;
-    let service = provenance_porcelain::Porcelain::new(
-        provenance_transport::porcelain::HostApiPort::new(host),
-    );
+    let service = host.porcelain().api();
     match service.execute_api(request).await {
         Ok(ApiOutcome::Catalog(catalog)) => {
             if format == Some(OutputFormat::Json) {

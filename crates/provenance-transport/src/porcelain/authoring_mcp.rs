@@ -26,22 +26,13 @@ fn tool(host: &crate::StatementHost, action: Action) -> Option<Tool> {
             .collect(),
         "anyOf",
     );
-    let mut tool = Tool::new(
+    Some(crate::mcp_surface::tool(
         action.as_str(),
         description(action),
-        input
-            .as_object()
-            .expect("target action input schema is an object")
-            .clone(),
-    );
-    tool.output_schema = Some(
-        output
-            .as_object()
-            .expect("target action output schema is an object")
-            .clone()
-            .into(),
-    );
-    Some(tool)
+        input,
+        output,
+        crate::mcp_surface::SchemaDeclaration::Keep,
+    ))
 }
 
 fn input_schema(action: Action, definitions: &[(NodeType, &'static Definition)]) -> Value {
@@ -205,7 +196,7 @@ pub async fn call(
     let (data, query, headers) =
         match crate::mcp::mcp_target_call(route.definition, &Value::Object(arguments), &target) {
             Ok(call) => call,
-            Err(failure) => return crate::mcp::error(failure),
+            Err(failure) => return crate::mcp_surface::failure_result(failure),
         };
     if !query.is_empty() {
         return action_error(&ActionError::InvalidOptions);
@@ -218,7 +209,7 @@ pub async fn call(
             ))];
             result
         }
-        Err(failure) => crate::mcp::error(failure),
+        Err(failure) => crate::mcp_surface::failure_result(failure),
     }
 }
 
@@ -235,5 +226,5 @@ fn action_error(error: &ActionError) -> CallToolResult {
     } else {
         error.to_string()
     };
-    CallToolResult::structured_error(json!({"error":{"kind":kind,"message":message}}))
+    crate::mcp_surface::detail_error(json!({"kind":kind,"message":message}))
 }
