@@ -99,11 +99,18 @@ enum Access {
     Held,
 }
 
+#[derive(Clone, Debug)]
+enum RecordStamp {
+    ResolveFromRepository,
+    Omit,
+    Fixed(provenance_core::Stamp),
+}
+
 #[derive(Debug)]
 pub struct StateStore {
     pub(crate) layout: ProvenanceLayout,
     access: Access,
-    record_stamp: Option<Option<provenance_core::Stamp>>,
+    record_stamp: RecordStamp,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -289,7 +296,7 @@ impl StateStore {
         Self {
             layout,
             access: Access::Lock,
-            record_stamp: None,
+            record_stamp: RecordStamp::ResolveFromRepository,
         }
     }
 
@@ -300,7 +307,7 @@ impl StateStore {
         Self {
             layout,
             access: Access::Lock,
-            record_stamp: Some(stamp),
+            record_stamp: stamp.map_or(RecordStamp::Omit, RecordStamp::Fixed),
         }
     }
 
