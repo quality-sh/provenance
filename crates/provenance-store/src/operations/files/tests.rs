@@ -2,6 +2,8 @@ use super::*;
 #[cfg(unix)]
 use std::io::Read;
 
+mod held_writes;
+
 #[cfg(unix)]
 fn physical_tempdir() -> tempfile::TempDir {
     // The selected test root must not inherit system aliases such as /var on macOS.
