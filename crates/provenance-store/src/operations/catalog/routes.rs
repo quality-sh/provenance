@@ -191,14 +191,27 @@ macro_rules! resource {
                 | "topics"
                 | "questions"
         );
+        let verification = matches!($plural, "verification-runs" | "verification-bindings");
+        let mut parameters = list_parameters(searchable, $plural == "rules");
+        if verification {
+            parameters.push(schema::query(
+                "rule",
+                json!({"type":"string","minLength":1}),
+            ));
+        }
+        let backing = if verification {
+            $plural
+        } else {
+            concat!("list-", $plural)
+        };
         let list = read::<$ty>(
             concat!("list-", $plural),
             concat!("list", $plural_id),
             concat!("/", $plural),
             concat!("List ", $plural, " in the bound scope."),
-            concat!("list-", $plural),
+            backing,
             ResponseKind::Items,
-            list_parameters(searchable, $plural == "rules"),
+            parameters,
         );
         let list_queries = if $plural == "rules" {
             vec![

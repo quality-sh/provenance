@@ -303,8 +303,8 @@ try {
     stdio: "pipe",
   });
 } finally { await fixture.close(); }
-const runs = JSON.parse(execFileSync(localEngine, [
-  "sdk", "verification-runs", "--repo", application, "--scope", "default", "--format", "json",
+const { data: { items: runs } } = JSON.parse(execFileSync(localEngine, [
+  "verification-runs", "list", "--repo", application, "--scope", "default", "--format", "json",
 ], { encoding: "utf8" }));
 assert.equal(runs.length, 2);
 assert.deepEqual(runs.map(({ status }) => status), ["passed", "passed"]);
