@@ -5,9 +5,11 @@ use provenance_cli::repo_context::RepoContext;
 use provenance_core::StableId;
 use provenance_porcelain::registry::{
     self, CargoInitInput, CoverageScanInput, DictionaryImportInput, DictionaryStatusInput,
-    ExportInput, GraphCommand, GraphReadInput, ImportInput, InitInput, MaterializeInput,
-    MergeJsonlInput, ReferenceInput, ReferenceIssueInput, RepositoryCommand, RequirementGraphInput,
-    SchemaShowInput, SwarmBacktraceLandInput, TraceabilityInput, ValidateInput,
+    DocsCheckInput, DocsServeInput, ExportInput, GraphCommand, GraphReadInput, ImportInput,
+    InitInput, MaterializeInput, MergeJsonlInput, ReferenceInput, ReferenceIssueInput,
+    ReportBuildInput, ReportRenderInput, RepositoryCommand, RequirementGraphInput, ReviewInput,
+    SchemaShowInput, SkillsInstallInput, SkillsListInput, SkillsShowInput, SwarmBacktraceLandInput,
+    TraceabilityInput, ValidateInput, WorkspaceCommand,
 };
 use provenance_store::cache;
 
@@ -268,9 +270,7 @@ pub(super) fn graph_command(input: GraphInput) -> anyhow::Result<()> {
                 baseline: input.baseline.map(Utf8PathBuf::from),
                 validate_rules: input.validate_rules,
                 strict: input.strict,
-                format: flag_value(&input.format, |format| {
-                    <output::ReportFormat as clap::ValueEnum>::from_str(format, false).ok()
-                })?,
+                format: flag_value(&input.format, output::ReportFormat::from_flag)?,
                 output: input.output.map(Utf8PathBuf::from),
             })
         }
@@ -314,14 +314,115 @@ fn artifact(value: &str) -> anyhow::Result<cli::IdeationArtifactKind> {
     flag_value(value, cli::IdeationArtifactKind::from_name)
 }
 
-/// Runs one built-in command. The commands that wait on async work or on a
-/// blocking thread run here. Every other command runs on the calling thread.
+/// The typed input of one workspace command, read from its declared flags.
 #[allow(clippy::redundant_pub_crate)]
-pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()> {
+pub(super) enum WorkspaceInput {
+    DocsCheck(DocsCheckInput),
+    DocsServe(DocsServeInput),
+    SkillsList(SkillsListInput),
+    SkillsShow(SkillsShowInput),
+    SkillsInstall(SkillsInstallInput),
+    ReportRender(ReportRenderInput),
+    ReportBuild(ReportBuildInput),
+    Review(ReviewInput),
+}
+
+impl WorkspaceInput {
+    /// Reads the input of `command` from the matches of its parser.
+    #[allow(clippy::redundant_pub_crate)]
+    pub(super) fn from_matches(
+        command: WorkspaceCommand,
+        matches: &clap::ArgMatches,
+    ) -> anyhow::Result<Self> {
+        let declaration = registry::Command::Workspace(command).declaration();
+        macro_rules! read {
+            ($variant:ident) => {
+                Self::$variant(crate::registry_cli::input(&declaration, matches)?)
+            };
+        }
+        Ok(match command {
+            WorkspaceCommand::DocsCheck => read!(DocsCheck),
+            WorkspaceCommand::DocsServe => read!(DocsServe),
+            WorkspaceCommand::SkillsList => read!(SkillsList),
+            WorkspaceCommand::SkillsShow => read!(SkillsShow),
+            WorkspaceCommand::SkillsInstall => read!(SkillsInstall),
+            WorkspaceCommand::ReportRender => read!(ReportRender),
+            WorkspaceCommand::ReportBuild => read!(ReportBuild),
+            WorkspaceCommand::Review => read!(Review),
+        })
+    }
+}
+
+/// Runs one workspace command.
+#[allow(clippy::redundant_pub_crate)]
+pub(super) async fn workspace_command(input: WorkspaceInput) -> anyhow::Result<()> {
+    use cli::{report::ReportCommand, workspace::DocsCommand, workspace::SkillsCommand};
+    match input {
+        WorkspaceInput::DocsCheck(input) => {
+            flag_value(&input.format, JsonFormat::from_flag)?;
+            docs::handle(DocsCommand::Check {
+                repo: input.repo.into(),
+            })
+            .await
+        }
+        WorkspaceInput::DocsServe(input) => {
+            docs::handle(DocsCommand::Serve {
+                repo: input.repo.into(),
+                host: input.host,
+                port: input.port,
+            })
+            .await
+        }
+        WorkspaceInput::SkillsList(input) => {
+            flag_value(&input.format, JsonFormat::from_flag)?;
+            skills::handle(SkillsCommand::List)
+        }
+        WorkspaceInput::SkillsShow(input) => {
+            skills::handle(SkillsCommand::Show { name: input.name })
+        }
+        WorkspaceInput::SkillsInstall(input) => {
+            flag_value(&input.format, JsonFormat::from_flag)?;
+            skills::handle(SkillsCommand::Install {
+                global: input.global,
+                copy: input.copy,
+                force: input.force,
+            })
+        }
+        WorkspaceInput::ReportRender(input) => report::handle(ReportCommand::Render {
+            input: input.input.into(),
+            format: flag_value(&input.format, output::ReportFormat::from_flag)?,
+            output: input.output.map(Utf8PathBuf::from),
+        }),
+        WorkspaceInput::ReportBuild(input) => report::handle(ReportCommand::Build {
+            repo: input.repo.into(),
+            base: input.base,
+            head: input.head,
+            repository: input.repository,
+            scope: input.scope,
+            path: input.path.map(Utf8PathBuf::from),
+            output: input.output.map(Utf8PathBuf::from),
+        }),
+        WorkspaceInput::Review(input) => {
+            crate::review::run(crate::review::Options {
+                repo: input.repo.into(),
+                repository_id: input.repository_id,
+                scope: input.scope,
+                port: input.port,
+                no_open: input.no_open,
+                detach: input.detach,
+            })
+            .await
+        }
+    }
+}
+
+/// Runs one built-in command.
+#[allow(clippy::redundant_pub_crate)]
+#[cfg_attr(not(feature = "dogfood"), allow(unused_variables))]
+pub(super) fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()> {
     match command {
-        Command::Docs { command } => docs::handle(command).await,
-        Command::Review(options) => crate::review::run(options).await,
-        command => dispatch_on_thread(command, quiet),
+        #[cfg(feature = "dogfood")]
+        Command::Dogfood { command } => dogfood::handle(command, quiet),
     }
 }
 
@@ -332,33 +433,20 @@ async fn run_blocking(
     tokio::task::spawn_blocking(handler).await?
 }
 
-/// Runs one built-in command whose handler does its work on the calling thread.
-#[cfg_attr(not(feature = "dogfood"), allow(unused_variables))]
-fn dispatch_on_thread(command: Command, quiet: bool) -> anyhow::Result<()> {
-    match command {
-        Command::Report { command } => report::handle(command),
-        Command::Skills { command } => skills::handle(command),
-        #[cfg(feature = "dogfood")]
-        Command::Dogfood { command } => dogfood::handle(command, quiet),
-        // These commands run in `dispatch`.
-        Command::Docs { .. } | Command::Review(_) => {
-            unreachable!("an earlier dispatcher runs this command")
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// Implementation aid: each value that a repository or graph flag declares converts
-    /// to the CLI value that its handler takes.
+    /// Implementation aid: each value that a CLI-only registry flag declares converts to
+    /// the CLI value that its handler takes.
     #[test]
     fn every_declared_repository_value_converts() {
         for command in registry::Command::ALL {
             if !matches!(
                 command,
-                registry::Command::Repository(_) | registry::Command::Graph(_)
+                registry::Command::Repository(_)
+                    | registry::Command::Graph(_)
+                    | registry::Command::Workspace(_)
             ) {
                 continue;
             }
@@ -372,10 +460,13 @@ mod tests {
                             OutputFormat::from_flag(value).is_some()
                         }
                         "format"
-                            if *command == registry::Command::Graph(GraphCommand::CoverageScan) =>
+                            if *command == registry::Command::Graph(GraphCommand::CoverageScan)
+                                || *command
+                                    == registry::Command::Workspace(
+                                        WorkspaceCommand::ReportRender,
+                                    ) =>
                         {
-                            <output::ReportFormat as clap::ValueEnum>::from_str(value, false)
-                                .is_ok()
+                            output::ReportFormat::from_flag(value).is_some()
                         }
                         "format" => JsonFormat::from_flag(value).is_some(),
                         "artifact" => artifact(value).is_ok(),

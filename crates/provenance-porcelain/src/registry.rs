@@ -8,6 +8,7 @@
 mod graph;
 mod porcelain;
 mod repository;
+mod workspace;
 
 pub use graph::{
     CoverageScanInput, GraphCommand, GraphReadInput, ReferenceInput, ReferenceIssueInput,
@@ -18,6 +19,10 @@ pub use repository::{
     CargoInitInput, DictionaryImportInput, DictionaryStatusInput, ExportInput, ImportInput,
     InitInput, MaterializeInput, MergeJsonlInput, RepositoryCommand, SchemaShowInput,
     ValidateInput,
+};
+pub use workspace::{
+    DocsCheckInput, DocsServeInput, ReportBuildInput, ReportRenderInput, ReviewInput,
+    SkillsInstallInput, SkillsListInput, SkillsShowInput, WorkspaceCommand,
 };
 
 use crate::action::Action;
@@ -94,6 +99,8 @@ pub enum FlagValue {
     ApiMethod,
     /// An api catalog page size from 1 through 200.
     CatalogLimit,
+    /// A TCP port number.
+    Port,
 }
 
 /// One CLI flag of a command, in the order that help shows it.
@@ -205,6 +212,12 @@ impl Flag {
 const REPO: Flag = Flag::new("repo", FlagKind::Value).default(".");
 const SCOPE: Flag = Flag::new("scope", FlagKind::Value).default("default");
 
+/// The description of each CLI command group that has one, by its first word.
+pub const GROUP_DESCRIPTIONS: &[(&str, &str)] = &[(
+    "report",
+    "Deterministic report rendering from a versioned report envelope",
+)];
+
 /// The repository options that the porcelain commands and the commands after them take.
 pub const GLOBAL_FLAGS: &[Flag] = &[
     REPO.hyphen_values().global(),
@@ -254,6 +267,7 @@ pub enum Command {
     Action(Action),
     Repository(RepositoryCommand),
     Graph(GraphCommand),
+    Workspace(WorkspaceCommand),
 }
 
 impl Command {
@@ -295,6 +309,14 @@ impl Command {
         Self::Graph(GraphCommand::ReferenceVerify),
         Self::Graph(GraphCommand::ReferenceExactExport),
         Self::Graph(GraphCommand::SwarmBacktraceLand),
+        Self::Workspace(WorkspaceCommand::DocsCheck),
+        Self::Workspace(WorkspaceCommand::DocsServe),
+        Self::Workspace(WorkspaceCommand::SkillsList),
+        Self::Workspace(WorkspaceCommand::SkillsShow),
+        Self::Workspace(WorkspaceCommand::SkillsInstall),
+        Self::Workspace(WorkspaceCommand::ReportRender),
+        Self::Workspace(WorkspaceCommand::ReportBuild),
+        Self::Workspace(WorkspaceCommand::Review),
     ];
 
     /// The declaration of this command.
@@ -348,6 +370,16 @@ impl Command {
                     | GraphCommand::ReferenceExactExport
                     | GraphCommand::SwarmBacktraceLand => Presence::Present,
                 },
+                Self::Workspace(command) => match command {
+                    WorkspaceCommand::DocsCheck
+                    | WorkspaceCommand::DocsServe
+                    | WorkspaceCommand::SkillsList
+                    | WorkspaceCommand::SkillsShow
+                    | WorkspaceCommand::SkillsInstall
+                    | WorkspaceCommand::ReportRender
+                    | WorkspaceCommand::ReportBuild
+                    | WorkspaceCommand::Review => Presence::Present,
+                },
             },
             Interface::Mcp => match self {
                 Self::Get | Self::Search | Self::Api | Self::Check => Presence::Present,
@@ -394,6 +426,18 @@ impl Command {
                     | GraphCommand::ReferenceExactExport
                     | GraphCommand::SwarmBacktraceLand => Presence::Absent {
                         reason: "MCP clients read the graph through get, search, and api",
+                    },
+                    Self::Workspace(command) => match command {
+                        WorkspaceCommand::DocsCheck
+                        | WorkspaceCommand::DocsServe
+                        | WorkspaceCommand::SkillsList
+                        | WorkspaceCommand::SkillsShow
+                        | WorkspaceCommand::SkillsInstall
+                        | WorkspaceCommand::ReportRender
+                        | WorkspaceCommand::ReportBuild
+                        | WorkspaceCommand::Review => Presence::Absent {
+                            reason: "the command works on files and hosts on the local machine",
+                        },
                     },
                 },
             },
