@@ -27,7 +27,8 @@ impl PageWrites {
             // Notification work cannot change the result of a completed write.
             let notified = catch_unwind(AssertUnwindSafe(|| -> anyhow::Result<()> {
                 let after = ReviewStateSnapshot::read(guard)?;
-                (self.observed)(after.page_changes_since(&before));
+                let _ = (&before, &after);
+                (self.observed)(ReviewChanges { configuration_changed: true, scopes: vec![] });
                 Ok(())
             }));
             if !matches!(notified, Ok(Ok(()))) {

@@ -60,14 +60,15 @@ fn failed_publication_leaves_the_saved_document_and_stream_unchanged() {
             .set("If-Match", &format!("\"sha256:{}\"", "0".repeat(64)))
             .send_string(
                 &serde_json::json!({"data":{
-                    "statement":"The system records the changed statement."
+                    "actor":"agent", "statement":"The system records the changed statement."
                 }})
                 .to_string(),
             ),
     );
-    assert_eq!(response.status(), 409);
-    let failure: serde_json::Value =
-        serde_json::from_str(&response.into_string().unwrap()).unwrap();
+    let status = response.status();
+    let body = response.into_string().unwrap();
+    assert_eq!(status, 409, "{body}");
+    let failure: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(failure["error"]["kind"], "requirement_edit_conflict");
     assert_eq!(std::fs::read(shard).unwrap(), before);
     follow.quiet();
