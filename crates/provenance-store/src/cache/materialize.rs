@@ -16,6 +16,7 @@ pub use units::{scope_ids, unit_digest, units_for, Unit, UnitHashError};
 use super::{open_cache, MaterializeReport};
 use crate::current_schema::{self, Compatibility};
 use crate::{layout::ProvenanceLayout, publication};
+use provenance_macros::rule;
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
 pub async fn materialize_empty_state(
@@ -87,6 +88,7 @@ pub(super) async fn materialize_on_pool_with_guard(
 
 /// Hashes, validates, reloads, and commits one full rebuild on the
 /// caller's pool.
+#[rule("rule_interrupted_migration_reloads_every_family")]
 async fn rebuild_rows(
     pool: &SqlitePool,
     reader: &mut validation::UnitReader<'_>,
