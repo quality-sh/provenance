@@ -70,6 +70,17 @@ pub async fn resolve_record(
     policy: ReadPolicy,
     request: ResolveRecordQuery,
 ) -> anyhow::Result<Stamped<ResolveRecordResult>> {
+    resolve_record_answer(repo, scope, policy, request)
+        .await
+        .and_then(|answer| page::checked("resolve-record", answer))
+}
+
+pub(crate) async fn resolve_record_answer(
+    repo: Option<Utf8PathBuf>,
+    scope: &ScopeId,
+    policy: ReadPolicy,
+    request: ResolveRecordQuery,
+) -> anyhow::Result<Stamped<ResolveRecordResult>> {
     served(repo, scope, policy, move |ctx| {
         Box::pin(async move { records::resolve_record(ctx, request).await })
     })

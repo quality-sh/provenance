@@ -115,7 +115,7 @@ impl StatementHost {
         let (repository, scope) = self
             .bound_identity()
             .ok_or(OperationError::Common(OperationFailure::UnavailableNeeds))?;
-        provenance_store::operations::catalog::invoke_authorized_typed::<O>(
+        provenance_store::operations::catalog::invoke_authorized_native_typed::<O>(
             self.access.clone(),
             RequestedContext::Scoped(RepositoryContext {
                 repository,
