@@ -452,8 +452,8 @@ Before final response:
 
    ```sh
    provenance topics <topic_id> close --scope <scope> --format json
-   provenance topics <topic_id> release --scope <scope> --format json
-   provenance questions <question_id> release --scope <scope> --format json
+   provenance topics <topic_id> release --actor <actor> --scope <scope> --format json
+   provenance questions <question_id> release --actor <actor> --scope <scope> --format json
    ```
 
    To archive a Question or Topic, use the commit that contains the

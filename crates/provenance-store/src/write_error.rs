@@ -2,12 +2,22 @@
 use crate::state_store::{
     ReconciledResource, StatementWriteError, TypedSpecDiagnostic, TypedSpecWriteError,
 };
+use provenance_core::protocol::failure::InvalidInputReason;
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum WriteFailure {
+    // `InvalidInput` and `AccessDenied` are the common failure kinds of the
+    // same name, raised by the store after decoding. Their wire shapes must
+    // stay identical to the common ones, so they carry no doc comment: the
+    // operation generator merges equal variants and refuses unequal twins.
+    InvalidInput {
+        field: Option<String>,
+        reason: InvalidInputReason,
+    },
+    AccessDenied,
     SchemaVersion,
     AlreadyExists,
     InvalidCommitPin,
@@ -47,6 +57,9 @@ pub enum WriteFailure {
         record_kind: provenance_core::NodeType,
         record_id: provenance_core::StableId,
     },
+    ClaimConflict {
+        holder: String,
+    },
     MissingReference,
     ResourceNotFound,
     DiscussionVersionConflict,
@@ -67,6 +80,13 @@ pub enum WriteFailure {
 }
 
 impl WriteFailure {
+    pub(crate) fn invalid_field(field: &str) -> Self {
+        Self::InvalidInput {
+            field: Some(field.to_owned()),
+            reason: InvalidInputReason::InvalidValue,
+        }
+    }
+
     #[provenance_macros::rule("rule_ownership_refusal_names_owner")]
     pub(crate) fn record_ownership_conflict(owner: Option<&str>) -> Self {
         let message = owner.map_or_else(
@@ -78,6 +98,18 @@ impl WriteFailure {
             message,
         }
     }
+}
+
+/// Every write request names the actor who makes it. A blank actor is a
+/// client fault, named as the decoder names body fields.
+pub(crate) fn ensure_actor(actor: &str) -> anyhow::Result<()> {
+    if actor.trim().is_empty() {
+        return Err(SourceFailure::wrap(
+            WriteFailure::invalid_field("request.actor"),
+            anyhow::anyhow!("actor must not be blank"),
+        ));
+    }
+    Ok(())
 }
 
 #[derive(Debug)]
@@ -142,6 +174,13 @@ impl WriteError {
         }
         if self
             .0
+            .downcast_ref::<provenance_core::DispositionActorRefusal>()
+            .is_some()
+        {
+            return WriteFailure::AccessDenied;
+        }
+        if self
+            .0
             .downcast_ref::<provenance_core::ApprovalEvidenceRequired>()
             .is_some()
         {
@@ -176,7 +215,7 @@ impl WriteError {
     pub fn status(&self) -> u16 {
         match self.safe() {
             WriteFailure::WriteFailed => 500,
-            WriteFailure::FileAccessDenied => 403,
+            WriteFailure::FileAccessDenied | WriteFailure::AccessDenied => 403,
             WriteFailure::FileUnavailable => 503,
             WriteFailure::ResourceNotFound => 404,
             WriteFailure::RecordOwnershipConflict { .. }
@@ -190,6 +229,7 @@ impl WriteError {
             | WriteFailure::DiscussionClosed
             | WriteFailure::DiscussionResolved
             | WriteFailure::DiscussionIntentChanged
+            | WriteFailure::ClaimConflict { .. }
             | WriteFailure::AlreadyComplete => 409,
             _ => 400,
         }

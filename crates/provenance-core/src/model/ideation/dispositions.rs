@@ -8,6 +8,22 @@ use crate::model::ids::{SchemaVersion, ScopeId, StableId};
 #[error("accepted proposal must be asserted before disposition")]
 pub struct ApprovalEvidenceRequired;
 
+/// The disposition actor may not decide in this repository.
+///
+/// An empty allowlist means configuration is absent, not that every possible
+/// actor was deliberately denied, so that refusal names the field and setup
+/// command rather than blaming the supplied actor id.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum DispositionActorRefusal {
+    #[error(
+        "no disposition actors configured: repository manifest disposition_actor_ids is empty; \
+         set it with provenance init --disposition-actor-id <ACTOR_ID>"
+    )]
+    NoActorsConfigured,
+    #[error("disposition actor is not in the repository allowlist")]
+    ActorNotListed,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
