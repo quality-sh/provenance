@@ -79,8 +79,8 @@ pub struct ApiArgs {
     #[command(flatten)]
     pub common: Common,
     pub path: Option<String>,
-    #[arg(long, value_parser = parse_api_method, default_value = "get")]
-    pub method: provenance_porcelain::api::ApiMethod,
+    #[arg(long, value_parser = parse_api_method)]
+    pub method: Option<provenance_porcelain::api::ApiMethod>,
     #[arg(long = "input", allow_hyphen_values = true)]
     pub input: Option<String>,
     #[arg(long = "header")]
