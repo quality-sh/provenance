@@ -20,7 +20,7 @@ async fn public_collection_search_accepts_kind_only_and_combined_queries() {
     assert_eq!(status, 200, "{kind_only}");
     assert_eq!(kind_only["data"]["items"].as_array().unwrap().len(), 1);
     assert_eq!(kind_only["data"]["items"][0]["node_type"], "rule");
-    assert_eq!(kind_only["meta"]["has_more"], false);
+    assert!(!kind_only["meta"]["has_more"].as_bool().unwrap());
 
     let (status, combined) = call(
         &host,
