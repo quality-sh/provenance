@@ -1,26 +1,30 @@
-function operations(document) {
-  return Object.entries(document.paths).flatMap(([path, item]) =>
-    ['get', 'post', 'patch'].flatMap(method => item[method] ? [{ path, method, op: item[method] }] : []));
-}
+import { isStringEnum, operations, pascal, propertyName, queryVariants } from './shared.mjs';
+import { allocateEnums, enumVariant, parameterEnumKey, parametersModule } from './rust-parameters.mjs';
+
 const ref = schema => schema.$ref.split('/').at(-1);
-const propertyName = parameter => parameter.in === 'header'
-  ? parameter.name.toLowerCase().replaceAll('-', '_') : parameter.name;
-const pascal = value => value.split(/[^a-zA-Z0-9]+/).filter(Boolean)
-  .map(part => part[0].toUpperCase() + part.slice(1)).join('');
-const queryVariants = op => op['x-provenance-query-variants'] ?? [];
 const variantStem = (op, variant) => `${pascal(op.operationId)}${variant.selector === null ? 'Base' : pascal(variant.selector)}`;
 const schemaName = schema => ref(schema);
 
-function tsType(parameter) {
-  const schema = parameter.schema;
-  if (typeof schema.const === 'string') return `'${schema.const.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`;
-  if (Array.isArray(schema.enum) && schema.enum.every(value => typeof value === 'string')) {
-    return schema.enum.map(value => `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`).join(' | ');
+const escapeLiteral = value => value.replaceAll('\\', '\\\\').replaceAll("'", "\\'");
+
+function tsTypeOf(schema) {
+  if (typeof schema.const === 'string') return `'${escapeLiteral(schema.const)}'`;
+  if (isStringEnum(schema)) {
+    return schema.enum.map(value => `'${escapeLiteral(value)}'`).join(' | ');
   }
   if (schema.type === 'integer' || schema.type === 'number') return 'number';
   if (schema.type === 'boolean') return 'boolean';
-  if (schema.type === 'array') return 'string[]';
+  if (schema.type === 'array') return `${tsItemType(schema.items)}[]`;
   return 'string';
+}
+
+function tsItemType(items) {
+  const type = tsTypeOf(items ?? {});
+  return type.includes(' ') ? `(${type})` : type;
+}
+
+function tsType(parameter) {
+  return tsTypeOf(parameter.schema);
 }
 
 function tsFields(parameters, required = parameter => parameter.required) {
@@ -80,7 +84,9 @@ ${query.map(parameter => `    if (call[${JSON.stringify(propertyName(parameter))
 
 export function typescriptClient(document, compatibility) {
   const routes = operations(document).filter(({ op }) => op.operationId !== 'metadata');
-  const failureTypes = [...new Set(routes.flatMap(({ op }) => queryVariants(op).length
+  // Metadata participates in the same declared-failure contract as every other
+  // operation: a refusal is a typed MetadataFailure, never a connection loss.
+  const failureTypes = ['MetadataFailure', ...new Set(routes.flatMap(({ op }) => queryVariants(op).length
     ? queryVariants(op).map(variant => schemaName(variant.failure))
     : [ref(op.responses['400'].content['application/json'].schema)]))];
   const queryTypes = routes.flatMap(({ op }) => queryTypeDeclarations(op));
@@ -154,8 +160,11 @@ export class HttpClient {
     if (!['http:', 'https:'].includes(url.protocol) || url.search || url.hash || url.username || url.password) throw new Error('Invalid HTTP host URL');
     const client = new HttpClient(baseUrl.replace(/\\/$/, ''), fetcher);
     const response = await send(fetcher, client.baseUrl + '/metadata', { redirect: 'error', signal: options.signal }, 'metadata', false);
-    if (!response.ok) { await response.body?.cancel(); throw new ConnectionError(); }
     const value = await readJson(response, 'metadata', false, options.signal);
+    if (!response.ok) {
+      checked(value, validate.MetadataFailure, 'metadata', false);
+      throw new OperationError<components['schemas']['MetadataFailure']>(response.status, value as components['schemas']['MetadataFailure']);
+    }
     checked(value, validate.MetadataSuccess, 'metadata', false);
     const metadata = (value as components['schemas']['MetadataSuccess']).data;
     const received = metadata.compatibility;
@@ -177,60 +186,95 @@ ${methods}
 `;
 }
 
-function rustType(parameter) {
-  const type = parameter.schema.type === 'integer' ? 'u64' : parameter.schema.type === 'boolean' ? 'bool' : parameter.schema.type === 'array' ? '&[&str]' : '&str';
+function rustScalarType(schema, enums, parameter) {
+  if (isStringEnum(schema)) return enums.get(parameterEnumKey(schema, parameter));
+  if (schema.type === 'integer') return 'u64';
+  if (schema.type === 'boolean') return 'bool';
+  return '&str';
+}
+
+/// Slice elements carry the position's own borrow of `str`.
+function rustItemType(items, enums, parameter, borrow) {
+  if (isStringEnum(items ?? {})) return enums.get(parameterEnumKey(items, parameter));
+  if (items?.type === 'integer') return 'u64';
+  if (items?.type === 'boolean') return 'bool';
+  return borrow;
+}
+
+function rustType(parameter, enums) {
+  const schema = parameter.schema;
+  const type = schema.type === 'array'
+    ? `&[${rustItemType(schema.items, enums, parameter, '&str')}]`
+    : rustScalarType(schema, enums, parameter);
   return parameter.required ? type : `Option<${type}>`;
 }
 
-function rustVariantType(parameter) {
-  const type = parameter.schema.type === 'integer' ? 'u64'
-    : parameter.schema.type === 'boolean' ? 'bool'
-      : parameter.schema.type === 'array' ? "&'a [&'a str]" : "&'a str";
+function rustVariantType(parameter, enums) {
+  const schema = parameter.schema;
+  const borrowed = rustScalarType(schema, enums, parameter) === '&str';
+  const type = schema.type === 'array'
+    ? `&'a [&'a ${rustItemType(schema.items, enums, parameter, "str")}]`
+    : borrowed ? "&'a str" : rustScalarType(schema, enums, parameter);
   return parameter.required ? type : `Option<${type}>`;
 }
 
-function rustQueryStatement(parameter) {
+const wireValue = (parameter, enums, bound = false) => isStringEnum(parameter.schema)
+  ? bound ? 'value.as_str()' : `${propertyName(parameter)}.as_str()`
+  : bound ? 'value' : propertyName(parameter);
+
+const arrayWireValue = (parameter, enums, bound = false) => isStringEnum(parameter.schema.items ?? {})
+  ? bound
+    ? 'value.iter().map(|item| item.as_str()).collect::<Vec<_>>().join(",")'
+    : `${propertyName(parameter)}.iter().map(|item| item.as_str()).collect::<Vec<_>>().join(",")`
+  : bound ? 'value.join(",")' : `${propertyName(parameter)}.join(",")`;
+
+function rustQueryStatement(parameter, enums) {
   if (typeof parameter.schema.const === 'string') {
     return `request = request.query(&[(${JSON.stringify(parameter.name)}, ${JSON.stringify(parameter.schema.const)})]);`;
   }
   const name = propertyName(parameter);
-  const value = parameter.schema.type === 'array' ? 'value.join(",")' : 'value.to_string()';
+  const bound = parameter.schema.type === 'array'
+    ? arrayWireValue(parameter, enums, true)
+    : wireValue(parameter, enums, true);
+  const direct = parameter.schema.type === 'array'
+    ? arrayWireValue(parameter, enums)
+    : isStringEnum(parameter.schema) ? wireValue(parameter, enums) : `${wireValue(parameter, enums)}.to_string()`;
   return parameter.required
-    ? `request = request.query(&[(${JSON.stringify(parameter.name)}, ${parameter.schema.type === 'array' ? `${name}.join(",")` : `${name}.to_string()`})]);`
-    : `if let Some(value) = ${name} { request = request.query(&[(${JSON.stringify(parameter.name)}, ${value})]); }`;
+    ? `request = request.query(&[(${JSON.stringify(parameter.name)}, ${direct})]);`
+    : `if let Some(value) = ${name} { request = request.query(&[(${JSON.stringify(parameter.name)}, ${bound})]); }`;
 }
 
-function rustUrl(path, pathParameters) {
+function rustUrl(path, pathParameters, enums) {
   if (pathParameters.length === 0) return `self.base_url.clone() + ${JSON.stringify(path)}`;
   const parameters = new Map(pathParameters.map(parameter => [parameter.name, parameter]));
   const values = [];
   const template = path.replace(/\{([^}]+)\}/g, (_match, name) => {
     const parameter = parameters.get(name);
     if (parameter === undefined) throw new Error(`Unbound path parameter: ${name}`);
-    values.push(`runtime::path(${propertyName(parameter)})`);
+    values.push(`runtime::path(${wireValue(parameter, enums)})`);
     return '{}';
   });
   if (values.length !== pathParameters.length) throw new Error(`Unused path parameter: ${path}`);
   return `format!(${JSON.stringify(`{}${template}`)}, self.base_url, ${values.join(', ')})`;
 }
 
-function rustVariantRequest(path, method, op, variant, operation) {
+function rustVariantRequest(path, method, op, variant, operation, enums) {
   const parameters = variant.parameters;
   const pathParameters = parameters.filter(parameter => parameter.in === 'path');
   const queryParameters = parameters.filter(parameter => parameter.in === 'query');
   const headerParameters = parameters.filter(parameter => parameter.in === 'header');
-  let setup = `let url = ${rustUrl(path, pathParameters)};`;
+  let setup = `let url = ${rustUrl(path, pathParameters, enums)};`;
   const changesRequest = queryParameters.length > 0 || headerParameters.length > 0;
   setup += `\n                let ${changesRequest ? 'mut ' : ''}request = self.http.${method}(url);`;
-  for (const parameter of queryParameters) setup += `\n                ${rustQueryStatement(parameter)}`;
+  for (const parameter of queryParameters) setup += `\n                ${rustQueryStatement(parameter, enums)}`;
   for (const parameter of headerParameters) {
-    setup += `\n                request = request.header(${JSON.stringify(parameter.name)}, ${propertyName(parameter)});`;
+    setup += `\n                request = request.header(${JSON.stringify(parameter.name)}, ${wireValue(parameter, enums)});`;
   }
   return `${setup}
                 let response = request.send().await.map_err(|cause| runtime::connection("${operation}", false, cause))?;`;
 }
 
-function rustQueryMethod(path, method, op) {
+function rustQueryMethod(path, method, op, enums) {
   const variants = queryVariants(op);
   const operation = op.operationId.replace(/[A-Z]/g, character => '_' + character.toLowerCase());
   const operationStem = pascal(op.operationId);
@@ -244,7 +288,7 @@ function rustQueryMethod(path, method, op) {
     const name = variant.selector === null ? 'Base' : pascal(variant.selector);
     const fields = variant.parameters
       .filter(parameter => parameter.schema.const === undefined)
-      .map(parameter => `${propertyName(parameter)}: ${rustVariantType(parameter)}`);
+      .map(parameter => `${propertyName(parameter)}: ${rustVariantType(parameter, enums)}`);
     return `    ${name} { ${fields.join(', ')} },`;
   }).join('\n');
   const outputs = variants.map(variant => {
@@ -266,12 +310,12 @@ function rustQueryMethod(path, method, op) {
   const helpers = variants.map(variant => {
     const name = variant.selector === null ? 'Base' : pascal(variant.selector);
     const parameters = variant.parameters.filter(parameter => parameter.schema.const === undefined);
-    const helperArguments = parameters.map(parameter => `${propertyName(parameter)}: ${rustType(parameter)}`);
+    const helperArguments = parameters.map(parameter => `${propertyName(parameter)}: ${rustType(parameter, enums)}`);
     const helper = `${operation}_${variant.selector === null ? 'base' : variant.selector.replaceAll('-', '_')}`;
     const success = schemaName(variant.success);
     const failed = schemaName(variant.failure);
     return `    async fn ${helper}(&self${helperArguments.length ? `, ${helperArguments.join(', ')}` : ''}) -> Result<${output}, Error> {
-        ${rustVariantRequest(path, method, op, variant, operation)}
+        ${rustVariantRequest(path, method, op, variant, operation, enums)}
         let status = response.status();
         let value = runtime::read_json(response, "${operation}", false).await?;
         if !status.is_success() {
@@ -306,24 +350,23 @@ ${helpers}
 }
 `;
 }
-function rustArgs(op) {
-  const args = (op.parameters ?? []).map(parameter => `${propertyName(parameter)}: ${rustType(parameter)}`);
+function rustArgs(op, enums) {
+  const args = (op.parameters ?? []).map(parameter => `${propertyName(parameter)}: ${rustType(parameter, enums)}`);
   if (op.requestBody) args.push(`call: &${ref(op.requestBody.content['application/json'].schema)}`);
   return args.join(', ');
 }
-function rustRequest(path, method, op, operation) {
+function rustRequest(path, method, op, operation, enums) {
   const pathParameters = (op.parameters ?? []).filter(parameter => parameter.in === 'path');
   const queryParameters = (op.parameters ?? []).filter(parameter => parameter.in === 'query');
   const headerParameters = (op.parameters ?? []).filter(parameter => parameter.in === 'header');
-  let setup = `let url = ${rustUrl(path, pathParameters)};`;
+  let setup = `let url = ${rustUrl(path, pathParameters, enums)};`;
   const changesRequest = queryParameters.length > 0 || headerParameters.length > 0 || op.requestBody;
   setup += `\n        let ${changesRequest ? 'mut ' : ''}request = self.http.${method}(url);`;
   for (const parameter of queryParameters) {
-    const name = propertyName(parameter);
-    setup += `\n        if let Some(value) = ${name} { request = request.query(&[(${JSON.stringify(parameter.name)}, ${parameter.schema.type === 'array' ? 'value.join(",")' : 'value.to_string()'})]); }`;
+    setup += `\n        ${rustQueryStatement(parameter, enums)}`;
   }
   for (const parameter of headerParameters) {
-    setup += `\n        request = request.header(${JSON.stringify(parameter.name)}, ${propertyName(parameter)});`;
+    setup += `\n        request = request.header(${JSON.stringify(parameter.name)}, ${wireValue(parameter, enums)});`;
   }
   if (op.requestBody) setup += `\n        request = request.json(call);`;
   return `${setup}
@@ -332,7 +375,10 @@ function rustRequest(path, method, op, operation) {
 
 export function rustClientFiles(document, compatibility) {
   const routes = operations(document).filter(({ op }) => op.operationId !== 'metadata');
-  const imports = new Set(['MetadataSuccess']);
+  const enums = allocateEnums(document);
+  // Metadata participates in the same declared-failure contract as every other
+  // operation: a refusal is a typed MetadataFailure, never a connection loss.
+  const imports = new Set(['MetadataFailure', 'MetadataSuccess']);
   for (const { op } of routes) {
     if (op.requestBody) imports.add(ref(op.requestBody.content['application/json'].schema));
     if (!queryVariants(op).length) {
@@ -343,7 +389,7 @@ export function rustClientFiles(document, compatibility) {
   const methods = Object.fromEntries(routes.map(({ path, method, op }) => {
     if (queryVariants(op).length) {
       const name = op.operationId.replace(/[A-Z]/g, c => '_' + c.toLowerCase());
-      return [`operations/${name}.rs`, rustQueryMethod(path, method, op)];
+      return [`operations/${name}.rs`, rustQueryMethod(path, method, op, enums)];
     }
     const success = ref(op.responses['200'].content['application/json'].schema);
     const failure = ref(op.responses['400'].content['application/json'].schema);
@@ -352,8 +398,8 @@ export function rustClientFiles(document, compatibility) {
     return [`operations/${name}.rs`, `// Generated from OpenAPI. Do not edit.
 #[allow(clippy::too_many_arguments)]
 impl HttpClient {
-    pub async fn ${name}(&self, ${rustArgs(op)}) -> Result<${success}, Error> {
-        ${rustRequest(path, method, op, name)}
+    pub async fn ${name}(&self, ${rustArgs(op, enums)}) -> Result<${success}, Error> {
+        ${rustRequest(path, method, op, name, enums)}
         let status = response.status();
         let value = runtime::read_json(response, "${name}", false).await?;
         if !status.is_success() {
@@ -367,11 +413,11 @@ impl HttpClient {
 }
 `];
   }));
-  const failures = routes.map(({ op }) => {
+  const failures = ['    Metadata(Box<MetadataFailure>),', ...routes.map(({ op }) => {
     const variant = op.operationId[0].toUpperCase() + op.operationId.slice(1);
     if (queryVariants(op).length) return `    ${variant}(Box<${variant}Failure>),`;
     return `    ${variant}(Box<${ref(op.responses['400'].content['application/json'].schema)}>),`;
-  }).join('\n');
+  })].join('\n');
   const c = compatibility;
   const connection = `// Generated from OpenAPI. Do not edit.
 use crate::types::{${[...imports].sort().join(', ')}};
@@ -402,8 +448,14 @@ impl HttpClient {
         if !matches!(url.scheme(), "http" | "https") || url.query().is_some() || url.fragment().is_some() || !url.username().is_empty() || url.password().is_some() { return Err(Error::InvalidUrl); }
         let client = Self { base_url: base_url.trim_end_matches('/').to_owned(), http: reqwest::Client::builder().default_headers(headers).retry(reqwest::retry::never()).redirect(reqwest::redirect::Policy::none()).build().map_err(|cause| runtime::connection("metadata", false, cause))? };
         let response = client.http.get(format!("{}/metadata", client.base_url)).send().await.map_err(|cause| runtime::connection("metadata", false, cause))?;
-        if !response.status().is_success() { return Err(runtime::metadata_status()); }
-        let value = runtime::read_json(response, "metadata", false).await?; runtime::validate(&value, "MetadataSuccess", "metadata", false)?;
+        let status = response.status();
+        let value = runtime::read_json(response, "metadata", false).await?;
+        if !status.is_success() {
+            runtime::validate(&value, "MetadataFailure", "metadata", false)?;
+            let failure: MetadataFailure = runtime::decode(value, "metadata", false)?;
+            return Err(Error::Operation { status: status.as_u16(), failure: OperationFailure::Metadata(Box::new(failure)) });
+        }
+        runtime::validate(&value, "MetadataSuccess", "metadata", false)?;
         let metadata: MetadataSuccess = runtime::decode(value, "metadata", false)?;
         let received = &metadata.data.compatibility;
         if (received.wire, received.state, received.review_journal, received.read_derivation) != COMPATIBILITY { return Err(Error::CompatibilityMismatch); }
@@ -413,7 +465,7 @@ impl HttpClient {
         Ok(client)
     }
 }
-${Object.keys(methods).map(path => `include!("${path}");`).join('\n')}
+${['parameters.rs', ...Object.keys(methods)].map(path => `include!("${path}");`).join('\n')}
 `;
-  return { 'client.rs': connection, ...methods };
+  return { 'client.rs': connection, 'parameters.rs': parametersModule(enums), ...methods };
 }

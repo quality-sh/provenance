@@ -81,8 +81,9 @@ where
 /// the same function the read choke point calls, before any record is built.
 ///
 /// The raw line stays with its typed record. An unchanged record keeps its
-/// raw line when the shard is saved, so stored content this build does not
-/// own survives outside rows byte for byte. A changed record carries the
+/// raw line when the shard is saved, so the stored JSON line content that
+/// this build does not own survives unchanged. Line terminators are normalized
+/// to `\n`. A changed record carries the
 /// row's top-level unknown members onto its new line, and the write is
 /// refused before anything is published when a changed row holds stored data
 /// that cannot be carried over safely.
@@ -124,6 +125,25 @@ fn write_jsonl_atomic_unlocked<T: Serialize>(path: &Utf8Path, records: &[T]) -> 
     }
     temp.persist(path)?;
     Ok(())
+}
+
+/// Writes merged records from the opaque rows read from the merge inputs.
+///
+/// The writer selects one stored line that has the exact value of each merged
+/// record. Callers cannot provide raw lines independently. A mismatch is
+/// refused before the target is replaced. JSON line bytes are preserved; line
+/// terminators are written as `\n`.
+pub fn write_preserved_jsonl_atomic(
+    path: &Utf8Path,
+    ours: &[crate::merge::StoredRow],
+    theirs: &[crate::merge::StoredRow],
+    records: &[crate::merge::CanonicalRecord],
+) -> anyhow::Result<()> {
+    let lines = crate::merge::preserved_lines(ours, theirs, records)?;
+    with_state_publication(path, || {
+        crate::review::guard::protect_rows(path, records)?;
+        write_jsonl_lines_atomic_unlocked(path, &lines)
+    })
 }
 
 fn write_jsonl_lines_atomic_unlocked(path: &Utf8Path, lines: &[String]) -> anyhow::Result<()> {
@@ -182,6 +202,30 @@ mod tests {
         let path = camino::Utf8PathBuf::from_path_buf(dir.path().join("records.jsonl")).unwrap();
         write_jsonl_atomic(&path, &[Record { id: "one" }]).unwrap();
         assert_eq!(std::fs::read_to_string(path).unwrap(), "{\"id\":\"one\"}\n");
+    }
+
+    #[test]
+    fn a_merged_record_without_a_stored_row_cannot_replace_the_target() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = camino::Utf8Path::from_path(dir.path()).unwrap();
+        let path = root.join("records.jsonl");
+        let side = root.join("side.jsonl");
+        let original = b"{\"schema_version\":2,\"id\":\"original\"}\n";
+        std::fs::write(&path, original).unwrap();
+        std::fs::write(&side, "{\"schema_version\":2,\"id\":\"stored\"}\n").unwrap();
+        let rows = crate::merge::read_jsonl_rows(&side).unwrap();
+        let records = [serde_json::json!({
+            "schema_version": provenance_core::SUPPORTED_SCHEMA_VERSION.0,
+            "id": "not-stored"
+        })];
+
+        let error = write_preserved_jsonl_atomic(&path, &rows, &[], &records)
+            .unwrap_err()
+            .to_string();
+
+        assert!(error.contains("not-stored"), "{error}");
+        assert!(error.contains("matches no stored line"), "{error}");
+        assert_eq!(std::fs::read(&path).unwrap(), original);
     }
 
     #[test]

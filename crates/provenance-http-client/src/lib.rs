@@ -10,6 +10,12 @@
 pub mod types {
     include!("generated/types.rs");
 }
+/// Closed enums for every declared operation parameter value set. A call
+/// names one variant or passes no value, so an invented selector, direction,
+/// or side cannot compile.
+pub mod parameters {
+    include!("generated/parameters.rs");
+}
 mod client {
     include!("generated/client.rs");
 }

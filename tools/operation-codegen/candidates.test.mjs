@@ -46,6 +46,10 @@ const node: Schemas['GraphNodeOutput']['node_type'] = 'invented';
 declare const client: HttpClient;
 client.listSources({query:'search',text:'fixture'});
 client.listSources({query:'search'});
+client.getRule({id:'rule_shared',query:'trace',direction:'in'});
+client.getRule({id:'rule_shared',query:'trace',direction:'both',relations:['supersedes']});
+// @ts-expect-error an invented direction is not a published value
+client.getRule({id:'rule_shared',query:'trace',direction:'sideways'});
 client.getRule({id:'rule_shared',query:'impact'});
 client.listRules({query:'resolve-symbol',file:'code.rs',symbol:'symbol'});
 client.getRuleEvidence({id:'rule_shared'});

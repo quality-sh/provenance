@@ -7,7 +7,7 @@ use provenance_porcelain::action::{validate_target, Action};
 use provenance_porcelain::get::View;
 
 pub mod grammar;
-use grammar::{CatalogArgs, SearchArgs, TargetArgs};
+use grammar::{CatalogArgs, SearchArgs, SearchCommand, TargetArgs};
 
 #[cfg(test)]
 mod tests;
@@ -17,7 +17,7 @@ pub enum Invocation {
     Builtin(Cli),
     Catalog(catalog_cli::Invocation),
     Get(GetInvocation),
-    Search(SearchInvocation),
+    Search(SearchArgs),
     Target(TargetInvocation),
 }
 
@@ -31,12 +31,6 @@ pub struct GetInvocation {
     context: GlobalContext,
     format: Option<porcelain::OutputFormat>,
     input: provenance_porcelain::get::GetInput,
-}
-
-pub struct SearchInvocation {
-    context: GlobalContext,
-    format: Option<porcelain::OutputFormat>,
-    query: SearchQuery,
 }
 
 pub struct TargetInvocation {
@@ -56,19 +50,9 @@ impl Invocation {
             ));
         };
         if word == "search" {
-            let args = SearchArgs::try_parse_from(arguments).unwrap_or_else(|error| error.exit());
+            let args = SearchCommand::try_parse_from(arguments).unwrap_or_else(|error| error.exit());
             debug_assert_eq!(args.command, "search");
-            return Ok(Self::Search(SearchInvocation {
-                context: args.common.context(),
-                format: args.common.format(),
-                query: SearchQuery {
-                    protocol_version: Some(SDK_PROTOCOL_VERSION),
-                    cursor: args.cursor,
-                    text: args.text,
-                    node_types: args.kind,
-                    limit: args.limit.unwrap_or(QUERY_DEFAULT_LIMIT),
-                },
-            }));
+            return Ok(Self::Search(args.args));
         }
         if Cli::command()
             .get_subcommands()
@@ -143,17 +127,28 @@ impl Invocation {
                 )
                 .await
             }
-            Self::Search(invocation) => {
-                porcelain::dispatch_search(
-                    &invocation.context.repo,
-                    &invocation.context.scope,
-                    invocation.format,
-                    invocation.query,
-                )
-                .await
-            }
+            Self::Search(args) => args.dispatch().await,
             Self::Target(invocation) => invocation.dispatch().await,
         }
+    }
+}
+
+impl SearchArgs {
+    pub(crate) async fn dispatch(self) -> anyhow::Result<()> {
+        let query = SearchQuery {
+            protocol_version: Some(SDK_PROTOCOL_VERSION),
+            cursor: self.cursor,
+            text: self.text,
+            node_types: self.kind,
+            limit: self.limit.unwrap_or(QUERY_DEFAULT_LIMIT),
+        };
+        porcelain::dispatch_search(
+            &self.common.repo,
+            &self.common.scope,
+            self.common.format(),
+            query,
+        )
+        .await
     }
 }
 

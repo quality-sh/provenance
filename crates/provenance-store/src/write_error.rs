@@ -33,6 +33,7 @@ pub enum WriteFailure {
     AlreadyComplete,
     FileAccessDenied,
     FileUnavailable,
+    RecordTooLarge,
     WriteFailed,
 }
 
