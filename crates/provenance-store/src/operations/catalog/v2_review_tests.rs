@@ -139,14 +139,28 @@ async fn content_update_replaces_or_opens_the_current_submission() {
             .unwrap(),
         )
         .unwrap();
-    let third = UpdateRequirementV2::run(context, update_request(&store, "update_b"))
-        .await
-        .unwrap();
+    let etag = store
+        .requirement_edit_state(&scope, &StableId::new("req_a").unwrap())
+        .unwrap()
+        .etag;
+    let third = UpdateRequirementV2::run(
+        context,
+        update_request_with_etag("update_b", &etag, "New text."),
+    )
+    .await
+    .unwrap();
     assert_ne!(
         third.decision.pending.unwrap().proposal_id,
         second.proposal_id
     );
-    assert_eq!(store.requirement_decision_state(&scope, &StableId::new("req_a").unwrap()).unwrap().decisions.len(), 0);
+    assert_eq!(
+        store
+            .requirement_decision_state(&scope, &StableId::new("req_a").unwrap())
+            .unwrap()
+            .decisions
+            .len(),
+        0
+    );
 }
 
 #[tokio::test]
@@ -168,7 +182,13 @@ async fn lifecycle_update_keeps_the_current_submission() {
 
     assert_eq!(updated.decision.pending.unwrap(), pending);
     assert_eq!(updated.edit.revision.unwrap(), pending.revision);
-    assert_eq!(store.list_proposal_definitions(&ScopeId::new("default").unwrap()).unwrap().len(), 1);
+    assert_eq!(
+        store
+            .list_proposal_definitions(&ScopeId::new("default").unwrap())
+            .unwrap()
+            .len(),
+        1
+    );
 }
 
 #[tokio::test]
