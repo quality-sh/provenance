@@ -63,12 +63,12 @@ impl InitEnding {
     }
 
     pub fn print(&self, quiet: bool) {
+        if let Some(warning) = &self.warning {
+            eprintln!("{warning}");
+        }
         if !quiet {
             let mut stdout = std::io::stdout().lock();
             let _ignored = self.write_to(&mut stdout);
-        }
-        if let Some(warning) = &self.warning {
-            eprintln!("{warning}");
         }
     }
 
@@ -147,25 +147,6 @@ fn write_inventory(
     Ok(())
 }
 
-pub fn skill_note(installed: usize, updated: usize, removed: usize, noun: &str) -> String {
-    let mut parts: Vec<String> = Vec::new();
-    if installed > 0 {
-        parts.push(counted("added", installed, noun));
-    }
-    if updated > 0 {
-        parts.push(counted("updated", updated, noun));
-    }
-    if removed > 0 {
-        parts.push(counted("removed", removed, "file"));
-    }
-    parts.join(", ")
-}
-
-fn counted(verb: &str, count: usize, noun: &str) -> String {
-    let plural = if count == 1 { "" } else { "s" };
-    format!("{verb} {count} {noun}{plural}")
-}
-
 pub fn scope_phrase(scopes: &[String]) -> String {
     match scopes {
         [one] => format!("scope \"{one}\""),
@@ -180,19 +161,6 @@ pub fn scope_phrase(scopes: &[String]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn skill_note_names_each_counted_change() {
-        assert_eq!(skill_note(4, 0, 0, "skill"), "added 4 skills");
-        assert_eq!(skill_note(1, 0, 0, "link"), "added 1 link");
-        assert_eq!(skill_note(0, 1, 0, "skill"), "updated 1 skill");
-        assert_eq!(skill_note(0, 0, 2, "skill"), "removed 2 files");
-        assert_eq!(
-            skill_note(3, 1, 0, "skill"),
-            "added 3 skills, updated 1 skill"
-        );
-        assert_eq!(skill_note(0, 0, 0, "skill"), "");
-    }
 
     #[test]
     fn scope_phrase_covers_one_and_many_scopes() {
