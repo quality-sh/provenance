@@ -33,6 +33,30 @@ fn forged_terminal_import_fails_without_changing_live_scope() {
 }
 
 #[test]
+fn import_keeps_a_command_keyword_id_that_is_already_stored() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = dir.path().join("repo");
+    init_repo(&repo, None);
+    let path = repo.join(".provenance/state/scopes/default/sources/source.jsonl");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(
+        &path,
+        format!(
+            "{{\"schema_version\":{},\"scope_id\":\"default\",\"id\":\"search\",\"name\":\"Existing\",\"source_type\":\"document\"}}\n",
+            SUPPORTED_SCHEMA_VERSION.0
+        ),
+    )
+    .unwrap();
+    let exported = dir.path().join("export.json");
+    export_scope(&repo, &exported).success();
+
+    import_scope(&repo, &exported).success();
+    let after = dir.path().join("after.json");
+    export_scope(&repo, &after).success();
+    assert_eq!(std::fs::read(after).unwrap(), std::fs::read(exported).unwrap());
+}
+
+#[test]
 fn late_scope_validation_failure_is_atomic() {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path().join("repo");

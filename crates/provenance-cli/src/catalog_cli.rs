@@ -4,7 +4,11 @@ use axum::http::{HeaderMap, HeaderName, HeaderValue, Method};
 use clap::{parser::ValueSource, ArgMatches, Command};
 use provenance_store::operations::catalog::{self, Definition, TargetAction};
 use serde_json::{json, Map, Value};
-use std::{collections::BTreeMap, io::Read as _, net::{Ipv4Addr, SocketAddr}};
+use std::{
+    collections::BTreeMap,
+    io::Read as _,
+    net::{Ipv4Addr, SocketAddr},
+};
 
 mod address;
 mod fields;
@@ -22,9 +26,14 @@ impl Invocation {
     pub fn new(args: grammar::CatalogArgs, matches: &ArgMatches) -> anyhow::Result<Self> {
         let resolved = address::resolve(&args.collection, &args.address)
             .unwrap_or_else(|error| usage_error(error));
-        let (data, query, headers) =
-            input(resolved.address.definition, matches, args.stdin, resolved.query, &["stdin"])
-                .unwrap_or_else(|error| usage_error(error));
+        let (data, query, headers) = input(
+            resolved.address.definition,
+            matches,
+            args.stdin,
+            resolved.query,
+            &["stdin"],
+        )
+        .unwrap_or_else(|error| usage_error(error));
         Ok(Self {
             context: args.common.context(),
             path: resolved.path,
@@ -52,20 +61,30 @@ pub fn command(collection: &str) -> anyhow::Result<Command> {
 }
 
 pub fn target_command() -> anyhow::Result<Command> {
-    let definitions = TargetAction::ALL.into_iter()
+    let definitions = TargetAction::ALL
+        .into_iter()
         .flat_map(catalog::target_definitions)
         .map(|(_, definition)| definition)
         .collect::<Vec<_>>();
     fields::augment(
         grammar::target_command(),
         definitions,
-        &["repo", "scope", "format", "quiet", "type", "view", "depth", "kind", "limit", "stdin"],
+        &[
+            "repo", "scope", "format", "quiet", "type", "view", "depth", "kind", "limit", "stdin",
+        ],
     )
 }
 
 /// Dispatch one catalog request through the local in-process host.
 pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
-    let Invocation { context, path, definition, data, query, headers } = invocation;
+    let Invocation {
+        context,
+        path,
+        definition,
+        data,
+        query,
+        headers,
+    } = invocation;
     let method = match definition.method {
         catalog::HttpMethod::Get => Method::GET,
         catalog::HttpMethod::Post => Method::POST,
@@ -78,7 +97,10 @@ pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
         warn_if_skills_missing(&context.repo, context.quiet)?;
     }
     let host = local_host(&context)?;
-    match host.invoke_resource(method, &path, data, query, headers).await {
+    match host
+        .invoke_resource(method, &path, data, query, headers)
+        .await
+    {
         Ok(value) => crate::output::print_json(&value)?,
         Err(failure) => anyhow::bail!("{}", serde_json::to_string(&failure)?),
     }
@@ -94,16 +116,26 @@ pub async fn dispatch_target(
     matches: ArgMatches,
 ) -> anyhow::Result<()> {
     let host = local_host(&context)?;
-    let route = host.target_route(action, &target, kind).await.map_err(anyhow::Error::new)?;
+    let route = host
+        .target_route(action, &target, kind)
+        .await
+        .map_err(anyhow::Error::new)?;
     if route.kind == provenance_core::NodeType::Question {
         warn_if_skills_missing(&context.repo, context.quiet)?;
     }
     let stdin = matches.get_flag("stdin");
-    let (data, query, headers) =
-        input(route.definition, &matches, stdin, None, &["record_type", "stdin"])
-            .unwrap_or_else(|error| usage_error(error));
+    let (data, query, headers) = input(
+        route.definition,
+        &matches,
+        stdin,
+        None,
+        &["record_type", "stdin"],
+    )
+    .unwrap_or_else(|error| usage_error(error));
     if !query.is_empty() {
-        usage_error(anyhow::anyhow!("target actions do not accept query options"));
+        usage_error(anyhow::anyhow!(
+            "target actions do not accept query options"
+        ));
     }
     let value = host
         .invoke_target(&route, data, headers)
@@ -112,22 +144,37 @@ pub async fn dispatch_target(
     if format == Some(provenance_cli::porcelain::OutputFormat::Json) {
         crate::output::print_json(&value)?;
     } else {
-        println!("{}", provenance_transport::porcelain::render_action_readable(
-            action, &target, route.kind, &value
-        ));
+        println!(
+            "{}",
+            provenance_transport::porcelain::render_action_readable(
+                action, &target, route.kind, &value
+            )
+        );
     }
     Ok(())
 }
 
 pub fn ensure_only_fields(matches: &ArgMatches, allowed: &[&str]) -> anyhow::Result<()> {
-    const COMMON: &[&str] = &["repo", "scope", "format", "quiet", "target", "action", "collection", "address"];
+    const COMMON: &[&str] = &[
+        "repo",
+        "scope",
+        "format",
+        "quiet",
+        "target",
+        "action",
+        "collection",
+        "address",
+    ];
     for id in matches.ids() {
         let name = id.as_str();
         if matches.value_source(name) != Some(ValueSource::CommandLine) {
             continue;
         }
         if !COMMON.contains(&name) && !allowed.contains(&name) {
-            usage_error(anyhow::anyhow!("unsupported option --{}", name.replace('_', "-")));
+            usage_error(anyhow::anyhow!(
+                "unsupported option --{}",
+                name.replace('_', "-")
+            ));
         }
     }
     Ok(())
@@ -147,7 +194,9 @@ fn local_host(context: &GlobalContext) -> anyhow::Result<provenance_transport::S
         SocketAddr::from((Ipv4Addr::LOCALHOST, 1)),
     )
     .map_err(|failure| anyhow::anyhow!(failure))?;
-    Ok(provenance_transport::StatementHost::with_access(std::sync::Arc::new(access)))
+    Ok(provenance_transport::StatementHost::with_access(
+        std::sync::Arc::new(access),
+    ))
 }
 
 fn warn_if_skills_missing(repo: &str, quiet: bool) -> anyhow::Result<()> {
@@ -172,7 +221,10 @@ fn input(
     extra: &[&str],
 ) -> anyhow::Result<(Value, BTreeMap<String, String>, HeaderMap)> {
     let declared = fields::declared(definition)?;
-    let mut allowed = declared.iter().map(|field| field.name.as_str()).collect::<Vec<_>>();
+    let mut allowed = declared
+        .iter()
+        .map(|field| field.name.as_str())
+        .collect::<Vec<_>>();
     allowed.extend(extra.iter().copied());
     ensure_only_fields(matches, &allowed)?;
     let mut data = Map::new();
@@ -199,44 +251,63 @@ fn input(
                 }
                 _ => anyhow::bail!("unknown catalog parameter location"),
             },
-            fields::Source::Body { wire_field, value_schema, wrap_array } => {
-                if !wrap_array && matches!(
-                    value_schema.get("type").and_then(Value::as_str),
-                    Some("array" | "object")
-                ) {
+            fields::Source::Body {
+                wire_field,
+                value_schema,
+                wrap_array,
+            } => {
+                if !wrap_array
+                    && matches!(
+                        value_schema.get("type").and_then(Value::as_str),
+                        Some("array" | "object")
+                    )
+                {
                     anyhow::bail!("arrays and objects must come from --stdin");
                 }
                 let request = definition.request_schema().expect("declared body field");
                 let parsed = catalog::parse_schema_value_in(request, &value_schema, value)
                     .map_err(|_| anyhow::anyhow!("invalid value for --{}", field.name))?;
                 anyhow::ensure!(
-                    data.insert(wire_field, if wrap_array { json!([parsed]) } else { parsed }).is_none(),
+                    data.insert(
+                        wire_field,
+                        if wrap_array { json!([parsed]) } else { parsed }
+                    )
+                    .is_none(),
                     "body field is supplied by more than one option"
                 );
             }
         }
     }
     if let Some(action) = query_action {
-        anyhow::ensure!(!query.contains_key("query"), "query action is supplied twice");
+        anyhow::ensure!(
+            !query.contains_key("query"),
+            "query action is supplied twice"
+        );
         query.insert("query".into(), action.to_owned());
     }
     if stdin {
-        anyhow::ensure!(data.is_empty(), "--stdin cannot be combined with body field flags");
+        anyhow::ensure!(
+            data.is_empty(),
+            "--stdin cannot be combined with body field flags"
+        );
         let mut text = String::new();
         std::io::stdin().read_to_string(&mut text)?;
         data = serde_json::from_str::<Value>(&text)?
-            .as_object().cloned()
+            .as_object()
+            .cloned()
             .ok_or_else(|| anyhow::anyhow!("stdin must contain one JSON object"))?;
     }
     for default in &definition.registration.cli.defaults {
-        data.entry(default.field).or_insert_with(|| match default.value {
-            catalog::CliDefaultValue::String(value) => json!(value),
-            catalog::CliDefaultValue::EmptyArray => json!([]),
-        });
+        data.entry(default.field)
+            .or_insert_with(|| match default.value {
+                catalog::CliDefaultValue::String(value) => json!(value),
+                catalog::CliDefaultValue::EmptyArray => json!([]),
+            });
     }
-    if definition.parameters().iter().any(|parameter|
+    if definition.parameters().iter().any(|parameter| {
         parameter.location == "header" && parameter.required && parameter.name == "Idempotency-Key"
-    ) && !headers.contains_key("Idempotency-Key") {
+    }) && !headers.contains_key("Idempotency-Key")
+    {
         headers.insert(
             HeaderName::from_static("idempotency-key"),
             HeaderValue::from_str(&uuid::Uuid::new_v4().to_string())?,

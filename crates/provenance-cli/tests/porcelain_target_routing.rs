@@ -129,7 +129,14 @@ fn named_actions_work_for_ordinary_targets() {
     ]);
 
     let claimed = json_output(&[
-        "topic_routing", "claim", "--repo", &repo, "--actor", "worker", "--format", "json",
+        "topic_routing",
+        "claim",
+        "--repo",
+        &repo,
+        "--actor",
+        "worker",
+        "--format",
+        "json",
     ]);
     assert_eq!(claimed["data"]["claimed_by"], "worker");
     let answered = json_output(&[
