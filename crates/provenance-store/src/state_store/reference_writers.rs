@@ -223,9 +223,9 @@ impl StateStore {
         let path = shards::path_for(&self.layout, scope_id, T::OWNER);
         self.with_repository_publication(|| {
             self.mutate_graph_record(&path, |records: &mut Vec<T>| {
-                let record = records
-                    .iter_mut()
-                    .find(|record| record.id() == owner)
+                let position = records
+                    .iter()
+                    .position(|record| record.id() == owner)
                     .ok_or_else(|| {
                         crate::write_error::SourceFailure::wrap(
                             crate::write_error::WriteFailure::MissingReference,
@@ -237,28 +237,30 @@ impl StateStore {
                             ),
                         )
                     })?;
+                let edit = crate::review::ListEdit::Delta {
+                    add: Vec::new(),
+                    remove: vec![target.clone()],
+                };
+                crate::review::relationships::validate_list_edit_targets(
+                    self,
+                    scope_id,
+                    records,
+                    owner,
+                    name,
+                    Some(&edit),
+                )?;
+                let record = records
+                    .get_mut(position)
+                    .expect("the located relationship owner remains present");
                 let Some(RelationSlot::List(list)) = record.relation_slot_mut(name) else {
                     panic!(
                         "relation `{name}` on {} is not a reference list",
                         kind_word(T::OWNER)
                     );
                 };
-                let position = list
-                    .iter()
-                    .position(|entry| entry == target)
-                    .ok_or_else(|| {
-                        crate::write_error::SourceFailure::wrap(
-                            crate::write_error::WriteFailure::InvalidUpdate,
-                            anyhow::anyhow!(
-                                "{} {} does not name {} {} under {}",
-                                kind_word(T::OWNER),
-                                owner.as_str(),
-                                kind_word(decl.target),
-                                target.as_str(),
-                                decl.name
-                            ),
-                        )
-                    })?;
+                let Some(position) = list.iter().position(|entry| entry == target) else {
+                    return Ok(record.clone());
+                };
                 crate::write_error::ensure!(
                     InvalidUpdate,
                     !(decl.required && list.len() == 1),

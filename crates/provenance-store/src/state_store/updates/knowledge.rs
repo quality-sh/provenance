@@ -14,6 +14,20 @@ impl StateStore {
 
     fn prepare_source_update(&self, input: UpdateSourceInput) -> anyhow::Result<Source> {
         let scope = input.scope_id.clone();
+        let records = self.list_sources(&scope)?;
+        let before = records
+            .iter()
+            .find(|record| record.id == input.id)
+            .ok_or_else(missing)?;
+        owner_matches(before.declared_by.as_deref(), input.declared_by.as_deref())?;
+        review::relationships::validate_list_edit_targets(
+            self,
+            &scope,
+            &records,
+            &input.id,
+            "supersedes",
+            input.supersedes.as_ref(),
+        )?;
         let path = shards::sources_path(&self.layout, &input.scope_id);
         let record = self.mutate_graph_record(&path, |records: &mut Vec<Source>| {
             let record = records
@@ -21,14 +35,10 @@ impl StateStore {
                 .find(|r| r.id == input.id)
                 .ok_or_else(missing)?;
             owner_matches(record.declared_by.as_deref(), input.declared_by.as_deref())?;
-            let record_id = record.id.clone();
             review::relationships::expand_list(
                 &mut record.supersedes,
-                "supersedes",
-                "source",
-                &record_id,
                 input.supersedes.as_ref(),
-            )?;
+            );
             if let Some(name) = &input.name {
                 required_text(name)?;
             }
@@ -82,6 +92,28 @@ impl StateStore {
 
     fn prepare_rule_update(&self, input: UpdateRuleInput) -> anyhow::Result<Rule> {
         let scope = input.scope_id.clone();
+        let records = self.list_rules(&scope)?;
+        let before = records
+            .iter()
+            .find(|record| record.id == input.id)
+            .ok_or_else(missing)?;
+        owner_matches(before.declared_by.as_deref(), input.declared_by.as_deref())?;
+        review::relationships::validate_list_edit_targets(
+            self,
+            &scope,
+            &records,
+            &input.id,
+            "requirement_ids",
+            input.requirement_ids.as_ref(),
+        )?;
+        review::relationships::validate_list_edit_targets(
+            self,
+            &scope,
+            &records,
+            &input.id,
+            "resolution_ids",
+            input.resolution_ids.as_ref(),
+        )?;
         let path = shards::rules_path(&self.layout, &input.scope_id);
         let record = self.mutate_graph_record(&path, |records: &mut Vec<Rule>| {
             let record = records
@@ -89,21 +121,14 @@ impl StateStore {
                 .find(|r| r.id == input.id)
                 .ok_or_else(missing)?;
             owner_matches(record.declared_by.as_deref(), input.declared_by.as_deref())?;
-            let record_id = record.id.clone();
             review::relationships::expand_list(
                 &mut record.requirement_ids,
-                "requirement_ids",
-                "rule",
-                &record_id,
                 input.requirement_ids.as_ref(),
-            )?;
+            );
             review::relationships::expand_list(
                 &mut record.resolution_ids,
-                "resolution_ids",
-                "rule",
-                &record_id,
                 input.resolution_ids.as_ref(),
-            )?;
+            );
             if let Some(statement) = &input.statement {
                 required_text(statement)?;
                 super::super::statement_policy::ensure_statement_is_writable(
