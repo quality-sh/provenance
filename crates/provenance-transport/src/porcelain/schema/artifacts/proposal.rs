@@ -1,7 +1,7 @@
 use super::super::common::model::{enum_names, PROPOSAL_TYPES};
 use serde_json::{json, Value};
 
-pub(in crate::handlers::schema) fn schema() -> Value {
+pub(in crate::porcelain::schema) fn schema() -> Value {
     json!({
         "title": "ProposalCard",
         "type": "object",

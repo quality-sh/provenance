@@ -1,6 +1,6 @@
 use serde_json::{json, Value};
 
-pub(in crate::handlers::schema) fn reference_schema() -> Value {
+pub(in crate::porcelain::schema) fn reference_schema() -> Value {
     json!({
         "title": "GraphReference",
         "type": "object",
@@ -29,7 +29,7 @@ pub(in crate::handlers::schema) fn reference_schema() -> Value {
     })
 }
 
-pub(in crate::handlers::schema) fn export_schema() -> Value {
+pub(in crate::porcelain::schema) fn export_schema() -> Value {
     json!({
         "title": "GraphReferenceExactExport",
         "type": "object",

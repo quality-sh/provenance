@@ -1,6 +1,6 @@
 use serde_json::{json, Value};
 
-pub(in crate::handlers::schema) fn schema() -> Value {
+pub(in crate::porcelain::schema) fn schema() -> Value {
     json!({
         "title": "SynthesisPacket",
         "type": "object",

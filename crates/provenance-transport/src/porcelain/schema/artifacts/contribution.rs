@@ -1,7 +1,7 @@
 use super::super::common::model::{enum_names, CONTRIBUTION_STANCES};
 use serde_json::{json, Value};
 
-pub(in crate::handlers::schema) fn schema() -> Value {
+pub(in crate::porcelain::schema) fn schema() -> Value {
     json!({
         "title": "Contribution",
         "type": "object",

@@ -318,7 +318,7 @@ impl Invocation {
             Self::Prime(input) => handlers::prime_command(&input),
             Self::Repository(input, quiet) => handlers::repository_command(input, quiet).await,
             Self::Graph(input) => handlers::graph_command(input).await,
-            Self::Workspace(input) => handlers::workspace_command(input),
+            Self::Workspace(input) => handlers::workspace_command(input).await,
             Self::Server(input) => handlers::server_command(input).await,
             #[cfg(feature = "dogfood")]
             Self::Dogfood(input, quiet) => handlers::dogfood_command(input, quiet),
