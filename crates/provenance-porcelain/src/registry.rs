@@ -5,11 +5,16 @@
 //! renders its parser from these declarations and the MCP server lists its tools
 //! from them.
 
+mod dogfood;
 mod graph;
 mod porcelain;
 mod repository;
 mod workspace;
 
+pub use dogfood::{
+    DogfoodCommand, DogfoodListInput, DogfoodNoteInput, DogfoodReportInput, DogfoodSimulateInput,
+    TriageHandleInput, TriageListInput, TriageReopenInput,
+};
 pub use graph::{
     CoverageScanInput, GraphCommand, GraphReadInput, ReferenceInput, ReferenceIssueInput,
     RequirementGraphInput, SwarmBacktraceLandInput, TraceabilityInput,
@@ -212,11 +217,22 @@ impl Flag {
 const REPO: Flag = Flag::new("repo", FlagKind::Value).default(".");
 const SCOPE: Flag = Flag::new("scope", FlagKind::Value).default("default");
 
-/// The description of each CLI command group that has one, by its first word.
-pub const GROUP_DESCRIPTIONS: &[(&str, &str)] = &[(
-    "report",
-    "Deterministic report rendering from a versioned report envelope",
-)];
+/// The description of each CLI command group that has one, by its words.
+pub const GROUP_DESCRIPTIONS: &[(&str, &str)] = &[
+    (
+        "report",
+        "Deterministic report rendering from a versioned report envelope",
+    ),
+    (
+        "dogfood",
+        "Dev-build-only: record pain-point notes about provenance itself",
+    ),
+    (
+        "dogfood triage",
+        "Dev-build-only triage of captured notes: mark them handled or reopen them. State \
+         lives beside the spool; the capture history is never rewritten",
+    ),
+];
 
 /// The repository options that the porcelain commands and the commands after them take.
 pub const GLOBAL_FLAGS: &[Flag] = &[
@@ -268,6 +284,8 @@ pub enum Command {
     Repository(RepositoryCommand),
     Graph(GraphCommand),
     Workspace(WorkspaceCommand),
+    /// Dev-build-only commands. The CLI shows them only with the `dogfood` feature.
+    Dogfood(DogfoodCommand),
 }
 
 impl Command {
@@ -317,6 +335,13 @@ impl Command {
         Self::Workspace(WorkspaceCommand::ReportRender),
         Self::Workspace(WorkspaceCommand::ReportBuild),
         Self::Workspace(WorkspaceCommand::Review),
+        Self::Dogfood(DogfoodCommand::Note),
+        Self::Dogfood(DogfoodCommand::List),
+        Self::Dogfood(DogfoodCommand::Report),
+        Self::Dogfood(DogfoodCommand::TriageHandle),
+        Self::Dogfood(DogfoodCommand::TriageReopen),
+        Self::Dogfood(DogfoodCommand::TriageList),
+        Self::Dogfood(DogfoodCommand::Simulate),
     ];
 
     /// The declaration of this command.
@@ -382,6 +407,23 @@ impl Command {
                     | WorkspaceCommand::ReportBuild
                     | WorkspaceCommand::Review => Presence::Present,
                 },
+                Self::Dogfood(command) => match command {
+                    DogfoodCommand::Note
+                    | DogfoodCommand::List
+                    | DogfoodCommand::Report
+                    | DogfoodCommand::TriageHandle
+                    | DogfoodCommand::TriageReopen
+                    | DogfoodCommand::TriageList
+                    | DogfoodCommand::Simulate => {
+                        if cfg!(feature = "dogfood") {
+                            Presence::Present
+                        } else {
+                            Presence::Absent {
+                                reason: "only dev builds with the dogfood feature have the command",
+                            }
+                        }
+                    }
+                },
             },
             Interface::Mcp => match self {
                 Self::Get | Self::Search | Self::Api | Self::Check => Presence::Present,
@@ -440,6 +482,17 @@ impl Command {
                     | WorkspaceCommand::ReportBuild
                     | WorkspaceCommand::Review => Presence::Absent {
                         reason: "the command works on files and hosts on the local machine",
+                    },
+                },
+                Self::Dogfood(command) => match command {
+                    DogfoodCommand::Note
+                    | DogfoodCommand::List
+                    | DogfoodCommand::Report
+                    | DogfoodCommand::TriageHandle
+                    | DogfoodCommand::TriageReopen
+                    | DogfoodCommand::TriageList
+                    | DogfoodCommand::Simulate => Presence::Absent {
+                        reason: "the notes are about the CLI on the local machine",
                     },
                 },
             },

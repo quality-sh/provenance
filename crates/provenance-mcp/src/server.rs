@@ -91,7 +91,8 @@ impl ServerHandler for Server {
                 | Command::Prime
                 | Command::Repository(_)
                 | Command::Graph(_)
-                | Command::Workspace(_),
+                | Command::Workspace(_)
+                | Command::Dogfood(_),
             )
             | None => Err(unknown_tool()),
         }
@@ -106,7 +107,11 @@ fn tool(host: &StatementHost, command: Command) -> Option<rmcp::model::Tool> {
         Command::Search => porcelain.search_is_available().then(tools::search_tool),
         Command::Api => porcelain.api_is_available().then(tools::api_tool),
         Command::Check => host.check_port().is_some().then(tools::check_tool),
-        Command::Prime | Command::Repository(_) | Command::Graph(_) | Command::Workspace(_) => None,
+        Command::Prime
+        | Command::Repository(_)
+        | Command::Graph(_)
+        | Command::Workspace(_)
+        | Command::Dogfood(_) => None,
         Command::Action(action) if Action::DISCUSSION.contains(&action) => porcelain
             .discussion_is_available(action)
             .then(|| tools::discussion_tool(action)),

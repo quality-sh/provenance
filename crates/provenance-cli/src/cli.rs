@@ -6,13 +6,7 @@ pub mod workspace;
 
 pub use ideation::{IdeationArtifactKind, SchemaCommand};
 
-#[cfg(feature = "dogfood")]
-use crate::output::JsonFormat;
-#[cfg(feature = "dogfood")]
-use camino::Utf8PathBuf;
-#[cfg(feature = "dogfood")]
-use clap::ValueEnum;
-use clap::{Parser, Subcommand};
+use clap::Parser;
 
 /// How the caller runs provenance, so init prints commands that the caller can run.
 #[derive(Clone, Copy, Debug, Default)]
@@ -59,10 +53,13 @@ impl PackageManager {
     }
 }
 
+/// The root parser. Every command under it comes from the registry.
 #[derive(Parser)]
 #[command(
     name = "provenance",
     version,
+    subcommand_required = true,
+    arg_required_else_help = true,
     after_help = concat!(
         "Dynamic commands:\n",
         "  provenance api [PATH]\n",
@@ -77,113 +74,11 @@ pub struct Cli {
     /// the warning that this repository has no shaping skills installed.
     #[arg(long, global = true)]
     pub quiet: bool,
-    #[command(subcommand)]
-    pub command: Command,
-}
-
-/// The built-in commands that the registry does not declare yet.
-#[derive(Subcommand)]
-pub enum Command {
-    /// Dev-build-only: record pain-point notes about provenance itself.
-    #[cfg(feature = "dogfood")]
-    Dogfood {
-        #[command(subcommand)]
-        command: DogfoodCommand,
-    },
-}
-
-/// Dev-build-only agent feedback about provenance itself. Notes are appended
-/// to a local spool; nothing ever leaves the machine.
-#[cfg(feature = "dogfood")]
-#[derive(Subcommand)]
-pub enum DogfoodCommand {
-    /// Record one pain-point note. Cheap by design: three enums and a sentence.
-    Note {
-        /// The part of provenance the note concerns: a subcommand name, or "general".
-        #[arg(long)]
-        surface: String,
-        #[arg(long, value_enum)]
-        category: DogfoodCategory,
-        /// Impact the pain had on the task at hand.
-        #[arg(long, value_enum)]
-        severity: DogfoodSeverity,
-        /// What you were trying to do, what happened, what you expected.
-        #[arg(long)]
-        detail: Option<String>,
-        #[arg(long)]
-        suggestion: Option<String>,
-        /// One-line summary of the pain point.
-        summary: String,
-    },
-    /// Print the local note spool.
-    List {
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
-    },
-    /// Aggregate the spool; optionally join session metadata supplied by a
-    /// sister system via the provenance-dogfood-enrichment/v1 contract.
-    Report {
-        /// Enrichment JSON conforming to provenance-dogfood-enrichment/v1
-        /// (a file path, or "-" for stdin).
-        #[arg(long)]
-        enrich: Option<Utf8PathBuf>,
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
-    },
-    /// Dev-build-only triage of captured notes: mark them handled or reopen
-    /// them. State lives beside the spool; the capture history is never
-    /// rewritten.
-    Triage {
-        #[command(subcommand)]
-        command: TriageCommand,
-    },
-    /// Dev-build-only: try the whole first-run experience in a throwaway
-    /// sandbox. Serves the STE dictionary from loopback, records no note,
-    /// and touches nothing outside the sandbox.
-    Simulate {
-        /// Keep the sandbox directory after the run for inspection.
-        #[arg(long)]
-        keep: bool,
-        /// Create the sandbox inside this existing directory instead of the
-        /// system temp location.
-        #[arg(long)]
-        dir: Option<Utf8PathBuf>,
-    },
-}
-
-/// Dev-build-only triage state for captured notes. Every state change is an
-/// append to a sibling state file, so the note spool stays untouched.
-#[cfg(feature = "dogfood")]
-#[derive(Subcommand)]
-pub enum TriageCommand {
-    /// Mark one note handled.
-    Handle {
-        /// Note id, or an unambiguous prefix of one, as shown by
-        /// `provenance dogfood triage list`.
-        id: String,
-        /// Why the note is handled: a short reason or an issue reference.
-        #[arg(long)]
-        reason: Option<String>,
-    },
-    /// Return a handled note to the unhandled state.
-    Reopen {
-        /// Note id, or an unambiguous prefix of one, as shown by
-        /// `provenance dogfood triage list`.
-        id: String,
-    },
-    /// Show every captured note with its identifier and triage state.
-    List {
-        /// Only show notes in this triage state.
-        #[arg(long, value_enum, default_value_t = TriageFilter::All)]
-        status: TriageFilter,
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
-    },
 }
 
 /// Which triage state a `dogfood triage list` view shows.
 #[cfg(feature = "dogfood")]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TriageFilter {
     Unhandled,
     Handled,
@@ -191,17 +86,21 @@ pub enum TriageFilter {
 }
 
 #[cfg(feature = "dogfood")]
+impl TriageFilter {
+    /// The filter that one `--status` value names.
+    pub fn from_flag(value: &str) -> Option<Self> {
+        match value {
+            "unhandled" => Some(Self::Unhandled),
+            "handled" => Some(Self::Handled),
+            "all" => Some(Self::All),
+            _ => None,
+        }
+    }
+}
+
+#[cfg(feature = "dogfood")]
 #[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    ValueEnum,
-    serde::Serialize,
-    serde::Deserialize,
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
 )]
 #[serde(rename_all = "kebab-case")]
 pub enum DogfoodCategory {
@@ -213,21 +112,28 @@ pub enum DogfoodCategory {
 }
 
 #[cfg(feature = "dogfood")]
+impl DogfoodCategory {
+    /// The category that one `--category` value names.
+    pub fn from_flag(value: &str) -> Option<Self> {
+        serde_json::from_value(serde_json::Value::String(value.to_owned())).ok()
+    }
+}
+
+#[cfg(feature = "dogfood")]
 #[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    ValueEnum,
-    serde::Serialize,
-    serde::Deserialize,
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
 )]
 #[serde(rename_all = "kebab-case")]
 pub enum DogfoodSeverity {
     Blocked,
     Workaround,
     Annoyance,
+}
+
+#[cfg(feature = "dogfood")]
+impl DogfoodSeverity {
+    /// The severity that one `--severity` value names.
+    pub fn from_flag(value: &str) -> Option<Self> {
+        serde_json::from_value(serde_json::Value::String(value.to_owned())).ok()
+    }
 }
