@@ -85,16 +85,43 @@ pub fn locate_repo_root(start: &Utf8Path) -> anyhow::Result<Utf8PathBuf> {
     anyhow::bail!("could not locate repository root from {start}")
 }
 
-/// Require the manifest before a command reads or writes an existing graph.
-pub fn require_initialized_graph(layout: &ProvenanceLayout) -> anyhow::Result<()> {
-    match std::fs::metadata(layout.manifest_path()) {
-        Ok(metadata) if metadata.is_file() => Ok(()),
-        Ok(_) => anyhow::bail!("Provenance graph manifest is not a file; run `provenance init`"),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            anyhow::bail!("Provenance graph is not initialized; run `provenance init`")
-        }
+#[derive(Debug)]
+pub struct GraphNotInitialized;
+
+impl std::fmt::Display for GraphNotInitialized {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "Provenance graph is not initialized; run `provenance init`")
+    }
+}
+
+impl std::error::Error for GraphNotInitialized {}
+
+fn path_exists(path: &Utf8Path) -> anyhow::Result<bool> {
+    match std::fs::symlink_metadata(path) {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
         Err(error) => Err(error.into()),
     }
+}
+
+/// Require a valid manifest after recovering any interrupted publication.
+pub fn require_initialized_graph(layout: &ProvenanceLayout) -> anyhow::Result<()> {
+    if !path_exists(&layout.manifest_path())? && !path_exists(&layout.publication_marker_path())? {
+        return Err(GraphNotInitialized.into());
+    }
+    crate::publication::with_repository_publication(layout, || {
+        match std::fs::metadata(layout.manifest_path()) {
+            Ok(metadata) if metadata.is_file() => {
+                crate::state_store::StateStore::new(layout.clone()).manifest()?;
+                Ok(())
+            }
+            Ok(_) => anyhow::bail!("Provenance graph manifest is not a file"),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                Err(GraphNotInitialized.into())
+            }
+            Err(error) => Err(error.into()),
+        }
+    })
 }
 
 #[cfg(test)]
