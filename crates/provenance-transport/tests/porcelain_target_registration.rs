@@ -45,14 +45,14 @@ fn target_actions_are_declared_once_by_canonical_registrations() {
         .collect::<BTreeSet<_>>();
     assert_eq!(actual, expected);
 
-    for action in TargetAction::ALL {
+    for action in TargetAction::RECORD {
         assert!(actual.iter().any(|entry| entry.0 == action.as_str()));
     }
 }
 
 #[test]
 fn each_target_action_and_kind_resolves_to_one_registration() {
-    for action in TargetAction::ALL {
+    for action in TargetAction::RECORD {
         for kind in provenance_core::NodeType::ALL {
             let matches = catalog::definitions()
                 .iter()

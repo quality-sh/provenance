@@ -1,7 +1,8 @@
-use clap::{Arg, ArgAction, Command};
+use clap::{builder::PossibleValuesParser, Arg, ArgAction, Command};
 use provenance_store::operations::catalog::{Definition, Parameter};
 use serde_json::Value;
 use std::collections::BTreeSet;
+use serde_json::Map;
 
 pub(super) struct Field {
     pub name: String,
@@ -145,4 +146,103 @@ pub(super) fn augment_with_overrides(
 
 pub(super) fn cli_name(name: &str) -> String {
     name.to_ascii_lowercase().replace('_', "-")
+}
+
+fn schema_properties(schema: &Value) -> anyhow::Result<&Map<String, Value>> {
+    schema
+        .get("properties")
+        .and_then(Value::as_object)
+        .ok_or_else(|| anyhow::anyhow!("declared input has no properties"))
+}
+
+/// Register flags from the same typed contracts that declare the MCP inputs.
+pub(crate) fn augment_schemas(
+    mut command: Command,
+    schemas: impl IntoIterator<Item = Value>,
+    bound: &[&str],
+) -> anyhow::Result<Command> {
+    let mut registered = command
+        .get_arguments()
+        .filter_map(|argument| argument.get_long().map(str::to_owned))
+        .collect::<BTreeSet<_>>();
+    for schema in schemas {
+        for (field, declaration) in schema_properties(&schema)? {
+            if bound.contains(&field.as_str()) {
+                continue;
+            }
+            let name = cli_name(field);
+            if registered.insert(name.clone()) {
+                let mut argument = Arg::new(name.clone())
+                    .long(name)
+                    .num_args(1)
+                    .allow_hyphen_values(true)
+                    .action(ArgAction::Set);
+                if let Some(values) = enum_values(&schema, declaration) {
+                    argument = argument.value_parser(PossibleValuesParser::new(values));
+                }
+                command = command.arg(argument);
+            }
+        }
+    }
+    Ok(command)
+}
+
+fn enum_values(root: &Value, declaration: &Value) -> Option<Vec<String>> {
+    if let Some(name) = declaration
+        .get("$ref")
+        .and_then(Value::as_str)
+        .and_then(|reference| reference.strip_prefix("#/$defs/"))
+    {
+        return root.get("$defs").and_then(|defs| defs.get(name)).and_then(|schema| enum_values(root, schema));
+    }
+    declaration
+        .get("enum")
+        .and_then(Value::as_array)
+        .map(|values| values.iter().filter_map(Value::as_str).map(str::to_owned).collect())
+}
+
+/// Bind supplied CLI flags using the typed input schema for one keyword.
+pub(crate) fn schema_input(
+    schema: &Value,
+    matches: &clap::ArgMatches,
+    bound: &[&str],
+) -> anyhow::Result<Map<String, Value>> {
+    let properties = schema_properties(schema)?;
+    let allowed = properties
+        .keys()
+        .filter(|name| !bound.contains(&name.as_str()))
+        .map(|name| cli_name(name))
+        .collect::<Vec<_>>();
+    super::ensure_only_fields(matches, &allowed.iter().map(String::as_str).collect::<Vec<_>>());
+    let mut input = Map::new();
+    for (field, declaration) in properties {
+        if bound.contains(&field.as_str()) {
+            continue;
+        }
+        let name = cli_name(field);
+        let parsed = if name == "limit" {
+            matches
+                .try_get_one::<usize>(&name)
+                .ok()
+                .flatten()
+                .copied()
+                .map(Value::from)
+        } else {
+            matches
+                .try_get_one::<String>(&name)
+                .ok()
+                .flatten()
+                .map(|raw| {
+                    provenance_store::operations::catalog::parse_schema_value_in(
+                        schema, declaration, raw,
+                    )
+                    .map_err(|_| anyhow::anyhow!("invalid value for --{name}"))
+                })
+                .transpose()?
+        };
+        if let Some(parsed) = parsed {
+            input.insert(field.clone(), parsed);
+        }
+    }
+    Ok(input)
 }
