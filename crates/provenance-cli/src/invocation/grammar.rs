@@ -74,6 +74,34 @@ pub struct DiscussionsArgs {
     pub common: Common,
 }
 
+#[derive(Args)]
+pub struct ApiArgs {
+    #[command(flatten)]
+    pub common: Common,
+    pub path: Option<String>,
+    #[arg(long, value_parser = parse_api_method, default_value = "get")]
+    pub method: provenance_porcelain::api::ApiMethod,
+    #[arg(long = "input", allow_hyphen_values = true)]
+    pub input: Option<String>,
+    #[arg(long = "header")]
+    pub headers: Vec<String>,
+    #[arg(long = "query")]
+    pub queries: Vec<String>,
+}
+
+fn parse_api_method(value: &str) -> Result<provenance_porcelain::api::ApiMethod, String> {
+    provenance_porcelain::api::ApiMethod::parse(value).ok_or_else(|| "unsupported method".to_owned())
+}
+
+#[derive(Parser)]
+#[command(name = "provenance", about = "Call one public API path or list the catalog routes")]
+pub(super) struct ApiCommand {
+    #[arg(value_parser = ["api"])]
+    pub command: String,
+    #[command(flatten)]
+    pub args: ApiArgs,
+}
+
 #[derive(Parser)]
 #[command(name = "provenance", about = "List or read addressed Discussions")]
 pub(super) struct DiscussionsCommand {
