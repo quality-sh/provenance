@@ -394,6 +394,27 @@ mod tests {
     }
 
     #[test]
+    fn site_core_reports_role_and_current_state() {
+        let mut site = SiteCore {
+            rule_id: "rule_overtime".into(),
+            file_path: Utf8PathBuf::from("src/payroll.rs"),
+            line: 4,
+            verification: None,
+            anchor: None,
+            anchor_state: AnchorState::New,
+            original_line: None,
+            original_file_path: None,
+        };
+
+        assert_eq!(site.role(), SiteRole::Implementation);
+        assert!(site.is_current());
+        site.verification = Some("examples".into());
+        site.anchor_state = AnchorState::Gone;
+        assert_eq!(site.role(), SiteRole::Verification);
+        assert!(!site.is_current());
+    }
+
+    #[test]
     fn old_annotation_results_default_to_implementation_role() {
         let annotation: AnnotationResult = serde_json::from_str(
             r#"{
