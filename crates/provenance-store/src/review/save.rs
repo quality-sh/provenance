@@ -197,7 +197,8 @@ impl StateStore {
             schema_version: REVIEW_SCHEMA_VERSION,
             scope_id: scope.clone(),
             requirement_id: id,
-            sequence: head.as_ref().map_or(1, |e| e.sequence + 1),
+            sequence: super::decision_state::CycleFacts::validated(self, &scope)?
+                .next_sequence(self, &scope, &id)?,
             id: entry_id,
             predecessor: head.as_ref().map(|e| e.id.clone()),
             revision,

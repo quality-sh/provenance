@@ -162,14 +162,27 @@ impl CycleFacts {
             .collect()
     }
 
-    pub(super) fn next_sequence(&self, requirement: &StableId) -> u64 {
-        self.entries
+    pub(super) fn next_sequence(
+        &self,
+        store: &StateStore,
+        scope: &ScopeId,
+        requirement: &StableId,
+    ) -> anyhow::Result<u64> {
+        let cycle = self
+            .entries
             .iter()
             .filter(|e| e.requirement_id == *requirement)
             .map(|e| e.sequence)
             .max()
-            .unwrap_or(0)
-            + 1
+            .unwrap_or(0);
+        let edits = store
+            .review_entries(scope)?
+            .into_iter()
+            .filter(|entry| entry.requirement_id == *requirement)
+            .map(|entry| entry.sequence)
+            .max()
+            .unwrap_or(0);
+        Ok(cycle.max(edits) + 1)
     }
 
     /// The submission of this record that still waits for a decision, if any.
