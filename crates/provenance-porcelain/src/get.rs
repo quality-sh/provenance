@@ -5,8 +5,11 @@ use provenance_core::protocol::{
 };
 use provenance_core::NodeType;
 use provenance_macros::rule;
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use std::{fmt::Display, future::Future, pin::Pin};
+
+mod wire;
+pub use wire::{input_schema, output_schema, render_readable};
 
 /// One future returned by an injected read port.
 pub type PortFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, ReadError>> + Send + 'a>>;
@@ -19,7 +22,7 @@ pub struct RecordResolution {
 }
 
 /// The named view selected for a known record.
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum View {
     #[default]
@@ -29,13 +32,38 @@ pub enum View {
     Impact,
 }
 
+impl View {
+    pub const ALL: [Self; 4] = [Self::Record, Self::Children, Self::Grounding, Self::Impact];
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Record => "record",
+            Self::Children => "children",
+            Self::Grounding => "grounding",
+            Self::Impact => "impact",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|view| view.as_str() == value)
+    }
+}
+
 /// One semantic known-record request.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct GetInput {
+    #[schemars(length(min = 1))]
     pub target: String,
+    #[serde(default)]
     pub view: View,
+    #[serde(default)]
+    #[schemars(range(min = 1))]
     pub max_depth: Option<usize>,
+    #[serde(default)]
     pub returned_kinds: Vec<NodeType>,
+    #[serde(default)]
+    #[schemars(range(min = 1))]
     pub limit: Option<usize>,
 }
 
@@ -52,9 +80,12 @@ impl GetInput {
 }
 
 /// The bound and continuation state of a potentially incomplete result.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct Bounds {
+    #[schemars(range(min = 1))]
     pub limit: usize,
+    #[schemars(range(min = 1))]
     pub max_depth: Option<usize>,
     pub has_more: bool,
     pub continuation: Option<String>,
@@ -169,87 +200,6 @@ impl GetOutcome {
     }
 }
 
-/// Serializes the canonical payload without the `GraphNode` discriminant.
-pub struct RecordData<'a>(pub &'a GraphNode);
-
-impl Serialize for RecordData<'_> {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        match self.0 {
-            GraphNode::Source(record) => record.serialize(serializer),
-            GraphNode::Requirement(record) => record.serialize(serializer),
-            GraphNode::Resolution(record) => record.serialize(serializer),
-            GraphNode::Rule(record) => record.serialize(serializer),
-            GraphNode::Topic(record) => record.serialize(serializer),
-            GraphNode::Question(record) => record.serialize(serializer),
-            GraphNode::Domain(record) => record.serialize(serializer),
-            GraphNode::Boundary(record) => record.serialize(serializer),
-        }
-    }
-}
-
-#[derive(Serialize)]
-struct OutputRecord<'a> {
-    id: &'a str,
-    kind: &'static str,
-    value: OutputValue<'a>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    depth: Option<usize>,
-}
-
-enum OutputValue<'a> {
-    Record(RecordData<'a>),
-    Traversed(&'a GraphNode),
-}
-
-impl Serialize for OutputValue<'_> {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        match self {
-            Self::Record(record) => record.serialize(serializer),
-            Self::Traversed(record) => record.serialize(serializer),
-        }
-    }
-}
-
-fn output_record(node: &GraphNode, depth: Option<usize>) -> OutputRecord<'_> {
-    OutputRecord {
-        id: node.id().as_str(),
-        kind: node.node_type().as_str(),
-        value: if depth.is_some() {
-            OutputValue::Traversed(node)
-        } else {
-            OutputValue::Record(RecordData(node))
-        },
-        depth,
-    }
-}
-
-impl Serialize for GetOutcome {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        use serde::ser::SerializeStruct as _;
-        let fields = 5
-            + usize::from(self.record_metadata.is_some())
-            + usize::from(self.view_metadata().is_some());
-        let mut output = serializer.serialize_struct("GetOutcome", fields)?;
-        output.serialize_field("record", &output_record(&self.record, None))?;
-        output.serialize_field("view", &self.view())?;
-        let related = self
-            .related()
-            .iter()
-            .map(|record| output_record(&record.node, Some(record.depth)))
-            .collect::<Vec<_>>();
-        output.serialize_field("related", &related)?;
-        output.serialize_field("detail", &self.impact())?;
-        output.serialize_field("bounds", &self.bounds())?;
-        if let Some(metadata) = &self.record_metadata {
-            output.serialize_field("record_metadata", metadata)?;
-        }
-        if let Some(metadata) = self.view_metadata() {
-            output.serialize_field("view_metadata", metadata)?;
-        }
-        output.end()
-    }
-}
-
 /// A failure from validation, identity resolution, or an injected operation.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ReadError {
@@ -332,6 +282,9 @@ impl<P: GetPort> crate::Porcelain<P> {
 }
 
 fn validate(input: &GetInput) -> Result<(), ReadError> {
+    if input.target.is_empty() {
+        return Err(ReadError::InvalidOptions);
+    }
     let has_traversal_options = input.max_depth.is_some() || !input.returned_kinds.is_empty();
     let unsupported = match input.view {
         View::Record => has_traversal_options || input.limit.is_some(),

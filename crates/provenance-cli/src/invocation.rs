@@ -3,6 +3,8 @@ use clap::{CommandFactory as _, Parser as _};
 use provenance_cli::porcelain;
 use provenance_core::protocol::{SearchQuery, QUERY_DEFAULT_LIMIT};
 use provenance_core::{NodeType, SDK_PROTOCOL_VERSION};
+use provenance_porcelain::action::{validate_target, Action};
+use provenance_porcelain::get::View;
 
 pub mod grammar;
 use grammar::{CatalogArgs, SearchArgs, TargetArgs};
@@ -41,7 +43,7 @@ pub struct TargetInvocation {
     context: GlobalContext,
     format: Option<porcelain::OutputFormat>,
     target: String,
-    action: provenance_transport::porcelain::Action,
+    action: Action,
     kind: Option<NodeType>,
     matches: clap::ArgMatches,
 }
@@ -96,7 +98,7 @@ impl Invocation {
             catalog_cli::ensure_only_fields(&matches, &["kind", "view", "depth", "limit"]);
             let mut input = provenance_porcelain::get::GetInput::new(
                 args.target,
-                args.view.unwrap_or_default().into(),
+                args.view.as_deref().and_then(View::parse).unwrap_or_default(),
             );
             input.max_depth = args.depth;
             input.returned_kinds = args.kind;
@@ -110,14 +112,11 @@ impl Invocation {
         let action = args
             .action
             .as_deref()
-            .and_then(provenance_transport::porcelain::Action::parse)
+            .and_then(Action::parse)
             .ok_or_else(|| anyhow::anyhow!("unsupported target action"))?;
         let kind = args.record_type;
-        if (action == provenance_transport::porcelain::Action::Create) != kind.is_some() {
-            catalog_cli::usage_error(
-                "create requires --type and existing-record actions infer it without --type",
-            );
-        }
+        validate_target(action, &args.target, kind)
+            .unwrap_or_else(|error| catalog_cli::usage_error(error));
         Ok(Self::Target(TargetInvocation {
             context,
             format,

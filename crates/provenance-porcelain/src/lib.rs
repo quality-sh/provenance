@@ -1,6 +1,11 @@
 //! Shared human-facing semantics for Provenance interfaces.
+//!
+//! Get and check request and result types produce their JSON and MCP schemas here.
+//! Add a get result field to the typed projection in `get::wire`.
+//! Add an action to `provenance_core::TargetAction`, then register it in the catalog.
 
 pub mod check;
+pub mod action;
 pub mod get;
 pub mod search;
 

@@ -2265,6 +2265,7 @@ version = "0.2.3"
 dependencies = [
  "provenance-core",
  "provenance-macros",
+ "schemars 1.2.2",
  "serde",
  "serde_json",
  "tempfile",
@@ -2368,6 +2369,7 @@ version = "0.2.3"
 dependencies = [
  "axum",
  "futures",
+ "jsonschema",
  "provenance-core",
  "provenance-macros",
  "provenance-porcelain",
