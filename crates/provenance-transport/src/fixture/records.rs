@@ -139,6 +139,7 @@ impl Repository {
             .unwrap();
         store
             .create_question(CreateQuestionInput {
+                depends_on: Vec::new(),
                 scope_id: scope.clone(),
                 id: sid("question_shared"),
                 topic_id: sid("topic_shared"),

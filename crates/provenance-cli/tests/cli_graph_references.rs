@@ -78,3 +78,6 @@ mod issuance;
 mod pinned_records;
 #[path = "cli_graph_references/schema.rs"]
 mod schema;
+
+#[path = "cli_graph_references/prerequisites.rs"]
+mod prerequisites;
