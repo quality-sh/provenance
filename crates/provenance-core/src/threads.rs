@@ -1,5 +1,7 @@
 mod discussion_chain;
+mod discovery;
 mod discussions;
+pub use discovery::*;
 pub use discussions::*;
 
 use crate::{StableId, Thread, ThreadParent, ThreadStatus};
