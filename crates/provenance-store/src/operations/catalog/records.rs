@@ -72,6 +72,14 @@ query!(
 );
 query!(Get, "get", GetQuery, GetResult, get, graph_needs);
 query!(
+    ResolveRecord,
+    "resolve-record",
+    ResolveRecordQuery,
+    ResolveRecordResult,
+    resolve_record,
+    graph_needs
+);
+query!(
     Search,
     "search",
     SearchQuery,
