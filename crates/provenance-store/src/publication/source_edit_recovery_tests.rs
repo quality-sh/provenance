@@ -1,4 +1,6 @@
-use super::{with_repository_publication, with_staged_state_and_source_edit};
+use super::{
+    with_repository_publication, with_staged_state_and_source_edit, SourceEditRecoveryFailure,
+};
 use crate::{
     layout::ProvenanceLayout,
     operations::files::RepositoryFiles,
@@ -88,4 +90,44 @@ fn each_source_edit_phase_recovers_matching_file_and_state() {
             "{phase}: {names:?}"
         );
     }
+}
+
+#[test]
+fn recovery_refuses_third_file_bytes_without_overwriting_them() {
+    let temp = fixture();
+    let root = Utf8Path::from_path(temp.path()).unwrap();
+    let status = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "publication::source_edit_recovery_tests::crash_child",
+            "--nocapture",
+        ])
+        .env("PROVENANCE_SOURCE_EDIT_CRASH_ROOT", root.as_str())
+        .env(
+            "PROVENANCE_SOURCE_EDIT_CRASH_PHASE",
+            "source_edit_prepared",
+        )
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .unwrap();
+    assert_eq!(status.code(), Some(86));
+    std::fs::write(root.join("source.txt"), b"external\n").unwrap();
+    let layout = ProvenanceLayout::new(root);
+
+    let error = with_repository_publication(&layout, || Ok(())).unwrap_err();
+
+    assert!(matches!(
+        error.downcast_ref::<SourceEditRecoveryFailure>(),
+        Some(SourceEditRecoveryFailure::ExternalChange)
+    ));
+    assert_eq!(
+        std::fs::read(root.join("source.txt")).unwrap(),
+        b"external\n"
+    );
+    assert_eq!(
+        std::fs::read(layout.state_dir().join("value")).unwrap(),
+        BEFORE
+    );
+    assert!(layout.source_edit_marker_path().exists());
 }

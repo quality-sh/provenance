@@ -131,9 +131,6 @@ pub(super) fn recover_pending_source_edit(layout: &ProvenanceLayout) -> anyhow::
         .read_bounded(&marker.target, usize::MAX)
         .map_err(|_| SourceEditRecoveryFailure::ExternalChange)?;
     let current = held.digest();
-    if current != marker.before_digest && current != marker.after_digest {
-        return Err(SourceEditRecoveryFailure::ExternalChange.into());
-    }
     complete_state(layout, &transaction, &mut marker)?;
     if current == marker.before_digest {
         let prepared = match held.recover_temp(
