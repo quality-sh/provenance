@@ -2,7 +2,10 @@ use super::catch_up_behavior::assert_catch_up_equals_rebuild;
 use super::fixtures::{create_requirement, seeded_layout};
 use crate::cache::{catch_up_state, materialize_state, open_cache};
 use crate::current_schema::{self, Compatibility};
+use crate::operations::read_policy::{FreshnessPolicy, ReadPolicy};
 use crate::state_store::StateStore;
+use provenance_core::protocol::{GetQuery, StampPolicy, SDK_PROTOCOL_VERSION};
+use provenance_core::NodeType;
 use provenance_macros::verifies;
 
 async fn schema_digest(pool: &sqlx::SqlitePool) -> String {
@@ -112,7 +115,7 @@ async fn a_current_digest_does_not_hide_a_missing_index() {
 #[tokio::test]
 #[verifies("rule_interrupted_migration_reloads_every_family", examples)]
 async fn an_interrupted_rebuild_does_not_publish_the_current_schema_digest() {
-    let (_dir, layout, _scope) = seeded_layout();
+    let (_dir, layout, scope) = seeded_layout();
     materialize_state(&layout).await.unwrap();
     let cache = open_cache(&layout).await.unwrap();
     sqlx::query("UPDATE _cache_metadata SET schema_digest = 'incompatible'")
@@ -129,6 +132,34 @@ async fn an_interrupted_rebuild_does_not_publish_the_current_schema_digest() {
     let cache = open_cache(&layout).await.unwrap();
     assert_eq!(schema_digest(cache.pool()).await, "incompatible");
     cache.close().await.unwrap();
+
+    let query = GetQuery {
+        protocol_version: Some(SDK_PROTOCOL_VERSION),
+        node_type: NodeType::Requirement,
+        id: "req_schads_overtime".into(),
+    };
+    let annotated = crate::operations::queries::get(
+        Some(layout.root().to_path_buf()),
+        &scope,
+        ReadPolicy::with_freshness(FreshnessPolicy::AnnotateOnly),
+        query.clone(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(annotated.stamp.policy, StampPolicy::AnnotateOnly);
+
+    let refused = crate::operations::queries::get(
+        Some(layout.root().to_path_buf()),
+        &scope,
+        ReadPolicy::with_freshness(FreshnessPolicy::RefuseStale),
+        query,
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(
+        refused.downcast_ref::<crate::operations::reader::ReadRefusal>(),
+        Some(crate::operations::reader::ReadRefusal::Stale { .. })
+    ));
 
     let healed = catch_up_state(&layout).await.unwrap();
     assert!(healed.rebuilt);
