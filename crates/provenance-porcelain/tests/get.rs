@@ -188,6 +188,15 @@ async fn grounding_and_impact_are_identified_named_views() {
 }
 
 #[tokio::test]
+#[verifies("rule_porcelain_return_filter_keeps_traversal", examples)]
+async fn read_rejects_a_returned_kind_outside_the_closed_kind_set() {
+    let mut input = GetInput::new("req_root", View::Children);
+    input.returned_kinds = vec!["requirement".into(), "dinosaur".into()];
+
+    assert_eq!(service().get(input).await, Err(ReadError::InvalidOptions));
+}
+
+#[tokio::test]
 #[verifies("rule_porcelain_read_rejects_bad_options", examples)]
 async fn read_rejects_options_that_its_view_does_not_support() {
     let mut bare = GetInput::new("req_alpha", View::Record);
