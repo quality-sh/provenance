@@ -18,6 +18,7 @@ pub enum WorkspaceCommand {
     ReportRender,
     ReportBuild,
     Review,
+    Mcp,
 }
 
 impl WorkspaceCommand {
@@ -32,7 +33,8 @@ impl WorkspaceCommand {
                 | Self::SkillsInstall
                 | Self::ReportRender
                 | Self::ReportBuild
-                | Self::Review => Presence::Present,
+                | Self::Review
+                | Self::Mcp => Presence::Present,
             },
             Interface::Mcp => match self {
                 Self::DocsCheck
@@ -44,6 +46,9 @@ impl WorkspaceCommand {
                 | Self::ReportBuild
                 | Self::Review => Presence::Absent {
                     reason: "the command works on files and hosts on the local machine",
+                },
+                Self::Mcp => Presence::Absent {
+                    reason: "the command starts the MCP server",
                 },
             },
         }
@@ -121,6 +126,8 @@ const REVIEW_FLAGS: &[Flag] = &[
          that keeps running after this command returns. Prints where the review page is served",
     ),
 ];
+
+const MCP_FLAGS: &[Flag] = &[REPO, SCOPE];
 
 /// The `docs check` input.
 #[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
@@ -203,6 +210,14 @@ pub struct ReviewInput {
     pub detach: bool,
 }
 
+/// The `mcp` input.
+#[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct McpInput {
+    pub repo: String,
+    pub scope: String,
+}
+
 macro_rules! schema_fn {
     ($name:ident, $input:ty) => {
         fn $name() -> serde_json::Value {
@@ -219,6 +234,7 @@ schema_fn!(skills_install_schema, SkillsInstallInput);
 schema_fn!(report_render_schema, ReportRenderInput);
 schema_fn!(report_build_schema, ReportBuildInput);
 schema_fn!(review_schema, ReviewInput);
+schema_fn!(mcp_schema, McpInput);
 
 /// A shown CLI-only command without flag relations.
 const fn cli_only(
@@ -301,6 +317,13 @@ pub(super) fn declaration(command: WorkspaceCommand) -> Declaration {
             "Serve local review assets and authorized repository operations",
             review_schema,
             REVIEW_FLAGS,
+        ),
+        WorkspaceCommand::Mcp => cli_only(
+            "mcp",
+            &["mcp"],
+            "Serve the MCP tools for one repository on standard input and output",
+            mcp_schema,
+            MCP_FLAGS,
         ),
     }
 }
