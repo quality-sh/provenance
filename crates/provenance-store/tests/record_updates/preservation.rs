@@ -1,25 +1,10 @@
-use super::support::Fixture;
+use super::support::{raw_rows, shard_path, Fixture};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 const COMMIT: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const AT: &str = "2026-09-01T00:00:00Z";
-
-fn shard_path(fixture: &Fixture, family: &str, file: &str) -> PathBuf {
-    fixture
-        .dir
-        .path()
-        .join(format!(".provenance/state/scopes/default/{family}/{file}"))
-}
-
-fn raw_rows(fixture: &Fixture, family: &str, file: &str) -> Vec<String> {
-    std::fs::read_to_string(shard_path(fixture, family, file))
-        .unwrap()
-        .lines()
-        .map(str::to_owned)
-        .collect()
-}
 
 fn parsed_rows(fixture: &Fixture, family: &str, file: &str) -> Vec<Value> {
     raw_rows(fixture, family, file)

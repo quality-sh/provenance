@@ -55,6 +55,7 @@ impl DeclarationRecord for Requirement {
             })
             .collect();
         let mut requirement = Self {
+            archived_in_commit: None,
             created: None,
             updated: None,
             schema_version: SUPPORTED_SCHEMA_VERSION,

@@ -114,6 +114,7 @@ impl StateStore {
         let path = shards::requirements_path(&self.layout, &scope_id);
         self.mutate_graph_record(&path, |records: &mut Vec<Requirement>| {
             let requirement = Requirement {
+                archived_in_commit: None,
                 created: None,
                 updated: None,
                 schema_version: SUPPORTED_SCHEMA_VERSION,
