@@ -12,7 +12,7 @@
 use super::{ReadContext, ReadFuture, ReadRefusal, ReadSnapshot};
 use crate::cache::{catch_up_with_guard, open_cache, open_stored_cache, CacheConnection};
 use crate::layout::ProvenanceLayout;
-use crate::migrations;
+use crate::current_schema::{self, Compatibility};
 use crate::operations::read_policy::FreshnessPolicy;
 use crate::operations::stamp;
 use crate::publication::publication_guard;
@@ -156,12 +156,9 @@ async fn stored(layout: &ProvenanceLayout, error: anyhow::Error) -> anyhow::Resu
     })
 }
 
-/// Under `annotate_only` a database behind on migrations or validation refuses: no
-/// freshness step will bring it forward. A file with no migration table
-/// at all is behind too. So is a half-migrated file: a migration commits
-/// and forgets the family digests, and the rebuild that refills the
-/// tables runs after it, so a revision beside no digests means the tables
-/// are empty and no freshness step will run to fill them. Digest rows are
+/// Under `annotate_only`, an incompatible schema or old validation refuses.
+/// No freshness step will rebuild it. A revision beside no family digests
+/// is also incomplete, so a read-only operation does not answer from it. Digest rows are
 /// one per scope, so a manifest that names no scope has none to lose and
 /// is not read as that window.
 #[rule("rule_annotate_only_refuses_a_half_migrated_projection")]
@@ -172,21 +169,7 @@ pub(super) async fn ensure_current_schema(
     let behind = ReadRefusal::SchemaBehind {
         database: layout.cache_db_path(),
     };
-    let applied = match migrations::applied_migrations(pool).await {
-        Ok(applied) => applied,
-        Err(error)
-            if error
-                .downcast_ref::<sqlx::Error>()
-                .is_some_and(is_missing_table) =>
-        {
-            return Err(behind.into())
-        }
-        Err(error) => return Err(error),
-    };
-    if !applied
-        .iter()
-        .any(|id| id == migrations::LATEST_MIGRATION_ID)
-    {
+    if current_schema::compatibility(pool).await? != Compatibility::Current {
         return Err(behind.into());
     }
     let validation: Option<i64> =

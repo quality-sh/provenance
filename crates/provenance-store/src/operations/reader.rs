@@ -74,9 +74,9 @@ pub enum ReadRefusal {
         path: Utf8PathBuf,
         error: String,
     },
-    #[error("the projection in {database} is behind on migrations or validation; run `provenance materialize`")]
+    #[error("the projection in {database} has an incompatible cache schema or old validation; run `provenance materialize`")]
     SchemaBehind { database: Utf8PathBuf },
-    #[error("the projection in {database} holds a revision but no family digests, so its tables were never reloaded after a migration; run `provenance materialize`")]
+    #[error("the projection in {database} holds a revision but no family digests, so the cache is incomplete; run `provenance materialize`")]
     HalfMigrated { database: Utf8PathBuf },
 }
 

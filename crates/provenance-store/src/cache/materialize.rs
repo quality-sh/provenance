@@ -14,7 +14,8 @@ pub use units::unit_stored_digest;
 pub use units::{scope_ids, unit_digest, units_for, Unit, UnitHashError};
 
 use super::{open_cache, MaterializeReport};
-use crate::{layout::ProvenanceLayout, migrations, publication};
+use crate::current_schema::{self, Compatibility};
+use crate::{layout::ProvenanceLayout, publication};
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
 pub async fn materialize_empty_state(
@@ -26,17 +27,26 @@ pub async fn materialize_empty_state(
     let connection = open_cache(layout).await?;
     // Everything between the open and the settle is part of the settled
     // work: a failure there completes the connection before it reports.
-    let applied = async {
-        crate::test_probes::at("run_migrations_under_guard")?;
-        migrations::run_migrations(connection.pool(), layout).await
-    }
-    .await;
+    let applied = initialize_empty(connection.pool()).await;
     connection
-        .settle(applied.map(|migrations_applied| MaterializeReport {
+        .settle(applied.map(|cache_recreated| MaterializeReport {
             records_loaded: 0,
-            migrations_applied,
+            cache_recreated,
         }))
         .await
+}
+
+async fn initialize_empty(pool: &SqlitePool) -> anyhow::Result<bool> {
+    crate::test_probes::at("prepare_current_schema_under_guard")?;
+    let recreate = current_schema::compatibility(pool).await? == Compatibility::RebuildRequired;
+    if !recreate {
+        return Ok(false);
+    }
+    let mut tx = pool.begin().await?;
+    current_schema::replace(&mut tx).await?;
+    current_schema::mark_current(&mut tx).await?;
+    tx.commit().await?;
+    Ok(true)
 }
 
 pub async fn materialize_state(layout: &ProvenanceLayout) -> anyhow::Result<MaterializeReport> {
@@ -46,7 +56,7 @@ pub async fn materialize_state(layout: &ProvenanceLayout) -> anyhow::Result<Mate
 
 /// The rebuild body for a caller that holds the guard.
 ///
-/// Hashing, validation, migrations, and the commit all run under the
+/// Hashing, validation, schema preparation, and the commit all run under the
 /// guard. The serial is the stored serial plus one. The connection is
 /// complete before the report or the failure leaves, however the body
 /// ends.
@@ -60,7 +70,6 @@ pub(super) async fn materialize_with_guard(
     let outcome = rebuild_rows(
         connection.pool(),
         &mut reader,
-        layout,
         manifest,
         global_digests,
     )
@@ -68,23 +77,38 @@ pub(super) async fn materialize_with_guard(
     connection.settle(outcome).await
 }
 
+/// Rebuilds through a pool whose connection stays with the caller.
+pub(super) async fn materialize_on_pool_with_guard(
+    guard: &publication::PublicationGuard,
+    pool: &SqlitePool,
+    layout: &ProvenanceLayout,
+) -> anyhow::Result<MaterializeReport> {
+    let mut reader = validation::UnitReader::new(guard);
+    let (manifest, global_digests) = reader.global(None)?;
+    rebuild_rows(pool, &mut reader, manifest, global_digests).await
+}
+
 /// Hashes, validates, reloads, and commits one full rebuild on the
 /// caller's pool.
 async fn rebuild_rows(
     pool: &SqlitePool,
     reader: &mut validation::UnitReader<'_>,
-    layout: &ProvenanceLayout,
     manifest: provenance_core::Manifest,
     global_digests: units::UnitDigests,
 ) -> anyhow::Result<MaterializeReport> {
-    crate::test_probes::at("run_migrations_under_guard")?;
-    let migrations_applied = migrations::run_migrations(pool, layout).await?;
+    crate::test_probes::at("prepare_current_schema_under_guard")?;
+    let cache_recreated =
+        current_schema::compatibility(pool).await? == Compatibility::RebuildRequired;
+    let mut tx = pool.begin().await?;
+    if cache_recreated {
+        current_schema::replace(&mut tx).await?;
+    } else {
+        clear_cache(&mut tx).await?;
+    }
     let stored_serial: i64 =
         sqlx::query_scalar("SELECT COALESCE(MAX(serial), 0) FROM projection_revision")
-            .fetch_one(pool)
+            .fetch_one(&mut *tx)
             .await?;
-    let mut tx = pool.begin().await?;
-    clear_cache(&mut tx).await?;
 
     stamp::upsert_unit_row(&mut tx, "global", &global_digests).await?;
     let mut records_loaded = 0;
@@ -114,13 +138,16 @@ async fn rebuild_rows(
         stamp::upsert_unit_row(&mut tx, &unit.name(), &digests).await?;
     }
     stamp::write_stamp(&mut tx, stored_serial + 1).await?;
+    if cache_recreated {
+        current_schema::mark_current(&mut tx).await?;
+    }
     crate::test_probes::at("materialize_before_commit")?;
     tx.commit().await?;
     crate::test_probes::at("materialize_after_commit")?;
 
     Ok(MaterializeReport {
         records_loaded,
-        migrations_applied,
+        cache_recreated,
     })
 }
 
