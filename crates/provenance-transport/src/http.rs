@@ -41,11 +41,17 @@ fn axum_path(path: &str) -> String {
         .join("/")
 }
 
-async fn unknown() -> Response {
+async fn unknown(State(host): State<StatementHost>, request: Request) -> Response {
+    if let Err(error) = host.authenticate(request.headers()) {
+        return failure::response(error);
+    }
     failure::response(ErasedFailure::new(None, OperationFailure::UnknownOperation))
 }
 
-async fn method_not_allowed() -> Response {
+async fn method_not_allowed(State(host): State<StatementHost>, request: Request) -> Response {
+    if let Err(error) = host.authenticate(request.headers()) {
+        return failure::response(error);
+    }
     failure::response(ErasedFailure::new(None, OperationFailure::MethodNotAllowed))
 }
 
