@@ -5,6 +5,61 @@ use super::{
 };
 use crate::layout::ProvenanceLayout;
 use camino::Utf8PathBuf;
+use provenance_macros::rule;
+use std::cell::RefCell;
+use std::collections::BTreeMap;
+
+thread_local! {
+    // Publication lock identity to live repository root, for each running stage body.
+    static STAGE_BODIES: RefCell<BTreeMap<String, Utf8PathBuf>> = const { RefCell::new(BTreeMap::new()) };
+}
+
+/// A stage body tried to enter a live publication section of its repository.
+#[derive(Debug, thiserror::Error)]
+#[error("a staged write cannot read or write the live state of {repository}")]
+pub struct LiveAccessDuringStage {
+    pub repository: Utf8PathBuf,
+}
+
+struct StageBody {
+    key: String,
+    inserted: bool,
+}
+
+impl Drop for StageBody {
+    fn drop(&mut self) {
+        if self.inserted {
+            STAGE_BODIES.with(|bodies| bodies.borrow_mut().remove(&self.key));
+        }
+    }
+}
+
+/// Runs a stage body. While it runs, a live publication section of the same
+/// repository on this thread refuses, so the body cannot read or write the
+/// live state through a captured repository, an open or a guard.
+#[rule("rule_staged_store_lives_only_inside_stage")]
+pub fn with_stage_body<R>(
+    live: &ProvenanceLayout,
+    body: impl FnOnce() -> anyhow::Result<R>,
+) -> anyhow::Result<R> {
+    let key = super::publication_lock_identity(live)?;
+    let inserted = STAGE_BODIES.with(|bodies| {
+        bodies
+            .borrow_mut()
+            .insert(key.clone(), live.root().to_owned())
+            .is_none()
+    });
+    let _body = StageBody { key, inserted };
+    body()
+}
+
+pub(super) fn refuse_during_stage(key: &str) -> anyhow::Result<()> {
+    STAGE_BODIES
+        .with(|bodies| bodies.borrow().get(key).cloned())
+        .map_or(Ok(()), |repository| {
+            Err(LiveAccessDuringStage { repository }.into())
+        })
+}
 
 /// Copies the complete state tree and publishes the prepared result under one lock.
 /// Copy cost is proportional to all state bytes, including existing evidence.

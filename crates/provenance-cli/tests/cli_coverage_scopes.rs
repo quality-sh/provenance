@@ -120,6 +120,25 @@ fn binding_checks_validate_each_scope_against_the_files_under_its_prefix() {
     assert_each_scope_sees_only_its_own_bindings(directory.path(), &["alpha", "beta"]);
 }
 
+/// A full check validates every manifest scope, also when no scope is
+/// named `default`.
+#[test]
+fn a_full_check_passes_on_a_repository_without_a_default_scope() {
+    let directory = tempfile::tempdir().unwrap();
+    bound_scopes(directory.path(), &[("alpha", "a"), ("beta", "b")]);
+
+    provenance()
+        .args([
+            "check",
+            "--repo",
+            directory.path().to_str().unwrap(),
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success();
+}
+
 #[test]
 #[verifies("rule_binding_scope_longest_prefix", examples)]
 fn a_root_scope_does_not_see_the_bindings_of_a_scope_under_it() {

@@ -106,7 +106,7 @@ fn concurrent_source_creates_preserve_all_records() {
     let barrier = std::sync::Arc::new(std::sync::Barrier::new(writer_count));
     let mut handles = Vec::new();
     for index in 0..writer_count {
-        let store = store.clone();
+        let store = crate::test_support::store(&store.layout);
         let scope = scope.clone();
         let barrier = barrier.clone();
         handles.push(std::thread::spawn(move || {
@@ -148,7 +148,7 @@ fn repository_publication_cannot_overwrite_a_concurrent_writer() {
     let (publication_ready_tx, publication_ready_rx) = std::sync::mpsc::channel();
     let (publish_tx, publish_rx) = std::sync::mpsc::channel();
     let publisher = {
-        let store = store.clone();
+        let store = crate::test_support::store(&store.layout);
         let scope = scope.clone();
         std::thread::spawn(move || {
             store
@@ -167,7 +167,7 @@ fn repository_publication_cannot_overwrite_a_concurrent_writer() {
 
     let (writer_done_tx, writer_done_rx) = std::sync::mpsc::channel();
     let writer = {
-        let store = store.clone();
+        let store = crate::test_support::store(&store.layout);
         let scope = scope.clone();
         std::thread::spawn(move || {
             store
@@ -208,7 +208,7 @@ fn repository_publication_excludes_an_entire_multi_shard_write() {
     let (publication_ready_tx, publication_ready_rx) = std::sync::mpsc::channel();
     let (release_tx, release_rx) = std::sync::mpsc::channel();
     let publisher = {
-        let store = store.clone();
+        let store = crate::test_support::store(&store.layout);
         std::thread::spawn(move || {
             store
                 .with_repository_publication(|| {
@@ -223,7 +223,7 @@ fn repository_publication_excludes_an_entire_multi_shard_write() {
 
     let (writer_done_tx, writer_done_rx) = std::sync::mpsc::channel();
     let writer = {
-        let store = store.clone();
+        let store = crate::test_support::store(&store.layout);
         let scope = scope.clone();
         std::thread::spawn(move || {
             store

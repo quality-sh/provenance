@@ -222,11 +222,12 @@ fn target_status_uses_the_selected_record_contract() {
 }
 
 fn resolve_second_discussion(directory: &tempfile::TempDir, second_id: &str) {
-    let store = provenance_store::state_store::StateStore::new(
-        provenance_store::layout::ProvenanceLayout::new(
-            camino::Utf8Path::from_path(directory.path()).unwrap(),
-        ),
-    );
+    let store = provenance_store::repository::Repository::open(
+        camino::Utf8Path::from_path(directory.path()).unwrap(),
+        "default",
+    )
+    .unwrap()
+    .store();
     store
         .write_discussion(provenance_store::review::WriteDiscussion {
             scope_id: provenance_core::ScopeId::new("default").unwrap(),
