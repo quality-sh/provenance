@@ -31,10 +31,12 @@ fn changed_host_epoch_returns_reset_with_current_state() {
     feed.send(json!({"type":"ready", "epoch":feed.epoch, "sequence":0}));
     let follow = feed.follow(repo.path());
     follow.frame();
-    feed.send(json!({"type":"ready", "epoch":"restarted-host", "sequence":0}));
+    // The sequence is contiguous, so only the epoch change can cause this reset.
+    feed.send(json!({"type":"ready", "epoch":"restarted-host", "sequence":1}));
     let reset = follow.frame();
     assert_eq!(reset["type"], "reset");
     assert_eq!(reset["epoch"], "restarted-host");
+    assert_eq!(reset["sequence"], 1);
     assert_eq!(reset["continuity"], "unknown");
     assert!(reset["records"].to_string().contains("req_follow"));
 }

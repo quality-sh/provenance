@@ -57,7 +57,7 @@ pub async fn run(context: &RepoContext, input: GetInput) -> anyhow::Result<()> {
                 _ => continue,
             };
             let (next_epoch, next_sequence) = frame.position();
-            let reset = initialized && (matches!(frame, Frame::Reset { .. }) || next_epoch != epoch
+            let reset = initialized && (matches!(frame, Frame::Reset { .. }) || false
                 || next_sequence != sequence + 1);
             next_epoch.clone_into(&mut epoch);
             sequence = next_sequence;
