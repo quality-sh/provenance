@@ -91,6 +91,15 @@ approves and shows its age to the approver. An unavailable limit blocks approval
 'Limits unavailable, try again'. Example: a limit raised at 09:10 applies by 10:10. Open:
 how old a stale limit may be before it blocks approval."
 
+## Conditional obligations
+
+A conditional Rule states when its obligation applies. Name the mode or configuration
+in the Requirement and Rule. A parent link does not select a private Rule subset.
+
+Example: "In offline mode, the client stores each unsent change until the next connection."
+A report states the tested mode. In online mode, this condition does not apply. In offline
+mode, a lost unsent change is an unmet obligation. Do not report these two states as equal.
+
 ## Good vs. bad
 
 Fictional product, "ExpenseFlow."

@@ -72,7 +72,9 @@ impl Cascade {
             requirement
                 .source_refs
                 .retain(|r| !source_ids.contains(r.source_id.as_str()));
-            clear_id(&mut requirement.refines, &requirement_ids);
+            requirement
+                .refines
+                .retain(|id| !requirement_ids.contains(id));
             remove_ids(&mut requirement.depends_on, &requirement_ids);
             remove_ids(&mut requirement.supersedes, &requirement_ids);
             clear_id(&mut requirement.spawned_by, &resolution_ids);

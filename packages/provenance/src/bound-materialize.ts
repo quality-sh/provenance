@@ -196,7 +196,7 @@ function byKey(left: { key: string }, right: { key: string }): number {
 /** The keys a requirement's relations name in the same spec. */
 function relatedKeys(state: RequirementState): string[] {
   return [
-    ...(state.refines === undefined ? [] : [state.refines]),
+    ...(state.refines ?? []),
     ...(state.dependsOn ?? []),
     ...(state.supersedes ?? []),
   ];

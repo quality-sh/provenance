@@ -11,7 +11,7 @@ use std::path::Path;
 fn requirements() -> String {
     [
     serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"req_root","statement":"The root requirement","status":"active","source_refs":[{"source_id":"source_missing","clause":null}]}).to_string(),
-    serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"req_child","statement":"The child requirement","status":"active","refines":"req_missing"}).to_string(),
+    serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"req_child","statement":"The child requirement","status":"active","refines":["req_missing"]}).to_string(),
     ]
     .join("\n")
 }

@@ -18,7 +18,7 @@ fn new_requirement(id: &str) -> CreateRequirementInput {
         "scope_id": "default", "id": id,
         "statement": "The system stores records.",
         "status": "discovery", "depends_on": [], "supersedes": [],
-        "description": null, "domain_id": null, "refines": null,
+        "description": null, "domain_id": null, "refines": [],
         "spawned_by": null, "origin_thread": null, "origin_message": null
     }))
     .unwrap()

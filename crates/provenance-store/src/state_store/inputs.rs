@@ -38,7 +38,8 @@ pub struct CreateRequirementInput {
     pub description: Option<String>,
     pub status: RequirementStatus,
     pub domain_id: Option<StableId>,
-    pub refines: Option<StableId>,
+    #[serde(default)]
+    pub refines: Vec<StableId>,
     pub depends_on: Vec<StableId>,
     pub supersedes: Vec<StableId>,
     pub spawned_by: Option<StableId>,
