@@ -2265,6 +2265,7 @@ version = "0.2.3"
 dependencies = [
  "provenance-core",
  "provenance-macros",
+ "schemars 1.2.2",
  "serde",
  "serde_json",
  "tempfile",
@@ -2343,6 +2344,7 @@ dependencies = [
  "jsonschema",
  "provenance-core",
  "provenance-macros",
+ "provenance-porcelain",
  "provenance-scanner",
  "provenance-ste100",
  "rustix",

@@ -45,21 +45,6 @@ pub(super) fn permitted_node_types(host: &crate::StatementHost) -> Vec<NodeType>
         })
 }
 
-pub(super) async fn resolve(
-    host: &crate::StatementHost,
-    id: &str,
-) -> Result<provenance_core::protocol::RecordResolution, String> {
-    let response = host
-        .invoke_scoped_typed::<catalog::ResolveRecord>(ResolveRecordQuery {
-            protocol_version: Some(SDK_PROTOCOL_VERSION),
-            id: id.to_owned(),
-            allowed_node_types: permitted_node_types(host),
-        })
-        .await
-        .map_err(|error| error.to_string())?;
-    Ok(response.result.resolution)
-}
-
 impl GetPort for HostGetPort {
     fn resolve<'a>(&'a self, id: &'a str) -> PortFuture<'a, RecordResolution> {
         Box::pin(async move {

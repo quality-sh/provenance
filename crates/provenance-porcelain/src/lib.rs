@@ -1,6 +1,7 @@
 //! Shared human-facing semantics for Provenance interfaces.
 
 pub mod check;
+pub mod action;
 pub mod get;
 pub mod search;
 

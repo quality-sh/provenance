@@ -1,11 +1,13 @@
 //! CLI-owned bindings for shared Porcelain capabilities.
 
-use provenance_porcelain::check::{Category, CheckInput, CheckOutcome};
+use provenance_porcelain::check::{Category, CheckInput};
 use provenance_porcelain::get::{GetInput, GetOutcome};
 use std::net::{Ipv4Addr, SocketAddr};
 
 mod search;
 pub use search::dispatch_search;
+pub use provenance_porcelain::check::render_readable as render_check;
+pub use provenance_porcelain::get::render_readable as render_get_readable;
 
 /// An explicit CLI output format.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -27,33 +29,6 @@ pub fn check_input_from_selectors(graph: bool, statements: bool, bindings: bool)
         categories.push(Category::Bindings);
     }
     CheckInput::new(categories)
-}
-
-/// Render a semantic check result for a terminal reader.
-pub fn render_check(outcome: &CheckOutcome) -> String {
-    outcome
-        .categories
-        .iter()
-        .flat_map(|report| {
-            let heading =
-                format!("{:?}: {:?}", report.category, report.status).to_ascii_lowercase();
-            std::iter::once(heading)
-                .chain(
-                    report
-                        .findings
-                        .iter()
-                        .map(|finding| format!("  - {}", finding.message)),
-                )
-                .chain(
-                    report
-                        .unavailable_reason
-                        .iter()
-                        .map(|reason| format!("  - {reason}")),
-                )
-                .collect::<Vec<_>>()
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 /// Run one fully parsed target-first Porcelain get command.
@@ -96,66 +71,3 @@ fn render_get(outcome: &GetOutcome, format: Option<OutputFormat>) -> serde_json:
     }
 }
 
-/// Render a get outcome and report any stale response metadata.
-pub fn render_get_readable(outcome: &GetOutcome) -> serde_json::Result<String> {
-    let sections = vec![
-        format!(
-            "{} {}",
-            outcome.record.node_type().as_str(),
-            outcome.record.id().as_str()
-        ),
-        format!("view: {:?}", outcome.view()).to_ascii_lowercase(),
-        format!(
-            "record:\n{}",
-            serde_json::to_string_pretty(&provenance_porcelain::get::RecordData(&outcome.record))?
-        ),
-    ];
-    let mut sections = sections;
-    if !outcome.related().is_empty() {
-        sections.push(format!(
-            "related:\n{}",
-            outcome
-                .related()
-                .iter()
-                .map(|record| format!(
-                    "- {} {}: {}",
-                    record.node.node_type().as_str(),
-                    record.node.id().as_str(),
-                    serde_json::to_string(&record.node).expect("record values are valid JSON")
-                ))
-                .collect::<Vec<_>>()
-                .join("\n")
-        ));
-    }
-    if let Some(detail) = outcome.impact() {
-        sections.push(format!(
-            "detail:\n{}",
-            serde_json::to_string_pretty(detail)?
-        ));
-    }
-    if let Some(bounds) = outcome.bounds() {
-        sections.push(format!(
-            "bounds: limit={} max_depth={} has_more={} truncated={} continuation={}",
-            bounds.limit,
-            bounds
-                .max_depth
-                .map_or_else(|| "none".to_owned(), |depth| depth.to_string()),
-            bounds.has_more,
-            bounds.truncated,
-            bounds.continuation.as_deref().unwrap_or("none")
-        ));
-    }
-    Ok(finish_readable(outcome, sections))
-}
-
-fn finish_readable(outcome: &GetOutcome, mut sections: Vec<String>) -> String {
-    for (label, metadata) in [
-        ("record", outcome.record_metadata.as_ref()),
-        ("view", outcome.view_metadata()),
-    ] {
-        if let Some(error) = metadata.and_then(|value| value.freshness_error.as_deref()) {
-            sections.push(format!("warning: {label} freshness: {error}"));
-        }
-    }
-    sections.join("\n\n")
-}

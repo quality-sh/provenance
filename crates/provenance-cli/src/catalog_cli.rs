@@ -3,6 +3,7 @@ use crate::invocation::{grammar, GlobalContext};
 use axum::http::{HeaderMap, HeaderName, HeaderValue, Method};
 use clap::{parser::ValueSource, ArgMatches, Command};
 use provenance_store::operations::catalog::{self, Definition, TargetAction};
+use provenance_porcelain::action::Action;
 use serde_json::{json, Map, Value};
 use std::{
     collections::BTreeMap,
@@ -121,11 +122,11 @@ pub async fn dispatch_target(
     context: GlobalContext,
     format: Option<provenance_cli::porcelain::OutputFormat>,
     target: String,
-    action: provenance_transport::porcelain::Action,
+    action: Action,
     kind: Option<provenance_core::NodeType>,
     matches: ArgMatches,
 ) -> anyhow::Result<()> {
-    if action == provenance_transport::porcelain::Action::Create {
+    if action == Action::Create {
         provenance_core::ensure_record_id_assignable(&target)
             .unwrap_or_else(|error| usage_error(error));
     }
@@ -160,7 +161,7 @@ pub async fn dispatch_target(
     } else {
         println!(
             "{}",
-            provenance_transport::porcelain::render_action_readable(
+            provenance_porcelain::action::render_readable(
                 action, &target, route.kind, &value
             )
         );
