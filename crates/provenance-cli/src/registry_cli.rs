@@ -60,6 +60,7 @@ fn value_parser(flag: &Flag) -> ValueParser {
         FlagValue::RecordKind => ValueParser::new(parse_kind),
         FlagValue::ApiMethod => ValueParser::new(parse_api_method),
         FlagValue::CatalogLimit => ValueParser::new(parse_catalog_limit),
+        FlagValue::Port => clap::value_parser!(u16).into(),
     }
 }
 
@@ -117,6 +118,12 @@ pub fn add_subcommand(root: Command, command: registry::Command) -> Command {
         }
         [group] => root.subcommand(
             Command::new(*group)
+                .about(
+                    registry::GROUP_DESCRIPTIONS
+                        .iter()
+                        .find(|(word, _)| word == group)
+                        .map(|(_, description)| *description),
+                )
                 .subcommand_required(true)
                 .arg_required_else_help(true)
                 .subcommand(leaf),
@@ -174,6 +181,7 @@ pub fn input<T: serde::de::DeserializeOwned>(
             (_, FlagValue::Count | FlagValue::CatalogLimit) => {
                 matches.get_one::<usize>(&id).map(|value| (*value).into())
             }
+            (_, FlagValue::Port) => matches.get_one::<u16>(&id).map(|value| (*value).into()),
             _ => matches
                 .get_raw(&id)
                 .and_then(|mut values| values.next())
