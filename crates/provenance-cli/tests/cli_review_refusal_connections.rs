@@ -87,6 +87,8 @@ fn a_refusal_reaches_a_client_that_sent_part_of_the_body() {
     request.extend(vec![b'x'; 64 * 1024]);
     stream.write_all(&request).unwrap();
 
+    // The client reads late, so the host has closed before the first read.
+    std::thread::sleep(Duration::from_millis(200));
     assert_full_refusal(&read_refusal(&mut stream));
 }
 
