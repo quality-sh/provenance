@@ -19,13 +19,18 @@ pub async fn with_deadline<F: Future>(work: F) -> F::Output {
     REQUEST_DEADLINE.scope(Instant::now() + WAIT, work).await
 }
 
+/// The deadline of the current request, or a fresh one for work outside a request.
+pub fn deadline() -> Instant {
+    REQUEST_DEADLINE
+        .try_with(|deadline| *deadline)
+        .unwrap_or_else(|_| Instant::now() + WAIT)
+}
+
 /// Wait for a slot in arrival order until the request deadline.
 #[rule("rule_host_slot_queue_bound")]
 #[rule("rule_host_slot_refusal_kind")]
 pub async fn acquire(semaphore: Arc<Semaphore>) -> Result<OwnedSemaphorePermit, ErasedFailure> {
-    let deadline = REQUEST_DEADLINE
-        .try_with(|deadline| *deadline)
-        .unwrap_or_else(|_| Instant::now() + WAIT);
+    let deadline = deadline();
     // A closed host is unavailable, even when a request has time left to wait.
     tokio::time::timeout_at(deadline, semaphore.acquire_owned())
         .await

@@ -61,11 +61,10 @@ pub async fn print(
             opened: Some(true),
             message: None,
         },
-        Some(host) => opened_output(
-            launch_link(host, &target)?,
-            plain_link(host, &target),
-            no_open,
-        ),
+        Some(host) => match launch_link(host, &target) {
+            Ok(launch) => opened_output(launch, plain_link(host, &target), no_open),
+            Err(error) => signed_out_output(plain_link(host, &target), &error),
+        },
         None => LinkOutput {
             review_url: None,
             opened: None,
@@ -130,6 +129,16 @@ fn opened_output(launch: url::Url, plain: String, no_open: bool) -> LinkOutput {
             opened: Some(false),
             message: None,
         },
+    }
+}
+
+/// Prints the plain review link when the host cannot sign the page in through this CLI.
+fn signed_out_output(plain: String, error: &anyhow::Error) -> LinkOutput {
+    eprintln!("warning: the review link cannot sign the page in, so open it and sign in: {error:#}");
+    LinkOutput {
+        review_url: Some(plain),
+        opened: Some(false),
+        message: None,
     }
 }
 
@@ -198,7 +207,11 @@ fn launch_link(host: &DiscoveredLocalHost, target: &ReviewTarget) -> anyhow::Res
     Ok(link)
 }
 
-/// Asks the host to show the record in a connected page and waits, without a deadline, for the
+// A connected page acknowledges a shown record at once; a page that holds the link back, for
+// example while a draft is open, must not block the command.
+const CONNECTED_PAGE_WAIT: Duration = Duration::from_secs(5);
+
+/// Asks the host to show the record in a connected page and waits a bounded time for the
 /// page to acknowledge it. Any other outcome uses the browser.
 async fn shown_in_connected_page(host: &DiscoveredLocalHost, target: &ReviewTarget) -> bool {
     let Ok(key) = crate::review::launch::LaunchKey::read(host.instance_nonce()) else {
@@ -214,6 +227,7 @@ async fn shown_in_connected_page(host: &DiscoveredLocalHost, target: &ReviewTarg
     tokio::task::spawn_blocking(move || {
         ureq::AgentBuilder::new()
             .redirects(0)
+            .timeout(CONNECTED_PAGE_WAIT)
             .build()
             .post(url.as_str())
             .set("Content-Type", "application/json")
