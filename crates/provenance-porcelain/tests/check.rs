@@ -1,6 +1,7 @@
 use provenance_macros::verifies;
 use provenance_porcelain::check::{
-    Category, CategoryReport, CheckInput, CheckPort, Finding, PortFuture, Status,
+    BindingContext, BindingPolicy, Category, CategoryContext, CategoryReport, CategoryRun,
+    CheckInput, CheckPort, Finding, PortFuture, Refusal, StatementContext, Status,
 };
 use provenance_porcelain::Porcelain;
 
@@ -20,11 +21,12 @@ struct FixturePort;
 impl CheckPort for FixturePort {
     fn run<'a>(&'a self, category: Category, _: Option<&'a str>) -> PortFuture<'a> {
         Box::pin(async move {
-            Ok(match category {
+            let findings = match category {
                 Category::Graph => vec![Finding::new("dangling requirement reference")],
                 Category::Statements => vec![Finding::new("statement uses an unapproved term")],
                 Category::Bindings => vec![Finding::new("active rule has no verification")],
-            })
+            };
+            Ok(CategoryRun::new(category, findings))
         })
     }
 }
@@ -79,6 +81,7 @@ async fn a_category_that_cannot_run_is_unavailable_not_passed() {
         outcome.categories[0].unavailable_reason.as_deref(),
         Some("source scanner is not installed")
     );
+    assert!(outcome.categories[0].refuses());
 }
 
 #[test]
@@ -111,15 +114,37 @@ fn findings_can_keep_surface_neutral_structured_details() {
 #[test]
 #[verifies("rule_porcelain_check_categories", examples)]
 fn category_reports_keep_computation_context() {
-    let report = CategoryReport::with_context(
+    let report = CategoryReport::from_run(CategoryRun::new(
         Category::Statements,
         Vec::new(),
-        serde_json::json!({"candidate_commit": "abc123", "base_commit": "def456"}),
-    );
+    ).with_context(CategoryContext::Statements(StatementContext {
+        candidate_commit: "abc123".into(),
+        base_commit: Some("def456".into()),
+    })));
 
-    assert_eq!(
-        report.context.as_ref().unwrap()["candidate_commit"],
-        "abc123"
-    );
+    let Some(CategoryContext::Statements(context)) = report.context.as_ref() else {
+        panic!("statement context")
+    };
+    assert_eq!(context.candidate_commit, "abc123");
     assert_eq!(report.status, Status::Passed);
+}
+
+#[test]
+fn category_run_keeps_typed_binding_policy_and_refusal_together() {
+    let run = CategoryRun::new(
+        Category::Bindings,
+        vec![Finding::new("active rule has no verification")],
+    )
+    .with_context(CategoryContext::Bindings(BindingContext {
+        policy: BindingPolicy::Error,
+    }))
+    .with_refusal(Refusal::Findings);
+
+    let report = CategoryReport::from_run(run);
+
+    assert!(report.refuses());
+    let Some(CategoryContext::Bindings(context)) = report.context else {
+        panic!("binding context")
+    };
+    assert_eq!(context.policy, BindingPolicy::Error);
 }
