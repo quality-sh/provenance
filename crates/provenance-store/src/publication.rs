@@ -134,3 +134,5 @@ impl crate::state_store::StateStore {
 mod containment_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(all(test, any(unix, windows)))]
+mod source_edit_recovery_tests;
