@@ -144,6 +144,7 @@ async fn materialize_state_caches_fog_resolution_method_and_claim_state() {
         .unwrap();
     store
         .create_question(CreateQuestionInput {
+            depends_on: Vec::new(),
             scope_id: scope.clone(),
             id: sid("question_threshold"),
             topic_id: sid("topic_overtime"),

@@ -33,6 +33,7 @@ fn add_topic_question(
         .unwrap();
     store
         .create_question(CreateQuestionInput {
+            depends_on: Vec::new(),
             scope_id: scope.clone(),
             id: sid(question),
             topic_id: sid(topic),
@@ -66,6 +67,7 @@ fn add_contradiction(
         .unwrap();
     store
         .create_question(CreateQuestionInput {
+            depends_on: Vec::new(),
             scope_id: scope.clone(),
             id: sid("question_contradiction"),
             topic_id: sid("topic_contradiction"),

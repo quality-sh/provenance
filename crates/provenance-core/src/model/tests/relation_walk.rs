@@ -214,6 +214,7 @@ fn every_topic_reference_key_is_declared_or_allowed() {
 fn every_question_reference_key_is_declared_or_allowed() {
     assert_walk(
         &Question {
+            depends_on: Vec::new(),
             schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: ScopeId::new("default").unwrap(),
             id: sid("question_threshold"),

@@ -40,6 +40,7 @@ impl GetPort for FixturePort {
         *self.request.lock().unwrap() = Some(request.clone());
         Box::pin(async move {
             Ok(Traversal {
+                shaping: None,
                 records: self.traversed.clone(),
                 bounds: provenance_porcelain::get::Bounds {
                     limit: request.limit,
