@@ -172,6 +172,18 @@ mod tests {
         );
         assert_eq!(layout.wiki_dir(), root.join(".provenance/wiki"));
         assert_eq!(
+            layout.source_edit_marker_path(),
+            root.join(".provenance/cache/source-edit-publication.json")
+        );
+        assert_eq!(
+            layout.source_edit_transactions_dir(),
+            root.join(".provenance/cache/source-edit-transactions")
+        );
+        assert_ne!(
+            layout.source_edit_transactions_dir(),
+            layout.import_transactions_dir()
+        );
+        assert_eq!(
             layout
                 .state_shard_lock_path(&layout.scopes_dir().join("default/sources/source.jsonl"))
                 .unwrap(),
