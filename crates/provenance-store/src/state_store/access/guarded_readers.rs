@@ -1,9 +1,38 @@
 use super::GuardedStore;
 use provenance_core::{
-    AssertionRecord, Boundary, Contribution, DispositionRecord, Domain, ImplementationBinding,
-    Manifest, Message, ProposalCard, Question, Requirement, RequirementReview, Resolution, Rule,
-    ScopeId, Source, SynthesisPacket, Thread, Topic, VerificationBinding,
+    ImplementationBinding, Manifest, ProposalCard, Requirement, ScopeId, VerificationBinding,
 };
+
+macro_rules! guarded_reader {
+    ($record:ty, list_requirements) => {};
+    ($record:ty, validated_journal_entries) => {
+        pub(crate) fn validated_journal_entries(
+            &self,
+            scope: &ScopeId,
+        ) -> anyhow::Result<Vec<$record>> {
+            self.store.validated_journal_entries(scope)
+        }
+    };
+    ($record:ty, $reader:ident) => {
+        pub fn $reader(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
+            self.store.$reader(scope)
+        }
+    };
+}
+
+macro_rules! define_guarded_family_readers {
+    (
+        export { $($export_variant:ident: $export_type:ty, $export_field:ident, $export_path:ident, $export_suffix:literal, $export_table:literal, [$($export_node:tt)*], $export_reader:ident, [$($export_closed:tt)*], $export_id:ident, [$($export_loader:tt)*], [$($export_catalog:tt)*];)* }
+        canonical { $($canonical_variant:ident: $canonical_type:ty, $canonical_field:ident, $canonical_path:ident, $canonical_suffix:literal, $canonical_table:literal, [$($canonical_node:tt)*], $canonical_reader:ident, [$($canonical_closed:tt)*], $canonical_id:ident, [$($canonical_loader:tt)*], [$($canonical_catalog:tt)*];)* }
+        bindings { $($binding_variant:ident: $binding_type:ty, $binding_field:ident, $binding_path:ident, $binding_suffix:literal, $binding_table:literal, [$($binding_node:tt)*], $binding_reader:ident, [$($binding_closed:tt)*], $binding_id:ident, [$($binding_loader:tt)*], [$($binding_catalog:tt)*];)* }
+        internal { $($internal_variant:ident: $internal_type:ty, $internal_field:ident, $internal_path:ident, $internal_suffix:literal, $internal_table:literal, [$($internal_node:tt)*], $internal_reader:ident, [$($internal_closed:tt)*], $internal_id:ident, [$($internal_loader:tt)*], [$($internal_catalog:tt)*];)* }
+    ) => {
+        $(guarded_reader!($export_type, $export_reader);)*
+        $(guarded_reader!($canonical_type, $canonical_reader);)*
+        $(guarded_reader!($binding_type, $binding_reader);)*
+        $(guarded_reader!($internal_type, $internal_reader);)*
+    };
+}
 
 impl GuardedStore<'_> {
     pub fn manifest(&self) -> anyhow::Result<Manifest> {
@@ -14,64 +43,17 @@ impl GuardedStore<'_> {
         self.store.list_scope_directories()
     }
 
-    pub fn list_sources(&self, scope: &ScopeId) -> anyhow::Result<Vec<Source>> {
-        self.store.list_sources(scope)
-    }
-
     pub fn list_requirements(&self, scope: &ScopeId) -> anyhow::Result<Vec<Requirement>> {
         self.store.list_requirements(scope)
     }
 
-    pub fn list_requirement_reviews(
-        &self,
-        scope: &ScopeId,
-    ) -> anyhow::Result<Vec<RequirementReview>> {
-        self.store.list_requirement_reviews(scope)
-    }
-
-    pub fn list_domains(&self, scope: &ScopeId) -> anyhow::Result<Vec<Domain>> {
-        self.store.list_domains(scope)
-    }
-
-    pub fn list_boundaries(&self, scope: &ScopeId) -> anyhow::Result<Vec<Boundary>> {
-        self.store.list_boundaries(scope)
-    }
-
-    pub fn list_topics(&self, scope: &ScopeId) -> anyhow::Result<Vec<Topic>> {
-        self.store.list_topics(scope)
-    }
-
-    pub fn list_questions(&self, scope: &ScopeId) -> anyhow::Result<Vec<Question>> {
-        self.store.list_questions(scope)
-    }
-
-    pub fn list_resolutions(&self, scope: &ScopeId) -> anyhow::Result<Vec<Resolution>> {
-        self.store.list_resolutions(scope)
-    }
-
-    pub fn list_rules(&self, scope: &ScopeId) -> anyhow::Result<Vec<Rule>> {
-        self.store.list_rules(scope)
-    }
-
-    pub fn list_verification_bindings(
-        &self,
-        scope: &ScopeId,
-    ) -> anyhow::Result<Vec<VerificationBinding>> {
-        self.store.list_verification_bindings(scope)
-    }
+    crate::cache::record_families!(define_guarded_family_readers);
 
     pub fn active_verification_bindings(
         &self,
         scope: &ScopeId,
     ) -> anyhow::Result<Vec<VerificationBinding>> {
         self.store.active_verification_bindings(scope)
-    }
-
-    pub fn list_implementation_bindings(
-        &self,
-        scope: &ScopeId,
-    ) -> anyhow::Result<Vec<ImplementationBinding>> {
-        self.store.list_implementation_bindings(scope)
     }
 
     pub fn active_implementation_bindings(
@@ -81,36 +63,8 @@ impl GuardedStore<'_> {
         self.store.active_implementation_bindings(scope)
     }
 
-    pub fn list_threads(&self, scope: &ScopeId) -> anyhow::Result<Vec<Thread>> {
-        self.store.list_threads(scope)
-    }
-
-    pub fn list_messages(&self, scope: &ScopeId) -> anyhow::Result<Vec<Message>> {
-        self.store.list_messages(scope)
-    }
-
-    pub fn list_contributions(&self, scope: &ScopeId) -> anyhow::Result<Vec<Contribution>> {
-        self.store.list_contributions(scope)
-    }
-
-    pub fn list_synthesis_packets(&self, scope: &ScopeId) -> anyhow::Result<Vec<SynthesisPacket>> {
-        self.store.list_synthesis_packets(scope)
-    }
-
-    pub fn list_proposal_cards(&self, scope: &ScopeId) -> anyhow::Result<Vec<ProposalCard>> {
-        self.store.list_proposal_cards(scope)
-    }
-
     pub fn list_proposal_definitions(&self, scope: &ScopeId) -> anyhow::Result<Vec<ProposalCard>> {
         self.store.list_proposal_definitions(scope)
-    }
-
-    pub fn list_dispositions(&self, scope: &ScopeId) -> anyhow::Result<Vec<DispositionRecord>> {
-        self.store.list_dispositions(scope)
-    }
-
-    pub fn list_assertion_records(&self, scope: &ScopeId) -> anyhow::Result<Vec<AssertionRecord>> {
-        self.store.list_assertion_records(scope)
     }
 
     pub fn list_proposal_cards_with_actor_ids(
@@ -137,14 +91,5 @@ impl GuardedStore<'_> {
 
     pub fn validate_graph_scope(&self, scope: &ScopeId) -> anyhow::Result<()> {
         self.store.validate_graph_scope(scope)
-    }
-}
-
-impl GuardedStore<'_> {
-    pub(crate) fn validated_journal_entries(
-        &self,
-        scope: &ScopeId,
-    ) -> anyhow::Result<Vec<provenance_core::review::JournalEntry>> {
-        self.store.validated_journal_entries(scope)
     }
 }
