@@ -4,7 +4,9 @@ mod support {
     pub mod records;
 }
 
-use provenance_porcelain::check::{Category, CheckPort, PortFuture};
+use provenance_porcelain::check::{
+    BindingContext, BindingPolicy, Category, CategoryRun, CheckPort, PortFuture, Refusal,
+};
 use provenance_transport::{
     fixture::{FixtureAccess, Target},
     StatementHost,
@@ -14,11 +16,30 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 use support::records::Repository;
 
-struct UnusedCheckPort;
+struct FixtureCheckPort;
 
-impl CheckPort for UnusedCheckPort {
-    fn run<'a>(&'a self, _: Category, _: Option<&'a str>) -> PortFuture<'a> {
-        Box::pin(async { Err("unused test port".to_owned()) })
+impl CheckPort for FixtureCheckPort {
+    fn run<'a>(&'a self, category: Category, _: Option<&'a str>) -> PortFuture<'a> {
+        Box::pin(async move {
+            Ok(match category {
+                Category::Graph => CategoryRun::Graph {
+                    findings: Vec::new(),
+                    refusal: Refusal::None,
+                },
+                Category::Statements => CategoryRun::Statements {
+                    findings: Vec::new(),
+                    context: None,
+                    refusal: Refusal::None,
+                },
+                Category::Bindings => CategoryRun::Bindings {
+                    findings: Vec::new(),
+                    context: BindingContext {
+                        policy: BindingPolicy::Warning,
+                    },
+                    refusal: Refusal::None,
+                },
+            })
+        })
     }
 }
 
@@ -50,6 +71,20 @@ fn assert_error_envelope(name: &str, result: &rmcp::model::CallToolResult) {
     assert!(envelope["meta"].is_object(), "{name}: {envelope:?}");
 }
 
+fn assert_matches_output_schema(
+    family: &str,
+    tool: &rmcp::model::Tool,
+    result: &rmcp::model::CallToolResult,
+) {
+    let schema = json!(tool.output_schema.as_ref().unwrap());
+    let validator = jsonschema::JSONSchema::compile(&schema).unwrap();
+    let structured = result.structured_content.as_ref().unwrap();
+    assert!(
+        validator.is_valid(structured),
+        "{family}: {structured:?} does not match {schema:?}"
+    );
+}
+
 #[tokio::test]
 async fn every_mcp_tool_family_uses_the_error_envelope() {
     let repository = Repository::new("The shared graph is readable.");
@@ -66,10 +101,11 @@ async fn every_mcp_tool_family_uses_the_error_envelope() {
     .unwrap()
     .allow_writes();
     let host =
-        StatementHost::with_fixture_access(access).with_check_port(Arc::new(UnusedCheckPort));
+        StatementHost::with_fixture_access(access).with_check_port(Arc::new(FixtureCheckPort));
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
     let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
+    let tools = client.list_all_tools().await.unwrap();
 
     for (family, tool, arguments) in [
         ("catalog", "get-source", json!({})),
@@ -80,7 +116,48 @@ async fn every_mcp_tool_family_uses_the_error_envelope() {
         ("discussion", "discussion", json!({})),
         ("check", "check", json!({"unknown":true})),
     ] {
-        assert_error_envelope(family, &call(&client, tool, arguments).await);
+        let result = call(&client, tool, arguments).await;
+        assert_error_envelope(family, &result);
+        let declaration = tools
+            .iter()
+            .find(|candidate| candidate.name == tool)
+            .unwrap();
+        assert_matches_output_schema(family, declaration, &result);
+    }
+
+    for (family, tool, arguments) in [
+        ("catalog", "get-source", json!({"id":"source_shared"})),
+        ("get", "get", json!({"target":"req_shared"})),
+        (
+            "search",
+            "search",
+            json!({"text":"no-record-has-this-text"}),
+        ),
+        ("api", "api", json!({})),
+        (
+            "authoring",
+            "create",
+            json!({
+                "target":"source_schema_success",
+                "type":"source",
+                "data":{
+                    "name":"Schema success",
+                    "source_type":"policy",
+                    "url":"https://example.test/schema-success",
+                    "supersedes":[]
+                }
+            }),
+        ),
+        ("discussion", "discussions", json!({})),
+        ("check", "check", json!({"categories":["graph"]})),
+    ] {
+        let result = call(&client, tool, arguments).await;
+        assert_ne!(result.is_error, Some(true), "{family}: {result:?}");
+        let declaration = tools
+            .iter()
+            .find(|candidate| candidate.name == tool)
+            .unwrap();
+        assert_matches_output_schema(family, declaration, &result);
     }
 
     client.cancel().await.unwrap();
