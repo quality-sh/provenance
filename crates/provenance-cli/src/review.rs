@@ -96,7 +96,15 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         access: access.clone(),
         value: config,
     };
+    let page_events = events.clone();
     let router = host
+        .with_page_writes(
+            provenance_store::layout::ProvenanceLayout::new(
+                camino::Utf8PathBuf::from_path_buf(options.repo.clone())
+                    .map_err(|_| anyhow::anyhow!("repository path is not UTF-8"))?,
+            ),
+            Arc::new(move |changes| page_events.page_changed(changes)),
+        )
         .router()
         .route(
             IDENTITY_ROUTE,
@@ -313,7 +321,12 @@ async fn protect_origin(
         Ok(()) => {
             // A cross-site entry navigation serves only assets and cannot use a cookie.
             if access.check_origin(request.headers()).is_ok() {
-                codes.authenticate_cookie(request.headers_mut());
+                let page = codes.authenticate_cookie(request.headers_mut());
+                if page && matches!(*request.method(), Method::POST | Method::PATCH) {
+                    request
+                        .extensions_mut()
+                        .insert(provenance_transport::ReviewPageWrite);
+                }
             }
             next.run(request).await
         }

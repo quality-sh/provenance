@@ -13,6 +13,11 @@ pub(in crate::review) enum Frame {
         sequence: u64,
         scopes: Vec<ScopeChanges>,
     },
+    Reviewed {
+        epoch: String,
+        sequence: u64,
+        scopes: Vec<ScopeChanges>,
+    },
     Reset {
         epoch: String,
         sequence: u64,

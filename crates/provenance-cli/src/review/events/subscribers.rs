@@ -77,6 +77,19 @@ impl Subscribers {
         }
     }
 
+    pub fn page_changed(&self, mut changes: ReviewChanges) {
+        let mut state = self.inner.lock().unwrap();
+        changes.scopes.retain(|scope| scope.scope == state.scope);
+        if !changes.scopes.is_empty() {
+            state.sequence += 1;
+            let _ = state.sender.send(Some(Frame::Reviewed {
+                epoch: state.epoch.clone(),
+                sequence: state.sequence,
+                scopes: changes.scopes,
+            }));
+        }
+    }
+
     pub fn reset(&self, reason: &str) -> Frame {
         Self::reset_locked(&mut self.inner.lock().unwrap(), reason)
     }

@@ -88,6 +88,10 @@ impl ReviewEvents {
             .with_state(self.state.clone())
     }
 
+    pub fn page_changed(&self, changes: provenance_store::review_changes::ReviewChanges) {
+        self.state.subscribers.page_changed(changes);
+    }
+
     pub fn stop(&self) {
         self.state.subscribers.stop();
     }
