@@ -39,10 +39,10 @@ pub struct SkillSummary {
     pub description: String,
 }
 
-/// What an install run did to one file. These five outcomes are the whole
-/// vocabulary of an install report; the status of the run is the strongest of
-/// them.
-/// The serialised names are the strings the JSON report has always carried,
+/// What an install run did to one file.
+///
+/// These five outcomes are the whole vocabulary of an install report; the status
+/// of the run is the strongest of them. The serialised names are the strings the JSON report has always carried,
 /// so the wire format does not depend on the Rust spelling.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize)]
 #[serde(rename_all = "lowercase")]
