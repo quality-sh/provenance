@@ -157,6 +157,8 @@ pub struct DecideRecordReviewRequest {
     pub proposal_id: StableId,
     pub decision: DispositionDecision,
     pub rationale: Option<String>,
+    /// An approval requires a prior assertion. A human can instead name an
+    /// existing canonical artifact.
     pub canonical_artifact: Option<CanonicalArtifact>,
     pub feedback: Option<review::ReviewFeedback>,
     pub declared_by: Option<String>,
