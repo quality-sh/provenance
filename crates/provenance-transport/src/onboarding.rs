@@ -1,6 +1,6 @@
-use provenance_porcelain::init::{InvocationChannel, PackageManager};
 use anyhow::Context;
 use provenance_macros::rule;
+use provenance_porcelain::init::{InvocationChannel, PackageManager};
 use pulldown_cmark::{Event, HeadingLevel, Parser, Tag};
 
 const HEADING: &str = "## Provenance";
