@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use predicates::prelude::PredicateBooleanExt as _;
 
 fn provenance() -> Command {
     Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
@@ -100,4 +101,14 @@ fn explicit_get_reads_a_record_whose_id_is_get() {
     );
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(value["record"]["id"], "get");
+}
+
+#[test]
+fn invalid_explicit_get_options_do_not_fall_back_to_the_catalog() {
+    provenance()
+        .args(["sources", "get", "--unknown-option", "value"])
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("unsupported read options"))
+        .stderr(predicates::str::contains("catalog does not declare").not());
 }
