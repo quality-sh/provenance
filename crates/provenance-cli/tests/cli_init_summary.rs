@@ -62,28 +62,25 @@ fn init_prints_a_summary_that_separates_new_from_changed_files() {
         "Initialized Provenance for scope \"default\" in {}\n",
         repo.display()
     )));
-    assert!(stdout.contains("Never lose the why behind your decisions.\n"));
+    assert!(stdout.contains("Provenance records requirements, decisions, and the rules that connect them to code.\n"));
     assert!(!stdout.contains("\nChanged\n"));
     let new_section = stdout
         .split_once("\nNew\n")
         .expect("a New section")
         .1
-        .split_once("\nNext steps\n")
-        .expect("next steps follow the inventory")
+        .split_once("\nHave your agent run provenance prime to get acclimated.\n")
+        .expect("the agent handoff follows the inventory")
         .0;
     assert!(new_section.contains("  .provenance/state (manifest for scope \"default\")\n"));
     assert!(new_section.contains("  .agents/skills (added 4 skills)\n"));
     assert!(new_section.contains("  .claude/skills (added 4 links)\n"));
     assert!(new_section.contains("  AGENTS.md (added the Provenance section)\n"));
     assert!(new_section.contains("  .gitignore (added one line)\n"));
-    assert!(stdout.contains("  1. provenance prime --quiet\n"));
-    assert!(stdout.contains("  2. provenance check --quiet\n"));
-    assert!(stdout
-        .contains("  3. provenance coverage scan --path . --scope default --validate-rules\n"));
-    assert!(stdout.contains("Docs: https://github.com/quality-sh/provenance/tree/main/docs\n"));
-    assert!(
-        stdout.contains("Dictionary: Imported the Issue 9 dictionary from the official asset.\n")
-    );
+    assert!(!stdout.contains("Next steps"));
+    assert!(!stdout.contains("Dictionary:"));
+    assert!(!stdout.contains("official asset"));
+    assert!(stdout.ends_with("Have your agent run provenance prime to get acclimated.\n"));
+    assert!(repo.join(".provenance/state/dictionary.json").exists());
 }
 
 #[test]
@@ -112,8 +109,8 @@ fn init_on_an_existing_repository_reports_only_the_changed_files() {
         .split_once("\nChanged\n")
         .expect("a Changed section")
         .1
-        .split_once("\n\nNext steps\n")
-        .expect("next steps follow the inventory");
+        .split_once("\n\nHave your agent run provenance prime to get acclimated.\n")
+        .expect("the handoff follows the inventory");
     assert_eq!(
         changed_section,
         concat!(
@@ -172,7 +169,7 @@ fn a_reinit_that_changes_nothing_prints_one_line() {
     assert_eq!(
         stdout,
         format!(
-            "Provenance is already set up for scope \"default\" in {}. No change.\n",
+            "Provenance is already set up for scope \"default\" in {}. No change.\n\nProvenance records requirements, decisions, and the rules that connect them to code.\n\nHave your agent run provenance prime to get acclimated.\n",
             repo.display()
         )
     );
@@ -196,4 +193,58 @@ fn quiet_suppresses_the_whole_summary_and_the_already_line() {
         .stdout
         .clone();
     assert!(stdout.is_empty(), "re-init printed {stdout:?}");
+}
+
+#[test]
+fn failed_dictionary_acquisition_keeps_init_successful_and_warns_even_when_quiet() {
+    let temporary = tempfile::tempdir().unwrap();
+    let repo = temporary.path().join("repo");
+    let asset_dir = temporary.path().join("assets");
+    let index_dir = temporary.path().join("indexes");
+    let output = Command::cargo_bin("provenance")
+        .unwrap()
+        .args(["init", "--path", repo.to_str().unwrap(), "--scope", "default", "--quiet"])
+        .env("PROVENANCE_STE100_ASSET_DIR", &asset_dir)
+        .env("PROVENANCE_STE100_INDEX_DIR", &index_dir)
+        .env("PROVENANCE_TEST_STE100_ASSET_URL", "http://127.0.0.1:9/unavailable")
+        .output()
+        .unwrap();
+
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(output.stdout.is_empty());
+    let warning = String::from_utf8(output.stderr).unwrap();
+    assert!(warning.contains("Warning: the official Issue 9 asset is unavailable"));
+    assert!(warning.contains("provenance dictionary import --pdf <path>"));
+    assert!(repo.join(".provenance/state/manifest.json").exists());
+    assert!(!repo.join(".provenance/state/dictionary.json").exists());
+}
+
+#[test]
+fn adding_a_dictionary_reference_on_reinit_is_reported_as_a_change() {
+    let temporary = tempfile::tempdir().unwrap();
+    let repo = temporary.path().join("repo");
+    let asset_dir = temporary.path().join("assets");
+    let index_dir = temporary.path().join("indexes");
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .args(["init", "--path", repo.to_str().unwrap(), "--scope", "default"])
+        .env("PROVENANCE_STE100_ASSET_DIR", &asset_dir)
+        .env("PROVENANCE_STE100_INDEX_DIR", &index_dir)
+        .env("PROVENANCE_TEST_STE100_ASSET_URL", "http://127.0.0.1:9/unavailable")
+        .assert()
+        .success();
+    let pdf = temporary.path().join("issue-9.pdf");
+    std::fs::write(&pdf, dictionary_support::dictionary_pdf()).unwrap();
+
+    let stdout = Command::cargo_bin("provenance")
+        .unwrap()
+        .args(["init", "--path", repo.to_str().unwrap(), "--ste-pdf", pdf.to_str().unwrap()])
+        .env("PROVENANCE_STE100_INDEX_DIR", &index_dir)
+        .output()
+        .unwrap();
+    assert!(stdout.status.success());
+    let stdout = String::from_utf8(stdout.stdout).unwrap();
+    assert!(stdout.contains("  .provenance/state/dictionary.json (added the dictionary reference)\n"));
+    assert!(!stdout.contains("No change."));
+    assert!(stdout.ends_with("Have your agent run provenance prime to get acclimated.\n"));
 }
