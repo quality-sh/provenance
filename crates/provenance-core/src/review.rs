@@ -5,10 +5,7 @@ mod review_serde;
 
 pub const REVIEW_SCHEMA_VERSION: SchemaVersion = SchemaVersion(3);
 
-use crate::{
-    Boundary, Domain, NodeType, Question, Requirement, Resolution, Rule, ScopeId, Source, StableId,
-    Topic,
-};
+use crate::{NodeType, ScopeId, StableId};
 use serde::{Deserialize, Serialize};
 
 const fn requirement_kind() -> NodeType {
@@ -82,85 +79,73 @@ pub struct RecordSnapshot {
     pub record: ReviewRecord,
 }
 
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone)]
-pub enum ReviewRecord {
-    Source(Source),
-    Requirement(Requirement),
-    Resolution(Resolution),
-    Rule(Rule),
-    Domain(Domain),
-    Boundary(Boundary),
-    Topic(Topic),
-    Question(Question),
-}
-
-impl ReviewRecord {
-    pub const fn kind(&self) -> NodeType {
-        match self {
-            Self::Source(_) => NodeType::Source,
-            Self::Requirement(_) => NodeType::Requirement,
-            Self::Resolution(_) => NodeType::Resolution,
-            Self::Rule(_) => NodeType::Rule,
-            Self::Domain(_) => NodeType::Domain,
-            Self::Boundary(_) => NodeType::Boundary,
-            Self::Topic(_) => NodeType::Topic,
-            Self::Question(_) => NodeType::Question,
-        }
-    }
-
-    pub const fn scope_id(&self) -> &ScopeId {
-        match self {
-            Self::Source(record) => &record.scope_id,
-            Self::Requirement(record) => &record.scope_id,
-            Self::Resolution(record) => &record.scope_id,
-            Self::Rule(record) => &record.scope_id,
-            Self::Domain(record) => &record.scope_id,
-            Self::Boundary(record) => &record.scope_id,
-            Self::Topic(record) => &record.scope_id,
-            Self::Question(record) => &record.scope_id,
-        }
-    }
-
-    pub const fn id(&self) -> &StableId {
-        match self {
-            Self::Source(record) => &record.id,
-            Self::Requirement(record) => &record.id,
-            Self::Resolution(record) => &record.id,
-            Self::Rule(record) => &record.id,
-            Self::Domain(record) => &record.id,
-            Self::Boundary(record) => &record.id,
-            Self::Topic(record) => &record.id,
-            Self::Question(record) => &record.id,
-        }
-    }
-
-    pub const fn as_requirement(&self) -> Option<&Requirement> {
-        match self {
-            Self::Requirement(record) => Some(record),
-            _ => None,
-        }
-    }
-}
-
-macro_rules! review_record_from {
-    ($type:ty, $variant:ident) => {
-        impl From<$type> for ReviewRecord {
-            fn from(record: $type) -> Self {
-                Self::$variant(record)
-            }
+/// The closed list of record kinds that native review evidence supports.
+///
+/// To add a kind, define its record type and add one entry here. This list
+/// generates the review enum, record dispatch, serialization, and closed
+/// deserialization.
+macro_rules! review_record_kinds {
+    ($consumer:path) => {
+        $consumer! {
+            Source(crate::Source, Source),
+            Requirement(crate::Requirement, Requirement),
+            Resolution(crate::Resolution, Resolution),
+            Rule(crate::Rule, Rule),
+            Domain(crate::Domain, Domain),
+            Boundary(crate::Boundary, Boundary),
+            Topic(crate::Topic, Topic),
+            Question(crate::Question, Question),
         }
     };
 }
+pub(crate) use review_record_kinds;
 
-review_record_from!(Source, Source);
-review_record_from!(Requirement, Requirement);
-review_record_from!(Resolution, Resolution);
-review_record_from!(Rule, Rule);
-review_record_from!(Domain, Domain);
-review_record_from!(Boundary, Boundary);
-review_record_from!(Topic, Topic);
-review_record_from!(Question, Question);
+macro_rules! define_review_record {
+    ($( $variant:ident($record:ty, $kind:ident), )*) => {
+        #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+        #[derive(Debug, Clone)]
+        pub enum ReviewRecord {
+            $( $variant($record), )*
+        }
+
+        impl ReviewRecord {
+            pub const fn kind(&self) -> NodeType {
+                match self {
+                    $( Self::$variant(_) => NodeType::$kind, )*
+                }
+            }
+
+            pub const fn scope_id(&self) -> &ScopeId {
+                match self {
+                    $( Self::$variant(record) => &record.scope_id, )*
+                }
+            }
+
+            pub const fn id(&self) -> &StableId {
+                match self {
+                    $( Self::$variant(record) => &record.id, )*
+                }
+            }
+
+            pub const fn as_requirement(&self) -> Option<&crate::Requirement> {
+                match self {
+                    Self::Requirement(record) => Some(record),
+                    _ => None,
+                }
+            }
+        }
+
+        $(
+            impl From<$record> for ReviewRecord {
+                fn from(record: $record) -> Self {
+                    Self::$variant(record)
+                }
+            }
+        )*
+    };
+}
+
+review_record_kinds!(define_review_record);
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
