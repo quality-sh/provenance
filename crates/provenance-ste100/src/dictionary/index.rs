@@ -299,4 +299,18 @@ mod tests {
             "unexpected error: {error:?}"
         );
     }
+
+    #[test]
+    #[verifies("rule_ste_dictionary_structure_validation", examples)]
+    fn a_source_match_does_not_accept_an_incomplete_index() {
+        let directory = scratch_directory();
+        let import = fixture_import();
+        store_dictionary_index(&import, &directory).expect("store the index");
+
+        let error = super::load_dictionary_index_for_source(&directory, b"synthetic source bytes")
+            .expect_err("an incomplete index must not load for a new project");
+
+        assert!(matches!(error, DictionaryIndexError::InvalidStructure { .. }));
+        std::fs::remove_dir_all(&directory).expect("remove the scratch directory");
+    }
 }

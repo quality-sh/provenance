@@ -1,7 +1,8 @@
 use pdf_oxide::writer::PdfWriter;
 use provenance_macros::verifies;
 use provenance_ste100::{
-    import_dictionary, DictionaryImportError, DictionaryStatus, PartOfSpeech, StandardIssue,
+    import_dictionary, load_dictionary_index_for_source, store_dictionary_index,
+    DictionaryImportError, DictionaryIndexError, DictionaryStatus, PartOfSpeech, StandardIssue,
 };
 
 const STATED_APPROVED_WORDS: usize = 875;
@@ -122,6 +123,55 @@ fn imports_a_complete_positioned_dictionary_deterministically() {
     );
     assert_eq!(prefix_entry.ste_example, "");
     assert_eq!(prefix_entry.non_ste_example, None);
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_import_reuse", examples)]
+fn a_verified_index_loads_for_the_same_source_bytes() {
+    let pdf = dictionary_pdf(APPROVED_TABLE_ROWS, UNAPPROVED_TABLE_ROWS, 9, true);
+    let import = import_dictionary(&pdf).expect("import the fixture");
+    let directory = scratch_directory("matching-source");
+    store_dictionary_index(&import, &directory).expect("store the index");
+
+    let loaded = load_dictionary_index_for_source(&directory, &pdf)
+        .expect("load the matching index");
+
+    assert_eq!(loaded, import);
+    std::fs::remove_dir_all(directory).expect("remove the scratch directory");
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_import_reuse", examples)]
+fn changed_source_or_extractor_version_cannot_reuse_an_index() {
+    let pdf = dictionary_pdf(APPROVED_TABLE_ROWS, UNAPPROVED_TABLE_ROWS, 9, true);
+    let mut old_import = import_dictionary(&pdf).expect("import the fixture");
+    let directory = scratch_directory("changed-source");
+    old_import.identity.extractor_version.push_str("-old");
+    store_dictionary_index(&old_import, &directory).expect("store the old index");
+
+    assert!(matches!(
+        load_dictionary_index_for_source(&directory, &pdf),
+        Err(DictionaryIndexError::NotFound { .. })
+    ));
+
+    old_import.identity.extractor_version.truncate(
+        old_import.identity.extractor_version.len() - "-old".len(),
+    );
+    store_dictionary_index(&old_import, &directory).expect("store the current index");
+    let mut changed_pdf = pdf;
+    changed_pdf.push(b' ');
+    assert!(matches!(
+        load_dictionary_index_for_source(&directory, &changed_pdf),
+        Err(DictionaryIndexError::NotFound { .. })
+    ));
+    std::fs::remove_dir_all(directory).expect("remove the scratch directory");
+}
+
+fn scratch_directory(name: &str) -> std::path::PathBuf {
+    std::env::temp_dir().join(format!(
+        "provenance-ste100-source-index-{name}-{}",
+        std::process::id()
+    ))
 }
 
 #[test]
