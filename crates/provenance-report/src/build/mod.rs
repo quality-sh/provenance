@@ -67,10 +67,9 @@ pub fn build_envelope(input: &BuildInput<'_>) -> anyhow::Result<ReportEnvelope> 
     let scans = provenance_scanner::scan_path_with_content(input.scan_path)?;
     let files_scanned = scans.len() as u64;
     let scans: Vec<_> = scans.into_iter().map(|file| file.scan).collect();
-    let scan_covers = scan_covers_repository(input.repo, input.scan_path);
+    let scan_covers = provenance_scanner::scan_covers_repository(input.repo, input.scan_path);
     let (completeness, incompleteness_reason) =
         scan_completeness(input.repo, input.scan_path, scan_covers, &head)?;
-    let complete_scan = completeness == Completeness::Complete;
 
     let (baseline, baseline_reason, base_snapshot, head_snapshot) =
         read_snapshots(input.repo, &base, &head, &scope)?;
@@ -91,7 +90,7 @@ pub fn build_envelope(input: &BuildInput<'_>) -> anyhow::Result<ReportEnvelope> 
         baseline,
         baseline_view: &BaselineView::for_rules(baseline, &base_snapshot.rules),
         binding_severity: binding_severity(configured),
-        complete_scan,
+        completeness,
     })?;
     let governed = finding_records
         .iter()
@@ -184,20 +183,19 @@ fn read_snapshots(
 fn collect_findings(input: &FindingInput<'_>) -> anyhow::Result<Vec<crate::envelope::Finding>> {
     let rules = &input.head_snapshot.rules;
     let mut finding_records = Vec::new();
-    if input.complete_scan {
-        finding_records.extend(findings::absence_findings(
-            rules,
-            input.scans,
-            input.verifications,
-            input.baseline_view,
-            input.binding_severity,
-        ));
-    }
-    finding_records.extend(findings::inactive_current_findings(
+    let completeness = match input.completeness {
+        Completeness::Complete => provenance_scanner::RuleEvidenceCompleteness::Complete,
+        Completeness::Incomplete => provenance_scanner::RuleEvidenceCompleteness::Incomplete,
+    };
+    let facts = provenance_scanner::derive_rule_evidence_facts(
         rules,
         input.scans,
         input.implementations,
         input.verifications,
+        completeness,
+    );
+    finding_records.extend(findings::rule_evidence_findings(
+        &facts,
         input.baseline_view,
         input.binding_severity,
         input.repo,
@@ -209,7 +207,7 @@ fn collect_findings(input: &FindingInput<'_>) -> anyhow::Result<Vec<crate::envel
             &input.base_snapshot.rules,
             &input.head_snapshot.rules,
         ));
-        if input.complete_scan {
+        if input.completeness == Completeness::Complete {
             finding_records.extend(evidence_site_findings(
                 input.repo,
                 input.base,
@@ -237,7 +235,7 @@ struct FindingInput<'a> {
     baseline: BaselineCompatibility,
     baseline_view: &'a BaselineView,
     binding_severity: crate::envelope::Severity,
-    complete_scan: bool,
+    completeness: Completeness,
 }
 
 const fn binding_severity(
@@ -260,7 +258,15 @@ const fn policy_result(
     configured: settings::BindingFindingsSeverity,
     governed: usize,
 ) -> PolicyResult {
-    if matches!(configured, settings::BindingFindingsSeverity::Error) && governed > 0 {
+    let severity = match configured {
+        settings::BindingFindingsSeverity::Warning => {
+            provenance_scanner::BindingFindingSeverity::Warning
+        }
+        settings::BindingFindingsSeverity::Error => {
+            provenance_scanner::BindingFindingSeverity::Error
+        }
+    };
+    if provenance_scanner::binding_findings_fail(severity, governed) {
         PolicyResult::Failure
     } else {
         PolicyResult::Success
@@ -289,12 +295,6 @@ fn evidence_site_findings(
         &graph,
     );
     Ok(findings::evidence_site_findings(&report))
-}
-
-/// Whether the scan covers the declared scope. A partial scan cannot claim
-/// that a Rule has no implementation or verification elsewhere.
-fn scan_covers_repository(repo: &Utf8Path, path: &Utf8Path) -> bool {
-    same_file::is_same_file(repo, path).unwrap_or(false)
 }
 
 /// Whether the working tree matches the head commit. Scanned source facts
