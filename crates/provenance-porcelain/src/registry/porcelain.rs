@@ -1,7 +1,11 @@
 //! Declarations of the record commands: get, search, api, check, prime, and the
 //! target actions.
 
-use super::{Command, Declaration, Grammar, Input};
+use super::porcelain_fields::{
+    API_FIELDS, CHECK_FIELDS, CHECK_RELATIONS, CREATE_FIELDS, GET_FIELDS, GET_RELATIONS,
+    PRIME_FIELDS, SEARCH_FIELDS, TRACE_FIELDS, UPDATE_FIELDS, UPDATE_RELATIONS,
+};
+use super::{Command, Declaration, Fields, Grammar, Input};
 use crate::action::Action;
 use serde::Deserialize;
 
@@ -50,37 +54,46 @@ pub(super) fn declaration(command: Command) -> Declaration {
             name: "search",
             description: SEARCH_DESCRIPTION,
             grammar: Grammar::Name,
-            input: Input::Typed(crate::search::input_schema),
+            internal: false,
+            input: Input::Fields(Fields::untyped(SEARCH_FIELDS)),
         },
         Command::Api => Declaration {
             name: "api",
             description: crate::api::API_DESCRIPTION,
             grammar: Grammar::Name,
-            input: Input::Typed(crate::api::input_schema),
+            internal: false,
+            input: Input::Fields(Fields::untyped(API_FIELDS).target(&["path"])),
         },
         Command::Check => Declaration {
             name: "check",
             description: CHECK_DESCRIPTION,
             grammar: Grammar::Name,
-            input: Input::Typed(crate::check::input_schema),
+            internal: false,
+            input: Input::Fields(
+                Fields::new(CHECK_FIELDS, super::arguments::check_schema)
+                    .relations(CHECK_RELATIONS),
+            ),
         },
         Command::Trace => Declaration {
             name: "trace",
             description: TRACE_DESCRIPTION,
             grammar: Grammar::Target,
-            input: Input::Typed(crate::get::trace_input_schema),
+            input: Input::Fields(Fields::untyped(TRACE_FIELDS)),
+            internal: false,
         },
         Command::Change => Declaration {
             name: "change",
             description: CHANGE_DESCRIPTION,
             grammar: Grammar::Name,
             input: Input::None,
+            internal: false,
         },
         Command::Prime => Declaration {
             name: "prime",
             description: PRIME_DESCRIPTION,
             grammar: Grammar::Name,
-            input: Input::Typed(prime_schema),
+            internal: false,
+            input: Input::Fields(Fields::new(PRIME_FIELDS, prime_schema)),
         },
         Command::Action(action) => action_declaration(action),
         Command::Repository(command) => super::repository::declaration(command),
@@ -98,7 +111,10 @@ const fn get_declaration() -> Declaration {
         name: "get",
         description: GET_DESCRIPTION,
         grammar: Grammar::Target,
-        input: Input::Typed(crate::get::input_schema),
+        input: Input::Fields(
+            Fields::new(GET_FIELDS, super::arguments::get_schema).relations(GET_RELATIONS),
+        ),
+        internal: false,
     }
 }
 
@@ -131,14 +147,29 @@ const fn action_declaration(action: Action) -> Declaration {
     };
     let input = match action {
         // The Discussions input lists Discussions and reads one.
-        Action::Discussions => Input::Typed(crate::discussion::tool_input_schema),
+        Action::Discussions => Input::Discussion(Action::Discussions),
         Action::Discussion | Action::Discuss | Action::Reply => Input::Discussion(action),
-        _ => Input::RecordFields(action),
+        Action::Create => Input::RecordFields {
+            action,
+            fields: CREATE_FIELDS,
+            relations: &[],
+        },
+        Action::Update => Input::RecordFields {
+            action,
+            fields: UPDATE_FIELDS,
+            relations: UPDATE_RELATIONS,
+        },
+        _ => Input::RecordFields {
+            action,
+            fields: &[],
+            relations: &[],
+        },
     };
     Declaration {
         name: action.as_str(),
         description,
         grammar,
         input,
+        internal: false,
     }
 }

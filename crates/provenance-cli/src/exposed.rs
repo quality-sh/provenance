@@ -71,8 +71,6 @@ pub fn shows(command: Command) -> bool {
 /// by its words.
 pub fn find(words: &[&str]) -> Option<Command> {
     EXPOSED.iter().copied().find(|command| {
-        crate::cli_form::declaration(*command)
-            .words()
-            .is_some_and(|selected| selected == words)
+        crate::cli_options::words(&command.declaration()).is_some_and(|selected| selected == words)
     })
 }

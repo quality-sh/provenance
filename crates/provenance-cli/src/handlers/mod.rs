@@ -1,13 +1,13 @@
 use crate::cli;
 use crate::output::{self, JsonFormat, OutputFormat};
 use camino::Utf8PathBuf;
-use provenance_cli::cli_form::{self, CheckCliInput};
 use provenance_cli::servers::{DocsServeInput, McpInput, ReviewInput, Server};
 use provenance_porcelain::registry::{
-    self, CargoInitInput, DictionaryImportInput, DictionaryStatusInput, ExportInput, GraphCommand,
-    ImportInput, InitInput, MaterializeInput, MergeJsonlInput, ReferenceInput, ReferenceIssueInput,
-    ReportBuildInput, ReportRenderInput, RepositoryCommand, SchemaShowInput, SkillsInstallInput,
-    SkillsListInput, SkillsShowInput, SwarmBacktraceLandInput, ValidateInput, WorkspaceCommand,
+    self, CargoInitInput, CheckArguments, DictionaryImportInput, DictionaryStatusInput,
+    ExportInput, GraphCommand, ImportInput, InitInput, MaterializeInput, MergeJsonlInput,
+    ReferenceInput, ReferenceIssueInput, ReportBuildInput, ReportRenderInput, RepositoryCommand,
+    SchemaShowInput, SkillsInstallInput, SkillsListInput, SkillsShowInput, SwarmBacktraceLandInput,
+    ValidateInput, WorkspaceCommand,
 };
 use provenance_store::cache;
 use provenance_transport::repository::RepoContext;
@@ -36,7 +36,7 @@ pub(super) use dogfood::{handle as dogfood_command, DogfoodInput};
 
 /// Runs the check command with the flags that its declaration names.
 #[allow(clippy::redundant_pub_crate)]
-pub(super) async fn check_command(input: CheckCliInput) -> anyhow::Result<()> {
+pub(super) async fn check_command(input: CheckArguments) -> anyhow::Result<()> {
     provenance_cli::porcelain::dispatch_check(input).await
 }
 
@@ -68,7 +68,7 @@ impl RepositoryInput {
         command: RepositoryCommand,
         matches: &clap::ArgMatches,
     ) -> anyhow::Result<Self> {
-        let declaration = cli_form::declaration(registry::Command::Repository(command));
+        let declaration = registry::Command::Repository(command).declaration();
         macro_rules! read {
             ($variant:ident) => {
                 Self::$variant(crate::registry_cli::input(&declaration, matches)?)
@@ -193,7 +193,7 @@ impl GraphInput {
         command: GraphCommand,
         matches: &clap::ArgMatches,
     ) -> anyhow::Result<Self> {
-        let declaration = cli_form::declaration(registry::Command::Graph(command));
+        let declaration = registry::Command::Graph(command).declaration();
         macro_rules! read {
             ($variant:ident) => {
                 Self::$variant(crate::registry_cli::input(&declaration, matches)?)
@@ -272,7 +272,7 @@ impl WorkspaceInput {
         command: WorkspaceCommand,
         matches: &clap::ArgMatches,
     ) -> anyhow::Result<Self> {
-        let declaration = cli_form::declaration(registry::Command::Workspace(command));
+        let declaration = registry::Command::Workspace(command).declaration();
         macro_rules! read {
             ($variant:ident) => {
                 Self::$variant(crate::registry_cli::input(&declaration, matches)?)
@@ -404,7 +404,7 @@ mod tests {
             if !cli_only || !provenance_cli::exposed::shows(*command) {
                 continue;
             }
-            for flag in cli_form::form(*command).flags {
+            for flag in command.declaration().input.fields() {
                 for value in flag.values {
                     let converts = match flag.name {
                         "format"

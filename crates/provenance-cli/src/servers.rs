@@ -1,8 +1,7 @@
 //! The CLI commands that start a server: review, docs serve, and mcp. They are not
 //! porcelain commands, so the CLI declares them here.
 
-use crate::cli_form::{CliDeclaration, CliForm, Flag, FlagKind, FlagValue, REPO, SCOPE};
-use provenance_porcelain::registry::Grammar;
+use provenance_porcelain::registry::{Declaration, Field, FieldValue, Fields, REPO, SCOPE};
 use serde::Deserialize;
 
 /// One CLI command that starts a server and runs until it stops.
@@ -16,34 +15,32 @@ pub enum Server {
 /// Each server command, in help order.
 pub const SERVERS: &[Server] = &[Server::DocsServe, Server::Review, Server::Mcp];
 
-const DOCS_SERVE_FLAGS: &[Flag] = &[
+const DOCS_SERVE_FIELDS: &[Field] = &[
     REPO,
-    Flag::new("host", FlagKind::Value).default("127.0.0.1"),
-    Flag::new("port", FlagKind::Value)
-        .value(FlagValue::Port)
-        .default("5174"),
+    Field::text("host").default("127.0.0.1"),
+    Field::text("port").of(FieldValue::Port).default("5174"),
 ];
 
-const REVIEW_FLAGS: &[Flag] = &[
-    Flag::new("repo", FlagKind::Value)
+const REVIEW_FIELDS: &[Field] = &[
+    Field::text("repo")
         .required()
-        .help("Repository with an initialized Provenance manifest"),
-    Flag::new("repository-id", FlagKind::Value)
+        .doc("Repository with an initialized Provenance manifest"),
+    Field::text("repository_id")
         .required()
-        .help("Opaque repository target exposed to the browser"),
-    Flag::new("scope", FlagKind::Value).required(),
-    Flag::new("port", FlagKind::Value)
-        .value(FlagValue::Port)
+        .doc("Opaque repository target exposed to the browser"),
+    Field::text("scope").required(),
+    Field::text("port")
+        .of(FieldValue::Port)
         .default("0")
-        .help("Loopback port. Zero selects an available port"),
-    Flag::new("no-open", FlagKind::Switch).help("Do not open the review page in a browser"),
-    Flag::new("detach", FlagKind::Switch).help(
+        .doc("Loopback port. Zero selects an available port"),
+    Field::switch("no_open").doc("Do not open the review page in a browser"),
+    Field::switch("detach").doc(
         "Reuse the running host for this repository and scope, or start one in the background \
          that keeps running after this command returns. Prints where the review page is served",
     ),
 ];
 
-const MCP_FLAGS: &[Flag] = &[REPO, SCOPE];
+const MCP_FIELDS: &[Field] = &[REPO, SCOPE];
 
 /// The `docs serve` input.
 #[derive(Clone, Debug, Deserialize, schemars::JsonSchema)]
@@ -78,45 +75,42 @@ pub struct McpInput {
 
 impl Server {
     /// The declaration of this server command.
-    pub const fn declaration(self) -> CliDeclaration {
-        let (name, description, flags) = match self {
-            Self::DocsServe => ("docs serve", "", DOCS_SERVE_FLAGS),
+    pub const fn declaration(self) -> Declaration {
+        let (name, description, fields, schema): (_, _, _, fn() -> serde_json::Value) = match self {
+            Self::DocsServe => ("docs serve", "", DOCS_SERVE_FIELDS, docs_serve_schema),
             Self::Review => (
                 "review",
                 "Serve local review assets and authorized repository operations",
-                REVIEW_FLAGS,
+                REVIEW_FIELDS,
+                review_schema,
             ),
             Self::Mcp => (
                 "mcp",
                 "Serve the MCP tools for one repository on standard input and output",
-                MCP_FLAGS,
+                MCP_FIELDS,
+                mcp_schema,
             ),
         };
-        CliDeclaration {
-            name,
-            description,
-            grammar: Grammar::Name,
-            form: CliForm::new(flags),
-        }
-    }
-
-    /// The schema of the input that the CLI reads from the flags of this command.
-    pub fn input_schema(self) -> serde_json::Value {
-        let schema = match self {
-            Self::DocsServe => schemars::schema_for!(DocsServeInput),
-            Self::Review => schemars::schema_for!(ReviewInput),
-            Self::Mcp => schemars::schema_for!(McpInput),
-        };
-        serde_json::to_value(schema).expect("schema is JSON")
+        Declaration::named(name, description, Fields::new(fields, schema))
     }
 
     /// The server command that the CLI root words select.
     pub fn find(words: &[&str]) -> Option<Self> {
-        SERVERS.iter().copied().find(|server| {
-            server
-                .declaration()
-                .words()
-                .is_some_and(|selected| selected == words)
-        })
+        SERVERS
+            .iter()
+            .copied()
+            .find(|server| server.declaration().words().eq(words.iter().copied()))
     }
+}
+
+fn docs_serve_schema() -> serde_json::Value {
+    serde_json::to_value(schemars::schema_for!(DocsServeInput)).expect("schema is JSON")
+}
+
+fn review_schema() -> serde_json::Value {
+    serde_json::to_value(schemars::schema_for!(ReviewInput)).expect("schema is JSON")
+}
+
+fn mcp_schema() -> serde_json::Value {
+    serde_json::to_value(schemars::schema_for!(McpInput)).expect("schema is JSON")
 }

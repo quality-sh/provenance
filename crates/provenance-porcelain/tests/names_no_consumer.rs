@@ -1,10 +1,20 @@
 //! The porcelain sources name no consumer of the commands: no identifier outside
-//! comments and literals has the word `cli`, `mcp`, `clap`, or `rmcp`.
+//! comments and literals has the word `cli`, `mcp`, `clap`, `rmcp`, `flag`, `positional`, or `tool`.
 
 use provenance_macros::verifies;
 use std::path::{Path, PathBuf};
 
-const CONSUMER_WORDS: &[&str] = &["cli", "mcp", "clap", "rmcp"];
+const CONSUMER_WORDS: &[&str] = &[
+    "cli",
+    "mcp",
+    "clap",
+    "rmcp",
+    "flag",
+    "flags",
+    "positional",
+    "tool",
+    "tools",
+];
 
 /// The source text with each comment, string, and character literal removed.
 fn code(source: &str) -> String {
@@ -193,6 +203,9 @@ fn scan_refuses_only_identifiers_with_a_consumer_word() {
         fn shared<'a>(value: &'a str, clients: u8, climb: u8) -> &'a str { value }
         struct CheckCliInput;
         fn mcp_schema() {}
+        struct ToolInput;
+        fn flag_name() {}
+        const POSITIONAL: u8 = 0;
         enum Form { ClapArg, RmcpTool, CLIForm }
     "#;
     assert_eq!(
@@ -200,6 +213,9 @@ fn scan_refuses_only_identifiers_with_a_consumer_word() {
         [
             "CheckCliInput",
             "mcp_schema",
+            "ToolInput",
+            "flag_name",
+            "POSITIONAL",
             "ClapArg",
             "RmcpTool",
             "CLIForm"

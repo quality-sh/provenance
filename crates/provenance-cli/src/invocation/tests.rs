@@ -22,7 +22,7 @@ fn reserved_ids_cover_declared_root_commands_collections_and_actions() {
         }
     }
     for server in provenance_cli::servers::SERVERS {
-        let word = server.declaration().words().unwrap()[0];
+        let word = provenance_cli::cli_options::words(&server.declaration()).unwrap()[0];
         assert!(
             RESERVED_RECORD_IDS.contains(&word),
             "root word {word} is not reserved"

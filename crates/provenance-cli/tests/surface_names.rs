@@ -4,6 +4,7 @@
 //! tool, so a change to a flag or a property name shows here first. A changed name
 //! changes its pin in the same commit.
 
+#[allow(dead_code)]
 mod support {
     pub mod surface;
 }
