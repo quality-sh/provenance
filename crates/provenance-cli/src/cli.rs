@@ -6,19 +6,35 @@ pub mod workspace;
 
 pub use ideation::{IdeationArtifactKind, SchemaCommand};
 
-use crate::output::{JsonFormat, OutputFormat};
+use crate::output::JsonFormat;
+#[cfg(feature = "dogfood")]
 use camino::Utf8PathBuf;
-use clap::{Parser, Subcommand, ValueEnum};
+#[cfg(feature = "dogfood")]
+use clap::ValueEnum;
+use clap::{Parser, Subcommand};
 use provenance_cli::repo_context::RepoContext;
 
-#[derive(Clone, Copy, Debug, Default, ValueEnum)]
+/// How the caller runs provenance, so init prints commands that the caller can run.
+#[derive(Clone, Copy, Debug, Default)]
 pub enum InvocationChannel {
     #[default]
     Native,
     Typescript,
 }
 
-#[derive(Clone, Copy, Debug, ValueEnum)]
+impl InvocationChannel {
+    /// The channel that one `--invocation-channel` value names.
+    pub fn from_flag(value: &str) -> Option<Self> {
+        match value {
+            "native" => Some(Self::Native),
+            "typescript" => Some(Self::Typescript),
+            _ => None,
+        }
+    }
+}
+
+/// The package manager that runs the TypeScript package.
+#[derive(Clone, Copy, Debug)]
 pub enum PackageManager {
     Npm,
     Pnpm,
@@ -26,6 +42,21 @@ pub enum PackageManager {
     Bun,
     Deno,
     Nub,
+}
+
+impl PackageManager {
+    /// The package manager that one `--package-manager` value names.
+    pub fn from_flag(value: &str) -> Option<Self> {
+        Some(match value {
+            "npm" => Self::Npm,
+            "pnpm" => Self::Pnpm,
+            "yarn" => Self::Yarn,
+            "bun" => Self::Bun,
+            "deno" => Self::Deno,
+            "nub" => Self::Nub,
+            _ => return None,
+        })
+    }
 }
 
 #[derive(Parser)]
@@ -52,54 +83,12 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Command {
-    #[command(name = "__cargo-init", hide = true)]
-    CargoInit {
-        #[arg(long)]
-        package: Option<String>,
-        /// Import this local Issue 9 dictionary PDF instead of downloading the
-        /// official asset.
-        #[arg(long)]
-        ste_pdf: Option<Utf8PathBuf>,
-    },
-    Init {
-        #[arg(long, default_value = ".")]
-        path: Utf8PathBuf,
-        #[arg(long)]
-        scope: Option<String>,
-        #[arg(long, requires = "scope")]
-        path_prefix: Option<Utf8PathBuf>,
-        /// Repository-local actor ID allowed to attest proposal dispositions.
-        /// Repeat for multiple actors. On re-init, omission preserves the allowlist.
-        #[arg(long)]
-        disposition_actor_id: Vec<String>,
-        /// Empty the repository-local disposition actor allowlist.
-        #[arg(long, conflicts_with = "disposition_actor_id")]
-        clear_disposition_actors: bool,
-        /// Import this local Issue 9 dictionary PDF instead of downloading the
-        /// official asset.
-        #[arg(long)]
-        ste_pdf: Option<Utf8PathBuf>,
-        #[arg(long, value_enum, default_value_t, hide = true)]
-        invocation_channel: InvocationChannel,
-        #[arg(long, value_enum, hide = true)]
-        package_manager: Option<PackageManager>,
-    },
     Docs {
         #[command(subcommand)]
         command: workspace::DocsCommand,
     },
-    Dictionary {
-        #[command(subcommand)]
-        command: dictionary::DictionaryCommand,
-    },
     /// Serve local review assets and authorized repository operations.
     Review(crate::review::Options),
-    Materialize {
-        #[arg(long, default_value = ".")]
-        repo: Utf8PathBuf,
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
-    },
     GraphReference {
         #[command(subcommand)]
         command: graph::GraphReferenceCommand,
@@ -152,49 +141,6 @@ pub enum Command {
     Skills {
         #[command(subcommand)]
         command: workspace::SkillsCommand,
-    },
-    Schema {
-        #[command(subcommand)]
-        command: ideation::SchemaCommand,
-    },
-    Validate {
-        artifact: ideation::IdeationArtifactKind,
-        #[arg(long)]
-        input: Utf8PathBuf,
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
-    },
-    Export {
-        #[command(flatten)]
-        context: RepoContext,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
-        format: OutputFormat,
-        #[arg(long)]
-        output: Option<Utf8PathBuf>,
-    },
-    Import {
-        #[command(flatten)]
-        context: RepoContext,
-        #[arg(long)]
-        input: Utf8PathBuf,
-        #[arg(long)]
-        dry_run: bool,
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
-    },
-    MergeJsonl {
-        base: Utf8PathBuf,
-        ours: Utf8PathBuf,
-        theirs: Utf8PathBuf,
-        #[arg(long)]
-        output: Option<Utf8PathBuf>,
-        /// Repository path the merged result belongs at. Git merge drivers get
-        /// three temporary files, so this is how the merge learns which record
-        /// type the file holds and which write-time checks to re-apply.
-        #[arg(long)]
-        path: Option<Utf8PathBuf>,
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
     },
     /// Dev-build-only: record pain-point notes about provenance itself.
     #[cfg(feature = "dogfood")]

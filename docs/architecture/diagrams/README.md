@@ -50,7 +50,7 @@ arrows show build-time generation or packaging.
 
 ## What the code did not show
 
-- No CLI command calls `StatementHost::serve_mcp`. Only tests use it, so the
+- No CLI command calls `provenance_mcp::serve`. Only tests use it, so the
   diagrams show the MCP server with no production caller.
 - `publication::with_staged_state_and_source_edit` has no production caller.
   Only tests use it. Each publication runs `recover_pending_source_edit` after
