@@ -17,19 +17,26 @@ impl StateStore {
         scope: &ScopeId,
         id: &StableId,
     ) -> anyhow::Result<RequirementResourceSnapshot> {
-        self.with_repository_publication(|| {
-            let record = self
-                .list_requirements(scope)?
-                .into_iter()
-                .find(|record| record.id == *id)
-                .ok_or(provenance_core::protocol::read_failure::ReadFailure::ResourceNotFound)?;
-            #[cfg(feature = "test-fixture")]
-            crate::fixture_probe::at("requirement_resource_record_read");
-            Ok(RequirementResourceSnapshot {
-                record,
-                edit: self.requirement_edit_state(scope, id)?,
-                decision: self.requirement_decision_state(scope, id)?,
-            })
+        self.with_repository_publication(|| self.requirement_resource_snapshot_unlocked(scope, id))
+    }
+
+    pub(super) fn requirement_resource_snapshot_unlocked(
+        &self,
+        scope: &ScopeId,
+        id: &StableId,
+    ) -> anyhow::Result<RequirementResourceSnapshot> {
+        crate::test_probes::at("requirement_resource_snapshot")?;
+        let record = self
+            .list_requirements(scope)?
+            .into_iter()
+            .find(|record| record.id == *id)
+            .ok_or(provenance_core::protocol::read_failure::ReadFailure::ResourceNotFound)?;
+        #[cfg(feature = "test-fixture")]
+        crate::fixture_probe::at("requirement_resource_record_read");
+        Ok(RequirementResourceSnapshot {
+            record,
+            edit: self.requirement_edit_state(scope, id)?,
+            decision: self.requirement_decision_state(scope, id)?,
         })
     }
 }
