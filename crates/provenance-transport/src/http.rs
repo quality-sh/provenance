@@ -102,7 +102,11 @@ async fn invoke(State(host): State<StatementHost>, request: Request) -> Response
     };
     match routing::invoke(&host, &matched, data, query, &headers).await {
         Ok((value, etag)) => {
-            let mut response = Json(value).into_response();
+            let mut response = (
+                [(axum::http::header::CONTENT_TYPE, "application/json")],
+                value.into_bytes(),
+            )
+                .into_response();
             if let Some(etag) = etag.and_then(|etag| etag.parse().ok()) {
                 response.headers_mut().insert("etag", etag);
             }
