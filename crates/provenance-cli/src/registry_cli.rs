@@ -53,7 +53,7 @@ fn arg(field: &Field, positional: bool) -> Arg {
             .value_parser(value_parser(field))
             .value_name(field.name.to_uppercase());
     }
-    match (field.doc, field.value) {
+    match (cli_options::field_help(field), field.value) {
         // The CLI reads an object field from a file or from standard input.
         (Some(doc), FieldValue::Object) => {
             arg = arg.help(format!(
@@ -170,21 +170,22 @@ fn parse_catalog_limit(value: &str) -> Result<usize, String> {
     }
 }
 
-/// The root parser: the built-in commands and the word commands that it lists. The
-/// server commands follow the workspace commands.
+/// The root parser: the built-in commands and the word commands that it lists. `docs`
+/// follows the graph commands, and the other server commands follow the workspace
+/// commands.
 pub fn root_command() -> clap::Command {
-    let listed = |command: &&registry::Command| {
-        provenance_cli::exposed::shows(**command)
-            && matches!(
-                command,
-                registry::Command::Repository(_)
-                    | registry::Command::Graph(_)
-                    | registry::Command::Workspace(_)
-            )
+    let shown = |command: &registry::Command| provenance_cli::exposed::shows(*command);
+    let listed = |filter: fn(&registry::Command) -> bool| {
+        registry::Command::ALL
+            .iter()
+            .filter(move |command| shown(command) && filter(command))
+            .map(|command| command.declaration())
     };
-    let dogfood = |command: &&registry::Command| {
-        provenance_cli::exposed::shows(**command)
-            && matches!(command, registry::Command::Dogfood(_))
+    let servers = |filter: fn(provenance_cli::servers::Server) -> bool| {
+        provenance_cli::servers::SERVERS
+            .iter()
+            .filter(move |server| filter(**server))
+            .map(|server| server.declaration())
     };
     [
         registry::Command::Search,
@@ -192,20 +193,26 @@ pub fn root_command() -> clap::Command {
         registry::Command::Prime,
     ]
     .iter()
-    .chain(registry::Command::ALL.iter().filter(listed))
     .map(|command| command.declaration())
-    .chain(
-        provenance_cli::servers::SERVERS
-            .iter()
-            .map(|server| server.declaration()),
-    )
-    .chain(
-        registry::Command::ALL
-            .iter()
-            .filter(dogfood)
-            .map(|command| command.declaration()),
-    )
+    .chain(listed(|command| {
+        matches!(
+            command,
+            registry::Command::Repository(_) | registry::Command::Graph(_)
+        )
+    }))
+    .chain(servers(is_docs))
+    .chain(listed(|command| {
+        matches!(command, registry::Command::Workspace(_))
+    }))
+    .chain(servers(|server| !is_docs(server)))
+    .chain(listed(|command| {
+        matches!(command, registry::Command::Dogfood(_))
+    }))
     .fold(crate::cli::Cli::command(), add_subcommand)
+}
+
+fn is_docs(server: provenance_cli::servers::Server) -> bool {
+    server == provenance_cli::servers::Server::DocsServe
 }
 
 /// Adds one word command to `root` under its words, as `provenance <words...>` shows it.

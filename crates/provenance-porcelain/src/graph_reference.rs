@@ -23,19 +23,24 @@ pub struct ReferenceInput {
 }
 
 /// The port that issues and reads the graph references of the bound repository. Each
-/// result is the JSON document of the reference operation.
+/// result is the typed document of the reference operation, so its JSON keeps the
+/// declared field order.
 pub trait GraphReferencePort: Send + Sync {
     /// The failure that this port reports.
     type Failure;
+    /// The reference that issue gives.
+    type Reference: serde::Serialize + Send;
+    /// The metadata and the graph-family counts that show gives.
+    type Summary: serde::Serialize + Send;
+    /// The result that verify gives.
+    type Verification: serde::Serialize + Send;
+    /// The pinned graph that exact-export gives.
+    type Export: serde::Serialize + Send;
 
-    fn issue(&self, input: ReferenceIssueInput)
-        -> WorkFuture<'_, serde_json::Value, Self::Failure>;
-    fn show(&self, input: ReferenceInput) -> WorkFuture<'_, serde_json::Value, Self::Failure>;
-    fn verify(&self, input: ReferenceInput) -> WorkFuture<'_, serde_json::Value, Self::Failure>;
-    fn exact_export(
-        &self,
-        input: ReferenceInput,
-    ) -> WorkFuture<'_, serde_json::Value, Self::Failure>;
+    fn issue(&self, input: ReferenceIssueInput) -> WorkFuture<'_, Self::Reference, Self::Failure>;
+    fn show(&self, input: ReferenceInput) -> WorkFuture<'_, Self::Summary, Self::Failure>;
+    fn verify(&self, input: ReferenceInput) -> WorkFuture<'_, Self::Verification, Self::Failure>;
+    fn exact_export(&self, input: ReferenceInput) -> WorkFuture<'_, Self::Export, Self::Failure>;
 }
 
 impl<P: GraphReferencePort> crate::Porcelain<P> {
@@ -43,15 +48,12 @@ impl<P: GraphReferencePort> crate::Porcelain<P> {
     pub async fn reference_issue(
         &self,
         input: ReferenceIssueInput,
-    ) -> Result<serde_json::Value, P::Failure> {
+    ) -> Result<P::Reference, P::Failure> {
         self.port.issue(input).await
     }
 
     /// The metadata and the graph-family counts of a reference.
-    pub async fn reference_show(
-        &self,
-        input: ReferenceInput,
-    ) -> Result<serde_json::Value, P::Failure> {
+    pub async fn reference_show(&self, input: ReferenceInput) -> Result<P::Summary, P::Failure> {
         self.port.show(input).await
     }
 
@@ -59,7 +61,7 @@ impl<P: GraphReferencePort> crate::Porcelain<P> {
     pub async fn reference_verify(
         &self,
         input: ReferenceInput,
-    ) -> Result<serde_json::Value, P::Failure> {
+    ) -> Result<P::Verification, P::Failure> {
         self.port.verify(input).await
     }
 
@@ -67,7 +69,7 @@ impl<P: GraphReferencePort> crate::Porcelain<P> {
     pub async fn reference_exact_export(
         &self,
         input: ReferenceInput,
-    ) -> Result<serde_json::Value, P::Failure> {
+    ) -> Result<P::Export, P::Failure> {
         self.port.exact_export(input).await
     }
 }

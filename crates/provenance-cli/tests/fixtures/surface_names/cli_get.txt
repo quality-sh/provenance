@@ -28,7 +28,7 @@ Options:
       --notify <NOTIFY>
           Queue review changes into a Codex thread, or end that registration with off. [possible values: codex, off]
       --thread <THREAD>
-          The Codex thread UUID for notify.
+          The Codex thread UUID for --notify. The default is CODEX_THREAD_ID.
       --follow
           Stream the current review document and pushed changes as JSON lines.
       --no-open
