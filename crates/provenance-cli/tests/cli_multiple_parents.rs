@@ -218,9 +218,9 @@ fn cli_refused_replacement_names_the_review_read_command() {
 #[verifies("rule_move_replaces_only_selected_parent", examples)]
 fn cli_replacement_keeps_the_declaration_owner_precondition() {
     let (_directory, repo) = parent_repo();
-    let store = provenance_store::state_store::StateStore::new(
-        provenance_store::layout::ProvenanceLayout::new(repo.clone()),
-    );
+    let store = provenance_store::repository::Repository::open(repo.clone(), "default")
+        .unwrap()
+        .store();
     store
         .apply_typed_spec(
             &provenance_core::ScopeId::new("default").unwrap(),

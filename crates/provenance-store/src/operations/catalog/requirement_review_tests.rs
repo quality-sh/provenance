@@ -26,7 +26,7 @@ fn fixture() -> (tempfile::TempDir, PreparedContext, StateStore, ScopeId) {
         repository: crate::repository::Repository::open(&root, scope.as_str()).unwrap(),
         requested_target: "fixture".into(),
     });
-    (temp, context, StateStore::new(layout), scope)
+    (temp, context, crate::test_support::store(&layout), scope)
 }
 
 fn create_request(_request_id: &str) -> CreateRequirementRequest {

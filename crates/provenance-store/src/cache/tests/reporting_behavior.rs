@@ -1,9 +1,7 @@
 use super::super::*;
 use super::fixtures::*;
 use crate::layout::ProvenanceLayout;
-use crate::state_store::{
-    CreateRequirementInput, CreateResolutionInput, CreateRuleInput, StateStore,
-};
+use crate::state_store::{CreateRequirementInput, CreateResolutionInput, CreateRuleInput};
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_core::{
     NodeType, RequirementStatus, ResolutionStatus, RuleSeverity, RuleStatus, ScopeId,
@@ -51,7 +49,7 @@ fn health_counts_rules_with_complete_traceability() {
 /// Seeds a requirement, the decision that settles it, and a rule both are
 /// recorded as producing. No source is attached to the requirement.
 fn seed_unsourced_chain(layout: &ProvenanceLayout, scope: &ScopeId) {
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(&layout);
     create_requirement(&store, scope, "req_unsourced", RequirementStatus::Active);
     store
         .create_resolution(CreateResolutionInput {
@@ -128,7 +126,7 @@ fn orphan_report_wants_a_source_behind_the_producing_requirement() {
 #[test]
 fn requirement_produced_rule_does_not_need_a_resolution() {
     let (_dir, layout, scope) = empty_layout();
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(&layout);
     create_source(&store, &scope, "source_anchor");
     create_requirement(&store, &scope, "req_half", RequirementStatus::Active);
     attach_source(&store, &scope, "req_half", "source_anchor");
@@ -168,7 +166,7 @@ fn requirement_produced_rule_does_not_need_a_resolution() {
 #[test]
 fn rule_without_a_producing_requirement_remains_orphaned() {
     let (_dir, layout, scope) = empty_layout();
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(&layout);
     create_source(&store, &scope, "source_anchor");
     create_requirement(&store, &scope, "req_decided", RequirementStatus::Active);
     attach_source(&store, &scope, "req_decided", "source_anchor");
@@ -216,7 +214,7 @@ fn seed_rule_with_producers(
     has_requirement: bool,
     has_resolution: bool,
 ) {
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(&layout);
     if has_requirement {
         create_source(&store, scope, "source_anchor");
         create_requirement(&store, scope, "req_rule", RequirementStatus::Active);
@@ -332,7 +330,7 @@ fn orphan_health_and_gaps_agree_on_the_source_leg() {
 #[provenance_macros::verifies("rule_graph_gaps", examples)]
 fn gaps_flag_requirements_without_domain_id_but_not_requirements_with_one() {
     let (_dir, layout, scope) = seeded_layout();
-    StateStore::new(layout.clone())
+    crate::test_support::store(&layout)
         .create_requirement(CreateRequirementInput {
             scope_id: scope,
             id: sid("req_missing_domain"),

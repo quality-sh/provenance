@@ -198,7 +198,7 @@ pub(super) fn change_one_record(
     let path = family.shard_path(layout, scope);
     match family {
         ProjectionFamily::Withdrawals => {
-            let store = StateStore::new(layout.clone());
+            let store = crate::test_support::store(&layout);
             let id = provenance_core::StableId::new("req_schads_overtime").unwrap();
             let etag = store.requirement_edit_state(scope, &id).unwrap().etag;
             store
@@ -227,7 +227,7 @@ pub(super) fn change_one_record(
                 .unwrap();
         }
         ProjectionFamily::Discussions => {
-            StateStore::new(layout.clone())
+            crate::test_support::store(&layout)
                 .write_discussion(
                     serde_json::from_value(json!({
                         "scope_id":scope, "actor":"reviewer", "declared_by":null,
@@ -274,7 +274,7 @@ fn current_digest(store: &StateStore, scopes: &[ScopeId]) -> String {
 fn one_changed_record_in_any_family_moves_the_revision_digest() {
     for family in ProjectionFamily::ALL {
         let (_dir, layout, scope) = aggregate_layout();
-        let store = StateStore::new(layout.clone());
+        let store = crate::test_support::store(&layout);
         let scopes = vec![scope.clone()];
         let before = current_digest(&store, &scopes);
         change_one_record(&layout, family, &scope);
@@ -291,7 +291,7 @@ fn one_changed_record_in_any_family_moves_the_revision_digest() {
 #[test]
 fn an_ideation_change_leaves_every_other_family_digest_standing() {
     let (_dir, layout, scope) = aggregate_layout();
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(&layout);
     let scopes = vec![scope.clone()];
     let before = family_content_digests(&store, &scopes).unwrap();
     change_one_record(&layout, ProjectionFamily::Contributions, &scope);

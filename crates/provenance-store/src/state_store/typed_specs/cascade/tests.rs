@@ -28,7 +28,7 @@ fn fixture() -> (tempfile::TempDir, StateStore, ScopeId) {
         .unwrap(),
     )
     .unwrap();
-    let store = StateStore::new(layout);
+    let store = crate::test_support::store(&layout);
     store
         .create_requirement(CreateRequirementInput {
             scope_id: scope.clone(),
