@@ -232,9 +232,19 @@ Topic can require a different method for the next Question.
 
 If a required claim is absent, claim the item before work, then read it again. If another
 actor holds a required claim, stop work on that item. If recovery is incomplete, stop
-selection and recover the missing records. Read all pages of the Topic and Question
+selection and recover the missing records. Read the bounded summary with
+`provenance <topic_id> get --scope <scope> --view children --format json`. Use its
+ready IDs only when `shaping.complete` is true. Filtered, depth-limited, truncated,
+and unchecked reads are incomplete. Read all pages of the Topic and Question
 collections when you need the map; a partial page cannot establish that work is absent.
 Do not use conversation memory as a substitute for these reads.
+
+A Question is ready only when every ID in `depends_on` names an answered Question
+in the same Topic. An archived or human-blocked prerequisite does not satisfy it.
+Closed and archived Topics have no ready Questions. Ready ID order is display
+order, not priority. Claims restrict work, not discovery. Create or replace
+`depends_on` through JSON input; an empty list clears it. Use prerequisites only
+where order affects the answer.
 
 Apply the stored method to the selected Question. Record each accepted answer and its
 resulting artifacts before the next turn, then read the stored state again. A proposed

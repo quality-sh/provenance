@@ -12,7 +12,9 @@ use provenance_macros::rule;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, future::Future, pin::Pin};
 
+mod shaping;
 mod wire;
+pub use shaping::{BlockedQuestion, BlockedReason, Claim, QuestionState, SessionSummary};
 pub use wire::{input_schema, output_schema, render_readable};
 
 /// One future returned by an injected read port.
@@ -120,6 +122,7 @@ pub struct TraversalRequest {
 #[derive(Clone, Debug)]
 pub struct Traversal {
     pub records: Vec<TracedNode>,
+    pub shaping: Option<SessionSummary>,
     pub bounds: Bounds,
     pub response_metadata: Option<ResponseMeta>,
 }
@@ -237,6 +240,13 @@ impl GetOutcome {
         self.result.bounds()
     }
 
+    pub fn shaping(&self) -> Option<&SessionSummary> {
+        match &self.result {
+            ViewResult::Children(traversal) => traversal.shaping.as_ref(),
+            _ => None,
+        }
+    }
+
     pub const fn view_metadata(&self) -> Option<&ResponseMeta> {
         self.result.metadata()
     }
@@ -304,6 +314,17 @@ impl<P: GetPort> crate::Porcelain<P> {
                         limit: input.limit.unwrap_or(50),
                     })
                     .await?;
+                if let Some(summary) = &mut traversal.shaping {
+                    if !input.returned_kinds.is_empty()
+                        || input.max_depth.is_some()
+                        || record_metadata.as_ref().is_none_or(|metadata| {
+                            metadata.freshness_error.is_some()
+                                || !same_revision(metadata, traversal.response_metadata.as_ref())
+                        })
+                    {
+                        summary.complete = false;
+                    }
+                }
                 traversal.records.retain(|candidate| {
                     input.returned_kinds.is_empty()
                         || input.returned_kinds.contains(&candidate.node.node_type())
@@ -343,4 +364,15 @@ fn validate(input: &GetInput) -> Result<(), ReadError> {
         return Err(ReadError::InvalidOptions);
     }
     Ok(())
+}
+
+fn same_revision(left: &ResponseMeta, right: Option<&ResponseMeta>) -> bool {
+    left.stamp
+        .as_ref()
+        .zip(right.and_then(|metadata| metadata.stamp.as_ref()))
+        .is_some_and(|(left, right)| {
+            left.instance_id == right.instance_id
+                && left.serial == right.serial
+                && left.digest == right.digest
+        })
 }
