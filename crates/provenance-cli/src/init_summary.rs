@@ -162,6 +162,28 @@ pub fn scope_phrase(scopes: &[String]) -> String {
 mod tests {
     use super::*;
 
+    struct FailingWriter;
+
+    impl Write for FailingWriter {
+        fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
+            Err(std::io::Error::other("output failed"))
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn completed_init_reports_output_failure() {
+        let ending = InitEnding::already("No change.".to_owned(), None);
+        assert_eq!(
+            ending.print(&mut FailingWriter, false).unwrap_err().to_string(),
+            "output failed"
+        );
+        ending.print(&mut FailingWriter, true).unwrap();
+    }
+
     #[test]
     fn scope_phrase_covers_one_and_many_scopes() {
         assert_eq!(scope_phrase(&["default".to_owned()]), "scope \"default\"");

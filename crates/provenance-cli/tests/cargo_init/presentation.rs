@@ -1,5 +1,18 @@
 use super::CargoFixture;
 
+#[cfg(target_os = "linux")]
+#[test]
+fn cargo_init_reports_a_failed_summary_after_publishing_state() {
+    let fixture = CargoFixture::new(&[("app", "Cargo.toml")]);
+    fixture
+        .command()
+        .args(["provenance", "init"])
+        .stdout(std::fs::File::create("/dev/full").unwrap())
+        .assert()
+        .failure();
+    assert!(fixture.root().join(".provenance/state/manifest.json").is_file());
+}
+
 #[test]
 fn noisy_cargo_add_does_not_print_during_quiet_success() {
     let fixture = CargoFixture::new(&[("app", "Cargo.toml")]);
