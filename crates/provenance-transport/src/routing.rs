@@ -54,6 +54,13 @@ pub fn find(method: &Method, path: &str) -> Option<Matched> {
     })
 }
 
+/// Whether any registered route publishes this path under some method.
+pub fn path_is_known(path: &str) -> bool {
+    catalog::definitions()
+        .iter()
+        .any(|definition| match_path(definition.path, path).is_some())
+}
+
 fn match_path(pattern: &str, actual: &str) -> Option<BTreeMap<String, String>> {
     let expected = pattern.trim_matches('/').split('/').collect::<Vec<_>>();
     let actual = actual.trim_matches('/').split('/').collect::<Vec<_>>();
