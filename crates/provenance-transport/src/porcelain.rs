@@ -6,7 +6,9 @@ use rmcp::model::{CallToolResult, Content};
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
+pub(crate) mod authoring;
 mod get_port;
+pub use authoring::{render_readable as render_action_readable, Action, ActionError, TargetRoute};
 pub use get_port::HostGetPort;
 
 /// MCP input for the `check` Porcelain action.
