@@ -7,7 +7,7 @@ pub(super) fn register(out: &mut Vec<Definition>) {
     computations(out);
     topic_actions(out);
     question_actions(out);
-    requirement_reviews(out);
+    review_actions(out);
     verification_runs(out);
 }
 
@@ -62,47 +62,133 @@ fn question_actions(out: &mut Vec<Definition>) {
     );
 }
 
-fn requirement_reviews(out: &mut Vec<Definition>) {
+fn review_actions_for_kind(
+    out: &mut Vec<Definition>,
+    plural: &'static str,
+    singular: &'static str,
+    title: &'static str,
+    kind: NodeType,
+) {
+    let base = leaked(format!("/{plural}/{{id}}"));
     out.push(
         backed::<operation::SubmitRequirementReview>(
-            "submit-requirement-review",
-            "submitRequirementReview",
+            leaked(format!("submit-{singular}-review")),
+            leaked(format!("submit{title}Review")),
             HttpMethod::Post,
-            "/requirements/{id}/submit",
-            "Submit the current Requirement revision for review.",
+            leaked(format!("{base}/submit")),
+            "Submit the current record revision for review.",
             ResponseKind::Resource,
             vec![schema::path("id")],
         )
-        .path_field("id", "requirement_id")
+        .path_field("id", "record_id")
+        .fixed("record_kind", kind.as_str())
         .scope("scope_id")
-        .target(TargetAction::Submit, Some(NodeType::Requirement)),
+        .target(TargetAction::Submit, Some(kind)),
     );
     out.push(
         backed::<operation::DecideRequirementReview>(
-            "decide-requirement-review",
-            "decideRequirementReview",
+            leaked(format!("decide-{singular}-review")),
+            leaked(format!("decide{title}Review")),
             HttpMethod::Post,
-            "/requirements/{id}/submissions/{proposal_id}/decide",
-            "Decide one Requirement review submission.",
+            leaked(format!("{base}/submissions/{{proposal_id}}/decide")),
+            "Decide one record review submission.",
             ResponseKind::Resource,
             vec![schema::path("id"), schema::path("proposal_id")],
         )
-        .path_field("id", "requirement_id")
+        .path_field("id", "record_id")
+        .fixed("record_kind", kind.as_str())
         .scope("scope_id"),
     );
     out.push(
         backed::<operation::WithdrawRequirementReview>(
-            "withdraw-requirement-review",
-            "withdrawRequirementReview",
+            leaked(format!("withdraw-{singular}-review")),
+            leaked(format!("withdraw{title}Review")),
             HttpMethod::Post,
-            "/requirements/{id}/submissions/{proposal_id}/withdraw",
-            "Withdraw one Requirement review submission.",
+            leaked(format!("{base}/submissions/{{proposal_id}}/withdraw")),
+            "Withdraw one record review submission.",
             ResponseKind::Resource,
             vec![schema::path("id"), schema::path("proposal_id")],
         )
-        .path_field("id", "requirement_id")
+        .path_field("id", "record_id")
+        .fixed("record_kind", kind.as_str())
         .scope("scope_id"),
     );
+}
+
+macro_rules! review_actions_for_row {
+    ($out:ident, [$kind:ident], [requirements], [$review:ident]) => {
+        review_actions_for_kind(
+            $out,
+            "requirements",
+            "requirement",
+            "Requirement",
+            NodeType::$kind,
+        );
+    };
+    (
+        $out:ident,
+        [$kind:ident],
+        [writable {
+            mode: $mode:ident,
+            plural: $plural:literal,
+            singular: $singular:literal,
+            singular_id: $singular_id:literal,
+            plural_id: $plural_id:literal,
+            create: $create:ident,
+            update: $update:ident,
+            create_defaults: $create_defaults:ident,
+            create_aliases: $create_aliases:ident,
+            update_defaults: $update_defaults:ident,
+            update_aliases: $update_aliases:ident,
+            nullable: $nullable:expr,
+            target: $target:expr
+        }],
+        [$review:ident]
+    ) => {
+        review_actions_for_kind(
+            $out,
+            $plural,
+            $singular,
+            $singular_id,
+            NodeType::$kind,
+        );
+    };
+    ($out:ident, [$($kind:tt)*], [$($route:tt)*], []) => {};
+}
+
+macro_rules! register_review_actions {
+    (
+        $out:ident;
+        $($group:ident {
+            $($variant:ident {
+                record: $record:ty,
+                field: $field:ident,
+                path: $path:ident,
+                meta: $meta:tt,
+                node: [$($node:tt)*],
+                reader: { open: $reader:ident, closed: [$($closed:tt)*], strategy: $strategy:ident },
+                id: $id:ident,
+                loader: [$($loader:tt)*],
+                graph: [$($graph:tt)*],
+                import: [$($import:tt)*],
+                catalog: [$($catalog:tt)*],
+                route: [$($route:tt)*]
+                $(, review: $review:ident)?
+            };)*
+        })*
+    ) => {
+        $($(review_actions_for_row!(
+            $out, [$($node)*], [$($route)*], [$($review)?]
+        );)*)*
+    };
+}
+
+fn review_actions(out: &mut Vec<Definition>) {
+    crate::cache::family_table::record_family_rows!(register_review_actions, out);
+}
+
+fn leaked(value: String) -> &'static str {
+    Box::leak(value.into_boxed_str())
 }
 
 fn verification_runs(out: &mut Vec<Definition>) {

@@ -2,8 +2,8 @@
 
 use super::{
     schema::{self, Definition, HttpMethod, Parameter, ResponseKind},
-    ArgumentAlias, CliDefault, CliDefaultValue, EtagBinding, HandlerBinding, HeaderBinding,
-    Operation, ParentBinding, PathBinding, QueryRequestBinding, QueryRoute, Registration,
+    ArgumentAlias, CliDefault, CliDefaultValue, EtagBinding, FixedBinding, HandlerBinding,
+    HeaderBinding, Operation, ParentBinding, PathBinding, QueryRequestBinding, QueryRoute, Registration,
     RequestAdapter, ResponseAdapter, ResponseBinding, SelectorBinding, TargetAction, TargetBinding,
 };
 use provenance_core::NodeType;
@@ -111,6 +111,11 @@ impl Definition {
         {
             binding.field = field;
         }
+        self
+    }
+
+    fn fixed(mut self, field: &'static str, value: &'static str) -> Self {
+        self.registration.request.fixed.push(FixedBinding { field, value });
         self
     }
 

@@ -9,7 +9,7 @@ use super::decision_state::CycleFacts;
 use crate::state_store::StateStore;
 use provenance_core::{
     review::{PendingSubmission, RecordedDecision, RequirementDecisionState},
-    DispositionDecision, IdeationTargetType, ProposalType, ScopeId, StableId,
+    DispositionDecision, NodeType, ProposalType, ScopeId, StableId,
 };
 use provenance_macros::rule;
 
@@ -23,14 +23,22 @@ impl StateStore {
         scope: &ScopeId,
         requirement_id: &StableId,
     ) -> anyhow::Result<RequirementDecisionState> {
-        let record = self.requirement(scope, requirement_id)?;
-        let head = self.head(&record.into())?;
+        self.record_decision_state(scope, NodeType::Requirement, requirement_id)
+    }
+
+    pub fn record_decision_state(
+        &self,
+        scope: &ScopeId,
+        kind: NodeType,
+        record_id: &StableId,
+    ) -> anyhow::Result<RequirementDecisionState> {
+        let record = crate::cache::review_families::record(self, scope, kind, record_id)?;
+        let head = self.head(&record)?;
         let proposals = self.list_proposal_definitions(scope)?;
         let dispositions = self.list_dispositions(scope)?;
         let facts = CycleFacts::validated(self, scope)?;
         let targets_record = |target: &provenance_core::IdeationTarget| {
-            target.artifact_type == IdeationTargetType::Requirement
-                && target.artifact_id == *requirement_id
+            NodeType::from(target.artifact_type) == kind && target.artifact_id == *record_id
         };
         let submissions: Vec<_> = proposals
             .iter()
@@ -43,8 +51,8 @@ impl StateStore {
             .pending_submission(
                 self,
                 scope,
-                provenance_core::NodeType::Requirement,
-                requirement_id,
+                kind,
+                record_id,
             )?
             .map(|entry| {
                 let proposal = submissions
@@ -94,14 +102,14 @@ impl StateStore {
             })
             .cloned();
         Ok(RequirementDecisionState {
-            record_kind: provenance_core::NodeType::Requirement,
-            record_id: requirement_id.clone(),
+            record_kind: kind,
+            record_id: record_id.clone(),
             current_revision: head.map(|entry| entry.revision),
             pending,
             current_acceptance,
             decisions: recorded,
             withdrawn: facts
-                .withdrawn_submissions(provenance_core::NodeType::Requirement, requirement_id),
+                .withdrawn_submissions(kind, record_id),
         })
     }
 }
