@@ -71,9 +71,42 @@ fn register<O: Operation>() -> Entry {
     }
 }
 
+macro_rules! register_family_catalog {
+    ($entries:ident, none) => {};
+    ($entries:ident, projection($list:ident, $list_wire:literal, $page:ident, $page_wire:literal, none)) => {
+        $entries.push(register::<super::resource_lists::$list>());
+        $entries.push(register::<super::resource_pages::$page>());
+    };
+    ($entries:ident, $kind:ident($list:ident, $list_wire:literal, $page:ident, $page_wire:literal, $member:ident, $member_wire:literal)) => {
+        $entries.push(register::<super::resource_lists::$list>());
+        $entries.push(register::<super::resource_pages::$page>());
+        $entries.push(register::<super::resource_members::$member>());
+    };
+    ($entries:ident, verification($list:ident, $list_wire:literal, $page:ident, $member:ident, $member_wire:literal)) => {
+        $entries.push(register::<super::resource_lists::$list>());
+        $entries.push(register::<super::resource_pages::$page>());
+        $entries.push(register::<super::resource_members::$member>());
+    };
+}
+
+macro_rules! register_family_entries {
+    (
+        $entries:ident;
+        export { $($export_variant:ident: $export_type:ty, $export_field:ident, $export_path:ident, $export_suffix:literal, $export_table:literal, [$($export_node:tt)*], $export_reader:ident, [$($export_closed:tt)*], $export_id:ident, [$($export_loader:tt)*], [$($export_catalog:tt)*];)* }
+        canonical { $($canonical_variant:ident: $canonical_type:ty, $canonical_field:ident, $canonical_path:ident, $canonical_suffix:literal, $canonical_table:literal, [$($canonical_node:tt)*], $canonical_reader:ident, [$($canonical_closed:tt)*], $canonical_id:ident, [$($canonical_loader:tt)*], [$($canonical_catalog:tt)*];)* }
+        bindings { $($binding_variant:ident: $binding_type:ty, $binding_field:ident, $binding_path:ident, $binding_suffix:literal, $binding_table:literal, [$($binding_node:tt)*], $binding_reader:ident, [$($binding_closed:tt)*], $binding_id:ident, [$($binding_loader:tt)*], [$($binding_catalog:tt)*];)* }
+        internal { $($internal_variant:ident: $internal_type:ty, $internal_field:ident, $internal_path:ident, $internal_suffix:literal, $internal_table:literal, [$($internal_node:tt)*], $internal_reader:ident, [$($internal_closed:tt)*], $internal_id:ident, [$($internal_loader:tt)*], [$($internal_catalog:tt)*];)* }
+    ) => {
+        $(register_family_catalog!($entries, $($export_catalog)*);)*
+        $(register_family_catalog!($entries, $($canonical_catalog)*);)*
+        $(register_family_catalog!($entries, $($binding_catalog)*);)*
+        $(register_family_catalog!($entries, $($internal_catalog)*);)*
+    };
+}
+
 #[allow(clippy::too_many_lines)]
 pub(super) fn entries() -> Vec<Entry> {
-    vec![
+    let mut entries = vec![
         register::<super::CheckStatement>(),
         register::<super::CreateContribution>(),
         register::<super::UpsertContribution>(),
@@ -149,60 +182,13 @@ pub(super) fn entries() -> Vec<Entry> {
         register::<super::CreateProposal>(),
         register::<super::CreateAssertion>(),
         register::<super::CreateDisposition>(),
-        register::<super::resource_pages::PageSourcesV2>(),
-        register::<super::resource_pages::PageRequirementsV2>(),
-        register::<super::resource_pages::PageResolutionsV2>(),
-        register::<super::resource_pages::PageRulesV2>(),
-        register::<super::resource_pages::PageDomainsV2>(),
-        register::<super::resource_pages::PageBoundariesV2>(),
-        register::<super::resource_pages::PageTopicsV2>(),
-        register::<super::resource_pages::PageQuestionsV2>(),
-        register::<super::resource_pages::PageContributionsV2>(),
-        register::<super::resource_pages::PageSynthesisPacketsV2>(),
-        register::<super::resource_pages::PageProposalsV2>(),
-        register::<super::resource_pages::PageVerificationBindingsV2>(),
-        register::<super::resource_pages::PageDiscussionContainersV2>(),
-        register::<super::resource_pages::PageMessagesV2>(),
-        register::<super::resource_pages::PageAssertionsV2>(),
-        register::<super::resource_pages::PageDispositionsV2>(),
         register::<super::resource_pages::PageProposalAssertionsV2>(),
         register::<super::resource_pages::PageProposalDispositionsV2>(),
         register::<super::verification_resources::PageVerificationRunsV2>(),
-        register::<super::resource_members::GetSourceV2>(),
-        register::<super::resource_members::GetResolutionV2>(),
-        register::<super::resource_members::GetRuleV2>(),
-        register::<super::resource_members::GetDomainV2>(),
-        register::<super::resource_members::GetBoundaryV2>(),
-        register::<super::resource_members::GetTopicV2>(),
-        register::<super::resource_members::GetQuestionV2>(),
-        register::<super::resource_members::GetContributionV2>(),
-        register::<super::resource_members::GetSynthesisPacketV2>(),
-        register::<super::resource_members::GetProposalV2>(),
         register::<super::verification_resources::GetVerificationRunV2>(),
-        register::<super::resource_members::GetVerificationBindingV2>(),
-        register::<super::resource_members::GetDiscussionContainerV2>(),
-        register::<super::resource_members::GetMessageV2>(),
-        register::<super::resource_members::GetAssertionV2>(),
-        register::<super::resource_members::GetDispositionV2>(),
         register::<super::resource_members::GetProposalAssertionV2>(),
         register::<super::resource_members::GetProposalDispositionV2>(),
-        register::<super::resource_lists::ListSourcesV2>(),
-        register::<super::resource_lists::ListRequirementsV2>(),
-        register::<super::resource_lists::ListResolutionsV2>(),
-        register::<super::resource_lists::ListRulesV2>(),
-        register::<super::resource_lists::ListDomainsV2>(),
-        register::<super::resource_lists::ListBoundariesV2>(),
-        register::<super::resource_lists::ListTopicsV2>(),
-        register::<super::resource_lists::ListQuestionsV2>(),
-        register::<super::resource_lists::ListContributionsV2>(),
-        register::<super::resource_lists::ListSynthesisPacketsV2>(),
-        register::<super::resource_lists::ListProposalsV2>(),
         register::<super::resource_lists::ListVerificationRunsV2>(),
-        register::<super::resource_lists::ListVerificationBindingsV2>(),
-        register::<super::resource_lists::ListDiscussionContainersV2>(),
-        register::<super::resource_lists::ListMessagesV2>(),
-        register::<super::resource_lists::ListAssertionsV2>(),
-        register::<super::resource_lists::ListDispositionsV2>(),
         register::<super::GetRequirementV2>(),
         register::<super::CreateRequirementV2>(),
         register::<super::UpdateRequirementV2>(),
@@ -220,5 +206,7 @@ pub(super) fn entries() -> Vec<Entry> {
         register::<super::GetDiscussionConversationV2>(),
         register::<super::WriteDiscussionV2>(),
         register::<super::WriteTargetDiscussionV2>(),
-    ]
+    ];
+    crate::cache::record_families!(register_family_entries, entries);
+    entries
 }

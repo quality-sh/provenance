@@ -1,10 +1,12 @@
 use provenance_core::{
-    QuestionStatus, RepoPathPrefix, RequirementStatus, ResolutionMethod, ResolutionStatus,
-    RuleSeverity, RuleStatus, SourceType, StableId, TopicStatus,
+    Boundary, Domain, ImplementationBinding, Question, QuestionStatus, RepoPathPrefix, Requirement,
+    RequirementStatus, Resolution, ResolutionMethod, ResolutionStatus, Rule, RuleSeverity,
+    RuleStatus, Source, SourceType, StableId, Topic, TopicStatus, VerificationBinding,
 };
 use provenance_macros::verifies;
 
 use super::*;
+use crate::cache::ProjectionFamily;
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 mod collaboration;
@@ -397,6 +399,26 @@ fn family_count_of(graph: &GraphExport) -> usize {
         "the fully populated fixture must hold exactly one record of every family, got {counts:?}"
     );
     counts.len()
+}
+
+#[test]
+fn graph_export_contains_each_table_field() {
+    let scope = ScopeId::new("default").unwrap();
+    let graph = graph_in_scope(&scope, &all_families());
+    let object = serde_json::to_value(graph)
+        .unwrap()
+        .as_object()
+        .unwrap()
+        .clone();
+
+    for family in ProjectionFamily::ALL {
+        if let Some(field) = family.graph_field() {
+            assert!(
+                object.contains_key(field),
+                "GraphExport does not contain the table field {field}"
+            );
+        }
+    }
 }
 
 #[test]
