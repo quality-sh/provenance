@@ -4,6 +4,7 @@ mod cli;
 mod docs;
 mod gitignore;
 mod handlers;
+mod invocation;
 mod legacy_cleanup;
 mod onboarding;
 mod output;
@@ -13,41 +14,8 @@ mod ste_onboarding;
 mod store;
 mod wiki;
 
-use clap::{CommandFactory, Parser};
-use cli::Cli;
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let arguments = std::env::args().collect::<Vec<_>>();
-    if provenance_cli::porcelain::explicitly_selects_get(&arguments)?
-        && provenance_cli::porcelain::try_dispatch(&arguments).await?
-    {
-        return Ok(());
-    }
-    if catalog_cli::try_dispatch(&arguments).await? {
-        return Ok(());
-    }
-    let mut index = 1;
-    while index < arguments.len() {
-        match arguments[index].as_str() {
-            "--quiet" => index += 1,
-            "--repo" | "--scope" | "--format" => index += 2,
-            _ => break,
-        }
-    }
-    let command = arguments.get(index);
-    let is_builtin = command.is_none_or(|command| {
-        command.starts_with('-')
-            || Cli::command()
-                .get_subcommands()
-                .any(|candidate| candidate.get_name() == command)
-    });
-    if provenance_cli::porcelain::bare_target_selects_get(&arguments, is_builtin)
-        && provenance_cli::porcelain::try_dispatch(&arguments).await?
-    {
-        return Ok(());
-    }
-    let cli = Cli::parse();
-    let quiet = cli.quiet;
-    handlers::dispatch(cli.command, quiet).await
+    invocation::Invocation::parse(arguments)?.dispatch().await
 }

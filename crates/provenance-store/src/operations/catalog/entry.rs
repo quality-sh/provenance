@@ -130,6 +130,7 @@ pub(super) fn entries() -> Vec<Entry> {
         register::<super::CompleteVerification>(),
         register::<super::Info>(),
         register::<super::Get>(),
+        register::<super::ResolveRecord>(),
         register::<super::ReadDocument>(),
         register::<super::Search>(),
         register::<super::Neighbors>(),

@@ -141,6 +141,11 @@ pub struct Relations<'s> {
     snapshot: &'s ReadSnapshot,
 }
 
+/// Repository identity rows visible in this snapshot's bound scope.
+pub struct RecordIdentities<'s> {
+    snapshot: &'s ReadSnapshot,
+}
+
 impl<'s> Relations<'s> {
     pub(crate) const fn snapshot(&self) -> &'s ReadSnapshot {
         self.snapshot
@@ -149,5 +154,29 @@ impl<'s> Relations<'s> {
     /// The scope's row count in the table.
     pub async fn count(&self) -> anyhow::Result<i64> {
         self.snapshot.count_rows("relations").await
+    }
+}
+
+impl ReadSnapshot {
+    pub fn record_identities(&self) -> RecordIdentities<'_> {
+        self.attest("record_identities");
+        RecordIdentities { snapshot: self }
+    }
+}
+
+impl RecordIdentities<'_> {
+    pub async fn resolve(&self, id: &str) -> anyhow::Result<Vec<provenance_core::NodeType>> {
+        let mut tx = self.snapshot.connection().await;
+        let rows: Vec<String> = sqlx::query_scalar(
+            "SELECT node_type FROM record_identities \
+             WHERE scope_id = ? AND id = ? ORDER BY node_type",
+        )
+        .bind(self.snapshot.scope().as_str())
+        .bind(id)
+        .fetch_all(&mut **tx)
+        .await?;
+        rows.into_iter()
+            .map(|node_type| provenance_core::NodeType::parse(&node_type))
+            .collect()
     }
 }

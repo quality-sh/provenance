@@ -2263,6 +2263,7 @@ dependencies = [
 name = "provenance-porcelain"
 version = "0.2.3"
 dependencies = [
+ "provenance-core",
  "provenance-macros",
  "serde",
  "serde_json",

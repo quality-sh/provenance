@@ -1,49 +1,21 @@
 //! Composed reads for one known repository record.
 
+use provenance_core::protocol::{
+    GraphNode, ImpactResult, RecordResolution as CoreRecordResolution, ResponseMeta, TracedNode,
+};
+use provenance_core::NodeType;
 use provenance_macros::rule;
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde::{Deserialize, Serialize, Serializer};
 use std::{fmt::Display, future::Future, pin::Pin};
 
 /// One future returned by an injected read port.
 pub type PortFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, ReadError>> + Send + 'a>>;
 
-/// A canonical record with its native JSON representation.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-pub struct Record {
-    pub id: String,
-    pub kind: String,
-    pub value: Value,
-    /// The number of graph hops from the selected record, for traversal results.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub depth: Option<usize>,
-    /// Metadata from the operation that resolved this record.
-    #[serde(skip)]
-    pub response_metadata: Option<Value>,
-}
-
-impl Record {
-    pub fn new(id: impl Into<String>, kind: impl Into<String>, value: Value) -> Self {
-        Self {
-            id: id.into(),
-            kind: kind.into(),
-            value,
-            depth: None,
-            response_metadata: None,
-        }
-    }
-
-    #[must_use]
-    pub fn with_response_metadata(mut self, metadata: Value) -> Self {
-        self.response_metadata = Some(metadata);
-        self
-    }
-
-    #[must_use]
-    pub const fn at_depth(mut self, depth: usize) -> Self {
-        self.depth = Some(depth);
-        self
-    }
+/// The result of resolving one repository-local record ID.
+#[derive(Clone, Debug)]
+pub struct RecordResolution {
+    pub result: CoreRecordResolution,
+    pub metadata: Option<ResponseMeta>,
 }
 
 /// The named view selected for a known record.
@@ -63,7 +35,7 @@ pub struct GetInput {
     pub target: String,
     pub view: View,
     pub max_depth: Option<usize>,
-    pub returned_kinds: Vec<String>,
+    pub returned_kinds: Vec<NodeType>,
     pub limit: Option<usize>,
 }
 
@@ -89,48 +61,175 @@ pub struct Bounds {
     pub truncated: bool,
 }
 
-/// A composed known-record result.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-pub struct GetOutcome {
-    pub record: Record,
-    pub view: View,
-    pub related: Vec<Record>,
-    pub detail: Option<Value>,
-    pub bounds: Option<Bounds>,
-    /// Metadata from the operation that resolved the selected record.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub record_metadata: Option<Value>,
-    /// Metadata from the traversal or impact operation, when selected.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub view_metadata: Option<Value>,
-}
-
 /// A traversal request sent through the injected operation port.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TraversalRequest {
     pub target: String,
-    pub kind: String,
+    pub kind: NodeType,
     pub view: View,
     pub max_depth: usize,
     pub limit: usize,
 }
 
-/// A traversal result before returned-kind filtering.
-#[derive(Clone, Debug, Eq, PartialEq)]
+/// A typed traversal result before returned-kind filtering.
+#[derive(Clone, Debug)]
 pub struct Traversal {
-    pub records: Vec<Record>,
+    pub records: Vec<TracedNode>,
     pub bounds: Bounds,
-    /// Metadata from the traversal operation.
-    pub response_metadata: Option<Value>,
+    pub response_metadata: Option<ResponseMeta>,
 }
 
-/// An impact result with its page state.
-#[derive(Clone, Debug, Eq, PartialEq)]
+/// A typed impact result with its page state.
+#[derive(Clone, Debug)]
 pub struct Impact {
-    pub detail: Value,
+    pub detail: ImpactResult,
     pub bounds: Bounds,
-    /// Metadata from the impact operation.
-    pub response_metadata: Option<Value>,
+    pub response_metadata: Option<ResponseMeta>,
+}
+
+/// The data selected by one named view.
+#[derive(Clone, Debug)]
+pub enum ViewResult {
+    Record,
+    Children(Traversal),
+    Grounding(Traversal),
+    Impact(Impact),
+}
+
+impl ViewResult {
+    pub const fn view(&self) -> View {
+        match self {
+            Self::Record => View::Record,
+            Self::Children(_) => View::Children,
+            Self::Grounding(_) => View::Grounding,
+            Self::Impact(_) => View::Impact,
+        }
+    }
+
+    pub fn related(&self) -> &[TracedNode] {
+        match self {
+            Self::Children(traversal) | Self::Grounding(traversal) => &traversal.records,
+            Self::Record | Self::Impact(_) => &[],
+        }
+    }
+
+    pub const fn impact(&self) -> Option<&ImpactResult> {
+        match self {
+            Self::Impact(impact) => Some(&impact.detail),
+            _ => None,
+        }
+    }
+
+    pub const fn bounds(&self) -> Option<&Bounds> {
+        match self {
+            Self::Children(traversal) | Self::Grounding(traversal) => Some(&traversal.bounds),
+            Self::Impact(impact) => Some(&impact.bounds),
+            Self::Record => None,
+        }
+    }
+
+    pub const fn metadata(&self) -> Option<&ResponseMeta> {
+        match self {
+            Self::Children(traversal) | Self::Grounding(traversal) => {
+                traversal.response_metadata.as_ref()
+            }
+            Self::Impact(impact) => impact.response_metadata.as_ref(),
+            Self::Record => None,
+        }
+    }
+}
+
+/// A composed known-record result with one typed view payload.
+#[derive(Clone, Debug)]
+pub struct GetOutcome {
+    pub record: GraphNode,
+    pub result: ViewResult,
+    pub record_metadata: Option<ResponseMeta>,
+}
+
+impl GetOutcome {
+    pub const fn view(&self) -> View {
+        self.result.view()
+    }
+
+    pub fn related(&self) -> &[TracedNode] {
+        self.result.related()
+    }
+
+    pub const fn impact(&self) -> Option<&ImpactResult> {
+        self.result.impact()
+    }
+
+    pub const fn bounds(&self) -> Option<&Bounds> {
+        self.result.bounds()
+    }
+
+    pub const fn view_metadata(&self) -> Option<&ResponseMeta> {
+        self.result.metadata()
+    }
+}
+
+/// Serializes the canonical payload without the `GraphNode` discriminant.
+pub struct RecordData<'a>(pub &'a GraphNode);
+
+impl Serialize for RecordData<'_> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self.0 {
+            GraphNode::Source(record) => record.serialize(serializer),
+            GraphNode::Requirement(record) => record.serialize(serializer),
+            GraphNode::Resolution(record) => record.serialize(serializer),
+            GraphNode::Rule(record) => record.serialize(serializer),
+            GraphNode::Topic(record) => record.serialize(serializer),
+            GraphNode::Question(record) => record.serialize(serializer),
+            GraphNode::Domain(record) => record.serialize(serializer),
+            GraphNode::Boundary(record) => record.serialize(serializer),
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct OutputRecord<'a> {
+    id: &'a str,
+    kind: &'static str,
+    value: RecordData<'a>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    depth: Option<usize>,
+}
+
+fn output_record(node: &GraphNode, depth: Option<usize>) -> OutputRecord<'_> {
+    OutputRecord {
+        id: node.id().as_str(),
+        kind: node.node_type().as_str(),
+        value: RecordData(node),
+        depth,
+    }
+}
+
+impl Serialize for GetOutcome {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct as _;
+        let fields = 5
+            + usize::from(self.record_metadata.is_some())
+            + usize::from(self.view_metadata().is_some());
+        let mut output = serializer.serialize_struct("GetOutcome", fields)?;
+        output.serialize_field("record", &output_record(&self.record, None))?;
+        output.serialize_field("view", &self.view())?;
+        let related = self
+            .related()
+            .iter()
+            .map(|record| output_record(&record.node, Some(record.depth)))
+            .collect::<Vec<_>>();
+        output.serialize_field("related", &related)?;
+        output.serialize_field("detail", &self.impact())?;
+        output.serialize_field("bounds", &self.bounds())?;
+        if let Some(metadata) = &self.record_metadata {
+            output.serialize_field("record_metadata", metadata)?;
+        }
+        if let Some(metadata) = self.view_metadata() {
+            output.serialize_field("view_metadata", metadata)?;
+        }
+        output.end()
+    }
 }
 
 /// A failure from validation, identity resolution, or an injected operation.
@@ -157,9 +256,9 @@ impl std::error::Error for ReadError {}
 
 /// Existing operation paths needed to compose a known-record read.
 pub trait GetPort: Send + Sync {
-    fn resolve<'a>(&'a self, id: &'a str) -> PortFuture<'a, Option<Record>>;
+    fn resolve<'a>(&'a self, id: &'a str) -> PortFuture<'a, RecordResolution>;
     fn traverse(&self, request: TraversalRequest) -> PortFuture<'_, Traversal>;
-    fn impact<'a>(&'a self, record: &'a Record, limit: usize) -> PortFuture<'a, Impact>;
+    fn impact<'a>(&'a self, record: &'a GraphNode, limit: usize) -> PortFuture<'a, Impact>;
 }
 
 impl<P: GetPort> crate::Porcelain<P> {
@@ -172,61 +271,44 @@ impl<P: GetPort> crate::Porcelain<P> {
     #[rule("rule_porcelain_read_rejects_bad_options")]
     pub async fn get(&self, input: GetInput) -> Result<GetOutcome, ReadError> {
         validate(&input)?;
-        let record = self
-            .port
-            .resolve(&input.target)
-            .await?
-            .ok_or(ReadError::NotFound)?;
-        let record_metadata = record.response_metadata.clone();
-        if matches!(input.view, View::Children | View::Grounding) {
-            let traversal = self
-                .port
-                .traverse(TraversalRequest {
-                    target: input.target,
-                    kind: record.kind.clone(),
-                    view: input.view,
-                    max_depth: input.max_depth.unwrap_or(1),
-                    limit: input.limit.unwrap_or(50),
-                })
-                .await?;
-            let related = traversal
-                .records
-                .into_iter()
-                .filter(|candidate| {
+        let resolved = self.port.resolve(&input.target).await?;
+        let record = match resolved.result {
+            CoreRecordResolution::Found(node) => node,
+            CoreRecordResolution::Missing => return Err(ReadError::NotFound),
+            CoreRecordResolution::Ambiguous => return Err(ReadError::AmbiguousIdentity),
+        };
+        let record_metadata = resolved.metadata;
+        let result = match input.view {
+            View::Record => ViewResult::Record,
+            View::Children | View::Grounding => {
+                let mut traversal = self
+                    .port
+                    .traverse(TraversalRequest {
+                        target: input.target,
+                        kind: record.node_type(),
+                        view: input.view,
+                        max_depth: input.max_depth.unwrap_or(1),
+                        limit: input.limit.unwrap_or(50),
+                    })
+                    .await?;
+                traversal.records.retain(|candidate| {
                     input.returned_kinds.is_empty()
-                        || input.returned_kinds.contains(&candidate.kind)
-                })
-                .collect();
-            return Ok(GetOutcome {
-                record,
-                view: input.view,
-                related,
-                detail: None,
-                bounds: Some(traversal.bounds),
-                record_metadata,
-                view_metadata: traversal.response_metadata,
-            });
-        }
-        if input.view == View::Impact {
-            let impact = self.port.impact(&record, input.limit.unwrap_or(50)).await?;
-            return Ok(GetOutcome {
-                record,
-                view: input.view,
-                related: Vec::new(),
-                detail: Some(impact.detail),
-                bounds: Some(impact.bounds),
-                record_metadata,
-                view_metadata: impact.response_metadata,
-            });
-        }
+                        || input.returned_kinds.contains(&candidate.node.node_type())
+                });
+                if input.view == View::Children {
+                    ViewResult::Children(traversal)
+                } else {
+                    ViewResult::Grounding(traversal)
+                }
+            }
+            View::Impact => {
+                ViewResult::Impact(self.port.impact(&record, input.limit.unwrap_or(50)).await?)
+            }
+        };
         Ok(GetOutcome {
             record,
-            view: input.view,
-            related: Vec::new(),
-            detail: None,
-            bounds: None,
+            result,
             record_metadata,
-            view_metadata: None,
         })
     }
 }
@@ -238,11 +320,7 @@ fn validate(input: &GetInput) -> Result<(), ReadError> {
         View::Children | View::Grounding => false,
         View::Impact => has_traversal_options,
     };
-    if unsupported
-        || input.max_depth == Some(0)
-        || input.limit == Some(0)
-        || input.returned_kinds.iter().any(String::is_empty)
-    {
+    if unsupported || input.max_depth == Some(0) || input.limit == Some(0) {
         return Err(ReadError::InvalidOptions);
     }
     Ok(())

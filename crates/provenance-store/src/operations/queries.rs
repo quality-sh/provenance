@@ -7,8 +7,9 @@
 use camino::Utf8PathBuf;
 use provenance_core::protocol::{
     EvidenceQuery, EvidenceResult, GetQuery, GetResult, ImpactQuery, ImpactResult, NeighborsQuery,
-    NeighborsResult, ResolveSymbolQuery, ResolveSymbolResult, SearchQuery, SearchResult,
-    StaleQuery, StaleResult, Stamped, TraceQuery, TraceResult,
+    NeighborsResult, ResolveRecordQuery, ResolveRecordResult, ResolveSymbolQuery,
+    ResolveSymbolResult, SearchQuery, SearchResult, StaleQuery, StaleResult, Stamped, TraceQuery,
+    TraceResult,
 };
 use provenance_core::ScopeId;
 
@@ -50,6 +51,18 @@ pub async fn get(
     })
     .await
     .and_then(|answer| page::checked_result("get", answer))
+}
+
+pub async fn resolve_record(
+    repo: Option<Utf8PathBuf>,
+    scope: &ScopeId,
+    policy: ReadPolicy,
+    request: ResolveRecordQuery,
+) -> anyhow::Result<Stamped<ResolveRecordResult>> {
+    served(repo, scope, policy, move |ctx| {
+        Box::pin(async move { records::resolve_record(ctx, request).await })
+    })
+    .await
 }
 
 pub async fn search(
