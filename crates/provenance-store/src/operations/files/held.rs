@@ -134,7 +134,7 @@ impl HeldRepositoryFile {
     }
 
     fn require_matching_backup(&self, backup: &str) -> Result<(), Refusal> {
-        match self.matches_backup(&backup) {
+        match self.matches_backup(backup) {
             Ok(true) => Ok(()),
             Ok(false) => self.restore_then_refuse(backup, Refusal::Changed),
             Err(error) => self.restore_then_refuse(backup, error),
