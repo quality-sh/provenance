@@ -111,3 +111,103 @@ fn scope_import_rejects_an_id_shared_by_two_canonical_kinds() {
 
     assert!(error.to_string().contains("record ID already exists"));
 }
+
+#[test]
+fn scope_import_does_not_grandfather_a_keyword_id_from_another_canonical_kind() {
+    let (_dir, live, staged, scope, _) = staged_store();
+    let old: provenance_core::Source = serde_json::from_value(serde_json::json!({
+        "schema_version": provenance_core::SUPPORTED_SCHEMA_VERSION.0,
+        "scope_id": "default", "id": "search", "name": "Old source",
+        "source_type": "document"
+    }))
+    .unwrap();
+    let old_path = shards::sources_path(&staged.layout, &scope);
+    crate::jsonl::write_jsonl_atomic(&old_path, std::slice::from_ref(&old)).unwrap();
+    let replacement: provenance_core::Requirement = serde_json::from_value(serde_json::json!({
+        "schema_version": provenance_core::SUPPORTED_SCHEMA_VERSION.0,
+        "scope_id": "default", "id": "search", "statement": "A new requirement exists.",
+        "status": "active"
+    }))
+    .unwrap();
+
+    let error = with_repository_publication(&live.layout, || {
+        staged.import_scope(
+            &scope,
+            &ScopeShards {
+                requirements: std::slice::from_ref(&replacement),
+                ..ScopeShards::default()
+            },
+        )
+    })
+    .unwrap_err();
+    assert!(error.to_string().contains("reserved record ID search"), "{error}");
+    assert!(!staged.layout.publication_lock_path().exists());
+    assert_eq!(staged.list_sources(&scope).unwrap(), vec![old]);
+    assert!(staged.list_requirements(&scope).unwrap().is_empty());
+}
+
+#[test]
+fn scope_import_preserves_a_keyword_id_from_a_landing_only_record() {
+    let (_dir, live, staged, scope, _) = staged_store();
+    let old: provenance_core::Contribution = serde_json::from_value(serde_json::json!({
+        "schema_version": provenance_core::SUPPORTED_SCHEMA_VERSION.0,
+        "scope_id": "default", "id": "search",
+        "target": {"artifact_type": "source", "artifact_id": "source_anchor"},
+        "participant_slot": "reviewer", "stance": "support", "strongest_finding": "Evidence",
+        "evidence_references": [], "material_claims": [], "risks": [], "objections": [],
+        "challenges": [], "suggested_artifact_changes": [],
+        "unsupported_recommendations": [],
+        "uncertainty": {"level": "low", "rationale": "Direct"}, "open_questions": []
+    }))
+    .unwrap();
+    let landing = crate::state_store::IdeationLandingBatch {
+        contributions: vec![old.clone()],
+        synthesis_packets: Vec::new(),
+        proposals: Vec::new(),
+        assertions: Vec::new(),
+        dispositions: Vec::new(),
+    };
+    let landing_path = shards::ideation_landings_path(&staged.layout, &scope);
+    crate::jsonl::write_jsonl_atomic(&landing_path, &[landing]).unwrap();
+
+    with_repository_publication(&live.layout, || {
+        staged.import_scope(
+            &scope,
+            &ScopeShards {
+                contributions: std::slice::from_ref(&old),
+                ..ScopeShards::default()
+            },
+        )
+    })
+    .unwrap();
+    assert!(!staged.layout.publication_lock_path().exists());
+    assert_eq!(staged.list_contributions(&scope).unwrap(), vec![old]);
+}
+
+#[test]
+fn scope_import_preserves_a_keyword_id_from_a_legacy_disposition() {
+    let (_dir, live, staged, scope, _) = staged_store();
+    let legacy_path = shards::legacy_promotion_decisions_path(&staged.layout, &scope);
+    std::fs::create_dir_all(legacy_path.parent().unwrap()).unwrap();
+    let old: provenance_core::DispositionRecord = serde_json::from_value(serde_json::json!({
+        "schema_version": provenance_core::SUPPORTED_SCHEMA_VERSION.0,
+        "scope_id": "default", "id": "search", "proposal_id": "proposal_old",
+        "decision": "rejected", "rationale": "Old decision",
+        "actor": {"identity_type": "human", "id": "reviewer"}
+    }))
+    .unwrap();
+    std::fs::write(&legacy_path, format!("{}\n", serde_json::to_string(&old).unwrap())).unwrap();
+
+    with_repository_publication(&live.layout, || {
+        staged.import_scope(
+            &scope,
+            &ScopeShards {
+                dispositions: std::slice::from_ref(&old),
+                ..ScopeShards::default()
+            },
+        )
+    })
+    .unwrap();
+    assert!(!staged.layout.publication_lock_path().exists());
+    assert_eq!(staged.list_dispositions(&scope).unwrap(), vec![old]);
+}
