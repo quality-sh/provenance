@@ -169,3 +169,15 @@ pub fn invalid(field: Option<&str>) -> ErasedFailure {
         },
     )
 }
+
+/// A request body that failed JSON parsing reports `malformed_json`, not
+/// `invalid_value`; the envelope has not been inspected yet.
+pub fn malformed_json() -> ErasedFailure {
+    ErasedFailure::new(
+        None,
+        OperationFailure::InvalidInput {
+            field: None,
+            reason: InvalidInputReason::MalformedJson,
+        },
+    )
+}
