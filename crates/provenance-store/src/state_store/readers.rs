@@ -365,8 +365,15 @@ pub(super) fn read_message_shards(
     scope: &ScopeId,
 ) -> anyhow::Result<Vec<Message>> {
     store.state_path_access(&shards::threads_path(layout, scope), || {
-        read_jsonl_shards(message_shard_paths(layout, scope)?, "message")
+        read_message_shards_unlocked(layout, scope)
     })
+}
+
+pub(super) fn read_message_shards_unlocked(
+    layout: &ProvenanceLayout,
+    scope: &ScopeId,
+) -> anyhow::Result<Vec<Message>> {
+    read_jsonl_shards(message_shard_paths(layout, scope)?, "message")
 }
 
 /// Every month shard of the scope's messages, sorted. All message reads

@@ -80,7 +80,8 @@ fn ensure_new_ids_assignable<T>(
 }
 use readers::{
     deserialize_closed, read_ideation_landings, read_jsonl, read_jsonl_closed,
-    read_legacy_dispositions, read_message_shards,
+    read_jsonl_unlocked, read_legacy_dispositions, read_message_shards,
+    read_message_shards_unlocked,
 };
 use serde::{Deserialize, Serialize};
 

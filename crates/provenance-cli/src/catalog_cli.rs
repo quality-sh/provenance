@@ -23,7 +23,7 @@ pub struct Invocation {
 }
 
 impl Invocation {
-    pub fn new(args: grammar::CatalogArgs, matches: &ArgMatches) -> anyhow::Result<Self> {
+    pub fn new(args: &grammar::CatalogArgs, matches: &ArgMatches) -> Self {
         let resolved = address::resolve(&args.collection, &args.address)
             .unwrap_or_else(|error| usage_error(error));
         let (data, query, headers) = input(
@@ -40,14 +40,14 @@ impl Invocation {
                     .unwrap_or_else(|error| usage_error(error));
             }
         }
-        Ok(Self {
+        Self {
             context: args.common.context(),
             path: resolved.path,
             definition: resolved.address.definition,
             data,
             query,
             headers,
-        })
+        }
     }
 }
 
@@ -168,7 +168,7 @@ pub async fn dispatch_target(
     Ok(())
 }
 
-pub fn ensure_only_fields(matches: &ArgMatches, allowed: &[&str]) -> anyhow::Result<()> {
+pub fn ensure_only_fields(matches: &ArgMatches, allowed: &[&str]) {
     const COMMON: &[&str] = &[
         "repo",
         "scope",
@@ -191,7 +191,6 @@ pub fn ensure_only_fields(matches: &ArgMatches, allowed: &[&str]) -> anyhow::Res
             ));
         }
     }
-    Ok(())
 }
 
 pub fn usage_error(error: impl std::fmt::Display) -> ! {
@@ -240,7 +239,7 @@ fn input(
         .map(|field| field.name.as_str())
         .collect::<Vec<_>>();
     allowed.extend(extra.iter().copied());
-    ensure_only_fields(matches, &allowed)?;
+    ensure_only_fields(matches, &allowed);
     let mut data = Map::new();
     let mut query = BTreeMap::new();
     let mut headers = HeaderMap::new();
