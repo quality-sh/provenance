@@ -204,14 +204,17 @@ fn build_summary(
         }
     }
     for file in skills.files() {
-        let relative = match std::path::Path::new(&file.path).strip_prefix(path.as_std_path()) {
-            Ok(path) => path
-                .iter()
-                .map(|part| part.to_string_lossy())
-                .collect::<Vec<_>>()
-                .join("/"),
-            Err(_) => file.path.clone(),
-        };
+        let relative = std::path::Path::new(&file.path)
+            .strip_prefix(path.as_std_path())
+            .map_or_else(
+                |_| file.path.clone(),
+                |path| {
+                    path.iter()
+                        .map(|part| part.to_string_lossy())
+                        .collect::<Vec<_>>()
+                        .join("/")
+                },
+            );
         match file.status {
             FileStatus::Unchanged => {}
             FileStatus::Installed => summary.push_new(relative, "added skill file"),
