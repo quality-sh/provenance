@@ -72,6 +72,14 @@ pub use ideation::{
 pub use invoke::{
     invoke, invoke_authorized_native_typed, invoke_authorized_typed, invoke_typed, invoke_with,
 };
+
+#[cfg(test)]
+pub(crate) fn registered_operation_names_for_test() -> Vec<&'static str> {
+    entry::entries()
+        .into_iter()
+        .map(|entry| entry.name)
+        .collect()
+}
 #[cfg(feature = "schema")]
 pub use schema::{
     definitions, operation_request_schema, operation_success_schema, parse_parameter_value,
