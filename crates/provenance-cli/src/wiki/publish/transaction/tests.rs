@@ -37,29 +37,3 @@ fn rollback_failure_leaves_every_ambiguous_tree_for_operator_recovery() {
         "new"
     );
 }
-
-#[test]
-fn no_replace_rename_preserves_an_output_that_appeared() {
-    let temp = tempfile::tempdir().unwrap();
-    let output = Utf8PathBuf::from_path_buf(temp.path().join("wiki")).unwrap();
-    let stage = Utf8PathBuf::from_path_buf(temp.path().join("stage")).unwrap();
-    std::fs::create_dir(&output).unwrap();
-    std::fs::write(output.join("caller"), "keep me").unwrap();
-    std::fs::create_dir(&stage).unwrap();
-    std::fs::write(stage.join("generated"), "new").unwrap();
-
-    let parent = ownership::open_directory_no_follow(temp.path()).unwrap();
-    let error =
-        replacement::rename_no_replace_at(&parent, output.parent().unwrap(), "stage", "wiki")
-            .unwrap_err();
-
-    assert_eq!(error.kind(), std::io::ErrorKind::AlreadyExists);
-    assert_eq!(
-        std::fs::read_to_string(output.join("caller")).unwrap(),
-        "keep me"
-    );
-    assert_eq!(
-        std::fs::read_to_string(stage.join("generated")).unwrap(),
-        "new"
-    );
-}

@@ -71,7 +71,7 @@ impl FileRollbackJournal {
         let backup = super::commit::displace_to_backup(path)
             .with_context(|| format!("failed to preserve {} before replacement", path.display()))?;
         if let Err(error) = verify(&backup) {
-            super::commit::rename_no_replace(&backup, path).with_context(|| {
+            crate::safe_fs::rename_no_replace(&backup, path).with_context(|| {
                 format!(
                     "{} changed during displacement and could not be restored from {}",
                     path.display(),
@@ -171,7 +171,7 @@ impl FileRollbackJournal {
                     (path, result)
                 }
                 FileChange::Displaced { path, backup } => {
-                    let result = super::commit::rename_no_replace(&backup, &path)
+                    let result = crate::safe_fs::rename_no_replace(&backup, &path)
                         .with_context(|| format!("failed to restore {}", path.display()));
                     (path, result)
                 }
