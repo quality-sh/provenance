@@ -6,7 +6,7 @@ use provenance_store::{
     layout::ProvenanceLayout,
     state_store::{
         CreateBoundaryInput, CreateDomainInput, CreateQuestionInput, CreateRequirementInput,
-        CreateResolutionInput, CreateRuleInput, CreateSourceInput, CreateTopicInput, StateStore,
+        CreateResolutionInput, CreateRuleInput, CreateSourceInput, CreateTopicInput,
         UpdateRuleInput,
     },
 };
@@ -38,7 +38,7 @@ impl Repository {
         result
     }
     pub fn seed(&self, scope: ScopeId, statement: &str, id_suffix: &str) {
-        let store = StateStore::new(self.layout.clone());
+        let store = self.open().store();
         let domain_id = sid(&format!("domain_shared{id_suffix}"));
         let requirement_id = sid(&format!("req_shared{id_suffix}"));
         let rule_id = sid(&format!("rule_shared{id_suffix}"));
@@ -106,7 +106,7 @@ impl Repository {
             QuestionStatus, ResolutionMethod, ResolutionStatus, SourceType, TopicStatus,
         };
         let scope = ScopeId::new("default").unwrap();
-        let store = StateStore::new(self.layout.clone());
+        let store = self.open().store();
         store
             .create_source(CreateSourceInput {
                 scope_id: scope.clone(),
@@ -203,7 +203,8 @@ impl Repository {
         found
     }
     pub fn edit(&self, scope: &str, text: &str) {
-        StateStore::new(self.layout.clone())
+        self.open()
+            .store()
             .update_rule(
                 serde_json::from_value::<UpdateRuleInput>(json!({
                     "scope_id": scope,

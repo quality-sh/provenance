@@ -14,7 +14,8 @@ mod source_edit_recovery;
 mod staged;
 pub use durability::{sync_directory, sync_tree};
 pub use guard::{publication_guard, with_publication_guard, PublicationGuard};
-pub use read_only::with_read_only_validation;
+pub use read_only::read_only_record_kinds;
+pub(crate) use read_only::with_read_only_validation;
 use recovery::{canonical_transactions_dir, create_real_directory};
 pub use recovery::{
     clear_publication_marker, recover_pending_publication, write_publication_marker,
@@ -24,7 +25,8 @@ pub use recovery::{
 use recovery::{validate_missing_transaction_dir, validated_transaction_dir};
 #[cfg(any(unix, windows))]
 pub use source_edit::{with_staged_state_and_source_edit, SourceEditRecoveryFailure};
-pub use staged::with_staged_state;
+pub use staged::LiveAccessDuringStage;
+pub(crate) use staged::{with_stage_body, with_staged_state};
 
 thread_local! {
     static HELD_LOCKS: RefCell<BTreeSet<String>> = const { RefCell::new(BTreeSet::new()) };
@@ -60,6 +62,7 @@ pub(crate) fn with_repository_publication_checked<R>(
     operation: impl FnOnce() -> anyhow::Result<R>,
 ) -> anyhow::Result<R> {
     let key = publication_lock_identity(layout)?;
+    staged::refuse_during_stage(&key)?;
     if read_only::active(&key) {
         check()?;
         return operation();

@@ -189,7 +189,9 @@ async fn catch_up_rebuilds_the_rows_of_a_scope_whose_owner_family_moved() {
 #[tokio::test]
 async fn a_departed_scope_takes_its_rows_with_it() {
     let (_dir, layout, _scope) = seeded_layout();
-    materialize_state(&open(&layout)).await.unwrap();
+    // Open before the test changes the manifest: an open refuses that manifest.
+    let repository = open(&layout);
+    materialize_state(&repository).await.unwrap();
     assert_ne!(
         relation_rows(&layout).await,
         [] as [(
@@ -210,7 +212,7 @@ async fn a_departed_scope_takes_its_rows_with_it() {
     )
     .unwrap();
 
-    catch_up_state(&open(&layout)).await.unwrap();
+    catch_up_state(&repository).await.unwrap();
     assert_eq!(
         relation_rows(&layout).await,
         [] as [(

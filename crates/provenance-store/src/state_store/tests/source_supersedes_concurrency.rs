@@ -27,6 +27,7 @@ fn replacement_source(
 #[test]
 fn source_creation_holds_the_lock_and_refuses_a_raw_followup_write() {
     let (_dir, store, scope) = seeded_source_requirement_store();
+    let repository = crate::test_support::repository(&store.layout);
     let older_id = StableId::new("source_schads").unwrap();
     // A review submission makes the existing Source subject to the write guard.
     store
@@ -45,7 +46,7 @@ fn source_creation_holds_the_lock_and_refuses_a_raw_followup_write() {
     let (release_tx, release_rx) = mpsc::channel();
     let (writer_done_tx, writer_done_rx) = mpsc::channel();
     let writer = {
-        let store = store.clone();
+        let store = repository.store();
         let input = replacement_source(scope.clone(), older_id.clone());
         std::thread::spawn(move || {
             crate::test_probes::arm("source_supersedes_validated", move || {
@@ -64,7 +65,7 @@ fn source_creation_holds_the_lock_and_refuses_a_raw_followup_write() {
     let (publisher_done_tx, publisher_done_rx) = mpsc::channel();
     let expected_older_id = older_id.clone();
     let publisher = {
-        let store = store.clone();
+        let store = repository.store();
         let scope = scope.clone();
         std::thread::spawn(move || {
             let result = store.with_repository_publication(|| {

@@ -10,7 +10,7 @@ pub fn fixture() -> (tempfile::TempDir, StateStore) {
     let temp = tempfile::tempdir().unwrap();
     let layout = ProvenanceLayout::new(Utf8Path::from_path(temp.path()).unwrap());
     initialization::initialize(&layout, &[]);
-    let store = StateStore::new(layout);
+    let store = Repository::open(temp.path(), "default").unwrap().store();
     store
         .create_review_requirement(serde_json::from_value(json!({
             "actor":"ben","origin":null,
