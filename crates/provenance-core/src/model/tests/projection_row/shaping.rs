@@ -86,6 +86,7 @@ fn bare_topic() -> Topic {
 
 fn filled_question() -> Question {
     Question {
+        depends_on: Vec::new(),
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid("question_threshold"),
@@ -109,6 +110,7 @@ fn filled_question() -> Question {
 
 fn bare_question() -> Question {
     Question {
+        depends_on: Vec::new(),
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid("question_bare"),
