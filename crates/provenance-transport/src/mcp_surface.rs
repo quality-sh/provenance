@@ -51,15 +51,13 @@ pub fn tool(
     name: &'static str,
     description: &'static str,
     mut input: Value,
-    mut output: Value,
+    output: Value,
     schema_declaration: SchemaDeclaration,
 ) -> Tool {
     if matches!(schema_declaration, SchemaDeclaration::Remove) {
         input.as_object_mut().map(|schema| schema.remove("$schema"));
-        output
-            .as_object_mut()
-            .map(|schema| schema.remove("$schema"));
     }
+    let output = output_schema(output, schema_declaration);
     let mut tool = Tool::new(
         name,
         description,
@@ -76,6 +74,40 @@ pub fn tool(
             .into(),
     );
     tool
+}
+
+fn output_schema(mut success: Value, schema_declaration: SchemaDeclaration) -> Value {
+    let success = success
+        .as_object_mut()
+        .expect("MCP output schema is an object");
+    let declaration = success.remove("$schema");
+    let definitions = success.remove("$defs");
+    let mut schema = Map::new();
+    if matches!(schema_declaration, SchemaDeclaration::Keep) {
+        if let Some(declaration) = declaration {
+            schema.insert("$schema".to_owned(), declaration);
+        }
+    }
+    if let Some(definitions) = definitions {
+        schema.insert("$defs".to_owned(), definitions);
+    }
+    schema.insert(
+        "oneOf".to_owned(),
+        Value::Array(vec![success.clone().into(), error_output_schema()]),
+    );
+    Value::Object(schema)
+}
+
+fn error_output_schema() -> Value {
+    serde_json::json!({
+        "type":"object",
+        "additionalProperties":false,
+        "properties":{
+            "error":{"type":"object"},
+            "meta":{"type":"object"}
+        },
+        "required":["error", "meta"]
+    })
 }
 
 /// Return one MCP error result with the shared response envelope.
