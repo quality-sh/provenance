@@ -70,6 +70,15 @@ try {
   await writeFile(join(temporary, 'validators.mjs'), await readFile(join(root, 'packages/provenance/src/generated/validators.mjs')));
   const module = await import(join(temporary, 'client.js'));
   const clientModule = process.argv.includes('--effect') ? (await import('./effect-host.mjs')).effectModule(module) : module;
+  if (family !== 'statements') {
+    await assert.rejects(clientModule.HttpClient.connectWithBearer(fixture.url, 'wrong-secret'), error => {
+      assert.ok(error instanceof module.OperationError);
+      assert.equal(error.status, 401);
+      assert.equal(error.failure.error.kind, 'unauthenticated');
+      assert.deepEqual(error.failure.meta, {});
+      return true;
+    });
+  }
   await checks[family](clientModule, fixture);
   if (!process.argv.includes('--effect') && family === 'statements') {
     run(['test', '--locked', '-p', 'provenance-http-client', '--test', 'v2_wire']);
@@ -78,7 +87,7 @@ try {
     run(
       [
         'test', '--locked', '-p', 'provenance-http-client', '--test', 'real_host',
-        'real_host_covers_read_guarded_mutation_and_typed_failure', '--', '--ignored', '--exact',
+        '--', '--ignored',
       ],
       {
         ...process.env,
