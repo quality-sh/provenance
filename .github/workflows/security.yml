@@ -36,6 +36,7 @@ jobs:
       matrix:
         directory:
           - .
+          - packages/create-provenance
           - packages/provenance
           - packages/provenance-rules-js
           - examples/typescript-sdk

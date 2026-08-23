@@ -13,6 +13,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const packageRoot = fileURLToPath(new URL("..", import.meta.url));
+const initializerRoot = fileURLToPath(new URL("../../create-provenance", import.meta.url));
 const repositoryRoot = fileURLToPath(new URL("../../..", import.meta.url));
 const npmCli = process.env.npm_execpath;
 assert.ok(npmCli, "run this test through npm so its CLI path is known");
@@ -41,10 +42,15 @@ execFileSync(process.execPath, [
 ]);
 npm(["pack", stagedEngine, "--pack-destination", archiveDirectory]);
 npm(["pack", packageRoot, "--pack-destination", archiveDirectory]);
+npm(["pack", initializerRoot, "--pack-destination", archiveDirectory]);
 npm(["pack", typescriptRoot, "--pack-destination", archiveDirectory]);
 
 const archives = readdirSync(archiveDirectory).filter((name) => name.endsWith(".tgz"));
 const mainArchive = archiveNamed(archives, `quality-sh-provenance-${version}.tgz`);
+const initializerManifest = JSON.parse(
+  readFileSync(join(initializerRoot, "package.json"), "utf8"),
+);
+const initializerArchive = archiveNamed(archives, archiveName(initializerManifest));
 const engineManifest = JSON.parse(readFileSync(join(stagedEngine, "package.json"), "utf8"));
 const engineArchive = archiveNamed(archives, archiveName(engineManifest));
 const typescriptArchive = archiveNamed(archives, archiveName(typescriptManifest));
@@ -90,6 +96,77 @@ assert.deepEqual(
 );
 const initialCheck = JSON.parse(provenance(["check", "--repo", ".", "--format", "json"], application));
 assert.equal(initialCheck.status, "ok", "a freshly initialized project must validate");
+
+// The initializer is a temporary command, while the SDK and engine become
+// durable project development dependencies.
+const initializedApplication = join(temporary, "initialized-application");
+const packedMainSpec = `file:../archives/${mainArchive}`;
+mkdirSync(initializedApplication);
+writeFileSync(join(initializedApplication, "package.json"), JSON.stringify({
+  name: "provenance-one-command-install",
+  private: true,
+  version: "1.0.0",
+  type: "module",
+  packageManager: "npm@11.6.2",
+  overrides: {
+    [engineManifest.name]: `file:../archives/${engineArchive}`,
+    "@quality-sh/provenance": packedMainSpec,
+    [typescriptManifest.name]: `file:../archives/${typescriptArchive}`,
+  },
+}));
+npm(
+  [
+    "install",
+    "--offline",
+    "--cache",
+    isolatedCache,
+    "--no-audit",
+    "--no-fund",
+    "--no-save",
+    join(archiveDirectory, initializerArchive),
+  ],
+  { cwd: initializedApplication },
+);
+execFileSync(process.execPath, [
+  join(
+    initializedApplication,
+    "node_modules",
+    ...initializerManifest.name.split("/"),
+    initializerManifest.bin["create-provenance"],
+  ),
+], {
+  cwd: initializedApplication,
+  env: {
+    ...process.env,
+    npm_config_cache: isolatedCache,
+    npm_config_offline: "true",
+    npm_config_update_notifier: "false",
+    PROVENANCE_PACKAGE_SPEC: packedMainSpec,
+  },
+  stdio: "pipe",
+});
+const initializedManifest = JSON.parse(
+  readFileSync(join(initializedApplication, "package.json"), "utf8"),
+);
+assert.equal(
+  initializedManifest.devDependencies["@quality-sh/provenance"],
+  packedMainSpec,
+  "the packed initializer must save the staged SDK as a development dependency",
+);
+assert.equal(
+  initializedManifest.dependencies?.[initializerManifest.name],
+  undefined,
+  "the temporary initializer must not become a project dependency",
+);
+assert.equal(
+  readFileSync(join(initializedApplication, ".gitignore"), "utf8"),
+  ".provenance/cache/\n",
+  "the initializer must keep derived cache data out of Git",
+);
+const initializedCheck = JSON.parse(
+  provenance(["check", "--repo", ".", "--format", "json"], initializedApplication),
+);
+assert.equal(initializedCheck.status, "ok", "the one-command project must validate");
 
 const localEngine = join(
   application,

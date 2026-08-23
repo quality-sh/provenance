@@ -12,14 +12,14 @@ The release workflow builds and uploads:
 - `provenance-<tag>-aarch64-apple-darwin.tar.gz`
 - `SHA256SUMS`
 
-It also stages and publishes matching npm engine packages plus
-`@quality-sh/provenance`. npm trusted publishing must be configured for the
-repository's `npm` GitHub environment before cutting the first package release.
+It also stages and publishes matching npm engine packages,
+`@quality-sh/provenance`, and `@quality-sh/create-provenance`. npm trusted
+publishing must be configured for the repository's `npm` GitHub environment.
 
 Each engine package carries a binary and no command name. `provenance` is a
-command of `@quality-sh/provenance`, the one package the quick start installs,
-so `npx provenance` resolves the same way on every host. `npm run test:packed`
-rehearses that whole install from local archives before a release.
+command of `@quality-sh/provenance`. The initializer adds that package as a
+development dependency and then initializes the project. `npm run test:packed`
+rehearses the complete flow from local archives before a release.
 
 ## Cut A Release
 
@@ -47,9 +47,10 @@ The binary lands at `target/release/provenance`. Users should commit `.provenanc
 ## Versions
 
 Every crate shares one version, set once in the workspace `[workspace.package]`
-and inherited with `version.workspace = true`. The TypeScript SDK version in
-`packages/provenance/package.json` must match it. The release job rejects a tag
-unless both versions equal the tag without its `v` prefix.
+and inherited with `version.workspace = true`. The package versions in
+`packages/provenance/package.json` and `packages/create-provenance/package.json`
+must match it. The release job rejects a tag unless all versions equal the tag
+without its `v` prefix.
 
 A tag carrying a hyphen is published as a prerelease, so `v0.1.0-rc.1` is the
 way to rehearse a release without announcing one. npm publishes that version
