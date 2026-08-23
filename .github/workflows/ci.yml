@@ -17,8 +17,44 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # Required checks skipped via `if:` count as passed for the main ruleset,
+  # so jobs whose inputs are untouched can skip without renaming anything.
+  # Pushes to main always run every job; the filters only narrow PRs.
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+      sdk: ${{ steps.filter.outputs.sdk }}
+      wiki: ${{ steps.filter.outputs.wiki }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
+        id: filter
+        with:
+          filters: |
+            ci: &ci
+              - ".github/workflows/ci.yml"
+            rust:
+              - *ci
+              - "crates/**"
+              - "Cargo.toml"
+              - "Cargo.lock"
+            sdk:
+              - *ci
+              - "packages/**"
+              - "examples/typescript-sdk/**"
+            wiki:
+              - *ci
+              - "tests/**"
+              - "package.json"
+              - "package-lock.json"
+              - "crates/provenance-cli/src/wiki/**"
+
   fmt:
     name: Format
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -30,6 +66,8 @@ jobs:
 
   clippy:
     name: Clippy
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -42,6 +80,8 @@ jobs:
 
   test:
     name: Test (${{ matrix.os }})
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -60,6 +100,8 @@ jobs:
 
   rule-coverage:
     name: Rule Coverage
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -77,6 +119,8 @@ jobs:
 
   wiki-dom:
     name: Wiki DOM
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.wiki == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -89,6 +133,8 @@ jobs:
 
   typescript-sdk:
     name: TypeScript SDK POC
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -135,6 +181,8 @@ jobs:
 
   typescript-sdk-packed-install:
     name: Packaged SDK install (${{ matrix.os }})
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
