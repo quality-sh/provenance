@@ -46,6 +46,6 @@
     "test:packed": "node scripts/test-packed-install.js"
   },
   "devDependencies": {
-    "@types/node": "^24.10.1"
+    "@types/node": "^26.2.0"
   }
 }
