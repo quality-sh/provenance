@@ -5,6 +5,6 @@
     "test:dom": "node --test tests/*.test.mjs"
   },
   "devDependencies": {
-    "jsdom": "29.1.1"
+    "jsdom": "30.0.1"
   }
 }
