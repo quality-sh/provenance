@@ -8,6 +8,10 @@ npm install @quality-sh/provenance
 npx provenance init --path . --scope default --path-prefix .
 ```
 
+Those two lines are the whole setup. The install brings the engine for your
+platform, `init` writes `.provenance/state/`, and `npx provenance check` reports
+`ok` on the project it just created.
+
 Define a spec without touching the engine:
 
 ```ts
@@ -233,6 +237,12 @@ optional dependency. It does not download a binary from an install script,
 compile Rust, or require a global CLI. Before its first operation, the SDK
 checks that the engine speaks the supported protocol. Rust then finds the
 nearest enclosing Provenance or Git project for each command.
+
+This package owns the `provenance` command and forwards it to that engine
+unchanged, so `npx provenance` runs what the install supplied. When the platform
+package is absent, after `npm install --omit=optional` or on a host with no
+published engine, the command names the missing package and the supported
+targets rather than reaching the registry for a command of the same name.
 
 Published targets are macOS arm64/x64, Windows x64, and glibc Linux x64. An
 unsupported host fails with the supported target list. These environment

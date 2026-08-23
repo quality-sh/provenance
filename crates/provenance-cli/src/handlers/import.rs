@@ -109,13 +109,11 @@ fn deserialize_scope_export(input: &str) -> anyhow::Result<ScopeExport> {
 }
 
 fn has_removed_service_family(input: &str) -> bool {
-    serde_json::from_str::<serde_json::Value>(input)
-        .ok()
-        .is_some_and(|value| {
-            value.as_object().is_some_and(|object| {
-                object.contains_key("services") || object.contains_key("service_bindings")
-            })
+    serde_json::from_str::<serde_json::Value>(input).is_ok_and(|value| {
+        value.as_object().is_some_and(|object| {
+            object.contains_key("services") || object.contains_key("service_bindings")
         })
+    })
 }
 
 fn ensure_immutable_records_preserved<T: Serialize>(

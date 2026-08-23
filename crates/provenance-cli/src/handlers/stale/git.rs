@@ -164,9 +164,7 @@ fn parse_hunk_span(field: &str, prefix: char) -> anyhow::Result<LineSpan> {
     let coordinates = field
         .strip_prefix(prefix)
         .context("malformed git diff hunk coordinates")?;
-    let (start, count) = coordinates
-        .split_once(',')
-        .map_or((coordinates, "1"), |parts| parts);
+    let (start, count) = coordinates.split_once(',').unwrap_or((coordinates, "1"));
     Ok(LineSpan {
         start: start.parse()?,
         count: count.parse()?,

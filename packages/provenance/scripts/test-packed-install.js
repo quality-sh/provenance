@@ -9,17 +9,19 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const packageRoot = fileURLToPath(new URL("..", import.meta.url));
 const repositoryRoot = fileURLToPath(new URL("../../..", import.meta.url));
 const npmCli = process.env.npm_execpath;
 assert.ok(npmCli, "run this test through npm so its CLI path is known");
+const npxCli = join(dirname(npmCli), "npx-cli.js");
 const version = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8")).version;
 const temporary = mkdtempSync(join(tmpdir(), "provenance-packed-install-"));
 process.once("exit", () => rmSync(temporary, { recursive: true, force: true }));
 const stagedEngine = join(temporary, "engine-package");
+const archiveDirectory = join(temporary, "archives");
 const isolatedCache = join(temporary, "npm-cache");
 const rustTarget = targetFor(process.platform, process.arch);
 const binaryName = process.platform === "win32" ? "provenance.exe" : "provenance";
@@ -29,6 +31,7 @@ const typescriptManifest = JSON.parse(
   readFileSync(join(typescriptRoot, "package.json"), "utf8"),
 );
 
+mkdirSync(archiveDirectory);
 execFileSync(process.execPath, [
   join(packageRoot, "scripts", "package-engine.js"),
   "--target", rustTarget,
@@ -36,34 +39,57 @@ execFileSync(process.execPath, [
   "--out", stagedEngine,
   "--version", version,
 ]);
-npm(["pack", stagedEngine, "--pack-destination", temporary]);
-npm(["pack", packageRoot, "--pack-destination", temporary]);
-npm(["pack", typescriptRoot, "--pack-destination", temporary]);
+npm(["pack", stagedEngine, "--pack-destination", archiveDirectory]);
+npm(["pack", packageRoot, "--pack-destination", archiveDirectory]);
+npm(["pack", typescriptRoot, "--pack-destination", archiveDirectory]);
 
-const archives = readdirSync(temporary).filter((name) => name.endsWith(".tgz"));
+const archives = readdirSync(archiveDirectory).filter((name) => name.endsWith(".tgz"));
 const mainArchive = archiveNamed(archives, `quality-sh-provenance-${version}.tgz`);
 const engineManifest = JSON.parse(readFileSync(join(stagedEngine, "package.json"), "utf8"));
 const engineArchive = archiveNamed(archives, archiveName(engineManifest));
 const typescriptArchive = archiveNamed(archives, archiveName(typescriptManifest));
 
+// The quick start in README.md installs one package and lets its optional
+// platform dependency bring the engine. There is no registry here, so
+// `overrides` points every download at a local archive and nothing else
+// changes: the install still asks for @quality-sh/provenance alone.
 const application = join(temporary, "application");
 mkdirSync(application);
-writeFileSync(join(application, "package.json"), JSON.stringify({ private: true, type: "module" }));
+writeFileSync(join(application, "package.json"), JSON.stringify({
+  name: "provenance-clean-install",
+  private: true,
+  version: "1.0.0",
+  type: "module",
+  overrides: {
+    [engineManifest.name]: `file:../archives/${engineArchive}`,
+    [typescriptManifest.name]: `file:../archives/${typescriptArchive}`,
+  },
+}));
 npm(
   [
     "install",
     "--offline",
     "--cache",
     isolatedCache,
-    "--ignore-scripts",
     "--no-audit",
     "--no-fund",
-    join(temporary, mainArchive),
-    join(temporary, engineArchive),
-    join(temporary, typescriptArchive),
+    join(archiveDirectory, mainArchive),
   ],
   { cwd: application },
 );
+
+// The second line of the quick start, run as written through the installed bin.
+provenance(["init", "--path", ".", "--scope", "default", "--path-prefix", "."], application);
+const projectManifest = JSON.parse(
+  readFileSync(join(application, ".provenance", "state", "manifest.json"), "utf8"),
+);
+assert.deepEqual(
+  projectManifest.scopes,
+  [{ id: "default", path_prefix: "." }],
+  "init through the installed bin must record the scope the quick start asks for",
+);
+const initialCheck = JSON.parse(provenance(["check", "--repo", ".", "--format", "json"], application));
+assert.equal(initialCheck.status, "ok", "a freshly initialized project must validate");
 
 const localEngine = join(
   application,
@@ -72,7 +98,6 @@ const localEngine = join(
   "bin",
   binaryName,
 );
-execFileSync(localEngine, ["init", "--path", application, "--scope", "default", "--path-prefix", "."]);
 writeFileSync(join(application, "runtime.mjs"), `
 export function startWorkflow() {}
 export class WorkflowRunner {
@@ -226,6 +251,65 @@ const runs = JSON.parse(execFileSync(localEngine, [
 ], { encoding: "utf8" }));
 assert.equal(runs.length, 2);
 assert.deepEqual(runs.map(({ status }) => status), ["passed", "passed"]);
+
+// An install that skips optional dependencies, or a host with no published
+// engine, must still answer with Provenance's own guidance. npm carries an
+// unrelated package called `provenance`, so a command npm cannot find in the
+// project is worse than a clear failure: npx offers to fetch that one instead.
+const withoutEngine = join(temporary, "application-without-engine");
+mkdirSync(withoutEngine);
+writeFileSync(join(withoutEngine, "package.json"), JSON.stringify({
+  name: "provenance-clean-install-without-engine",
+  private: true,
+  version: "1.0.0",
+  overrides: { [typescriptManifest.name]: `file:../archives/${typescriptArchive}` },
+}));
+npm(
+  [
+    "install",
+    "--offline",
+    "--cache",
+    isolatedCache,
+    "--omit=optional",
+    "--no-audit",
+    "--no-fund",
+    join(archiveDirectory, mainArchive),
+  ],
+  { cwd: withoutEngine },
+);
+let missingEngine;
+try {
+  provenance(["init", "--path", ".", "--scope", "default", "--path-prefix", "."], withoutEngine);
+} catch (error) {
+  missingEngine = error;
+}
+assert.ok(missingEngine, "init must fail when the install left out the platform engine");
+const guidance = `${missingEngine.stdout ?? ""}${missingEngine.stderr ?? ""}`;
+assert.match(
+  guidance,
+  new RegExp(`${engineManifest.name.replace("/", "\\/")} is missing`),
+  `the installed bin must name the absent engine package, said: ${guidance}`,
+);
+assert.doesNotMatch(
+  guidance,
+  /registry\.npmjs\.org|canceled due to missing packages/,
+  `the installed bin must not send the quick start to the registry, said: ${guidance}`,
+);
+
+function provenance(args, cwd) {
+  const { PROVENANCE_BIN: _removed, ...environment } = process.env;
+  return execFileSync(process.execPath, [npxCli, "--no", "provenance", ...args], {
+    cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    env: {
+      ...environment,
+      npm_config_offline: "true",
+      npm_config_cache: isolatedCache,
+      npm_config_update_notifier: "false",
+    },
+  });
+}
 
 function archiveNamed(archives, expected) {
   const archive = archives.find((name) => name === expected);

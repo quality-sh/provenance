@@ -16,6 +16,11 @@ It also stages and publishes matching npm engine packages plus
 `@quality-sh/provenance`. npm trusted publishing must be configured for the
 repository's `npm` GitHub environment before cutting the first package release.
 
+Each engine package carries a binary and no command name. `provenance` is a
+command of `@quality-sh/provenance`, the one package the quick start installs,
+so `npx provenance` resolves the same way on every host. `npm run test:packed`
+rehearses that whole install from local archives before a release.
+
 ## Cut A Release
 
 Update crate versions, then tag and push:

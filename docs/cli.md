@@ -1,5 +1,9 @@
 # CLI
 
+The `provenance` command comes from a release archive or from `npm install
+@quality-sh/provenance`, which supplies the same engine and answers to `npx
+provenance`.
+
 Common local workflow:
 
 ```sh

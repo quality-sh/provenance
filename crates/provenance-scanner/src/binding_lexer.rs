@@ -107,7 +107,7 @@ fn at_identifier_start(bytes: &[u8], idx: usize) -> bool {
         .is_some_and(|previous| bytes[previous].is_ascii_alphanumeric() || bytes[previous] == b'_')
 }
 
-fn closing_plain_quote(bytes: &[u8], mut idx: usize) -> Option<usize> {
+const fn closing_plain_quote(bytes: &[u8], mut idx: usize) -> Option<usize> {
     while idx < bytes.len() {
         match bytes[idx] {
             b'\\' => idx += 2,

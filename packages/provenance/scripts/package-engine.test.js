@@ -7,6 +7,11 @@ import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
+const canonicalRepository = {
+  type: "git",
+  url: "git+https://github.com/quality-sh/provenance.git",
+};
+
 const targets = [
   ["aarch64-apple-darwin", "@quality-sh/provenance-darwin-arm64", "darwin", "arm64", undefined],
   ["x86_64-apple-darwin", "@quality-sh/provenance-darwin-x64", "darwin", "x64", undefined],
@@ -34,6 +39,7 @@ test("every Rust release target becomes a checksummed npm platform package", () 
     const manifest = JSON.parse(readFileSync(join(output, "package.json"), "utf8"));
     assert.equal(manifest.name, name);
     assert.equal(manifest.version, "0.1.0");
+    assert.deepEqual(manifest.repository, canonicalRepository);
     assert.deepEqual(manifest.os, [os]);
     assert.deepEqual(manifest.cpu, [cpu]);
     assert.deepEqual(manifest.libc, libc === undefined ? undefined : [libc]);
@@ -48,4 +54,10 @@ test("every Rust release target becomes a checksummed npm platform package", () 
       `${digest}  bin/${binaryName}\n`,
     );
   }
+});
+
+test("the TypeScript SDK names the canonical release repository", () => {
+  const packageRoot = fileURLToPath(new URL("..", import.meta.url));
+  const manifest = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
+  assert.deepEqual(manifest.repository, canonicalRepository);
 });

@@ -9,7 +9,7 @@
 /// char-literal-like span (quotes inside it stay inert); an apostrophe whose
 /// mate sits past the marker is prose, as in contractions straddling the
 /// directive.
-pub fn marker_is_inside_quoted_region(text: &str, marker: usize) -> bool {
+pub const fn marker_is_inside_quoted_region(text: &str, marker: usize) -> bool {
     let bytes = text.as_bytes();
     let mut quote = None;
     let mut index = 0;
@@ -48,7 +48,7 @@ pub fn marker_is_inside_quoted_region(text: &str, marker: usize) -> bool {
     }
 }
 
-fn quote_end(bytes: &[u8], mut index: usize, quote: u8) -> Option<usize> {
+const fn quote_end(bytes: &[u8], mut index: usize, quote: u8) -> Option<usize> {
     while index < bytes.len() {
         match bytes[index] {
             b'\\' if quote != b'`' => index += 2,

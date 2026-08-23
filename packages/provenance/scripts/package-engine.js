@@ -52,13 +52,18 @@ const manifest = {
   version,
   description: "Platform engine for @quality-sh/provenance",
   license: "BUSL-1.1",
-  repository: "github:BNasraoui/Provenance",
+  repository: {
+    type: "git",
+    url: "git+https://github.com/quality-sh/provenance.git",
+  },
   os: target.os,
   cpu: target.cpu,
   ...(target.libc === undefined ? {} : { libc: target.libc }),
   engines: { node: ">=20" },
   files: ["bin", "SHA256SUMS", "README.md", "LICENSE"],
-  bin: { provenance: `bin/${target.binary}` },
+  // A platform package carries the binary and nothing else. The command name
+  // stays with @quality-sh/provenance, which every install has, so `npx
+  // provenance` behaves the same whether or not this package was installed.
   exports: { "./bin": `./bin/${target.binary}` },
 };
 writeFileSync(join(output, "package.json"), `${JSON.stringify(manifest, null, 2)}\n`);
