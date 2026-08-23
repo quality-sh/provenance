@@ -52,7 +52,10 @@ const manifest = {
   version,
   description: "Platform engine for @quality-sh/provenance",
   license: "BUSL-1.1",
-  repository: "github:BNasraoui/Provenance",
+  repository: {
+    type: "git",
+    url: "git+https://github.com/quality-sh/provenance.git",
+  },
   os: target.os,
   cpu: target.cpu,
   ...(target.libc === undefined ? {} : { libc: target.libc }),

@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "description": "Typed traceability declarations backed by the Provenance Rust engine",
   "license": "BUSL-1.1",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/quality-sh/provenance.git"
+  },
   "type": "module",
   "sideEffects": false,
   "files": [
