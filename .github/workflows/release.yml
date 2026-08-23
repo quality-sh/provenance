@@ -112,8 +112,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     environment: npm
-    env:
-      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
     permissions:
       contents: read
       id-token: write
@@ -138,6 +136,10 @@ jobs:
           test "$version" = "$cargo_version"
           test "$version" = "$npm_version"
       - name: Publish platform engines
+        # The npm token is scoped to the publish steps so dependency install
+        # scripts elsewhere in the job can never read it.
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           version="${GITHUB_REF_NAME#v}"
           npm_tag=latest
@@ -145,12 +147,16 @@ jobs:
           for package in ./dist/quality-sh-provenance-*.tgz; do
             npm publish "$package" --access public --provenance --tag "$npm_tag"
           done
+      - name: Pack TypeScript SDK
+        run: |
+          npm ci --prefix packages/provenance
+          npm pack ./packages/provenance --pack-destination dist
       - name: Publish TypeScript SDK
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           version="${GITHUB_REF_NAME#v}"
           npm_tag=latest
           if [[ "$version" == *-* ]]; then npm_tag=next; fi
-          npm ci --prefix packages/provenance
-          npm pack ./packages/provenance --pack-destination dist
           npm publish "./dist/quality-sh-provenance-${version}.tgz" \
             --access public --provenance --tag "$npm_tag"
