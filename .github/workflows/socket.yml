@@ -21,7 +21,7 @@ jobs:
     env:
       SOCKET_SECURITY_API_KEY: ${{ secrets.SOCKET_SECURITY_API_KEY }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Explain a missing API key
         if: env.SOCKET_SECURITY_API_KEY == ''
         run: |
