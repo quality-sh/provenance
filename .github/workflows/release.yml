@@ -75,7 +75,7 @@ jobs:
             --binary "$binary" \
             --out "$package" \
             --version "$version"
-          npm pack "$package" --pack-destination dist
+          npm pack "./$package" --pack-destination dist
 
       - uses: actions/upload-artifact@v4
         with:
@@ -142,7 +142,7 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           npm_tag=latest
           if [[ "$version" == *-* ]]; then npm_tag=next; fi
-          for package in dist/quality-sh-provenance-*.tgz; do
+          for package in ./dist/quality-sh-provenance-*.tgz; do
             npm publish "$package" --access public --provenance --tag "$npm_tag"
           done
       - name: Publish TypeScript SDK
@@ -151,6 +151,6 @@ jobs:
           npm_tag=latest
           if [[ "$version" == *-* ]]; then npm_tag=next; fi
           npm ci --prefix packages/provenance
-          npm pack packages/provenance --pack-destination dist
-          npm publish "dist/quality-sh-provenance-${version}.tgz" \
+          npm pack ./packages/provenance --pack-destination dist
+          npm publish "./dist/quality-sh-provenance-${version}.tgz" \
             --access public --provenance --tag "$npm_tag"
