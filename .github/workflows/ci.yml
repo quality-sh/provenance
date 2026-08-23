@@ -149,6 +149,7 @@ jobs:
         with:
           bun-version: latest
       - run: cargo build -p provenance-cli
+      - run: npm ci --prefix packages/create-provenance
       - run: npm test --prefix packages/create-provenance
       - run: npm ci --prefix packages/provenance
       - run: npm test --prefix packages/provenance

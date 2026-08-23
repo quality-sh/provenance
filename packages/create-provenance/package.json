@@ -19,9 +19,6 @@
   "engines": {
     "node": ">=20"
   },
-  "dependencies": {
-    "@quality-sh/provenance": "0.1.0"
-  },
   "scripts": {
     "test": "node --test test/*.test.mjs"
   }

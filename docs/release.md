@@ -23,7 +23,7 @@ rehearses the complete flow from local archives before a release.
 
 ## Cut A Release
 
-Update crate versions, then tag and push:
+Update the crate and npm package versions, then tag and push:
 
 ```sh
 git tag v0.1.0

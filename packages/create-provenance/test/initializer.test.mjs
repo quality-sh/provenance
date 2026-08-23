@@ -4,7 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test, { after } from "node:test";
 
-import { initializeProject, parseArguments } from "../src/initializer.mjs";
+import * as initializer from "../src/initializer.mjs";
+
+const { initializeProject, parseArguments } = initializer;
 
 const packageVersion = "0.1.0";
 const packageSpec = `@quality-sh/provenance@${packageVersion}`;
@@ -14,6 +16,14 @@ after(() => {
   for (const directory of temporaryDirectories) {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("the initializer has no runtime dependency on the SDK it installs", () => {
+  const manifest = JSON.parse(
+    readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+  );
+
+  assert.equal(manifest.dependencies, undefined);
 });
 
 const managers = [
@@ -27,6 +37,7 @@ const managers = [
     [
       "add",
       "--dev",
+      "--save-exact",
       "--package-json",
       "--minimum-dependency-age=0",
       `npm:${packageSpec}`,
@@ -40,7 +51,8 @@ const managers = [
       "-D",
       "-E",
       "--allow-low-downloads",
-      "--minimum-release-age=0",
+      "--minimum-release-age-exclude",
+      "@quality-sh/provenance*",
       packageSpec,
     ],
   ],
@@ -200,26 +212,92 @@ test("a development package override replaces the registry package spec", () => 
   ]);
 });
 
-test("the engine command can run through the packaged JavaScript entry point", () => {
+test("the installed SDK engine is resolved after dependency installation", () => {
   const project = projectDirectory({ packageManager: "npm@11.0.0" });
+  const invocations = [];
+  let resolvedAfterInstallation = false;
+
+  initializeProject({
+    projectDirectory: project,
+    packageVersion,
+    resolveEngine(directory) {
+      assert.equal(directory, project);
+      resolvedAfterInstallation = invocations.length === 1;
+      return {
+        command: "/usr/bin/node",
+        args: ["/project/node_modules/@quality-sh/provenance/bin/provenance.mjs"],
+      };
+    },
+    execute: recordingExecutor(invocations),
+  });
+
+  assert.equal(resolvedAfterInstallation, true);
+  assert.deepEqual(invocations[1].args.slice(0, 2), [
+    "/project/node_modules/@quality-sh/provenance/bin/provenance.mjs",
+    "init",
+  ]);
+  assert.deepEqual(invocations[2].args.slice(0, 2), [
+    "/project/node_modules/@quality-sh/provenance/bin/provenance.mjs",
+    "check",
+  ]);
+});
+
+test("Yarn Plug'n'Play resolves the installed SDK through its project loader", () => {
+  const project = projectDirectory({ packageManager: "yarn@4.9.0" });
+  const sdkEntry = join(project, ".yarn", "cache", "provenance", "dist", "index.js");
+  writeFileSync(
+    join(project, ".pnp.cjs"),
+    `module.exports.resolveRequest = () => ${JSON.stringify(sdkEntry)};\n`,
+  );
   const invocations = [];
 
   initializeProject({
     projectDirectory: project,
     packageVersion,
-    enginePath: "/usr/bin/node",
-    engineArguments: ["/sdk/bin/provenance.mjs"],
     execute: recordingExecutor(invocations),
   });
 
+  assert.equal(invocations[1].command, "yarn");
   assert.deepEqual(invocations[1].args.slice(0, 2), [
-    "/sdk/bin/provenance.mjs",
-    "init",
+    "node",
+    join(project, ".yarn", "cache", "provenance", "bin", "provenance.mjs"),
   ]);
-  assert.deepEqual(invocations[2].args.slice(0, 2), [
-    "/sdk/bin/provenance.mjs",
-    "check",
-  ]);
+});
+
+test("Windows package-manager shims run through the command interpreter", () => {
+  assert.deepEqual(
+    initializer.hostInvocation(
+      {
+        command: "npm",
+        args: ["install", "--save-dev", packageSpec],
+        capture: false,
+      },
+      "win32",
+      "C:\\Windows\\System32\\cmd.exe",
+    ),
+    {
+      command: "C:\\Windows\\System32\\cmd.exe",
+      args: ["/d", "/s", "/c", "npm", "install", "--save-dev", packageSpec],
+      capture: false,
+    },
+  );
+});
+
+test("Windows runs native engine executables directly", () => {
+  const invocation = {
+    command: "C:\\Program Files\\nodejs\\node.exe",
+    args: ["C:\\project\\provenance.mjs", "init"],
+    capture: false,
+  };
+
+  assert.deepEqual(
+    initializer.hostInvocation(
+      invocation,
+      "win32",
+      "C:\\Windows\\System32\\cmd.exe",
+    ),
+    invocation,
+  );
 });
 
 function projectDirectory(manifest = {}) {

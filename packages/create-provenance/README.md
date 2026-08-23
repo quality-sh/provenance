@@ -19,3 +19,9 @@ Use `--path <path>` to initialize a project outside the current directory. The
 initializer installs the matching `@quality-sh/provenance` release, creates the
 default scope, validates the new state, and adds `.provenance/cache/` to
 `.gitignore`.
+
+Deno blocks packages that are newer than its minimum dependency age. The
+initializer disables that age check for the Deno add operation so a new
+Provenance release can install immediately. For Nub, it approves the new
+Provenance package name and excludes only the Provenance package family from
+the release age check. Other Nub dependencies keep the project's age policy.

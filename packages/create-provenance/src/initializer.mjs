@@ -4,7 +4,8 @@ import {
   readFileSync,
   writeFileSync,
 } from "node:fs";
-import { join, resolve } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, join, resolve } from "node:path";
 
 const supportedManagers = new Set(["npm", "pnpm", "yarn", "bun", "deno", "nub"]);
 
@@ -47,6 +48,7 @@ export function initializeProject({
   packageSpec,
   enginePath,
   engineArguments = [],
+  resolveEngine = installedEngineCommand,
   packageManager,
   userAgent = process.env.npm_config_user_agent,
   execute,
@@ -63,10 +65,13 @@ export function initializeProject({
     ),
     "Provenance installation",
   );
+  const engine = enginePath === undefined
+    ? resolveEngine(directory)
+    : { command: enginePath, args: engineArguments };
   runChecked(run, {
-    command: enginePath,
+    command: engine.command,
     args: [
-      ...engineArguments,
+      ...engine.args,
       "init",
       "--path",
       directory,
@@ -78,14 +83,34 @@ export function initializeProject({
     capture: false,
   }, "Provenance initialization");
   const check = runChecked(run, {
-    command: enginePath,
-    args: [...engineArguments, "check", "--repo", directory, "--format", "json"],
+    command: engine.command,
+    args: [...engine.args, "check", "--repo", directory, "--format", "json"],
     capture: true,
   }, "Provenance validation");
   ensureValidProject(check.stdout);
   ensureCacheIgnored(directory);
 
   return { packageManager: selectedManager };
+}
+
+function installedEngineCommand(directory) {
+  const pnpPath = join(directory, ".pnp.cjs");
+  const usesPnp = existsSync(pnpPath);
+  const sdkEntry = usesPnp
+    ? createRequire(pnpPath)(pnpPath).resolveRequest(
+      "@quality-sh/provenance",
+      join(directory, "package.json"),
+    )
+    : createRequire(join(directory, "package.json"))
+      .resolve("@quality-sh/provenance");
+  const sdkRoot = dirname(dirname(sdkEntry));
+  return {
+    command: usesPnp ? "yarn" : process.execPath,
+    args: [
+      ...(usesPnp ? ["node"] : []),
+      join(sdkRoot, "bin", "provenance.mjs"),
+    ],
+  };
 }
 
 function selectPackageManager(directory, requested, userAgent) {
@@ -151,6 +176,7 @@ function installInvocation(manager, packageSpec) {
       return command("deno", [
         "add",
         "--dev",
+        "--save-exact",
         "--package-json",
         "--minimum-dependency-age=0",
         packageSpec.startsWith("@quality-sh/") ? `npm:${packageSpec}` : packageSpec,
@@ -161,7 +187,8 @@ function installInvocation(manager, packageSpec) {
         "-D",
         "-E",
         "--allow-low-downloads",
-        "--minimum-release-age=0",
+        "--minimum-release-age-exclude",
+        "@quality-sh/provenance*",
         packageSpec,
       ]);
   }
@@ -202,7 +229,8 @@ function ensureCacheIgnored(directory) {
 }
 
 function executeCommand({ command, args, capture }, directory) {
-  const result = spawnSync(hostExecutable(command), args, {
+  const invocation = hostInvocation({ command, args, capture });
+  const result = spawnSync(invocation.command, invocation.args, {
     cwd: directory,
     encoding: "utf8",
     stdio: capture ? ["ignore", "pipe", "inherit"] : "inherit",
@@ -213,9 +241,17 @@ function executeCommand({ command, args, capture }, directory) {
   return { status: result.status, stdout: result.stdout ?? "" };
 }
 
-function hostExecutable(command) {
-  if (process.platform !== "win32") {
-    return command;
+export function hostInvocation(
+  invocation,
+  platform = process.platform,
+  commandInterpreter = process.env.ComSpec ?? "cmd.exe",
+) {
+  if (platform !== "win32" || !supportedManagers.has(invocation.command)) {
+    return invocation;
   }
-  return ["npm", "pnpm", "yarn", "nub"].includes(command) ? `${command}.cmd` : command;
+  return {
+    ...invocation,
+    command: commandInterpreter,
+    args: ["/d", "/s", "/c", invocation.command, ...invocation.args],
+  };
 }
