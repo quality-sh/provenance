@@ -75,7 +75,7 @@ async function invoke<Result>(
   const code = await completed.catch((cause: unknown) => {
     throw new Error(
       `Provenance engine could not start at ${engine}. Check PROVENANCE_BIN if it is set, ` +
-      "or run npm install @quality-sh/provenance without --omit=optional.",
+      "or install the development dependency again with optional dependencies enabled.",
       { cause },
     );
   });

@@ -1,8 +1,9 @@
 # CLI
 
-The `provenance` command comes from a release archive or from `npm install
-@quality-sh/provenance`, which supplies the same engine and answers to `npx
-provenance`.
+The `provenance` command comes from a release archive or from the
+`@quality-sh/provenance` development dependency. Run `npx --yes
+@quality-sh/create-provenance@latest` to install that dependency and initialize
+the project. The initializer supports npm, pnpm, Yarn, Bun, Deno, and Nub.
 
 Common local workflow:
 
