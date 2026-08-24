@@ -4,13 +4,13 @@ This package is an optional typed façade over the Provenance Rust engine. It
 does not implement graph semantics or persistence in JavaScript.
 
 ```sh
-npm install @quality-sh/provenance
-npx provenance init --path . --scope default --path-prefix .
+npx --yes @quality-sh/create-provenance@latest
 ```
 
-Those two lines are the whole setup. The install brings the engine for your
-platform, `init` writes `.provenance/state/`, and `npx provenance check` reports
-`ok` on the project it just created.
+The initializer detects npm, pnpm, Yarn, Bun, Deno, or Nub. It adds this SDK as
+an exact development dependency, installs the engine for the current platform,
+writes `.provenance/state/`, and confirms that `npx provenance check` reports
+`ok`.
 
 Define a spec without touching the engine:
 

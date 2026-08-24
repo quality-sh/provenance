@@ -136,8 +136,10 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           cargo_version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
           npm_version=$(node -p "require('./packages/provenance/package.json').version")
+          initializer_version=$(node -p "require('./packages/create-provenance/package.json').version")
           test "$version" = "$cargo_version"
           test "$version" = "$npm_version"
+          test "$version" = "$initializer_version"
       - name: Publish platform engines
         # The npm token is scoped to the publish steps so dependency install
         # scripts elsewhere in the job can never read it.
@@ -162,4 +164,15 @@ jobs:
           npm_tag=latest
           if [[ "$version" == *-* ]]; then npm_tag=next; fi
           npm publish "./dist/quality-sh-provenance-${version}.tgz" \
+            --access public --provenance --tag "$npm_tag"
+      - name: Pack initializer
+        run: npm pack ./packages/create-provenance --pack-destination dist
+      - name: Publish initializer
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          npm_tag=latest
+          if [[ "$version" == *-* ]]; then npm_tag=next; fi
+          npm publish "./dist/quality-sh-create-provenance-${version}.tgz" \
             --access public --provenance --tag "$npm_tag"
