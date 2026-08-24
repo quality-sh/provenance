@@ -80,7 +80,12 @@ fn desired_typed_ids(
         &input.rules,
         &current.rule_addresses,
     )?;
-    validate_references(&input.requirements, &input.rules, &sources, &requirements)?;
+    validate_references(
+        &input.requirements,
+        &input.rules,
+        |key| sources.contains_key(key),
+        |key| requirements.contains_key(key),
+    )?;
     Ok(DesiredTypedIds {
         sources,
         requirements,
