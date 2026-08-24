@@ -1,10 +1,10 @@
 use super::super::git::{ChangeKind, ChangedFile, LineSpan};
-use crate::wiki::links::{parse_code_ref, parse_code_refs, CodeRef, LineRange};
+use crate::cache::GraphEvidenceReference;
+use crate::code_refs::{parse_code_ref, parse_code_refs, CodeRef, LineRange};
 use camino::Utf8Path;
 use provenance_core::coverage::{
     BindingResult, EvidenceDiffSite, EvidenceDiffState, EvidenceSiteKind,
 };
-use provenance_store::cache::GraphEvidenceReference;
 
 pub(super) fn sites(
     reference: &GraphEvidenceReference,

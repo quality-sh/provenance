@@ -1,43 +1,46 @@
-use camino::Utf8Path;
-use provenance_core::{EdgeType, NodeType, StableId};
-use provenance_store::{
+use crate::{
     layout::ProvenanceLayout,
     state_store::{ReconcileState, StateStore, TypedResourceKind, TypedSpecInput, TypedSpecResult},
 };
+use camino::Utf8Path;
+use provenance_core::{EdgeType, NodeType, StableId};
 use serde::Serialize;
 use std::collections::BTreeMap;
 
 use super::sites;
 
 mod evidence;
-mod human;
 
-pub(super) use human::render;
+pub use evidence::{ReviewReason, RuleEvidence};
 
+/// One planned reconciliation with its affected Rules and their evidence.
+///
+/// `TypedSpecPlan` flattens `TypedSpecResult`, so `TypedSpecResult` must
+/// never gain `deny_unknown_fields`.
 #[derive(Serialize)]
-pub(super) struct TypedSpecPlan {
+pub struct TypedSpecPlan {
     #[serde(flatten)]
-    reconciliation: TypedSpecResult,
-    affected_rules: Vec<AffectedRule>,
+    pub reconciliation: TypedSpecResult,
+    pub affected_rules: Vec<AffectedRule>,
 }
 
 #[derive(Serialize)]
-pub(super) struct AffectedRule {
+pub struct AffectedRule {
     #[serde(flatten)]
     rule: provenance_core::protocol::AffectedRule,
-    evidence: evidence::RuleEvidence,
+    pub evidence: evidence::RuleEvidence,
 }
 
 impl AffectedRule {
-    pub(super) const fn id(&self) -> &StableId {
+    pub const fn id(&self) -> &StableId {
         &self.rule.id
     }
 
-    pub(super) fn implementations(&self) -> &[provenance_core::protocol::ImplementationSite] {
+    pub fn implementations(&self) -> &[provenance_core::protocol::ImplementationSite] {
         &self.rule.implementations
     }
 
-    pub(super) fn verifications(&self) -> &[provenance_core::protocol::VerificationSite] {
+    pub fn verifications(&self) -> &[provenance_core::protocol::VerificationSite] {
         &self.rule.verifications
     }
 }

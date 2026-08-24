@@ -1,9 +1,9 @@
+use crate::state_store::StateStore;
 use camino::Utf8Path;
 use provenance_core::protocol::{
     ensure_limit, ensure_protocol_version, take_page, EvidenceQuery, EvidenceResult, StaleEvidence,
 };
 use provenance_core::{ScopeId, StableId};
-use provenance_store::state_store::StateStore;
 
 use super::{bindings::Bindings, stale};
 

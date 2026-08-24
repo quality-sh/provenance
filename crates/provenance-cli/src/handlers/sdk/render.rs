@@ -1,10 +1,9 @@
+use provenance_store::operations::{AffectedRule, TypedSpecPlan};
 use provenance_store::state_store::{ReconciledResource, TypedResourceKind};
 use std::fmt::Write as _;
 
-use super::{AffectedRule, TypedSpecPlan};
-
 /// Explains one plan in prose a first-time reader can follow.
-pub(in crate::handlers::sdk) fn render(plan: &TypedSpecPlan) -> String {
+pub(super) fn render(plan: &TypedSpecPlan) -> String {
     let mut out = String::new();
     let changed = plan
         .reconciliation

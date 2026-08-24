@@ -1,9 +1,9 @@
+use crate::state_store::StateStore;
 use provenance_core::protocol::{
     ensure_limit, ensure_max_depth, ensure_protocol_version, take_page, Direction, GraphNode,
     Neighbor, NeighborsQuery, NeighborsResult, TraceQuery, TraceResult, TracedNode,
 };
 use provenance_core::{Edge, EdgeType, NodeType, ScopeId, StableId};
-use provenance_store::state_store::StateStore;
 use std::collections::BTreeSet;
 
 use super::records;

@@ -1,9 +1,9 @@
+use crate::state_store::StateStore;
 use provenance_core::protocol::{
     ensure_limit, ensure_protocol_version, take_page, GetQuery, GetResult, GraphNode, SearchQuery,
     SearchResult,
 };
 use provenance_core::{NodeType, ScopeId, StableId};
-use provenance_store::state_store::StateStore;
 
 /// Loads every canonical record a query can name, in one settled order.
 ///

@@ -3,7 +3,7 @@ use provenance_core::coverage::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
-pub(in crate::handlers) fn reconcile(
+pub fn reconcile(
     current: &mut CoverageScan,
     baseline: &CoverageScan,
     repo: &camino::Utf8Path,

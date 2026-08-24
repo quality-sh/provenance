@@ -1,10 +1,10 @@
 use super::super::git::{ChangeKind, ChangedFile};
+use crate::cache::GraphEvidence;
 use camino::Utf8Path;
 use provenance_core::{
     coverage::{CoverageScan, EvidenceDiffSite, EvidenceDiffState, EvidenceSiteKind},
     ImplementationBinding,
 };
-use provenance_store::cache::GraphEvidence;
 
 pub(super) fn sites(
     scanned: &[EvidenceDiffSite],

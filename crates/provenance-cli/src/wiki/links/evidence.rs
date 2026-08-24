@@ -1,8 +1,8 @@
 use super::annotate::{is_test_name, tokens, trim_token};
-use super::code_ref::{parse_code_ref, CodeRef};
 use super::remote::{blob_url, parse_git_remote, GitRemote};
 use provenance_core::coverage::CoverageScan;
 use provenance_macros::rule;
+use provenance_store::code_refs::{parse_code_ref, CodeRef};
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

@@ -1,11 +1,11 @@
 use super::git::{ChangedFile, RevisionFile};
-use crate::handlers::coverage::anchors;
+use crate::cache::GraphEvidence;
+use crate::evidence_anchors as anchors;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::coverage::{
     AnchorState, AnnotationResult, BindingResult, CoverageReport, CoverageScan, EvidenceDiffReport,
     EvidenceDiffSite, EvidenceDiffState, EvidenceDiffSummary, EvidenceSiteKind, ScannedFile,
 };
-use provenance_store::cache::GraphEvidence;
 use std::collections::{BTreeMap, BTreeSet};
 
 mod source_refs;

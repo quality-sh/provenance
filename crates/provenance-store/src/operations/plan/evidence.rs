@@ -1,13 +1,13 @@
-use provenance_core::{RequirementReview, ScopeId, StableId};
-use provenance_store::state_store::{
+use crate::state_store::{
     requirement_statement_changes, StateStore, TypedResourceKind, TypedSpecResult,
 };
+use provenance_core::{RequirementReview, ScopeId, StableId};
 use serde::Serialize;
 use std::collections::BTreeMap;
 
 /// What the current state of a Rule's evidence asks a reader to do.
 #[derive(Serialize)]
-pub(super) struct RuleEvidence {
+pub struct RuleEvidence {
     review_required: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     reasons: Vec<ReviewReason>,
@@ -15,7 +15,7 @@ pub(super) struct RuleEvidence {
 
 /// One restated Requirement that put this Rule's evidence up for review.
 #[derive(Debug, Clone, Serialize)]
-pub(super) struct ReviewReason {
+pub struct ReviewReason {
     pub requirement: StableId,
     pub field: String,
     pub before: String,
@@ -51,11 +51,11 @@ impl Reviews {
 }
 
 impl RuleEvidence {
-    pub(super) const fn review_required(&self) -> bool {
+    pub const fn review_required(&self) -> bool {
         self.review_required
     }
 
-    pub(super) fn reasons(&self) -> &[ReviewReason] {
+    pub fn reasons(&self) -> &[ReviewReason] {
         &self.reasons
     }
 }

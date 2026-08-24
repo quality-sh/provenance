@@ -1,12 +1,12 @@
+use crate::{cache, layout::ProvenanceLayout};
 use camino::Utf8Path;
 use provenance_core::coverage::{EvidenceDiffSite, EvidenceDiffState, EvidenceDiffSummary};
 use provenance_core::protocol::{
     ensure_limit, ensure_protocol_version, take_page, StaleQuery, StaleResult,
 };
 use provenance_core::ScopeId;
-use provenance_store::{cache, layout::ProvenanceLayout};
 
-use crate::handlers::stale::{gate, git};
+use crate::stale::{gate, git};
 
 /// What a commit range did to the code carrying graph evidence.
 ///

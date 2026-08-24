@@ -1,10 +1,10 @@
+use crate::state_store::StateStore;
 use camino::Utf8Path;
 use provenance_core::protocol::{
     ensure_limit, ensure_protocol_version, take_page, ResolveSymbolQuery, ResolveSymbolResult,
 };
 use provenance_core::{NodeType, ScopeId, StableId};
 use provenance_scanner::source_sites;
-use provenance_store::state_store::StateStore;
 use std::collections::BTreeSet;
 
 use super::super::sites::relative;

@@ -1,4 +1,4 @@
-use super::code_ref::{CodeRef, LineRange};
+use provenance_store::code_refs::{CodeRef, LineRange};
 use serde::Serialize;
 use std::path::Path;
 
@@ -100,9 +100,9 @@ pub fn detect_remote_url(repo: &Path) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::code_ref::parse_code_ref;
     use super::*;
     use provenance_macros::verifies;
+    use provenance_store::code_refs::parse_code_ref;
 
     /// Derived from an exhaustive match so that adding a `GitHost` variant
     /// fails compilation until the new host joins the chain, keeping the

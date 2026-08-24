@@ -1,5 +1,5 @@
+use crate::state_store::StateStore;
 use provenance_core::{ImplementationBinding, ScopeId, VerificationBinding};
-use provenance_store::state_store::StateStore;
 
 /// The canonical relationships from code to Rules, in one settled order.
 ///
