@@ -20,8 +20,12 @@ initializer installs the matching `@quality-sh/provenance` release, creates the
 default scope, validates the new state, and adds `.provenance/cache/` to
 `.gitignore`.
 
-Deno blocks packages that are newer than its minimum dependency age. The
+Deno can block packages that are newer than its minimum dependency age. The
 initializer disables that age check for the Deno add operation so a new
-Provenance release can install immediately. For Nub, it approves the new
-Provenance package name and excludes only the Provenance package family from
-the release age check. Other Nub dependencies keep the project's age policy.
+Provenance release can install immediately. This method also works with Deno
+versions that do not support the newer command option.
+
+For Nub, the initializer permits low-download names for the complete add
+operation. It also replaces the configured release-age exclusion list for that
+operation with the Provenance package family. The configured age window still
+applies to all other package names during the add operation.

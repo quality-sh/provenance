@@ -42,6 +42,7 @@ function requiredValue(args, index, option) {
   return value;
 }
 
+// @provenance rule: rule_typescript_initializer_installs_dev_dependency
 // @provenance rule: rule_typescript_initializer_validates_project
 export function initializeProject({
   projectDirectory,
@@ -164,7 +165,6 @@ function ensureSupportedManager(manager) {
   return manager;
 }
 
-// @provenance rule: rule_typescript_initializer_installs_dev_dependency
 function installInvocation(manager, packageSpec) {
   switch (manager) {
     case "npm":
@@ -181,9 +181,8 @@ function installInvocation(manager, packageSpec) {
         "--dev",
         "--save-exact",
         "--package-json",
-        "--minimum-dependency-age=0",
         packageSpec.startsWith("@quality-sh/") ? `npm:${packageSpec}` : packageSpec,
-      ]);
+      ], { NPM_CONFIG_MIN_RELEASE_AGE: "0" });
     case "nub":
       return command("nub", [
         "add",
@@ -197,8 +196,13 @@ function installInvocation(manager, packageSpec) {
   }
 }
 
-function command(executable, args) {
-  return { command: executable, args, capture: false };
+function command(executable, args, environment) {
+  return {
+    command: executable,
+    args,
+    capture: false,
+    ...(environment === undefined ? {} : { environment }),
+  };
 }
 
 function runChecked(run, invocation, operation) {
@@ -231,11 +235,12 @@ function ensureCacheIgnored(directory) {
   writeFileSync(ignorePath, `${current}${separator}.provenance/cache/\n`);
 }
 
-function executeCommand({ command, args, capture }, directory) {
-  const invocation = hostInvocation({ command, args, capture });
+function executeCommand({ command, args, capture, environment }, directory) {
+  const invocation = hostInvocation({ command, args, capture, environment });
   const result = spawnSync(invocation.command, invocation.args, {
     cwd: directory,
     encoding: "utf8",
+    env: environment === undefined ? undefined : { ...process.env, ...environment },
     stdio: capture ? ["ignore", "pipe", "inherit"] : "inherit",
   });
   if (result.error !== undefined) {

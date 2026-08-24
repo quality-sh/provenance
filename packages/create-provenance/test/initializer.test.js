@@ -26,6 +26,27 @@ test("the initializer has no runtime dependency on the SDK it installs", () => {
   assert.equal(manifest.dependencies, undefined);
 });
 
+test("the matching-release Rule binds the full initializer behavior", () => {
+  const source = readFileSync(new URL("../src/initializer.js", import.meta.url), "utf8");
+  const binding = "// @provenance rule: rule_typescript_initializer_installs_dev_dependency";
+
+  assert.equal(source.split(binding).length - 1, 1);
+  assert.match(
+    source,
+    new RegExp(`${binding.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\n` +
+      "// @provenance rule: rule_typescript_initializer_validates_project\\n" +
+      "export function initializeProject"),
+  );
+});
+
+test("the README states the scope of package-manager policy overrides", () => {
+  const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
+
+  assert.match(readme, /Deno\s+versions that do not support the newer command option/);
+  assert.match(readme, /permits low-download names for the complete add\s+operation/);
+  assert.match(readme, /replaces the configured release-age exclusion list/s);
+});
+
 const managers = [
   ["npm", "npm", ["install", "--save-dev", "--save-exact", packageSpec]],
   ["pnpm", "pnpm", ["add", "--save-dev", "--save-exact", packageSpec]],
@@ -39,9 +60,9 @@ const managers = [
       "--dev",
       "--save-exact",
       "--package-json",
-      "--minimum-dependency-age=0",
       `npm:${packageSpec}`,
     ],
+    { NPM_CONFIG_MIN_RELEASE_AGE: "0" },
   ],
   [
     "nub",
@@ -58,15 +79,15 @@ const managers = [
   ],
 ];
 
-for (const [manager, command, args] of managers) {
+for (const [manager, command, args, environment] of managers) {
   test(`${manager} installs Provenance as an exact development dependency`, () => {
-    verifyExactDevelopmentDependency(manager, command, args);
+    verifyExactDevelopmentDependency(manager, command, args, environment);
   });
 }
 
 // @provenance rule: rule_typescript_initializer_installs_dev_dependency
-// @provenance verification: conformance
-function verifyExactDevelopmentDependency(manager, command, args) {
+// @provenance verification: examples
+function verifyExactDevelopmentDependency(manager, command, args, environment) {
   const project = projectDirectory({ packageManager: `${manager}@1.0.0` });
   const invocations = [];
 
@@ -78,7 +99,12 @@ function verifyExactDevelopmentDependency(manager, command, args) {
   });
 
   assert.equal(result.packageManager, manager);
-  assert.deepEqual(invocations[0], { command, args, capture: false });
+  assert.deepEqual(invocations[0], {
+    command,
+    args,
+    capture: false,
+    ...(environment === undefined ? {} : { environment }),
+  });
   assert.deepEqual(invocations.slice(1), [
     {
       command: "/provenance-engine",
