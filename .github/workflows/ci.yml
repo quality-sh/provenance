@@ -259,3 +259,31 @@ jobs:
       - run: npm run test:packed --prefix packages/provenance
         env:
           PROVENANCE_TEST_YARN_PNP: ${{ matrix.yarn-pnp }}
+
+  # The one status the branch ruleset requires. Conditional jobs skip when a
+  # pull request leaves their inputs untouched, and a skipped matrix job never
+  # reports its expanded name, so requiring the jobs directly deadlocks a
+  # state-only pull request. This job always runs and fails when any needed
+  # job failed or was cancelled; skipped counts as success.
+  ci-ok:
+    name: CI OK
+    needs:
+      - changes
+      - fmt
+      - clippy
+      - test
+      - rule-coverage
+      - wiki-dom
+      - typescript-sdk
+      - initializer-package-managers
+      - typescript-sdk-packed-install
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check needed job results
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          bad=$(echo "$RESULTS" | jq -r '[.[] | select(.result == "failure" or .result == "cancelled")] | length')
+          test "$bad" -eq 0
