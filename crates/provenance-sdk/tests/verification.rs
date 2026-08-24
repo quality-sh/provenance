@@ -79,6 +79,11 @@ fn a_passing_callback_records_passed() {
     assert_eq!(runs.len(), 1);
     assert_eq!(runs[0].status, VerificationRunStatus::Passed);
     assert_eq!(runs[0].declared_by, "ci://rust");
+    assert_eq!(
+        runs[0].file.as_deref().map(camino::Utf8Path::as_str),
+        Some("crates/provenance-sdk/tests/verification.rs"),
+        "the call site file is the binding file"
+    );
 }
 
 #[test]

@@ -116,30 +116,50 @@ pub fn normalize_rule_relationships(declarations: &mut [TypedRuleInput]) -> anyh
 }
 
 /// Refuses references to sources or requirements the document does not
-/// declare. This reads only the document's own declared key sets.
+/// declare.
+///
+/// The wire stops at the first defect; `build()` collects the full list
+/// from [`reference_violations`], the single statement of the check.
 pub fn validate_references(
     requirements: &[TypedRequirementInput],
     rules: &[TypedRuleInput],
     source_declared: impl Fn(&str) -> bool,
     requirement_declared: impl Fn(&str) -> bool,
 ) -> anyhow::Result<()> {
+    reference_violations(requirements, rules, source_declared, requirement_declared)
+        .into_iter()
+        .next()
+        .map_or(Ok(()), |first| Err(anyhow::anyhow!(first)))
+}
+
+/// Every undeclared reference in the document, in document order. This
+/// reads only the document's own declared key sets.
+pub fn reference_violations(
+    requirements: &[TypedRequirementInput],
+    rules: &[TypedRuleInput],
+    source_declared: impl Fn(&str) -> bool,
+    requirement_declared: impl Fn(&str) -> bool,
+) -> Vec<String> {
+    let mut violations = Vec::new();
     for requirement in requirements {
         for source in &requirement.sources {
-            anyhow::ensure!(
-                source_declared(source),
-                "requirement `{}` references undeclared source `{source}`",
-                requirement.key
-            );
+            if !source_declared(source) {
+                violations.push(format!(
+                    "requirement `{}` references undeclared source `{source}`",
+                    requirement.key
+                ));
+            }
         }
     }
     for rule in rules {
         for requirement in &rule.requirements {
-            anyhow::ensure!(
-                requirement_declared(requirement),
-                "rule `{}` references undeclared requirement `{requirement}`",
-                rule.key
-            );
+            if !requirement_declared(requirement) {
+                violations.push(format!(
+                    "rule `{}` references undeclared requirement `{requirement}`",
+                    rule.key
+                ));
+            }
         }
     }
-    Ok(())
+    violations
 }

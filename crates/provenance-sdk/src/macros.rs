@@ -1,8 +1,11 @@
 //! The macro projection over the string-keyed kernel.
 
-/// Says whether a Rust identifier names a spec key, reading `_` in the
-/// identifier as `-` in the key. Const so the `provenance_spec!` link
-/// holds at compile time on stable Rust.
+/// Says whether a Rust identifier names a spec key.
+///
+/// An identifier `_` stands for `-` or `_` in the key, because an
+/// identifier cannot carry a hyphen; every other byte must match
+/// exactly. Const so the `provenance_spec!` link holds at compile time
+/// on stable Rust.
 #[must_use]
 pub const fn identifier_matches_key(identifier: &str, key: &str) -> bool {
     let identifier = identifier.as_bytes();

@@ -17,7 +17,8 @@ pub use builders::{
     requirement, rule, source, spec, RequirementBuilder, RuleBuilder, SourceBuilder, SpecBuilder,
 };
 pub use checks::{
-    normalize_rule_relationships, validate_references, DeclarationChecker, RuleChecker,
+    normalize_rule_relationships, reference_violations, validate_references, DeclarationChecker,
+    RuleChecker,
 };
 pub use document::SpecDocument;
 pub use error::AuthoringError;

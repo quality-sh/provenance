@@ -10,7 +10,7 @@ use std::collections::BTreeSet;
 use provenance_macros::rule;
 
 use super::builders::{RequirementBuilder, RuleBuilder, SourceBuilder, SpecBuilder};
-use super::checks::{validate_references, DeclarationChecker, RuleChecker};
+use super::checks::{reference_violations, DeclarationChecker, RuleChecker};
 use super::AuthoringError;
 use crate::model::{StableId, SUPPORTED_SCHEMA_VERSION};
 use crate::protocol::{
@@ -210,10 +210,19 @@ fn collect_rule(
     if let Some(existing) = rules.iter_mut().find(|existing| {
         existing.key == declaration.key && same_rule_content(existing, &declaration)
     }) {
-        existing.requirements.extend(declaration.requirements);
-        existing.requirements.sort();
-        existing.requirements.dedup();
-        return;
+        // A matching declaration merges only when it brings a new owner;
+        // a same-owner repeat stays separate so the wire checker rejects
+        // it exactly as ingestion would.
+        if declaration
+            .requirements
+            .iter()
+            .any(|owner| !existing.requirements.contains(owner))
+        {
+            existing.requirements.extend(declaration.requirements);
+            existing.requirements.sort();
+            existing.requirements.dedup();
+            return;
+        }
     }
     rules.push(declaration);
 }
@@ -255,14 +264,12 @@ fn check_structure(
             Err(error) => violations.push(error.to_string()),
         }
     }
-    if let Err(error) = validate_references(
+    violations.extend(reference_violations(
         requirements,
         rules,
         |key| source_keys.contains(key),
         |key| requirement_keys.contains(key),
-    ) {
-        violations.push(error.to_string());
-    }
+    ));
 }
 
 /// A build-time content check accepts text only when characters remain

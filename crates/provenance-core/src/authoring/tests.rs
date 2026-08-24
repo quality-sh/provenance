@@ -60,11 +60,12 @@ fn rules_sort_by_serialized_address() {
     let addresses = document
         .rules()
         .iter()
-        .map(|rule| rule.address.as_ref().unwrap().segments().join("/"))
+        .map(|rule| serde_json::to_string(rule.address.as_ref().unwrap().segments()).unwrap())
         .collect::<Vec<_>>();
     let mut sorted = addresses.clone();
     sorted.sort();
     assert_eq!(addresses, sorted);
+    assert_eq!(addresses.len(), 3);
 }
 
 #[test]
@@ -117,9 +118,10 @@ fn build_carries_every_structural_violation() {
         .requirements([
             requirement("sharing")
                 .statement("Users can share documentation")
+                .from(source("policy").document("docs/a.md"))
                 .rules([rule("expiry")
                     .statement("Share links expire")
-                    .requirements(["missing"])]),
+                    .requirements(["missing", "also-missing"])]),
             requirement("sharing").statement("A duplicate requirement"),
         ])
         .build()
@@ -128,8 +130,26 @@ fn build_carries_every_structural_violation() {
         error.violations(),
         [
             "duplicate requirement key `sharing`",
+            "rule `expiry` references undeclared requirement `also-missing`",
             "rule `expiry` references undeclared requirement `missing`",
         ]
+    );
+}
+
+#[test]
+fn a_same_owner_duplicate_rule_is_rejected_like_the_wire() {
+    let error = spec("share-links")
+        .requirements([requirement("sharing")
+            .statement("Users can share documentation")
+            .rules([
+                rule("expiry").statement("Share links expire"),
+                rule("expiry").statement("Share links expire"),
+            ])])
+        .build()
+        .unwrap_err();
+    assert_eq!(
+        error.violations(),
+        ["distinct rule declarations resolve to address `share-links/requirement/sharing/rule/expiry`"]
     );
 }
 
