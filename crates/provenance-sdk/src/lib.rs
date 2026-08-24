@@ -11,8 +11,8 @@ mod settings;
 mod verify;
 
 pub use provenance_core::authoring::{
-    requirement, rule, source, spec, AuthoringError, RequirementBuilder, RuleBuilder,
-    SourceBuilder, SpecBuilder, SpecDocument,
+    requirement, rule, source, spec, AuthoringError, RequirementBuilder, RequirementHandle,
+    RuleBuilder, RuleHandle, SourceBuilder, SpecBuilder, SpecDocument, SpecHandles,
 };
 pub use provenance_core::protocol::{
     TypedImplementationInput, TypedRequirementInput, TypedRuleInput, TypedSourceInput,
@@ -25,4 +25,4 @@ pub use provenance_store::state_store::TypedSpecResult;
 
 pub use macros::identifier_matches_key;
 pub use settings::Settings;
-pub use verify::verify;
+pub use verify::{verify, VerifyTarget};
