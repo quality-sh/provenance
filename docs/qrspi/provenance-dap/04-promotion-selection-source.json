@@ -1,0 +1,623 @@
+{
+  "source": {
+    "logicalId": "accepted-successor-package",
+    "kind": "source",
+    "create": {
+      "scope": "default",
+      "id": "source_rust_requirements_as_code_successor_2026_08_24",
+      "name": "Rust requirements-as-code successor acceptance, 2026-08-24",
+      "source-type": "project_artifact",
+      "reference": "git:967cffd160262a2e8b9f6073669c4ce3f438b3a9:docs/qrspi/provenance-dap/03-manifest.json#package-f8929d9ec73d2297537d306b6c3cb78a94d113f4253d13f72fc648e11be150b5",
+      "commit-pin": "967cffd160262a2e8b9f6073669c4ce3f438b3a9"
+    }
+  },
+  "requirement": {
+    "logicalId": "rust-native-authoring",
+    "kind": "requirement",
+    "create": {
+      "scope": "default",
+      "id": "req_rust_requirements_as_code_authoring",
+      "statement": "Rust consumers use in-process Rust APIs, not a CLI subprocess, for requirements-as-code authoring and SDK operations.",
+      "description": "The existing provenance-core crate supplies pure authoring semantics. Provenance-store remains the sole stateful engine. A thin provenance-sdk facade supplies Rust ergonomics. Direct use of provenance-core plus provenance-store remains supported.",
+      "status": "active",
+      "domain-id": "domain_graph_model"
+    }
+  },
+  "resolutions": [
+    {
+      "logicalId": "DR1",
+      "kind": "resolution",
+      "create": {
+        "scope": "default",
+        "id": "res_rust_authoring_kernel_in_core",
+        "title": "Keep Rust authoring semantics in provenance-core",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "position": "Place pure builders, document-decidable structural checks, address construction, canonical authored assembly, and the TypedSpec input family in the existing provenance-core crate.",
+        "rationale": "A new engine crate or SDK-owned materializer would duplicate ownership. Provenance-core already owns protocol and domain types, stays dependency-light, and is shared by store and wire consumers.",
+        "status": "approved",
+        "made-by": "Ben",
+        "approved-by": "Ben"
+      }
+    },
+    {
+      "logicalId": "DR4",
+      "kind": "resolution",
+      "create": {
+        "scope": "default",
+        "id": "res_rust_stateful_operations_in_store",
+        "title": "Keep the stateful Rust seam in provenance-store",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "position": "Keep identity, reconciliation, ownership refusal, STE write gates, locking, planning, and mutation in provenance-store, and expose its SDK operations as in-process functions.",
+        "rationale": "The store already owns persistent state and one plan/apply path. A separate provenance-engine crate or CLI library seam would add another owner or lose store behavior.",
+        "status": "approved",
+        "made-by": "Ben",
+        "approved-by": "Ben"
+      }
+    },
+    {
+      "logicalId": "DR2",
+      "kind": "resolution",
+      "create": {
+        "scope": "default",
+        "id": "res_rust_wire_semantics_remain_unchanged",
+        "title": "Preserve typed-spec wire semantics",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "position": "Route wire ingestion through the kernel at the existing pipeline points without changing protocol 4, schema 1, acceptance, first-error order, error wording, or decoded response order.",
+        "rationale": "Existing TypeScript documents and other wire consumers must keep the same engine contract while semantic code moves to its shared home.",
+        "status": "approved",
+        "made-by": "Ben",
+        "approved-by": "Ben"
+      }
+    },
+    {
+      "logicalId": "DR5",
+      "kind": "resolution",
+      "create": {
+        "scope": "default",
+        "id": "res_rust_sdk_is_thin_facade",
+        "title": "Use a thin provenance-sdk facade",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "position": "Add provenance-sdk as re-exports plus verification orchestration, macro projections, settings, a parity ledger, and engine_info().",
+        "rationale": "These are Rust frontend concerns that do not belong in the pure core. Keeping materialization, validation, identity, planning, and mutation outside the facade prevents a second semantic layer.",
+        "status": "approved",
+        "made-by": "Ben",
+        "approved-by": "Ben"
+      }
+    },
+    {
+      "logicalId": "G2",
+      "kind": "resolution",
+      "create": {
+        "scope": "default",
+        "id": "res_rust_sdk_uses_cargo_compatibility",
+        "title": "Use Cargo compatibility for the Rust SDK",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "position": "Use Cargo semver for in-process compatibility and Cargo path or patch configuration for explicit development overrides.",
+        "rationale": "An in-process Rust consumer resolves crates through Cargo and does not need a duplicate runtime protocol handshake. Wire consumers keep the existing protocol check.",
+        "status": "approved",
+        "made-by": "Ben",
+        "approved-by": "Ben"
+      }
+    },
+    {
+      "logicalId": "DR8-G7",
+      "kind": "resolution",
+      "create": {
+        "scope": "default",
+        "id": "res_rust_verification_is_sync_first",
+        "title": "Deliver synchronous Rust verification first",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "position": "Ship synchronous Rust verification first, record callback failure before propagation, and defer asynchronous verification.",
+        "rationale": "The synchronous API matches current engine operations and TypeScript failure semantics. Async support can follow without delaying the first native Rust surface.",
+        "status": "approved",
+        "made-by": "Ben",
+        "approved-by": "Ben"
+      }
+    },
+    {
+      "logicalId": "DR8-G6",
+      "kind": "resolution",
+      "create": {
+        "scope": "default",
+        "id": "res_rust_symbol_resolution_is_store_owned",
+        "title": "Resolve Rust implementation symbols in provenance-store",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "position": "Resolve implementation symbols to repository files in provenance-store and reject missing or ambiguous matches before apply writes state.",
+        "rationale": "The scanner supplies evidence, but the stateful apply boundary must own the decision and its no-write refusal behavior.",
+        "status": "approved",
+        "made-by": "Ben",
+        "approved-by": "Ben"
+      }
+    },
+    {
+      "logicalId": "DR10-G1",
+      "kind": "resolution",
+      "create": {
+        "scope": "default",
+        "id": "res_rust_crate_publication_requires_audit",
+        "title": "Audit Rust crates before publication",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "position": "Do not publish the Rust crates until the DR10 audit covers public APIs, dependency closure, version coupling, engine identity, and MSRV, and Ben records a separate go decision.",
+        "rationale": "Publishing too early can freeze accidental APIs or an incomplete dependency chain. Graph promotion is not crate publication.",
+        "status": "approved",
+        "made-by": "Ben",
+        "approved-by": "Ben"
+      }
+    },
+    {
+      "logicalId": "RR-R7-1",
+      "kind": "resolution",
+      "create": {
+        "scope": "default",
+        "id": "res_rust_risk_rejection_precedence",
+        "title": "Accept rejection-precedence risk with a fixture",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "position": "Accept rejection-precedence risk only if a multi-defect fixture pins the current per-item first error.",
+        "rationale": "Static call placement alone does not prove intra-list precedence. CO-R7-3 makes the stronger commitment observable.",
+        "status": "approved",
+        "made-by": "Ben",
+        "approved-by": "Ben"
+      }
+    },
+    {
+      "logicalId": "RR-R7-2",
+      "kind": "resolution",
+      "create": {
+        "scope": "default",
+        "id": "res_rust_risk_error_wording",
+        "title": "Accept error-wording risk with pre-capture",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "position": "Accept relocation-time error-wording risk only if current wire wording is captured before the kernel takes ownership.",
+        "rationale": "CO-R7-4 and CO-R7-5 separate engine-identical wire text from TypeScript-parity build-time text.",
+        "status": "approved",
+        "made-by": "Ben",
+        "approved-by": "Ben"
+      }
+    },
+    {
+      "logicalId": "RR-R7-3",
+      "kind": "resolution",
+      "create": {
+        "scope": "default",
+        "id": "res_rust_risk_discovery_fallback",
+        "title": "Accept discovery-fallback risk with a fixture",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "position": "Accept the no-repository discovery risk with a fixture for the canonicalized start-directory fallback.",
+        "rationale": "CO-R7-7 closes the current test gap without changing discovery semantics.",
+        "status": "approved",
+        "made-by": "Ben",
+        "approved-by": "Ben"
+      }
+    },
+    {
+      "logicalId": "RR-R7-4",
+      "kind": "resolution",
+      "create": {
+        "scope": "default",
+        "id": "res_rust_risk_empty_statement_reading",
+        "title": "Accept the static empty-statement finding",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "position": "Accept the static empty-statement finding if V2 verifies the wire and STE rejection paths during execution.",
+        "rationale": "Independent code reading found no engine wire rejection, but execution is the final check.",
+        "status": "approved",
+        "made-by": "Ben",
+        "approved-by": "Ben"
+      }
+    },
+    {
+      "logicalId": "RR-R7-5",
+      "kind": "resolution",
+      "create": {
+        "scope": "default",
+        "id": "res_rust_risk_typescript_mirror_rot",
+        "title": "Accept temporary TypeScript mirror risk",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "position": "Accept temporary TypeScript mirror drift while the kernel is authoritative and the cross-SDK corpus monitors parity.",
+        "rationale": "Deleting TypeScript mirrors is a separate change. V3 detects drift during the redundancy period.",
+        "status": "approved",
+        "made-by": "Ben",
+        "approved-by": "Ben"
+      }
+    },
+    {
+      "logicalId": "RR-R7-6",
+      "kind": "resolution",
+      "create": {
+        "scope": "default",
+        "id": "res_rust_risk_publication_surface",
+        "title": "Accept publication risk behind the audit gate",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "position": "Accept publication-surface uncertainty only behind the DR10 audit and a later human go decision.",
+        "rationale": "Engine version, dependency closure, MSRV, and public API exposure can change the release decision but cannot bypass G1.",
+        "status": "approved",
+        "made-by": "Ben",
+        "approved-by": "Ben"
+      }
+    },
+    {
+      "logicalId": "RR-R7-7",
+      "kind": "resolution",
+      "create": {
+        "scope": "default",
+        "id": "res_rust_risk_process_globals",
+        "title": "Accept process-global host limits",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "position": "Accept process-global current-directory, environment, and advisory-lock limits and document them for in-process hosts.",
+        "rationale": "The first API keeps current engine behavior. Documentation makes the concurrency limit explicit.",
+        "status": "approved",
+        "made-by": "Ben",
+        "approved-by": "Ben"
+      }
+    },
+    {
+      "logicalId": "RR-R7-8",
+      "kind": "resolution",
+      "create": {
+        "scope": "default",
+        "id": "res_rust_risk_purity_check_is_heuristic",
+        "title": "Accept the heuristic purity check",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "position": "Accept V12 as a compile-time import check plus deterministic property tests, not a formal proof of purity.",
+        "rationale": "The checks catch the expected dependency and behavior violations without claiming a machine proof.",
+        "status": "approved",
+        "made-by": "Ben",
+        "approved-by": "Ben"
+      }
+    },
+    {
+      "logicalId": "RR-R7-9",
+      "kind": "resolution",
+      "create": {
+        "scope": "default",
+        "id": "res_rust_risk_stranded_verification_runs",
+        "title": "Accept stranded verification-run risk",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "position": "Accept that aborts, process death, or direct engine use can leave a verification run marked running.",
+        "rationale": "The facade records ordinary errors and unwinds before propagation. It cannot recover after process termination or bypass by direct consumers.",
+        "status": "approved",
+        "made-by": "Ben",
+        "approved-by": "Ben"
+      }
+    },
+    {
+      "logicalId": "RR-R7-10",
+      "kind": "resolution",
+      "create": {
+        "scope": "default",
+        "id": "res_rust_risk_goldens_are_change_detectors",
+        "title": "Treat goldens as change detectors",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "position": "Accept golden files and corpus fixtures as change detectors rather than complete proofs.",
+        "rationale": "The fixtures protect named behavior while property, conformance, and existing engine tests cover other dimensions.",
+        "status": "approved",
+        "made-by": "Ben",
+        "approved-by": "Ben"
+      }
+    },
+    {
+      "logicalId": "RR-R7-11",
+      "kind": "resolution",
+      "create": {
+        "scope": "default",
+        "id": "res_rust_risk_design_not_executed",
+        "title": "Accept design-stage execution uncertainty",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "position": "Accept that Design review executed no code if V1 through V12 and the two Plan-entry checks discharge the uncertainty before reliance.",
+        "rationale": "The reviews establish ownership and controls from repository evidence. Tests and Plan-entry checks remain required before implementation claims success.",
+        "status": "approved",
+        "made-by": "Ben",
+        "approved-by": "Ben"
+      }
+    }
+  ],
+  "rules": [
+    {
+      "logicalId": "DR13-purity",
+      "kind": "rule",
+      "resolutionId": "res_rust_authoring_kernel_in_core",
+      "create": {
+        "scope": "default",
+        "id": "rule_rust_authoring_kernel_is_pure",
+        "name": "Pure Rust authoring kernel",
+        "description": "The kernel can use pure core types and functions. It cannot read process or repository state.",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "resolution-id": "res_rust_authoring_kernel_in_core",
+        "statement": "Rust authoring build and materialize operations perform no file, environment, process, clock, repository, scanner, or store access.",
+        "status": "active",
+        "severity": "critical",
+        "source-document": "docs/qrspi/provenance-dap/03-design.md",
+        "source-section": "DR1 and DR13"
+      }
+    },
+    {
+      "logicalId": "DR1-order",
+      "kind": "rule",
+      "resolutionId": "res_rust_authoring_kernel_in_core",
+      "create": {
+        "scope": "default",
+        "id": "rule_rust_authored_documents_are_canonical",
+        "name": "Canonical Rust authored documents",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "resolution-id": "res_rust_authoring_kernel_in_core",
+        "statement": "The Rust authoring kernel orders sources and requirements by key and rules by serialized address with lexicographic UTF-8 byte order.",
+        "status": "active",
+        "severity": "high",
+        "source-document": "docs/qrspi/provenance-dap/03-design.md",
+        "source-section": "DR1 canonical assembly"
+      }
+    },
+    {
+      "logicalId": "CO-R7-6",
+      "kind": "rule",
+      "resolutionId": "res_rust_authoring_kernel_in_core",
+      "create": {
+        "scope": "default",
+        "id": "rule_rust_build_text_checks_trim",
+        "name": "Trim Rust build-time text",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "resolution-id": "res_rust_authoring_kernel_in_core",
+        "statement": "Rust build-time content checks reject text that is empty after trimming, matching TypeScript requireText behavior.",
+        "status": "active",
+        "severity": "high",
+        "source-document": "docs/qrspi/provenance-dap/03-accepted-folds.md",
+        "source-section": "CO-R7-6"
+      }
+    },
+    {
+      "logicalId": "DR2-acceptance",
+      "kind": "rule",
+      "resolutionId": "res_rust_wire_semantics_remain_unchanged",
+      "create": {
+        "scope": "default",
+        "id": "rule_rust_wire_acceptance_is_stable",
+        "name": "Stable typed-spec wire acceptance",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "resolution-id": "res_rust_wire_semantics_remain_unchanged",
+        "statement": "A protocol-4 typed-spec document receives the same accept-or-reject result after kernel extraction as it received before extraction.",
+        "status": "active",
+        "severity": "critical",
+        "source-document": "docs/qrspi/provenance-dap/03-design.md",
+        "source-section": "DR2 wire acceptance"
+      }
+    },
+    {
+      "logicalId": "CO-R7-3-5",
+      "kind": "rule",
+      "resolutionId": "res_rust_wire_semantics_remain_unchanged",
+      "create": {
+        "scope": "default",
+        "id": "rule_rust_wire_first_error_is_stable",
+        "name": "Stable first wire error",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "resolution-id": "res_rust_wire_semantics_remain_unchanged",
+        "statement": "For a typed-spec document with more than one defect, kernel extraction preserves the first engine error class and text.",
+        "status": "active",
+        "severity": "critical",
+        "source-document": "docs/qrspi/provenance-dap/03-accepted-folds.md",
+        "source-section": "CO-R7-3 through CO-R7-5"
+      }
+    },
+    {
+      "logicalId": "DR2-order",
+      "kind": "rule",
+      "resolutionId": "res_rust_wire_semantics_remain_unchanged",
+      "create": {
+        "scope": "default",
+        "id": "rule_rust_wire_order_is_preserved",
+        "name": "Preserve decoded wire order",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "resolution-id": "res_rust_wire_semantics_remain_unchanged",
+        "statement": "Wire ingestion returns resources and diagnostics in decoded document order and does not apply authored-document canonical ordering.",
+        "status": "active",
+        "severity": "high",
+        "source-document": "docs/qrspi/provenance-dap/03-design.md",
+        "source-section": "DR2 no reordering"
+      }
+    },
+    {
+      "logicalId": "DR6",
+      "kind": "rule",
+      "resolutionId": "res_rust_wire_semantics_remain_unchanged",
+      "create": {
+        "scope": "default",
+        "id": "rule_rust_typed_input_round_trip",
+        "name": "Round-trip Rust typed input",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "resolution-id": "res_rust_wire_semantics_remain_unchanged",
+        "statement": "A Rust TypedSpec input round trip preserves every present field and the existing omission behavior.",
+        "status": "active",
+        "severity": "high",
+        "source-document": "docs/qrspi/provenance-dap/03-design.md",
+        "source-section": "DR6"
+      }
+    },
+    {
+      "logicalId": "DR7",
+      "kind": "rule",
+      "resolutionId": "res_rust_stateful_operations_in_store",
+      "create": {
+        "scope": "default",
+        "id": "rule_rust_store_owns_persistent_identity",
+        "name": "Store-owned persistent identity",
+        "description": "Id resolution includes local-to-shared migration, ownership checks, explicit-id validation, and resolution-dependent collision checks.",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "resolution-id": "res_rust_stateful_operations_in_store",
+        "statement": "Only provenance-store determines persistent declaration identity.",
+        "status": "active",
+        "severity": "critical",
+        "source-document": "docs/qrspi/provenance-dap/03-design.md",
+        "source-section": "DR4 and DR7"
+      }
+    },
+    {
+      "logicalId": "DR13-facade",
+      "kind": "rule",
+      "resolutionId": "res_rust_sdk_is_thin_facade",
+      "create": {
+        "scope": "default",
+        "id": "rule_rust_sdk_facade_delegates_semantics",
+        "name": "Semantics-free Rust facade",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "resolution-id": "res_rust_sdk_is_thin_facade",
+        "statement": "The provenance-sdk facade delegates materialization, structural validation, address construction, identity, planning, and mutation to provenance-core or provenance-store.",
+        "status": "active",
+        "severity": "critical",
+        "source-document": "docs/qrspi/provenance-dap/03-design.md",
+        "source-section": "DR5 and DR13"
+      }
+    },
+    {
+      "logicalId": "DR8-failure",
+      "kind": "rule",
+      "resolutionId": "res_rust_verification_is_sync_first",
+      "create": {
+        "scope": "default",
+        "id": "rule_rust_verification_records_failure_first",
+        "name": "Record Rust verification failure first",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "resolution-id": "res_rust_verification_is_sync_first",
+        "statement": "When a Rust verification callback returns an error or unwinds, verification records the run as failed before it propagates the callback failure.",
+        "status": "active",
+        "severity": "critical",
+        "source-document": "docs/qrspi/provenance-dap/03-design.md",
+        "source-section": "DR8 and V11"
+      }
+    },
+    {
+      "logicalId": "DR8-G6-refusal",
+      "kind": "rule",
+      "resolutionId": "res_rust_symbol_resolution_is_store_owned",
+      "create": {
+        "scope": "default",
+        "id": "rule_rust_symbol_resolution_refuses_writes",
+        "name": "Refuse unresolved Rust symbols",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "resolution-id": "res_rust_symbol_resolution_is_store_owned",
+        "statement": "Rust SDK apply writes no state when an implementation symbol does not resolve to exactly one repository file.",
+        "status": "active",
+        "severity": "critical",
+        "source-document": "docs/qrspi/provenance-dap/03-design.md",
+        "source-section": "DR8, G6, and V7"
+      }
+    },
+    {
+      "logicalId": "DR8-G6-owner",
+      "kind": "rule",
+      "resolutionId": "res_rust_symbol_resolution_is_store_owned",
+      "create": {
+        "scope": "default",
+        "id": "rule_rust_store_resolves_implementation_symbols",
+        "name": "Store-owned Rust symbol resolution",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "resolution-id": "res_rust_symbol_resolution_is_store_owned",
+        "statement": "Only provenance-store resolves an implementation symbol to a repository file for Rust SDK apply.",
+        "status": "active",
+        "severity": "high",
+        "source-document": "docs/qrspi/provenance-dap/03-design.md",
+        "source-section": "DR8 and G6"
+      }
+    },
+    {
+      "logicalId": "DR10-G1",
+      "kind": "rule",
+      "resolutionId": "res_rust_crate_publication_requires_audit",
+      "create": {
+        "scope": "default",
+        "id": "rule_rust_crate_publication_requires_audit",
+        "name": "Audit before Rust crate publication",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "resolution-id": "res_rust_crate_publication_requires_audit",
+        "statement": "Rust crate publication starts only after the DR10 audit is complete and Ben records a separate go decision.",
+        "status": "active",
+        "severity": "critical",
+        "source-document": "docs/qrspi/provenance-dap/03-design.md",
+        "source-section": "DR10 and G1"
+      }
+    },
+    {
+      "logicalId": "CO-R5-9",
+      "kind": "rule",
+      "resolutionId": "res_rust_risk_design_not_executed",
+      "create": {
+        "scope": "default",
+        "id": "rule_rust_plan_rechecks_artifact_dependencies",
+        "name": "Recheck Cargo artifact dependencies",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "resolution-id": "res_rust_risk_design_not_executed",
+        "statement": "Rust SDK Plan work does not rely on Cargo artifact dependencies until primary-source evidence has been checked again.",
+        "status": "active",
+        "severity": "high",
+        "source-document": "docs/qrspi/provenance-dap/03-design.md",
+        "source-section": "CO-R5-9"
+      }
+    },
+    {
+      "logicalId": "CO-R5-10",
+      "kind": "rule",
+      "resolutionId": "res_rust_risk_design_not_executed",
+      "create": {
+        "scope": "default",
+        "id": "rule_rust_plan_rechecks_const_string_asserts",
+        "name": "Recheck stable const string assertions",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "resolution-id": "res_rust_risk_design_not_executed",
+        "statement": "Rust SDK Plan work does not rely on compile-time key assertions until stable Rust support for const string comparison and assertion is verified.",
+        "status": "active",
+        "severity": "high",
+        "source-document": "docs/qrspi/provenance-dap/03-design.md",
+        "source-section": "CO-R5-10"
+      }
+    },
+    {
+      "logicalId": "CO-R5-11-V9",
+      "kind": "rule",
+      "resolutionId": "res_rust_risk_design_not_executed",
+      "create": {
+        "scope": "default",
+        "id": "rule_rust_plan_goldens_precede_store_relocation",
+        "name": "Capture plan goldens before relocation",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "resolution-id": "res_rust_risk_design_not_executed",
+        "statement": "Rendered-plan goldens are captured before CLI SDK operations move to provenance-store.",
+        "status": "active",
+        "severity": "critical",
+        "source-document": "docs/qrspi/provenance-dap/03-design.md",
+        "source-section": "CO-R5-11 and V9"
+      }
+    },
+    {
+      "logicalId": "CO-R5-11-V10",
+      "kind": "rule",
+      "resolutionId": "res_rust_risk_design_not_executed",
+      "create": {
+        "scope": "default",
+        "id": "rule_rust_binding_scan_follows_store_relocation",
+        "name": "Scan bindings after relocation",
+        "requirement-id": "req_rust_requirements_as_code_authoring",
+        "resolution-id": "res_rust_risk_design_not_executed",
+        "statement": "The workspace-wide Rule binding scan runs after CLI SDK operations move to provenance-store.",
+        "status": "active",
+        "severity": "critical",
+        "source-document": "docs/qrspi/provenance-dap/03-design.md",
+        "source-section": "CO-R5-11 and V10"
+      }
+    }
+  ],
+  "existingRecordReferences": {
+    "resolutions": [
+      "res_typed_facade_owns_construction",
+      "res_sdk_engine_from_package_manager"
+    ],
+    "rules": [
+      "rule_sdk_package_supplies_engine",
+      "rule_sdk_project_discovery",
+      "rule_sdk_protocol_handshake",
+      "rule_shared_typed_rule_materializes_once",
+      "rule_ste_typed_apply_atomic_rejection",
+      "rule_ste_typed_diagnostic_parity",
+      "rule_typed_declarations_are_immutable",
+      "rule_typed_implementation_reference_is_static",
+      "rule_verification_runs_are_cache"
+    ]
+  }
+}
