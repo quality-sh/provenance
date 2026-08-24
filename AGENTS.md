@@ -24,7 +24,7 @@ use Git's standard `git commit --no-verify` option.
 - When you touch a file already over the limit, leave it smaller than you found it where practical.
 - Tests count too: split large test files by the behavior they pin.
 
-Before designing or restructuring modules, use the `codebase-design` and `domain-modeling` skills (`.claude/skills/`).
+Before designing or restructuring modules, use the codebase-design and domain-modeling skills.
 
 ## Technical writing
 
