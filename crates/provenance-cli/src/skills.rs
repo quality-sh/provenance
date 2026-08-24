@@ -1,3 +1,4 @@
+mod copy_tree;
 mod install_decision;
 mod render;
 pub mod stamp;
@@ -90,7 +91,7 @@ struct FileInstallReport {
 enum ClaudeInstall {
     Symlink(FileInstallReport),
     CopyFallback {
-        report: FileInstallReport,
+        reports: Vec<FileInstallReport>,
         reason: String,
     },
 }
@@ -161,16 +162,16 @@ fn install_at(base: &Path, global: bool, force: bool, copy: bool) -> anyhow::Res
 
     for skill in EMBEDDED_SKILLS {
         if copy {
-            files.push(copy_skill_dir(skill, &canonical_dir, &claude_dir, force)?);
+            files.extend(copy_skill_dir(skill, &canonical_dir, &claude_dir, force)?);
             continue;
         }
 
         match install_claude_symlink_or_copy(skill, &canonical_dir, &claude_dir, force)? {
             ClaudeInstall::Symlink(report) => files.push(report),
-            ClaudeInstall::CopyFallback { report, reason } => {
+            ClaudeInstall::CopyFallback { reports, reason } => {
                 link_mode = "copy-fallback";
                 fallback_reason.get_or_insert(reason);
-                files.push(report);
+                files.extend(reports);
             }
         }
     }
@@ -234,7 +235,7 @@ fn install_claude_symlink_or_copy(
         InstallVerdict::CopyInto => {
             let reason = format!("{} already exists as a directory", link_path.display());
             return Ok(ClaudeInstall::CopyFallback {
-                report: copy_skill_dir(skill, canonical_dir, claude_dir, force)
+                reports: copy_skill_dir(skill, canonical_dir, claude_dir, force)
                     .with_context(|| reason.clone())?,
                 reason,
             });
@@ -282,7 +283,7 @@ fn create_symlink_or_copy(
         // Callers only reach this with link_path absent or already cleared,
         // so the copy needs no overwrite permission: force stays false.
         Err(error) => Ok(ClaudeInstall::CopyFallback {
-            report: copy_skill_dir(skill, canonical_dir, claude_dir, false)
+            reports: copy_skill_dir(skill, canonical_dir, claude_dir, false)
                 .with_context(|| format!("failed to copy after symlink error: {error}"))?,
             reason: format!("failed to symlink {}: {error}", link_path.display()),
         }),
@@ -299,12 +300,14 @@ fn create_dir_symlink(target: &Path, link_path: &Path) -> std::io::Result<()> {
     std::os::windows::fs::symlink_dir(target, link_path)
 }
 
+/// Copies one skill from the canonical directory to `.claude/skills`. The
+/// copy holds the full skill directory, not only its `SKILL.md`.
 fn copy_skill_dir(
     skill: &EmbeddedSkill,
     canonical_dir: &Path,
     claude_dir: &Path,
     force: bool,
-) -> anyhow::Result<FileInstallReport> {
+) -> anyhow::Result<Vec<FileInstallReport>> {
     let name = skill_name(skill)?;
     let destination = claude_dir.join(name);
     let entry = TargetEntry::read(&destination)?;
@@ -337,9 +340,7 @@ fn copy_skill_dir(
         },
     }
 
-    let source_file = canonical_dir.join(name).join("SKILL.md");
-    let contents = std::fs::read_to_string(&source_file)?;
-    write_managed_file(&destination.join("SKILL.md"), &contents, force)
+    copy_tree::copy_tree(&canonical_dir.join(name), &destination, force)
 }
 
 fn write_managed_file(
@@ -347,8 +348,19 @@ fn write_managed_file(
     contents: &str,
     force: bool,
 ) -> anyhow::Result<FileInstallReport> {
+    write_managed_bytes(path, contents.as_bytes(), force)
+}
+
+/// Writes `contents` at `path` under the installer's ownership rules. The
+/// bytes form also serves the files that a skill directory carries beside its
+/// `SKILL.md`, such as a picture below `assets/`.
+fn write_managed_bytes(
+    path: &Path,
+    contents: &[u8],
+    force: bool,
+) -> anyhow::Result<FileInstallReport> {
     let existing = if path.exists() {
-        Some(std::fs::read_to_string(path)?)
+        Some(std::fs::read(path)?)
     } else {
         None
     };
