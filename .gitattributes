@@ -5,3 +5,10 @@
 # Embedded skill sources are compiled into the binary with include_str!;
 # their bytes must be identical on every platform's checkout.
 skills/** text eol=lf
+
+# The installed copies of those skills are compared byte for byte against
+# what `provenance skills install` writes; see
+# crates/provenance-cli/tests/cli_skills_committed_copies.rs. Pin their line
+# endings too, or the comparison fails on a Windows checkout.
+.agents/skills/** text eol=lf
+.claude/skills/** text eol=lf
