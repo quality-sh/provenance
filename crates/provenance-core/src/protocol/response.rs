@@ -1,5 +1,5 @@
 use camino::Utf8PathBuf;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::coverage::{EvidenceDiffSite, EvidenceDiffSummary};
 use crate::model::{
@@ -14,6 +14,7 @@ use super::{AffectedRule, GraphNode, Neighbor, TracedNode, SDK_PROTOCOL_VERSION}
 /// recorded response can tell which contract produced it, and `operation`
 /// names which primitive it came from.
 #[derive(Debug, Clone, Serialize)]
+// The envelope stays encode-only: `operation` is a static name.
 pub struct QueryResponse<Result> {
     pub protocol_version: u32,
     pub operation: &'static str,
@@ -31,21 +32,21 @@ impl<Result> QueryResponse<Result> {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct GetResult {
     pub found: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub node: Option<GraphNode>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SearchResult {
     pub limit: usize,
     pub has_more: bool,
     pub nodes: Vec<GraphNode>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct NeighborsResult {
     pub id: String,
     pub limit: usize,
@@ -53,7 +54,7 @@ pub struct NeighborsResult {
     pub neighbors: Vec<Neighbor>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TraceResult {
     pub id: String,
     pub max_depth: usize,
@@ -62,7 +63,7 @@ pub struct TraceResult {
     pub nodes: Vec<TracedNode>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ImpactResult {
     pub id: String,
     pub limit: usize,
@@ -71,14 +72,14 @@ pub struct ImpactResult {
 }
 
 /// What a commit range did to the code carrying a Rule's evidence.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct StaleEvidence {
     pub base: String,
     pub head: String,
     pub sites: Vec<EvidenceDiffSite>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct EvidenceResult {
     pub rule_id: String,
     pub limit: usize,
@@ -86,14 +87,14 @@ pub struct EvidenceResult {
     pub implementation_bindings: Vec<ImplementationBinding>,
     pub verification_bindings: Vec<VerificationBinding>,
     pub verification_runs: Vec<VerificationRun>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub latest_verification_run: Option<VerificationRun>,
     pub review_required: bool,
     pub reviews: Vec<RequirementReview>,
     pub stale: Option<StaleEvidence>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct StaleResult {
     pub base: String,
     pub head: String,
@@ -104,10 +105,10 @@ pub struct StaleResult {
     pub sites: Vec<EvidenceDiffSite>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ResolveSymbolResult {
     pub file: Utf8PathBuf,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub symbol: Option<String>,
     pub limit: usize,
     pub has_more: bool,

@@ -2,25 +2,25 @@ use crate::state_store::{
     requirement_statement_changes, StateStore, TypedResourceKind, TypedSpecResult,
 };
 use provenance_core::{RequirementReview, ScopeId, StableId};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// What the current state of a Rule's evidence asks a reader to do.
-#[derive(Serialize)]
+#[derive(Deserialize, Serialize)]
 pub struct RuleEvidence {
     review_required: bool,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     reasons: Vec<ReviewReason>,
 }
 
 /// One restated Requirement that put this Rule's evidence up for review.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ReviewReason {
     pub requirement: StableId,
     pub field: String,
     pub before: String,
     pub after: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub changed_at: Option<i64>,
 }
 

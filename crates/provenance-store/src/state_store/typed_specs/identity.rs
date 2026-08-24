@@ -234,6 +234,7 @@ mod tests {
     use crate::state_store::typed_specs::rule_address;
     use crate::state_store::TypedRuleInput;
     use provenance_core::StableId;
+    use provenance_macros::verifies;
 
     #[test]
     fn implicit_ids_are_scoped_to_the_spec_address() {
@@ -287,6 +288,7 @@ mod tests {
     }
 
     #[test]
+    #[verifies("rule_rust_store_owns_persistent_identity", examples)]
     fn an_existing_address_keeps_its_canonical_id() {
         let address = requirement_address("share-links", "sharing").unwrap();
         let mut existing = BTreeMap::new();

@@ -166,6 +166,7 @@ fn handles_carry_declaration_addresses() {
 }
 
 #[test]
+#[verifies("rule_rust_typed_input_round_trip", examples)]
 fn materialize_emits_the_wire_document_with_addresses() {
     let input = sample(true).build().unwrap().materialize("spec://rust");
     assert_eq!(input.schema_version, 1);

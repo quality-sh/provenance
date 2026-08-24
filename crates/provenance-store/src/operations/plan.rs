@@ -4,7 +4,7 @@ use crate::{
 };
 use camino::Utf8Path;
 use provenance_core::{EdgeType, NodeType, StableId};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 use super::sites;
@@ -17,14 +17,14 @@ pub use evidence::{ReviewReason, RuleEvidence};
 ///
 /// `TypedSpecPlan` flattens `TypedSpecResult`, so `TypedSpecResult` must
 /// never gain `deny_unknown_fields`.
-#[derive(Serialize)]
+#[derive(Deserialize, Serialize)]
 pub struct TypedSpecPlan {
     #[serde(flatten)]
     pub reconciliation: TypedSpecResult,
     pub affected_rules: Vec<AffectedRule>,
 }
 
-#[derive(Serialize)]
+#[derive(Deserialize, Serialize)]
 pub struct AffectedRule {
     #[serde(flatten)]
     rule: provenance_core::protocol::AffectedRule,

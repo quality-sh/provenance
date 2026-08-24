@@ -28,6 +28,11 @@ not set a repository-wide STE enforcement policy.
 
 ## Typed SDK protocol (POC)
 
+Rust consumers do not need these one-shot commands: every operation is
+a public function in `provenance_store::operations`, and the
+`provenance-sdk` crate adds the authoring builders, `verify`, and the
+macro projection. See `examples/rust-sdk`.
+
 The SDK protocol uses one-shot commands that read or write JSON:
 
 ```sh

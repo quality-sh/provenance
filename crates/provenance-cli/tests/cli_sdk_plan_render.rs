@@ -4,6 +4,7 @@
 //! and must stay green after that move.
 
 use assert_cmd::Command;
+use provenance_macros::verifies;
 use serde_json::{json, Value};
 
 fn provenance() -> Command {
@@ -102,6 +103,7 @@ fn an_unchanged_plan_renders_the_empty_report() {
 }
 
 #[test]
+#[verifies("rule_rust_plan_goldens_precede_store_relocation", examples)]
 fn a_rule_statement_change_renders_the_change_and_the_affected_rule() {
     let directory = init_repo();
     let repo = directory.path().to_str().unwrap();
