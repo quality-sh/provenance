@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "reference_id": "grf1_611565ce00e9f441c2dee1ce312eb5a763b31ea9fbd8a8552d06adc74b63e248",
+  "repository_id": "git1_17df5f389fdff12f14bd4207543edc05148fb16ec55b2dc9b01de8f2b1686599",
+  "store_path": ".provenance/state",
+  "scope_id": "default",
+  "commit": "c340a3c9448d5475f5fdbbebc399d7deca08cb5e",
+  "graph_digest": "sha256:bbb18ae65e08b920ee5abd1b80663f26babb01dadadf5161af222061308c444b",
+  "correlation": {
+    "system": "qrispi",
+    "key": "provenance-rust-sdk-f8929d9e-cd971c58"
+  }
+}

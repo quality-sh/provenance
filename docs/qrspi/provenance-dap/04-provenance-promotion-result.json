@@ -1,0 +1,25 @@
+{
+  "contractVersion": 1,
+  "status": "confirmed",
+  "requestId": "provenance-rust-sdk-f8929d9e-cd971c58",
+  "requestSha256": "b314bf70212b14b71de8e994ba7bdbbc8de5c0235688846d5dde972db329af4d",
+  "packageSha256": "f8929d9ec73d2297537d306b6c3cb78a94d113f4253d13f72fc648e11be150b5",
+  "gateResponseSha256": "cd971c588770df9de0a1e87eb62355dcee2aa1737632c3972e352d2bde400627",
+  "observedAt": "2026-08-24T08:38:48Z",
+  "authoritativeObservation": {
+    "checkStatus": "ok",
+    "selectionComplete": true,
+    "graphReferenceVerified": true
+  },
+  "graphSnapshot": {
+    "identity": "grf1_611565ce00e9f441c2dee1ce312eb5a763b31ea9fbd8a8552d06adc74b63e248",
+    "repositoryIdentity": "git1_17df5f389fdff12f14bd4207543edc05148fb16ec55b2dc9b01de8f2b1686599",
+    "sha256": "bbb18ae65e08b920ee5abd1b80663f26babb01dadadf5161af222061308c444b",
+    "commit": "c340a3c9448d5475f5fdbbebc399d7deca08cb5e",
+    "scope": "default",
+    "graphRoot": ".provenance/state",
+    "referencePath": "docs/qrspi/provenance-dap/04-graph-reference.json",
+    "exactExportPath": "docs/qrspi/provenance-dap/04-graph-export.json",
+    "exactExportSha256": "cb0b6f7a50925f320e98b36126918f3dd299fd697066dfee635749a865c1d671"
+  }
+}
