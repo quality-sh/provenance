@@ -181,6 +181,11 @@ fn normalize_verification_context(
     Ok(())
 }
 
+/// Resolves each implementation target to one repository file before any
+/// store call; a target that does not resolve refuses the operation, so
+/// apply writes nothing.
+#[rule("rule_rust_store_resolves_implementation_symbols")]
+#[rule("rule_rust_symbol_resolution_refuses_writes")]
 fn normalize_implementation_context(
     repo: &Utf8Path,
     input: &mut TypedSpecInput,

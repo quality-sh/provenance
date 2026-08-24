@@ -1,0 +1,12 @@
+error: couldn't read `$WORKSPACE/target/tests/trybuild/provenance-sdk/src/absent_module.rs`: No such file or directory (os error 2)
+ --> tests/compile_fail/implemented_by_missing_file.rs:4:13
+  |
+4 |       let _ = implemented_by!(
+  |  _____________^
+5 | |         rule("expiry").statement("Share links expire within 30 days"),
+6 | |         "src/absent_module.rs",
+7 | |         create_share_link
+8 | |     );
+  | |_____^
+  |
+  = note: this error originates in the macro `include_bytes` which comes from the expansion of the macro `implemented_by` (in Nightly builds, run with -Z macro-backtrace for more info)

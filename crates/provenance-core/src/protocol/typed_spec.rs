@@ -5,11 +5,16 @@
 //! `Serialize` is for fixture emission and kernel materialization; the
 //! wire decoder keeps `deny_unknown_fields`.
 
+use provenance_macros::rule;
 use serde::{Deserialize, Serialize};
 
 use crate::model::DeclarationAddress;
 
 /// One language-authored desired-state document.
+///
+/// Serialization skips absent optional fields, so a decode and encode
+/// round trip preserves every present field and every omission.
+#[rule("rule_rust_typed_input_round_trip")]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct TypedSpecInput {
