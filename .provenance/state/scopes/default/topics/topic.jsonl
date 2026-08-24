@@ -1,4 +1,4 @@
 {"schema_version":1,"scope_id":"default","id":"top_req_create_an_end_to_end_product_research_to_ux","requirement_id":"req_create_an_end_to_end_product_research_to","title":"UX","status":"open","links":[]}
-{"schema_version":1,"scope_id":"default","id":"topic_agents_md_injection","requirement_id":"req_consuming_repo_agents_md_block","title":"AGENTS.md injection block delivery","status":"open","links":[]}
+{"schema_version":1,"scope_id":"default","id":"topic_agents_md_injection","requirement_id":"req_consuming_repo_agents_md_block","title":"AGENTS.md injection block delivery","status":"closed","links":[]}
 {"schema_version":1,"scope_id":"default","id":"topic_ste_authoring_and_graph_checks","requirement_id":"req_ste_syntax_checked_before_graph_write","title":"ASD-STE100 authoring and graph checks","status":"open","links":[]}
 {"schema_version":1,"scope_id":"default","id":"topic_wiki_homepage_direction","requirement_id":"req_wiki_homepage_entry_mode","title":"Wiki homepage first-viewport direction","status":"closed","links":[]}
