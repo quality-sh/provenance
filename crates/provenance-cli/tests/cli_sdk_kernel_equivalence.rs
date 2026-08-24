@@ -246,6 +246,58 @@ fn wire_ingestion_rejects_the_named_structural_defects() {
 }
 
 #[test]
+fn the_in_process_route_refuses_the_envelope_and_gate_classes_like_the_wire() {
+    let scope = ScopeId::new("default").unwrap();
+    let document = |declared_by: &str, statement: &str| {
+        serde_json::from_value::<provenance_core::protocol::TypedSpecInput>(json!({
+            "schema_version": 1,
+            "spec": "share-links",
+            "declared_by": declared_by,
+            "requirements": [{"key": "sharing", "statement": statement}]
+        }))
+        .unwrap()
+    };
+
+    let repo = init_repo();
+    let mut wrong_version = document("spec://parity", "Users can share documentation");
+    wrong_version.schema_version = 2;
+    let error = operations::apply(Some(repo_root(&repo)), &scope, wrong_version).unwrap_err();
+    assert_eq!(error.to_string(), "typed spec schema_version must be 1");
+
+    let first = operations::apply(
+        Some(repo_root(&repo)),
+        &scope,
+        document("spec://parity", "Users can share documentation"),
+    )
+    .unwrap();
+    let owned = first.resources[0].id.as_str().to_string();
+    let mut other_owner = document("spec://other", "Users can share documentation");
+    other_owner.requirements[0].id = Some(owned.clone());
+    let error = operations::apply(Some(repo_root(&repo)), &scope, other_owner).unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        format!("record `{owned}` is not owned by `spec://other` (declared_by: spec://parity)")
+    );
+
+    let ste_repo = init_repo();
+    let error = operations::apply(
+        Some(repo_root(&ste_repo)),
+        &scope,
+        document(
+            "spec://parity",
+            "Users can share documentation with colleagues and partners and auditors and \
+             regulators and reviewers and vendors and clients and translators and archivists \
+             and every other reader they choose to invite",
+        ),
+    )
+    .unwrap_err();
+    assert!(
+        error.to_string().contains("statement"),
+        "the STE gate did not refuse: {error}"
+    );
+}
+
+#[test]
 fn a_legacy_singular_requirement_field_matches_the_normalized_list() {
     let legacy_repo = init_repo();
     let list_repo = init_repo();

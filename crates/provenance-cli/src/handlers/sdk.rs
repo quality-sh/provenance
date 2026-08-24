@@ -21,7 +21,9 @@ pub(super) fn handle(command: SdkCommand) -> anyhow::Result<()> {
             scope,
             format,
         } => {
-            let plan = operations::plan(repo, &ScopeId::new(scope)?, read_stdin_json()?)?;
+            let repo = Some(operations::discover_repository(repo)?);
+            let input = read_stdin_json()?;
+            let plan = operations::plan(repo, &ScopeId::new(scope)?, input)?;
             match format {
                 output::OutputFormat::Json | output::OutputFormat::Jsonl => {
                     output::print(format, &plan)?;
@@ -38,7 +40,9 @@ pub(super) fn handle(command: SdkCommand) -> anyhow::Result<()> {
             scope,
             format,
         } => {
-            let result = operations::apply(repo, &ScopeId::new(scope)?, read_stdin_json()?)?;
+            let repo = Some(operations::discover_repository(repo)?);
+            let input = read_stdin_json()?;
+            let result = operations::apply(repo, &ScopeId::new(scope)?, input)?;
             output::print(format, &result)?;
         }
         SdkCommand::BeginVerification {
@@ -46,6 +50,7 @@ pub(super) fn handle(command: SdkCommand) -> anyhow::Result<()> {
             scope,
             format,
         } => {
+            let repo = Some(operations::discover_repository(repo)?);
             let input = read_stdin_json::<BeginVerificationInput>()?;
             let run = operations::begin_verification(repo, ScopeId::new(scope)?, input)?;
             output::print(format, &run)?;
@@ -55,6 +60,7 @@ pub(super) fn handle(command: SdkCommand) -> anyhow::Result<()> {
             scope,
             format,
         } => {
+            let repo = Some(operations::discover_repository(repo)?);
             let input = read_stdin_json::<CompleteVerificationInput>()?;
             let run = operations::complete_verification(repo, &ScopeId::new(scope)?, input)?;
             output::print(format, &run)?;
@@ -65,6 +71,7 @@ pub(super) fn handle(command: SdkCommand) -> anyhow::Result<()> {
             rule,
             format,
         } => {
+            let repo = Some(operations::discover_repository(repo)?);
             let rule = rule.map(StableId::new).transpose()?;
             let runs = operations::verification_runs(repo, &ScopeId::new(scope)?, rule.as_ref())?;
             output::print(format, &runs)?;
@@ -85,6 +92,7 @@ pub(super) fn handle(command: SdkCommand) -> anyhow::Result<()> {
             rule,
             format,
         } => {
+            let repo = Some(operations::discover_repository(repo)?);
             let rule = rule.map(StableId::new).transpose()?;
             let bindings =
                 operations::verification_bindings(repo, &ScopeId::new(scope)?, rule.as_ref())?;

@@ -300,7 +300,9 @@ fn implementation_pair(rule: &TypedRuleInput) -> Option<(&camino::Utf8Path, &str
     })
 }
 
-/// The canonical rule sort key: the serialized address in UTF-8 byte order.
+/// The canonical rule sort key: the JSON-serialized address, compared
+/// by bytes. Keys with characters JSON escapes order by their escaped
+/// form; the requirement is a deterministic, locale-free order.
 fn serialized_address(rule: &TypedRuleInput) -> String {
     rule.address.as_ref().map_or_else(String::new, |address| {
         serde_json::to_string(address.segments()).unwrap_or_default()

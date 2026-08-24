@@ -32,6 +32,13 @@ Every entry falls in one of three delta classes.
 
 - Verification is synchronous in Rust v1; asynchronous callbacks are a
   gate-visible follow-up (G7).
+- TypeScript `verify` takes `options.method` (default `examples`) and
+  `options.symbol`; Rust `verify` fixes the method to `examples` and
+  records no symbol in v1.
+- TypeScript records `error.stack` for a failing callback and rethrows
+  the original error; Rust records the error's display text and returns
+  a new error carrying that text, so the original error type and source
+  chain do not propagate.
 - `PROVENANCE_BIN` and the runtime engine handshake do not apply: the
   Rust SDK links the engine in process, and compatibility is cargo
   semver on provenance-core and provenance-store (G2).

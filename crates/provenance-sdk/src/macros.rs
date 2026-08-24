@@ -41,12 +41,12 @@ pub const fn identifier_matches_key(identifier: &str, key: &str) -> bool {
 /// ```
 #[macro_export]
 macro_rules! provenance_spec {
-    ($name:ident => $key:literal { $($requirement:expr),* $(,)? }) => {
+    ($vis:vis $name:ident => $key:literal { $($requirement:expr),* $(,)? }) => {
         const _: () = assert!(
             $crate::identifier_matches_key(stringify!($name), $key),
             "provenance_spec! identifier does not spell the spec key"
         );
-        pub fn $name() -> Result<$crate::SpecDocument, $crate::AuthoringError> {
+        $vis fn $name() -> Result<$crate::SpecDocument, $crate::AuthoringError> {
             $crate::spec($key).requirements([$($requirement),*]).build()
         }
     };

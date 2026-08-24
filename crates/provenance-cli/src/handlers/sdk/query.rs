@@ -22,7 +22,9 @@ pub(super) enum Operation {
 /// Every primitive is one named operation with typed parameters read from
 /// stdin, and every answer carries the protocol version that produced it.
 pub(super) fn handle(operation: Operation, args: QueryArgs) -> anyhow::Result<()> {
-    let repo = args.repo;
+    let repo = Some(provenance_store::operations::discover_repository(
+        args.repo,
+    )?);
     let scope = ScopeId::new(args.scope)?;
     let format = args.format;
     match operation {

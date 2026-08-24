@@ -2,7 +2,7 @@
 
 use provenance_sdk::{implemented_by, provenance_spec, requirement, rule, source};
 
-provenance_spec!(share_links => "share-links" {
+provenance_spec!(pub share_links => "share-links" {
     requirement("sharing")
         .statement("Users can securely share documentation")
         .from(source("sharing-policy").document("docs/sharing-policy.md"))
