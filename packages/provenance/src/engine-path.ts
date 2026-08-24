@@ -46,8 +46,8 @@ export function resolveEnginePath(
     return resolvePackage(`${packageName}/bin`);
   } catch (cause) {
     throw new Error(
-      `The optional engine package ${packageName} is missing. Run npm install @quality-sh/provenance ` +
-      `without --omit=optional for ${hostLabel(host)}.`,
+      `The optional engine package ${packageName} is missing. Install the development dependency ` +
+      `again with optional dependencies enabled for ${hostLabel(host)}.`,
       { cause },
     );
   }
