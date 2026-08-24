@@ -43,6 +43,11 @@ test("every Rust release target becomes a checksummed npm platform package", () 
     assert.deepEqual(manifest.os, [os]);
     assert.deepEqual(manifest.cpu, [cpu]);
     assert.deepEqual(manifest.libc, libc === undefined ? undefined : [libc]);
+    assert.equal(
+      manifest.preferUnplugged,
+      true,
+      "native engine packages must ask Plug'n'Play managers to unpack them",
+    );
 
     const binaryName = os === "win32" ? "provenance.exe" : "provenance";
     const packagedBinary = join(output, "bin", binaryName);

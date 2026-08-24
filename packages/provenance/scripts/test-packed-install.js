@@ -168,6 +168,10 @@ const initializedCheck = JSON.parse(
 );
 assert.equal(initializedCheck.status, "ok", "the one-command project must validate");
 
+if (process.env.PROVENANCE_TEST_YARN_PNP === "true") {
+  verifyYarnPnpInstall();
+}
+
 const localEngine = join(
   application,
   "node_modules",
@@ -386,6 +390,46 @@ function provenance(args, cwd) {
       npm_config_update_notifier: "false",
     },
   });
+}
+
+function verifyYarnPnpInstall() {
+  // The manager smoke uses a JavaScript engine fixture. This packed test joins
+  // Yarn's default PnP linker to the real SDK and native platform engine.
+  const yarnApplication = join(temporary, "yarn-pnp-initialized-application");
+  const yarnMainSpec = join(archiveDirectory, mainArchive);
+  mkdirSync(yarnApplication);
+  writeFileSync(join(yarnApplication, "package.json"), JSON.stringify({
+    name: "provenance-yarn-pnp-install",
+    private: true,
+    version: "1.0.0",
+    packageManager: "yarn@4.9.2",
+    resolutions: {
+      [engineManifest.name]: `file:../archives/${engineArchive}`,
+      [typescriptManifest.name]: `file:../archives/${typescriptArchive}`,
+    },
+  }));
+  execFileSync(process.execPath, [
+    join(initializerRoot, "bin", "create-provenance.mjs"),
+    "--package-manager", "yarn",
+  ], {
+    cwd: yarnApplication,
+    env: { ...process.env, PROVENANCE_PACKAGE_SPEC: yarnMainSpec },
+    stdio: "inherit",
+  });
+  assert.equal(
+    JSON.parse(readFileSync(join(yarnApplication, "package.json"), "utf8"))
+      .devDependencies["@quality-sh/provenance"],
+    yarnMainSpec,
+    "the Yarn PnP initializer must save the staged SDK as a development dependency",
+  );
+  assert.ok(
+    readFileSync(join(yarnApplication, ".pnp.cjs"), "utf8").length > 0,
+    "the Yarn regression test must use Plug'n'Play",
+  );
+  const check = JSON.parse(execFileSync("yarn", [
+    "provenance", "check", "--repo", yarnApplication, "--format", "json",
+  ], { cwd: yarnApplication, encoding: "utf8" }));
+  assert.equal(check.status, "ok", "the Yarn PnP project must validate with the native engine");
 }
 
 function archiveNamed(archives, expected) {
