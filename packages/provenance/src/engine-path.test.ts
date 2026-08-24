@@ -65,6 +65,6 @@ test("a missing optional package explains how to repair the install", () => {
         throw new Error("not found");
       },
     }),
-    /optional engine package.*npm install.*omit=optional/s,
+    /optional engine package.*install the development dependency again.*optional dependencies/si,
   );
 });

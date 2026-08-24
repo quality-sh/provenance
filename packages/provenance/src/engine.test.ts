@@ -122,6 +122,6 @@ test("an engine that cannot start reports the override and reinstall paths", asy
 
   await assert.rejects(
     plan(spec()),
-    /could not start.*PROVENANCE_BIN.*npm install/s,
+    /could not start.*PROVENANCE_BIN.*install the development dependency again/s,
   );
 });

@@ -60,6 +60,7 @@ const manifest = {
   cpu: target.cpu,
   ...(target.libc === undefined ? {} : { libc: target.libc }),
   engines: { node: ">=20" },
+  preferUnplugged: true,
   files: ["bin", "SHA256SUMS", "README.md", "LICENSE"],
   // A platform package carries the binary and nothing else. The command name
   // stays with @quality-sh/provenance, which every install has, so `npx
