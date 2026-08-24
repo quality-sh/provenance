@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test, { after } from "node:test";
 
-import * as initializer from "../src/initializer.mjs";
+import * as initializer from "../src/initializer.js";
 
 const { initializeProject, parseArguments } = initializer;
 
@@ -60,35 +60,41 @@ const managers = [
 
 for (const [manager, command, args] of managers) {
   test(`${manager} installs Provenance as an exact development dependency`, () => {
-    const project = projectDirectory({ packageManager: `${manager}@1.0.0` });
-    const invocations = [];
-
-    const result = initializeProject({
-      projectDirectory: project,
-      packageVersion,
-      enginePath: "/provenance-engine",
-      execute: recordingExecutor(invocations),
-    });
-
-    assert.equal(result.packageManager, manager);
-    assert.deepEqual(invocations[0], { command, args, capture: false });
-    assert.deepEqual(invocations.slice(1), [
-      {
-        command: "/provenance-engine",
-        args: ["init", "--path", project, "--scope", "default", "--path-prefix", "."],
-        capture: false,
-      },
-      {
-        command: "/provenance-engine",
-        args: ["check", "--repo", project, "--format", "json"],
-        capture: true,
-      },
-    ]);
-    assert.equal(
-      readFileSync(join(project, ".gitignore"), "utf8"),
-      ".provenance/cache/\n",
-    );
+    verifyExactDevelopmentDependency(manager, command, args);
   });
+}
+
+// @provenance rule: rule_typescript_initializer_installs_dev_dependency
+// @provenance verification: conformance
+function verifyExactDevelopmentDependency(manager, command, args) {
+  const project = projectDirectory({ packageManager: `${manager}@1.0.0` });
+  const invocations = [];
+
+  const result = initializeProject({
+    projectDirectory: project,
+    packageVersion,
+    enginePath: "/provenance-engine",
+    execute: recordingExecutor(invocations),
+  });
+
+  assert.equal(result.packageManager, manager);
+  assert.deepEqual(invocations[0], { command, args, capture: false });
+  assert.deepEqual(invocations.slice(1), [
+    {
+      command: "/provenance-engine",
+      args: ["init", "--path", project, "--scope", "default", "--path-prefix", "."],
+      capture: false,
+    },
+    {
+      command: "/provenance-engine",
+      args: ["check", "--repo", project, "--format", "json"],
+      capture: true,
+    },
+  ]);
+  assert.equal(
+    readFileSync(join(project, ".gitignore"), "utf8"),
+    ".provenance/cache/\n",
+  );
 }
 
 const lockfiles = [
@@ -132,6 +138,66 @@ test("conflicting lockfiles require an explicit package manager", () => {
   );
 });
 
+test("package manager selection follows its documented precedence", () => {
+  verifyPackageManagerSelection();
+});
+
+// @provenance rule: rule_typescript_initializer_selects_package_manager
+// @provenance verification: examples
+function verifyPackageManagerSelection() {
+  const explicitProject = projectDirectory({ packageManager: "pnpm@10.0.0" });
+  writeFileSync(join(explicitProject, "yarn.lock"), "");
+  const explicit = initializeProject({
+    projectDirectory: explicitProject,
+    packageVersion,
+    packageManager: "bun",
+    userAgent: "deno/2.0.0",
+    enginePath: "/provenance-engine",
+    execute: recordingExecutor([]),
+  });
+  assert.equal(explicit.packageManager, "bun");
+
+  const declaredProject = projectDirectory({ packageManager: "pnpm@10.0.0" });
+  writeFileSync(join(declaredProject, "yarn.lock"), "");
+  const declared = initializeProject({
+    projectDirectory: declaredProject,
+    packageVersion,
+    userAgent: "deno/2.0.0",
+    enginePath: "/provenance-engine",
+    execute: recordingExecutor([]),
+  });
+  assert.equal(declared.packageManager, "pnpm");
+
+  const lockfileProject = projectDirectory();
+  writeFileSync(join(lockfileProject, "yarn.lock"), "");
+  const lockfile = initializeProject({
+    projectDirectory: lockfileProject,
+    packageVersion,
+    userAgent: "deno/2.0.0",
+    enginePath: "/provenance-engine",
+    execute: recordingExecutor([]),
+  });
+  assert.equal(lockfile.packageManager, "yarn");
+
+  const userAgent = initializeProject({
+    projectDirectory: projectDirectory(),
+    packageVersion,
+    userAgent: "deno/2.0.0",
+    enginePath: "/provenance-engine",
+    execute: recordingExecutor([]),
+  });
+  assert.equal(userAgent.packageManager, "deno");
+
+  const fallback = initializeProject({
+    projectDirectory: projectDirectory(),
+    packageVersion,
+    userAgent: undefined,
+    enginePath: "/provenance-engine",
+    execute: recordingExecutor([]),
+  });
+  assert.equal(fallback.packageManager, "npm");
+}
+
 test("an existing cache ignore entry is not duplicated", () => {
   const project = projectDirectory({ packageManager: "npm@11.0.0" });
   writeFileSync(join(project, ".gitignore"), "dist/\n.provenance/cache/\n");
@@ -150,6 +216,12 @@ test("an existing cache ignore entry is not duplicated", () => {
 });
 
 test("a failed validation does not claim success or edit gitignore", () => {
+  verifyFailedValidation();
+});
+
+// @provenance rule: rule_typescript_initializer_validates_project
+// @provenance verification: examples
+function verifyFailedValidation() {
   const project = projectDirectory({ packageManager: "npm@11.0.0" });
 
   assert.throws(
@@ -166,7 +238,7 @@ test("a failed validation does not claim success or edit gitignore", () => {
     /freshly initialized project did not validate/,
   );
   assert.throws(() => readFileSync(join(project, ".gitignore")), /ENOENT/);
-});
+}
 
 test("the command defaults to the current project", () => {
   assert.deepEqual(parseArguments([], "/workspace/application"), {

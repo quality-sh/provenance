@@ -42,6 +42,7 @@ function requiredValue(args, index, option) {
   return value;
 }
 
+// @provenance rule: rule_typescript_initializer_validates_project
 export function initializeProject({
   projectDirectory,
   packageVersion,
@@ -113,6 +114,7 @@ function installedEngineCommand(directory) {
   };
 }
 
+// @provenance rule: rule_typescript_initializer_selects_package_manager
 function selectPackageManager(directory, requested, userAgent) {
   if (requested !== undefined) {
     return ensureSupportedManager(requested);
@@ -162,6 +164,7 @@ function ensureSupportedManager(manager) {
   return manager;
 }
 
+// @provenance rule: rule_typescript_initializer_installs_dev_dependency
 function installInvocation(manager, packageSpec) {
   switch (manager) {
     case "npm":

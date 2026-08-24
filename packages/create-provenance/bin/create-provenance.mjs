@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { initializeProject, parseArguments } from "../src/initializer.mjs";
+import { initializeProject, parseArguments } from "../src/initializer.js";
 
 if (process.argv.slice(2).some((argument) => argument === "--help" || argument === "-h")) {
   process.stdout.write(`Usage: create-provenance [options]
