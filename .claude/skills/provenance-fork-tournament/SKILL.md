@@ -2,7 +2,7 @@
 name: provenance-fork-tournament
 description: Run a fork tournament when a shaping session hits a genuine design fork — mutually exclusive directions, expensive to reverse, and the human's preference unknowable without concrete artifacts to react to. Implements the `prototype` resolution method from docs/shaping.md - spawn stance-based agents producing competing artifacts as proposals (phase 1, end session), then present them for human disposal and land the decision as a Resolution (phase 2).
 ---
-<!-- Installed by provenance 0.2.0; content hash fnv1a64:1e796d53cf38e8d2 -->
+<!-- Installed by provenance 0.2.1; content hash fnv1a64:1e796d53cf38e8d2 -->
 
 # Fork tournament (`prototype`)
 

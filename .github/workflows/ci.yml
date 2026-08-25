@@ -37,6 +37,8 @@ jobs:
               - ".github/workflows/ci.yml"
             rust:
               - *ci
+              - ".github/workflows/release.yml"
+              - ".github/scripts/publish-cargo-if-missing.sh"
               - "crates/**"
               - "Cargo.toml"
               - "Cargo.lock"

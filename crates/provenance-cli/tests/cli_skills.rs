@@ -93,7 +93,7 @@ fn skills_install_default_writes_canonical_files_and_relative_claude_symlinks() 
 
 #[test]
 fn fork_tournament_skill_documents_the_assertable_winner_lifecycle() {
-    let skill = include_str!("../../../skills/provenance-fork-tournament/SKILL.md");
+    let skill = include_str!("../skills/provenance-fork-tournament/SKILL.md");
 
     assert!(skill.contains("--supporting-claim-id claim_<question>_<slot>"));
     assert!(skill.contains(r#""proposal_id":"prop_<question>_<slot>""#));

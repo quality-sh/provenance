@@ -2,13 +2,19 @@
 name = "provenance-ste100"
 version.workspace = true
 edition.workspace = true
+description = "ASD-STE100 statement checks for Provenance Requirements and Rules"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+publish.workspace = true
 
 [lints]
 workspace = true
 
 [dependencies]
 pdf_oxide = { version = "=0.3.77", default-features = false, features = ["legacy-crypto"] }
-provenance-macros = { path = "../provenance-macros" }
+provenance-macros.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

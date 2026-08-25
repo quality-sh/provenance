@@ -16,6 +16,23 @@ It also stages and publishes matching npm engine packages,
 `@quality-sh/provenance`, and `@quality-sh/create-provenance`. npm trusted
 publishing must be configured for the repository's `npm` GitHub environment.
 
+The workflow publishes these Rust crates to crates.io:
+
+- `provenance-macros`
+- `provenance-core`
+- `provenance-scanner`
+- `provenance-ste100`
+- `provenance-store`
+- `provenance-sdk`
+- `provenance-cli`
+
+The `crates-io` GitHub environment protects publication. The first publication
+uses the short-lived `CRATES_IO_BOOTSTRAP_TOKEN` environment secret. The token
+must permit `publish-new` only for `provenance-*`. After the first publication,
+configure a trusted publisher for each crate. Replace the bootstrap credential
+in the workflow with the official crates.io authentication action. Then remove
+the secret.
+
 Each engine package carries a binary and no command name. `provenance` is a
 command of `@quality-sh/provenance`. The initializer adds that package as a
 development dependency and then initializes the project. `npm run test:packed`
@@ -23,11 +40,18 @@ rehearses the complete flow from local archives before a release.
 
 ## Cut A Release
 
-Update the crate and npm package versions, then tag and push:
+Update the crate and npm package versions. Verify the crate archives before you
+tag the release:
 
 ```sh
-git tag v0.2.0
-git push origin v0.2.0
+cargo package --workspace --locked
+```
+
+Tag and push the release commit:
+
+```sh
+git tag v0.2.1
+git push origin v0.2.1
 ```
 
 The `Release` workflow creates the GitHub Release, attaches archives, and generates release notes.
@@ -55,6 +79,6 @@ and inherited with `version.workspace = true`. The package versions in
 must match it. The release job rejects a tag unless all versions equal the tag
 without its `v` prefix.
 
-A tag carrying a hyphen is published as a prerelease, so `v0.2.0-rc.1` is the
+A tag carrying a hyphen is published as a prerelease, so `v0.2.1-rc.1` is the
 way to rehearse a release without announcing one. npm publishes that version
 under the `next` tag; stable versions use `latest`.
