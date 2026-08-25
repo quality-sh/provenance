@@ -12,6 +12,7 @@ camino.workspace = true
 fs2.workspace = true
 provenance-core = { path = "../provenance-core" }
 provenance-macros = { path = "../provenance-macros" }
+provenance-scanner = { path = "../provenance-scanner" }
 provenance-ste100 = { path = "../provenance-ste100" }
 serde.workspace = true
 serde_ignored.workspace = true

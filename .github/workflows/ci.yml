@@ -40,6 +40,7 @@ jobs:
               - "crates/**"
               - "Cargo.toml"
               - "Cargo.lock"
+              - "examples/rust-sdk/**"
               # Skill files are Rust inputs: the sources compile into the
               # binary with include_str!, and a test compares the installed
               # copies against what an install writes.
@@ -189,6 +190,40 @@ jobs:
             --repo "$fixture_repo" --scope default --rule "$rule_id" --format json \
             | jq -e 'length == 1 and .[0].file == "dist/share-links.test.js"'
 
+  rust-sdk:
+    name: Rust SDK example
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+      - run: cargo build -p provenance-cli
+      - name: Run Rust fixture
+        shell: bash
+        run: |
+          fixture_repo="$PWD/examples/rust-sdk"
+          target/debug/provenance init --path "$fixture_repo" --scope default --path-prefix .
+          (cd examples/rust-sdk && PROVENANCE_REPO="$fixture_repo" cargo run --bin apply)
+          (cd examples/rust-sdk && \
+            PROVENANCE_REPO="$fixture_repo" \
+            PROVENANCE_VERIFICATION_OWNER="ci://rust-example" \
+            cargo test)
+          rule_id=$(target/debug/provenance rules list \
+            --repo "$fixture_repo" --scope default --format json \
+            | jq -er 'select(length == 1) | .[0].id')
+          target/debug/provenance rules show \
+            --repo "$fixture_repo" --scope default --id "$rule_id" --format json
+          target/debug/provenance sdk verification-runs \
+            --repo "$fixture_repo" --scope default --rule "$rule_id" --format json \
+            | jq -e 'length == 1 and .[0].status == "passed"'
+          target/debug/provenance sdk verification-bindings \
+            --repo "$fixture_repo" --scope default --rule "$rule_id" --format json \
+            | jq -e 'length == 1 and .[0].file == "tests/share_links.rs"'
+
   initializer-package-managers:
     name: Initializer (${{ matrix.manager }})
     needs: changes
@@ -281,6 +316,7 @@ jobs:
       - rule-coverage
       - wiki-dom
       - typescript-sdk
+      - rust-sdk
       - initializer-package-managers
       - typescript-sdk-packed-install
     if: always()
