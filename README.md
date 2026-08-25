@@ -16,7 +16,13 @@ The initializer detects npm, pnpm, Yarn, Bun, Deno, or Nub. It installs
 `@quality-sh/provenance` as an exact development dependency, creates the
 default scope, validates the state, and ignores `.provenance/cache/`.
 
-To build the CLI from source:
+Install the CLI from crates.io:
+
+```sh
+cargo install provenance-cli
+```
+
+To build the CLI from this source tree:
 
 ```sh
 cargo build --release -p provenance-cli --all-features
