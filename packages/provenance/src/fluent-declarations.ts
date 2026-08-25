@@ -4,7 +4,7 @@ import {
   captureImplementationReference,
   type ImplementationTarget,
 } from "./implementation-reference.js";
-import type { ImplementationDeclaration, SourceDeclaration } from "./protocol.js";
+import type { ImplementationDeclaration, SourceDeclaration, SourceKind } from "./protocol.js";
 import { requireText } from "./fluent-validation.js";
 
 const moduleFile = fileURLToPath(import.meta.url);
@@ -42,8 +42,19 @@ export class FluentSource<Key extends string = string> {
     return this.copy(existingId, true);
   }
 
+  // The short form of `kind("document")` that also gives the reference.
   document(reference: string): FluentSource<Key> {
     requireText("document reference", reference);
+    return this.withKind("document", reference);
+  }
+
+  // Selects the canonical source type. It adds no optional URL or
+  // reference metadata.
+  kind(kind: SourceKind): FluentSource<Key> {
+    return this.withKind(kind, this.declaration?.reference);
+  }
+
+  private withKind(kind: SourceKind, reference?: string): FluentSource<Key> {
     const displayName = sourceNames.get(this);
     return new FluentSource(
       this.key,
@@ -51,7 +62,7 @@ export class FluentSource<Key extends string = string> {
         key: this.key,
         id: this.explicitId,
         name: displayName ?? this.key,
-        kind: "document",
+        kind,
         reference,
       },
       displayName,

@@ -18,11 +18,22 @@ Every entry falls in one of three delta classes.
   string-keyed handles. Unknown keys fail at compile time in
   TypeScript and at runtime in Rust, except the spec key itself, which
   `provenance_spec!` checks at compile time.
-- The 13 TypeScript type fixtures map as follows: the spec-key fixture
+- The 14 TypeScript type fixtures map as follows: the spec-key fixture
   maps to the `provenance_spec!` compile-fail case; the frozen-instance
   fixtures map to the by-value builder and the immutable
-  `SpecDocument`; the remaining literal-key fixtures fall in this
+  `SpecDocument`; the source-kind fixture maps to the `SourceType`
+  enum; the remaining literal-key fixtures fall in this
   class as runtime checks on `handles()`.
+- The Rust typed builder and the two TypeScript fluent builders close the
+  source kind over the same canonical set. Rust names
+  `provenance_core::SourceType`; TypeScript names the `SourceKind`
+  string-literal union, which both fluent builder surfaces take: the
+  top-level `source(key)` and the spec-scoped `defineSpec(key).source(key)`.
+  The `source-kind-closed` fixture proves both calls. An unsupported kind
+  fails at compile time on both sides. The wider surfaces keep a string
+  kind: the low-level TypeScript overload `source(key, options)` and the
+  wire protocol, which also maps the provider aliases `linear`, `github`,
+  and `jira` onto `external_integration`.
 - `implemented_by!` checks path existence with `include_bytes!`;
   TypeScript resolves the symbol with the compiler API. A missing file
   fails both at compile time; a missing symbol fails only TypeScript

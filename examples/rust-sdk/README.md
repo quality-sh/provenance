@@ -45,6 +45,12 @@ assert_eq!(
 operations::apply(Some(repo), &scope, input)?;
 ```
 
+An existing record that is not a document keeps its source type only when the
+declaration states that type. Use `kind(SourceType::ExternalIntegration)` in
+place of `document`. `kind` gives no locator, so the canonical URL and
+reference stay as they are. `document(reference)` is the short form of
+`kind(SourceType::Document)` that also gives the reference.
+
 Plan first. A valid apply keeps the Stable ID and definition and adds only the
 Declaration owner and Declaration address. Richer canonical metadata outside
 the typed declaration surface remains unchanged. Repeating the request is

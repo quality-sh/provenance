@@ -345,3 +345,90 @@ fn kernel_modules_import_no_ambient_capability() {
     }
     assert_eq!(checked, 6);
 }
+
+#[test]
+fn every_source_type_reaches_the_wire_declaration() {
+    use crate::model::SourceType;
+
+    let types = [
+        SourceType::Policy,
+        SourceType::Document,
+        SourceType::Legislation,
+        SourceType::CompanyAgreement,
+        SourceType::SystemState,
+        SourceType::ExternalIntegration,
+        SourceType::DomainKnowledge,
+        SourceType::ProjectArtifact,
+        SourceType::Incident,
+        SourceType::ApiSpec,
+    ];
+    for source_type in types {
+        let document = spec("catalogue")
+            .requirements([requirement("intake")
+                .statement("The catalogue records the source type of every citation")
+                .from(source("brief").kind(source_type.clone()))])
+            .build()
+            .unwrap()
+            .materialize("spec://rust");
+
+        assert_eq!(document.sources[0].kind, source_type.as_str());
+        assert_eq!(
+            SourceType::parse(&document.sources[0].kind).unwrap(),
+            source_type
+        );
+        // `kind` adds no optional URL or reference metadata.
+        assert_eq!(document.sources[0].reference, None);
+        assert_eq!(document.sources[0].url, None);
+    }
+}
+
+#[test]
+fn document_declares_the_document_type_and_its_reference() {
+    let document = spec("catalogue")
+        .requirements([requirement("intake")
+            .statement("The catalogue records the source type of every citation")
+            .from(source("brief").document("docs/brief.md"))])
+        .build()
+        .unwrap()
+        .materialize("spec://rust");
+
+    assert_eq!(document.sources[0].kind, "document");
+    assert_eq!(
+        document.sources[0].reference.as_deref(),
+        Some("docs/brief.md")
+    );
+}
+
+#[test]
+fn two_declarations_of_one_key_that_differ_only_in_type_are_not_merged() {
+    use crate::model::SourceType;
+
+    let error = spec("catalogue")
+        .requirements([
+            requirement("intake")
+                .statement("The catalogue records the source type of every citation")
+                .from(source("brief").kind(SourceType::Document)),
+            requirement("review")
+                .statement("The catalogue reviews the source type of every citation")
+                .from(source("brief").kind(SourceType::ExternalIntegration)),
+        ])
+        .build()
+        .unwrap_err();
+
+    assert_eq!(error.violations(), ["duplicate source key `brief`"]);
+}
+
+#[test]
+fn a_source_without_a_source_type_is_rejected() {
+    let error = spec("catalogue")
+        .requirements([requirement("intake")
+            .statement("The catalogue records the source type of every citation")
+            .from(source("brief").name("Integration brief"))])
+        .build()
+        .unwrap_err();
+
+    assert_eq!(
+        error.violations(),
+        ["source `brief` must declare a source type"]
+    );
+}

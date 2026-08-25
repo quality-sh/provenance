@@ -269,7 +269,7 @@ function buildSpec<
 
   for (const source of sources) {
     if (source.declaration === undefined) {
-      throw new Error(`Source declaration \`${source.key}\` has no document definition`);
+      throw new Error(`Source declaration \`${source.key}\` has no source type`);
     }
   }
   for (const requirement of requirements) {

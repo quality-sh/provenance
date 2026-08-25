@@ -12,7 +12,7 @@ use provenance_macros::rule;
 use super::builders::{RequirementBuilder, RuleBuilder, SourceBuilder, SpecBuilder};
 use super::checks::{reference_violations, DeclarationChecker, RuleChecker};
 use super::AuthoringError;
-use crate::model::{StableId, SUPPORTED_SCHEMA_VERSION};
+use crate::model::{SourceType, StableId, SUPPORTED_SCHEMA_VERSION};
 use crate::protocol::{
     TypedAdoptionTarget, TypedDeclarationKind, TypedImplementationInput, TypedRequirementInput,
     TypedRuleInput, TypedSourceInput, TypedSpecInput,
@@ -180,18 +180,27 @@ fn collect_source(
     {
         violations.push("source name must not be empty".to_string());
     }
-    match source.reference.as_deref() {
-        None => violations.push(format!("source `{}` must declare a document", source.key)),
-        Some(reference) if reference.trim().is_empty() => {
-            violations.push("document reference must not be empty".to_string());
-        }
-        Some(_) => {}
+    // The reference is optional. Only `document` sets one, and a
+    // reference that is set must hold text.
+    if source
+        .reference
+        .as_deref()
+        .is_some_and(|reference| reference.trim().is_empty())
+    {
+        violations.push("document reference must not be empty".to_string());
     }
+    let source_type = source.source_type.unwrap_or_else(|| {
+        violations.push(format!(
+            "source `{}` must declare a source type",
+            source.key
+        ));
+        SourceType::Document
+    });
     let declaration = TypedSourceInput {
         name: source.name.unwrap_or_else(|| source.key.clone()),
         key: source.key,
         id: source.explicit_id,
-        kind: "document".to_string(),
+        kind: source_type.as_str().to_string(),
         url: None,
         reference: source.reference,
     };
@@ -341,6 +350,7 @@ fn same_source(left: &TypedSourceInput, right: &TypedSourceInput) -> bool {
     left.key == right.key
         && left.id == right.id
         && left.name == right.name
+        && left.kind == right.kind
         && left.reference == right.reference
 }
 
