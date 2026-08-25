@@ -5,6 +5,7 @@
 
 use super::document::build_document;
 use super::{AuthoringError, SpecDocument};
+use crate::model::SourceType;
 
 /// Starts one spec document.
 pub fn spec(key: impl Into<String>) -> SpecBuilder {
@@ -21,6 +22,7 @@ pub fn source(key: impl Into<String>) -> SourceBuilder {
         explicit_id: None,
         adopt_unowned: false,
         name: None,
+        source_type: None,
         reference: None,
     }
 }
@@ -80,6 +82,7 @@ pub struct SourceBuilder {
     pub(super) explicit_id: Option<String>,
     pub(super) adopt_unowned: bool,
     pub(super) name: Option<String>,
+    pub(super) source_type: Option<SourceType>,
     pub(super) reference: Option<String>,
 }
 
@@ -100,10 +103,21 @@ impl SourceBuilder {
         self
     }
 
-    /// Declares the source as a document at `reference`.
+    /// Declares the source as a document at `reference`. This is the
+    /// short form of `kind(SourceType::Document)` that also gives the
+    /// reference.
     #[must_use]
     pub fn document(mut self, reference: impl Into<String>) -> Self {
+        self.source_type = Some(SourceType::Document);
         self.reference = Some(reference.into());
+        self
+    }
+
+    /// Selects the canonical source type. It adds no optional URL or
+    /// reference metadata.
+    #[must_use]
+    pub const fn kind(mut self, source_type: SourceType) -> Self {
+        self.source_type = Some(source_type);
         self
     }
 

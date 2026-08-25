@@ -278,6 +278,54 @@ test("build collects Sources referenced by Requirements", async () => {
   ]);
 });
 
+test("a fluent Source declares a supported non-document kind", async () => {
+  const recorder = recordingEngine();
+  configure({ engine: recorder.engine, owner: "spec://typescript/source-kind" });
+  const spec = defineSpec("source-kind")
+    .requirements(
+      requirement("intake")
+        .statement("The catalogue records the source type of every citation")
+        .from(source("brief").name("Workflowd integration brief").kind("external_integration")),
+    )
+    .build();
+
+  await apply(spec);
+
+  // `kind` adds no optional URL or reference metadata.
+  const request = recorder.requests().find(({ command }) => command === "apply");
+  assert.deepEqual((request?.input as { sources?: unknown }).sources, [
+    {
+      key: "brief",
+      name: "Workflowd integration brief",
+      kind: "external_integration",
+    },
+  ]);
+});
+
+test("document stays the short form of the document kind", async () => {
+  const recorder = recordingEngine();
+  configure({ engine: recorder.engine, owner: "spec://typescript/source-kind-document" });
+  const spec = defineSpec("source-kind-document")
+    .requirements(
+      requirement("intake")
+        .statement("The catalogue records the source type of every citation")
+        .from(source("brief").document("docs/brief.md")),
+    )
+    .build();
+
+  await apply(spec);
+
+  const request = recorder.requests().find(({ command }) => command === "apply");
+  assert.deepEqual((request?.input as { sources?: unknown }).sources, [
+    {
+      key: "brief",
+      name: "brief",
+      kind: "document",
+      reference: "docs/brief.md",
+    },
+  ]);
+});
+
 test("built fluent specs expose direct typed semantic handles", () => {
   const spec = defineSpec("direct-handles")
     .requirements(

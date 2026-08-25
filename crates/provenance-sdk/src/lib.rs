@@ -18,7 +18,7 @@ pub use provenance_core::protocol::{
     TypedAdoptionTarget, TypedDeclarationKind, TypedImplementationInput, TypedRequirementInput,
     TypedRuleInput, TypedSourceInput, TypedSpecInput,
 };
-pub use provenance_core::{EngineInfo, ScopeId, StableId, SDK_PROTOCOL_VERSION};
+pub use provenance_core::{EngineInfo, ScopeId, SourceType, StableId, SDK_PROTOCOL_VERSION};
 pub use provenance_store::operations;
 pub use provenance_store::operations::{AffectedRule, TypedSpecPlan};
 pub use provenance_store::state_store::TypedSpecResult;

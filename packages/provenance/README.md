@@ -138,6 +138,12 @@ if (preview.conflicts !== 0) throw new Error("Declaration adoption conflicts");
 await apply(migration);
 ```
 
+An existing record that is not a document keeps its source type only when the
+declaration states that type. Use `.kind("external_integration")` in place of
+`.document(...)`. `kind` gives no locator, so the canonical URL and reference
+stay as they are. `document(reference)` is the short form of `kind("document")`
+that also gives the reference.
+
 `SourceDeclaration`, `RequirementDeclaration`, and `RuleDeclaration` provide
 the same immutable `adoptUnowned(existingId)` method. Use `.id(existingId)`
 when identity must be explicit but adoption is not requested.

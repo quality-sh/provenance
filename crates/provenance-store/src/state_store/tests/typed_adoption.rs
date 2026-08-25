@@ -16,6 +16,7 @@ mod metadata;
 mod noscope;
 mod rule_implementation;
 mod rule_mismatches;
+mod source_kind;
 
 const OWNER: &str = "spec://rust/migration";
 const STATEMENT: &str = "The canonical Requirement keeps its identity";

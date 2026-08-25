@@ -68,7 +68,7 @@ function collectSource(
   const state = sourceState(value);
   assertContext("Source", state, context);
   if (state.declaration === undefined) {
-    throw new Error(`Source declaration \`${state.key}\` has no document definition`);
+    throw new Error(`Source declaration \`${state.key}\` has no source type`);
   }
   const existing = collected.get(state.key);
   if (existing?.value === value) return;

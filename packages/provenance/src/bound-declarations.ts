@@ -7,6 +7,7 @@ import {
 import type {
   ImplementationDeclaration,
   SourceDeclaration,
+  SourceKind,
 } from "./protocol.js";
 import type { VerifyOptions } from "./spec.js";
 import type {
@@ -93,8 +94,19 @@ export class BoundSource<SpecKey extends string, Key extends string> {
     return new BoundSource({ context, lineage: Object.freeze({}), key });
   }
 
+  // The short form of `kind("document")` that also gives the reference.
   document(reference: string): BoundSource<SpecKey, Key> {
     requireText("document reference", reference);
+    return this.withKind("document", reference);
+  }
+
+  // Selects the canonical source type. It adds no optional URL or
+  // reference metadata.
+  kind(kind: SourceKind): BoundSource<SpecKey, Key> {
+    return this.withKind(kind, sourceState(this).declaration?.reference);
+  }
+
+  private withKind(kind: SourceKind, reference?: string): BoundSource<SpecKey, Key> {
     const state = sourceState(this);
     return new BoundSource({
       ...state,
@@ -102,7 +114,7 @@ export class BoundSource<SpecKey extends string, Key extends string> {
         key: state.key,
         id: state.explicitId,
         name: state.name ?? state.key,
-        kind: "document",
+        kind,
         reference,
       }),
     });

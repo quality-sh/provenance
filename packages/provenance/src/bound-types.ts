@@ -4,6 +4,7 @@ import type {
   FluentSource,
   FluentSpec,
 } from "./fluent-spec.js";
+import type { SourceKind } from "./protocol.js";
 import type { SpecHandle, VerifyOptions } from "./spec.js";
 import type { ImplementationTarget } from "./implementation-reference.js";
 
@@ -13,6 +14,7 @@ export interface SourceDeclaration<in out SpecKey extends string, out Key extend
   id(existingId: string): SourceDeclaration<SpecKey, Key>;
   adoptUnowned(existingId: string): SourceDeclaration<SpecKey, Key>;
   document(reference: string): SourceDeclaration<SpecKey, Key>;
+  kind(kind: SourceKind): SourceDeclaration<SpecKey, Key>;
   name(name: string): SourceDeclaration<SpecKey, Key>;
 }
 

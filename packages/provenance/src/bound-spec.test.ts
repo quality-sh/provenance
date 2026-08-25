@@ -274,6 +274,101 @@ test("spec-bound declarations adopt exact unowned engine records", async () => {
   assert.equal(replay.unchanged, 3);
 });
 
+test("a spec-bound Source declares a supported non-document kind", async () => {
+  const recorder = recordingEngine();
+  configure({ engine: recorder.engine, owner: "spec://typescript/bound-source-kind" });
+  const provenance = defineSpec("bound-source-kind");
+  const brief = provenance
+    .source("brief")
+    .name("Workflowd integration brief")
+    .kind("external_integration");
+  const canonical = provenance
+    .requirement("intake")
+    .statement("The catalogue records the source type of every citation")
+    .from(brief);
+
+  await apply(provenance.build(canonical));
+
+  // `kind` adds no optional URL or reference metadata.
+  const input = recorder.requests().find(({ command }) => command === "apply")?.input as {
+    sources?: unknown;
+  };
+  assert.deepEqual(input.sources, [
+    {
+      key: "brief",
+      name: "Workflowd integration brief",
+      kind: "external_integration",
+    },
+  ]);
+});
+
+test("spec-bound declarations adopt an unowned external_integration Source", async () => {
+  const repo = repository();
+  configure({ engine, repository: repo, owner: "spec://typescript/bound-source-kind-runtime" });
+  execFileSync(engine, [
+    "sources",
+    "create",
+    "--repo",
+    repo,
+    "--scope",
+    "default",
+    "--id",
+    "source_workflowd_integration_brief",
+    "--name",
+    "workflowd integration brief (agent-authored, relayed by Ben Nasraoui 2026-08-19)",
+    "--source-type",
+    "external_integration",
+    "--reference",
+    "session:824f8174 workflowd-agent brief",
+  ]);
+  execFileSync(engine, [
+    "requirements",
+    "create",
+    "--repo",
+    repo,
+    "--scope",
+    "default",
+    "--id",
+    "req_env_key_at_invocation",
+    "--statement",
+    "The provider reads the environment key at invocation",
+  ]);
+  execFileSync(engine, [
+    "requirements",
+    "source-ref",
+    "add",
+    "--repo",
+    repo,
+    "--scope",
+    "default",
+    "--requirement-id",
+    "req_env_key_at_invocation",
+    "--source-id",
+    "source_workflowd_integration_brief",
+  ]);
+
+  const provenance = defineSpec("noscope");
+  const brief = provenance
+    .source("workflowd-integration-brief")
+    .name("workflowd integration brief (agent-authored, relayed by Ben Nasraoui 2026-08-19)")
+    .adoptUnowned("source_workflowd_integration_brief")
+    .kind("external_integration");
+  const canonical = provenance
+    .requirement("env-key-at-invocation")
+    .adoptUnowned("req_env_key_at_invocation")
+    .statement("The provider reads the environment key at invocation")
+    .from(brief);
+  const spec = provenance.build(canonical);
+
+  const preview = await plan(spec);
+  assert.equal(preview.created, 0);
+  assert.equal(preview.conflicts, 0);
+  assert.equal(preview.moved, 2);
+  await apply(spec);
+  const replay = await plan(spec);
+  assert.equal(replay.unchanged, 2);
+});
+
 test("a spec-scoped Rule materializes once for several Requirements", async () => {
   const repo = repository();
   configure({ engine, repository: repo, owner: "spec://typescript/bound-shared" });
