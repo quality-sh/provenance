@@ -1,3 +1,4 @@
+pub mod authoring;
 pub mod coverage;
 pub mod edge_validation;
 pub mod model;

@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 use provenance_core::{
     DeclarationAddress, Requirement, Rule, ScopeId, Source, StableId, SUPPORTED_SCHEMA_VERSION,
 };
+use provenance_macros::rule;
 
 use super::requirement_reviews;
 use super::{
@@ -56,6 +57,11 @@ enum ReconcileMode {
     Apply,
 }
 
+/// Runs the kernel checkers and id resolution at the pinned pipeline
+/// points, so a document keeps its pre-extraction accept-or-reject
+/// result and, for a multi-defect document, its first error.
+#[rule("rule_rust_wire_acceptance_is_stable")]
+#[rule("rule_rust_wire_first_error_is_stable")]
 fn desired_typed_ids(
     input: &TypedSpecInput,
     current: &CurrentTypedState,
@@ -80,7 +86,12 @@ fn desired_typed_ids(
         &input.rules,
         &current.rule_addresses,
     )?;
-    validate_references(&input.requirements, &input.rules, &sources, &requirements)?;
+    validate_references(
+        &input.requirements,
+        &input.rules,
+        |key| sources.contains_key(key),
+        |key| requirements.contains_key(key),
+    )?;
     Ok(DesiredTypedIds {
         sources,
         requirements,
@@ -339,6 +350,9 @@ impl StateStore {
     }
 }
 
+/// Assembles resources and diagnostics in decoded wire order; canonical
+/// ordering applies only to kernel-authored documents.
+#[rule("rule_rust_wire_order_is_preserved")]
 fn spec_result(
     declared_by: String,
     source_resources: Vec<ReconciledResource>,

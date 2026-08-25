@@ -5,8 +5,7 @@ use provenance_core::ScopeId;
 use provenance_store::{cache, layout::ProvenanceLayout};
 use std::fmt::Write;
 
-pub(super) mod gate;
-pub(super) mod git;
+pub(super) use provenance_store::stale::{gate, git};
 
 pub(super) fn handle(
     repo: &Utf8Path,

@@ -1,15 +1,9 @@
 use std::io::Read as _;
 
+use provenance_core::protocol::CheckStatementRequest;
 use provenance_macros::rule;
-use serde::Deserialize;
 
 use crate::output::{self, OutputFormat};
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct CheckStatementRequest {
-    statement: String,
-}
 
 /// Parses the fixed request shape for one unfinished statement.
 #[rule("rule_ste_sdk_statement_request_schema")]

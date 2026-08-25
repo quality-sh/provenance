@@ -9,7 +9,7 @@ mod retired;
 mod verification_state;
 use verification_state::{load_validation_state, unverified_rule_warnings};
 
-pub(super) mod anchors;
+pub(super) use provenance_store::evidence_anchors as anchors;
 
 pub(super) fn coverage_scan(
     repo: &camino::Utf8Path,
