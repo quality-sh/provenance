@@ -397,6 +397,7 @@ function verifyYarnPnpInstall() {
   // Yarn's default PnP linker to the real SDK and native platform engine.
   const yarnApplication = join(temporary, "yarn-pnp-initialized-application");
   const yarnMainSpec = join(archiveDirectory, mainArchive);
+  const engineResolutions = stageEngineArchivesForYarn();
   mkdirSync(yarnApplication);
   writeFileSync(join(yarnApplication, "package.json"), JSON.stringify({
     name: "provenance-yarn-pnp-install",
@@ -404,7 +405,7 @@ function verifyYarnPnpInstall() {
     version: "1.0.0",
     packageManager: "yarn@4.9.2",
     resolutions: {
-      [engineManifest.name]: `file:../archives/${engineArchive}`,
+      ...engineResolutions,
       [typescriptManifest.name]: `file:../archives/${typescriptArchive}`,
     },
   }));
@@ -413,7 +414,11 @@ function verifyYarnPnpInstall() {
     "--package-manager", "yarn",
   ], {
     cwd: yarnApplication,
-    env: { ...process.env, PROVENANCE_PACKAGE_SPEC: yarnMainSpec },
+    env: {
+      ...process.env,
+      PROVENANCE_PACKAGE_SPEC: yarnMainSpec,
+      YARN_ENABLE_NETWORK: "false",
+    },
     stdio: "inherit",
   });
   assert.equal(
@@ -430,6 +435,36 @@ function verifyYarnPnpInstall() {
     "provenance", "check", "--repo", yarnApplication, "--format", "json",
   ], { cwd: yarnApplication, encoding: "utf8" }));
   assert.equal(check.status, "ok", "the Yarn PnP project must validate with the native engine");
+}
+
+function stageEngineArchivesForYarn() {
+  const resolutions = {
+    [engineManifest.name]: `file:../archives/${engineArchive}`,
+  };
+  const targets = [
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+    "x86_64-unknown-linux-gnu",
+  ];
+  for (const target of targets) {
+    if (target === rustTarget) continue;
+
+    const staged = join(temporary, `engine-package-${target}`);
+    execFileSync(process.execPath, [
+      join(packageRoot, "scripts", "package-engine.js"),
+      "--target", target,
+      // Yarn resolves every optional package before it filters by platform.
+      // Only the host archive runs, so keep the other fixtures small.
+      "--binary", join(packageRoot, "bin", "provenance.mjs"),
+      "--out", staged,
+      "--version", version,
+    ]);
+    npm(["pack", staged, "--pack-destination", archiveDirectory]);
+    const manifest = JSON.parse(readFileSync(join(staged, "package.json"), "utf8"));
+    resolutions[manifest.name] = `file:../archives/${archiveName(manifest)}`;
+  }
+  return resolutions;
 }
 
 function archiveNamed(archives, expected) {
