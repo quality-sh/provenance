@@ -2,7 +2,7 @@
 name: provenance-grounded-writing
 description: Write specific, evidence-grounded statements for requirements, rules, sources, resolutions, and boundaries — not generic capability language. Use before calling `requirements create`, `rules create`, `sources create`, `resolutions create`, or `boundaries create`, especially for a root or mid-level requirement, a statement merging several candidates, or a resolution's position and rationale.
 ---
-<!-- Installed by provenance 0.1.0; content hash fnv1a64:a123bc878ef09e2d -->
+<!-- Installed by provenance 0.2.0; content hash fnv1a64:a123bc878ef09e2d -->
 
 # Grounded writing
 

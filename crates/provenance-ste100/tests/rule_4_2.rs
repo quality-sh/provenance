@@ -187,7 +187,7 @@ fn rule_4_2_report_serialization_is_stable_and_explicit() {
     let expected = json!({
         "standard": "ASD-STE100",
         "issue": 9,
-        "analyzer_version": "0.1.0",
+        "analyzer_version": "0.2.0",
         "findings": [finding(
             "4.2",
             0,

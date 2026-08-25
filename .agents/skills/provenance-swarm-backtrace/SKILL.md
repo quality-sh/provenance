@@ -2,7 +2,7 @@
 name: provenance-swarm-backtrace
 description: Reverse-engineer candidate requirements from an existing codebase with a multi-agent swarm. Use when the user wants to extract, mine, backtrace, or reverse-engineer requirements or rules from existing code, bootstrap a Provenance graph from a legacy system, or asks "what must be true for this code to be correct". Lands everything as proposals (promotion_state=proposed) against a commit-pinned source — never as active requirements.
 ---
-<!-- Installed by provenance 0.1.0; content hash fnv1a64:6cfb1e350df5343a -->
+<!-- Installed by provenance 0.2.0; content hash fnv1a64:6cfb1e350df5343a -->
 
 # Swarm backtrace
 

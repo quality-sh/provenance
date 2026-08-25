@@ -150,7 +150,9 @@ jobs:
           npm_tag=latest
           if [[ "$version" == *-* ]]; then npm_tag=next; fi
           for package in ./dist/quality-sh-provenance-*.tgz; do
-            npm publish "$package" --access public --provenance --tag "$npm_tag"
+            package_name=$(tar -xOzf "$package" package/package.json | jq -er '.name')
+            bash .github/scripts/publish-npm-if-missing.sh \
+              "$package_name" "$version" "$package" "$npm_tag"
           done
       - name: Pack TypeScript SDK
         run: |
@@ -163,8 +165,9 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           npm_tag=latest
           if [[ "$version" == *-* ]]; then npm_tag=next; fi
-          npm publish "./dist/quality-sh-provenance-${version}.tgz" \
-            --access public --provenance --tag "$npm_tag"
+          bash .github/scripts/publish-npm-if-missing.sh \
+            "@quality-sh/provenance" "$version" \
+            "./dist/quality-sh-provenance-${version}.tgz" "$npm_tag"
       - name: Pack initializer
         run: npm pack ./packages/create-provenance --pack-destination dist
       - name: Publish initializer
@@ -174,5 +177,6 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           npm_tag=latest
           if [[ "$version" == *-* ]]; then npm_tag=next; fi
-          npm publish "./dist/quality-sh-create-provenance-${version}.tgz" \
-            --access public --provenance --tag "$npm_tag"
+          bash .github/scripts/publish-npm-if-missing.sh \
+            "@quality-sh/create-provenance" "$version" \
+            "./dist/quality-sh-create-provenance-${version}.tgz" "$npm_tag"
