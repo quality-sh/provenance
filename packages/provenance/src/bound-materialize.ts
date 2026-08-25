@@ -131,6 +131,7 @@ function compileDocument(
     const state = requirementState(value);
     return {
       key: state.key,
+      id: state.explicitId,
       statement: state.text!,
       description: state.description,
       sources: state.sources.map((source) => sourceState(source).key).sort(),
@@ -149,9 +150,22 @@ function compileDocument(
   ruleRecords.sort((left, right) =>
     JSON.stringify(left.address).localeCompare(JSON.stringify(right.address)),
   );
+  const adoptUnowned = [
+    ...[...sources.values()]
+      .filter(({ state }) => state.adoptsUnowned)
+      .map(({ state }) => ({ kind: "source" as const, id: state.explicitId! })),
+    ...requirements
+      .map(requirementState)
+      .filter((state) => state.adoptsUnowned)
+      .map((state) => ({ kind: "requirement" as const, id: state.explicitId! })),
+    ...[...rules.values()]
+      .filter(({ state }) => state.adoptsUnowned)
+      .map(({ state }) => ({ kind: "rule" as const, id: state.explicitId! })),
+  ];
   return {
     schema_version: 1,
     spec,
+    ...(adoptUnowned.length === 0 ? {} : { adopt_unowned: adoptUnowned }),
     sources: sourceRecords,
     requirements: requirementRecords,
     rules: ruleRecords,

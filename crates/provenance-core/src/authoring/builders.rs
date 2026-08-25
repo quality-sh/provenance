@@ -18,6 +18,8 @@ pub fn spec(key: impl Into<String>) -> SpecBuilder {
 pub fn source(key: impl Into<String>) -> SourceBuilder {
     SourceBuilder {
         key: key.into(),
+        explicit_id: None,
+        adopt_unowned: false,
         name: None,
         reference: None,
     }
@@ -27,6 +29,8 @@ pub fn source(key: impl Into<String>) -> SourceBuilder {
 pub fn requirement(key: impl Into<String>) -> RequirementBuilder {
     RequirementBuilder {
         key: key.into(),
+        explicit_id: None,
+        adopt_unowned: false,
         statement: None,
         description: None,
         sources: Vec::new(),
@@ -43,6 +47,7 @@ pub fn rule(key: impl Into<String>) -> RuleBuilder {
         description: None,
         implementation: None,
         explicit_id: None,
+        adopt_unowned: false,
         requirements: Vec::new(),
     }
 }
@@ -72,11 +77,29 @@ impl SpecBuilder {
 #[derive(Debug, Clone)]
 pub struct SourceBuilder {
     pub(super) key: String,
+    pub(super) explicit_id: Option<String>,
+    pub(super) adopt_unowned: bool,
     pub(super) name: Option<String>,
     pub(super) reference: Option<String>,
 }
 
 impl SourceBuilder {
+    /// Selects an existing canonical identity without changing ownership.
+    #[must_use]
+    pub fn id(mut self, id: impl Into<String>) -> Self {
+        self.explicit_id = Some(id.into());
+        self.adopt_unowned = false;
+        self
+    }
+
+    /// Selects one explicit identity for one-time unowned adoption.
+    #[must_use]
+    pub fn adopt_unowned(mut self, id: impl Into<String>) -> Self {
+        self.explicit_id = Some(id.into());
+        self.adopt_unowned = true;
+        self
+    }
+
     /// Declares the source as a document at `reference`.
     #[must_use]
     pub fn document(mut self, reference: impl Into<String>) -> Self {
@@ -94,6 +117,8 @@ impl SourceBuilder {
 #[derive(Debug, Clone)]
 pub struct RequirementBuilder {
     pub(super) key: String,
+    pub(super) explicit_id: Option<String>,
+    pub(super) adopt_unowned: bool,
     pub(super) statement: Option<String>,
     pub(super) description: Option<String>,
     pub(super) sources: Vec<SourceBuilder>,
@@ -101,6 +126,22 @@ pub struct RequirementBuilder {
 }
 
 impl RequirementBuilder {
+    /// Selects an existing canonical identity without changing ownership.
+    #[must_use]
+    pub fn id(mut self, id: impl Into<String>) -> Self {
+        self.explicit_id = Some(id.into());
+        self.adopt_unowned = false;
+        self
+    }
+
+    /// Selects one explicit identity for one-time unowned adoption.
+    #[must_use]
+    pub fn adopt_unowned(mut self, id: impl Into<String>) -> Self {
+        self.explicit_id = Some(id.into());
+        self.adopt_unowned = true;
+        self
+    }
+
     #[must_use]
     pub fn statement(mut self, statement: impl Into<String>) -> Self {
         self.statement = Some(statement.into());
@@ -135,6 +176,7 @@ pub struct RuleBuilder {
     pub(super) description: Option<String>,
     pub(super) implementation: Option<(camino::Utf8PathBuf, String)>,
     pub(super) explicit_id: Option<String>,
+    pub(super) adopt_unowned: bool,
     pub(super) requirements: Vec<String>,
 }
 
@@ -172,6 +214,15 @@ impl RuleBuilder {
     #[must_use]
     pub fn id(mut self, id: impl Into<String>) -> Self {
         self.explicit_id = Some(id.into());
+        self.adopt_unowned = false;
+        self
+    }
+
+    /// Selects one explicit identity for one-time unowned adoption.
+    #[must_use]
+    pub fn adopt_unowned(mut self, id: impl Into<String>) -> Self {
+        self.explicit_id = Some(id.into());
+        self.adopt_unowned = true;
         self
     }
 

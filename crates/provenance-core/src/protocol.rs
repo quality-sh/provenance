@@ -18,11 +18,11 @@ pub use response::{
     SearchResult, StaleEvidence, StaleResult, TraceResult,
 };
 pub use typed_spec::{
-    CheckStatementRequest, TypedImplementationInput, TypedRequirementInput, TypedRuleInput,
-    TypedSourceInput, TypedSpecInput,
+    CheckStatementRequest, TypedAdoptionTarget, TypedDeclarationKind, TypedImplementationInput,
+    TypedRequirementInput, TypedRuleInput, TypedSourceInput, TypedSpecInput,
 };
 
-pub const SDK_PROTOCOL_VERSION: u32 = 4;
+pub const SDK_PROTOCOL_VERSION: u32 = 5;
 
 /// How many records a query returns when the caller names no limit.
 pub const QUERY_DEFAULT_LIMIT: usize = 50;

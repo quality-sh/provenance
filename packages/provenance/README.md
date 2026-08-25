@@ -114,6 +114,47 @@ become the shared Rule, apply fails instead of guessing. An immutable
 `.id(existingId)` call can choose the canonical record. Other declarations
 omitted from that complete spec are retired, not deleted.
 
+## Adopt existing unowned declarations
+
+Use Declaration adoption only for a migration from existing canonical state.
+The method requires one explicit Stable ID and adds one exact wire target:
+
+```ts
+const policy = source("policy")
+  .adoptUnowned("source_policy")
+  .document("docs/policy.md");
+
+export const migration = defineSpec("existing-requirements")
+  .requirements(
+    requirement("sharing")
+      .adoptUnowned("req_sharing")
+      .statement("Users can securely share documentation")
+      .from(policy),
+  )
+  .build();
+
+const preview = await plan(migration);
+if (preview.conflicts !== 0) throw new Error("Declaration adoption conflicts");
+await apply(migration);
+```
+
+`SourceDeclaration`, `RequirementDeclaration`, and `RuleDeclaration` provide
+the same immutable `adoptUnowned(existingId)` method. Use `.id(existingId)`
+when identity must be explicit but adoption is not requested.
+
+Plan must show no create and no conflict for a valid adoption. Apply keeps the
+Stable ID and definition and adds only the Declaration owner and Declaration
+address. Richer canonical metadata outside the typed declaration surface is
+preserved and does not block adoption. The same request then plans as unchanged.
+After adoption, replace `adoptUnowned(existingId)` with `id(existingId)` before
+a later definition change.
+
+Adoption refuses a missing declaration, an implicit or different ID, a
+duplicate target, a nonexistent record, a definition or relationship change,
+and a record owned by another declaration. One refusal makes the complete
+apply a no-op. A document with no adoption request keeps the default ownership
+conflict behavior.
+
 Materialize only this spec at a deliberate entry point:
 
 ```ts

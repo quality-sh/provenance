@@ -8,8 +8,14 @@ Schema version `1` includes the local graph fields plus imported/cloud review me
 
 Sources, Requirements, and Rules may also carry `declared_by`. It names the
 integration allowed to reconcile that record; it does not grant ownership of
-the scope or of unrelated graph state. The typed SDK refuses to adopt an
-existing record whose value is absent or different.
+the scope or of unrelated graph state. The typed SDK refuses implicit takeover
+of an unowned record and all takeover of a foreign-owned record. An exact
+`adopt_unowned` target can assign an unowned record to one declaration. The
+target must name one declaration with the same explicit Stable ID. The fields
+supplied by that declaration and its relevant relationships must already match.
+Richer canonical metadata outside the typed surface remains unchanged and does
+not block adoption. Adoption changes only `declared_by` and
+`declaration_address`, so state schema version `1` needs no migration.
 
 Typed-owned Sources, Requirements, and Rules may carry `retired: true`.
 Omitting the field means active. A complete typed declaration document retires

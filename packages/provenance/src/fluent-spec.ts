@@ -1,15 +1,8 @@
 import type {
-  ImplementationDeclaration,
   RequirementDeclaration,
   RuleDeclaration,
-  SourceDeclaration,
   TypedSpecDocument,
 } from "./protocol.js";
-import {
-  captureImplementationReference,
-  type ImplementationTarget,
-} from "./implementation-reference.js";
-import { fileURLToPath } from "node:url";
 import {
   registerSpecProperties,
   type RequirementHandle,
@@ -18,6 +11,10 @@ import {
   type SpecHandle,
   type VerifyOptions,
 } from "./spec.js";
+import { appendByIdentity, requireText, uniqueByKey } from "./fluent-validation.js";
+import { FluentRule, FluentSource } from "./fluent-declarations.js";
+
+export { FluentRule, FluentSource } from "./fluent-declarations.js";
 
 type RuleVerifier = (
   address: readonly string[],
@@ -26,82 +23,7 @@ type RuleVerifier = (
   options?: VerifyOptions,
 ) => Promise<void>;
 
-const moduleFile = fileURLToPath(import.meta.url);
-const sourceNames = new WeakMap<object, string>();
 const requirementDescriptions = new WeakMap<object, string>();
-
-export class FluentSource<Key extends string = string> {
-  readonly key: Key;
-  readonly declaration?: SourceDeclaration;
-
-  constructor(key: Key, declaration?: SourceDeclaration, displayName?: string) {
-    requireKey("source", key);
-    this.key = key;
-    this.declaration = declaration === undefined ? undefined : Object.freeze({ ...declaration });
-    if (displayName !== undefined) sourceNames.set(this, displayName);
-    Object.freeze(this);
-  }
-
-  document(reference: string): FluentSource<Key> {
-    requireText("document reference", reference);
-    const displayName = sourceNames.get(this);
-    return new FluentSource(
-      this.key,
-      {
-        key: this.key,
-        name: displayName ?? this.key,
-        kind: "document",
-        reference,
-      },
-      displayName,
-    );
-  }
-
-  name(name: string): FluentSource<Key> {
-    requireText("source name", name);
-    return new FluentSource(
-      this.key,
-      this.declaration === undefined ? undefined : { ...this.declaration, name },
-      name,
-    );
-  }
-}
-
-export class FluentRule<Key extends string = string> {
-  readonly key: Key;
-  readonly text?: string;
-  readonly explicitId?: string;
-  readonly implementation?: ImplementationDeclaration;
-
-  constructor(
-    key: Key,
-    text?: string,
-    explicitId?: string,
-    implementation?: ImplementationDeclaration,
-  ) {
-    requireKey("rule", key);
-    this.key = key;
-    this.text = text;
-    this.explicitId = explicitId;
-    this.implementation = implementation;
-    Object.freeze(this);
-  }
-
-  statement(text: string): FluentRule<Key> {
-    requireText("rule statement", text);
-    return new FluentRule(this.key, text, this.explicitId, this.implementation);
-  }
-
-  id(existingId: string): FluentRule<Key> {
-    requireText("rule id", existingId);
-    return new FluentRule(this.key, this.text, existingId, this.implementation);
-  }
-
-  implementedBy(_target: ImplementationTarget): FluentRule<Key> {
-    const implementation = captureImplementationReference([moduleFile]);
-    return new FluentRule(this.key, this.text, this.explicitId, implementation);
-  }
-}
 
 export class FluentRequirement<
   Key extends string = string,
@@ -110,6 +32,8 @@ export class FluentRequirement<
 > {
   readonly key: Key;
   readonly text?: string;
+  readonly explicitId?: string;
+  readonly adoptsUnowned: boolean;
   readonly sourceDeclarations: Sources;
   readonly ruleDeclarations: Rules;
 
@@ -119,10 +43,14 @@ export class FluentRequirement<
     sources: Sources = [] as unknown as Sources,
     rules: Rules = [] as unknown as Rules,
     description?: string,
+    explicitId?: string,
+    adoptsUnowned = false,
   ) {
     requireKey("requirement", key);
     this.key = key;
     this.text = text;
+    this.explicitId = explicitId;
+    this.adoptsUnowned = adoptsUnowned;
     this.sourceDeclarations = Object.freeze([...sources]) as unknown as Sources;
     this.ruleDeclarations = Object.freeze([...rules]) as unknown as Rules;
     if (description !== undefined) requirementDescriptions.set(this, description);
@@ -137,6 +65,33 @@ export class FluentRequirement<
       this.sourceDeclarations,
       this.ruleDeclarations,
       requirementDescriptions.get(this),
+      this.explicitId,
+      this.adoptsUnowned,
+    );
+  }
+
+  id(existingId: string): FluentRequirement<Key, Rules, Sources> {
+    requireText("requirement id", existingId);
+    return new FluentRequirement(
+      this.key,
+      this.text,
+      this.sourceDeclarations,
+      this.ruleDeclarations,
+      requirementDescriptions.get(this),
+      existingId,
+    );
+  }
+
+  adoptUnowned(existingId: string): FluentRequirement<Key, Rules, Sources> {
+    requireText("requirement id", existingId);
+    return new FluentRequirement(
+      this.key,
+      this.text,
+      this.sourceDeclarations,
+      this.ruleDeclarations,
+      requirementDescriptions.get(this),
+      existingId,
+      true,
     );
   }
 
@@ -148,6 +103,8 @@ export class FluentRequirement<
       this.sourceDeclarations,
       this.ruleDeclarations,
       description,
+      this.explicitId,
+      this.adoptsUnowned,
     );
   }
 
@@ -163,6 +120,8 @@ export class FluentRequirement<
       ],
       this.ruleDeclarations,
       requirementDescriptions.get(this),
+      this.explicitId,
+      this.adoptsUnowned,
     );
   }
 
@@ -175,6 +134,8 @@ export class FluentRequirement<
       this.sourceDeclarations,
       appendByIdentity(this.ruleDeclarations, rules) as unknown as readonly [...Rules, ...Added],
       requirementDescriptions.get(this),
+      this.explicitId,
+      this.adoptsUnowned,
     );
   }
 }
@@ -401,6 +362,7 @@ function document(
   const sourceRecords = sources.map((source) => source.declaration!);
   const requirementRecords = requirements.map<RequirementDeclaration>((requirement) => ({
     key: requirement.key,
+    id: requirement.explicitId,
     statement: requirement.text!,
     description: requirementDescriptions.get(requirement),
     sources: requirement.sourceDeclarations.map(({ key }) => key).sort(),
@@ -415,9 +377,21 @@ function document(
   sourceRecords.sort(byKey);
   requirementRecords.sort(byKey);
   ruleRecords.sort(byKey);
+  const adoptUnowned = [
+    ...sources
+      .filter((source) => source.adoptsUnowned)
+      .map((source) => ({ kind: "source" as const, id: source.explicitId! })),
+    ...requirements
+      .filter((requirement) => requirement.adoptsUnowned)
+      .map((requirement) => ({ kind: "requirement" as const, id: requirement.explicitId! })),
+    ...[...memberships.keys()]
+      .filter((rule) => rule.adoptsUnowned)
+      .map((rule) => ({ kind: "rule" as const, id: rule.explicitId! })),
+  ];
   return {
     schema_version: 1,
     spec: spec.key,
+    ...(adoptUnowned.length === 0 ? {} : { adopt_unowned: adoptUnowned }),
     sources: sourceRecords,
     requirements: requirementRecords,
     rules: ruleRecords,
@@ -452,34 +426,8 @@ function ruleAddress(
     : [spec, "rule", key];
 }
 
-function uniqueByKey<T extends { readonly key: string }>(kind: string, values: readonly T[]): T[] {
-  const byKey = new Map<string, T>();
-  for (const value of values) {
-    const existing = byKey.get(value.key);
-    if (existing !== undefined && existing !== value) {
-      throw new Error(`distinct ${kind} declarations use key \`${value.key}\``);
-    }
-    byKey.set(value.key, value);
-  }
-  return [...byKey.values()];
-}
-
-function appendByIdentity<T>(existing: readonly T[], added: readonly T[]): T[] {
-  const result = [...existing];
-  for (const value of added) {
-    if (!result.includes(value)) result.push(value);
-  }
-  return result;
-}
-
 function requireKey(kind: string, key: string): void {
   requireText(`${kind} key`, key);
-}
-
-function requireText(field: string, value: string | undefined): asserts value is string {
-  if (value === undefined || value.trim() === "") {
-    throw new Error(`${field} must not be empty`);
-  }
 }
 
 function byKey(left: { key: string }, right: { key: string }): number {

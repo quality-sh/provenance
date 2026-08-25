@@ -50,10 +50,13 @@ spans, so a later editor adapter can transport the result without implementing
 ASD-STE100 rules.
 
 `apply` creates missing records and updates records whose `declared_by` matches
-the document. It refuses unowned and foreign-owned collisions before writing,
-while omitted owned declarations retire in place. Identity-preserving moves
-replace their active owned relationships. `plan` previews creates, updates,
-moves, retirements, and ownership conflicts without writing. Verification runs
+the document. It refuses implicit takeover and foreign-owned collisions before
+writing. Protocol 5 also accepts an exact, per-target `adopt_unowned` allowlist.
+An adoption target must name one declaration with the same explicit Stable ID,
+and its definition and relationships must already match canonical state.
+Omitted owned declarations retire in place. Identity-preserving moves replace
+their active owned relationships. `plan` previews creates, updates, moves,
+adoptions, retirements, and ownership conflicts without writing. Verification runs
 live in the derived cache and always cite an existing Rule. Begin accepts either
 a canonical Rule ID or a declaration owner plus hierarchical address;
 the language callback itself runs in Node and never crosses into Rust. See

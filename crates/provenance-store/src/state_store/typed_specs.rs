@@ -1,26 +1,27 @@
-mod conflicts;
+mod adoption;
 mod identity;
 mod lifecycle;
 mod reconcile;
 mod relationships;
 mod rule_addresses;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use provenance_core::{
-    DeclarationAddress, Requirement, Rule, ScopeId, Source, StableId, SUPPORTED_SCHEMA_VERSION,
+    DeclarationAddress, Edge, ImplementationBinding, Requirement, Rule, ScopeId, Source, StableId,
+    SUPPORTED_SCHEMA_VERSION,
 };
 use provenance_macros::rule;
 
 use super::requirement_reviews;
 use super::{
-    ReconcileState, ReconciledResource, StateStore, TypedFieldChange, TypedRequirementInput,
-    TypedRuleInput, TypedSpecInput, TypedSpecResult,
+    ReconcileState, ReconciledResource, StateStore, TypedDeclarationKind, TypedFieldChange,
+    TypedRequirementInput, TypedRuleInput, TypedSpecInput, TypedSpecResult,
 };
 use crate::shards;
 use identity::{
     declaration_ids, normalize_rule_relationships, owned_declaration_ids, requirement_identity,
-    rule_declaration_ids, source_identity, validate_ownership, validate_references,
+    rule_declaration_ids, source_identity, validate_references,
 };
 use reconcile::{reconcile_requirements, reconcile_rules, reconcile_sources};
 pub(in crate::state_store) use rule_addresses::rule_address;
@@ -29,6 +30,8 @@ struct CurrentTypedState {
     sources: Vec<Source>,
     requirements: Vec<Requirement>,
     rules: Vec<Rule>,
+    edges: Vec<Edge>,
+    implementation_bindings: Vec<ImplementationBinding>,
     source_addresses: BTreeMap<DeclarationAddress, StableId>,
     requirement_addresses: BTreeMap<DeclarationAddress, StableId>,
     rule_addresses: BTreeMap<DeclarationAddress, StableId>,
@@ -41,14 +44,14 @@ struct DesiredTypedIds {
 }
 
 #[derive(Clone, Copy)]
-struct DesiredTypedGraph<'a> {
-    spec: &'a str,
-    owner: &'a str,
-    requirements: &'a [TypedRequirementInput],
-    rules: &'a [TypedRuleInput],
-    source_ids: &'a BTreeMap<String, StableId>,
-    requirement_ids: &'a BTreeMap<String, StableId>,
-    rule_ids: &'a BTreeMap<DeclarationAddress, StableId>,
+pub(super) struct DesiredTypedGraph<'a> {
+    pub(super) spec: &'a str,
+    pub(super) owner: &'a str,
+    pub(super) requirements: &'a [TypedRequirementInput],
+    pub(super) rules: &'a [TypedRuleInput],
+    pub(super) source_ids: &'a BTreeMap<String, StableId>,
+    pub(super) requirement_ids: &'a BTreeMap<String, StableId>,
+    pub(super) rule_ids: &'a BTreeMap<DeclarationAddress, StableId>,
 }
 
 #[derive(Clone, Copy)]
@@ -135,20 +138,21 @@ impl StateStore {
     ) -> anyhow::Result<TypedSpecResult> {
         let (input, current) = self.prepare_typed_spec(scope_id, input)?;
         let ids = desired_typed_ids(&input, &current)?;
-        let conflicts = conflicts::ownership_conflicts(&input, &current, &ids)?;
-        if !conflicts.is_empty() {
+        let ownership = adoption::decide(scope_id, &input, &current, &ids)?;
+        if !ownership.conflicts().is_empty() {
             if matches!(mode, ReconcileMode::Apply) {
-                validate_desired_ownership(&input, &current, &ids)?;
-                unreachable!("ownership validation must reject reported conflicts");
+                ownership.refuse()?;
+                unreachable!("ownership decision must reject reported conflicts");
             }
             return Ok(spec_result(
                 input.declared_by,
                 Vec::new(),
                 Vec::new(),
-                conflicts,
+                ownership.into_conflicts(),
                 Vec::new(),
             ));
         }
+        let adopted_rule_ids = adopted_rule_ids(&input);
 
         let requirement_relationships = input.requirements.clone();
         let rule_relationships = input.rules.clone();
@@ -178,14 +182,21 @@ impl StateStore {
             input.rules,
             &ids.rules,
         )?;
+        let graph = DesiredTypedGraph {
+            spec: &spec,
+            owner: &input.declared_by,
+            requirements: &requirement_relationships,
+            rules: &rule_relationships,
+            source_ids: &ids.sources,
+            requirement_ids: &ids.requirements,
+            rule_ids: &ids.rules,
+        };
         let implementation_reconciliation = super::implementation_bindings::reconcile(
             self,
             scope_id,
-            &input.declared_by,
-            &spec,
-            &rule_relationships,
-            &ids.rules,
+            graph,
             &rules,
+            &adopted_rule_ids,
         )?;
         attach_implementation_changes(&mut rule_resources, &implementation_reconciliation.changes);
         let mut result = spec_result(
@@ -217,19 +228,7 @@ impl StateStore {
                 &shards::implementation_bindings_path(&self.layout, scope_id),
                 implementation_reconciliation.records,
             )?;
-            relationships::reconcile(
-                self,
-                scope_id,
-                DesiredTypedGraph {
-                    spec: &spec,
-                    owner: &input.declared_by,
-                    requirements: &requirement_relationships,
-                    rules: &rule_relationships,
-                    source_ids: &ids.sources,
-                    requirement_ids: &ids.requirements,
-                    rule_ids: &ids.rules,
-                },
-            )?;
+            relationships::reconcile(self, scope_id, graph)?;
             self.raise_requirement_reviews(scope_id, &requirement_resources, &rule_resources)?;
         }
 
@@ -281,6 +280,12 @@ impl StateStore {
         let sources = self.list_sources(scope_id)?;
         let requirements = self.list_requirements(scope_id)?;
         let rules = self.list_rules(scope_id)?;
+        let implementation_bindings = self.list_implementation_bindings(scope_id)?;
+        let edges = self
+            .list_edges()?
+            .into_iter()
+            .filter(|edge| edge.scope_id == *scope_id)
+            .collect();
         let source_addresses = owned_declaration_ids(owner, &sources, |record| {
             (
                 &record.id,
@@ -306,6 +311,8 @@ impl StateStore {
             sources,
             requirements,
             rules,
+            edges,
+            implementation_bindings,
             source_addresses,
             requirement_addresses,
             rule_addresses,
@@ -350,6 +357,15 @@ impl StateStore {
     }
 }
 
+fn adopted_rule_ids(input: &TypedSpecInput) -> BTreeSet<String> {
+    input
+        .adopt_unowned
+        .iter()
+        .filter(|target| target.kind == TypedDeclarationKind::Rule)
+        .map(|target| target.id.clone())
+        .collect()
+}
+
 /// Assembles resources and diagnostics in decoded wire order; canonical
 /// ordering applies only to kernel-authored documents.
 #[rule("rule_rust_wire_order_is_preserved")]
@@ -375,31 +391,6 @@ fn spec_result(
         diagnostics: Vec::new(),
         implementation_bindings,
     }
-}
-
-fn validate_desired_ownership(
-    input: &TypedSpecInput,
-    current: &CurrentTypedState,
-    ids: &DesiredTypedIds,
-) -> anyhow::Result<()> {
-    validate_ownership(
-        &input.declared_by,
-        &current.sources,
-        ids.sources.values(),
-        |record| (&record.id, record.declared_by.as_deref()),
-    )?;
-    validate_ownership(
-        &input.declared_by,
-        &current.requirements,
-        ids.requirements.values(),
-        |record| (&record.id, record.declared_by.as_deref()),
-    )?;
-    validate_ownership(
-        &input.declared_by,
-        &current.rules,
-        ids.rules.values(),
-        |record| (&record.id, record.declared_by.as_deref()),
-    )
 }
 
 fn replace_records<T: serde::de::DeserializeOwned + serde::Serialize>(

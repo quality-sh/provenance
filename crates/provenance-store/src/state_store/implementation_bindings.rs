@@ -1,9 +1,10 @@
-use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 use provenance_core::{ImplementationBinding, Rule, ScopeId, StableId, SUPPORTED_SCHEMA_VERSION};
 use sha2::{Digest, Sha256};
 
-use super::{MaterializeImplementationBindingInput, StateStore, TypedFieldChange, TypedRuleInput};
+use super::typed_specs::DesiredTypedGraph;
+use super::{MaterializeImplementationBindingInput, StateStore, TypedFieldChange};
 use crate::shards;
 
 pub(super) struct Reconciliation {
@@ -15,14 +16,25 @@ pub(super) struct Reconciliation {
 pub(super) fn reconcile(
     store: &StateStore,
     scope_id: &ScopeId,
-    owner: &str,
-    spec: &str,
-    rules: &[TypedRuleInput],
-    rule_ids: &BTreeMap<provenance_core::DeclarationAddress, StableId>,
+    graph: DesiredTypedGraph<'_>,
     canonical_rules: &[Rule],
+    preserve_omitted_for: &BTreeSet<String>,
 ) -> anyhow::Result<Reconciliation> {
     let mut records = store.list_implementation_bindings(scope_id)?;
-    let desired = desired_bindings(scope_id, owner, spec, rules, rule_ids, &records)?;
+    let mut desired = desired_bindings(scope_id, graph, &records)?;
+    for binding in records.iter().filter(|binding| {
+        !binding.retired && preserve_omitted_for.contains(binding.rule_id.as_str())
+    }) {
+        if let Some(generated) = desired
+            .iter_mut()
+            .find(|desired| desired.rule_id == binding.rule_id)
+        {
+            *generated = binding.clone();
+        } else {
+            desired.push(binding.clone());
+        }
+    }
+    desired.sort_by(|left, right| left.id.as_str().cmp(right.id.as_str()));
     let mut changes = Vec::new();
 
     for binding in &desired {
@@ -50,9 +62,9 @@ pub(super) fn reconcile(
         .collect::<Vec<_>>();
     for record in records.iter_mut().filter(|binding| {
         !binding.retired
-            && binding.declared_by == owner
+            && binding.declared_by == graph.owner
             && !desired_rule_ids.contains(&&binding.rule_id)
-            && rule_belongs_to_spec(canonical_rules, &binding.rule_id, owner, spec)
+            && rule_belongs_to_spec(canonical_rules, &binding.rule_id, graph.owner, graph.spec)
     }) {
         let before = target(record);
         record.retired = true;
@@ -74,13 +86,11 @@ pub(super) fn reconcile(
 
 fn desired_bindings(
     scope_id: &ScopeId,
-    owner: &str,
-    spec: &str,
-    rules: &[TypedRuleInput],
-    rule_ids: &BTreeMap<provenance_core::DeclarationAddress, StableId>,
+    graph: DesiredTypedGraph<'_>,
     existing: &[ImplementationBinding],
 ) -> anyhow::Result<Vec<ImplementationBinding>> {
-    rules
+    graph
+        .rules
         .iter()
         .filter_map(|rule| {
             rule.implementation
@@ -88,12 +98,12 @@ fn desired_bindings(
                 .map(|implementation| (rule, implementation))
         })
         .map(|(rule, implementation)| {
-            let address = super::typed_specs::rule_address(spec, rule)?;
-            let rule_id = rule_ids[&address].clone();
+            let address = super::typed_specs::rule_address(graph.spec, rule)?;
+            let rule_id = graph.rule_ids[&address].clone();
             validate_target(&implementation.file, &implementation.symbol)?;
             if let Some(record) = existing.iter().find(|record| record.rule_id == rule_id) {
                 anyhow::ensure!(
-                    record.declared_by == owner,
+                    record.declared_by == graph.owner,
                     "rule `{}` implementation is owned by `{}`",
                     rule_id.as_str(),
                     record.declared_by
@@ -104,7 +114,7 @@ fn desired_bindings(
                 scope_id: scope_id.clone(),
                 id: binding_id(&rule_id)?,
                 rule_id,
-                declared_by: owner.to_string(),
+                declared_by: graph.owner.to_string(),
                 retired: false,
                 file: implementation.file.clone(),
                 symbol: implementation.symbol.clone(),

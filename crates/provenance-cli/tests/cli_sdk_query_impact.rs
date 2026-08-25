@@ -13,7 +13,7 @@ fn impact_names_the_rules_a_requirement_reaches_with_their_sites() {
 
     let answer = sdk(repo, "impact", &json!({"id": ids.sharing.as_str()}));
 
-    assert_eq!(answer["protocol_version"], 4);
+    assert_eq!(answer["protocol_version"], 5);
     assert_eq!(answer["operation"], "impact");
     assert_eq!(answer["id"], ids.sharing);
     assert_eq!(answer["has_more"], false);

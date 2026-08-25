@@ -2,10 +2,10 @@
 //! reactivate, local-to-shared migration, and mixed-case keys, all
 //! through kernel-authored documents.
 
-use provenance_core::{Manifest, RepoPathPrefix, ScopeId};
+use provenance_core::{Manifest, RepoPathPrefix, RequirementStatus, ScopeId, StableId};
 use provenance_sdk::{operations, requirement, rule, spec, RequirementBuilder};
 use provenance_store::layout::ProvenanceLayout;
-use provenance_store::state_store::TypedResourceKind;
+use provenance_store::state_store::{CreateRequirementInput, StateStore, TypedResourceKind};
 
 fn repository() -> (tempfile::TempDir, camino::Utf8PathBuf) {
     let dir = tempfile::tempdir().unwrap();
@@ -133,4 +133,43 @@ fn mixed_case_keys_keep_distinct_stable_identities() {
         ],
     );
     assert_eq!(again.unchanged, 2);
+}
+
+#[test]
+fn a_kernel_authored_requirement_adopts_one_exact_unowned_identity() {
+    let (_dir, root) = repository();
+    let scope = ScopeId::new("default").unwrap();
+    let store = StateStore::new(ProvenanceLayout::new(root.clone()));
+    store
+        .create_requirement(CreateRequirementInput {
+            scope_id: scope.clone(),
+            id: StableId::new("req_existing").unwrap(),
+            statement: "The canonical Requirement keeps its identity".to_string(),
+            description: None,
+            status: RequirementStatus::Active,
+            domain_id: None,
+            origin_thread: None,
+            origin_message: None,
+        })
+        .unwrap();
+    let document = spec("migration")
+        .requirements([requirement("canonical")
+            .adopt_unowned("req_existing")
+            .statement("The canonical Requirement keeps its identity")])
+        .build()
+        .unwrap()
+        .materialize("spec://rust/migration");
+
+    let preview = operations::plan(Some(root.clone()), &scope, document.clone()).unwrap();
+    assert_eq!(
+        (
+            preview.reconciliation.created,
+            preview.reconciliation.conflicts
+        ),
+        (0, 0)
+    );
+    let applied = operations::apply(Some(root.clone()), &scope, document.clone()).unwrap();
+    assert_eq!(applied.resources[0].id.as_str(), "req_existing");
+    let replay = operations::plan(Some(root), &scope, document).unwrap();
+    assert_eq!(replay.reconciliation.unchanged, 1);
 }

@@ -30,6 +30,11 @@ Every entry falls in one of three delta classes.
 
 ## Class 3: capability
 
+- Rust `adopt_unowned(existing_id)` and TypeScript
+  `adoptUnowned(existingId)` produce the same protocol 5 exact allowlist. Both
+  use the Rust ownership decision. Rust links it in process; TypeScript checks
+  the engine protocol before it sends the document.
+
 - Verification is synchronous in Rust v1; asynchronous callbacks are a
   gate-visible follow-up (G7).
 - TypeScript `verify` takes `options.method` (default `examples`) and

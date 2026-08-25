@@ -137,8 +137,8 @@ pub struct CreateRuleInput {
 // The typed-spec input family is wire protocol and lives in core; these
 // re-exports keep the store paths every existing consumer uses.
 pub use provenance_core::protocol::{
-    TypedImplementationInput, TypedRequirementInput, TypedRuleInput, TypedSourceInput,
-    TypedSpecInput,
+    TypedAdoptionTarget, TypedDeclarationKind, TypedImplementationInput, TypedRequirementInput,
+    TypedRuleInput, TypedSourceInput, TypedSpecInput,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
