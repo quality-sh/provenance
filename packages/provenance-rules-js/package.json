@@ -22,6 +22,6 @@
     "test": "tsc --strict --module NodeNext --moduleResolution NodeNext --target ES2022 --outDir .test-dist src/index.test.ts && node .test-dist/index.test.js"
   },
   "devDependencies": {
-    "typescript": "^5.9.3"
+    "typescript": "^7.0.2"
   }
 }
