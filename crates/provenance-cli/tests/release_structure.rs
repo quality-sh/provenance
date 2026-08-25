@@ -140,6 +140,32 @@ fn cli_package_contains_its_embedded_skills() {
     }
 }
 
+#[test]
+fn crate_local_embedded_skills_are_checked_out_with_lf() {
+    let workspace = workspace_root();
+    for skill in [
+        "provenance-fork-tournament",
+        "provenance-grounded-writing",
+        "provenance-shaping",
+        "provenance-swarm-backtrace",
+    ] {
+        let path = format!("crates/provenance-cli/skills/{skill}/SKILL.md");
+        let output = Command::new("git")
+            .args(["check-attr", "eol", "--", &path])
+            .current_dir(&workspace)
+            .output()
+            .expect("read Git attributes");
+        assert!(output.status.success(), "git check-attr failed for {path}");
+        assert!(
+            String::from_utf8(output.stdout)
+                .expect("git check-attr output is UTF-8")
+                .trim_end()
+                .ends_with("eol: lf"),
+            "{path} must use LF so include_str! embeds the same bytes on every platform",
+        );
+    }
+}
+
 #[cfg(unix)]
 mod publish_helper {
     use super::*;
