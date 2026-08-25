@@ -104,6 +104,42 @@ fn release_workflow_publishes_rust_crates_in_dependency_order() {
 }
 
 #[test]
+fn release_workflow_uses_crates_io_trusted_publishing() {
+    let workspace = workspace_root();
+    let workflow = fs::read_to_string(workspace.join(".github/workflows/release.yml"))
+        .expect("read release workflow");
+    let crates_job = workflow
+        .split_once("  publish-crates:")
+        .expect("release workflow has a Rust publish job")
+        .1
+        .split_once("\n  publish-npm:")
+        .expect("npm publish job follows the Rust publish job")
+        .0;
+
+    assert!(crates_job.contains("id-token: write"));
+    assert!(crates_job
+        .contains("rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18"));
+    assert!(crates_job.contains("CARGO_REGISTRY_TOKEN: ${{ steps.crates-auth.outputs.token }}"));
+    assert!(!workflow.contains("CRATES_IO_BOOTSTRAP_TOKEN"));
+}
+
+#[test]
+fn release_workflow_uses_npm_trusted_publishing_without_a_token() {
+    let workspace = workspace_root();
+    let workflow = fs::read_to_string(workspace.join(".github/workflows/release.yml"))
+        .expect("read release workflow");
+    let npm_job = workflow
+        .split_once("  publish-npm:")
+        .expect("release workflow has an npm publish job")
+        .1;
+
+    assert!(npm_job.contains("id-token: write"));
+    assert!(npm_job.contains("npm install --global npm@^11.5.1"));
+    assert!(!workflow.contains("NPM_TOKEN"));
+    assert!(!workflow.contains("NODE_AUTH_TOKEN"));
+}
+
+#[test]
 fn cli_package_contains_its_embedded_skills() {
     let workspace = workspace_root();
     let output = Command::new(env!("CARGO"))

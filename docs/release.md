@@ -14,7 +14,9 @@ The release workflow builds and uploads:
 
 It also stages and publishes matching npm engine packages,
 `@quality-sh/provenance`, and `@quality-sh/create-provenance`. npm trusted
-publishing must be configured for the repository's `npm` GitHub environment.
+publishing must trust `quality-sh/provenance`, the `release.yml` workflow, and
+the `npm` GitHub environment for each package. The workflow uses GitHub OIDC
+and does not store an npm registry token.
 
 The workflow publishes these Rust crates to crates.io:
 
@@ -26,12 +28,11 @@ The workflow publishes these Rust crates to crates.io:
 - `provenance-sdk`
 - `provenance-cli`
 
-The `crates-io` GitHub environment protects publication. The first publication
-uses the short-lived `CRATES_IO_BOOTSTRAP_TOKEN` environment secret. The token
-must permit `publish-new` only for `provenance-*`. After the first publication,
-configure a trusted publisher for each crate. Replace the bootstrap credential
-in the workflow with the official crates.io authentication action. Then remove
-the secret.
+The `crates-io` GitHub environment protects publication. Each crate must trust
+`quality-sh/provenance`, the `release.yml` workflow, and that environment on
+crates.io. The official crates.io authentication action exchanges GitHub's OIDC
+token for a short-lived registry token during each release. The repository does
+not store a crates.io registry token.
 
 Each engine package carries a binary and no command name. `provenance` is a
 command of `@quality-sh/provenance`. The initializer adds that package as a
