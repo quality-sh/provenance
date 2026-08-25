@@ -22,11 +22,29 @@ pub struct TypedSpecInput {
     pub spec: String,
     pub declared_by: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub adopt_unowned: Vec<TypedAdoptionTarget>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sources: Vec<TypedSourceInput>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub requirements: Vec<TypedRequirementInput>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub rules: Vec<TypedRuleInput>,
+}
+
+/// One exact declaration identity that may transition from unowned to owned.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct TypedAdoptionTarget {
+    pub kind: TypedDeclarationKind,
+    pub id: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TypedDeclarationKind {
+    Source,
+    Requirement,
+    Rule,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

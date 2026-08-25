@@ -15,8 +15,8 @@ pub use provenance_core::authoring::{
     RuleBuilder, RuleHandle, SourceBuilder, SpecBuilder, SpecDocument, SpecHandles,
 };
 pub use provenance_core::protocol::{
-    TypedImplementationInput, TypedRequirementInput, TypedRuleInput, TypedSourceInput,
-    TypedSpecInput,
+    TypedAdoptionTarget, TypedDeclarationKind, TypedImplementationInput, TypedRequirementInput,
+    TypedRuleInput, TypedSourceInput, TypedSpecInput,
 };
 pub use provenance_core::{EngineInfo, ScopeId, StableId, SDK_PROTOCOL_VERSION};
 pub use provenance_store::operations;

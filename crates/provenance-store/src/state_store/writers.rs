@@ -176,39 +176,14 @@ impl StateStore {
             }
             Ok(())
         })?;
-        let edge = Edge {
-            schema_version: SUPPORTED_SCHEMA_VERSION,
+        self.add_edge(
             scope_id,
-            id: Edge::stable_id(
-                EdgeType::References,
-                NodeType::Source,
-                &source_id,
-                NodeType::Requirement,
-                &requirement_id,
-            )?,
-            edge_type: EdgeType::References,
-            from_type: NodeType::Source,
-            from_id: source_id,
-            to_type: NodeType::Requirement,
-            to_id: requirement_id,
-            label: None,
-        };
-        let path = shards::edges_path(&self.layout);
-        self.mutate_jsonl_records(&path, |records: &mut Vec<Edge>| {
-            if !records
-                .iter()
-                .any(|record| record.id == edge.id && record.scope_id == edge.scope_id)
-            {
-                records.push(edge.clone());
-            }
-            records.sort_by(|a, b| {
-                a.scope_id
-                    .as_str()
-                    .cmp(b.scope_id.as_str())
-                    .then(a.id.as_str().cmp(b.id.as_str()))
-            });
-            Ok(edge)
-        })
+            EdgeType::References,
+            NodeType::Source,
+            source_id,
+            NodeType::Requirement,
+            requirement_id,
+        )
     }
 
     pub fn create_edge(&self, input: CreateEdgeInput) -> anyhow::Result<Edge> {
@@ -277,6 +252,16 @@ impl StateStore {
         };
         let path = shards::edges_path(&self.layout);
         self.mutate_jsonl_records(&path, |records: &mut Vec<Edge>| {
+            if let Some(existing) = records.iter().find(|record| {
+                record.scope_id == edge.scope_id
+                    && record.edge_type == edge.edge_type
+                    && record.from_type == edge.from_type
+                    && record.from_id == edge.from_id
+                    && record.to_type == edge.to_type
+                    && record.to_id == edge.to_id
+            }) {
+                return Ok(existing.clone());
+            }
             if !records
                 .iter()
                 .any(|record| record.id == edge.id && record.scope_id == edge.scope_id)

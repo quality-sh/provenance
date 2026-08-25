@@ -85,11 +85,30 @@ async function rejectsIncompatibleEngineBeforeCommand(): Promise<void> {
 
 test("an incompatible engine is rejected before the requested command", rejectsIncompatibleEngineBeforeCommand);
 
-async function leavesRepositoryDiscoveryToRust(): Promise<void> {
+test("the adoption SDK rejects a protocol-4 engine before the requested command", async () => {
   const recorder = recordingEngine({
     info: {
       engine_version: "0.1.0",
       protocol_version: 4,
+      state_schema_version: 1,
+      repository: "/project",
+    },
+    plan: {
+      created: 0, updated: 0, moved: 0, retired: 0, conflicts: 0, unchanged: 0,
+      resources: [], affected_rules: [],
+    },
+  });
+  configure({ engine: recorder.engine, repository: "/project" });
+
+  await assert.rejects(plan(spec()), /protocol version 4/);
+  assert.deepEqual(recorder.requests().map(({ command }) => command), ["info"]);
+});
+
+async function leavesRepositoryDiscoveryToRust(): Promise<void> {
+  const recorder = recordingEngine({
+    info: {
+      engine_version: "0.1.0",
+      protocol_version: 5,
       state_schema_version: 1,
       repository: "/project",
     },

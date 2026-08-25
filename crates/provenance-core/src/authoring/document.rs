@@ -14,14 +14,15 @@ use super::checks::{reference_violations, DeclarationChecker, RuleChecker};
 use super::AuthoringError;
 use crate::model::{StableId, SUPPORTED_SCHEMA_VERSION};
 use crate::protocol::{
-    TypedImplementationInput, TypedRequirementInput, TypedRuleInput, TypedSourceInput,
-    TypedSpecInput,
+    TypedAdoptionTarget, TypedDeclarationKind, TypedImplementationInput, TypedRequirementInput,
+    TypedRuleInput, TypedSourceInput, TypedSpecInput,
 };
 
 /// One frozen, canonical, kernel-authored document.
 #[derive(Debug, Clone)]
 pub struct SpecDocument {
     pub(super) spec: String,
+    pub(super) adopt_unowned: Vec<TypedAdoptionTarget>,
     pub(super) sources: Vec<TypedSourceInput>,
     pub(super) requirements: Vec<TypedRequirementInput>,
     pub(super) rules: Vec<TypedRuleInput>,
@@ -51,6 +52,7 @@ impl SpecDocument {
             schema_version: SUPPORTED_SCHEMA_VERSION.0,
             spec: self.spec.clone(),
             declared_by: declared_by.into(),
+            adopt_unowned: self.adopt_unowned.clone(),
             sources: self.sources.clone(),
             requirements: self.requirements.clone(),
             rules: self.rules.clone(),
@@ -72,6 +74,7 @@ pub(super) fn build_document(builder: SpecBuilder) -> Result<SpecDocument, Autho
     let mut sources: Vec<TypedSourceInput> = Vec::new();
     let mut requirements: Vec<TypedRequirementInput> = Vec::new();
     let mut rules: Vec<TypedRuleInput> = Vec::new();
+    let mut adopt_unowned = Vec::new();
     for requirement in builder.requirements {
         collect_requirement(
             requirement,
@@ -79,6 +82,7 @@ pub(super) fn build_document(builder: SpecBuilder) -> Result<SpecDocument, Autho
             &mut sources,
             &mut requirements,
             &mut rules,
+            &mut adopt_unowned,
         );
     }
     check_structure(&spec, &sources, &requirements, &mut rules, &mut violations);
@@ -88,8 +92,11 @@ pub(super) fn build_document(builder: SpecBuilder) -> Result<SpecDocument, Autho
     sources.sort_by(|left, right| left.key.cmp(&right.key));
     requirements.sort_by(|left, right| left.key.cmp(&right.key));
     rules.sort_by_key(serialized_address);
+    adopt_unowned.sort();
+    adopt_unowned.dedup();
     Ok(SpecDocument {
         spec,
+        adopt_unowned,
         sources,
         requirements,
         rules,
@@ -102,6 +109,7 @@ fn collect_requirement(
     sources: &mut Vec<TypedSourceInput>,
     requirements: &mut Vec<TypedRequirementInput>,
     rules: &mut Vec<TypedRuleInput>,
+    adopt_unowned: &mut Vec<TypedAdoptionTarget>,
 ) {
     if text_missing(requirement.statement.as_deref()) {
         violations.push(format!(
@@ -116,19 +124,31 @@ fn collect_requirement(
     {
         violations.push("requirement description must not be empty".to_string());
     }
+    validate_explicit_id(
+        "requirement",
+        &requirement.key,
+        requirement.explicit_id.as_deref(),
+        violations,
+    );
+    collect_adoption(
+        TypedDeclarationKind::Requirement,
+        requirement.adopt_unowned,
+        requirement.explicit_id.as_deref(),
+        adopt_unowned,
+    );
     let mut cited = Vec::new();
     for source in requirement.sources {
         cited.push(source.key.clone());
-        collect_source(source, violations, sources);
+        collect_source(source, violations, sources, adopt_unowned);
     }
     cited.sort();
     cited.dedup();
     for rule in requirement.rules {
-        collect_rule(rule, &requirement.key, violations, rules);
+        collect_rule(rule, &requirement.key, violations, rules, adopt_unowned);
     }
     requirements.push(TypedRequirementInput {
         key: requirement.key,
-        id: None,
+        id: requirement.explicit_id,
         statement: requirement.statement.unwrap_or_default(),
         description: requirement.description,
         sources: cited,
@@ -139,7 +159,20 @@ fn collect_source(
     source: SourceBuilder,
     violations: &mut Vec<String>,
     sources: &mut Vec<TypedSourceInput>,
+    adopt_unowned: &mut Vec<TypedAdoptionTarget>,
 ) {
+    validate_explicit_id(
+        "source",
+        &source.key,
+        source.explicit_id.as_deref(),
+        violations,
+    );
+    collect_adoption(
+        TypedDeclarationKind::Source,
+        source.adopt_unowned,
+        source.explicit_id.as_deref(),
+        adopt_unowned,
+    );
     if source
         .name
         .as_deref()
@@ -157,7 +190,7 @@ fn collect_source(
     let declaration = TypedSourceInput {
         name: source.name.unwrap_or_else(|| source.key.clone()),
         key: source.key,
-        id: None,
+        id: source.explicit_id,
         kind: "document".to_string(),
         url: None,
         reference: source.reference,
@@ -176,20 +209,18 @@ fn collect_rule(
     owner: &str,
     violations: &mut Vec<String>,
     rules: &mut Vec<TypedRuleInput>,
+    adopt_unowned: &mut Vec<TypedAdoptionTarget>,
 ) {
     if text_missing(rule.statement.as_deref()) {
         violations.push(format!("Rule `{}` statement must not be empty", rule.key));
     }
-    if let Some(id) = rule.explicit_id.as_deref() {
-        if id.trim().is_empty() {
-            violations.push("rule id must not be empty".to_string());
-        } else if StableId::new(id).is_err() {
-            violations.push(format!(
-                "rule `{}` id `{id}` must use lowercase ASCII letters, digits, '_' or '-'",
-                rule.key
-            ));
-        }
-    }
+    validate_explicit_id("rule", &rule.key, rule.explicit_id.as_deref(), violations);
+    collect_adoption(
+        TypedDeclarationKind::Rule,
+        rule.adopt_unowned,
+        rule.explicit_id.as_deref(),
+        adopt_unowned,
+    );
     let mut owners = rule.requirements;
     owners.push(owner.to_string());
     owners.sort();
@@ -279,8 +310,38 @@ fn text_missing(text: Option<&str>) -> bool {
     text.is_none_or(|text| text.trim().is_empty())
 }
 
+fn validate_explicit_id(kind: &str, key: &str, id: Option<&str>, violations: &mut Vec<String>) {
+    let Some(id) = id else {
+        return;
+    };
+    if id.trim().is_empty() {
+        violations.push(format!("{kind} id must not be empty"));
+    } else if StableId::new(id).is_err() {
+        violations.push(format!(
+            "{kind} `{key}` id `{id}` must use lowercase ASCII letters, digits, '_' or '-'"
+        ));
+    }
+}
+
+fn collect_adoption(
+    kind: TypedDeclarationKind,
+    adopt: bool,
+    id: Option<&str>,
+    targets: &mut Vec<TypedAdoptionTarget>,
+) {
+    if adopt {
+        targets.push(TypedAdoptionTarget {
+            kind,
+            id: id.unwrap_or_default().to_string(),
+        });
+    }
+}
+
 fn same_source(left: &TypedSourceInput, right: &TypedSourceInput) -> bool {
-    left.key == right.key && left.name == right.name && left.reference == right.reference
+    left.key == right.key
+        && left.id == right.id
+        && left.name == right.name
+        && left.reference == right.reference
 }
 
 fn same_rule_content(left: &TypedRuleInput, right: &TypedRuleInput) -> bool {

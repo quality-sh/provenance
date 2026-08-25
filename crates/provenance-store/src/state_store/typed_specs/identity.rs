@@ -205,27 +205,6 @@ pub(super) fn owned_declaration_ids<'a, T: 'a>(
     Ok(ids)
 }
 
-pub(super) fn validate_ownership<'a, T: 'a>(
-    owner: &str,
-    records: &'a [T],
-    desired_ids: impl Iterator<Item = &'a StableId>,
-    fields: impl Fn(&'a T) -> (&'a StableId, Option<&'a str>),
-) -> anyhow::Result<()> {
-    for desired_id in desired_ids {
-        let Some(record) = records.iter().find(|record| fields(record).0 == desired_id) else {
-            continue;
-        };
-        let (_, declared_by) = fields(record);
-        anyhow::ensure!(
-            declared_by == Some(owner),
-            "record `{}` is not owned by `{owner}` (declared_by: {})",
-            desired_id.as_str(),
-            declared_by.unwrap_or("unowned")
-        );
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;

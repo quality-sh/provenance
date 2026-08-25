@@ -47,7 +47,7 @@ fn info_reports_the_language_neutral_engine_contract() {
     ]));
 
     assert_eq!(info["engine_version"], env!("CARGO_PKG_VERSION"));
-    assert_eq!(info["protocol_version"], 4);
+    assert_eq!(info["protocol_version"], 5);
     assert_eq!(info["state_schema_version"], 1);
     assert_eq!(info["repository"], root.to_str().unwrap());
 }

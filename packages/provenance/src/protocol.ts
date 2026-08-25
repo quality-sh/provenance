@@ -1,4 +1,10 @@
 export type DeclarationAddress = readonly string[];
+export type ResourceKind = "source" | "requirement" | "rule";
+
+export interface AdoptionTarget {
+  kind: ResourceKind;
+  id: string;
+}
 
 export interface SourceDeclaration {
   key: string;
@@ -38,12 +44,12 @@ export interface TypedSpecDocument {
   schema_version: 1;
   spec: string;
   declared_by: string;
+  adopt_unowned?: AdoptionTarget[];
   sources: SourceDeclaration[];
   requirements: RequirementDeclaration[];
   rules: RuleDeclaration[];
 }
 
-export type ResourceKind = "source" | "requirement" | "rule";
 export type ReconcileState =
   | "created"
   | "updated"

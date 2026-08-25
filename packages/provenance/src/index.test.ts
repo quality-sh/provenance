@@ -66,6 +66,7 @@ function declareFixture(repo: string) {
     url: "https://linear.app/example/issue/ABC-123",
   });
   const sharing = requirement("sharing", {
+    id: "req_existing_sharing",
     statement: "Users can securely share documentation",
     sources: [linear],
   });
@@ -105,7 +106,7 @@ if (Object.hasOwn(responses, command)) {
 } else if (command === "info") {
   process.stdout.write(JSON.stringify({
     engine_version: "0.1.0",
-    protocol_version: 4,
+    protocol_version: 5,
     state_schema_version: 1,
     repository: "/project",
   }));
@@ -140,6 +141,39 @@ if (Object.hasOwn(responses, command)) {
         .map((line) => JSON.parse(line) as { command: string; args: string[]; input: unknown }),
   };
 }
+
+test("the callback option-object Requirement keeps an explicit ID", async () => {
+  const recorder = recordingEngine({
+    apply: {
+      declared_by: "spec://typescript/callback-requirement-id",
+      created: 1,
+      updated: 0,
+      moved: 0,
+      retired: 0,
+      conflicts: 0,
+      unchanged: 0,
+      resources: [],
+    },
+  });
+  configure({
+    engine: recorder.engine,
+    owner: "spec://typescript/callback-requirement-id",
+  });
+  const spec = defineSpec("callback-requirement-id", ({ requirement }) => ({
+    canonical: requirement("canonical", {
+      id: "req_existing",
+      statement: "The canonical Requirement keeps its identity",
+    }),
+  }));
+
+  await apply(spec);
+
+  const request = recorder.requests().find(({ command }) => command === "apply");
+  assert.equal(
+    (request?.input as { requirements?: Array<{ id?: string }> }).requirements?.[0]?.id,
+    "req_existing",
+  );
+});
 
 test("verify sends the same durable binding key on repeated runs", async () => {
   const recorder = recordingEngine();
@@ -222,7 +256,7 @@ test("plan sends the finalized spec to the read-only engine command", async () =
   const recorder = recordingEngine({
     info: {
       engine_version: "0.1.0",
-      protocol_version: 4,
+      protocol_version: 5,
       state_schema_version: 1,
       repository: "/project",
     },
@@ -270,7 +304,7 @@ test("typed declarations reconcile to canonical Provenance records", async () =>
   const result = await apply();
 
   assert.match(expiry.id, /^rule_legacy_sharing_expiry_/);
-  assert.match(sharing.id, /^requirement_legacy_sharing_/);
+  assert.equal(sharing.id, "req_existing_sharing");
   assert.equal(result.created, 3);
   const rule = engineJson(repo, [
     "rules",

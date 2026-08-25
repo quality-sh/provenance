@@ -168,6 +168,119 @@ fn build_rejects_a_malformed_explicit_rule_id() {
 }
 
 #[test]
+fn requirement_builder_materializes_an_explicit_existing_id() {
+    let document = spec("migration")
+        .requirements([requirement("canonical")
+            .id("req_existing")
+            .statement("The canonical requirement keeps its identity")])
+        .build()
+        .unwrap()
+        .materialize("spec://rust/migration");
+
+    assert_eq!(document.requirements[0].id.as_deref(), Some("req_existing"));
+}
+
+#[test]
+fn build_rejects_a_malformed_explicit_requirement_id() {
+    let error = spec("migration")
+        .requirements([requirement("canonical")
+            .id("Bad Id")
+            .statement("The canonical requirement keeps its identity")])
+        .build()
+        .unwrap_err();
+
+    assert_eq!(
+        error.violations(),
+        ["requirement `canonical` id `Bad Id` must use lowercase ASCII letters, digits, '_' or '-'"]
+    );
+}
+
+#[test]
+fn adoption_methods_materialize_exact_wire_targets() {
+    use crate::protocol::TypedDeclarationKind;
+
+    let policy = source("policy")
+        .adopt_unowned("source_existing")
+        .document("docs/policy.md");
+    let document = spec("migration")
+        .requirements([requirement("canonical")
+            .adopt_unowned("req_existing")
+            .statement("The canonical requirement keeps its identity")
+            .from(policy)
+            .rules([rule("enforcement")
+                .adopt_unowned("rule_existing")
+                .statement("The migration keeps the canonical rule")])])
+        .build()
+        .unwrap()
+        .materialize("spec://rust/migration");
+
+    assert_eq!(document.sources[0].id.as_deref(), Some("source_existing"));
+    assert_eq!(document.requirements[0].id.as_deref(), Some("req_existing"));
+    assert_eq!(document.rules[0].id.as_deref(), Some("rule_existing"));
+    assert_eq!(document.adopt_unowned.len(), 3);
+    assert_eq!(document.adopt_unowned[0].kind, TypedDeclarationKind::Source);
+    assert_eq!(document.adopt_unowned[0].id.as_str(), "source_existing");
+    assert_eq!(
+        document.adopt_unowned[1].kind,
+        TypedDeclarationKind::Requirement
+    );
+    assert_eq!(document.adopt_unowned[1].id.as_str(), "req_existing");
+    assert_eq!(document.adopt_unowned[2].kind, TypedDeclarationKind::Rule);
+    assert_eq!(document.adopt_unowned[2].id.as_str(), "rule_existing");
+}
+
+#[test]
+fn explicit_source_ids_are_not_discarded_during_deduplication() {
+    let error = spec("migration")
+        .requirements([
+            requirement("first")
+                .statement("The first Requirement cites the policy")
+                .from(
+                    source("policy")
+                        .id("source_first")
+                        .document("docs/policy.md"),
+                ),
+            requirement("second")
+                .statement("The second Requirement cites the policy")
+                .from(
+                    source("policy")
+                        .id("source_second")
+                        .document("docs/policy.md"),
+                ),
+        ])
+        .build()
+        .unwrap_err();
+
+    assert_eq!(error.violations(), ["duplicate source key `policy`"]);
+}
+
+#[test]
+fn explicit_id_after_adoption_returns_to_ordinary_identity_selection() {
+    let policy = source("policy")
+        .adopt_unowned("source_old")
+        .id("source_existing")
+        .document("docs/policy.md");
+    let document = spec("migration")
+        .requirements([requirement("canonical")
+            .adopt_unowned("req_old")
+            .id("req_existing")
+            .statement("The canonical Requirement keeps its identity")
+            .from(policy)
+            .rules([rule("enforcement")
+                .adopt_unowned("rule_old")
+                .id("rule_existing")
+                .statement("The canonical Rule keeps its identity")])])
+        .build()
+        .unwrap()
+        .materialize("spec://rust/migration");
+
+    assert!(document.adopt_unowned.is_empty());
+    assert_eq!(document.sources[0].id.as_deref(), Some("source_existing"));
+    assert_eq!(document.requirements[0].id.as_deref(), Some("req_existing"));
+    assert_eq!(document.rules[0].id.as_deref(), Some("rule_existing"));
+}
+
+#[test]
 fn handles_carry_declaration_addresses() {
     let document = sample(true).build().unwrap();
     let handles = document.handles();

@@ -43,7 +43,7 @@ const source = readFileSync(0, "utf8");
 const input = source === "" ? undefined : JSON.parse(source);
 appendFileSync(${JSON.stringify(log)}, JSON.stringify({ command, input }) + "\\n");
 if (command === "info") process.stdout.write(JSON.stringify({
-  engine_version: "0.1.0", protocol_version: 4, state_schema_version: 1, repository: "/project"
+  engine_version: "0.1.0", protocol_version: 5, state_schema_version: 1, repository: "/project"
 }));
 else if (command === "begin-verification") process.stdout.write(JSON.stringify({
   id: "run_1", binding_id: "binding_1", rule_id: "rule_1", status: "running"
@@ -119,6 +119,159 @@ test("a spec-bound Rule is its own immutable verification handle", async () => {
     declared_by: "ci://typescript",
     file: fileURLToPath(import.meta.url),
   });
+});
+
+test("a spec-bound Requirement serializes an immutable explicit ID", async () => {
+  const recorder = recordingEngine();
+  configure({ engine: recorder.engine, owner: "spec://typescript/bound-requirement-id" });
+  const provenance = defineSpec("bound-requirement-id");
+  const draft = provenance.requirement("canonical");
+  const identified = draft.id("req_existing");
+  const stated = identified.statement("The canonical Requirement keeps its identity");
+
+  assert.notEqual(draft, identified);
+  assert.notEqual(identified, stated);
+  await apply(provenance.build(stated));
+
+  const request = recorder.requests().find(({ command }) => command === "apply");
+  assert.deepEqual((request?.input as { requirements?: unknown }).requirements, [
+    {
+      key: "canonical",
+      id: "req_existing",
+      statement: "The canonical Requirement keeps its identity",
+      sources: [],
+    },
+  ]);
+});
+
+test("spec-bound declarations serialize exact unowned adoption targets", async () => {
+  const recorder = recordingEngine();
+  configure({ engine: recorder.engine, owner: "spec://typescript/bound-adoption" });
+  const provenance = defineSpec("bound-adoption");
+  const policy = provenance
+    .source("policy")
+    .adoptUnowned("source_existing")
+    .document("docs/policy.md");
+  const enforcement = provenance
+    .rule("enforcement")
+    .adoptUnowned("rule_existing")
+    .statement("The migration keeps the canonical Rule");
+  const canonical = provenance
+    .requirement("canonical")
+    .adoptUnowned("req_existing")
+    .statement("The canonical Requirement keeps its identity")
+    .from(policy)
+    .rules(enforcement);
+
+  await apply(provenance.build(canonical));
+
+  const input = recorder.requests().find(({ command }) => command === "apply")?.input as {
+    adopt_unowned?: unknown;
+  };
+  assert.deepEqual(input.adopt_unowned, [
+    { kind: "source", id: "source_existing" },
+    { kind: "requirement", id: "req_existing" },
+    { kind: "rule", id: "rule_existing" },
+  ]);
+
+  const ordinary = provenance
+    .requirement("ordinary")
+    .adoptUnowned("req_old")
+    .id("req_existing")
+    .statement("Ordinary identity selection does not request adoption")
+    .from(policy.id("source_existing"))
+    .rules(enforcement.id("rule_existing"));
+  await apply(provenance.build(ordinary));
+  const ordinaryInput = recorder.requests().filter(({ command }) => command === "apply").at(-1)
+    ?.input as { adopt_unowned?: unknown };
+  assert.equal(ordinaryInput.adopt_unowned, undefined);
+});
+
+test("spec-bound declarations adopt exact unowned engine records", async () => {
+  const repo = repository();
+  configure({ engine, repository: repo, owner: "spec://typescript/bound-adoption-runtime" });
+  execFileSync(engine, [
+    "sources",
+    "create",
+    "--repo",
+    repo,
+    "--scope",
+    "default",
+    "--id",
+    "source_existing",
+    "--name",
+    "policy",
+    "--source-type",
+    "document",
+    "--reference",
+    "docs/policy.md",
+  ]);
+  execFileSync(engine, [
+    "requirements",
+    "create",
+    "--repo",
+    repo,
+    "--scope",
+    "default",
+    "--id",
+    "req_existing",
+    "--statement",
+    "The canonical Requirement keeps its identity",
+  ]);
+  execFileSync(engine, [
+    "requirements",
+    "source-ref",
+    "add",
+    "--repo",
+    repo,
+    "--scope",
+    "default",
+    "--requirement-id",
+    "req_existing",
+    "--source-id",
+    "source_existing",
+  ]);
+  execFileSync(engine, [
+    "rules",
+    "create",
+    "--repo",
+    repo,
+    "--scope",
+    "default",
+    "--id",
+    "rule_existing",
+    "--requirement-id",
+    "req_existing",
+    "--statement",
+    "The canonical Rule keeps its identity",
+  ]);
+  const provenance = defineSpec("bound-adoption-runtime");
+  const policy = provenance
+    .source("policy")
+    .adoptUnowned("source_existing")
+    .document("docs/policy.md");
+  const enforcement = provenance
+    .rule("enforcement")
+    .adoptUnowned("rule_existing")
+    .statement("The canonical Rule keeps its identity");
+  const canonical = provenance
+    .requirement("canonical")
+    .adoptUnowned("req_existing")
+    .statement("The canonical Requirement keeps its identity")
+    .from(policy)
+    .rules(enforcement);
+  const spec = provenance.build(canonical);
+
+  const preview = await plan(spec);
+  assert.equal(preview.created, 0);
+  assert.equal(preview.conflicts, 0);
+  const applied = await apply(spec);
+  assert.deepEqual(
+    applied.resources.map(({ id }) => id).sort(),
+    ["req_existing", "rule_existing", "source_existing"],
+  );
+  const replay = await plan(spec);
+  assert.equal(replay.unchanged, 3);
 });
 
 test("a spec-scoped Rule materializes once for several Requirements", async () => {

@@ -106,7 +106,7 @@ fn every_primitive_answers_the_same_bytes_on_a_second_run() {
         let answer = twice(repo, command, &request);
         let parsed: Value = serde_json::from_str(&answer).unwrap();
         assert_eq!(
-            parsed["protocol_version"], 4,
+            parsed["protocol_version"], 5,
             "{command} names the protocol"
         );
         assert!(
