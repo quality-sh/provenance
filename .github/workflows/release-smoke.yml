@@ -1,0 +1,123 @@
+name: Post-release installation smoke tests
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Exact release version without a leading v
+        required: true
+        type: string
+      archive_matrix:
+        description: Release archive smoke matrix from release preflight
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact release version without a leading v (for example, 0.2.2)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  RELEASE_SMOKE_RETRY_ATTEMPTS: "20"
+  RELEASE_SMOKE_RETRY_DELAY_SECONDS: "30"
+
+jobs:
+  contract:
+    name: Released contract
+    runs-on: ubuntu-latest
+    outputs:
+      archive-matrix: ${{ steps.targets.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/v${{ inputs.version }}
+          persist-credentials: false
+      - name: Validate version and load release targets
+        id: targets
+        shell: bash
+        env:
+          ARCHIVE_MATRIX: ${{ inputs.archive_matrix }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [[ -n "$ARCHIVE_MATRIX" ]]; then
+            jq -e '.include | length > 0' <<< "$ARCHIVE_MATRIX" >/dev/null
+            matrix=$ARCHIVE_MATRIX
+          else
+            # Manual dispatch has no release preflight to own this contract.
+            source .github/scripts/release-smoke/lib.sh
+            # shellcheck disable=SC2153
+            validate_version "$VERSION"
+            matrix=$(python3 .github/scripts/release-contract.py \
+              "$VERSION" .github/release-targets.json |
+              sed -n 's/^smoke-matrix=//p')
+          fi
+          printf 'matrix=%s\n' "$matrix" >> "$GITHUB_OUTPUT"
+
+  cargo-registry:
+    name: crates.io installation
+    needs: contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/v${{ inputs.version }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
+      - name: Install and exercise the exact Rust distribution
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+        run: bash .github/scripts/release-smoke/cargo-registry.sh "$VERSION"
+
+  npm-registry:
+    name: npm installation
+    needs: contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/v${{ inputs.version }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: Install and exercise the exact npm distribution
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+        run: bash .github/scripts/release-smoke/npm-registry.sh "$VERSION"
+
+  github-archive:
+    name: GitHub archive (${{ matrix.target }})
+    needs: contract
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.contract.outputs.archive-matrix) }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/v${{ inputs.version }}
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Verify and execute the native archive
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          bash .github/scripts/release-smoke/github-archive.sh \
+            "$VERSION" "${{ matrix.target }}" "${{ matrix.archive }}" \
+            "${{ matrix.archive_name }}" "${{ matrix.package }}" \
+            "${{ matrix.executable_suffix }}"

@@ -1,5 +1,7 @@
 import { createRequire } from "node:module";
 
+import { enginePackages } from "./engine-packages.js";
+
 export interface EngineHost {
   platform: NodeJS.Platform;
   arch: string;
@@ -11,21 +13,14 @@ interface ResolutionOptions {
   resolvePackage?: (specifier: string) => string;
 }
 
-const packages = new Map<string, string>([
-  ["darwin-arm64", "@quality-sh/provenance-darwin-arm64"],
-  ["darwin-x64", "@quality-sh/provenance-darwin-x64"],
-  ["win32-x64", "@quality-sh/provenance-win32-x64-msvc"],
-  ["linux-x64-glibc", "@quality-sh/provenance-linux-x64-gnu"],
-]);
-
 const require = createRequire(import.meta.url);
 
 export function enginePackageFor(host: EngineHost): string {
   const label = hostLabel(host);
-  const packageName = packages.get(label);
+  const packageName = enginePackages.get(label);
   if (packageName === undefined) {
     throw new Error(
-      `Provenance has no engine for ${label}. Supported targets: ${[...packages.keys()].join(", ")}`,
+      `Provenance has no engine for ${label}. Supported targets: ${[...enginePackages.keys()].join(", ")}`,
     );
   }
   return packageName;

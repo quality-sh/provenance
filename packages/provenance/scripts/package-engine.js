@@ -4,51 +4,32 @@ import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // @provenance rule: rule_sdk_install_has_no_binary_fetch
-const targets = {
-  "aarch64-apple-darwin": {
-    name: "@quality-sh/provenance-darwin-arm64",
-    os: ["darwin"],
-    cpu: ["arm64"],
-    binary: "provenance",
-  },
-  "x86_64-apple-darwin": {
-    name: "@quality-sh/provenance-darwin-x64",
-    os: ["darwin"],
-    cpu: ["x64"],
-    binary: "provenance",
-  },
-  "x86_64-pc-windows-msvc": {
-    name: "@quality-sh/provenance-win32-x64-msvc",
-    os: ["win32"],
-    cpu: ["x64"],
-    binary: "provenance.exe",
-  },
-  "x86_64-unknown-linux-gnu": {
-    name: "@quality-sh/provenance-linux-x64-gnu",
-    os: ["linux"],
-    cpu: ["x64"],
-    libc: ["glibc"],
-    binary: "provenance",
-  },
-};
-
 const args = parseArgs(process.argv.slice(2));
-const target = targets[required(args, "target")];
+const targetsPath = args.targets ?? fileURLToPath(
+  new URL("../../../.github/release-targets.json", import.meta.url),
+);
+const targets = JSON.parse(readFileSync(targetsPath, "utf8"));
+const targetName = required(args, "target");
+const target = targets.find((entry) => entry.target === targetName);
 if (target === undefined) {
-  throw new Error(`unsupported Rust target ${args.target}; expected ${Object.keys(targets).join(", ")}`);
+  throw new Error(
+    `unsupported Rust target ${targetName}; expected ${targets.map((entry) => entry.target).join(", ")}`,
+  );
 }
 const source = required(args, "binary");
 const output = required(args, "out");
 const version = required(args, "version");
-const destination = join(output, "bin", target.binary);
+const packageData = target.npm;
+const binaryName = `provenance${target.executable_suffix}`;
+const destination = join(output, "bin", binaryName);
 mkdirSync(join(output, "bin"), { recursive: true });
 copyFileSync(source, destination);
-if (target.os[0] !== "win32") {
+if (!packageData.os.includes("win32")) {
   chmodSync(destination, 0o755);
 }
 
 const manifest = {
-  name: target.name,
+  name: packageData.name,
   version,
   description: "Platform engine for @quality-sh/provenance",
   license: "BUSL-1.1",
@@ -56,16 +37,16 @@ const manifest = {
     type: "git",
     url: "git+https://github.com/quality-sh/provenance.git",
   },
-  os: target.os,
-  cpu: target.cpu,
-  ...(target.libc === undefined ? {} : { libc: target.libc }),
+  os: packageData.os,
+  cpu: packageData.cpu,
+  ...(packageData.libc === undefined ? {} : { libc: packageData.libc }),
   engines: { node: ">=20" },
   preferUnplugged: true,
   files: ["bin", "SHA256SUMS", "README.md", "LICENSE"],
   // A platform package carries the binary and nothing else. The command name
   // stays with @quality-sh/provenance, which every install has, so `npx
   // provenance` behaves the same whether or not this package was installed.
-  exports: { "./bin": `./bin/${target.binary}` },
+  exports: { "./bin": `./bin/${binaryName}` },
 };
 writeFileSync(join(output, "package.json"), `${JSON.stringify(manifest, null, 2)}\n`);
 copyFileSync(fileURLToPath(new URL("../../../README.md", import.meta.url)), join(output, "README.md"));

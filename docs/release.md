@@ -80,6 +80,6 @@ and inherited with `version.workspace = true`. The package versions in
 must match it. The release job rejects a tag unless all versions equal the tag
 without its `v` prefix.
 
-A tag carrying a hyphen is published as a prerelease, so `v0.2.1-rc.1` is the
-way to rehearse a release without announcing one. npm publishes that version
-under the `next` tag; stable versions use `latest`.
+A tag with a SemVer prerelease component is published as a prerelease, so
+`v0.2.1-rc.1` is the way to rehearse a release without announcing one. npm
+publishes that version under the `next` tag; stable versions use `latest`.

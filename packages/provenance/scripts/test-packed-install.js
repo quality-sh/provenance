@@ -16,6 +16,9 @@ import { assertPackedConsumerScan } from "./packed-consumer-scan.js";
 const packageRoot = fileURLToPath(new URL("..", import.meta.url));
 const initializerRoot = fileURLToPath(new URL("../../create-provenance", import.meta.url));
 const repositoryRoot = fileURLToPath(new URL("../../..", import.meta.url));
+const releaseTargets = JSON.parse(
+  readFileSync(join(repositoryRoot, ".github", "release-targets.json"), "utf8"),
+);
 const npmCli = process.env.npm_execpath;
 assert.ok(npmCli, "run this test through npm so its CLI path is known");
 const npxCli = join(dirname(npmCli), "npx-cli.js");
@@ -25,8 +28,9 @@ process.once("exit", () => rmSync(temporary, { recursive: true, force: true }));
 const stagedEngine = join(temporary, "engine-package");
 const archiveDirectory = join(temporary, "archives");
 const isolatedCache = join(temporary, "npm-cache");
-const rustTarget = targetFor(process.platform, process.arch);
-const binaryName = process.platform === "win32" ? "provenance.exe" : "provenance";
+const hostTarget = targetFor(process.platform, process.arch);
+const rustTarget = hostTarget.target;
+const binaryName = `provenance${hostTarget.executable_suffix}`;
 const builtBinary = join(repositoryRoot, "target", "debug", binaryName);
 const typescriptRoot = join(packageRoot, "node_modules", "typescript");
 const typescriptManifest = JSON.parse(
@@ -446,13 +450,7 @@ function stageEngineArchivesForYarn() {
   const resolutions = {
     [engineManifest.name]: `file:../archives/${engineArchive}`,
   };
-  const targets = [
-    "aarch64-apple-darwin",
-    "x86_64-apple-darwin",
-    "x86_64-pc-windows-msvc",
-    "x86_64-unknown-linux-gnu",
-  ];
-  for (const target of targets) {
+  for (const { target } of releaseTargets) {
     if (target === rustTarget) continue;
 
     const staged = join(temporary, `engine-package-${target}`);
@@ -488,13 +486,11 @@ function npm(args, options = {}) {
 
 function targetFor(platform, arch) {
   const key = `${platform}-${arch}`;
-  const targets = {
-    "darwin-arm64": "aarch64-apple-darwin",
-    "darwin-x64": "x86_64-apple-darwin",
-    "linux-x64": "x86_64-unknown-linux-gnu",
-    "win32-x64": "x86_64-pc-windows-msvc",
-  };
-  const target = targets[key];
-  if (target === undefined) throw new Error(`packed install test does not support ${key}`);
-  return target;
+  const matches = releaseTargets.filter(({ npm }) => (
+    npm.os.includes(platform) && npm.cpu.includes(arch)
+  ));
+  if (matches.length !== 1) {
+    throw new Error(`packed install test found ${matches.length} release targets for ${key}`);
+  }
+  return matches[0];
 }
