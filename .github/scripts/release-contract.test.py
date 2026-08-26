@@ -8,6 +8,7 @@ from pathlib import Path
 
 
 SCRIPT = Path(__file__).with_name("release-contract.py")
+TARGETS = json.loads((Path(__file__).resolve().parents[1] / "release-targets.json").read_text())
 
 
 def valid_target() -> dict:
@@ -40,18 +41,31 @@ def run_contract(targets: list, version: str = "0.2.2") -> subprocess.CompletedP
 
 class ReleaseContractTests(unittest.TestCase):
     def test_emits_safe_build_and_smoke_entries(self) -> None:
-        result = run_contract([valid_target()])
+        result = run_contract(TARGETS)
         self.assertEqual(result.returncode, 0, result.stderr)
         outputs = dict(line.split("=", 1) for line in result.stdout.splitlines())
-        build = json.loads(outputs["build-matrix"])["include"][0]
-        smoke = json.loads(outputs["smoke-matrix"])["include"][0]
+        build_entries = json.loads(outputs["build-matrix"])["include"]
+        smoke_entries = json.loads(outputs["smoke-matrix"])["include"]
+        build = build_entries[0]
+        smoke = smoke_entries[0]
         self.assertEqual(outputs["version"], "0.2.2")
+        self.assertEqual(outputs["npm-channel"], "latest")
+        self.assertEqual(outputs["prerelease"], "false")
+        self.assertEqual(len(build_entries), 4)
+        self.assertEqual(len(smoke_entries), 4)
         self.assertEqual(build["binary"], "provenance")
         self.assertEqual(
             build["archive_name"],
             "provenance-v0.2.2-x86_64-unknown-linux-gnu.tar.gz",
         )
         self.assertEqual(smoke["os"], "ubuntu-latest")
+
+    def test_build_metadata_hyphen_does_not_make_a_stable_version_prerelease(self) -> None:
+        result = run_contract(TARGETS, "1.0.0+build-9")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        outputs = dict(line.split("=", 1) for line in result.stdout.splitlines())
+        self.assertEqual(outputs["npm-channel"], "latest")
+        self.assertEqual(outputs["prerelease"], "false")
 
     def test_rejects_unsafe_or_malformed_target_data(self) -> None:
         cases = {
@@ -63,7 +77,7 @@ class ReleaseContractTests(unittest.TestCase):
             "control character in runner": (
                 ("build_os",),
                 "ubuntu-latest\u007f",
-                "safe runner label",
+                "control characters",
             ),
             "malformed npm name": (
                 ("npm", "name"),
@@ -98,11 +112,6 @@ class ReleaseContractTests(unittest.TestCase):
                 "zip",
                 "requires executable_suffix",
             ),
-            "windows npm with unix suffix": (
-                ("npm", "os"),
-                ["win32"],
-                "inconsistent",
-            ),
         }
         for name, (path, value, expected_error) in cases.items():
             with self.subTest(name=name):
@@ -114,6 +123,33 @@ class ReleaseContractTests(unittest.TestCase):
                 result = run_contract([target])
                 self.assertNotEqual(result.returncode, 0, result.stdout)
                 self.assertIn(expected_error, result.stderr)
+
+    def test_rejects_windows_npm_with_unix_executable_suffix(self) -> None:
+        target = valid_target()
+        target["npm"]["os"] = ["win32"]
+        del target["npm"]["libc"]
+        result = run_contract([target])
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("npm os and executable suffix are inconsistent", result.stderr)
+
+    def test_rejects_manifest_missing_a_promised_target(self) -> None:
+        result = run_contract(TARGETS[:-1])
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("optionalDependencies", result.stderr)
+
+    def test_rejects_runners_from_the_wrong_os_family(self) -> None:
+        for runner_field in ("build_os", "smoke_os"):
+            with self.subTest(runner_field=runner_field):
+                targets = copy.deepcopy(TARGETS)
+                linux = next(
+                    target
+                    for target in targets
+                    if target["target"] == "x86_64-unknown-linux-gnu"
+                )
+                linux[runner_field] = "macos-latest"
+                result = run_contract(targets)
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertIn(f"{runner_field} must use an ubuntu runner", result.stderr)
 
     def test_rejects_redundant_binary_and_unsafe_version_components(self) -> None:
         target = valid_target()

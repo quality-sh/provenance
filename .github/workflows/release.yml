@@ -14,6 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.contract.outputs.version }}
+      npm-channel: ${{ steps.contract.outputs.npm-channel }}
+      prerelease: ${{ steps.contract.outputs.prerelease }}
       build-matrix: ${{ steps.contract.outputs.build-matrix }}
       smoke-matrix: ${{ steps.contract.outputs.smoke-matrix }}
     steps:
@@ -70,8 +72,8 @@ jobs:
         run: |
           package="${{ matrix.package }}"
           mkdir -p "dist/${package}"
-          cp "target/${{ matrix.target }}/release/${{ matrix.binary }}" "dist/${package}/"
-          cp README.md LICENSE "dist/${package}/"
+          cp -f "target/${{ matrix.target }}/release/${{ matrix.binary }}" "dist/${package}/"
+          cp -f README.md LICENSE "dist/${package}/"
           tar -C dist -czf "dist/${{ matrix.archive_name }}" "${package}"
 
       - name: Package Windows archive
@@ -110,6 +112,7 @@ jobs:
     name: Publish GitHub Release
     runs-on: ubuntu-latest
     needs:
+      - preflight
       - publish-crates
       - publish-npm
     permissions:
@@ -130,7 +133,7 @@ jobs:
             dist/quality-sh-provenance-*.tgz
             dist/SHA256SUMS
           generate_release_notes: true
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: ${{ fromJSON(needs.preflight.outputs.prerelease) }}
 
   publish-crates:
     name: Publish Rust crates
@@ -203,13 +206,12 @@ jobs:
       - name: Publish platform engines
         env:
           RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
+          NPM_TAG: ${{ needs.preflight.outputs.npm-channel }}
         run: |
-          npm_tag=latest
-          if [[ "$RELEASE_VERSION" == *-* ]]; then npm_tag=next; fi
           for package in ./dist/quality-sh-provenance-*.tgz; do
             package_name=$(tar -xOzf "$package" package/package.json | jq -er '.name')
             bash .github/scripts/publish-npm-if-missing.sh \
-              "$package_name" "$RELEASE_VERSION" "$package" "$npm_tag"
+              "$package_name" "$RELEASE_VERSION" "$package" "$NPM_TAG"
           done
       - name: Pack TypeScript SDK
         run: |
@@ -218,23 +220,21 @@ jobs:
       - name: Publish TypeScript SDK
         env:
           RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
+          NPM_TAG: ${{ needs.preflight.outputs.npm-channel }}
         run: |
-          npm_tag=latest
-          if [[ "$RELEASE_VERSION" == *-* ]]; then npm_tag=next; fi
           bash .github/scripts/publish-npm-if-missing.sh \
             "@quality-sh/provenance" "$RELEASE_VERSION" \
-            "./dist/quality-sh-provenance-${RELEASE_VERSION}.tgz" "$npm_tag"
+            "./dist/quality-sh-provenance-${RELEASE_VERSION}.tgz" "$NPM_TAG"
       - name: Pack initializer
         run: npm pack ./packages/create-provenance --pack-destination dist
       - name: Publish initializer
         env:
           RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
+          NPM_TAG: ${{ needs.preflight.outputs.npm-channel }}
         run: |
-          npm_tag=latest
-          if [[ "$RELEASE_VERSION" == *-* ]]; then npm_tag=next; fi
           bash .github/scripts/publish-npm-if-missing.sh \
             "@quality-sh/create-provenance" "$RELEASE_VERSION" \
-            "./dist/quality-sh-create-provenance-${RELEASE_VERSION}.tgz" "$npm_tag"
+            "./dist/quality-sh-create-provenance-${RELEASE_VERSION}.tgz" "$NPM_TAG"
 
   smoke:
     name: Verify released installations

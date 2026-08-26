@@ -33,16 +33,17 @@
     "node": ">=20"
   },
   "optionalDependencies": {
-    "@quality-sh/provenance-darwin-arm64": "0.2.1",
-    "@quality-sh/provenance-darwin-x64": "0.2.1",
     "@quality-sh/provenance-linux-x64-gnu": "0.2.1",
-    "@quality-sh/provenance-win32-x64-msvc": "0.2.1"
+    "@quality-sh/provenance-win32-x64-msvc": "0.2.1",
+    "@quality-sh/provenance-darwin-x64": "0.2.1",
+    "@quality-sh/provenance-darwin-arm64": "0.2.1"
   },
   "dependencies": {
     "typescript": "^5.9.3"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "node scripts/generate-release-consumers.js --check && tsc -p tsconfig.json",
+    "generate:release-consumers": "node scripts/generate-release-consumers.js",
     "prepack": "npm run build",
     "test": "npm run build && npm run test:runtime && npm run test:types && npm run test:packed",
     "test:runtime": "tsc -p tsconfig.test.json && node --test .test-dist/*.test.js scripts/*.test.js",

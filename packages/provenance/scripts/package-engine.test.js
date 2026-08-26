@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -97,4 +97,63 @@ test("the TypeScript SDK names the canonical release repository", () => {
   const packageRoot = fileURLToPath(new URL("..", import.meta.url));
   const manifest = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
   assert.deepEqual(manifest.repository, canonicalRepository);
+});
+
+test("packed dependencies and runtime hosts are generated from release targets", () => {
+  const packageRoot = fileURLToPath(new URL("..", import.meta.url));
+  const generator = join(packageRoot, "scripts", "generate-release-consumers.js");
+  const runtimePath = join(packageRoot, "src", "engine-packages.ts");
+
+  execFileSync(process.execPath, [generator, "--check"]);
+
+  const manifest = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
+  const expectedPackages = Object.fromEntries(
+    targets.map((entry) => [entry.npm.name, manifest.version]),
+  );
+  assert.deepEqual(manifest.optionalDependencies, expectedPackages);
+
+  const runtime = readFileSync(runtimePath, "utf8");
+  for (const entry of targets) {
+    const label = [entry.npm.os[0], entry.npm.cpu[0], entry.npm.libc?.[0]]
+      .filter((part) => part !== undefined)
+      .join("-");
+    assert.match(runtime, new RegExp(`${label}.*${entry.npm.name}`));
+  }
+});
+
+test("consumer generation detects package and runtime drift", () => {
+  const temporary = mkdtempSync(join(tmpdir(), "provenance-release-consumers-"));
+  const targetsPath = join(temporary, "targets.json");
+  const packagePath = join(temporary, "package.json");
+  const runtimePath = join(temporary, "engine-packages.ts");
+  const generator = fileURLToPath(new URL("./generate-release-consumers.js", import.meta.url));
+  writeFileSync(targetsPath, JSON.stringify(targets));
+  writeFileSync(packagePath, JSON.stringify({ version: "9.8.7", optionalDependencies: {} }));
+  writeFileSync(runtimePath, "stale runtime data\n");
+
+  execFileSync(process.execPath, [
+    generator,
+    "--targets", targetsPath,
+    "--package", packagePath,
+    "--runtime", runtimePath,
+  ]);
+  const generatedPackage = JSON.parse(readFileSync(packagePath, "utf8"));
+  assert.deepEqual(
+    generatedPackage.optionalDependencies,
+    Object.fromEntries(targets.map((entry) => [entry.npm.name, "9.8.7"])),
+  );
+  assert.match(readFileSync(runtimePath, "utf8"), /linux-x64-glibc/);
+
+  writeFileSync(runtimePath, "stale runtime data\n");
+
+  const result = spawnSync(process.execPath, [
+    generator,
+    "--check",
+    "--targets", targetsPath,
+    "--package", packagePath,
+    "--runtime", runtimePath,
+  ], { encoding: "utf8" });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /generated release consumer is stale/);
 });

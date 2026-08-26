@@ -8,12 +8,7 @@ from pathlib import Path
 SAFE_COMPONENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
 SAFE_RUNNER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 NPM_PACKAGE = re.compile(r"^@quality-sh/provenance-[a-z0-9][a-z0-9-]*$")
-SUPPORTED_PLATFORMS = {
-    ("darwin", "arm64", None),
-    ("darwin", "x64", None),
-    ("linux", "x64", "glibc"),
-    ("win32", "x64", None),
-}
+PACKAGE_MANIFEST = Path(__file__).resolve().parents[2] / "packages/provenance/package.json"
 
 
 def fail(message: str) -> None:
@@ -23,7 +18,7 @@ def fail(message: str) -> None:
 def require_nonempty_string(value: object, location: str) -> str:
     if not isinstance(value, str) or not value or value != value.strip():
         fail(f"{location} must be a non-empty string without surrounding whitespace")
-    if any(ord(character) < 32 for character in value):
+    if any(ord(character) < 32 or ord(character) == 127 for character in value):
         fail(f"{location} must not contain control characters")
     return value
 
@@ -86,6 +81,7 @@ def main() -> int:
         raise SystemExit("usage: release-contract.py <version> <target-manifest>")
 
     version = require_safe_component(sys.argv[1], "version")
+    prerelease = "-" in version.split("+", 1)[0]
     try:
         targets = json.loads(Path(sys.argv[2]).read_text())
     except (OSError, json.JSONDecodeError) as error:
@@ -96,8 +92,7 @@ def main() -> int:
     build = []
     smoke = []
     seen_targets = set()
-    seen_packages = set()
-    seen_platforms = set()
+    actual_packages = set()
     for entry in targets:
         required = {
             "build_os",
@@ -153,18 +148,21 @@ def main() -> int:
             None if npm_libc is None else npm_libc[0],
         )
         expected_platform = (expected_os, expected_cpu, expected_libc)
-        if expected_platform not in SUPPORTED_PLATFORMS:
-            fail(f"{target} maps to an unsupported npm platform")
         if actual_platform != expected_platform:
             fail(f"{target} npm platform does not match target")
         if npm_name != expected_name:
             fail(f"{target} npm package name does not match target")
-        if actual_platform in seen_platforms:
-            fail(f"duplicate npm platform {actual_platform!r}")
-        seen_platforms.add(actual_platform)
-        if npm_name in seen_packages:
-            fail(f"duplicate npm package {npm_name}")
-        seen_packages.add(npm_name)
+        actual_packages.add(npm_name)
+
+        expected_archive = "zip" if expected_os == "win32" else "tar.gz"
+        if archive != expected_archive:
+            fail(f"{target} must use the {expected_archive!r} archive format")
+        runner_family = {"darwin": "macos", "linux": "ubuntu", "win32": "windows"}[
+            expected_os
+        ]
+        for field, runner in (("build_os", build_os), ("smoke_os", smoke_os)):
+            if not runner.startswith(f"{runner_family}-"):
+                fail(f"{target} {field} must use an {runner_family} runner")
 
         package = f"provenance-v{version}-{target}"
         require_safe_component(package, f"{target} archive package")
@@ -184,8 +182,23 @@ def main() -> int:
         )
         smoke.append({**common, "os": smoke_os})
 
+    try:
+        package_manifest = json.loads(PACKAGE_MANIFEST.read_text())
+        promised_packages = set(package_manifest["optionalDependencies"])
+    except (OSError, json.JSONDecodeError, KeyError, TypeError) as error:
+        fail(f"cannot read package optionalDependencies: {error}")
+    if actual_packages != promised_packages:
+        missing = sorted(promised_packages - actual_packages)
+        extra = sorted(actual_packages - promised_packages)
+        fail(
+            "release targets do not match package optionalDependencies "
+            f"(missing={missing!r}, extra={extra!r})"
+        )
+
     compact = (",", ":")
     print(f"version={version}")
+    print(f"npm-channel={'next' if prerelease else 'latest'}")
+    print(f"prerelease={str(prerelease).lower()}")
     print(f"build-matrix={json.dumps({'include': build}, separators=compact)}")
     print(f"smoke-matrix={json.dumps({'include': smoke}, separators=compact)}")
     return 0
