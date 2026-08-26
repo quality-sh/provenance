@@ -154,8 +154,14 @@ export function bindClass<
 `);
 writeFileSync(join(application, "consumer.ts"), `
 import { defineSpec } from "@quality-sh/provenance";
+import { rule as bindRule, verifies } from "@quality-sh/provenance/rules";
 import { WorkflowRunner } from "./runtime-types.js";
 import { bindClass, guide, installed, invocation as declareInvocation } from "./helpers.js";
+
+const overtime = bindRule("rule_overtime", (hours: number): boolean => hours > 38);
+const overtimeResult: boolean = overtime(39);
+verifies("rule_overtime", "examples");
+void overtimeResult;
 
 const provenance = defineSpec("packed-typescript-consumer");
 const packedGuide = guide(provenance);
@@ -182,7 +188,15 @@ execFileSync(process.execPath, [
 ], { cwd: application, stdio: "pipe" });
 writeFileSync(join(application, "verify.mjs"), `
 import { apply, defineSpec, plan, requirement, rule, source } from "@quality-sh/provenance";
+import { rule as bindRule, verifies } from "@quality-sh/provenance/rules";
 import { startWorkflow, WorkflowRunner } from "./runtime.mjs";
+const boundStartWorkflow = bindRule("rule_packed_start", startWorkflow);
+if (boundStartWorkflow !== startWorkflow) {
+  throw new Error("the packed rule helper changed the implementation");
+}
+if (verifies("rule_packed_start", "examples") !== undefined) {
+  throw new Error("the packed verifies helper returned a value");
+}
 const spec = defineSpec("packed-install", ({ requirement }) => {
   const installed = requirement("installed", {
     statement: "The installed SDK invokes its package-supplied engine"

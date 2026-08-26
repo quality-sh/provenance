@@ -207,8 +207,8 @@ The scanner is line-oriented. Its native binding patterns and current limits are
 Keep the helper name, opening parenthesis, and quoted id on one line. An assignment may
 start on that line or, for the Java-style field layout, immediately above it. Copyable
 identity-helper implementations and their exact constraints are in
-[`rule-bindings.md`](rule-bindings.md); the TypeScript-first npm package source is under
-`packages/provenance-rules-js/`.
+[`rule-bindings.md`](rule-bindings.md). The installed TypeScript SDK supplies its helpers
+from `@quality-sh/provenance/rules`.
 
 The scanner matches by shape, not by what the name resolves to: a call to anything named
 `rule` with a quoted string id can bind a primary implementation, even when it is not the

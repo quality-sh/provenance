@@ -174,10 +174,10 @@ production behaviour.
 
 ## Coexistence with existing bindings
 
-The `@provenance/rules` identity helpers, scanner patterns, Rust attributes,
-and comment directives are unchanged. Typed declarations create the same
-canonical Rule records those bindings cite. A codebase may therefore keep a
-scanner-recognized implementation binding while tests use imported handles.
+The `@quality-sh/provenance/rules` identity helpers, scanner patterns, Rust
+attributes, and comment directives remain compatible. Typed declarations create
+the same canonical Rule records that those bindings cite. A codebase can keep a
+scanner-recognized Implementation binding while tests use imported handles.
 
 The experiment resolved the semantic question it exposed. A Rule is an
 independent behavioural obligation, so a typed declaration may materialize a

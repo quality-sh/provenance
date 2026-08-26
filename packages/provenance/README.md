@@ -12,6 +12,34 @@ Those two lines are the whole setup. The install brings the engine for your
 platform, `init` writes `.provenance/state/`, and `npx provenance check` reports
 `ok` on the project it just created.
 
+## Runtime Rule bindings
+
+The same install supplies inert helpers that put Rule IDs next to production
+implementations and tests. Import these helpers from the `rules` subpath:
+
+```ts
+import { rule, verifies } from "@quality-sh/provenance/rules";
+
+export const paysOvertime = rule("rule_overtime", (hours: number) =>
+  hours > 38,
+);
+
+test("hours above 38 attract overtime", function overtimeExamples() {
+  verifies("rule_overtime", "examples");
+  expect(paysOvertime(39)).toBe(true);
+});
+```
+
+`rule` returns the exact function. `verifies` returns nothing. Neither helper
+registers state or changes application behavior. The scanner reads both calls
+and creates the Implementation binding and Verification binding. Keep
+`rule("id",` on one line. Put `verifies("id", "method")` in a named function or
+in a function-valued `const`.
+
+The top-level `rule("local-key")` export remains the Rule declaration builder.
+The `rules` subpath keeps the scanner helpers separate from that authoring
+interface.
+
 Define a spec without touching the engine:
 
 ```ts
@@ -106,7 +134,7 @@ Calls, conditionals, computed members, instance methods, anonymous closures,
 constructed values, and local functions fail clearly because they do not provide
 one durable source identity. Rust checks that the resolved file belongs to the
 repository and owns the canonical implementation binding. Production code does
-not import Provenance.
+not import the authoring interface to create this link.
 
 Moving a local Rule to a shared declaration, or back, preserves its canonical
 ID when Rust finds exactly one owned candidate. If several local Rules could

@@ -51,14 +51,9 @@ import {
 } from "./spec.js";
 import type { DeclarationAddress } from "./protocol.js";
 import { verificationFile } from "./verification-file.js";
+import type { VerificationMethod } from "./rules.js";
 
-export type VerificationMethod =
-  | "exhaustion"
-  | "property"
-  | "examples"
-  | "conformance"
-  | "construction"
-  | "proof";
+export type { VerificationMethod } from "./rules.js";
 
 export interface ConfigureOptions {
   engine?: string;
