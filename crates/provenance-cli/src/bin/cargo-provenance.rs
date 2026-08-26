@@ -24,7 +24,11 @@ fn main() {
     }
     arguments[0] = OsString::from("__cargo-init");
 
-    let status = Command::new(provenance_command())
+    let provenance = sibling_provenance().unwrap_or_else(|error| {
+        eprintln!("matching sibling provenance executable is missing: {error}");
+        std::process::exit(1);
+    });
+    let status = Command::new(provenance)
         .args(arguments)
         .status()
         .unwrap_or_else(|error| {
@@ -34,14 +38,18 @@ fn main() {
     std::process::exit(status.code().unwrap_or(1));
 }
 
-fn provenance_command() -> OsString {
-    sibling_provenance().map_or_else(|| OsString::from("provenance"), PathBuf::into_os_string)
-}
-
-fn sibling_provenance() -> Option<PathBuf> {
-    let executable = std::env::current_exe().ok()?;
+fn sibling_provenance() -> std::io::Result<PathBuf> {
+    let executable = std::env::current_exe()?;
     let sibling = executable
-        .parent()?
+        .parent()
+        .ok_or_else(|| std::io::Error::other("cargo-provenance has no parent directory"))?
         .join(format!("provenance{}", std::env::consts::EXE_SUFFIX));
-    sibling.is_file().then_some(sibling)
+    if sibling.is_file() {
+        Ok(sibling)
+    } else {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            sibling.display().to_string(),
+        ))
+    }
 }

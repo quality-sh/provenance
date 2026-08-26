@@ -4,9 +4,10 @@
 //! (the generated wiki, for example) without requiring the caller to manage
 //! `.gitignore` by hand.
 
+use crate::atomic_file::{atomic_replace, FileSnapshot};
+use anyhow::Context;
 use camino::Utf8Path;
 use provenance_macros::rule;
-use std::io::Write;
 
 /// A generated output directory gets exactly one ignore line in the repo's
 /// `.gitignore`: added if it is missing, never added twice, whatever
@@ -35,27 +36,28 @@ pub fn ensure_ignored(repo: &Utf8Path, pattern: &str) -> anyhow::Result<bool> {
         "ignore pattern must be one line with no surrounding whitespace: {pattern:?}"
     );
     let path = repo.join(".gitignore");
-    let existing = match std::fs::read_to_string(&path) {
-        Ok(existing) => existing,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
-        Err(error) => {
-            return Err(anyhow::Error::new(error)
-                .context(format!("failed to read {path} to check for {pattern}")))
-        }
-    };
-    if existing.lines().any(|line| line.trim() == pattern) {
+    let before = FileSnapshot::read(path.as_std_path())
+        .with_context(|| format!("failed to read {path} to check for {pattern}"))?;
+    let updated = project_ignored(before.bytes().unwrap_or_default(), pattern)?;
+    if before.bytes() == Some(updated.as_slice()) {
         return Ok(false);
     }
-
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&path)?;
-    if !existing.is_empty() && !existing.ends_with('\n') {
-        writeln!(file)?;
-    }
-    writeln!(file, "{pattern}")?;
+    atomic_replace(path.as_std_path(), &before, &updated)?;
     Ok(true)
+}
+
+pub fn project_ignored(existing: &[u8], pattern: &str) -> anyhow::Result<Vec<u8>> {
+    let existing = std::str::from_utf8(existing).context(".gitignore is not valid UTF-8")?;
+    if existing.lines().any(|line| line.trim() == pattern) {
+        return Ok(existing.as_bytes().to_vec());
+    }
+    let mut updated = existing.as_bytes().to_vec();
+    if !updated.is_empty() && !updated.ends_with(b"\n") {
+        updated.push(b'\n');
+    }
+    updated.extend_from_slice(pattern.as_bytes());
+    updated.push(b'\n');
+    Ok(updated)
 }
 
 #[cfg(test)]

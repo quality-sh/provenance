@@ -15,12 +15,16 @@ struct ScopeRecords {
 }
 
 impl ScopeRecords {
-    fn load(store: &StateStore, scope_id: &ScopeId) -> anyhow::Result<Self> {
+    fn load(
+        store: &StateStore,
+        scope_id: &ScopeId,
+        disposition_actor_ids: &[String],
+    ) -> anyhow::Result<Self> {
         Ok(Self {
             scope_id: scope_id.clone(),
             core: core::Records::load(store, scope_id)?,
             collaboration: collaboration::Records::load(store, scope_id)?,
-            ideation: ideation::Records::load(store, scope_id)?,
+            ideation: ideation::Records::load(store, scope_id, disposition_actor_ids)?,
         })
     }
 
@@ -57,13 +61,14 @@ fn check_scope_ownership(
 pub(super) fn validate(
     store: &StateStore,
     scopes: &[Scope],
+    disposition_actor_ids: &[String],
     manifest_scopes: &BTreeSet<String>,
     index: &mut CheckIndex,
     dangling: &mut Vec<String>,
 ) -> anyhow::Result<()> {
     let records = scopes
         .iter()
-        .map(|scope| ScopeRecords::load(store, &scope.id))
+        .map(|scope| ScopeRecords::load(store, &scope.id, disposition_actor_ids))
         .collect::<anyhow::Result<Vec<_>>>()?;
 
     let mut ownership_findings = Vec::new();

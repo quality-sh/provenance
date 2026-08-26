@@ -32,16 +32,19 @@ fn shim_forwards_to_the_sibling_provenance_and_preserves_exit_code() {
 }
 
 #[test]
-fn shim_falls_back_to_provenance_on_path() {
+fn shim_refuses_a_path_binary_when_its_sibling_is_missing() {
     let fixture = ShimFixture::new(false);
 
     fixture
         .command()
         .args(["provenance", "init"])
         .assert()
-        .code(23);
+        .code(1)
+        .stderr(predicates::str::contains(
+            "matching sibling provenance executable is missing",
+        ));
 
-    assert_eq!(fixture.forwarded_arguments(), "__cargo-init\n");
+    assert!(!fixture.call_log.exists());
 }
 
 struct ShimFixture {

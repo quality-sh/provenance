@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use provenance_macros::verifies;
 use serde_json::Value;
 
 fn init(repo: &std::path::Path, args: &[&str]) -> assert_cmd::assert::Assert {
@@ -40,7 +41,7 @@ fn cli_init_check_and_materialize_empty_repo() {
         .success();
 
     assert!(repo.join(".provenance/state/manifest.json").exists());
-    assert!(repo.join(".provenance/cache").exists());
+    assert!(!repo.join(".provenance/cache").exists());
     let manifest: Value = serde_json::from_slice(
         &std::fs::read(repo.join(".provenance/state/manifest.json")).unwrap(),
     )
@@ -188,4 +189,57 @@ fn init_clear_disposition_actors_only_empties_the_allowlist() {
     let mut expected = original;
     expected["disposition_actor_ids"] = serde_json::json!([]);
     assert_eq!(read_manifest(&repo), expected);
+}
+
+#[test]
+#[verifies("rule_init_plan_rejection_preserves_targets", examples)]
+#[verifies("rule_init_validates_planned_repository", examples)]
+fn planned_actor_change_is_rejected_without_writes_or_cache_setup() {
+    let temp = tempfile::tempdir().unwrap();
+    let repo = temp.path().join("repo");
+    init(
+        &repo,
+        &["--scope", "default", "--disposition-actor-id", "reviewer"],
+    )
+    .success();
+    let ideation = repo.join(".provenance/state/scopes/default/ideation");
+    std::fs::create_dir_all(&ideation).unwrap();
+    std::fs::write(
+        ideation.join("proposal_cards.jsonl"),
+        r#"{"schema_version":1,"scope_id":"default","id":"proposal_a","proposal_key":"a","proposal_type":"requirement_candidate","title":"A","summary":"A","traceability":{"target":{"artifact_type":"requirement","artifact_id":"req_anchor"},"source_ids":[],"evidence_references":[],"supporting_claim_ids":[]},"promotion_state":"proposed"}
+"#,
+    )
+    .unwrap();
+    std::fs::write(
+        ideation.join("dispositions.jsonl"),
+        r#"{"schema_version":1,"scope_id":"default","id":"disposition_a","proposal_id":"proposal_a","decision":"rejected","rationale":"Reviewed","actor":{"identity_type":"human","id":"reviewer"}}
+"#,
+    )
+    .unwrap();
+    let requirements = repo.join(".provenance/state/scopes/default/requirements");
+    std::fs::create_dir_all(&requirements).unwrap();
+    std::fs::write(
+        requirements.join("req.jsonl"),
+        r#"{"schema_version":1,"scope_id":"default","id":"req_anchor","statement":"Anchor","status":"active"}
+"#,
+    )
+    .unwrap();
+    let manifest = std::fs::read(repo.join(".provenance/state/manifest.json")).unwrap();
+    let agents = std::fs::read(repo.join("AGENTS.md")).unwrap();
+    let skill = std::fs::read(repo.join(".agents/skills/provenance-shaping/SKILL.md")).unwrap();
+
+    init(&repo, &["--disposition-actor-id", "maintainer"])
+        .failure()
+        .stderr(predicates::str::contains("repository allowlist"));
+
+    assert_eq!(
+        std::fs::read(repo.join(".provenance/state/manifest.json")).unwrap(),
+        manifest
+    );
+    assert_eq!(std::fs::read(repo.join("AGENTS.md")).unwrap(), agents);
+    assert_eq!(
+        std::fs::read(repo.join(".agents/skills/provenance-shaping/SKILL.md")).unwrap(),
+        skill
+    );
+    assert!(!repo.join(".provenance/cache").exists());
 }

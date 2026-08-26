@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use predicates::prelude::*;
 use provenance_macros::verifies;
 use std::path::Path;
 
@@ -63,6 +64,207 @@ fn init_onboarding_is_idempotent() {
         std::fs::read(repo.join(".agents/skills/provenance-shaping/SKILL.md")).unwrap(),
         skill
     );
+}
+
+#[test]
+#[verifies("rule_init_installs_bundled_skills", examples)]
+#[verifies("rule_init_upgrades_hash_owned_skills", examples)]
+fn init_upgrades_an_unedited_skill_from_a_prior_provenance_version() {
+    let temporary = tempfile::tempdir().unwrap();
+    let repo = temporary.path().join("repo");
+    init(&repo).success();
+    let skill = repo.join(".agents/skills/provenance-shaping/SKILL.md");
+    let current = std::fs::read_to_string(&skill).unwrap();
+    write_as_prior_version(&skill, &current);
+
+    init(&repo).success();
+
+    assert_eq!(std::fs::read_to_string(skill).unwrap(), current);
+}
+
+#[test]
+#[verifies("rule_init_installs_bundled_skills", examples)]
+#[verifies("rule_init_upgrades_hash_owned_skills", examples)]
+fn init_refuses_to_replace_an_edited_skill_from_a_prior_provenance_version() {
+    let temporary = tempfile::tempdir().unwrap();
+    let repo = temporary.path().join("repo");
+    init(&repo).success();
+    let skill = repo.join(".agents/skills/provenance-shaping/SKILL.md");
+    let current = std::fs::read_to_string(&skill).unwrap();
+    write_as_prior_version(&skill, &current);
+    let mut edited = std::fs::read_to_string(&skill).unwrap();
+    edited.push_str("\nUser edit.\n");
+    std::fs::write(&skill, &edited).unwrap();
+
+    init(&repo)
+        .failure()
+        .stderr(predicate::str::contains("exists and differs"))
+        .stderr(predicate::str::contains("rerun with --force"));
+
+    assert_eq!(std::fs::read_to_string(skill).unwrap(), edited);
+}
+
+#[test]
+#[verifies("rule_init_upgrades_hash_owned_skills", examples)]
+#[verifies("rule_init_plan_rejection_preserves_targets", examples)]
+fn a_skill_conflict_leaves_a_new_repository_without_partial_onboarding() {
+    let temporary = tempfile::tempdir().unwrap();
+    let source = temporary.path().join("source");
+    let repo = temporary.path().join("repo");
+    init(&source).success();
+    let source_skill = source.join(".agents/skills/provenance-shaping/SKILL.md");
+    let target_skill = repo.join(".agents/skills/provenance-shaping/SKILL.md");
+    std::fs::create_dir_all(target_skill.parent().unwrap()).unwrap();
+    let current = std::fs::read_to_string(source_skill).unwrap();
+    write_as_prior_version(&target_skill, &current);
+    let mut edited = std::fs::read_to_string(&target_skill).unwrap();
+    edited.push_str("\nUser edit.\n");
+    std::fs::write(&target_skill, &edited).unwrap();
+
+    init(&repo)
+        .failure()
+        .stderr(predicate::str::contains("exists and differs"));
+
+    assert_eq!(std::fs::read_to_string(target_skill).unwrap(), edited);
+    assert!(!repo.join(".provenance").exists());
+    assert!(!repo.join(".claude").exists());
+    assert!(!repo.join("AGENTS.md").exists());
+    assert!(!repo.join(".gitignore").exists());
+}
+
+#[test]
+#[verifies("rule_init_plans_all_project_writes", examples)]
+#[verifies("rule_init_plan_rejection_preserves_targets", examples)]
+fn a_late_claude_conflict_leaves_every_existing_file_unchanged() {
+    let temporary = tempfile::tempdir().unwrap();
+    let repo = temporary.path().join("repo");
+    std::fs::create_dir_all(repo.join(".claude/skills")).unwrap();
+    std::fs::create_dir_all(repo.join(".provenance/state")).unwrap();
+    std::fs::write(repo.join("keep.txt"), "keep\n").unwrap();
+    std::fs::write(repo.join("AGENTS.md"), "# Existing\n").unwrap();
+    std::fs::write(repo.join(".gitignore"), "target/\n").unwrap();
+    let conflict = repo.join(".claude/skills/provenance-swarm-backtrace");
+    std::fs::write(&conflict, "user-owned\n").unwrap();
+
+    init(&repo)
+        .failure()
+        .stderr(predicate::str::contains("rerun with --force"));
+
+    assert_eq!(
+        std::fs::read_to_string(repo.join("keep.txt")).unwrap(),
+        "keep\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(repo.join("AGENTS.md")).unwrap(),
+        "# Existing\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(repo.join(".gitignore")).unwrap(),
+        "target/\n"
+    );
+    assert_eq!(std::fs::read_to_string(conflict).unwrap(), "user-owned\n");
+    assert!(!repo.join(".provenance/state/manifest.json").exists());
+    assert!(!repo.join(".agents").exists());
+}
+
+#[test]
+#[verifies("rule_init_plan_rejection_preserves_targets", examples)]
+#[verifies("rule_init_validates_planned_repository", examples)]
+fn invalid_existing_graph_is_rejected_before_onboarding_writes() {
+    let temporary = tempfile::tempdir().unwrap();
+    let repo = temporary.path().join("repo");
+    let graph = repo.join(".provenance/state/scopes/default/requirements/req.jsonl");
+    std::fs::create_dir_all(graph.parent().unwrap()).unwrap();
+    std::fs::write(&graph, "not json\n").unwrap();
+
+    init(&repo).failure();
+
+    assert_eq!(std::fs::read_to_string(graph).unwrap(), "not json\n");
+    assert!(!repo.join(".provenance/state/manifest.json").exists());
+    assert!(!repo.join(".agents").exists());
+    assert!(!repo.join(".claude").exists());
+    assert!(!repo.join("AGENTS.md").exists());
+    assert!(!repo.join(".gitignore").exists());
+}
+
+#[test]
+fn invalid_agents_text_is_rejected_before_any_init_write() {
+    let temporary = tempfile::tempdir().unwrap();
+    let repo = temporary.path().join("repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    let invalid = b"instructions\xff";
+    std::fs::write(repo.join("AGENTS.md"), invalid).unwrap();
+
+    init(&repo)
+        .failure()
+        .stderr(predicate::str::contains("UTF-8"));
+
+    assert_eq!(std::fs::read(repo.join("AGENTS.md")).unwrap(), invalid);
+    assert!(!repo.join(".provenance").exists());
+    assert!(!repo.join(".agents").exists());
+    assert!(!repo.join(".claude").exists());
+    assert!(!repo.join(".gitignore").exists());
+}
+
+#[test]
+fn invalid_gitignore_text_is_rejected_before_any_init_write() {
+    let temporary = tempfile::tempdir().unwrap();
+    let repo = temporary.path().join("repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    let invalid = b"target/\n\xff";
+    std::fs::write(repo.join(".gitignore"), invalid).unwrap();
+
+    init(&repo)
+        .failure()
+        .stderr(predicate::str::contains("UTF-8"));
+
+    assert_eq!(std::fs::read(repo.join(".gitignore")).unwrap(), invalid);
+    assert!(!repo.join(".provenance").exists());
+    assert!(!repo.join(".agents").exists());
+    assert!(!repo.join(".claude").exists());
+    assert!(!repo.join("AGENTS.md").exists());
+}
+
+#[test]
+fn existing_manifest_is_preserved_when_a_late_skill_conflicts() {
+    let temporary = tempfile::tempdir().unwrap();
+    let repo = temporary.path().join("repo");
+    init(&repo).success();
+    let manifest = repo.join(".provenance/state/manifest.json");
+    let before = std::fs::read(&manifest).unwrap();
+    let conflict = repo.join(".claude/skills/provenance-swarm-backtrace");
+    remove_skill_entry(&conflict);
+    std::fs::write(&conflict, "user-owned\n").unwrap();
+
+    init(&repo)
+        .failure()
+        .stderr(predicate::str::contains("rerun with --force"));
+
+    assert_eq!(std::fs::read(manifest).unwrap(), before);
+    assert_eq!(std::fs::read_to_string(conflict).unwrap(), "user-owned\n");
+}
+
+#[test]
+#[verifies("rule_init_plan_rejection_preserves_targets", examples)]
+#[verifies("rule_init_validates_planned_repository", examples)]
+fn planned_validation_failure_preserves_the_original_repository() {
+    let temporary = tempfile::tempdir().unwrap();
+    let repo = temporary.path().join("repo");
+    let original_scope = repo.join(".provenance/state/scopes/unexpected");
+    std::fs::create_dir_all(&original_scope).unwrap();
+
+    init(&repo)
+        .failure()
+        .stderr(predicate::str::contains("scope directory unexpected"));
+
+    assert!(original_scope.is_dir());
+    assert!(!repo.join(".provenance/manifest.json").exists());
+    assert!(!repo.join(".provenance/state/edges").exists());
+    assert!(!repo.join(".provenance/cache").exists());
+    assert!(!repo.join(".agents").exists());
+    assert!(!repo.join(".claude").exists());
+    assert!(!repo.join("AGENTS.md").exists());
+    assert!(!repo.join(".gitignore").exists());
 }
 
 #[test]
@@ -164,4 +366,32 @@ fn init(repo: &Path) -> assert_cmd::assert::Assert {
 
 fn read_agents(repo: &Path) -> String {
     std::fs::read_to_string(repo.join("AGENTS.md")).unwrap()
+}
+
+fn write_as_prior_version(path: &Path, current: &str) {
+    let current_stamp = format!("Installed by provenance {}", env!("CARGO_PKG_VERSION"));
+    let prior = current.replacen(&current_stamp, "Installed by provenance 0.2.1", 1);
+    assert_ne!(prior, current);
+    std::fs::write(path, prior).unwrap();
+}
+
+fn remove_skill_entry(path: &Path) {
+    let metadata = std::fs::symlink_metadata(path).unwrap();
+    if metadata.file_type().is_symlink() {
+        remove_skill_symlink(path);
+    } else if metadata.is_file() {
+        std::fs::remove_file(path).unwrap();
+    } else {
+        std::fs::remove_dir_all(path).unwrap();
+    }
+}
+
+#[cfg(unix)]
+fn remove_skill_symlink(path: &Path) {
+    std::fs::remove_file(path).unwrap();
+}
+
+#[cfg(windows)]
+fn remove_skill_symlink(path: &Path) {
+    std::fs::remove_dir(path).unwrap();
 }

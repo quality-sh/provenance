@@ -1,5 +1,4 @@
 use anyhow::Context;
-use camino::Utf8Path;
 use provenance_macros::rule;
 use pulldown_cmark::{Event, HeadingLevel, Parser, Tag};
 
@@ -19,28 +18,12 @@ it in the same change.
   `provenance coverage scan --path . --scope default --validate-rules`.
   Commit graph updates with the code."#;
 
-/// Installs the bundled skills and repository instructions for every init path.
+/// Projects only the instruction section owned by the exact Provenance heading.
 #[rule("rule_init_installs_bundled_skills")]
-pub fn install(repo: &Utf8Path) -> anyhow::Result<()> {
-    crate::skills::install_at(repo.as_std_path(), false, false, false)
-        .context("failed to install the bundled Provenance skills")?;
-    inject_agents_instructions(repo)
-}
-
-/// Writes only the instruction section owned by the exact Provenance heading.
 #[rule("rule_init_owns_agents_provenance_section")]
-fn inject_agents_instructions(repo: &Utf8Path) -> anyhow::Result<()> {
-    let path = repo.join("AGENTS.md");
-    let existing = match std::fs::read_to_string(&path) {
-        Ok(contents) => contents,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
-        Err(error) => return Err(error).with_context(|| format!("failed to read {path}")),
-    };
-    let updated = update_agents(&existing);
-    if updated != existing {
-        std::fs::write(&path, updated).with_context(|| format!("failed to write {path}"))?;
-    }
-    Ok(())
+pub fn project(existing: &[u8]) -> anyhow::Result<Vec<u8>> {
+    let existing = std::str::from_utf8(existing).context("AGENTS.md is not valid UTF-8")?;
+    Ok(update_agents(existing).into_bytes())
 }
 
 fn update_agents(existing: &str) -> String {

@@ -2,7 +2,6 @@ import { spawnSync } from "node:child_process";
 import {
   existsSync,
   readFileSync,
-  writeFileSync,
 } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
@@ -84,14 +83,6 @@ export function initializeProject({
     ],
     capture: false,
   }, "Provenance initialization");
-  const check = runChecked(run, {
-    command: engine.command,
-    args: [...engine.args, "check", "--repo", directory, "--format", "json"],
-    capture: true,
-  }, "Provenance validation");
-  ensureValidProject(check.stdout);
-  ensureCacheIgnored(directory);
-
   return { packageManager: selectedManager };
 }
 
@@ -211,28 +202,6 @@ function runChecked(run, invocation, operation) {
     throw new Error(`${operation} failed with exit code ${result.status ?? "unknown"}.`);
   }
   return result;
-}
-
-function ensureValidProject(stdout) {
-  let result;
-  try {
-    result = JSON.parse(stdout);
-  } catch {
-    throw new Error("The freshly initialized project did not validate: invalid check output.");
-  }
-  if (result.status !== "ok") {
-    throw new Error("The freshly initialized project did not validate.");
-  }
-}
-
-function ensureCacheIgnored(directory) {
-  const ignorePath = join(directory, ".gitignore");
-  const current = existsSync(ignorePath) ? readFileSync(ignorePath, "utf8") : "";
-  if (current.split(/\r?\n/).includes(".provenance/cache/")) {
-    return;
-  }
-  const separator = current.length > 0 && !current.endsWith("\n") ? "\n" : "";
-  writeFileSync(ignorePath, `${current}${separator}.provenance/cache/\n`);
 }
 
 function executeCommand({ command, args, capture, environment }, directory) {

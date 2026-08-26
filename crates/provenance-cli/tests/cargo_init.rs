@@ -1,7 +1,11 @@
 use assert_cmd::Command;
 use predicates::prelude::*;
-use serde_json::{json, Value};
-use std::path::{Path, PathBuf};
+use provenance_macros::verifies;
+use serde_json::json;
+
+#[path = "cargo_init/support.rs"]
+mod support;
+use support::CargoFixture;
 
 #[test]
 fn cargo_injected_argument_initializes_one_package_at_the_cli_version() {
@@ -23,7 +27,7 @@ fn cargo_injected_argument_initializes_one_package_at_the_cli_version() {
         .exists());
     assert!(fixture
         .cargo_calls()
-        .contains("add provenance-sdk@0.2.2 --package app --exact"));
+        .contains("add provenance-sdk@=0.2.2 --package app"));
 }
 
 #[test]
@@ -123,6 +127,156 @@ fn ambiguous_workspace_requires_a_package() {
 }
 
 #[test]
+#[verifies("rule_init_plans_all_project_writes", examples)]
+fn repository_planning_failure_does_not_run_cargo_add() {
+    let fixture = CargoFixture::new(&[("app", "Cargo.toml")]);
+    let skill = fixture
+        .root()
+        .join(".agents/skills/provenance-shaping/SKILL.md");
+    std::fs::create_dir_all(skill.parent().unwrap()).unwrap();
+    std::fs::write(&skill, "user-owned skill\n").unwrap();
+
+    fixture
+        .command()
+        .args(["provenance", "init"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("exists and differs"));
+
+    assert!(!fixture.cargo_calls().contains("add "));
+}
+
+#[test]
+#[verifies("rule_cargo_init_restores_owned_files", examples)]
+fn a_failing_cargo_add_restores_its_partial_manifest_and_lock_changes() {
+    let fixture = CargoFixture::new(&[("app", "Cargo.toml")]);
+    let manifest = fixture.cargo_manifest();
+
+    fixture
+        .command()
+        .env("FAKE_CARGO_FAIL_AFTER_WRITE", "1")
+        .args(["provenance", "init"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("cargo add"));
+
+    assert_eq!(fixture.cargo_manifest(), manifest);
+    assert!(!fixture.root().join("Cargo.lock").exists());
+}
+
+#[cfg(unix)]
+#[test]
+#[verifies("rule_cargo_init_restores_owned_files", examples)]
+fn later_init_failure_exactly_restores_cargo_files() {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+
+    let fixture = CargoFixture::new(&[("app", "Cargo.toml")]);
+    let manifest = std::fs::read(&fixture.cargo_manifest).unwrap();
+    std::fs::set_permissions(
+        &fixture.cargo_manifest,
+        std::fs::Permissions::from_mode(0o640),
+    )
+    .unwrap();
+    fixture
+        .command()
+        .env("FAKE_CARGO_STALE_INIT_PLAN", "1")
+        .args(["provenance", "init"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "changed after initialization was planned",
+        ));
+
+    assert_eq!(std::fs::read(&fixture.cargo_manifest).unwrap(), manifest);
+    assert_eq!(
+        std::fs::metadata(&fixture.cargo_manifest).unwrap().mode() & 0o777,
+        0o640
+    );
+    assert!(!fixture.root().join("Cargo.lock").exists());
+}
+
+#[cfg(unix)]
+#[test]
+#[verifies("rule_cargo_init_restores_owned_files", examples)]
+fn repository_validation_failure_prevents_a_concurrent_cargo_edit() {
+    let fixture = CargoFixture::new(&[("app", "Cargo.toml")]);
+    fixture
+        .command()
+        .env("FAKE_CARGO_CONCURRENT_EDIT", "1")
+        .args(["provenance", "init"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("neither file was restored"));
+
+    assert_eq!(fixture.cargo_manifest(), "concurrent manifest\n");
+    assert!(fixture.root().join("Cargo.lock").exists());
+    assert!(fixture.cargo_calls().contains("add "));
+}
+
+#[cfg(unix)]
+#[test]
+#[verifies("rule_cargo_init_restores_owned_files", examples)]
+fn concurrent_lock_edit_prevents_restoring_either_cargo_file() {
+    let fixture = CargoFixture::new(&[("app", "Cargo.toml")]);
+    fixture
+        .command()
+        .env("FAKE_CARGO_CONCURRENT_LOCK_EDIT", "1")
+        .args(["provenance", "init"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("neither file was restored"));
+
+    assert!(fixture.cargo_manifest().contains("provenance-sdk"));
+    assert_eq!(fixture.cargo_lock(), "concurrent lock\n");
+}
+
+#[cfg(unix)]
+#[test]
+#[verifies("rule_cargo_init_restores_owned_files", examples)]
+fn failed_lock_restore_compensates_the_manifest_restore() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let fixture = CargoFixture::new(&[("app", "crates/app/Cargo.toml")]);
+    let assertion = fixture
+        .command()
+        .env("FAKE_CARGO_ROLLBACK_SECOND_RESTORE_FAIL", "1")
+        .args(["provenance", "init"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Cargo rollback failed"));
+
+    std::fs::set_permissions(fixture.root(), std::fs::Permissions::from_mode(0o755)).unwrap();
+    assertion.stderr(predicate::str::contains("failed to restore"));
+    assert!(fixture.cargo_manifest().contains("provenance-sdk"));
+    assert_eq!(fixture.cargo_lock(), "version = 4\n");
+}
+
+#[cfg(unix)]
+#[test]
+#[verifies("rule_cargo_init_restores_owned_files", examples)]
+fn failed_manifest_restore_leaves_both_post_cargo_files_untouched() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let fixture = CargoFixture::new(&[("app", "crates/app/Cargo.toml")]);
+    fixture
+        .command()
+        .env("FAKE_CARGO_ROLLBACK_FIRST_RESTORE_FAIL", "1")
+        .args(["provenance", "init"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Cargo rollback failed"))
+        .stderr(predicate::str::contains("failed to restore"));
+
+    std::fs::set_permissions(
+        fixture.root().join("crates/app"),
+        std::fs::Permissions::from_mode(0o755),
+    )
+    .unwrap();
+    assert!(fixture.cargo_manifest().contains("provenance-sdk"));
+    assert_eq!(fixture.cargo_lock(), "version = 4\n");
+}
+
+#[test]
 fn explicit_package_selects_its_manifest_directory_as_the_path_prefix() {
     let fixture = CargoFixture::new(&[
         ("api", "crates/api/Cargo.toml"),
@@ -138,7 +292,7 @@ fn explicit_package_selects_its_manifest_directory_as_the_path_prefix() {
     assert_eq!(fixture.scope_path_prefix(), "crates/api");
     assert!(fixture
         .cargo_calls()
-        .contains("add provenance-sdk@0.2.2 --package api --exact"));
+        .contains("add provenance-sdk@=0.2.2 --package api"));
 }
 
 #[test]
@@ -191,172 +345,4 @@ fn rerun_accepts_an_equivalent_existing_path_prefix() {
         .success();
 
     assert_eq!(fixture.scope_path_prefix(), "crates/api");
-}
-
-struct CargoFixture {
-    temporary: tempfile::TempDir,
-    workspace_root: PathBuf,
-    fake_bin: PathBuf,
-    call_log: PathBuf,
-    cargo_manifest: PathBuf,
-}
-
-impl CargoFixture {
-    fn new(packages: &[(&str, &str)]) -> Self {
-        let temporary = tempfile::tempdir().expect("create fixture directory");
-        let workspace_root = temporary.path().join("workspace");
-        let fake_bin = temporary.path().join("bin");
-        std::fs::create_dir_all(workspace_root.join("nested")).unwrap();
-        std::fs::create_dir_all(&fake_bin).unwrap();
-
-        let metadata_packages: Vec<_> = packages
-            .iter()
-            .map(|(name, manifest)| {
-                let manifest_path = workspace_root.join(manifest);
-                std::fs::create_dir_all(manifest_path.parent().unwrap()).unwrap();
-                std::fs::write(
-                    &manifest_path,
-                    format!("[package]\nname = \"{name}\"\nversion = \"0.1.0\"\n"),
-                )
-                .unwrap();
-                json!({
-                    "id": format!("path+file://fixture/{name}#0.1.0"),
-                    "name": name,
-                    "manifest_path": manifest_path,
-                    "dependencies": [],
-                })
-            })
-            .collect();
-        let cargo_manifest = workspace_root.join(packages[0].1);
-        let metadata = json!({
-            "workspace_root": workspace_root,
-            "workspace_members": metadata_packages.iter().map(|package| package["id"].clone()).collect::<Vec<_>>(),
-            "packages": metadata_packages,
-        });
-        let metadata_path = temporary.path().join("metadata.json");
-        std::fs::write(&metadata_path, serde_json::to_vec(&metadata).unwrap()).unwrap();
-
-        let call_log = temporary.path().join("cargo-calls.log");
-        let helper_source = temporary.path().join("fake-cargo.rs");
-        std::fs::write(
-            &helper_source,
-            r#"
-use std::env;
-use std::fs::{self, OpenOptions};
-use std::io::Write;
-
-fn main() {
-    let arguments: Vec<_> = env::args().skip(1).collect();
-    let mut log = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(env::var_os("FAKE_CARGO_CALL_LOG").unwrap())
-        .unwrap();
-    writeln!(log, "{}", arguments.join(" ")).unwrap();
-    match arguments.first().map(String::as_str) {
-        Some("metadata") => {
-            let mut metadata = fs::read_to_string(env::var_os("FAKE_CARGO_METADATA").unwrap()).unwrap();
-            if std::path::Path::new(&env::var_os("FAKE_CARGO_DEPENDENCY_STATE").unwrap()).exists() {
-                metadata = metadata.replace(
-                    "\"dependencies\":[]",
-                    "\"dependencies\":[{\"name\":\"provenance-sdk\",\"req\":\"=0.2.2\"}]",
-                );
-            }
-            print!("{metadata}");
-        }
-        Some("add") => {
-            let manifest_path = env::var_os("FAKE_CARGO_MANIFEST").unwrap();
-            let mut manifest = fs::read_to_string(&manifest_path).unwrap();
-            if !manifest.contains("provenance-sdk") {
-                manifest.push_str("\n[dependencies]\nprovenance-sdk = \"=0.2.2\"\n");
-                fs::write(manifest_path, manifest).unwrap();
-            }
-            fs::write(env::var_os("FAKE_CARGO_LOCK").unwrap(), "version = 4\n").unwrap();
-            fs::write(env::var_os("FAKE_CARGO_DEPENDENCY_STATE").unwrap(), "installed\n").unwrap();
-        }
-        _ => std::process::exit(64),
-    }
-}
-"#,
-        )
-        .unwrap();
-        let cargo = fake_bin.join(format!("cargo{}", std::env::consts::EXE_SUFFIX));
-        let output =
-            std::process::Command::new(std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into()))
-                .args(["--edition=2021", "-o"])
-                .arg(&cargo)
-                .arg(&helper_source)
-                .output()
-                .expect("compile fake cargo");
-        assert!(
-            output.status.success(),
-            "fake cargo did not compile: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-
-        Self {
-            temporary,
-            workspace_root,
-            fake_bin,
-            call_log,
-            cargo_manifest,
-        }
-    }
-
-    fn command(&self) -> Command {
-        let mut command = Command::cargo_bin("cargo-provenance").unwrap();
-        let path = std::env::join_paths(std::iter::once(self.fake_bin.clone()).chain(
-            std::env::split_paths(&std::env::var_os("PATH").expect("PATH is set")),
-        ))
-        .unwrap();
-        command
-            .current_dir(self.workspace_root.join("nested"))
-            .env("PATH", path)
-            .env(
-                "FAKE_CARGO_METADATA",
-                self.temporary.path().join("metadata.json"),
-            )
-            .env("FAKE_CARGO_CALL_LOG", &self.call_log)
-            .env("FAKE_CARGO_MANIFEST", &self.cargo_manifest)
-            .env("FAKE_CARGO_LOCK", self.workspace_root.join("Cargo.lock"))
-            .env(
-                "FAKE_CARGO_DEPENDENCY_STATE",
-                self.temporary.path().join("dependency-installed"),
-            );
-        command
-    }
-
-    fn root(&self) -> &Path {
-        &self.workspace_root
-    }
-
-    fn manifest(&self) -> Value {
-        serde_json::from_slice(
-            &std::fs::read(self.root().join(".provenance/state/manifest.json")).unwrap(),
-        )
-        .unwrap()
-    }
-
-    fn scope_path_prefix(&self) -> String {
-        self.manifest()["scopes"][0]["path_prefix"]
-            .as_str()
-            .unwrap()
-            .to_owned()
-    }
-
-    fn gitignore(&self) -> String {
-        std::fs::read_to_string(self.root().join(".gitignore")).unwrap()
-    }
-
-    fn cargo_calls(&self) -> String {
-        std::fs::read_to_string(&self.call_log).unwrap_or_default()
-    }
-
-    fn cargo_manifest(&self) -> String {
-        std::fs::read_to_string(&self.cargo_manifest).unwrap()
-    }
-
-    fn cargo_lock(&self) -> String {
-        std::fs::read_to_string(self.root().join("Cargo.lock")).unwrap()
-    }
 }

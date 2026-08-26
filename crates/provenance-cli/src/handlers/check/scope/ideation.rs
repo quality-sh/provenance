@@ -11,12 +11,17 @@ pub(super) struct Records {
 }
 
 impl Records {
-    pub(super) fn load(store: &StateStore, scope_id: &ScopeId) -> anyhow::Result<Self> {
-        store.validate_ideation_scope(scope_id)?;
+    pub(super) fn load(
+        store: &StateStore,
+        scope_id: &ScopeId,
+        disposition_actor_ids: &[String],
+    ) -> anyhow::Result<Self> {
+        store.validate_ideation_scope_with_actor_ids(scope_id, disposition_actor_ids)?;
         Ok(Self {
             contributions: store.list_contributions(scope_id)?,
             synthesis_packets: store.list_synthesis_packets(scope_id)?,
-            proposal_cards: store.list_proposal_cards(scope_id)?,
+            proposal_cards: store
+                .list_proposal_cards_with_actor_ids(scope_id, disposition_actor_ids)?,
             dispositions: store.list_dispositions(scope_id)?,
         })
     }

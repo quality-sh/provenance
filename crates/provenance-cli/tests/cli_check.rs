@@ -331,7 +331,9 @@ fn check_rejects_symlinked_cache_without_writing_to_target() {
     let dir = tempfile::tempdir().unwrap();
     init(dir.path());
     let cache = dir.path().join(".provenance/cache");
-    std::fs::remove_dir_all(&cache).unwrap();
+    if cache.exists() {
+        std::fs::remove_dir_all(&cache).unwrap();
+    }
     let outside = dir.path().join("outside");
     std::fs::create_dir(&outside).unwrap();
     std::os::unix::fs::symlink(&outside, &cache).unwrap();

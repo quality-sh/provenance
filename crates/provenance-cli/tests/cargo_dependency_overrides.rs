@@ -1,6 +1,7 @@
 use assert_cmd::Command;
 use predicates::prelude::*;
 use provenance_macros::verifies;
+use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use std::process::Command as StdCommand;
 
@@ -19,6 +20,76 @@ fn registry_requirements_and_patch_leave_the_manifest_and_lock_unchanged() {
         assert_eq!(fixture.manifest(), manifest);
         assert_eq!(fixture.lockfile(), lockfile);
     }
+}
+
+#[test]
+#[verifies("rule_cargo_init_preserves_sdk_dependency", examples)]
+#[verifies("rule_cargo_init_adds_exact_sdk", examples)]
+fn missing_dependency_is_added_with_an_exact_requirement_by_real_cargo() {
+    let fixture = CargoProject::new("0.2.2");
+    fixture.write_missing_dependency();
+
+    fixture.init().success();
+
+    let manifest = String::from_utf8(fixture.manifest()).unwrap();
+    assert!(
+        manifest.contains("provenance-sdk = \"=0.2.2\""),
+        "{manifest}"
+    );
+}
+
+#[test]
+#[verifies("rule_cargo_init_preserves_sdk_dependency", examples)]
+fn onboarding_conflict_leaves_missing_dependency_and_repository_state_unchanged() {
+    let fixture = CargoProject::new("0.2.2");
+    fixture.write_missing_dependency();
+    let skill = fixture
+        .root
+        .join(".agents/skills/provenance-shaping/SKILL.md");
+    std::fs::create_dir_all(skill.parent().unwrap()).unwrap();
+    std::fs::write(&skill, "user-owned skill\n").unwrap();
+    let manifest = fixture.manifest();
+
+    fixture
+        .init()
+        .failure()
+        .stderr(predicate::str::contains("exists and differs"));
+
+    assert_eq!(fixture.manifest(), manifest);
+    assert_eq!(
+        std::fs::read_to_string(skill).unwrap(),
+        "user-owned skill\n"
+    );
+    assert!(!fixture.root.join("Cargo.lock").exists());
+    assert!(!fixture.root.join(".provenance").exists());
+    assert!(!fixture.root.join(".claude").exists());
+    assert!(!fixture.root.join("AGENTS.md").exists());
+    assert!(!fixture.root.join(".gitignore").exists());
+}
+
+#[test]
+#[verifies("rule_init_validates_planned_repository", examples)]
+fn planned_repository_validation_failure_precedes_cargo_and_onboarding_writes() {
+    let fixture = CargoProject::new("0.2.2");
+    fixture.write_missing_dependency();
+    let manifest = fixture.manifest();
+    let original_scope = fixture.root.join(".provenance/state/scopes/unexpected");
+    std::fs::create_dir_all(&original_scope).unwrap();
+
+    fixture
+        .init()
+        .failure()
+        .stderr(predicate::str::contains("scope directory unexpected"));
+
+    assert_eq!(fixture.manifest(), manifest);
+    assert!(!fixture.root.join("Cargo.lock").exists());
+    assert!(original_scope.is_dir());
+    assert!(!fixture.root.join(".provenance/manifest.json").exists());
+    assert!(!fixture.root.join(".provenance/cache").exists());
+    assert!(!fixture.root.join(".agents").exists());
+    assert!(!fixture.root.join(".claude").exists());
+    assert!(!fixture.root.join("AGENTS.md").exists());
+    assert!(!fixture.root.join(".gitignore").exists());
 }
 
 #[test]
@@ -102,6 +173,31 @@ impl CargoProject {
             "provenance-sdk = \"{requirement}\"\n\n[patch.crates-io]\nprovenance-sdk = {{ path = \"{}\" }}\n",
             cargo_path(&self.sdk)
         ));
+    }
+
+    fn write_missing_dependency(&self) {
+        self.write_manifest("");
+        let registry = self.root.join("registry");
+        let archive = b"fixture crate archive";
+        std::fs::create_dir_all(registry.join("index/pr/ov")).unwrap();
+        std::fs::write(registry.join("provenance-sdk-0.2.2.crate"), archive).unwrap();
+        std::fs::write(
+            registry.join("index/pr/ov/provenance-sdk"),
+            format!(
+                "{{\"name\":\"provenance-sdk\",\"vers\":\"0.2.2\",\"deps\":[],\"cksum\":\"{:x}\",\"features\":{{}},\"yanked\":false}}\n",
+                Sha256::digest(archive)
+            ),
+        )
+        .unwrap();
+        std::fs::create_dir_all(self.root.join(".cargo")).unwrap();
+        std::fs::write(
+            self.root.join(".cargo/config.toml"),
+            format!(
+                "[source.crates-io]\nreplace-with = \"fixture\"\n\n[source.fixture]\nlocal-registry = \"{}\"\n",
+                cargo_path(&registry)
+            ),
+        )
+        .unwrap();
     }
 
     fn write_path_dependency(&self) {
