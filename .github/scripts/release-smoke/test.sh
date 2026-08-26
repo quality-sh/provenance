@@ -127,4 +127,19 @@ if expected_checksum "$checksum_file" archive.tar.gz >/dev/null 2>&1; then
   fail "checksum lookup accepted duplicate archive entries"
 fi
 
+mkdir -p "$temporary/archive-source" "$temporary/archive-output"
+printf 'archive fixture\n' > "$temporary/archive-source/file.txt"
+python3 - "$temporary" <<'PY'
+import sys
+import zipfile
+from pathlib import Path
+
+root = Path(sys.argv[1])
+with zipfile.ZipFile(root / "fixture.zip", "w") as archive:
+    archive.write(root / "archive-source/file.txt", "file.txt")
+PY
+python3 "$script_directory/extract_archive.py" \
+  "$temporary/fixture.zip" "$temporary/archive-output"
+cmp "$temporary/archive-source/file.txt" "$temporary/archive-output/file.txt"
+
 printf 'release smoke helper tests passed\n'

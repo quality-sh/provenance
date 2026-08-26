@@ -43,7 +43,7 @@ jobs:
               - ".github/workflows/release.yml"
               - ".github/workflows/release-smoke.yml"
               - ".github/scripts/**/*.sh"
-              - ".github/scripts/release-smoke/validate-targets.py"
+              - ".github/scripts/release-smoke/*.py"
             rust:
               - *ci
               - *release
@@ -326,6 +326,9 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
       - name: Parse release shell scripts
         shell: bash
         run: bash -n .github/scripts/*.sh .github/scripts/release-smoke/*.sh
@@ -338,22 +341,31 @@ jobs:
           mkdir -p "$temporary/source" "$temporary/extracted"
           printf 'archive fixture\n' > "$temporary/source/file.txt"
           if [[ "$RUNNER_OS" == Windows ]]; then
-            windows_temporary=$(cygpath -w "$temporary")
-            pwsh -NoProfile -Command \
-              "Compress-Archive -Path '$windows_temporary/source/*' -DestinationPath '$windows_temporary/fixture.zip'"
-            tar -xf "$temporary/fixture.zip" -C "$temporary/extracted"
+            archive="$temporary/fixture.zip"
           else
-            tar -czf "$temporary/fixture.tar.gz" -C "$temporary/source" file.txt
-            tar -xf "$temporary/fixture.tar.gz" -C "$temporary/extracted"
+            archive="$temporary/fixture.tar.gz"
           fi
+          python - "$temporary/source/file.txt" "$archive" <<'PY'
+          import sys
+          import tarfile
+          import zipfile
+          from pathlib import Path
+
+          source = Path(sys.argv[1])
+          archive = Path(sys.argv[2])
+          if archive.suffix == ".zip":
+              with zipfile.ZipFile(archive, "w") as contents:
+                  contents.write(source, "file.txt")
+          else:
+              with tarfile.open(archive, "w:gz") as contents:
+                  contents.add(source, "file.txt")
+          PY
+          python .github/scripts/release-smoke/extract_archive.py \
+            "$archive" "$temporary/extracted"
           cmp "$temporary/source/file.txt" "$temporary/extracted/file.txt"
       - name: Run ShellCheck
         if: matrix.os == 'ubuntu-latest'
         run: shellcheck .github/scripts/*.sh .github/scripts/release-smoke/*.sh
-      - uses: actions/setup-python@v7
-        if: matrix.os == 'ubuntu-latest'
-        with:
-          python-version: "3.12"
       - name: Install workflow validators
         if: matrix.os == 'ubuntu-latest'
         run: |

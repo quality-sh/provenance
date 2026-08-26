@@ -99,6 +99,9 @@ jobs:
         with:
           ref: refs/tags/v${{ inputs.version }}
           persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
       - name: Verify and execute the native archive
         shell: bash
         env:

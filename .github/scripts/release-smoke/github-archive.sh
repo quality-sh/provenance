@@ -62,12 +62,10 @@ fi
 
 extracted="$smoke_root/extracted"
 mkdir -p "$extracted"
-if ! command -v tar >/dev/null 2>&1; then
-  channel_failure "$channel" "the runner does not provide the cross-platform tar extractor"
-  exit 1
-fi
-if ! tar -xf "$smoke_root/$archive" -C "$extracted"; then
-  channel_failure "$channel" "could not extract $archive with tar"
+if ! python "$script_directory/extract_archive.py" \
+  "$smoke_root/$archive" "$extracted"
+then
+  channel_failure "$channel" "could not extract $archive with the release extractor"
   exit 1
 fi
 
