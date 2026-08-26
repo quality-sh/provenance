@@ -2,7 +2,7 @@
 set -euo pipefail
 
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-# shellcheck source=lib.sh
+# shellcheck source=.github/scripts/release-smoke/lib.sh
 source "$script_directory/lib.sh"
 
 version=${1-}
@@ -12,10 +12,10 @@ smoke_root=$(make_smoke_directory npm-registry)
 trap 'rm -rf -- "$smoke_root"' EXIT
 
 export HOME="$smoke_root/home"
-export npm_config_cache="$smoke_root/npm-cache"
-export npm_config_userconfig="$smoke_root/npmrc"
-mkdir -p "$HOME" "$npm_config_cache"
-: > "$npm_config_userconfig"
+export NPM_CONFIG_CACHE="$smoke_root/npm-cache"
+export NPM_CONFIG_USERCONFIG="$smoke_root/npmrc"
+mkdir -p "$HOME" "$NPM_CONFIG_CACHE"
+: > "$NPM_CONFIG_USERCONFIG"
 
 fixture="$smoke_root/npm-fixture"
 
@@ -26,15 +26,6 @@ npm_packages_are_visible() {
 }
 
 initialize_npm_fixture() {
-  rm -rf -- "$fixture"
-  mkdir -p "$fixture"
-  cat > "$fixture/package.json" <<'JSON'
-{
-  "name": "provenance-release-smoke",
-  "private": true,
-  "version": "0.0.0"
-}
-JSON
   (
     cd "$fixture"
     npx --yes "@quality-sh/create-provenance@$version" \
@@ -42,22 +33,56 @@ JSON
   )
 }
 
+assert_npm_sdk_requirement() {
+  if ! node - "$fixture" "$version" <<'JS'
+const { readFileSync } = require("node:fs");
+const { join } = require("node:path");
+
+const [root, version] = process.argv.slice(2);
+const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+const lockfile = JSON.parse(readFileSync(join(root, "package-lock.json"), "utf8"));
+if (manifest.devDependencies?.["@quality-sh/provenance"] !== version) process.exit(1);
+if (lockfile.packages?.["node_modules/@quality-sh/provenance"]?.version !== version) process.exit(1);
+JS
+  then
+    channel_failure "$channel" \
+      "npm project does not require and lock @quality-sh/provenance $version exactly"
+    return 1
+  fi
+}
+
 retry_channel "$channel" npm_packages_are_visible
-retry_channel "$channel" initialize_npm_fixture
+mkdir -p "$fixture"
+cat > "$fixture/package.json" <<'JSON'
+{
+  "name": "provenance-release-smoke",
+  "private": true,
+  "version": "0.0.0"
+}
+JSON
 
-if [[ ! -f "$fixture/.provenance/state/manifest.json" ]]; then
-  channel_failure "$channel" "initializer did not create Provenance state"
+if ! initialize_npm_fixture; then
+  channel_failure "$channel" "npm initialization failed after all packages became visible"
   exit 1
 fi
+assert_npm_sdk_requirement
+assert_initialized_repository "$channel" "$fixture"
+capture_initialized_repository \
+  "$channel" "$fixture" "$smoke_root/first-init" package.json package-lock.json
 
-installed_version=$(node -e \
-  'process.stdout.write(require(process.argv[1]).version)' \
-  "$fixture/node_modules/@quality-sh/provenance/package.json")
-if [[ "$installed_version" != "$version" ]]; then
-  channel_failure "$channel" \
-    "initializer installed @quality-sh/provenance $installed_version instead of $version"
+if ! initialize_npm_fixture; then
+  channel_failure "$channel" "the second npm initialization failed"
   exit 1
 fi
+assert_npm_sdk_requirement
+assert_initialized_repository "$channel" "$fixture"
+capture_initialized_repository \
+  "$channel" "$fixture" "$smoke_root/second-init" package.json package-lock.json
+assert_initialized_snapshots_equal \
+  "$channel" "$smoke_root/first-init" "$smoke_root/second-init"
+assert_provenance_check \
+  "$channel" "$fixture" "$fixture/node_modules/.bin/provenance"
 
-assert_binary_version "$channel" "$version" "$fixture/node_modules/.bin/provenance"
+assert_binary_version \
+  "$channel" "$version" provenance "$fixture/node_modules/.bin/provenance"
 printf 'npm: @quality-sh/create-provenance %s passed the installation smoke test\n' "$version"

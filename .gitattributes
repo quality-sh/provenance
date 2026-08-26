@@ -13,3 +13,6 @@ crates/provenance-cli/skills/** text eol=lf
 # endings too, or the comparison fails on a Windows checkout.
 .agents/skills/** text eol=lf
 .claude/skills/** text eol=lf
+
+# Release shell scripts run under Bash on Unix and Windows runners.
+.github/scripts/**/*.sh text eol=lf

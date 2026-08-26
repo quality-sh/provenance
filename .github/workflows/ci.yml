@@ -27,6 +27,7 @@ jobs:
       rust: ${{ steps.filter.outputs.rust }}
       sdk: ${{ steps.filter.outputs.sdk }}
       wiki: ${{ steps.filter.outputs.wiki }}
+      release: ${{ steps.filter.outputs.release }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
@@ -35,9 +36,17 @@ jobs:
           filters: |
             ci: &ci
               - ".github/workflows/ci.yml"
+            release: &release
+              - *ci
+              - ".gitattributes"
+              - ".github/release-targets.json"
+              - ".github/workflows/release.yml"
+              - ".github/workflows/release-smoke.yml"
+              - ".github/scripts/**/*.sh"
+              - ".github/scripts/release-smoke/validate-targets.py"
             rust:
               - *ci
-              - ".github/workflows/release.yml"
+              - *release
               - ".github/scripts/publish-cargo-if-missing.sh"
               - "crates/**"
               - "Cargo.toml"
@@ -301,6 +310,65 @@ jobs:
         env:
           PROVENANCE_TEST_YARN_PNP: ${{ matrix.yarn-pnp }}
 
+  release-smoke-tools:
+    name: Release tools (${{ matrix.os }})
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.release == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Parse release shell scripts
+        shell: bash
+        run: bash -n .github/scripts/*.sh .github/scripts/release-smoke/*.sh
+      - name: Verify archive extraction tool
+        shell: bash
+        run: |
+          source .github/scripts/release-smoke/lib.sh
+          temporary=$(make_smoke_directory release-tar)
+          trap 'rm -rf -- "$temporary"' EXIT
+          mkdir -p "$temporary/source" "$temporary/extracted"
+          printf 'archive fixture\n' > "$temporary/source/file.txt"
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            windows_temporary=$(cygpath -w "$temporary")
+            pwsh -NoProfile -Command \
+              "Compress-Archive -Path '$windows_temporary/source/*' -DestinationPath '$windows_temporary/fixture.zip'"
+            tar -xf "$temporary/fixture.zip" -C "$temporary/extracted"
+          else
+            tar -czf "$temporary/fixture.tar.gz" -C "$temporary/source" file.txt
+            tar -xf "$temporary/fixture.tar.gz" -C "$temporary/extracted"
+          fi
+          cmp "$temporary/source/file.txt" "$temporary/extracted/file.txt"
+      - name: Run ShellCheck
+        if: matrix.os == 'ubuntu-latest'
+        run: shellcheck .github/scripts/*.sh .github/scripts/release-smoke/*.sh
+      - uses: actions/setup-python@v7
+        if: matrix.os == 'ubuntu-latest'
+        with:
+          python-version: "3.12"
+      - name: Install workflow validators
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          python3 -m pip install --disable-pip-version-check --no-input PyYAML==6.0.3
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+      - name: Validate workflows and release targets
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          "$(go env GOPATH)/bin/actionlint"
+          python3 .github/scripts/release-smoke/validate-targets.py
+      - name: Test release smoke helpers
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: bash .github/scripts/release-smoke/test.sh
+
   # The one status the branch ruleset requires. Conditional jobs skip when a
   # pull request leaves their inputs untouched, and a skipped matrix job never
   # reports its expanded name, so requiring the jobs directly deadlocks a
@@ -319,6 +387,7 @@ jobs:
       - rust-sdk
       - initializer-package-managers
       - typescript-sdk-packed-install
+      - release-smoke-tools
     if: always()
     runs-on: ubuntu-latest
     steps:

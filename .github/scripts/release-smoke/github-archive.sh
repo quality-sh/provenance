@@ -2,7 +2,7 @@
 set -euo pipefail
 
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-# shellcheck source=lib.sh
+# shellcheck source=.github/scripts/release-smoke/lib.sh
 source "$script_directory/lib.sh"
 
 version=${1-}
@@ -32,10 +32,26 @@ package="provenance-$tag-$target"
 archive="$package.$archive_format"
 base_url="https://github.com/quality-sh/provenance/releases/download/$tag"
 
-retry_channel "$channel" curl --fail --silent --show-error --location \
+release_assets_are_visible() {
+  curl --fail --silent --show-error --location --head \
+    "$base_url/SHA256SUMS" >/dev/null &&
+    curl --fail --silent --show-error --location --head \
+      "$base_url/$archive" >/dev/null
+}
+
+retry_channel "$channel" release_assets_are_visible
+if ! curl --fail --silent --show-error --location \
   --output "$smoke_root/SHA256SUMS" "$base_url/SHA256SUMS"
-retry_channel "$channel" curl --fail --silent --show-error --location \
+then
+  channel_failure "$channel" "could not download SHA256SUMS after it became visible"
+  exit 1
+fi
+if ! curl --fail --silent --show-error --location \
   --output "$smoke_root/$archive" "$base_url/$archive"
+then
+  channel_failure "$channel" "could not download $archive after it became visible"
+  exit 1
+fi
 
 expected=$(expected_checksum "$smoke_root/SHA256SUMS" "$archive")
 actual=$(sha256_file "$smoke_root/$archive")
@@ -46,20 +62,14 @@ fi
 
 extracted="$smoke_root/extracted"
 mkdir -p "$extracted"
-case "$archive_format" in
-  tar.gz)
-    if ! tar -xzf "$smoke_root/$archive" -C "$extracted"; then
-      channel_failure "$channel" "could not extract $archive"
-      exit 1
-    fi
-    ;;
-  zip)
-    if ! unzip -q "$smoke_root/$archive" -d "$extracted"; then
-      channel_failure "$channel" "could not extract $archive"
-      exit 1
-    fi
-    ;;
-esac
+if ! command -v tar >/dev/null 2>&1; then
+  channel_failure "$channel" "the runner does not provide the cross-platform tar extractor"
+  exit 1
+fi
+if ! tar -xf "$smoke_root/$archive" -C "$extracted"; then
+  channel_failure "$channel" "could not extract $archive with tar"
+  exit 1
+fi
 
 for binary in provenance cargo-provenance; do
   if [[ "$archive_format" == zip ]]; then
@@ -71,7 +81,7 @@ for binary in provenance cargo-provenance; do
     channel_failure "$channel" "$archive does not contain $binary$executable_suffix"
     exit 1
   fi
-  assert_binary_version "$channel" "$version" "$path"
+  assert_binary_version "$channel" "$version" "$binary" "$path"
 done
 
 printf 'GitHub archive: %s passed checksum and execution smoke tests\n' "$archive"

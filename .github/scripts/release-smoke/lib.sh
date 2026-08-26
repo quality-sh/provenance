@@ -2,9 +2,25 @@
 
 validate_version() {
   local version=${1-}
-  if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?(\+[0-9A-Za-z][0-9A-Za-z.-]*)?$ ]]; then
+  local semver='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-([0-9A-Za-z-]+)(\.([0-9A-Za-z-]+))*)?(\+([0-9A-Za-z-]+)(\.([0-9A-Za-z-]+))*)?$'
+  if [[ ! "$version" =~ $semver ]]; then
     printf 'release version must be an exact SemVer without a leading v: %s\n' "$version" >&2
     return 2
+  fi
+
+  local without_build=${version%%+*}
+  if [[ "$without_build" == *-* ]]; then
+    local prerelease=${without_build#*-}
+    local identifier
+    local identifiers
+    IFS=. read -r -a identifiers <<< "$prerelease"
+    for identifier in "${identifiers[@]}"; do
+      if [[ "$identifier" =~ ^[0-9]+$ && "$identifier" == 0* && "$identifier" != 0 ]]; then
+        printf 'numeric prerelease identifiers must not have leading zeros: %s\n' \
+          "$version" >&2
+        return 2
+      fi
+    done
   fi
 }
 
@@ -103,7 +119,8 @@ sha256_file() {
 assert_binary_version() {
   local channel=$1
   local expected_version=$2
-  local binary=$3
+  local expected_name=$3
+  local binary=$4
   local output
 
   if ! output=$("$binary" --version 2>&1); then
@@ -111,10 +128,109 @@ assert_binary_version() {
     return 1
   fi
   printf '%s\n' "$output"
-  local reported_version=${output##* }
-  if [[ "$reported_version" != "$expected_version" ]]; then
+  local expected_output="$expected_name $expected_version"
+  if [[ "$output" != "$expected_output" ]]; then
     channel_failure "$channel" \
-      "$binary reported a version other than $expected_version: $output"
+      "$binary reported '$output'; expected '$expected_output'"
+    return 1
+  fi
+}
+
+assert_initialized_repository() {
+  local channel=$1
+  local repository=$2
+  local path
+
+  for path in \
+    .provenance/state/manifest.json \
+    .gitignore \
+    AGENTS.md
+  do
+    if [[ ! -f "$repository/$path" ]]; then
+      channel_failure "$channel" "initializer did not create $path"
+      return 1
+    fi
+  done
+  if ! grep -Fqx '.provenance/cache/' "$repository/.gitignore"; then
+    channel_failure "$channel" "initializer did not add the cache path to .gitignore"
+    return 1
+  fi
+  if ! grep -Fqx '## Provenance' "$repository/AGENTS.md"; then
+    channel_failure "$channel" "initializer did not add the Provenance section to AGENTS.md"
+    return 1
+  fi
+
+  local skill
+  for skill in \
+    provenance-fork-tournament \
+    provenance-grounded-writing \
+    provenance-shaping \
+    provenance-swarm-backtrace
+  do
+    for path in \
+      ".agents/skills/$skill/SKILL.md" \
+      ".claude/skills/$skill/SKILL.md"
+    do
+      if [[ ! -f "$repository/$path" ]]; then
+        channel_failure "$channel" "initializer did not install $path"
+        return 1
+      fi
+    done
+  done
+
+}
+
+assert_provenance_check() {
+  local channel=$1
+  local repository=$2
+  local provenance_binary=$3
+  if ! "$provenance_binary" check --repo "$repository"; then
+    channel_failure "$channel" "provenance check failed for the initialized repository"
+    return 1
+  fi
+}
+
+capture_initialized_repository() {
+  local channel=$1
+  local repository=$2
+  local destination=$3
+  shift 3
+  local paths=(
+    .provenance/state
+    .gitignore
+    .agents/skills
+    .claude/skills
+    AGENTS.md
+    "$@"
+  )
+  local path
+
+  if [[ -e "$destination" ]]; then
+    channel_failure "$channel" "snapshot destination already exists: $destination"
+    return 1
+  fi
+  for path in "${paths[@]}"; do
+    if [[ ! -e "$repository/$path" && ! -L "$repository/$path" ]]; then
+      channel_failure "$channel" "cannot snapshot missing initialized path: $path"
+      return 1
+    fi
+  done
+
+  mkdir -p "$destination"
+  if ! tar -C "$repository" -cf - -- "${paths[@]}" |
+    tar -C "$destination" -xf -
+  then
+    channel_failure "$channel" "could not capture initialized repository bytes"
+    return 1
+  fi
+}
+
+assert_initialized_snapshots_equal() {
+  local channel=$1
+  local first=$2
+  local second=$3
+  if ! git diff --no-index --no-ext-diff --exit-code -- "$first" "$second"; then
+    channel_failure "$channel" "the second initialization changed repository bytes"
     return 1
   fi
 }
