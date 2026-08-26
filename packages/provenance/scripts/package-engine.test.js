@@ -144,9 +144,28 @@ test("consumer generation detects package and runtime drift", () => {
   );
   assert.match(readFileSync(runtimePath, "utf8"), /linux-x64-glibc/);
 
+  const stalePackage = JSON.parse(readFileSync(packagePath, "utf8"));
+  stalePackage.optionalDependencies[targets[0].npm.name] = "0.0.0";
+  writeFileSync(packagePath, JSON.stringify(stalePackage));
+  let result = spawnSync(process.execPath, [
+    generator,
+    "--check",
+    "--targets", targetsPath,
+    "--package", packagePath,
+    "--runtime", runtimePath,
+  ], { encoding: "utf8" });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, new RegExp(`stale: ${packagePath.replaceAll("\\", "\\\\")}`));
+
+  execFileSync(process.execPath, [
+    generator,
+    "--targets", targetsPath,
+    "--package", packagePath,
+    "--runtime", runtimePath,
+  ]);
   writeFileSync(runtimePath, "stale runtime data\n");
 
-  const result = spawnSync(process.execPath, [
+  result = spawnSync(process.execPath, [
     generator,
     "--check",
     "--targets", targetsPath,
@@ -156,4 +175,37 @@ test("consumer generation detects package and runtime drift", () => {
 
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /generated release consumer is stale/);
+});
+
+test("consumer checks accept Windows line endings", () => {
+  const temporary = mkdtempSync(join(tmpdir(), "provenance-release-consumers-crlf-"));
+  const targetsPath = join(temporary, "targets.json");
+  const packagePath = join(temporary, "package.json");
+  const runtimePath = join(temporary, "engine-packages.ts");
+  const generator = fileURLToPath(new URL("./generate-release-consumers.js", import.meta.url));
+  writeFileSync(targetsPath, JSON.stringify(targets));
+  writeFileSync(packagePath, JSON.stringify({ version: "9.8.7", optionalDependencies: {} }));
+  writeFileSync(runtimePath, "stale runtime data\n");
+  const args = [
+    generator,
+    "--targets", targetsPath,
+    "--package", packagePath,
+    "--runtime", runtimePath,
+  ];
+
+  execFileSync(process.execPath, args);
+  for (const path of [packagePath, runtimePath]) {
+    writeFileSync(path, readFileSync(path, "utf8").replaceAll("\n", "\r\n"));
+  }
+
+  execFileSync(process.execPath, [generator, "--check", ...args.slice(1)]);
+
+  writeFileSync(targetsPath, JSON.stringify(targets.slice(0, -1)));
+  const drift = spawnSync(
+    process.execPath,
+    [generator, "--check", ...args.slice(1)],
+    { encoding: "utf8" },
+  );
+  assert.notEqual(drift.status, 0);
+  assert.match(drift.stderr, /generated release consumer is stale/);
 });

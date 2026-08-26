@@ -9,6 +9,7 @@ from pathlib import Path
 
 SCRIPT = Path(__file__).with_name("release-contract.py")
 TARGETS = json.loads((Path(__file__).resolve().parents[1] / "release-targets.json").read_text())
+RELEASE_WORKFLOW = Path(__file__).resolve().parents[1] / "workflows/release.yml"
 
 
 def valid_target() -> dict:
@@ -40,6 +41,24 @@ def run_contract(targets: list, version: str = "0.2.2") -> subprocess.CompletedP
 
 
 class ReleaseContractTests(unittest.TestCase):
+    def test_generated_consumers_gate_every_publication_path_in_preflight(self) -> None:
+        workflow = RELEASE_WORKFLOW.read_text()
+        preflight = workflow.split("\n  build:", 1)[0]
+        self.assertIn(
+            "node packages/provenance/scripts/generate-release-consumers.js --check",
+            preflight,
+        )
+        for job, next_job in (
+            ("publish", "publish-crates"),
+            ("publish-crates", "publish-npm"),
+            ("publish-npm", "smoke"),
+        ):
+            with self.subTest(job=job):
+                block = workflow.split(f"\n  {job}:", 1)[1].split(
+                    f"\n  {next_job}:", 1
+                )[0]
+                self.assertIn("- preflight", block)
+
     def test_emits_safe_build_and_smoke_entries(self) -> None:
         result = run_contract(TARGETS)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -69,9 +88,10 @@ class ReleaseContractTests(unittest.TestCase):
 
     def test_rejects_unsafe_or_malformed_target_data(self) -> None:
         cases = {
-            "empty target": (("target",), "", "target must be"),
-            "escaping target": (("target",), "../../escape", "safe path component"),
-            "unsupported archive": (("archive",), "rar", "unsupported archive"),
+            "empty target": (("target",), "", "unsupported Rust release target"),
+            "escaping target": (("target",), "../../escape", "unsupported Rust release target"),
+            "numeric target": (("target",), 42, "target must be a string"),
+            "wrong archive": (("archive",), "rar", "archive does not match target"),
             "empty build runner": (("build_os",), "", "build_os must be"),
             "numeric smoke runner": (("smoke_os",), 42, "smoke_os must be"),
             "control character in runner": (
@@ -82,21 +102,21 @@ class ReleaseContractTests(unittest.TestCase):
             "malformed npm name": (
                 ("npm", "name"),
                 "@quality-sh/../../escape",
-                "invalid npm package name",
+                "npm package name does not match target",
             ),
-            "npm os is not an array": (("npm", "os"), "linux", "non-empty array"),
-            "empty npm cpu array": (("npm", "cpu"), [], "non-empty array"),
-            "numeric npm libc value": (("npm", "libc"), [1], "non-empty string"),
-            "invented npm os": (("npm", "os"), ["plan9"], "unsupported npm os"),
-            "invented npm cpu": (("npm", "cpu"), ["mips"], "unsupported npm cpu"),
+            "npm os is not an array": (("npm", "os"), "linux", "npm os does not match"),
+            "empty npm cpu array": (("npm", "cpu"), [], "npm cpu does not match"),
+            "numeric npm libc value": (("npm", "libc"), [1], "npm libc does not match"),
+            "invented npm os": (("npm", "os"), ["plan9"], "npm os does not match"),
+            "invented npm cpu": (("npm", "cpu"), ["mips"], "npm cpu does not match"),
             "supported but wrong npm cpu": (
                 ("npm", "cpu"),
                 ["arm64"],
                 "does not match target",
             ),
-            "invented npm libc": (("npm", "libc"), ["musl"], "unsupported npm libc"),
-            "mixed npm os": (("npm", "os"), ["linux", "win32"], "exactly one"),
-            "duplicate npm cpu": (("npm", "cpu"), ["x64", "x64"], "duplicates"),
+            "invented npm libc": (("npm", "libc"), ["musl"], "npm libc does not match"),
+            "mixed npm os": (("npm", "os"), ["linux", "win32"], "npm os does not match"),
+            "duplicate npm cpu": (("npm", "cpu"), ["x64", "x64"], "npm cpu does not match"),
             "valid-looking wrong npm name": (
                 ("npm", "name"),
                 "@quality-sh/provenance-linux-x64-typo",
@@ -105,12 +125,12 @@ class ReleaseContractTests(unittest.TestCase):
             "executable suffix on tar archive": (
                 ("executable_suffix",),
                 ".exe",
-                "requires executable_suffix",
+                "executable_suffix does not match target",
             ),
             "zip archive without executable suffix": (
                 ("archive",),
                 "zip",
-                "requires executable_suffix",
+                "archive does not match target",
             ),
         }
         for name, (path, value, expected_error) in cases.items():
@@ -125,12 +145,17 @@ class ReleaseContractTests(unittest.TestCase):
                 self.assertIn(expected_error, result.stderr)
 
     def test_rejects_windows_npm_with_unix_executable_suffix(self) -> None:
-        target = valid_target()
-        target["npm"]["os"] = ["win32"]
-        del target["npm"]["libc"]
+        target = copy.deepcopy(
+            next(
+                target
+                for target in TARGETS
+                if target["target"] == "x86_64-pc-windows-msvc"
+            )
+        )
+        target["executable_suffix"] = ""
         result = run_contract([target])
         self.assertNotEqual(result.returncode, 0, result.stdout)
-        self.assertIn("npm os and executable suffix are inconsistent", result.stderr)
+        self.assertIn("executable_suffix does not match target", result.stderr)
 
     def test_rejects_manifest_missing_a_promised_target(self) -> None:
         result = run_contract(TARGETS[:-1])
@@ -156,7 +181,7 @@ class ReleaseContractTests(unittest.TestCase):
         target["npm"]["binary"] = "provenance"
         result = run_contract([target])
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("unknown npm package data", result.stderr)
+        self.assertIn("npm fields do not match target", result.stderr)
         result = run_contract([valid_target()], "../0.2.2")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("safe path component", result.stderr)

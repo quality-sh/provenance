@@ -7,7 +7,6 @@ from pathlib import Path
 
 SAFE_COMPONENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
 SAFE_RUNNER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
-NPM_PACKAGE = re.compile(r"^@quality-sh/provenance-[a-z0-9][a-z0-9-]*$")
 PACKAGE_MANIFEST = Path(__file__).resolve().parents[2] / "packages/provenance/package.json"
 
 
@@ -25,7 +24,7 @@ def require_nonempty_string(value: object, location: str) -> str:
 
 def require_safe_component(value: object, location: str) -> str:
     text = require_nonempty_string(value, location)
-    if not SAFE_COMPONENT.fullmatch(text) or text in {".", ".."}:
+    if not SAFE_COMPONENT.fullmatch(text):
         fail(f"{location} is not a safe path component: {text!r}")
     return text
 
@@ -37,41 +36,47 @@ def require_runner(value: object, location: str) -> str:
     return runner
 
 
-def require_string_array(value: object, location: str) -> list[str]:
-    if not isinstance(value, list) or not value:
-        fail(f"{location} must be a non-empty array")
-    items = [require_safe_component(item, location) for item in value]
-    if len(items) != len(set(items)):
-        fail(f"{location} must not contain duplicates")
-    return items
-
-
-def require_platform_array(
-    value: object, location: str, supported: set[str]
-) -> list[str]:
-    items = require_string_array(value, location)
-    if len(items) != 1:
-        fail(f"{location} must contain exactly one value")
-    if items[0] not in supported:
-        fail(f"unsupported {location} value {items[0]!r}")
-    return items
-
-
-def expected_npm_data(target: str) -> tuple[str, str, str | None, str]:
+def expected_target_data(
+    target: str,
+) -> tuple[str, str, str, str, str, str | None, str]:
     match = re.fullmatch(r"(aarch64|x86_64)-apple-darwin", target)
     if match:
         cpu = "arm64" if match.group(1) == "aarch64" else "x64"
-        return "darwin", cpu, None, f"@quality-sh/provenance-darwin-{cpu}"
+        return (
+            "tar.gz",
+            "",
+            "macos",
+            "darwin",
+            cpu,
+            None,
+            f"@quality-sh/provenance-darwin-{cpu}",
+        )
 
     match = re.fullmatch(r"(aarch64|x86_64)-pc-windows-msvc", target)
     if match:
         cpu = "arm64" if match.group(1) == "aarch64" else "x64"
-        return "win32", cpu, None, f"@quality-sh/provenance-win32-{cpu}-msvc"
+        return (
+            "zip",
+            ".exe",
+            "windows",
+            "win32",
+            cpu,
+            None,
+            f"@quality-sh/provenance-win32-{cpu}-msvc",
+        )
 
     match = re.fullmatch(r"(aarch64|x86_64)-unknown-linux-gnu", target)
     if match:
         cpu = "arm64" if match.group(1) == "aarch64" else "x64"
-        return "linux", cpu, "glibc", f"@quality-sh/provenance-linux-{cpu}-gnu"
+        return (
+            "tar.gz",
+            "",
+            "ubuntu",
+            "linux",
+            cpu,
+            "glibc",
+            f"@quality-sh/provenance-linux-{cpu}-gnu",
+        )
 
     fail(f"unsupported Rust release target {target!r}")
 
@@ -104,68 +109,57 @@ def main() -> int:
         }
         if not isinstance(entry, dict) or set(entry) != required:
             fail(f"each entry must contain exactly {sorted(required)}")
-        build_os = require_runner(entry["build_os"], "build_os")
-        smoke_os = require_runner(entry["smoke_os"], "smoke_os")
-        target = require_safe_component(entry["target"], "target")
-        archive = require_nonempty_string(entry["archive"], f"{target} archive")
-        if archive not in {"tar.gz", "zip"}:
-            fail(f"{target} uses unsupported archive format {archive!r}")
-        executable_suffix = entry["executable_suffix"]
-        expected_suffix = ".exe" if archive == "zip" else ""
-        if executable_suffix != expected_suffix:
-            fail(
-                f"{target} archive {archive!r} requires executable_suffix "
-                f"{expected_suffix!r}"
-            )
+        target = entry["target"]
+        if not isinstance(target, str):
+            fail("target must be a string")
         if target in seen_targets:
             fail(f"duplicate target {target}")
         seen_targets.add(target)
+        (
+            expected_archive,
+            expected_suffix,
+            runner_family,
+            expected_os,
+            expected_cpu,
+            expected_libc,
+            expected_name,
+        ) = expected_target_data(target)
 
-        npm = entry["npm"]
-        npm_required = {"name", "os", "cpu"}
-        if not isinstance(npm, dict) or not npm_required.issubset(npm):
-            fail(f"{target} has incomplete npm package data")
-        if set(npm) - (npm_required | {"libc"}):
-            fail(f"{target} has unknown npm package data")
-        npm_name = require_nonempty_string(npm["name"], f"{target} npm name")
-        if not NPM_PACKAGE.fullmatch(npm_name):
-            fail(f"{target} has invalid npm package name {npm_name!r}")
-        npm_os = require_platform_array(
-            npm["os"], "npm os", {"darwin", "linux", "win32"}
-        )
-        npm_cpu = require_platform_array(npm["cpu"], "npm cpu", {"arm64", "x64"})
-        npm_libc = None
-        if "libc" in npm:
-            npm_libc = require_platform_array(npm["libc"], "npm libc", {"glibc"})
-        if (npm_os == ["linux"]) != (npm_libc == ["glibc"]):
-            fail(f"{target} npm os and libc are inconsistent")
-        if (npm_os == ["win32"]) != (executable_suffix == ".exe"):
-            fail(f"{target} npm os and executable suffix are inconsistent")
-        expected_os, expected_cpu, expected_libc, expected_name = expected_npm_data(target)
-        actual_platform = (
-            npm_os[0],
-            npm_cpu[0],
-            None if npm_libc is None else npm_libc[0],
-        )
-        expected_platform = (expected_os, expected_cpu, expected_libc)
-        if actual_platform != expected_platform:
-            fail(f"{target} npm platform does not match target")
-        if npm_name != expected_name:
-            fail(f"{target} npm package name does not match target")
-        actual_packages.add(npm_name)
-
-        expected_archive = "zip" if expected_os == "win32" else "tar.gz"
-        if archive != expected_archive:
-            fail(f"{target} must use the {expected_archive!r} archive format")
-        runner_family = {"darwin": "macos", "linux": "ubuntu", "win32": "windows"}[
-            expected_os
-        ]
+        build_os = require_runner(entry["build_os"], "build_os")
+        smoke_os = require_runner(entry["smoke_os"], "smoke_os")
         for field, runner in (("build_os", build_os), ("smoke_os", smoke_os)):
             if not runner.startswith(f"{runner_family}-"):
                 fail(f"{target} {field} must use an {runner_family} runner")
 
+        archive = entry["archive"]
+        if archive != expected_archive:
+            fail(f"{target} archive does not match target")
+        executable_suffix = entry["executable_suffix"]
+        if executable_suffix != expected_suffix:
+            fail(f"{target} executable_suffix does not match target")
+
+        npm = entry["npm"]
+        expected_npm_fields = {"name", "os", "cpu"}
+        if expected_libc is not None:
+            expected_npm_fields.add("libc")
+        if not isinstance(npm, dict) or set(npm) != expected_npm_fields:
+            fail(f"{target} npm fields do not match target")
+        npm_name = npm["name"]
+        npm_os = npm["os"]
+        npm_cpu = npm["cpu"]
+        npm_libc = npm.get("libc")
+        if npm_os != [expected_os]:
+            fail(f"{target} npm os does not match target")
+        if npm_cpu != [expected_cpu]:
+            fail(f"{target} npm cpu does not match target")
+        expected_libc_values = None if expected_libc is None else [expected_libc]
+        if npm_libc != expected_libc_values:
+            fail(f"{target} npm libc does not match target")
+        if npm_name != expected_name:
+            fail(f"{target} npm package name does not match target")
+        actual_packages.add(npm_name)
+
         package = f"provenance-v{version}-{target}"
-        require_safe_component(package, f"{target} archive package")
         common = {
             "target": target,
             "archive": archive,

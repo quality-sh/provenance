@@ -9,9 +9,11 @@ const defaults = {
 const { check, paths } = parseArgs(process.argv.slice(2));
 const targets = JSON.parse(readFileSync(paths.targets, "utf8"));
 const packageManifest = JSON.parse(readFileSync(paths.package, "utf8"));
-packageManifest.optionalDependencies = Object.fromEntries(
+const expectedDependencies = Object.fromEntries(
   targets.map((entry) => [entry.npm.name, packageManifest.version]),
 );
+const currentDependencies = packageManifest.optionalDependencies;
+packageManifest.optionalDependencies = expectedDependencies;
 
 const packageOutput = `${JSON.stringify(packageManifest, null, 2)}\n`;
 const runtimeRows = targets.map((entry) => {
@@ -29,17 +31,23 @@ const runtimeOutput = [
   "",
 ].join("\n");
 
-for (const [path, output] of [
-  [paths.package, packageOutput],
-  [paths.runtime, runtimeOutput],
-]) {
-  if (check) {
-    if (readFileSync(path, "utf8") !== output) {
-      throw new Error(`generated release consumer is stale: ${path}`);
-    }
-  } else {
-    writeFileSync(path, output);
+if (check) {
+  if (sortedEntries(currentDependencies) !== sortedEntries(expectedDependencies)) {
+    throw new Error(`generated release consumer is stale: ${paths.package}`);
   }
+  if (readFileSync(paths.runtime, "utf8").replaceAll("\r\n", "\n") !== runtimeOutput) {
+    throw new Error(`generated release consumer is stale: ${paths.runtime}`);
+  }
+} else {
+  writeFileSync(paths.package, packageOutput);
+  writeFileSync(paths.runtime, runtimeOutput);
+}
+
+function sortedEntries(value) {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return "";
+  }
+  return JSON.stringify(Object.entries(value).sort(([left], [right]) => left.localeCompare(right)));
 }
 
 function parseArgs(values) {
