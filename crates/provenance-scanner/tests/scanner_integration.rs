@@ -91,13 +91,15 @@ fn scans_javascript_verifies_call_in_named_function() {
 }
 
 #[test]
-fn scans_typescript_rule_and_verifies_calls_bound_to_consts() {
+fn scans_typescript_sdk_rule_and_verifies_helpers() {
     let scan = scan_file(
         Utf8Path::new("rules.ts"),
         Language::TypeScript,
-        r#"export const paysOvertime = rule("rule_overtime", (hours: number) => hours > 38);
+        r#"import { rule, verifies } from "@quality-sh/provenance/rules";
+
+export const paysOvertime = rule("rule_overtime", (hours: number) => hours > 38);
 const overtimeProperty = () => {
-  verifies("rule_overtime", property);
+  verifies("rule_overtime", "property");
 };"#,
     );
 

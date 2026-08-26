@@ -5,6 +5,7 @@ import type {
   SourceDeclaration,
   TypedSpecDocument,
 } from "./protocol.js";
+import type { VerificationMethod } from "./rules.js";
 
 export interface SourceOptions {
   id?: string;
@@ -31,7 +32,7 @@ export interface RuleOptions {
 // `file` and `url` both say which file the verification runs in. Pass
 // `import.meta` for the whole option, or state one of them yourself.
 export interface VerifyOptions {
-  method?: "exhaustion" | "property" | "examples" | "conformance" | "construction" | "proof";
+  method?: VerificationMethod;
   file?: string;
   url?: string;
   symbol?: string;

@@ -5,9 +5,37 @@ tree. These helpers are intentionally inert: they keep a rule id next to the
 Rule's primary production implementation without introducing a registry or
 changing the function. The binding does not define the Rule; a Rule may exist
 before any implementation is bound to it.
-JavaScript and TypeScript can use the source package in
-`packages/provenance-rules-js/`. The snippets below are small enough to keep in
-an application's own support module.
+
+## JavaScript and TypeScript helpers
+
+Install the TypeScript SDK. No second package is necessary:
+
+```sh
+npm install @quality-sh/provenance
+```
+
+Import the scanner helpers from the SDK's `rules` subpath:
+
+```ts
+import { rule, verifies } from "@quality-sh/provenance/rules";
+
+export const paysOvertime = rule("rule_overtime", (hours: number) =>
+  hours > 38,
+);
+
+test("hours above 38 attract overtime", function overtimeExamples() {
+  verifies("rule_overtime", "examples");
+  expect(paysOvertime(39)).toBe(true);
+});
+```
+
+`rule` returns the exact function and preserves its callable type. `verifies`
+returns nothing. Neither helper registers global state or changes application
+behavior. Keep `rule("id",` on one line. Put `verifies("id", "method")` in a
+named function or in a function-valued `const`.
+
+The top-level `rule("local-key")` export is the authoring builder. Import the
+Implementation binding helper only from the `rules` subpath.
 
 ## Python decorator
 

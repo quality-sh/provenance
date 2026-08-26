@@ -167,8 +167,6 @@ jobs:
       # Bun eliminates the calling frame of a tail call, so a verify call that
       # states no file only reproduces here.
       - run: npm run test:bun --prefix packages/provenance
-      - run: npm ci --prefix packages/provenance-rules-js
-      - run: npm test --prefix packages/provenance-rules-js
       - run: npm ci --prefix examples/typescript-sdk
       - name: Run packaged fixture
         shell: bash

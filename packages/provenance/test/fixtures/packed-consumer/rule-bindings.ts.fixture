@@ -1,0 +1,20 @@
+import * as ruleBindings from "@quality-sh/provenance/rules";
+
+const implementation = (hours: number): boolean => hours > 38;
+const paysOvertime: (hours: number) => boolean = ruleBindings.rule("rule_packed_consumer_overtime", implementation);
+
+function overtimeExamples(): void {
+  ruleBindings.verifies("rule_packed_consumer_overtime", "examples");
+  if (paysOvertime(39) !== true) {
+    throw new Error("packed rule bindings changed execution");
+  }
+}
+
+overtimeExamples();
+
+if (false) {
+  // @ts-expect-error Rule bindings preserve the implementation parameter types.
+  paysOvertime("39");
+  // @ts-expect-error Verification methods use the scanner's fixed vocabulary.
+  ruleBindings.verifies("rule_packed_consumer_overtime", "sample");
+}

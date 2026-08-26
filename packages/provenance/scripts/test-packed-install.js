@@ -11,6 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertPackedConsumerScan } from "./packed-consumer-scan.js";
 
 const packageRoot = fileURLToPath(new URL("..", import.meta.url));
 const initializerRoot = fileURLToPath(new URL("../../create-provenance", import.meta.url));
@@ -246,13 +247,14 @@ export const spec = provenance.build(packedInstallation.rules(invocation));
 
 void invocation.verify("packed-consumer", () => undefined);
 `);
+writeFileSync(join(application, "rule-bindings.ts"), readFileSync(join(packageRoot, "test", "fixtures", "packed-consumer", "rule-bindings.ts.fixture"), "utf8"));
 writeFileSync(join(application, "tsconfig.json"), JSON.stringify({
   compilerOptions: {
     module: "NodeNext",
     moduleResolution: "NodeNext",
     target: "ES2022",
     strict: true,
-    noEmit: true,
+    outDir: ".compiled",
     skipLibCheck: true,
   },
   include: ["*.ts"],
@@ -261,6 +263,9 @@ execFileSync(process.execPath, [
   join(application, "node_modules", "typescript", "bin", "tsc"),
   "-p", join(application, "tsconfig.json"),
 ], { cwd: application, stdio: "pipe" });
+execFileSync(process.execPath, [join(application, ".compiled", "rule-bindings.js")], { cwd: application, stdio: "pipe" });
+provenance(["rules", "create", "--scope", "default", "--id", "rule_packed_consumer_overtime", "--statement", "Hours above 38 receive overtime pay.", "--format", "json"], application);
+assertPackedConsumerScan(provenance(["coverage", "scan", "--path", "rule-bindings.ts", "--scope", "default", "--validate-rules", "--strict", "--format", "json"], application));
 writeFileSync(join(application, "verify.mjs"), `
 import { apply, defineSpec, plan, requirement, rule, source } from "@quality-sh/provenance";
 import { startWorkflow, WorkflowRunner } from "./runtime.mjs";
