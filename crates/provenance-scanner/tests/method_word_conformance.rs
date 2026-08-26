@@ -1,12 +1,8 @@
-//! The scanner's verification methods, held to the macro's.
+//! The scanner's verification methods, held to the macro and TypeScript SDK.
 //!
-//! `provenance-macros` validates `#[verifies]` method words against its
-//! `VERIFICATION_METHODS` list at compile time; the scanner parses the same
-//! words into `Verification` long after, from repositories the macro never
-//! saw. A proc-macro crate exports only macros, so no dependency can carry
-//! the list between them; this reads the macro's source instead and checks
-//! every word it accepts round-trips through the scanner, and that neither
-//! side knows a word the other refuses.
+//! `provenance-macros` validates `#[verifies]` method words at compile time.
+//! The TypeScript signature declares the same restriction, and the scanner
+//! parses those words later. These tests compare all three source lists.
 
 use std::str::FromStr;
 
@@ -64,6 +60,31 @@ fn macro_method_words() -> Vec<String> {
     words
 }
 
+fn typescript_method_words() -> Vec<String> {
+    let source = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../packages/provenance/src/rules.ts"),
+    )
+    .expect("read TypeScript rules source");
+    let (_, declaration) = source
+        .split_once("export type VerificationMethod =")
+        .expect("TypeScript no longer declares VerificationMethod");
+    let (declaration, _) = declaration
+        .split_once(';')
+        .expect("VerificationMethod declaration is unterminated");
+    let words = declaration
+        .split('"')
+        .skip(1)
+        .step_by(2)
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    assert!(
+        !words.is_empty(),
+        "parsed no method words out of TypeScript VerificationMethod"
+    );
+    words
+}
+
 #[test]
 #[verifies("rule_verification_method_words", conformance)]
 fn every_macro_method_word_is_a_scanner_verification() {
@@ -93,4 +114,18 @@ fn the_scanner_knows_no_method_word_the_macro_refuses() {
         all_verifications().len(),
         "the two method lists differ in size"
     );
+}
+
+#[test]
+#[verifies("rule_verification_method_words", conformance)]
+fn typescript_uses_exactly_the_macro_and_scanner_method_words() {
+    let typescript_words = typescript_method_words();
+    let macro_words = macro_method_words();
+    let scanner_words = all_verifications()
+        .into_iter()
+        .map(|verification| verification.to_string())
+        .collect::<Vec<_>>();
+
+    assert_eq!(typescript_words, macro_words);
+    assert_eq!(typescript_words, scanner_words);
 }

@@ -22,20 +22,3 @@ test("verifies marks a test without changing execution", function verifiesHelper
     undefined,
   );
 });
-
-test("verifies accepts every scanner verification method", function verificationMethodConformance() {
-  verifies("rule_verification_method_words", "conformance");
-  for (const method of [
-    "exhaustion",
-    "property",
-    "examples",
-    "conformance",
-    "construction",
-    "proof",
-  ] as const) {
-    assert.equal(
-      verifies("rule_typescript_verifies_helper_marker", method),
-      undefined,
-    );
-  }
-});

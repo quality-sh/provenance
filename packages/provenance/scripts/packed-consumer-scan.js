@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 export function assertPackedConsumerScan(output) {
   const report = JSON.parse(output);
+  assert.deepEqual(report.warnings, []);
   assert.deepEqual(
     report.bindings.map(({ rule_id, file_path, item_name, verification }) => ({
       rule_id,

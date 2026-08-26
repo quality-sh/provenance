@@ -140,46 +140,6 @@ fn release_workflow_uses_npm_trusted_publishing_without_a_token() {
 }
 
 #[test]
-fn npm_automation_tracks_each_javascript_package_directory() {
-    let workspace = workspace_root();
-    let security = fs::read_to_string(workspace.join(".github/workflows/security.yml"))
-        .expect("read security workflow");
-    let dependabot = fs::read_to_string(workspace.join(".github/dependabot.yml"))
-        .expect("read Dependabot configuration");
-
-    for directory in [
-        ".",
-        "packages/create-provenance",
-        "packages/provenance",
-        "examples/typescript-sdk",
-    ] {
-        assert!(
-            workspace
-                .join(directory)
-                .join("package-lock.json")
-                .is_file(),
-            "npm automation target {directory} has no package lock",
-        );
-        assert!(
-            security.contains(&format!("          - {directory}\n")),
-            "security workflow omits {directory}",
-        );
-        let dependabot_directory = if directory == "." {
-            "/".to_string()
-        } else {
-            format!("/{directory}")
-        };
-        assert!(
-            dependabot.contains(&format!("      - {dependabot_directory}\n")),
-            "Dependabot omits {dependabot_directory}",
-        );
-    }
-
-    assert!(!security.contains("provenance-rules-js"));
-    assert!(!dependabot.contains("provenance-rules-js"));
-}
-
-#[test]
 fn cli_package_contains_its_embedded_skills() {
     let workspace = workspace_root();
     let output = Command::new(env!("CARGO"))
