@@ -368,10 +368,14 @@ jobs:
         run: shellcheck .github/scripts/*.sh .github/scripts/release-smoke/*.sh
       - name: Install workflow validator
         if: matrix.os == 'ubuntu-latest'
+        env:
+          GOBIN: ${{ runner.temp }}/release-tools
         run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
       - name: Validate workflows
         if: matrix.os == 'ubuntu-latest'
-        run: "$(go env GOPATH)/bin/actionlint"
+        env:
+          GOBIN: ${{ runner.temp }}/release-tools
+        run: '"$GOBIN/actionlint"'
       - name: Test release smoke helpers
         if: matrix.os == 'ubuntu-latest'
         shell: bash
