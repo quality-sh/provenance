@@ -18,12 +18,7 @@ mkdir -p "$HOME" "$NPM_CONFIG_CACHE"
 : > "$NPM_CONFIG_USERCONFIG"
 
 fixture="$smoke_root/npm-fixture"
-
-npm_packages_are_visible() {
-  npm view "@quality-sh/create-provenance@$version" version >/dev/null &&
-    npm view "@quality-sh/provenance@$version" version >/dev/null &&
-    npm view "@quality-sh/provenance-linux-x64-gnu@$version" version >/dev/null
-}
+target_manifest="$script_directory/../../release-targets.json"
 
 initialize_npm_fixture() {
   (
@@ -51,7 +46,8 @@ JS
   fi
 }
 
-retry_channel "$channel" npm_packages_are_visible
+retry_channel \
+  "$channel" npm_release_packages_are_visible "$target_manifest" "$version"
 mkdir -p "$fixture"
 cat > "$fixture/package.json" <<'JSON'
 {

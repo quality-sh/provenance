@@ -20,7 +20,7 @@ const targets = JSON.parse(readFileSync(
 // @provenance verification: examples
 // @provenance rule: rule_sdk_install_has_no_binary_fetch
 test("every Rust release target becomes a checksummed npm platform package", () => {
-  for (const { target, npm: packageData } of targets) {
+  for (const { target, executable_suffix: executableSuffix, npm: packageData } of targets) {
     const temporary = mkdtempSync(join(tmpdir(), "provenance-engine-package-"));
     const binary = join(temporary, "built-provenance");
     const output = join(temporary, "package");
@@ -47,7 +47,7 @@ test("every Rust release target becomes a checksummed npm platform package", () 
       "native engine packages must ask Plug'n'Play managers to unpack them",
     );
 
-    const binaryName = packageData.binary;
+    const binaryName = `provenance${executableSuffix}`;
     const packagedBinary = join(output, "bin", binaryName);
     assert.equal(readFileSync(packagedBinary, "utf8"), "native engine bytes");
     if (!packageData.os.includes("win32")) {
@@ -69,11 +69,11 @@ test("platform package metadata comes from the release target manifest", () => {
   writeFileSync(binary, "native engine bytes", { mode: 0o755 });
   writeFileSync(manifestPath, JSON.stringify([{
     target: "test-release-target",
+    executable_suffix: "",
     npm: {
       name: "@quality-sh/provenance-test",
       os: ["test-os"],
       cpu: ["test-cpu"],
-      binary: "test-provenance",
     },
   }]));
 
@@ -90,7 +90,7 @@ test("platform package metadata comes from the release target manifest", () => {
   assert.equal(manifest.name, "@quality-sh/provenance-test");
   assert.deepEqual(manifest.os, ["test-os"]);
   assert.deepEqual(manifest.cpu, ["test-cpu"]);
-  assert.equal(readFileSync(join(output, "bin", "test-provenance"), "utf8"), "native engine bytes");
+  assert.equal(readFileSync(join(output, "bin", "provenance"), "utf8"), "native engine bytes");
 });
 
 test("the TypeScript SDK names the canonical release repository", () => {

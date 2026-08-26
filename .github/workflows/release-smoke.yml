@@ -43,14 +43,14 @@ jobs:
           ARCHIVE_MATRIX: ${{ inputs.archive_matrix }}
           VERSION: ${{ inputs.version }}
         run: |
-          # VERSION is assigned in the step environment.
-          source .github/scripts/release-smoke/lib.sh
-          # shellcheck disable=SC2153
-          validate_version "$VERSION"
           if [[ -n "$ARCHIVE_MATRIX" ]]; then
             jq -e '.include | length > 0' <<< "$ARCHIVE_MATRIX" >/dev/null
             matrix=$ARCHIVE_MATRIX
           else
+            # Manual dispatch has no release preflight to own this contract.
+            source .github/scripts/release-smoke/lib.sh
+            # shellcheck disable=SC2153
+            validate_version "$VERSION"
             matrix=$(python3 .github/scripts/release-contract.py \
               "$VERSION" .github/release-targets.json |
               sed -n 's/^smoke-matrix=//p')

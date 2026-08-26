@@ -9,8 +9,7 @@
       "name": "@quality-sh/provenance-linux-x64-gnu",
       "os": ["linux"],
       "cpu": ["x64"],
-      "libc": ["glibc"],
-      "binary": "provenance"
+      "libc": ["glibc"]
     }
   },
   {
@@ -22,8 +21,7 @@
     "npm": {
       "name": "@quality-sh/provenance-win32-x64-msvc",
       "os": ["win32"],
-      "cpu": ["x64"],
-      "binary": "provenance.exe"
+      "cpu": ["x64"]
     }
   },
   {
@@ -35,8 +33,7 @@
     "npm": {
       "name": "@quality-sh/provenance-darwin-x64",
       "os": ["darwin"],
-      "cpu": ["x64"],
-      "binary": "provenance"
+      "cpu": ["x64"]
     }
   },
   {
@@ -48,8 +45,7 @@
     "npm": {
       "name": "@quality-sh/provenance-darwin-arm64",
       "os": ["darwin"],
-      "cpu": ["arm64"],
-      "binary": "provenance"
+      "cpu": ["arm64"]
     }
   }
 ]

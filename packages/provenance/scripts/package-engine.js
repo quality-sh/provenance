@@ -10,7 +10,7 @@ const targetsPath = args.targets ?? fileURLToPath(
 );
 const targets = JSON.parse(readFileSync(targetsPath, "utf8"));
 const targetName = required(args, "target");
-const target = targets.find((entry) => entry.target === targetName)?.npm;
+const target = targets.find((entry) => entry.target === targetName);
 if (target === undefined) {
   throw new Error(
     `unsupported Rust target ${targetName}; expected ${targets.map((entry) => entry.target).join(", ")}`,
@@ -19,15 +19,17 @@ if (target === undefined) {
 const source = required(args, "binary");
 const output = required(args, "out");
 const version = required(args, "version");
-const destination = join(output, "bin", target.binary);
+const packageData = target.npm;
+const binaryName = `provenance${target.executable_suffix}`;
+const destination = join(output, "bin", binaryName);
 mkdirSync(join(output, "bin"), { recursive: true });
 copyFileSync(source, destination);
-if (target.os[0] !== "win32") {
+if (!packageData.os.includes("win32")) {
   chmodSync(destination, 0o755);
 }
 
 const manifest = {
-  name: target.name,
+  name: packageData.name,
   version,
   description: "Platform engine for @quality-sh/provenance",
   license: "BUSL-1.1",
@@ -35,16 +37,16 @@ const manifest = {
     type: "git",
     url: "git+https://github.com/quality-sh/provenance.git",
   },
-  os: target.os,
-  cpu: target.cpu,
-  ...(target.libc === undefined ? {} : { libc: target.libc }),
+  os: packageData.os,
+  cpu: packageData.cpu,
+  ...(packageData.libc === undefined ? {} : { libc: packageData.libc }),
   engines: { node: ">=20" },
   preferUnplugged: true,
   files: ["bin", "SHA256SUMS", "README.md", "LICENSE"],
   // A platform package carries the binary and nothing else. The command name
   // stays with @quality-sh/provenance, which every install has, so `npx
   // provenance` behaves the same whether or not this package was installed.
-  exports: { "./bin": `./bin/${target.binary}` },
+  exports: { "./bin": `./bin/${binaryName}` },
 };
 writeFileSync(join(output, "package.json"), `${JSON.stringify(manifest, null, 2)}\n`);
 copyFileSync(fileURLToPath(new URL("../../../README.md", import.meta.url)), join(output, "README.md"));

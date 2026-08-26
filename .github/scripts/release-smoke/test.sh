@@ -30,6 +30,28 @@ done
 temporary=$(make_smoke_directory helper-test)
 trap 'rm -rf -- "$temporary"' EXIT
 
+fake_npm_bin="$temporary/fake-npm-bin"
+mkdir -p "$fake_npm_bin"
+cat > "$fake_npm_bin/npm" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$NPM_VIEW_LOG"
+SH
+chmod 755 "$fake_npm_bin/npm"
+export NPM_VIEW_LOG="$temporary/npm-view.log"
+PATH="$fake_npm_bin:$PATH" npm_release_packages_are_visible \
+  "$script_directory/../../release-targets.json" 0.2.2
+expected_npm_views=$(($(jq 'length' "$script_directory/../../release-targets.json") + 2))
+[[ $(wc -l < "$NPM_VIEW_LOG") -eq "$expected_npm_views" ]] ||
+  fail "npm visibility probe did not check every release package"
+for package in @quality-sh/create-provenance @quality-sh/provenance; do
+  grep -Fqx "view $package@0.2.2 version" "$NPM_VIEW_LOG" ||
+    fail "npm visibility probe omitted $package"
+done
+while IFS= read -r package; do
+  grep -Fqx "view $package@0.2.2 version" "$NPM_VIEW_LOG" ||
+    fail "npm visibility probe omitted $package"
+done < <(jq -r '.[].npm.name' "$script_directory/../../release-targets.json")
+
 fake_binary="$temporary/provenance"
 cat > "$fake_binary" <<'SH'
 #!/usr/bin/env bash
@@ -172,6 +194,7 @@ python3 "$script_directory/extract_archive.py" \
 cmp "$temporary/archive-source/file.txt" "$temporary/archive-output/file.txt"
 
 contract_output="$temporary/release-contract-output"
+python3 "$script_directory/../release-contract.test.py"
 python3 "$script_directory/../release-contract.py" \
   0.2.2 "$script_directory/../../release-targets.json" > "$contract_output"
 jq -e -s '

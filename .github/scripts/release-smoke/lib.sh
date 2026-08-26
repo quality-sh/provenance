@@ -65,6 +65,22 @@ retry_channel() {
   return 1
 }
 
+npm_release_packages_are_visible() {
+  local target_manifest=$1
+  local version=$2
+  local platform_packages
+  if ! platform_packages=$(jq -er '.[].npm.name' "$target_manifest"); then
+    return 1
+  fi
+
+  npm view "@quality-sh/create-provenance@$version" version >/dev/null || return
+  npm view "@quality-sh/provenance@$version" version >/dev/null || return
+  local package
+  while IFS= read -r package; do
+    npm view "$package@$version" version >/dev/null || return
+  done <<< "$platform_packages"
+}
+
 make_smoke_directory() {
   local channel=$1
   local base=${RUNNER_TEMP:-${TMPDIR:-/tmp}}
