@@ -82,7 +82,23 @@ pub(super) fn rename_no_replace(from: &Path, to: &Path) -> std::io::Result<()> {
 
 #[cfg(windows)]
 pub(super) fn rename_no_replace(from: &Path, to: &Path) -> std::io::Result<()> {
-    std::fs::rename(from, to)
+    use std::iter::once;
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Foundation::{ERROR_ALREADY_EXISTS, ERROR_FILE_EXISTS};
+    use windows_sys::Win32::Storage::FileSystem::MoveFileExW;
+
+    let from: Vec<u16> = from.as_os_str().encode_wide().chain(once(0)).collect();
+    let to: Vec<u16> = to.as_os_str().encode_wide().chain(once(0)).collect();
+    if unsafe { MoveFileExW(from.as_ptr(), to.as_ptr(), 0) } != 0 {
+        return Ok(());
+    }
+    let error = std::io::Error::last_os_error();
+    match error.raw_os_error() {
+        Some(code) if code == ERROR_FILE_EXISTS as i32 || code == ERROR_ALREADY_EXISTS as i32 => {
+            Err(std::io::Error::new(ErrorKind::AlreadyExists, error))
+        }
+        _ => Err(error),
+    }
 }
 
 #[cfg(not(any(

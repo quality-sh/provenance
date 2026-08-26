@@ -67,10 +67,14 @@ const packOutput = execFileSync(process.execPath, [npmCli, "pack", sdkRoot, "--j
 const archive = join(temporary, JSON.parse(packOutput)[0].filename);
 const sdkSpec = manager === "deno"
   ? `@quality-sh/provenance@${fixtureVersion}`
+  : manager === "nub"
+    ? `@quality-sh/provenance@file:${archive}`
   : archive;
 const versionOutput = execFileSync(manager, ["--version"], { encoding: "utf8" });
 const managerVersion = manager === "deno"
   ? versionOutput.match(/^deno\s+(\S+)/)?.[1]
+  : manager === "nub"
+    ? versionOutput.trim().replace(/^v(?=\d)/, "")
   : versionOutput.trim();
 assert.ok(managerVersion, `could not read the ${manager} version`);
 writeFileSync(join(project, "package.json"), JSON.stringify({

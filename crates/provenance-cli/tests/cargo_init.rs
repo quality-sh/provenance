@@ -2,6 +2,7 @@ use assert_cmd::Command;
 use predicates::prelude::*;
 use provenance_macros::verifies;
 use serde_json::json;
+use std::path::Path;
 
 #[path = "cargo_init/support.rs"]
 mod support;
@@ -302,8 +303,11 @@ fn cargo_add_targets_the_selected_manifest_without_resolving_its_name_again() {
         .find(|call| call.starts_with("add "))
         .unwrap()
         .to_owned();
-    assert!(add.contains(" --manifest-path "), "{add}");
-    assert!(add.ends_with("/crates/api/Cargo.toml"), "{add}");
+    let (_, manifest) = add.rsplit_once(" --manifest-path ").unwrap();
+    assert_eq!(
+        Path::new(manifest),
+        fixture.root().join("crates").join("api").join("Cargo.toml")
+    );
     assert!(!add.contains(" --package "), "{add}");
 }
 
