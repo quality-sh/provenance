@@ -8,28 +8,16 @@ source "$script_directory/lib.sh"
 version=${1-}
 target=${2-}
 archive_format=${3-}
+archive=${4-}
+package=${5-}
+executable_suffix=${6-}
 validate_version "$version"
-
-case "$target:$archive_format" in
-  x86_64-unknown-linux-gnu:tar.gz | x86_64-apple-darwin:tar.gz | aarch64-apple-darwin:tar.gz)
-    executable_suffix=
-    ;;
-  x86_64-pc-windows-msvc:zip)
-    executable_suffix=.exe
-    ;;
-  *)
-    channel_failure "GitHub archive" "unsupported smoke target: $target ($archive_format)"
-    exit 2
-    ;;
-esac
 
 channel="GitHub archive $target"
 smoke_root=$(make_smoke_directory github-archive)
 trap 'rm -rf -- "$smoke_root"' EXIT
 
 tag="v$version"
-package="provenance-$tag-$target"
-archive="$package.$archive_format"
 base_url="https://github.com/quality-sh/provenance/releases/download/$tag"
 
 release_assets_are_visible() {

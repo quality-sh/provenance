@@ -43,7 +43,7 @@ jobs:
               - ".github/workflows/release.yml"
               - ".github/workflows/release-smoke.yml"
               - ".github/scripts/**/*.sh"
-              - ".github/scripts/release-smoke/*.py"
+              - ".github/scripts/**/*.py"
             rust:
               - *ci
               - *release
@@ -366,16 +366,12 @@ jobs:
       - name: Run ShellCheck
         if: matrix.os == 'ubuntu-latest'
         run: shellcheck .github/scripts/*.sh .github/scripts/release-smoke/*.sh
-      - name: Install workflow validators
+      - name: Install workflow validator
         if: matrix.os == 'ubuntu-latest'
-        run: |
-          python3 -m pip install --disable-pip-version-check --no-input PyYAML==6.0.3
-          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
-      - name: Validate workflows and release targets
+        run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+      - name: Validate workflows
         if: matrix.os == 'ubuntu-latest'
-        run: |
-          "$(go env GOPATH)/bin/actionlint"
-          python3 .github/scripts/release-smoke/validate-targets.py
+        run: "$(go env GOPATH)/bin/actionlint"
       - name: Test release smoke helpers
         if: matrix.os == 'ubuntu-latest'
         shell: bash

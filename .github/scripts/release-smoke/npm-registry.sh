@@ -67,8 +67,7 @@ if ! initialize_npm_fixture; then
 fi
 assert_npm_sdk_requirement
 assert_initialized_repository "$channel" "$fixture"
-capture_initialized_repository \
-  "$channel" "$fixture" "$smoke_root/first-init" package.json package-lock.json
+capture_initialized_repository "$channel" "$fixture" "$smoke_root/first-init"
 
 if ! initialize_npm_fixture; then
   channel_failure "$channel" "the second npm initialization failed"
@@ -76,8 +75,7 @@ if ! initialize_npm_fixture; then
 fi
 assert_npm_sdk_requirement
 assert_initialized_repository "$channel" "$fixture"
-capture_initialized_repository \
-  "$channel" "$fixture" "$smoke_root/second-init" package.json package-lock.json
+capture_initialized_repository "$channel" "$fixture" "$smoke_root/second-init"
 assert_initialized_snapshots_equal \
   "$channel" "$smoke_root/first-init" "$smoke_root/second-init"
 assert_provenance_check \

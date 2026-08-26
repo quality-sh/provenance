@@ -32,26 +32,6 @@ crates_are_visible() {
   done
 }
 
-assert_cargo_sdk_requirement() {
-  if ! python3 - "$fixture/Cargo.toml" "$version" <<'PY'
-import sys
-import tomllib
-
-with open(sys.argv[1], "rb") as manifest_file:
-    manifest = tomllib.load(manifest_file)
-dependency = manifest.get("dependencies", {}).get("provenance-sdk")
-requirement = dependency if isinstance(dependency, str) else (dependency or {}).get("version")
-if requirement != sys.argv[2]:
-    raise SystemExit(
-        f"provenance-sdk requirement is {requirement!r}; expected {sys.argv[2]!r}"
-    )
-PY
-  then
-    channel_failure "$channel" "Cargo.toml does not require provenance-sdk $version exactly"
-    return 1
-  fi
-}
-
 retry_channel "$channel" crates_are_visible
 if ! cargo install --locked provenance-cli --version "=$version"; then
   channel_failure "$channel" "provenance-cli $version failed to install after it became visible"
@@ -59,11 +39,12 @@ if ! cargo install --locked provenance-cli --version "=$version"; then
 fi
 
 for binary in provenance cargo-provenance; do
-  if ! command -v "$binary" >/dev/null 2>&1; then
+  installed_binary="$CARGO_HOME/bin/$binary"
+  if [[ ! -x "$installed_binary" ]]; then
     channel_failure "$channel" "provenance-cli $version did not install $binary"
     exit 1
   fi
-  assert_binary_version "$channel" "$version" "$binary" "$binary"
+  assert_binary_version "$channel" "$version" "$binary" "$installed_binary"
 done
 
 fixture="$smoke_root/rust-fixture"
@@ -76,19 +57,17 @@ if ! (cd "$fixture" && cargo provenance init); then
   channel_failure "$channel" "the first cargo provenance init failed"
   exit 1
 fi
-assert_cargo_sdk_requirement
+assert_cargo_sdk_requirement "$channel" "$fixture/Cargo.toml" "$version"
 assert_initialized_repository "$channel" "$fixture"
-capture_initialized_repository \
-  "$channel" "$fixture" "$smoke_root/first-init" Cargo.toml Cargo.lock
+capture_initialized_repository "$channel" "$fixture" "$smoke_root/first-init"
 
 if ! (cd "$fixture" && cargo provenance init); then
   channel_failure "$channel" "the second cargo provenance init failed"
   exit 1
 fi
-assert_cargo_sdk_requirement
+assert_cargo_sdk_requirement "$channel" "$fixture/Cargo.toml" "$version"
 assert_initialized_repository "$channel" "$fixture"
-capture_initialized_repository \
-  "$channel" "$fixture" "$smoke_root/second-init" Cargo.toml Cargo.lock
+capture_initialized_repository "$channel" "$fixture" "$smoke_root/second-init"
 assert_initialized_snapshots_equal \
   "$channel" "$smoke_root/first-init" "$smoke_root/second-init"
 assert_provenance_check "$channel" "$fixture" "$CARGO_HOME/bin/provenance"

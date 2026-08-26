@@ -16,6 +16,9 @@ import { assertPackedConsumerScan } from "./packed-consumer-scan.js";
 const packageRoot = fileURLToPath(new URL("..", import.meta.url));
 const initializerRoot = fileURLToPath(new URL("../../create-provenance", import.meta.url));
 const repositoryRoot = fileURLToPath(new URL("../../..", import.meta.url));
+const releaseTargets = JSON.parse(
+  readFileSync(join(repositoryRoot, ".github", "release-targets.json"), "utf8"),
+);
 const npmCli = process.env.npm_execpath;
 assert.ok(npmCli, "run this test through npm so its CLI path is known");
 const npxCli = join(dirname(npmCli), "npx-cli.js");
@@ -446,13 +449,7 @@ function stageEngineArchivesForYarn() {
   const resolutions = {
     [engineManifest.name]: `file:../archives/${engineArchive}`,
   };
-  const targets = [
-    "aarch64-apple-darwin",
-    "x86_64-apple-darwin",
-    "x86_64-pc-windows-msvc",
-    "x86_64-unknown-linux-gnu",
-  ];
-  for (const target of targets) {
+  for (const { target } of releaseTargets) {
     if (target === rustTarget) continue;
 
     const staged = join(temporary, `engine-package-${target}`);

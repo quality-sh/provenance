@@ -91,12 +91,41 @@ if [[ -e "$CHECK_LOG" ]]; then
 fi
 assert_provenance_check test "$repository" "$fake_binary"
 [[ $(wc -l < "$CHECK_LOG") -eq 1 ]] || fail "provenance check did not run exactly once"
-capture_initialized_repository test "$repository" "$temporary/first" Cargo.toml Cargo.lock
-capture_initialized_repository test "$repository" "$temporary/second" Cargo.toml Cargo.lock
+
+cat > "$repository/Cargo.toml" <<'TOML'
+[package]
+name = "fixture"
+version = "0.0.0"
+
+[dependencies]
+provenance-sdk = "=0.2.2"
+TOML
+assert_cargo_sdk_requirement test "$repository/Cargo.toml" 0.2.2
+sed -i.bak 's/=0\.2\.2/0.2.2/' "$repository/Cargo.toml"
+rm -f -- "$repository/Cargo.toml.bak"
+if assert_cargo_sdk_requirement test "$repository/Cargo.toml" 0.2.2 \
+  >/dev/null 2>&1
+then
+  fail "Cargo requirement assertion accepted a non-exact requirement"
+fi
+sed -i.bak 's/"0\.2\.2"/"=0.2.2"/' "$repository/Cargo.toml"
+rm -f -- "$repository/Cargo.toml.bak"
+
+capture_initialized_repository test "$repository" "$temporary/first"
+capture_initialized_repository test "$repository" "$temporary/second"
 assert_initialized_snapshots_equal test "$temporary/first" "$temporary/second"
 
+printf 'unexpected initializer output\n' > "$repository/unexpected.txt"
+capture_initialized_repository test "$repository" "$temporary/unexpected"
+if assert_initialized_snapshots_equal test "$temporary/first" "$temporary/unexpected" \
+  >/dev/null 2>&1
+then
+  fail "snapshot comparison ignored an unexpected repository file"
+fi
+rm -f -- "$repository/unexpected.txt"
+
 printf '# changed\n' >> "$repository/Cargo.toml"
-capture_initialized_repository test "$repository" "$temporary/changed" Cargo.toml Cargo.lock
+capture_initialized_repository test "$repository" "$temporary/changed"
 if assert_initialized_snapshots_equal test "$temporary/first" "$temporary/changed" \
   >/dev/null 2>&1
 then
@@ -141,5 +170,15 @@ PY
 python3 "$script_directory/extract_archive.py" \
   "$temporary/fixture.zip" "$temporary/archive-output"
 cmp "$temporary/archive-source/file.txt" "$temporary/archive-output/file.txt"
+
+contract_output="$temporary/release-contract-output"
+python3 "$script_directory/../release-contract.py" \
+  0.2.2 "$script_directory/../../release-targets.json" > "$contract_output"
+jq -e -s '
+  (map(select(startswith("version="))) == ["version=0.2.2"]) and
+  (map(select(startswith("build-matrix="))) | length == 1) and
+  (map(select(startswith("smoke-matrix="))) | length == 1)
+' < <(jq -R . "$contract_output") >/dev/null ||
+  fail "release contract did not emit one version and both target matrices"
 
 printf 'release smoke helper tests passed\n'

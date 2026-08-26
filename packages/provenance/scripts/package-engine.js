@@ -4,38 +4,17 @@ import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // @provenance rule: rule_sdk_install_has_no_binary_fetch
-const targets = {
-  "aarch64-apple-darwin": {
-    name: "@quality-sh/provenance-darwin-arm64",
-    os: ["darwin"],
-    cpu: ["arm64"],
-    binary: "provenance",
-  },
-  "x86_64-apple-darwin": {
-    name: "@quality-sh/provenance-darwin-x64",
-    os: ["darwin"],
-    cpu: ["x64"],
-    binary: "provenance",
-  },
-  "x86_64-pc-windows-msvc": {
-    name: "@quality-sh/provenance-win32-x64-msvc",
-    os: ["win32"],
-    cpu: ["x64"],
-    binary: "provenance.exe",
-  },
-  "x86_64-unknown-linux-gnu": {
-    name: "@quality-sh/provenance-linux-x64-gnu",
-    os: ["linux"],
-    cpu: ["x64"],
-    libc: ["glibc"],
-    binary: "provenance",
-  },
-};
-
 const args = parseArgs(process.argv.slice(2));
-const target = targets[required(args, "target")];
+const targetsPath = args.targets ?? fileURLToPath(
+  new URL("../../../.github/release-targets.json", import.meta.url),
+);
+const targets = JSON.parse(readFileSync(targetsPath, "utf8"));
+const targetName = required(args, "target");
+const target = targets.find((entry) => entry.target === targetName)?.npm;
 if (target === undefined) {
-  throw new Error(`unsupported Rust target ${args.target}; expected ${Object.keys(targets).join(", ")}`);
+  throw new Error(
+    `unsupported Rust target ${targetName}; expected ${targets.map((entry) => entry.target).join(", ")}`,
+  );
 }
 const source = required(args, "binary");
 const output = required(args, "out");

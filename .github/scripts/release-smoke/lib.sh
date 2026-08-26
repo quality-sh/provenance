@@ -190,34 +190,47 @@ assert_provenance_check() {
   fi
 }
 
+assert_cargo_sdk_requirement() {
+  local channel=$1
+  local manifest_path=$2
+  local version=$3
+  if ! python3 - "$manifest_path" "=$version" <<'PY'
+import sys
+import tomllib
+
+with open(sys.argv[1], "rb") as manifest_file:
+    manifest = tomllib.load(manifest_file)
+dependency = manifest.get("dependencies", {}).get("provenance-sdk")
+requirement = dependency if isinstance(dependency, str) else (dependency or {}).get("version")
+if requirement != sys.argv[2]:
+    raise SystemExit(
+        f"provenance-sdk requirement is {requirement!r}; expected {sys.argv[2]!r}"
+    )
+PY
+  then
+    channel_failure "$channel" \
+      "Cargo.toml does not require provenance-sdk =$version exactly"
+    return 1
+  fi
+}
+
 capture_initialized_repository() {
   local channel=$1
   local repository=$2
   local destination=$3
-  shift 3
-  local paths=(
-    .provenance/state
-    .gitignore
-    .agents/skills
-    .claude/skills
-    AGENTS.md
-    "$@"
-  )
-  local path
 
   if [[ -e "$destination" ]]; then
     channel_failure "$channel" "snapshot destination already exists: $destination"
     return 1
   fi
-  for path in "${paths[@]}"; do
-    if [[ ! -e "$repository/$path" && ! -L "$repository/$path" ]]; then
-      channel_failure "$channel" "cannot snapshot missing initialized path: $path"
-      return 1
-    fi
-  done
 
   mkdir -p "$destination"
-  if ! tar -C "$repository" -cf - -- "${paths[@]}" |
+  if ! tar -C "$repository" \
+    --exclude=.git \
+    --exclude=node_modules \
+    --exclude=target \
+    --exclude=.provenance/cache \
+    -cf - . |
     tar -C "$destination" -xf -
   then
     channel_failure "$channel" "could not capture initialized repository bytes"
