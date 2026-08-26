@@ -177,8 +177,11 @@ impl InitSkillPlan {
         self.0.recheck()
     }
 
-    pub(crate) fn apply(self) -> anyhow::Result<()> {
-        self.0.apply().map(|_| ())
+    pub(crate) fn apply_in(
+        self,
+        rollback: &mut crate::atomic_file::FileRollbackJournal,
+    ) -> anyhow::Result<()> {
+        self.0.apply_in(rollback).map(|_| ())
     }
 }
 

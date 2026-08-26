@@ -1,5 +1,5 @@
 use super::FileAction;
-use crate::atomic_file::FileSnapshot;
+use crate::atomic_file::{FileRollbackJournal, FileSnapshot};
 use crate::skills::install_decision::{classify_install, TargetEntry, TargetState};
 use crate::skills::{file_report, skill_name, EmbeddedSkill, FileInstallReport, FileStatus};
 use std::path::{Path, PathBuf};
@@ -90,9 +90,12 @@ impl RemoveAction {
         Ok(None)
     }
 
-    pub(super) fn apply(self) -> anyhow::Result<FileInstallReport> {
+    pub(super) fn apply(
+        self,
+        rollback: &mut FileRollbackJournal,
+    ) -> anyhow::Result<FileInstallReport> {
         self.recheck()?;
-        std::fs::remove_file(&self.path)?;
+        rollback.remove(&self.path, &self.before)?;
         if self.parent_entries.len() == 1 {
             std::fs::remove_dir(&self.parent)?;
         }

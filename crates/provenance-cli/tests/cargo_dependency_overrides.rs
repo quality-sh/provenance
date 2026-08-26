@@ -85,7 +85,10 @@ fn planned_repository_validation_failure_precedes_cargo_and_onboarding_writes() 
     assert!(!fixture.root.join("Cargo.lock").exists());
     assert!(original_scope.is_dir());
     assert!(!fixture.root.join(".provenance/manifest.json").exists());
-    assert!(!fixture.root.join(".provenance/cache").exists());
+    assert!(fixture
+        .root
+        .join(".provenance/cache/locks/repository.publication.lock")
+        .exists());
     assert!(!fixture.root.join(".agents").exists());
     assert!(!fixture.root.join(".claude").exists());
     assert!(!fixture.root.join("AGENTS.md").exists());

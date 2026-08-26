@@ -17,6 +17,10 @@ const manager = process.env.PROVENANCE_TEST_PACKAGE_MANAGER;
 assert.ok(manager, "set PROVENANCE_TEST_PACKAGE_MANAGER");
 
 const packageRoot = fileURLToPath(new URL("..", import.meta.url));
+const initializerVersion = JSON.parse(
+  readFileSync(join(packageRoot, "package.json"), "utf8"),
+).version;
+const fixtureVersion = manager === "deno" ? "0.1.0" : initializerVersion;
 const npmCli = process.env.npm_execpath;
 assert.ok(npmCli, "run this test through npm so its CLI path is known");
 
@@ -31,7 +35,7 @@ mkdirSync(project);
 
 writeFileSync(join(sdkRoot, "package.json"), JSON.stringify({
   name: "@quality-sh/provenance",
-  version: "0.1.0",
+  version: fixtureVersion,
   type: "module",
   main: "dist/index.js",
   bin: { provenance: "bin/provenance.mjs" },
@@ -62,7 +66,7 @@ const packOutput = execFileSync(process.execPath, [npmCli, "pack", sdkRoot, "--j
 });
 const archive = join(temporary, JSON.parse(packOutput)[0].filename);
 const sdkSpec = manager === "deno"
-  ? "@quality-sh/provenance@0.1.0"
+  ? `@quality-sh/provenance@${fixtureVersion}`
   : archive;
 const versionOutput = execFileSync(manager, ["--version"], { encoding: "utf8" });
 const managerVersion = manager === "deno"
@@ -99,11 +103,15 @@ function verifyManagerInstall(packageManager, directory) {
     undefined,
     "the temporary initializer must not become a project dependency",
   );
-  assert.equal(
-    readFileSync(join(directory, ".gitignore"), "utf8"),
-    ".provenance/cache/\n",
+  const stateManifest = readFileSync(
+    join(directory, ".provenance", "state", "manifest.json"),
+    "utf8",
   );
-  assert.equal(installedSdkVersion(directory), "0.1.0");
+  assert.doesNotThrow(
+    () => JSON.parse(stateManifest),
+    `${packageManager} must run the installed Provenance engine initializer`,
+  );
+  assert.equal(installedSdkVersion(directory), fixtureVersion);
 }
 
 function installedSdkVersion(directory) {

@@ -87,7 +87,6 @@ for (const [manager, command, args, environment] of managers) {
 
 // @provenance verification: examples
 // @provenance rule: rule_typescript_initializer_installs_dev_dependency
-// @provenance rule: rule_typescript_initializer_validates_project
 function verifyExactDevelopmentDependency(manager, command, args, environment) {
   const project = projectDirectory({ packageManager: `${manager}@1.0.0` });
   const invocations = [];
@@ -115,6 +114,22 @@ function verifyExactDevelopmentDependency(manager, command, args, environment) {
   ]);
   assert.throws(() => readFileSync(join(project, ".gitignore")), /ENOENT/);
 }
+
+test("the initializer reports failure when the installed engine rejects init", () => {
+  const project = projectDirectory({ packageManager: "npm@1.0.0" });
+  let invocation = 0;
+
+  assert.throws(
+    () => initializeProject({
+      projectDirectory: project,
+      packageVersion,
+      enginePath: "/provenance-engine",
+      execute: () => ({ status: invocation++ === 0 ? 0 : 23 }),
+    }),
+    /Provenance initialization failed with exit code 23/,
+  );
+  assert.equal(invocation, 2);
+});
 
 const lockfiles = [
   ["package-lock.json", "npm"],

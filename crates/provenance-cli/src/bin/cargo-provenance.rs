@@ -2,6 +2,7 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 use std::process::Command;
 
+// @provenance rule: rule_cargo_subcommand_uses_sibling_cli
 fn main() {
     let mut arguments: Vec<OsString> = std::env::args_os().skip(1).collect();
     if arguments

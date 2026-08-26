@@ -66,6 +66,29 @@ fn init_onboarding_is_idempotent() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+#[verifies("rule_init_managed_paths_stay_in_repository", examples)]
+fn init_refuses_managed_skill_paths_with_symlinked_ancestors() {
+    use std::os::unix::fs::symlink;
+
+    for managed_directory in [".agents", ".claude"] {
+        let temporary = tempfile::tempdir().unwrap();
+        let repo = temporary.path().join("repo");
+        let outside = temporary.path().join("outside");
+        std::fs::create_dir_all(&repo).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        symlink(&outside, repo.join(managed_directory)).unwrap();
+
+        init(&repo)
+            .failure()
+            .stderr(predicate::str::contains("symlink component"));
+
+        assert_eq!(std::fs::read_dir(&outside).unwrap().count(), 0);
+        assert!(!repo.join(".provenance").exists());
+    }
+}
+
 #[test]
 #[verifies("rule_init_installs_bundled_skills", examples)]
 #[verifies("rule_init_upgrades_hash_owned_skills", examples)]
@@ -260,7 +283,9 @@ fn planned_validation_failure_preserves_the_original_repository() {
     assert!(original_scope.is_dir());
     assert!(!repo.join(".provenance/manifest.json").exists());
     assert!(!repo.join(".provenance/state/edges").exists());
-    assert!(!repo.join(".provenance/cache").exists());
+    assert!(repo
+        .join(".provenance/cache/locks/repository.publication.lock")
+        .is_file());
     assert!(!repo.join(".agents").exists());
     assert!(!repo.join(".claude").exists());
     assert!(!repo.join("AGENTS.md").exists());

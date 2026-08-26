@@ -127,13 +127,7 @@ jobs:
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
-      # Report-only for now: the report is printed but the step never fails.
-      # The four wiki homepage rules are bound and verified. --strict still
-      # cannot be added because the scan flags ~66 directive-shaped fixture
-      # strings inside coverage and scanner tests (unknown rule ids, legacy
-      # @statesman markers). Add --strict once those fixtures are excluded
-      # from the scan or rewritten so the parser skips them.
-      - run: cargo run -p provenance-cli -- coverage scan --repo . --path crates --scope default --validate-rules
+      - run: cargo run -p provenance-cli -- coverage scan --repo . --path crates --scope default --validate-rules --strict
       - name: Validate initializer Rule bindings
         run: cargo run -p provenance-cli -- coverage scan --repo . --path packages/create-provenance --scope default --validate-rules --strict
 
@@ -242,6 +236,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - manager: npm
+            version: 10.9.4
           - manager: bun
             version: 1.3.14
           - manager: deno
@@ -250,6 +246,8 @@ jobs:
             version: 10.15.0
           - manager: yarn
             version: 4.9.2
+          - manager: nub
+            version: 0.7.5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -263,6 +261,10 @@ jobs:
         if: matrix.manager == 'deno'
         with:
           deno-version: ${{ matrix.version }}
+      - uses: nubjs/setup-nub@47e5e7393d50f4e9544ddaf756aa277972afba2d # v0.4.0
+        if: matrix.manager == 'nub'
+        with:
+          nub-version: ${{ matrix.version }}
       - name: Enable Corepack package manager
         if: matrix.manager == 'pnpm' || matrix.manager == 'yarn'
         run: |

@@ -19,7 +19,6 @@ it in the same change.
   Commit graph updates with the code."#;
 
 /// Projects only the instruction section owned by the exact Provenance heading.
-#[rule("rule_init_installs_bundled_skills")]
 #[rule("rule_init_owns_agents_provenance_section")]
 pub fn project(existing: &[u8]) -> anyhow::Result<Vec<u8>> {
     let existing = std::str::from_utf8(existing).context("AGENTS.md is not valid UTF-8")?;

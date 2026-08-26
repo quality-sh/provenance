@@ -54,7 +54,7 @@ impl CargoFixture {
 use std::env;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
-use std::process::{Command, Stdio};
+use std::process::Command;
 
 fn main() {
     let arguments: Vec<_> = env::args().skip(1).collect();
@@ -86,31 +86,16 @@ fn main() {
             }
             fs::write(env::var_os("FAKE_CARGO_LOCK").unwrap(), "version = 4\n").unwrap();
             fs::write(env::var_os("FAKE_CARGO_DEPENDENCY_STATE").unwrap(), "installed\n").unwrap();
+            if env::var_os("FAKE_CARGO_BREAK_LOCK_OBSERVATION").is_some() {
+                let lock = env::var_os("FAKE_CARGO_LOCK").unwrap();
+                fs::remove_file(&lock).unwrap();
+                fs::create_dir(&lock).unwrap();
+            }
             if env::var_os("FAKE_CARGO_FAIL_AFTER_WRITE").is_some() {
                 std::process::exit(42);
             }
             if env::var_os("FAKE_CARGO_STALE_INIT_PLAN").is_some() {
                 fs::write(workspace.join("AGENTS.md"), "concurrent instructions\n").unwrap();
-            }
-            if env::var_os("FAKE_CARGO_CONCURRENT_EDIT").is_some() {
-                Command::new("sh")
-                    .arg("-c")
-                    .arg(r#"while [ ! -f "$FAKE_CARGO_WORKSPACE/.provenance/state/manifest.json" ]; do :; done
-printf 'concurrent manifest\n' > "$FAKE_CARGO_MANIFEST"
-printf 'concurrent instructions\n' > "$FAKE_CARGO_WORKSPACE/AGENTS.md""#)
-                    .stdout(Stdio::inherit())
-                    .stderr(Stdio::inherit())
-                    .spawn()
-                    .unwrap();
-            }
-            if env::var_os("FAKE_CARGO_CONCURRENT_LOCK_EDIT").is_some() {
-                Command::new("sh")
-                    .arg("-c")
-                    .arg(r#"while [ ! -f "$FAKE_CARGO_WORKSPACE/.provenance/state/manifest.json" ]; do :; done
-printf 'concurrent lock\n' > "$FAKE_CARGO_LOCK"
-printf 'concurrent instructions\n' > "$FAKE_CARGO_WORKSPACE/AGENTS.md""#)
-                    .spawn()
-                    .unwrap();
             }
             if env::var_os("FAKE_CARGO_ROLLBACK_SECOND_RESTORE_FAIL").is_some() {
                 fs::write(workspace.join("AGENTS.md"), "concurrent instructions\n").unwrap();

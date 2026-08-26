@@ -4,10 +4,10 @@ use provenance_macros::rule;
 use semver::{Version, VersionReq};
 use serde::Deserialize;
 use std::collections::HashSet;
-use std::fs::Permissions;
-use std::io::{ErrorKind, Write};
-use std::path::{Path, PathBuf};
 use std::process::Command;
+
+mod rollback;
+use rollback::{CargoPaths, CargoRollback};
 
 const SDK_CRATE: &str = "provenance-sdk";
 
@@ -109,6 +109,7 @@ fn load_metadata() -> anyhow::Result<CargoMetadata> {
     serde_json::from_slice(&output.stdout).context("`cargo metadata` returned invalid JSON")
 }
 
+#[rule("rule_cargo_init_selects_workspace_package")]
 fn select_package<'a>(
     metadata: &'a CargoMetadata,
     requested: Option<&str>,
@@ -159,6 +160,7 @@ fn package_names(metadata: &CargoMetadata) -> String {
     names.join(", ")
 }
 
+#[rule("rule_cargo_init_uses_package_directory")]
 fn package_path_prefix(
     workspace_root: &Utf8Path,
     package: &CargoPackage,
@@ -183,6 +185,7 @@ fn package_path_prefix(
 /// Adds an absent SDK without replacing a compatible or development declaration.
 #[rule("rule_cargo_init_preserves_sdk_dependency")]
 #[rule("rule_cargo_init_adds_exact_sdk")]
+#[rule("rule_cargo_init_mutates_selected_manifest")]
 fn prepare_sdk(
     workspace_root: &Utf8Path,
     package: &CargoPackage,
@@ -201,26 +204,21 @@ fn prepare_sdk(
         manifest: package.manifest_path.as_std_path().to_path_buf(),
         lock: workspace_root.join("Cargo.lock").into_std_path_buf(),
     };
-    let before = CargoFilesState::capture(&paths).context("failed to snapshot Cargo files")?;
+    let rollback = CargoRollback::capture(paths)?;
     let dependency = format!("{SDK_CRATE}@={}", env!("CARGO_PKG_VERSION"));
     let status = Command::new("cargo")
-        .args(["add", &dependency, "--package", &package.name])
+        .args(["add", &dependency, "--manifest-path"])
+        .arg(&package.manifest_path)
         .current_dir(workspace_root)
         .status();
-    let after = CargoFilesState::capture(&paths)
-        .context("failed to observe Cargo files after `cargo add`")?;
-    let rollback = CargoRollback {
-        paths,
-        before,
-        after,
-    };
+    let rollback = rollback.observe_after()?;
     let cargo_result = status
         .context("failed to run `cargo add` for the Provenance SDK")
         .and_then(|status| {
             anyhow::ensure!(
                 status.success(),
-                "`cargo add {dependency} --package {}` failed",
-                package.name
+                "`cargo add {dependency} --manifest-path {}` failed",
+                package.manifest_path
             );
             Ok(())
         });
@@ -231,174 +229,6 @@ fn prepare_sdk(
         };
     }
     Ok(Some(rollback))
-}
-
-struct CargoPaths {
-    manifest: PathBuf,
-    lock: PathBuf,
-}
-
-struct CargoRollback {
-    paths: CargoPaths,
-    before: CargoFilesState,
-    after: CargoFilesState,
-}
-
-impl CargoRollback {
-    #[rule("rule_cargo_init_restores_owned_files")]
-    fn rollback(self) -> anyhow::Result<()> {
-        let current = CargoFilesState::capture(&self.paths)
-            .context("failed to inspect Cargo files before rollback")?;
-        anyhow::ensure!(
-            current.equivalent(&self.after),
-            "Cargo.toml or Cargo.lock changed after `cargo add`; neither file was restored"
-        );
-
-        self.before
-            .manifest
-            .restore(&self.paths.manifest)
-            .with_context(|| format!("failed to restore {}", self.paths.manifest.display()))?;
-        if let Err(error) = self.before.lock.restore(&self.paths.lock) {
-            return match self.after.manifest.restore(&self.paths.manifest) {
-                Ok(()) => Err(error).with_context(|| {
-                    format!(
-                        "failed to restore {}; restored {} to its post-Cargo state",
-                        self.paths.lock.display(),
-                        self.paths.manifest.display()
-                    )
-                }),
-                Err(compensation) => Err(error).with_context(|| {
-                    format!(
-                        "failed to restore {}; also failed to return {} to its post-Cargo state: {compensation}",
-                        self.paths.lock.display(),
-                        self.paths.manifest.display()
-                    )
-                }),
-            };
-        }
-        Ok(())
-    }
-}
-
-struct CargoFilesState {
-    manifest: CargoFileState,
-    lock: CargoFileState,
-}
-
-impl CargoFilesState {
-    fn capture(paths: &CargoPaths) -> anyhow::Result<Self> {
-        Ok(Self {
-            manifest: CargoFileState::capture(&paths.manifest)?,
-            lock: CargoFileState::capture(&paths.lock)?,
-        })
-    }
-
-    fn equivalent(&self, other: &Self) -> bool {
-        self.manifest.equivalent(&other.manifest) && self.lock.equivalent(&other.lock)
-    }
-}
-
-enum CargoFileState {
-    Missing,
-    Present {
-        contents: Vec<u8>,
-        permissions: Permissions,
-    },
-}
-
-impl CargoFileState {
-    fn capture(path: &Path) -> anyhow::Result<Self> {
-        let metadata = match std::fs::symlink_metadata(path) {
-            Ok(metadata) => metadata,
-            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(Self::Missing),
-            Err(error) => return Err(error.into()),
-        };
-        anyhow::ensure!(
-            metadata.is_file(),
-            "{} is not a regular file",
-            path.display()
-        );
-        Ok(Self::Present {
-            contents: std::fs::read(path)?,
-            permissions: metadata.permissions(),
-        })
-    }
-
-    fn equivalent(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Missing, Self::Missing) => true,
-            (
-                Self::Present {
-                    contents: left_contents,
-                    permissions: left_permissions,
-                },
-                Self::Present {
-                    contents: right_contents,
-                    permissions: right_permissions,
-                },
-            ) => {
-                left_contents == right_contents
-                    && permissions_equal(left_permissions, right_permissions)
-            }
-            _ => false,
-        }
-    }
-
-    fn restore(self, path: &Path) -> anyhow::Result<()> {
-        match self {
-            Self::Missing => match std::fs::remove_file(path) {
-                Ok(()) => Ok(()),
-                Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
-                Err(error) => Err(error.into()),
-            },
-            Self::Present {
-                contents,
-                permissions,
-            } => restore_file(path, &contents, permissions),
-        }
-    }
-}
-
-fn restore_file(path: &Path, contents: &[u8], permissions: Permissions) -> anyhow::Result<()> {
-    let parent = path.parent().unwrap_or_else(|| Path::new("."));
-    let name = path.file_name().unwrap_or_default().to_string_lossy();
-    for attempt in 0..100_u8 {
-        let temporary = parent.join(format!(
-            ".{name}.provenance-cargo-rollback-{}-{attempt}.tmp",
-            std::process::id()
-        ));
-        let mut file = match std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&temporary)
-        {
-            Ok(file) => file,
-            Err(error) if error.kind() == ErrorKind::AlreadyExists => continue,
-            Err(error) => return Err(error.into()),
-        };
-        let result = (|| -> std::io::Result<()> {
-            file.write_all(contents)?;
-            file.sync_all()?;
-            std::fs::set_permissions(&temporary, permissions)?;
-            crate::atomic_file::replace_path(&temporary, path)
-        })();
-        if result.is_err() {
-            let _ = std::fs::remove_file(&temporary);
-        }
-        return result.map_err(Into::into);
-    }
-    anyhow::bail!("could not allocate rollback temporary file")
-}
-
-#[cfg(unix)]
-fn permissions_equal(left: &Permissions, right: &Permissions) -> bool {
-    use std::os::unix::fs::PermissionsExt;
-    left.mode() == right.mode()
-}
-
-#[cfg(not(unix))]
-fn permissions_equal(left: &Permissions, right: &Permissions) -> bool {
-    left.readonly() == right.readonly()
 }
 
 fn validate_sdk_dependencies(dependencies: &[&CargoDependency]) -> anyhow::Result<()> {

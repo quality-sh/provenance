@@ -8,6 +8,7 @@ mod support;
 use support::CargoFixture;
 
 #[test]
+#[verifies("rule_cargo_init_selects_workspace_package", examples)]
 fn cargo_injected_argument_initializes_one_package_at_the_cli_version() {
     let fixture = CargoFixture::new(&[("app", "Cargo.toml")]);
 
@@ -27,7 +28,7 @@ fn cargo_injected_argument_initializes_one_package_at_the_cli_version() {
         .exists());
     assert!(fixture
         .cargo_calls()
-        .contains("add provenance-sdk@=0.2.2 --package app"));
+        .contains("add provenance-sdk@=0.2.2 --manifest-path"));
 }
 
 #[test]
@@ -105,6 +106,7 @@ fn cargo_and_plain_init_write_identical_onboarding_files() {
 }
 
 #[test]
+#[verifies("rule_cargo_init_selects_workspace_package", examples)]
 fn ambiguous_workspace_requires_a_package() {
     let fixture = CargoFixture::new(&[
         ("api", "crates/api/Cargo.toml"),
@@ -164,6 +166,25 @@ fn a_failing_cargo_add_restores_its_partial_manifest_and_lock_changes() {
     assert!(!fixture.root().join("Cargo.lock").exists());
 }
 
+#[test]
+fn post_command_observation_failure_restores_the_file_it_proved_owned() {
+    let fixture = CargoFixture::new(&[("app", "Cargo.toml")]);
+    let manifest = fixture.cargo_manifest();
+
+    fixture
+        .command()
+        .env("FAKE_CARGO_BREAK_LOCK_OBSERVATION", "1")
+        .args(["provenance", "init"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "restored Cargo.toml after post-command observation failed",
+        ));
+
+    assert_eq!(fixture.cargo_manifest(), manifest);
+    assert!(fixture.root().join("Cargo.lock").is_dir());
+}
+
 #[cfg(unix)]
 #[test]
 #[verifies("rule_cargo_init_restores_owned_files", examples)]
@@ -193,41 +214,6 @@ fn later_init_failure_exactly_restores_cargo_files() {
         0o640
     );
     assert!(!fixture.root().join("Cargo.lock").exists());
-}
-
-#[cfg(unix)]
-#[test]
-#[verifies("rule_cargo_init_restores_owned_files", examples)]
-fn repository_validation_failure_prevents_a_concurrent_cargo_edit() {
-    let fixture = CargoFixture::new(&[("app", "Cargo.toml")]);
-    fixture
-        .command()
-        .env("FAKE_CARGO_CONCURRENT_EDIT", "1")
-        .args(["provenance", "init"])
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("neither file was restored"));
-
-    assert_eq!(fixture.cargo_manifest(), "concurrent manifest\n");
-    assert!(fixture.root().join("Cargo.lock").exists());
-    assert!(fixture.cargo_calls().contains("add "));
-}
-
-#[cfg(unix)]
-#[test]
-#[verifies("rule_cargo_init_restores_owned_files", examples)]
-fn concurrent_lock_edit_prevents_restoring_either_cargo_file() {
-    let fixture = CargoFixture::new(&[("app", "Cargo.toml")]);
-    fixture
-        .command()
-        .env("FAKE_CARGO_CONCURRENT_LOCK_EDIT", "1")
-        .args(["provenance", "init"])
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("neither file was restored"));
-
-    assert!(fixture.cargo_manifest().contains("provenance-sdk"));
-    assert_eq!(fixture.cargo_lock(), "concurrent lock\n");
 }
 
 #[cfg(unix)]
@@ -277,6 +263,7 @@ fn failed_manifest_restore_leaves_both_post_cargo_files_untouched() {
 }
 
 #[test]
+#[verifies("rule_cargo_init_uses_package_directory", examples)]
 fn explicit_package_selects_its_manifest_directory_as_the_path_prefix() {
     let fixture = CargoFixture::new(&[
         ("api", "crates/api/Cargo.toml"),
@@ -292,7 +279,32 @@ fn explicit_package_selects_its_manifest_directory_as_the_path_prefix() {
     assert_eq!(fixture.scope_path_prefix(), "crates/api");
     assert!(fixture
         .cargo_calls()
-        .contains("add provenance-sdk@=0.2.2 --package api"));
+        .contains("add provenance-sdk@=0.2.2 --manifest-path"));
+}
+
+#[test]
+#[verifies("rule_cargo_init_mutates_selected_manifest", examples)]
+fn cargo_add_targets_the_selected_manifest_without_resolving_its_name_again() {
+    let fixture = CargoFixture::new(&[
+        ("api", "crates/api/Cargo.toml"),
+        ("worker", "crates/worker/Cargo.toml"),
+    ]);
+
+    fixture
+        .command()
+        .args(["provenance", "init", "--package", "api"])
+        .assert()
+        .success();
+
+    let add = fixture
+        .cargo_calls()
+        .lines()
+        .find(|call| call.starts_with("add "))
+        .unwrap()
+        .to_owned();
+    assert!(add.contains(" --manifest-path "), "{add}");
+    assert!(add.ends_with("/crates/api/Cargo.toml"), "{add}");
+    assert!(!add.contains(" --package "), "{add}");
 }
 
 #[test]

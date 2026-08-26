@@ -1,14 +1,16 @@
 use super::install_decision::{classify_install, InstallVerdict, TargetEntry, TargetState};
-use super::{file_report, skill_name, EmbeddedSkill, FileInstallReport, FileStatus, InstallReport};
-use crate::atomic_file::{atomic_replace, FileSnapshot};
-use anyhow::Context;
+use super::{file_report, FileInstallReport, FileStatus, InstallReport};
+use crate::atomic_file::{ensure_managed_directory, FileRollbackJournal, FileSnapshot};
 use provenance_macros::rule;
 use std::path::{Path, PathBuf};
 
 mod auxiliary;
-use auxiliary::{plan_agents_cleanup, plan_copy_files, RemoveAction};
+use auxiliary::{plan_agents_cleanup, RemoveAction};
+mod claude;
+use claude::ClaudeAction;
 
 pub(super) struct InstallPlan {
+    base: PathBuf,
     global: bool,
     canonical_dir: PathBuf,
     claude_dir: PathBuf,
@@ -42,6 +44,8 @@ impl InstallPlan {
         };
         let canonical_dir = base.join(".agents/skills");
         let claude_dir = base.join(".claude/skills");
+        ensure_managed_directory(base, &canonical_dir)?;
+        ensure_managed_directory(base, &claude_dir)?;
         let mut canonical = Vec::new();
         for skill in super::EMBEDDED_SKILLS {
             canonical.push(FileAction::managed(
@@ -74,6 +78,7 @@ impl InstallPlan {
             .transpose()?
             .flatten();
         Ok(Self {
+            base: base.to_path_buf(),
             global,
             canonical_dir,
             claude_dir,
@@ -86,13 +91,33 @@ impl InstallPlan {
         })
     }
 
-    pub(super) fn apply(mut self) -> anyhow::Result<InstallReport> {
+    pub(super) fn apply(self) -> anyhow::Result<InstallReport> {
+        let mut rollback = FileRollbackJournal::within(&self.base);
+        match self.apply_in(&mut rollback) {
+            Ok(report) => {
+                rollback.commit()?;
+                Ok(report)
+            }
+            Err(error) => match rollback.rollback() {
+                Ok(()) => Err(error),
+                Err(rollback) => Err(error.context(format!("skill rollback failed: {rollback:#}"))),
+            },
+        }
+    }
+
+    #[rule("rule_init_installs_bundled_skills")]
+    pub(super) fn apply_in(
+        mut self,
+        rollback: &mut FileRollbackJournal,
+    ) -> anyhow::Result<InstallReport> {
+        ensure_managed_directory(&self.base, &self.canonical_dir)?;
+        ensure_managed_directory(&self.base, &self.claude_dir)?;
         let mut files = Vec::new();
         for action in self.canonical {
-            files.push(action.apply()?);
+            files.push(action.apply(rollback)?);
         }
         for action in self.claude {
-            let (reports, runtime_fallback) = action.apply()?;
+            let (reports, runtime_fallback) = action.apply(rollback)?;
             if let Some(reason) = runtime_fallback {
                 self.link_mode = "copy-fallback";
                 self.fallback_reason.get_or_insert(reason);
@@ -100,10 +125,10 @@ impl InstallPlan {
             files.extend(reports);
         }
         for action in self.legacy {
-            files.push(action.apply()?);
+            files.push(action.apply(rollback)?);
         }
         if let Some(action) = self.agents {
-            files.push(action.apply()?);
+            files.push(action.apply(rollback)?);
         }
         Ok(InstallReport {
             global: self.global,
@@ -213,237 +238,13 @@ impl FileAction {
         Ok(())
     }
 
-    fn apply(self) -> anyhow::Result<FileInstallReport> {
+    fn apply(self, rollback: &mut FileRollbackJournal) -> anyhow::Result<FileInstallReport> {
         if self.status != FileStatus::Unchanged {
-            atomic_replace(&self.path, &self.before, &self.contents)?;
+            rollback.replace(&self.path, &self.before, &self.contents)?;
         }
         Ok(file_report(&self.path, self.status))
     }
 }
 
-enum ClaudeAction {
-    Symlink {
-        path: PathBuf,
-        target: PathBuf,
-        before: TargetEntry,
-        verdict: InstallVerdict,
-        fallback: Vec<FileAction>,
-    },
-    Copy {
-        path: PathBuf,
-        before: TargetEntry,
-        verdict: InstallVerdict,
-        files: Vec<FileAction>,
-    },
-}
-
-impl ClaudeAction {
-    fn plan(
-        skill: &'static EmbeddedSkill,
-        canonical_dir: &Path,
-        claude_dir: &Path,
-        force: bool,
-        copy: bool,
-    ) -> anyhow::Result<Self> {
-        let name = skill_name(skill)?;
-        let path = claude_dir.join(name);
-        let target = super::relative_claude_target(name);
-        let before = TargetEntry::read(&path)?;
-        if copy {
-            let state = match &before {
-                TargetEntry::Vacant | TargetEntry::Directory => TargetState::Clear,
-                TargetEntry::Symlink(current) if current == &target => TargetState::Ours,
-                TargetEntry::Symlink(_) | TargetEntry::Other => TargetState::Foreign,
-            };
-            let verdict = classify_install(state, force);
-            refuse_claude(&path, &before, verdict, true)?;
-            let prospective_missing = !matches!(before, TargetEntry::Directory);
-            let files = plan_copy_files(skill, canonical_dir, &path, force, prospective_missing)?;
-            return Ok(Self::Copy {
-                path,
-                before,
-                verdict,
-                files,
-            });
-        }
-
-        let state = match &before {
-            TargetEntry::Vacant => TargetState::Clear,
-            TargetEntry::Symlink(current) if current == &target => TargetState::Ours,
-            TargetEntry::Directory => TargetState::ForeignDirectory,
-            TargetEntry::Symlink(_) | TargetEntry::Other => TargetState::Foreign,
-        };
-        let verdict = classify_install(state, force);
-        refuse_claude(&path, &before, verdict, false)?;
-        let fallback = if verdict == InstallVerdict::Ours {
-            Vec::new()
-        } else {
-            plan_copy_files(
-                skill,
-                canonical_dir,
-                &path,
-                force,
-                !matches!(before, TargetEntry::Directory),
-            )?
-        };
-        Ok(Self::Symlink {
-            path,
-            target,
-            before,
-            verdict,
-            fallback,
-        })
-    }
-
-    const fn uses_copy_fallback(&self) -> bool {
-        matches!(
-            self,
-            Self::Symlink {
-                verdict: InstallVerdict::CopyInto,
-                ..
-            }
-        )
-    }
-
-    fn fallback_reason(&self) -> String {
-        match self {
-            Self::Symlink { path, .. } => {
-                format!("{} already exists as a directory", path.display())
-            }
-            Self::Copy { .. } => String::new(),
-        }
-    }
-
-    fn apply(self) -> anyhow::Result<(Vec<FileInstallReport>, Option<String>)> {
-        self.apply_with(super::create_dir_symlink)
-    }
-
-    fn apply_with(
-        self,
-        create_symlink: impl FnOnce(&Path, &Path) -> std::io::Result<()>,
-    ) -> anyhow::Result<(Vec<FileInstallReport>, Option<String>)> {
-        match self {
-            Self::Copy {
-                path,
-                before,
-                verdict,
-                files,
-            } => {
-                before.recheck(&path)?;
-                if matches!(verdict, InstallVerdict::Ours | InstallVerdict::Overwrite) {
-                    before.remove(&path)?;
-                }
-                Ok((
-                    files
-                        .into_iter()
-                        .map(FileAction::apply)
-                        .collect::<anyhow::Result<Vec<_>>>()?,
-                    None,
-                ))
-            }
-            Self::Symlink {
-                path,
-                target,
-                before,
-                verdict,
-                fallback,
-            } => {
-                if verdict == InstallVerdict::Ours {
-                    return Ok((vec![file_report(&path, FileStatus::Unchanged)], None));
-                }
-                before.recheck(&path)?;
-                if verdict == InstallVerdict::CopyInto {
-                    return Ok((
-                        fallback
-                            .into_iter()
-                            .map(FileAction::apply)
-                            .collect::<anyhow::Result<Vec<_>>>()?,
-                        None,
-                    ));
-                }
-                if verdict == InstallVerdict::Overwrite {
-                    before.remove(&path)?;
-                }
-                std::fs::create_dir_all(path.parent().unwrap_or_else(|| Path::new(".")))?;
-                match create_symlink(&target, &path) {
-                    Ok(()) => Ok((
-                        vec![file_report(
-                            &path,
-                            if matches!(before, TargetEntry::Vacant) {
-                                FileStatus::Linked
-                            } else {
-                                FileStatus::Updated
-                            },
-                        )],
-                        None,
-                    )),
-                    Err(error) => {
-                        let reason = format!("failed to symlink {}: {error}", path.display());
-                        let reports = fallback
-                            .into_iter()
-                            .map(FileAction::apply)
-                            .collect::<anyhow::Result<Vec<_>>>()
-                            .with_context(|| {
-                                format!("failed to copy after symlink error: {error}")
-                            })?;
-                        Ok((reports, Some(reason)))
-                    }
-                }
-            }
-        }
-    }
-
-    fn recheck(&self) -> anyhow::Result<()> {
-        match self {
-            Self::Symlink {
-                path,
-                before,
-                fallback,
-                ..
-            } => {
-                before.recheck(path)?;
-                for action in fallback {
-                    action.recheck()?;
-                }
-            }
-            Self::Copy {
-                path,
-                before,
-                files,
-                ..
-            } => {
-                before.recheck(path)?;
-                for action in files {
-                    action.recheck()?;
-                }
-            }
-        }
-        Ok(())
-    }
-}
-
 #[cfg(test)]
 mod tests;
-
-fn refuse_claude(
-    path: &Path,
-    entry: &TargetEntry,
-    verdict: InstallVerdict,
-    copy: bool,
-) -> anyhow::Result<()> {
-    if verdict != InstallVerdict::Refuse {
-        return Ok(());
-    }
-    match entry {
-        TargetEntry::Symlink(current) => anyhow::bail!(
-            "{} {} {}; rerun with --force to overwrite",
-            path.display(),
-            if copy { "is a symlink to" } else { "points at" },
-            current.display()
-        ),
-        _ => anyhow::bail!(
-            "{} exists and is not a skill directory; rerun with --force to overwrite",
-            path.display()
-        ),
-    }
-}

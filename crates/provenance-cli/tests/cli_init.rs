@@ -194,7 +194,7 @@ fn init_clear_disposition_actors_only_empties_the_allowlist() {
 #[test]
 #[verifies("rule_init_plan_rejection_preserves_targets", examples)]
 #[verifies("rule_init_validates_planned_repository", examples)]
-fn planned_actor_change_is_rejected_without_writes_or_cache_setup() {
+fn planned_actor_change_is_rejected_without_managed_file_writes() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("repo");
     init(
@@ -241,5 +241,39 @@ fn planned_actor_change_is_rejected_without_writes_or_cache_setup() {
         std::fs::read(repo.join(".agents/skills/provenance-shaping/SKILL.md")).unwrap(),
         skill
     );
-    assert!(!repo.join(".provenance/cache").exists());
+    assert!(repo
+        .join(".provenance/cache/locks/repository.publication.lock")
+        .is_file());
+}
+
+#[test]
+#[verifies("rule_init_validates_planned_repository", examples)]
+fn init_recovers_interrupted_publication_before_classifying_the_repository() {
+    let temp = tempfile::tempdir().unwrap();
+    let repo = temp.path().join("repo");
+    init(&repo, &["--scope", "default"]).success();
+    let transaction = repo.join(".provenance/cache/import-transactions/interrupted-init");
+    std::fs::create_dir_all(&transaction).unwrap();
+    std::fs::rename(
+        repo.join(".provenance/state"),
+        transaction.join("backup-state"),
+    )
+    .unwrap();
+    std::fs::write(
+        repo.join(".provenance/cache/import-publication.json"),
+        serde_json::to_vec(&serde_json::json!({
+            "schema_version": 1,
+            "transaction_dir": transaction,
+            "phase": "backup_created"
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+
+    init(&repo, &[]).success();
+
+    assert!(repo.join(".provenance/state/manifest.json").is_file());
+    assert!(!repo
+        .join(".provenance/cache/import-publication.json")
+        .exists());
 }

@@ -35,16 +35,30 @@ pub(super) fn validate_repository(repo: Utf8PathBuf) -> anyhow::Result<()> {
     })
 }
 
-#[allow(dead_code)] // Called by repository planning once that integration lands.
 pub(super) fn validate_repository_with_manifest(
     repo: &Utf8Path,
     manifest: &Manifest,
 ) -> anyhow::Result<()> {
     let layout = ProvenanceLayout::new(repo.to_path_buf());
     let store = StateStore::new(layout.clone());
-    provenance_store::publication::with_read_only_validation(&layout, || {
-        validate_locked(&store, manifest)
-    })
+    match std::fs::symlink_metadata(layout.provenance_dir()) {
+        Ok(_) => store.with_repository_publication(|| validate_locked(&store, manifest)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            provenance_store::publication::with_read_only_validation(&layout, || {
+                validate_locked(&store, manifest)
+            })
+        }
+        Err(error) => Err(error.into()),
+    }
+}
+
+pub(super) fn recover_repository_before_init(repo: &Utf8Path) -> anyhow::Result<()> {
+    let layout = ProvenanceLayout::new(repo.to_path_buf());
+    match std::fs::symlink_metadata(layout.provenance_dir()) {
+        Ok(_) => StateStore::new(layout).with_repository_publication(|| Ok(())),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.into()),
+    }
 }
 
 fn collect_report_locked(
@@ -109,7 +123,8 @@ mod tests {
     use provenance_core::{Manifest, RepoPathPrefix, ScopeId};
 
     #[test]
-    fn planned_manifest_validation_is_read_only_and_does_not_read_disk_manifest() {
+    #[provenance_macros::verifies("rule_init_validates_planned_repository", examples)]
+    fn planned_manifest_validation_runs_publication_recovery_before_reading_state() {
         let directory = tempfile::tempdir().unwrap();
         let repo = Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
         let layout = ProvenanceLayout::new(repo.clone());
@@ -123,18 +138,38 @@ mod tests {
             RepoPathPrefix::new("."),
         );
 
-        validate_repository_with_manifest(&repo, &manifest).unwrap();
+        let error = validate_repository_with_manifest(&repo, &manifest).unwrap_err();
 
-        assert_eq!(
-            std::fs::read_to_string(layout.publication_marker_path()).unwrap(),
-            "not a publication marker"
+        assert!(format!("{error:#}").contains("expected ident"));
+        assert!(layout.publication_lock_path().exists());
+        assert!(layout.import_transactions_dir().exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[provenance_macros::verifies("rule_init_validates_planned_repository", examples)]
+    fn planned_manifest_validation_refuses_a_symlinked_publication_cache() {
+        use std::os::unix::fs::symlink;
+
+        let directory = tempfile::tempdir().unwrap();
+        let repo = Utf8PathBuf::from_path_buf(directory.path().join("repo")).unwrap();
+        let outside = directory.path().join("outside");
+        let layout = ProvenanceLayout::new(repo.clone());
+        std::fs::create_dir_all(layout.provenance_dir()).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        symlink(&outside, layout.cache_dir()).unwrap();
+        let manifest = Manifest::default_with_scope(
+            ScopeId::new("default").unwrap(),
+            RepoPathPrefix::new("."),
         );
-        assert!(!layout.publication_lock_path().exists());
-        assert!(!layout.import_transactions_dir().exists());
+
+        let error = validate_repository_with_manifest(&repo, &manifest).unwrap_err();
+
+        assert!(format!("{error:#}").contains("symlink component"));
     }
 
     #[test]
-    fn planned_manifest_validation_does_not_create_a_cache_directory() {
+    fn planned_manifest_validation_locks_an_existing_state_tree() {
         let directory = tempfile::tempdir().unwrap();
         let repo = Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
         let layout = ProvenanceLayout::new(repo.clone());
@@ -147,6 +182,21 @@ mod tests {
 
         validate_repository_with_manifest(&repo, &manifest).unwrap();
 
-        assert!(!layout.cache_dir().exists());
+        assert!(layout.publication_lock_path().exists());
+    }
+
+    #[test]
+    fn planned_manifest_validation_keeps_a_new_repository_read_only() {
+        let directory = tempfile::tempdir().unwrap();
+        let repo = Utf8PathBuf::from_path_buf(directory.path().join("repo")).unwrap();
+        let layout = ProvenanceLayout::new(repo.clone());
+        let manifest = Manifest::default_with_scope(
+            ScopeId::new("default").unwrap(),
+            RepoPathPrefix::new("."),
+        );
+
+        validate_repository_with_manifest(&repo, &manifest).unwrap();
+
+        assert!(!layout.provenance_dir().exists());
     }
 }

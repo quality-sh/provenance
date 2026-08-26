@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use provenance_macros::verifies;
 use std::path::{Path, PathBuf};
 
 #[test]
@@ -16,6 +17,7 @@ fn direct_version_flag_names_the_cargo_subcommand_binary() {
 }
 
 #[test]
+#[verifies("rule_cargo_subcommand_uses_sibling_cli", examples)]
 fn shim_forwards_to_the_sibling_provenance_and_preserves_exit_code() {
     let fixture = ShimFixture::new(true);
 
@@ -32,6 +34,7 @@ fn shim_forwards_to_the_sibling_provenance_and_preserves_exit_code() {
 }
 
 #[test]
+#[verifies("rule_cargo_subcommand_uses_sibling_cli", examples)]
 fn shim_refuses_a_path_binary_when_its_sibling_is_missing() {
     let fixture = ShimFixture::new(false);
 

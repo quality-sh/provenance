@@ -29,6 +29,21 @@ fn cli_package_ships_both_native_entry_points() {
 }
 
 #[test]
+#[provenance_macros::verifies("rule_cargo_install_prints_init_step", examples)]
+fn cargo_install_emits_the_exact_init_next_step_from_the_cli_build_script() {
+    let workspace = workspace_root();
+    let build_script = fs::read_to_string(workspace.join("crates/provenance-cli/build.rs"))
+        .expect("read provenance-cli build script");
+    let next_step = "Next step: run cargo provenance init in your project.";
+
+    assert_eq!(build_script.matches(next_step).count(), 1);
+    assert!(build_script.contains(&format!("cargo:warning={next_step}")));
+
+    let manifest = fs::read_to_string(workspace.join("crates/provenance-cli/Cargo.toml")).unwrap();
+    assert!(manifest.contains("homepage.workspace = true"));
+}
+
+#[test]
 fn cargo_provenance_is_a_std_only_forwarding_shim() {
     let workspace = workspace_root();
     let crate_root = workspace.join("crates/provenance-cli");
@@ -193,6 +208,41 @@ fn release_smoke_waits_for_preflight_and_both_registries() {
 
     assert!(smoke.contains("      - preflight"));
     assert!(smoke.contains("      - publish"));
+}
+
+#[test]
+fn initializer_smoke_matrix_covers_every_supported_package_manager() {
+    let workflow = fs::read_to_string(workspace_root().join(".github/workflows/ci.yml")).unwrap();
+    let manager_job = workflow
+        .split_once("  initializer-package-managers:")
+        .unwrap()
+        .1
+        .split_once("  typescript-sdk-packed-install:")
+        .unwrap()
+        .0;
+
+    for manager in ["npm", "pnpm", "yarn", "bun", "deno", "nub"] {
+        assert!(
+            manager_job.contains(&format!("- manager: {manager}")),
+            "{manager}"
+        );
+    }
+}
+
+#[test]
+fn post_release_smoke_controls_deno_against_the_current_engine() {
+    let workspace = workspace_root();
+    let workflow =
+        fs::read_to_string(workspace.join(".github/workflows/release-smoke.yml")).unwrap();
+    let script =
+        fs::read_to_string(workspace.join(".github/scripts/release-smoke/deno-registry.sh"))
+            .expect("read Deno release smoke script");
+
+    assert!(workflow.contains("  deno-registry:"));
+    assert!(workflow.contains("deno-registry.sh \"$VERSION\""));
+    assert!(script.contains("@quality-sh/create-provenance@$version"));
+    assert!(script.contains("npm:@quality-sh/provenance@${version}"));
+    assert!(script.contains("assert_provenance_check"));
 }
 
 fn cargo_metadata() -> Value {

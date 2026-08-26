@@ -3,6 +3,16 @@
 use provenance_macros::verifies;
 use provenance_sdk::{provenance_spec, requirement, rule};
 
+#[test]
+fn implemented_by_has_no_public_path_joining_helper() {
+    let crate_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let interface = std::fs::read_to_string(crate_root.join("src/lib.rs")).unwrap();
+    let implementation = std::fs::read_to_string(crate_root.join("src/macros.rs")).unwrap();
+
+    assert!(!interface.contains("implemented_by_package_path"));
+    assert!(!implementation.contains("pub fn implemented_by_package_path"));
+}
+
 provenance_spec!(share_links => "share-links" {
     requirement("sharing")
         .statement("Users can securely share documentation")

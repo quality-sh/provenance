@@ -1,4 +1,4 @@
-use crate::skills::stamp::{fnv1a64, header_hash};
+use crate::skills::stamp::{fnv1a64, header_hash, parse_header, SkillStamp};
 use provenance_macros::rule;
 use std::path::{Path, PathBuf};
 
@@ -32,21 +32,21 @@ pub fn agents_path(base: &Path, global: bool) -> PathBuf {
 
 #[rule("rule_legacy_cleanup_ownership")]
 pub fn valid_managed_skill(contents: &str) -> bool {
-    let Some(frontmatter_end) = contents
+    managed_skill_stamp(contents).is_some()
+}
+
+pub fn managed_skill_stamp(contents: &str) -> Option<SkillStamp<'_>> {
+    let frontmatter_end = contents
         .strip_prefix("---\n")
         .and_then(|rest| rest.find("\n---\n"))
-        .map(|end| end + "---\n".len() + "\n---\n".len())
-    else {
-        return false;
-    };
-    let Some(after_header) = contents[frontmatter_end..].find('\n') else {
-        return false;
-    };
+        .map(|end| end + "---\n".len() + "\n---\n".len())?;
+    let after_header = contents[frontmatter_end..].find('\n')?;
     let header_end = frontmatter_end + after_header;
     let header = &contents[frontmatter_end..header_end];
     let payload = &contents[header_end + 1..];
     let installed = format!("{}{payload}", &contents[..frontmatter_end]);
-    hash_proves_ownership(header, &installed)
+    let stamp = parse_header(header)?;
+    (stamp.hash == fnv1a64(&installed)).then_some(stamp)
 }
 
 fn hash_proves_ownership(header: &str, installed: &str) -> bool {

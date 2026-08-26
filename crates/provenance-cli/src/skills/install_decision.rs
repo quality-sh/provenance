@@ -114,28 +114,6 @@ impl TargetEntry {
         );
         Ok(())
     }
-
-    /// Removes whatever is at the path. Only sound after a verdict that
-    /// permits it: `Overwrite`, or `Ours` when the caller wants the same
-    /// content in another form.
-    pub fn remove(&self, path: &Path) -> std::io::Result<()> {
-        match self {
-            Self::Vacant => Ok(()),
-            Self::Directory => std::fs::remove_dir_all(path),
-            Self::Symlink(_) => remove_directory_symlink(path),
-            Self::Other => std::fs::remove_file(path),
-        }
-    }
-}
-
-#[cfg(unix)]
-fn remove_directory_symlink(path: &Path) -> std::io::Result<()> {
-    std::fs::remove_file(path)
-}
-
-#[cfg(windows)]
-fn remove_directory_symlink(path: &Path) -> std::io::Result<()> {
-    std::fs::remove_dir(path)
 }
 
 #[cfg(test)]
