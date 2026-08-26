@@ -16,11 +16,25 @@ The initializer detects npm, pnpm, Yarn, Bun, Deno, or Nub. It installs
 `@quality-sh/provenance` as an exact development dependency, creates the
 default scope, validates the state, and ignores `.provenance/cache/`.
 
-Install the CLI from crates.io:
+Install and initialize Provenance in an existing Rust project:
 
 ```sh
 cargo install provenance-cli
+cargo provenance init
 ```
+
+The Cargo initializer finds the current workspace, adds `provenance-sdk` at the
+CLI version, creates the default scope, validates the state, and ignores
+`.provenance/cache/`. In a workspace with multiple packages, use `cargo
+provenance init --package <name>`.
+
+For a TypeScript project, run:
+
+```sh
+npx --yes @quality-sh/create-provenance
+```
+
+The TypeScript initializer detects npm, pnpm, Yarn, Bun, Deno, or Nub.
 
 To build the CLI from this source tree:
 
@@ -28,7 +42,8 @@ To build the CLI from this source tree:
 cargo build --release -p provenance-cli --all-features
 ```
 
-The binary lands at `target/release/provenance`. Put it on your PATH.
+The binaries land at `target/release/provenance` and
+`target/release/cargo-provenance`. Put them on your PATH.
 
 ### Quick start
 

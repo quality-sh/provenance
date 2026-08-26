@@ -153,7 +153,12 @@ pub fn render_status_markdown(status: &SkillInstallStatus) -> String {
     )
 }
 
-fn install_at(base: &Path, global: bool, force: bool, copy: bool) -> anyhow::Result<InstallReport> {
+pub fn install_at(
+    base: &Path,
+    global: bool,
+    force: bool,
+    copy: bool,
+) -> anyhow::Result<InstallReport> {
     let canonical_dir = base.join(".agents/skills");
     let claude_dir = base.join(".claude/skills");
     let mut files = install_canonical_skill_files(&canonical_dir, force)?;

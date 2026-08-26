@@ -267,6 +267,7 @@ fn prime_reports_skill_install_status_and_install_command() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("repo");
     init_repo(&repo);
+    std::fs::remove_file(repo.join(".agents/skills/provenance-shaping/SKILL.md")).unwrap();
 
     Command::cargo_bin("provenance")
         .unwrap()
@@ -337,6 +338,7 @@ fn shaping_and_ideation_commands_emit_suppressible_skill_install_hint() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("repo");
     init_repo(&repo);
+    std::fs::remove_file(repo.join(".agents/skills/provenance-shaping/SKILL.md")).unwrap();
 
     Command::cargo_bin("provenance")
         .unwrap()

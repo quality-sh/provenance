@@ -26,6 +26,11 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Command {
+    #[command(name = "__cargo-init", hide = true)]
+    CargoInit {
+        #[arg(long)]
+        package: Option<String>,
+    },
     Init {
         #[arg(long)]
         path: Utf8PathBuf,

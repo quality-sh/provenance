@@ -1,6 +1,7 @@
 [package]
 name = "provenance-cli"
 version.workspace = true
+default-run = "provenance"
 edition.workspace = true
 description = "Command-line interface for Provenance requirements traceability"
 license.workspace = true
@@ -15,6 +16,10 @@ workspace = true
 [[bin]]
 name = "provenance"
 path = "src/main.rs"
+
+[[bin]]
+name = "cargo-provenance"
+path = "src/bin/cargo-provenance.rs"
 
 [dependencies]
 anyhow.workspace = true
@@ -32,6 +37,7 @@ provenance-store.workspace = true
 remove_dir_all.workspace = true
 rustix.workspace = true
 same-file.workspace = true
+semver.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true

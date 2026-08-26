@@ -1,6 +1,7 @@
 use crate::cli::Command;
 
 mod boundaries;
+mod cargo_init;
 mod check;
 mod common;
 mod contributions;
@@ -47,6 +48,9 @@ pub(super) use export::{export_scope, ScopeExport};
 #[allow(clippy::redundant_pub_crate)]
 pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()> {
     match command {
+        Command::CargoInit { package } => {
+            cargo_init::handle(package.as_deref())?;
+        }
         Command::Init {
             path,
             scope,
@@ -55,7 +59,7 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
             clear_disposition_actors,
         } => {
             repo::init(
-                path,
+                &path,
                 scope,
                 path_prefix,
                 disposition_actor_id,

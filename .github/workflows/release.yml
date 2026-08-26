@@ -33,6 +33,7 @@ jobs:
         shell: bash
         run: |
           node packages/provenance/scripts/generate-release-consumers.js --check
+          bash .github/scripts/verify-release-versions.sh "$GITHUB_REF_NAME"
           version="${GITHUB_REF_NAME#v}"
           source .github/scripts/release-smoke/lib.sh
           validate_version "$version"
@@ -74,6 +75,7 @@ jobs:
           package="${{ matrix.package }}"
           mkdir -p "dist/${package}"
           cp -f "target/${{ matrix.target }}/release/${{ matrix.binary }}" "dist/${package}/"
+          cp -f "target/${{ matrix.target }}/release/cargo-provenance${{ matrix.executable_suffix }}" "dist/${package}/"
           cp -f README.md LICENSE "dist/${package}/"
           tar -C dist -czf "dist/${{ matrix.archive_name }}" "${package}"
 
@@ -84,6 +86,7 @@ jobs:
           $package = "${{ matrix.package }}"
           New-Item -ItemType Directory -Force "dist/$package" | Out-Null
           Copy-Item "target/${{ matrix.target }}/release/${{ matrix.binary }}" "dist/$package/${{ matrix.binary }}"
+          Copy-Item "target/${{ matrix.target }}/release/cargo-provenance${{ matrix.executable_suffix }}" "dist/$package/cargo-provenance${{ matrix.executable_suffix }}"
           Copy-Item README.md, LICENSE "dist/$package/"
           Compress-Archive -Path "dist/$package/*" -DestinationPath "dist/${{ matrix.archive_name }}" -Force
 

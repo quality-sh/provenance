@@ -1,9 +1,16 @@
 # CLI
 
-The `provenance` command comes from a release archive or from the
-`@quality-sh/provenance` development dependency. Run `npx --yes
-@quality-sh/create-provenance` to install that dependency and initialize the
-project. The initializer supports npm, pnpm, Yarn, Bun, Deno, and Nub.
+The `provenance` command comes from a release archive, `cargo install
+provenance-cli`, or the `@quality-sh/provenance` development dependency. The
+native distribution also includes `cargo-provenance`, which Cargo runs for
+`cargo provenance`.
+
+For Rust, run `cargo install provenance-cli` and then `cargo provenance init`.
+The initializer finds the current Cargo workspace and adds `provenance-sdk` at
+the running CLI version. Use `--package <name>` when the workspace contains
+multiple packages. For TypeScript, run `npx --yes
+@quality-sh/create-provenance`. The initializer supports npm, pnpm, Yarn, Bun,
+Deno, and Nub.
 
 Common local workflow:
 
@@ -28,10 +35,9 @@ not set a repository-wide STE enforcement policy.
 
 ## Typed SDK protocol (POC)
 
-Rust consumers do not need these one-shot commands: every operation is
-a public function in `provenance_store::operations`, and the
-`provenance-sdk` crate adds the authoring builders, `verify`, and the
-macro projection. See `examples/rust-sdk`.
+Rust consumers do not need these one-shot commands. The `provenance-sdk` crate
+provides the authoring builders, operations, `verify`, and the `rule` and
+`verifies` attributes. See `examples/rust-sdk`.
 
 The SDK protocol uses one-shot commands that read or write JSON:
 

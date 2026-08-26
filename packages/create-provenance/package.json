@@ -1,6 +1,6 @@
 {
   "name": "@quality-sh/create-provenance",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Install and initialize Provenance in a TypeScript project",
   "license": "BUSL-1.1",
   "repository": {

@@ -1,5 +1,7 @@
 //! The macro projection over the string-keyed kernel.
 
+use provenance_macros::rule;
+
 /// Says whether a Rust identifier names a spec key.
 ///
 /// An identifier `_` stands for `-` or `_` in the key, because an
@@ -68,6 +70,23 @@ macro_rules! provenance_spec {
 macro_rules! implemented_by {
     ($rule:expr, $file:literal, $symbol:ident) => {{
         const _: &[u8] = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/", $file));
-        $rule.implemented_at($file, stringify!($symbol))
+        $crate::implemented_by_package_path(
+            $rule,
+            env!("CARGO_MANIFEST_DIR"),
+            $file,
+            stringify!($symbol),
+        )
     }};
+}
+
+/// Resolves a package-relative implementation before repository normalization.
+#[doc(hidden)]
+#[rule("rule_nested_rust_implementation_path")]
+pub fn implemented_by_package_path(
+    rule: provenance_core::authoring::RuleBuilder,
+    manifest_dir: &str,
+    file: &str,
+    symbol: &str,
+) -> provenance_core::authoring::RuleBuilder {
+    rule.implemented_at(format!("{manifest_dir}/{file}"), symbol)
 }

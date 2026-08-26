@@ -11,7 +11,6 @@ fn wiki_build_writes_static_pages_and_stylesheet() {
     let repo = repo.to_string_lossy().to_string();
     let out = dir.path().join("site");
     seed_state(dir.path(), &repo);
-
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
@@ -202,6 +201,8 @@ fn wiki_build_with_an_explicit_out_does_not_touch_gitignore() {
     let repo = repo.to_string_lossy().to_string();
     let out = dir.path().join("site");
     seed_state(dir.path(), &repo);
+    let gitignore = std::fs::read_to_string(std::path::Path::new(&repo).join(".gitignore"))
+        .expect("init creates the cache ignore");
 
     Command::cargo_bin("provenance")
         .unwrap()
@@ -218,9 +219,10 @@ fn wiki_build_with_an_explicit_out_does_not_touch_gitignore() {
         .assert()
         .success();
 
-    assert!(
-        !std::path::Path::new(&repo).join(".gitignore").exists(),
-        "explicit --out must not create or edit .gitignore"
+    assert_eq!(
+        std::fs::read_to_string(std::path::Path::new(&repo).join(".gitignore")).unwrap(),
+        gitignore,
+        "explicit --out must not edit .gitignore"
     );
 }
 

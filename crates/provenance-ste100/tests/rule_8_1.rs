@@ -66,7 +66,7 @@ fn report_serialization_is_stable_and_explicit() {
         json!({
             "standard": "ASD-STE100",
             "issue": 9,
-            "analyzer_version": "0.2.1",
+            "analyzer_version": "0.2.2",
             "findings": [{
                 "rule": "8.1",
                 "kind": "violation",
