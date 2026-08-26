@@ -17,7 +17,24 @@ test("the installed SDK documents its rule binding subpath", () => {
       documentation,
       /from ["']@quality-sh\/provenance\/rules["']/,
     );
-    assert.match(documentation, /npm install @quality-sh\/provenance/);
+  }
+  assert.match(
+    packageReadme,
+    /^npx --yes @quality-sh\/create-provenance$/m,
+  );
+  assert.match(bindingGuide, /npm install @quality-sh\/provenance/);
+});
+
+test("onboarding documentation uses the supported untagged npx command", () => {
+  for (const path of [
+    "README.md",
+    "docs/cli.md",
+    "packages/create-provenance/README.md",
+    "packages/provenance/README.md",
+  ]) {
+    const documentation = repositoryFile(path);
+    assert.match(documentation, /npx --yes\s+@quality-sh\/create-provenance(?!@)/);
+    assert.doesNotMatch(documentation, /@quality-sh\/create-provenance@latest/);
   }
 });
 

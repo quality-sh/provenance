@@ -4,7 +4,7 @@ Install Provenance as a development dependency and initialize a TypeScript
 project:
 
 ```sh
-npx --yes @quality-sh/create-provenance@latest
+npx --yes @quality-sh/create-provenance
 ```
 
 The initializer detects npm, pnpm, Yarn, Bun, Deno, or Nub from the
@@ -12,7 +12,7 @@ The initializer detects npm, pnpm, Yarn, Bun, Deno, or Nub from the
 a project contains lockfiles from more than one manager:
 
 ```sh
-npx --yes @quality-sh/create-provenance@latest --package-manager bun
+npx --yes @quality-sh/create-provenance --package-manager bun
 ```
 
 Use `--path <path>` to initialize a project outside the current directory. The

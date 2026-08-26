@@ -15,8 +15,8 @@ updates:
   - package-ecosystem: npm
     directories:
       - /
+      - /packages/create-provenance
       - /packages/provenance
-      - /packages/provenance-rules-js
       - /examples/typescript-sdk
     schedule:
       interval: weekly

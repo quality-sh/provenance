@@ -9,7 +9,7 @@ Provenance is a tool for building requirements traceability, from source to requ
 Install and initialize Provenance in a TypeScript project:
 
 ```sh
-npx --yes @quality-sh/create-provenance@latest
+npx --yes @quality-sh/create-provenance
 ```
 
 The initializer detects npm, pnpm, Yarn, Bun, Deno, or Nub. It installs
@@ -34,7 +34,7 @@ The binary lands at `target/release/provenance`. Put it on your PATH.
 
 ```sh
 # install the development dependency and set up the repository
-npx --yes @quality-sh/create-provenance@latest
+npx --yes @quality-sh/create-provenance
 
 # put something in the graph
 npx provenance requirements create --scope default --id req_exports \

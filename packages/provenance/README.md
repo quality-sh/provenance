@@ -4,7 +4,7 @@ This package is an optional typed façade over the Provenance Rust engine. It
 does not implement graph semantics or persistence in JavaScript.
 
 ```sh
-npx --yes @quality-sh/create-provenance@latest
+npx --yes @quality-sh/create-provenance
 ```
 
 The initializer detects npm, pnpm, Yarn, Bun, Deno, or Nub. It adds this SDK as
