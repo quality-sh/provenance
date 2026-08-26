@@ -109,9 +109,20 @@ impl TargetEntry {
         match self {
             Self::Vacant => Ok(()),
             Self::Directory => std::fs::remove_dir_all(path),
-            Self::Symlink(_) | Self::Other => std::fs::remove_file(path),
+            Self::Symlink(_) => remove_directory_symlink(path),
+            Self::Other => std::fs::remove_file(path),
         }
     }
+}
+
+#[cfg(unix)]
+fn remove_directory_symlink(path: &Path) -> std::io::Result<()> {
+    std::fs::remove_file(path)
+}
+
+#[cfg(windows)]
+fn remove_directory_symlink(path: &Path) -> std::io::Result<()> {
+    std::fs::remove_dir(path)
 }
 
 #[cfg(test)]

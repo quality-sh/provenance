@@ -134,17 +134,20 @@ fn release_version_preflight_gates_every_artifact_build() {
     assert!(build_job.contains("needs: verify-versions"));
     assert_eq!(workflow.matches("verify-release-versions.sh").count(), 1);
 
-    let output = Command::new("bash")
-        .arg(script)
-        .arg("v0.2.2")
-        .current_dir(workspace)
-        .output()
-        .expect("run release version preflight");
-    assert!(
-        output.status.success(),
-        "release version preflight failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    #[cfg(unix)]
+    {
+        let output = Command::new("bash")
+            .arg(script)
+            .arg("v0.2.2")
+            .current_dir(workspace)
+            .output()
+            .expect("run release version preflight");
+        assert!(
+            output.status.success(),
+            "release version preflight failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
 }
 
 #[test]
