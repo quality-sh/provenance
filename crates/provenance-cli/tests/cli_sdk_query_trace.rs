@@ -28,7 +28,7 @@ fn trace_walks_from_a_source_to_the_rules_it_grounds() {
         &json!({"id": ids.source.as_str(), "direction": "out"}),
     );
 
-    assert_eq!(answer["protocol_version"], 4);
+    assert_eq!(answer["protocol_version"], 5);
     assert_eq!(answer["operation"], "trace");
     assert_eq!(answer["id"], ids.source);
     assert_eq!(answer["max_depth"], 3);

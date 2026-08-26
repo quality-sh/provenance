@@ -107,9 +107,12 @@ Immutable handles do not cache IDs;
 
 Sources, requirements, and rules carry optional `declared_by` metadata.
 Apply may create a missing record or update a record with the same owner. It
-refuses to take over an unowned record or one owned by another integration,
-and performs that check before writing. Plan reports that takeover as a
-structured conflict, while apply refuses it. Omitted declarations are marked
+refuses implicit takeover and all takeover of a record owned by another
+integration. Protocol 5 adds an exact `adopt_unowned` allowlist for an unowned
+record. The target and declaration must name the same explicit Stable ID, and
+the definition and relevant relationships must already match. Plan reports an
+invalid takeover as a structured conflict, while apply refuses it before any
+write. Omitted declarations are marked
 retired and disappear from active graph and assurance checks without losing
 their Stable IDs or history. Reintroducing one clears retirement on the same
 record. Fields outside the small TypeScript interface are preserved;
@@ -117,7 +120,9 @@ source references declared by the spec are added rather than replacing
 external references.
 
 Plan distinguishes created, updated, moved, retired, conflicted, and unchanged
-resources. An identity-preserving Rule move updates the active owned
+resources. A valid adoption uses the moved state because it assigns the first
+Declaration address, and its changes contain only owner and address. An
+identity-preserving Rule move updates the active owned
 Requirement relationships. Historical relationships attached to retired
 records remain canonical history. The POC still has no hard deletion,
 ownership-transfer, or automatic ambiguous rename operation.
@@ -205,9 +210,10 @@ canonical model without a data migration.
 3. One-shot child processes are sufficient. Platform packages now supply the
    matching engine without a global CLI, install script download, Rust toolchain,
    daemon, or gRPC.
-4. Typed declarations coexist with external state by refusing takeover,
-   retiring only records owned by the same spec, preserving history, and
-   preserving fields outside the façade.
+4. Typed declarations coexist with external state by refusing implicit and
+   foreign-owned takeover. Exact per-target adoption is the only unowned
+   transition. Retirement applies only to records owned by the same spec, and
+   history and fields outside the façade stay canonical.
 5. The operations are portable: declare a source, requirement, or rule; apply
    desired state; begin a verification; run a language callback; complete the
    verification. No operation depends on a TypeScript-only runtime concept.

@@ -7,6 +7,7 @@ import {
 import type {
   ImplementationDeclaration,
   SourceDeclaration,
+  SourceKind,
 } from "./protocol.js";
 import type { VerifyOptions } from "./spec.js";
 import type {
@@ -31,6 +32,8 @@ export interface SourceState {
   readonly context: AuthoringContext;
   readonly lineage: object;
   readonly key: string;
+  readonly explicitId?: string;
+  readonly adoptsUnowned?: boolean;
   readonly name?: string;
   readonly declaration?: SourceDeclaration;
 }
@@ -39,6 +42,8 @@ export interface RequirementState {
   readonly context: AuthoringContext;
   readonly lineage: object;
   readonly key: string;
+  readonly explicitId?: string;
+  readonly adoptsUnowned?: boolean;
   readonly text?: string;
   readonly description?: string;
   readonly sources: readonly object[];
@@ -53,6 +58,7 @@ export interface RuleState {
   readonly owner?: { readonly key: string; readonly lineage: object };
   readonly text?: string;
   readonly explicitId?: string;
+  readonly adoptsUnowned?: boolean;
   readonly implementation?: ImplementationDeclaration;
 }
 
@@ -88,18 +94,48 @@ export class BoundSource<SpecKey extends string, Key extends string> {
     return new BoundSource({ context, lineage: Object.freeze({}), key });
   }
 
+  // The short form of `kind("document")` that also gives the reference.
   document(reference: string): BoundSource<SpecKey, Key> {
     requireText("document reference", reference);
+    return this.withKind("document", reference);
+  }
+
+  // Selects the canonical source type. It adds no optional URL or
+  // reference metadata.
+  kind(kind: SourceKind): BoundSource<SpecKey, Key> {
+    return this.withKind(kind, sourceState(this).declaration?.reference);
+  }
+
+  private withKind(kind: SourceKind, reference?: string): BoundSource<SpecKey, Key> {
     const state = sourceState(this);
     return new BoundSource({
       ...state,
       declaration: Object.freeze({
         key: state.key,
+        id: state.explicitId,
         name: state.name ?? state.key,
-        kind: "document",
+        kind,
         reference,
       }),
     });
+  }
+
+  id(existingId: string): BoundSource<SpecKey, Key> {
+    requireText("source id", existingId);
+    const state = sourceState(this);
+    return new BoundSource({
+      ...state,
+      explicitId: existingId,
+      adoptsUnowned: false,
+      declaration:
+        state.declaration === undefined
+          ? undefined
+          : Object.freeze({ ...state.declaration, id: existingId }),
+    });
+  }
+
+  adoptUnowned(existingId: string): BoundSource<SpecKey, Key> {
+    return this.id(existingId).copyAdoption();
   }
 
   name(name: string): BoundSource<SpecKey, Key> {
@@ -113,6 +149,10 @@ export class BoundSource<SpecKey extends string, Key extends string> {
           ? undefined
           : Object.freeze({ ...state.declaration, name }),
     });
+  }
+
+  private copyAdoption(): BoundSource<SpecKey, Key> {
+    return new BoundSource({ ...sourceState(this), adoptsUnowned: true });
   }
 }
 
@@ -166,7 +206,12 @@ export class BoundRule<
 
   id(existingId: string): BoundRule<SpecKey, Key, Owner> {
     requireText("rule id", existingId);
-    return this.copy({ explicitId: existingId });
+    return this.copy({ explicitId: existingId, adoptsUnowned: false });
+  }
+
+  adoptUnowned(existingId: string): BoundRule<SpecKey, Key, Owner> {
+    requireText("rule id", existingId);
+    return this.copy({ explicitId: existingId, adoptsUnowned: true });
   }
 
   implementedBy(_target: ImplementationTarget): BoundRule<SpecKey, Key, Owner> {
@@ -214,6 +259,16 @@ export class BoundRequirement<SpecKey extends string, Key extends string> {
   statement(text: string): BoundRequirement<SpecKey, Key> {
     requireText("requirement statement", text);
     return this.copy({ text });
+  }
+
+  id(existingId: string): BoundRequirement<SpecKey, Key> {
+    requireText("requirement id", existingId);
+    return this.copy({ explicitId: existingId, adoptsUnowned: false });
+  }
+
+  adoptUnowned(existingId: string): BoundRequirement<SpecKey, Key> {
+    requireText("requirement id", existingId);
+    return this.copy({ explicitId: existingId, adoptsUnowned: true });
   }
 
   description(description: string): BoundRequirement<SpecKey, Key> {

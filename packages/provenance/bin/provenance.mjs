@@ -19,7 +19,7 @@ const result = spawnSync(engine, process.argv.slice(2), { stdio: "inherit" });
 if (result.error !== undefined) {
   process.stderr.write(
     `Provenance engine could not start at ${engine}. Check PROVENANCE_BIN if it is set, ` +
-    `or run npm install @quality-sh/provenance without --omit=optional.\n`,
+    `or install the development dependency again with optional dependencies enabled.\n`,
   );
   process.exit(1);
 }

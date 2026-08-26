@@ -43,7 +43,7 @@ const source = readFileSync(0, "utf8");
 const input = source === "" ? undefined : JSON.parse(source);
 appendFileSync(${JSON.stringify(log)}, JSON.stringify({ command, input }) + "\\n");
 if (command === "info") process.stdout.write(JSON.stringify({
-  engine_version: "0.1.0", protocol_version: 4, state_schema_version: 1, repository: "/project"
+  engine_version: "0.1.0", protocol_version: 5, state_schema_version: 1, repository: "/project"
 }));
 else if (command === "begin-verification") process.stdout.write(JSON.stringify({
   id: "run_1", binding_id: "binding_1", rule_id: "rule_1", status: "running"
@@ -119,6 +119,254 @@ test("a spec-bound Rule is its own immutable verification handle", async () => {
     declared_by: "ci://typescript",
     file: fileURLToPath(import.meta.url),
   });
+});
+
+test("a spec-bound Requirement serializes an immutable explicit ID", async () => {
+  const recorder = recordingEngine();
+  configure({ engine: recorder.engine, owner: "spec://typescript/bound-requirement-id" });
+  const provenance = defineSpec("bound-requirement-id");
+  const draft = provenance.requirement("canonical");
+  const identified = draft.id("req_existing");
+  const stated = identified.statement("The canonical Requirement keeps its identity");
+
+  assert.notEqual(draft, identified);
+  assert.notEqual(identified, stated);
+  await apply(provenance.build(stated));
+
+  const request = recorder.requests().find(({ command }) => command === "apply");
+  assert.deepEqual((request?.input as { requirements?: unknown }).requirements, [
+    {
+      key: "canonical",
+      id: "req_existing",
+      statement: "The canonical Requirement keeps its identity",
+      sources: [],
+    },
+  ]);
+});
+
+test("spec-bound declarations serialize exact unowned adoption targets", async () => {
+  const recorder = recordingEngine();
+  configure({ engine: recorder.engine, owner: "spec://typescript/bound-adoption" });
+  const provenance = defineSpec("bound-adoption");
+  const policy = provenance
+    .source("policy")
+    .adoptUnowned("source_existing")
+    .document("docs/policy.md");
+  const enforcement = provenance
+    .rule("enforcement")
+    .adoptUnowned("rule_existing")
+    .statement("The migration keeps the canonical Rule");
+  const canonical = provenance
+    .requirement("canonical")
+    .adoptUnowned("req_existing")
+    .statement("The canonical Requirement keeps its identity")
+    .from(policy)
+    .rules(enforcement);
+
+  await apply(provenance.build(canonical));
+
+  const input = recorder.requests().find(({ command }) => command === "apply")?.input as {
+    adopt_unowned?: unknown;
+  };
+  assert.deepEqual(input.adopt_unowned, [
+    { kind: "source", id: "source_existing" },
+    { kind: "requirement", id: "req_existing" },
+    { kind: "rule", id: "rule_existing" },
+  ]);
+
+  const ordinary = provenance
+    .requirement("ordinary")
+    .adoptUnowned("req_old")
+    .id("req_existing")
+    .statement("Ordinary identity selection does not request adoption")
+    .from(policy.id("source_existing"))
+    .rules(enforcement.id("rule_existing"));
+  await apply(provenance.build(ordinary));
+  const ordinaryInput = recorder.requests().filter(({ command }) => command === "apply").at(-1)
+    ?.input as { adopt_unowned?: unknown };
+  assert.equal(ordinaryInput.adopt_unowned, undefined);
+});
+
+test("spec-bound declarations adopt exact unowned engine records", async () => {
+  const repo = repository();
+  configure({ engine, repository: repo, owner: "spec://typescript/bound-adoption-runtime" });
+  execFileSync(engine, [
+    "sources",
+    "create",
+    "--repo",
+    repo,
+    "--scope",
+    "default",
+    "--id",
+    "source_existing",
+    "--name",
+    "policy",
+    "--source-type",
+    "document",
+    "--reference",
+    "docs/policy.md",
+  ]);
+  execFileSync(engine, [
+    "requirements",
+    "create",
+    "--repo",
+    repo,
+    "--scope",
+    "default",
+    "--id",
+    "req_existing",
+    "--statement",
+    "The canonical Requirement keeps its identity",
+  ]);
+  execFileSync(engine, [
+    "requirements",
+    "source-ref",
+    "add",
+    "--repo",
+    repo,
+    "--scope",
+    "default",
+    "--requirement-id",
+    "req_existing",
+    "--source-id",
+    "source_existing",
+  ]);
+  execFileSync(engine, [
+    "rules",
+    "create",
+    "--repo",
+    repo,
+    "--scope",
+    "default",
+    "--id",
+    "rule_existing",
+    "--requirement-id",
+    "req_existing",
+    "--statement",
+    "The canonical Rule keeps its identity",
+  ]);
+  const provenance = defineSpec("bound-adoption-runtime");
+  const policy = provenance
+    .source("policy")
+    .adoptUnowned("source_existing")
+    .document("docs/policy.md");
+  const enforcement = provenance
+    .rule("enforcement")
+    .adoptUnowned("rule_existing")
+    .statement("The canonical Rule keeps its identity");
+  const canonical = provenance
+    .requirement("canonical")
+    .adoptUnowned("req_existing")
+    .statement("The canonical Requirement keeps its identity")
+    .from(policy)
+    .rules(enforcement);
+  const spec = provenance.build(canonical);
+
+  const preview = await plan(spec);
+  assert.equal(preview.created, 0);
+  assert.equal(preview.conflicts, 0);
+  const applied = await apply(spec);
+  assert.deepEqual(
+    applied.resources.map(({ id }) => id).sort(),
+    ["req_existing", "rule_existing", "source_existing"],
+  );
+  const replay = await plan(spec);
+  assert.equal(replay.unchanged, 3);
+});
+
+test("a spec-bound Source declares a supported non-document kind", async () => {
+  const recorder = recordingEngine();
+  configure({ engine: recorder.engine, owner: "spec://typescript/bound-source-kind" });
+  const provenance = defineSpec("bound-source-kind");
+  const brief = provenance
+    .source("brief")
+    .name("Workflowd integration brief")
+    .kind("external_integration");
+  const canonical = provenance
+    .requirement("intake")
+    .statement("The catalogue records the source type of every citation")
+    .from(brief);
+
+  await apply(provenance.build(canonical));
+
+  // `kind` adds no optional URL or reference metadata.
+  const input = recorder.requests().find(({ command }) => command === "apply")?.input as {
+    sources?: unknown;
+  };
+  assert.deepEqual(input.sources, [
+    {
+      key: "brief",
+      name: "Workflowd integration brief",
+      kind: "external_integration",
+    },
+  ]);
+});
+
+test("spec-bound declarations adopt an unowned external_integration Source", async () => {
+  const repo = repository();
+  configure({ engine, repository: repo, owner: "spec://typescript/bound-source-kind-runtime" });
+  execFileSync(engine, [
+    "sources",
+    "create",
+    "--repo",
+    repo,
+    "--scope",
+    "default",
+    "--id",
+    "source_workflowd_integration_brief",
+    "--name",
+    "workflowd integration brief (agent-authored, relayed by Ben Nasraoui 2026-08-19)",
+    "--source-type",
+    "external_integration",
+    "--reference",
+    "session:824f8174 workflowd-agent brief",
+  ]);
+  execFileSync(engine, [
+    "requirements",
+    "create",
+    "--repo",
+    repo,
+    "--scope",
+    "default",
+    "--id",
+    "req_env_key_at_invocation",
+    "--statement",
+    "The provider reads the environment key at invocation",
+  ]);
+  execFileSync(engine, [
+    "requirements",
+    "source-ref",
+    "add",
+    "--repo",
+    repo,
+    "--scope",
+    "default",
+    "--requirement-id",
+    "req_env_key_at_invocation",
+    "--source-id",
+    "source_workflowd_integration_brief",
+  ]);
+
+  const provenance = defineSpec("noscope");
+  const brief = provenance
+    .source("workflowd-integration-brief")
+    .name("workflowd integration brief (agent-authored, relayed by Ben Nasraoui 2026-08-19)")
+    .adoptUnowned("source_workflowd_integration_brief")
+    .kind("external_integration");
+  const canonical = provenance
+    .requirement("env-key-at-invocation")
+    .adoptUnowned("req_env_key_at_invocation")
+    .statement("The provider reads the environment key at invocation")
+    .from(brief);
+  const spec = provenance.build(canonical);
+
+  const preview = await plan(spec);
+  assert.equal(preview.created, 0);
+  assert.equal(preview.conflicts, 0);
+  assert.equal(preview.moved, 2);
+  await apply(spec);
+  const replay = await plan(spec);
+  assert.equal(replay.unchanged, 2);
 });
 
 test("a spec-scoped Rule materializes once for several Requirements", async () => {

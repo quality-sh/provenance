@@ -2,6 +2,12 @@
 name = "provenance-store"
 version.workspace = true
 edition.workspace = true
+description = "Git-backed graph storage for Provenance requirements traceability"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+publish.workspace = true
 
 [lints]
 workspace = true
@@ -10,9 +16,10 @@ workspace = true
 anyhow.workspace = true
 camino.workspace = true
 fs2.workspace = true
-provenance-core = { path = "../provenance-core" }
-provenance-macros = { path = "../provenance-macros" }
-provenance-ste100 = { path = "../provenance-ste100" }
+provenance-core.workspace = true
+provenance-macros.workspace = true
+provenance-scanner.workspace = true
+provenance-ste100.workspace = true
 serde.workspace = true
 serde_ignored.workspace = true
 serde_json.workspace = true

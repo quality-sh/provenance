@@ -1,5 +1,5 @@
 use camino::Utf8PathBuf;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::fmt::Write as _;
 
 use crate::model::{
@@ -13,7 +13,7 @@ use super::Direction;
 /// Each variant carries the record the store already writes, so a primitive
 /// never invents a second vocabulary for a Requirement or a Rule. The
 /// `node_type` tag is the same word `Edge` uses for its endpoints.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "node_type", rename_all = "snake_case")]
 pub enum GraphNode {
     Source(Box<Source>),
@@ -89,7 +89,7 @@ impl GraphNode {
 }
 
 /// One record reached in a single hop, with the edge that reached it.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Neighbor {
     pub edge_type: EdgeType,
     pub direction: Direction,
@@ -97,39 +97,39 @@ pub struct Neighbor {
 }
 
 /// One record reached by a walk, with how many hops it took.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TracedNode {
     pub depth: usize,
     pub node: GraphNode,
 }
 
 /// Where a Rule is implemented.
-#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Serialize)]
+#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Deserialize, Serialize)]
 pub struct ImplementationSite {
     pub file: Utf8PathBuf,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub line: Option<usize>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub symbol: Option<String>,
 }
 
 /// Where a Rule is verified, and how.
-#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Serialize)]
+#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Deserialize, Serialize)]
 pub struct VerificationSite {
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub key: Option<String>,
     pub method: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub declared_by: Option<String>,
     pub file: Utf8PathBuf,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub line: Option<usize>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub symbol: Option<String>,
 }
 
 /// One Rule a change reaches, with the code that stands behind it.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AffectedRule {
     pub id: StableId,
     pub implementations: Vec<ImplementationSite>,

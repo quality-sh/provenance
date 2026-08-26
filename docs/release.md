@@ -12,22 +12,47 @@ The release workflow builds and uploads:
 - `provenance-<tag>-aarch64-apple-darwin.tar.gz`
 - `SHA256SUMS`
 
-It also stages and publishes matching npm engine packages plus
-`@quality-sh/provenance`. npm trusted publishing must be configured for the
-repository's `npm` GitHub environment before cutting the first package release.
+It also stages and publishes matching npm engine packages,
+`@quality-sh/provenance`, and `@quality-sh/create-provenance`. npm trusted
+publishing must trust `quality-sh/provenance`, the `release.yml` workflow, and
+the `npm` GitHub environment for each package. The workflow uses GitHub OIDC
+and does not store an npm registry token.
+
+The workflow publishes these Rust crates to crates.io:
+
+- `provenance-macros`
+- `provenance-core`
+- `provenance-scanner`
+- `provenance-ste100`
+- `provenance-store`
+- `provenance-sdk`
+- `provenance-cli`
+
+The `crates-io` GitHub environment protects publication. Each crate must trust
+`quality-sh/provenance`, the `release.yml` workflow, and that environment on
+crates.io. The official crates.io authentication action exchanges GitHub's OIDC
+token for a short-lived registry token during each release. The repository does
+not store a crates.io registry token.
 
 Each engine package carries a binary and no command name. `provenance` is a
-command of `@quality-sh/provenance`, the one package the quick start installs,
-so `npx provenance` resolves the same way on every host. `npm run test:packed`
-rehearses that whole install from local archives before a release.
+command of `@quality-sh/provenance`. The initializer adds that package as a
+development dependency and then initializes the project. `npm run test:packed`
+rehearses the complete flow from local archives before a release.
 
 ## Cut A Release
 
-Update crate versions, then tag and push:
+Update the crate and npm package versions. Verify the crate archives before you
+tag the release:
 
 ```sh
-git tag v0.1.0
-git push origin v0.1.0
+cargo package --workspace --locked
+```
+
+Tag and push the release commit:
+
+```sh
+git tag v0.2.1
+git push origin v0.2.1
 ```
 
 The `Release` workflow creates the GitHub Release, attaches archives, and generates release notes.
@@ -40,17 +65,21 @@ Build the local binary with:
 cargo build --release -p provenance-cli --all-features
 ```
 
-A release scans clean: `provenance coverage scan --path . --scope default --validate-rules --strict` exits zero, so every marker cites a real rule and every active rule has a verification site.
+Before a release, validate the Rust markers with
+`provenance coverage scan --repo . --path crates --scope default --validate-rules`.
+The command also reports active Rules that have no implementation or verification site.
+Add `--strict` only when those warnings must stop the release.
 
 The binary lands at `target/release/provenance`. Users should commit `.provenance/state/` and ignore `.provenance/cache/`.
 
 ## Versions
 
 Every crate shares one version, set once in the workspace `[workspace.package]`
-and inherited with `version.workspace = true`. The TypeScript SDK version in
-`packages/provenance/package.json` must match it. The release job rejects a tag
-unless both versions equal the tag without its `v` prefix.
+and inherited with `version.workspace = true`. The package versions in
+`packages/provenance/package.json` and `packages/create-provenance/package.json`
+must match it. The release job rejects a tag unless all versions equal the tag
+without its `v` prefix.
 
-A tag carrying a hyphen is published as a prerelease, so `v0.1.0-rc.1` is the
+A tag carrying a hyphen is published as a prerelease, so `v0.2.1-rc.1` is the
 way to rehearse a release without announcing one. npm publishes that version
 under the `next` tag; stable versions use `latest`.

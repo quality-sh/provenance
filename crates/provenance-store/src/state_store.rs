@@ -30,9 +30,10 @@ pub use inputs::{
     CreateRequirementInput, CreateResolutionInput, CreateRuleInput, CreateSourceInput,
     CreateSynthesisPacketInput, CreateTopicInput, DeclarationReferenceInput,
     MaterializeImplementationBindingInput, MaterializeVerificationBindingInput, PostMessageInput,
-    ReconcileState, ReconciledResource, TypedFieldChange, TypedImplementationInput,
-    TypedRequirementInput, TypedResourceKind, TypedRuleInput, TypedSourceInput,
-    TypedSpecDiagnostic, TypedSpecInput, TypedSpecResult, UpdateQuestionInput,
+    ReconcileState, ReconciledResource, TypedAdoptionTarget, TypedDeclarationKind,
+    TypedFieldChange, TypedImplementationInput, TypedRequirementInput, TypedResourceKind,
+    TypedRuleInput, TypedSourceInput, TypedSpecDiagnostic, TypedSpecInput, TypedSpecResult,
+    UpdateQuestionInput,
 };
 pub use proposal_surfaces::{ProposalDemand, ProposalSurfaceReason, SurfacedProposal, TopicClaim};
 pub use requirement_reviews::{requirement_statement_changes, RequirementStatementChange};

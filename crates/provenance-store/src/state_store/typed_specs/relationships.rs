@@ -109,7 +109,9 @@ fn remove_superseded_edges(
         .filter(|edge| edge.scope_id == *scope_id)
         .filter(|edge| match edge.edge_type {
             EdgeType::References => {
-                managed_sources.contains(edge.from_id.as_str())
+                edge.from_type == NodeType::Source
+                    && edge.to_type == NodeType::Requirement
+                    && managed_sources.contains(edge.from_id.as_str())
                     && desired_requirements.contains(edge.to_id.as_str())
                     && !references.contains(&(
                         edge.from_id.as_str().to_string(),
@@ -117,7 +119,9 @@ fn remove_superseded_edges(
                     ))
             }
             EdgeType::Produces => {
-                managed_requirements.contains(edge.from_id.as_str())
+                edge.from_type == NodeType::Requirement
+                    && edge.to_type == NodeType::Rule
+                    && managed_requirements.contains(edge.from_id.as_str())
                     && desired_rules.contains(edge.to_id.as_str())
                     && !produces.contains(&(
                         edge.from_id.as_str().to_string(),

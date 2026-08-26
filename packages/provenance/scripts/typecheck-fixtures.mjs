@@ -51,6 +51,25 @@ assert.notEqual(
 );
 assert.match(contextLocalRuleMismatch.stdout + contextLocalRuleMismatch.stderr, /TS2345/);
 
+const sourceKindClosed = typecheck("source-kind-closed");
+const sourceKindOutput = sourceKindClosed.stdout + sourceKindClosed.stderr;
+assert.notEqual(
+  sourceKindClosed.status,
+  0,
+  "an unsupported source kind unexpectedly typechecked",
+);
+assert.match(sourceKindOutput, /TS2345/);
+// Both fluent builder surfaces close the kind: the top-level
+// `source(key).kind` and the spec-scoped `defineSpec(key).source(key).kind`.
+const closedKindErrors = sourceKindOutput
+  .split("\n")
+  .filter((line) => line.includes("TS2345") && line.includes("SourceKind"));
+assert.equal(
+  closedKindErrors.length,
+  2,
+  "both fluent builder surfaces must reject an unsupported kind",
+);
+
 const contextCrossSpec = typecheck("context-cross-spec");
 assert.notEqual(contextCrossSpec.status, 0, "a Source unexpectedly crossed spec contexts");
 assert.match(contextCrossSpec.stdout + contextCrossSpec.stderr, /TS2345/);

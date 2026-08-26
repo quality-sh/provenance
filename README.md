@@ -6,6 +6,24 @@ Provenance is a tool for building requirements traceability, from source to requ
 
 ### Installation
 
+Install and initialize Provenance in a TypeScript project:
+
+```sh
+npx --yes @quality-sh/create-provenance@latest
+```
+
+The initializer detects npm, pnpm, Yarn, Bun, Deno, or Nub. It installs
+`@quality-sh/provenance` as an exact development dependency, creates the
+default scope, validates the state, and ignores `.provenance/cache/`.
+
+Install the CLI from crates.io:
+
+```sh
+cargo install provenance-cli
+```
+
+To build the CLI from this source tree:
+
 ```sh
 cargo build --release -p provenance-cli --all-features
 ```
@@ -15,15 +33,15 @@ The binary lands at `target/release/provenance`. Put it on your PATH.
 ### Quick start
 
 ```sh
-# set up a repo (commit .provenance/state/, ignore .provenance/cache/)
-provenance init --path . --scope default --path-prefix .
+# install the development dependency and set up the repository
+npx --yes @quality-sh/create-provenance@latest
 
 # put something in the graph
-provenance requirements create --scope default --id req_exports \
+npx provenance requirements create --scope default --id req_exports \
   --statement "Exports finish in under a minute"
 
 # see where things stand
-provenance prime
+npx provenance prime
 ```
 
 ### Essential commands

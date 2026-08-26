@@ -1,17 +1,26 @@
+//! Persistent identity resolution.
+//!
+//! The kernel admits declarations structurally at the existing pipeline
+//! points; only this module maps admitted addresses to canonical ids,
+//! migrates local and shared identities, and enforces ownership. Only
+//! provenance-store determines persistent declaration identity.
+
 use std::collections::{BTreeMap, BTreeSet};
 
+use provenance_core::authoring::{self, addresses};
 use provenance_core::{DeclarationAddress, StableId};
+use provenance_macros::rule;
 use sha2::{Digest, Sha256};
 
 use super::super::{TypedRequirementInput, TypedRuleInput, TypedSourceInput};
-use super::rule_addresses::{migration_candidates, rule_address};
+use super::rule_addresses::migration_candidates;
 
 pub(super) fn source_address(spec: &str, key: &str) -> anyhow::Result<DeclarationAddress> {
-    DeclarationAddress::new([spec, "source", key])
+    addresses::source_address(spec, key)
 }
 
 pub(super) fn requirement_address(spec: &str, key: &str) -> anyhow::Result<DeclarationAddress> {
-    DeclarationAddress::new([spec, "requirement", key])
+    addresses::requirement_address(spec, key)
 }
 
 pub(super) fn source_identity(input: &TypedSourceInput) -> (&str, Option<&str>) {
@@ -22,6 +31,8 @@ pub(super) fn requirement_identity(input: &TypedRequirementInput) -> (&str, Opti
     (&input.key, input.id.as_deref())
 }
 
+pub(super) use authoring::{normalize_rule_relationships, validate_references};
+
 pub(super) fn rule_declaration_ids(
     owner: &str,
     spec: &str,
@@ -30,25 +41,9 @@ pub(super) fn rule_declaration_ids(
 ) -> anyhow::Result<BTreeMap<DeclarationAddress, StableId>> {
     let mut ids = BTreeMap::new();
     let mut canonical = BTreeSet::new();
-    let mut relationships = BTreeSet::new();
+    let mut checker = authoring::RuleChecker::new();
     for declaration in declarations {
-        anyhow::ensure!(
-            !declaration.key.trim().is_empty(),
-            "rule key must not be empty"
-        );
-        let address = rule_address(spec, declaration)?;
-        anyhow::ensure!(
-            !ids.contains_key(&address),
-            "distinct rule declarations resolve to address `{}`",
-            address.segments().join("/")
-        );
-        for requirement in &declaration.requirements {
-            anyhow::ensure!(
-                relationships.insert((requirement.clone(), declaration.key.clone())),
-                "distinct rule declarations with key `{}` collide under requirement `{requirement}`",
-                declaration.key
-            );
-        }
+        let address = checker.admit(spec, declaration)?;
         let candidates = migration_candidates(spec, declaration, &address, existing)?;
         let canonical_key = match address.segments() {
             [_, _, requirement, _, _] => format!("{spec}/{requirement}/{}", declaration.key),
@@ -109,43 +104,8 @@ fn resolve_rule_id(
     resolve_id("rule", owner, address, canonical_key, None, existing)
 }
 
-pub(super) fn normalize_rule_relationships(
-    declarations: &mut [TypedRuleInput],
-) -> anyhow::Result<()> {
-    for declaration in declarations {
-        anyhow::ensure!(
-            declaration.requirement.is_none() || declaration.requirements.is_empty(),
-            "rule `{}` cannot set both `requirement` and `requirements`",
-            declaration.key
-        );
-        if let Some(requirement) = declaration.requirement.take() {
-            declaration.requirements.push(requirement);
-        }
-        anyhow::ensure!(
-            !declaration.requirements.is_empty(),
-            "rule `{}` must refine at least one requirement",
-            declaration.key
-        );
-        let mut unique = BTreeSet::new();
-        for requirement in &declaration.requirements {
-            anyhow::ensure!(
-                !requirement.trim().is_empty(),
-                "rule `{}` has an empty requirement key",
-                declaration.key
-            );
-            anyhow::ensure!(
-                unique.insert(requirement.clone()),
-                "rule `{}` repeats requirement `{requirement}`",
-                declaration.key
-            );
-        }
-        declaration.requirements = unique.into_iter().collect();
-    }
-    Ok(())
-}
-
 pub(super) fn declaration_ids<'a>(
-    kind: &str,
+    kind: &'static str,
     owner: &str,
     spec: &str,
     declarations: impl Iterator<Item = (&'a str, Option<&'a str>)>,
@@ -153,10 +113,9 @@ pub(super) fn declaration_ids<'a>(
 ) -> anyhow::Result<BTreeMap<String, StableId>> {
     let mut ids = BTreeMap::new();
     let mut canonical = BTreeSet::new();
+    let mut checker = authoring::DeclarationChecker::new(kind);
     for (key, explicit_id) in declarations {
-        anyhow::ensure!(!key.trim().is_empty(), "{kind} key must not be empty");
-        anyhow::ensure!(!ids.contains_key(key), "duplicate {kind} key `{key}`");
-        let address = DeclarationAddress::new([spec, kind, key])?;
+        let address = checker.admit(spec, key)?;
         let id = resolve_id(
             kind,
             owner,
@@ -175,6 +134,10 @@ pub(super) fn declaration_ids<'a>(
     Ok(ids)
 }
 
+/// Maps one admitted declaration address to its canonical id: the
+/// existing id for a known address, the caller's explicit id, the
+/// canonical key when it is well formed, or a digest-suffixed slug.
+#[rule("rule_rust_store_owns_persistent_identity")]
 fn resolve_id(
     kind: &str,
     owner: &str,
@@ -242,54 +205,6 @@ pub(super) fn owned_declaration_ids<'a, T: 'a>(
     Ok(ids)
 }
 
-pub(super) fn validate_references(
-    requirements: &[TypedRequirementInput],
-    rules: &[TypedRuleInput],
-    source_ids: &BTreeMap<String, StableId>,
-    requirement_ids: &BTreeMap<String, StableId>,
-) -> anyhow::Result<()> {
-    for requirement in requirements {
-        for source in &requirement.sources {
-            anyhow::ensure!(
-                source_ids.contains_key(source),
-                "requirement `{}` references undeclared source `{source}`",
-                requirement.key
-            );
-        }
-    }
-    for rule in rules {
-        for requirement in &rule.requirements {
-            anyhow::ensure!(
-                requirement_ids.contains_key(requirement),
-                "rule `{}` references undeclared requirement `{requirement}`",
-                rule.key
-            );
-        }
-    }
-    Ok(())
-}
-
-pub(super) fn validate_ownership<'a, T: 'a>(
-    owner: &str,
-    records: &'a [T],
-    desired_ids: impl Iterator<Item = &'a StableId>,
-    fields: impl Fn(&'a T) -> (&'a StableId, Option<&'a str>),
-) -> anyhow::Result<()> {
-    for desired_id in desired_ids {
-        let Some(record) = records.iter().find(|record| fields(record).0 == desired_id) else {
-            continue;
-        };
-        let (_, declared_by) = fields(record);
-        anyhow::ensure!(
-            declared_by == Some(owner),
-            "record `{}` is not owned by `{owner}` (declared_by: {})",
-            desired_id.as_str(),
-            declared_by.unwrap_or("unowned")
-        );
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
@@ -298,6 +213,7 @@ mod tests {
     use crate::state_store::typed_specs::rule_address;
     use crate::state_store::TypedRuleInput;
     use provenance_core::StableId;
+    use provenance_macros::verifies;
 
     #[test]
     fn implicit_ids_are_scoped_to_the_spec_address() {
@@ -351,6 +267,7 @@ mod tests {
     }
 
     #[test]
+    #[verifies("rule_rust_store_owns_persistent_identity", examples)]
     fn an_existing_address_keeps_its_canonical_id() {
         let address = requirement_address("share-links", "sharing").unwrap();
         let mut existing = BTreeMap::new();

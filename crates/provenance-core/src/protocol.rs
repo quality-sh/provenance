@@ -1,6 +1,7 @@
 mod node;
 mod query;
 mod response;
+mod typed_spec;
 
 use camino::Utf8PathBuf;
 use serde::{Deserialize, Serialize};
@@ -16,8 +17,12 @@ pub use response::{
     EvidenceResult, GetResult, ImpactResult, NeighborsResult, QueryResponse, ResolveSymbolResult,
     SearchResult, StaleEvidence, StaleResult, TraceResult,
 };
+pub use typed_spec::{
+    CheckStatementRequest, TypedAdoptionTarget, TypedDeclarationKind, TypedImplementationInput,
+    TypedRequirementInput, TypedRuleInput, TypedSourceInput, TypedSpecInput,
+};
 
-pub const SDK_PROTOCOL_VERSION: u32 = 4;
+pub const SDK_PROTOCOL_VERSION: u32 = 5;
 
 /// How many records a query returns when the caller names no limit.
 pub const QUERY_DEFAULT_LIMIT: usize = 50;

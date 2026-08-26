@@ -1,4 +1,26 @@
 export type DeclarationAddress = readonly string[];
+export type ResourceKind = "source" | "requirement" | "rule";
+
+export interface AdoptionTarget {
+  kind: ResourceKind;
+  id: string;
+}
+
+// The canonical source types that fluent authoring selects. It mirrors
+// the Rust `SourceType` enum. The wire protocol also maps the provider
+// aliases `linear`, `github`, and `jira` onto `external_integration`;
+// fluent authoring states the canonical value instead.
+export type SourceKind =
+  | "policy"
+  | "document"
+  | "legislation"
+  | "company_agreement"
+  | "system_state"
+  | "external_integration"
+  | "domain_knowledge"
+  | "project_artifact"
+  | "incident"
+  | "api_spec";
 
 export interface SourceDeclaration {
   key: string;
@@ -38,12 +60,12 @@ export interface TypedSpecDocument {
   schema_version: 1;
   spec: string;
   declared_by: string;
+  adopt_unowned?: AdoptionTarget[];
   sources: SourceDeclaration[];
   requirements: RequirementDeclaration[];
   rules: RuleDeclaration[];
 }
 
-export type ResourceKind = "source" | "requirement" | "rule";
 export type ReconcileState =
   | "created"
   | "updated"

@@ -1,0 +1,9 @@
+error[E0080]: evaluation panicked: provenance_spec! identifier does not spell the spec key
+ --> tests/compile_fail/spec_key_mismatch.rs:3:1
+  |
+3 | / provenance_spec!(share_links => "session-links" {
+4 | |     requirement("sharing").statement("Users can securely share documentation"),
+5 | | });
+  | |__^ evaluation of `_` failed here
+  |
+  = note: this error originates in the macro `$crate::panic::panic_2021` which comes from the expansion of the macro `provenance_spec` (in Nightly builds, run with -Z macro-backtrace for more info)

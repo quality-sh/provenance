@@ -54,7 +54,7 @@ const source = readFileSync(0, "utf8");
 const input = source === "" ? undefined : JSON.parse(source);
 appendFileSync(${JSON.stringify(log)}, JSON.stringify({ command, input }) + "\\n");
 if (command === "info") process.stdout.write(JSON.stringify({
-  engine_version: "0.1.0", protocol_version: 4, state_schema_version: 1, repository: "/project"
+  engine_version: "0.1.0", protocol_version: 5, state_schema_version: 1, repository: "/project"
 }));
 else process.stdout.write(JSON.stringify({
   declared_by: "spec://typescript", created: 0, updated: 0, moved: 0,
@@ -189,6 +189,69 @@ test("top-level fluent declarations author source names and Requirement descript
   });
 });
 
+test("top-level fluent Requirements serialize an immutable explicit ID", async () => {
+  const recorder = recordingEngine();
+  configure({ engine: recorder.engine, owner: "spec://typescript/requirement-id" });
+  const draft = requirement("canonical");
+  const identified = draft.id("req_existing");
+  const stated = identified.statement("The canonical Requirement keeps its identity");
+  const spec = defineSpec("requirement-id").requirements(stated).build();
+
+  assert.notEqual(draft, identified);
+  assert.notEqual(identified, stated);
+  await apply(spec);
+
+  const request = recorder.requests().find(({ command }) => command === "apply");
+  assert.deepEqual((request?.input as { requirements?: unknown }).requirements, [
+    {
+      key: "canonical",
+      id: "req_existing",
+      statement: "The canonical Requirement keeps its identity",
+      sources: [],
+    },
+  ]);
+});
+
+test("top-level fluent declarations serialize exact unowned adoption targets", async () => {
+  const recorder = recordingEngine();
+  configure({ engine: recorder.engine, owner: "spec://typescript/adoption" });
+  const policyDraft = source("policy");
+  const policy = policyDraft
+    .adoptUnowned("source_existing")
+    .document("docs/policy.md");
+  const ruleDraft = rule("enforcement");
+  const enforcement = ruleDraft
+    .adoptUnowned("rule_existing")
+    .statement("The migration keeps the canonical Rule");
+  const requirementDraft = requirement("canonical");
+  const canonical = requirementDraft
+    .adoptUnowned("req_existing")
+    .statement("The canonical Requirement keeps its identity")
+    .from(policy)
+    .rules(enforcement);
+  const spec = defineSpec("adoption").requirements(canonical).build();
+
+  assert.notEqual(policyDraft, policy);
+  assert.notEqual(ruleDraft, enforcement);
+  assert.notEqual(requirementDraft, canonical);
+  await apply(spec);
+
+  const input = recorder.requests().find(({ command }) => command === "apply")?.input as {
+    adopt_unowned?: unknown;
+    sources?: Array<{ id?: string }>;
+    requirements?: Array<{ id?: string }>;
+    rules?: Array<{ id?: string }>;
+  };
+  assert.deepEqual(input.adopt_unowned, [
+    { kind: "source", id: "source_existing" },
+    { kind: "requirement", id: "req_existing" },
+    { kind: "rule", id: "rule_existing" },
+  ]);
+  assert.equal(input.sources?.[0]?.id, "source_existing");
+  assert.equal(input.requirements?.[0]?.id, "req_existing");
+  assert.equal(input.rules?.[0]?.id, "rule_existing");
+});
+
 test("build collects Sources referenced by Requirements", async () => {
   const recorder = recordingEngine();
   configure({ engine: recorder.engine, owner: "spec://typescript/collected-source" });
@@ -211,6 +274,54 @@ test("build collects Sources referenced by Requirements", async () => {
       name: "Sharing policy",
       kind: "document",
       reference: "docs/policy.md",
+    },
+  ]);
+});
+
+test("a fluent Source declares a supported non-document kind", async () => {
+  const recorder = recordingEngine();
+  configure({ engine: recorder.engine, owner: "spec://typescript/source-kind" });
+  const spec = defineSpec("source-kind")
+    .requirements(
+      requirement("intake")
+        .statement("The catalogue records the source type of every citation")
+        .from(source("brief").name("Workflowd integration brief").kind("external_integration")),
+    )
+    .build();
+
+  await apply(spec);
+
+  // `kind` adds no optional URL or reference metadata.
+  const request = recorder.requests().find(({ command }) => command === "apply");
+  assert.deepEqual((request?.input as { sources?: unknown }).sources, [
+    {
+      key: "brief",
+      name: "Workflowd integration brief",
+      kind: "external_integration",
+    },
+  ]);
+});
+
+test("document stays the short form of the document kind", async () => {
+  const recorder = recordingEngine();
+  configure({ engine: recorder.engine, owner: "spec://typescript/source-kind-document" });
+  const spec = defineSpec("source-kind-document")
+    .requirements(
+      requirement("intake")
+        .statement("The catalogue records the source type of every citation")
+        .from(source("brief").document("docs/brief.md")),
+    )
+    .build();
+
+  await apply(spec);
+
+  const request = recorder.requests().find(({ command }) => command === "apply");
+  assert.deepEqual((request?.input as { sources?: unknown }).sources, [
+    {
+      key: "brief",
+      name: "brief",
+      kind: "document",
+      reference: "docs/brief.md",
     },
   ]);
 });

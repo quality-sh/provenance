@@ -14,7 +14,7 @@ interface EngineInfo {
   repository: string;
 }
 
-const SUPPORTED_PROTOCOL_VERSION = 4;
+const SUPPORTED_PROTOCOL_VERSION = 5;
 const handshakes = new Map<string, Promise<void>>();
 
 export async function invokeEngine<Result>(
@@ -75,7 +75,7 @@ async function invoke<Result>(
   const code = await completed.catch((cause: unknown) => {
     throw new Error(
       `Provenance engine could not start at ${engine}. Check PROVENANCE_BIN if it is set, ` +
-      "or run npm install @quality-sh/provenance without --omit=optional.",
+      "or install the development dependency again with optional dependencies enabled.",
       { cause },
     );
   });

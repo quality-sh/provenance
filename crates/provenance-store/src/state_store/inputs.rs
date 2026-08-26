@@ -134,77 +134,14 @@ pub struct CreateRuleInput {
     pub origin_message: Option<StableId>,
 }
 
-/// One language-authored desired-state document.
-#[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct TypedSpecInput {
-    pub schema_version: u32,
-    pub spec: String,
-    pub declared_by: String,
-    #[serde(default)]
-    pub sources: Vec<TypedSourceInput>,
-    #[serde(default)]
-    pub requirements: Vec<TypedRequirementInput>,
-    #[serde(default)]
-    pub rules: Vec<TypedRuleInput>,
-}
+// The typed-spec input family is wire protocol and lives in core; these
+// re-exports keep the store paths every existing consumer uses.
+pub use provenance_core::protocol::{
+    TypedAdoptionTarget, TypedDeclarationKind, TypedImplementationInput, TypedRequirementInput,
+    TypedRuleInput, TypedSourceInput, TypedSpecInput,
+};
 
-#[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct TypedSourceInput {
-    pub key: String,
-    #[serde(default)]
-    pub id: Option<String>,
-    pub name: String,
-    pub kind: String,
-    #[serde(default)]
-    pub url: Option<String>,
-    #[serde(default)]
-    pub reference: Option<String>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct TypedRequirementInput {
-    pub key: String,
-    #[serde(default)]
-    pub id: Option<String>,
-    pub statement: String,
-    #[serde(default)]
-    pub description: Option<String>,
-    #[serde(default)]
-    pub sources: Vec<String>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct TypedRuleInput {
-    pub key: String,
-    #[serde(default)]
-    pub id: Option<String>,
-    #[serde(default)]
-    pub address: Option<provenance_core::DeclarationAddress>,
-    #[serde(default)]
-    pub requirement: Option<String>,
-    #[serde(default)]
-    pub requirements: Vec<String>,
-    pub statement: String,
-    #[serde(default)]
-    pub name: Option<String>,
-    #[serde(default)]
-    pub description: Option<String>,
-    #[serde(default)]
-    pub implementation: Option<TypedImplementationInput>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct TypedImplementationInput {
-    pub file: camino::Utf8PathBuf,
-    pub symbol: String,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TypedResourceKind {
     Source,
@@ -212,7 +149,7 @@ pub enum TypedResourceKind {
     Rule,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ReconcileState {
     Created,
@@ -223,11 +160,11 @@ pub enum ReconcileState {
     Unchanged,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct ReconciledResource {
     pub kind: TypedResourceKind,
     pub key: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent: Option<String>,
     pub address: provenance_core::DeclarationAddress,
     pub id: StableId,
@@ -236,7 +173,7 @@ pub struct ReconciledResource {
     pub changes: Vec<TypedFieldChange>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct TypedFieldChange {
     pub field: String,
     pub before: serde_json::Value,
@@ -244,7 +181,7 @@ pub struct TypedFieldChange {
 }
 
 /// One ASD-STE100 violation attached to its typed declaration site.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct TypedSpecDiagnostic {
     pub address: DeclarationAddress,
     pub resource_kind: TypedResourceKind,
@@ -257,7 +194,7 @@ pub struct TypedSpecDiagnostic {
     pub message: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct TypedSpecResult {
     pub declared_by: String,
     pub created: usize,

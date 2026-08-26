@@ -13,6 +13,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const packageRoot = fileURLToPath(new URL("..", import.meta.url));
+const initializerRoot = fileURLToPath(new URL("../../create-provenance", import.meta.url));
 const repositoryRoot = fileURLToPath(new URL("../../..", import.meta.url));
 const npmCli = process.env.npm_execpath;
 assert.ok(npmCli, "run this test through npm so its CLI path is known");
@@ -41,10 +42,15 @@ execFileSync(process.execPath, [
 ]);
 npm(["pack", stagedEngine, "--pack-destination", archiveDirectory]);
 npm(["pack", packageRoot, "--pack-destination", archiveDirectory]);
+npm(["pack", initializerRoot, "--pack-destination", archiveDirectory]);
 npm(["pack", typescriptRoot, "--pack-destination", archiveDirectory]);
 
 const archives = readdirSync(archiveDirectory).filter((name) => name.endsWith(".tgz"));
 const mainArchive = archiveNamed(archives, `quality-sh-provenance-${version}.tgz`);
+const initializerManifest = JSON.parse(
+  readFileSync(join(initializerRoot, "package.json"), "utf8"),
+);
+const initializerArchive = archiveNamed(archives, archiveName(initializerManifest));
 const engineManifest = JSON.parse(readFileSync(join(stagedEngine, "package.json"), "utf8"));
 const engineArchive = archiveNamed(archives, archiveName(engineManifest));
 const typescriptArchive = archiveNamed(archives, archiveName(typescriptManifest));
@@ -90,6 +96,81 @@ assert.deepEqual(
 );
 const initialCheck = JSON.parse(provenance(["check", "--repo", ".", "--format", "json"], application));
 assert.equal(initialCheck.status, "ok", "a freshly initialized project must validate");
+
+// The initializer is a temporary command, while the SDK and engine become
+// durable project development dependencies.
+const initializedApplication = join(temporary, "initialized-application");
+const packedMainSpec = `file:../archives/${mainArchive}`;
+mkdirSync(initializedApplication);
+writeFileSync(join(initializedApplication, "package.json"), JSON.stringify({
+  name: "provenance-one-command-install",
+  private: true,
+  version: "1.0.0",
+  type: "module",
+  packageManager: "npm@11.6.2",
+  overrides: {
+    [engineManifest.name]: `file:../archives/${engineArchive}`,
+    "@quality-sh/provenance": packedMainSpec,
+    [typescriptManifest.name]: `file:../archives/${typescriptArchive}`,
+  },
+}));
+npm(
+  [
+    "install",
+    "--offline",
+    "--cache",
+    isolatedCache,
+    "--no-audit",
+    "--no-fund",
+    "--no-save",
+    join(archiveDirectory, initializerArchive),
+  ],
+  { cwd: initializedApplication },
+);
+execFileSync(process.execPath, [
+  join(
+    initializedApplication,
+    "node_modules",
+    ...initializerManifest.name.split("/"),
+    initializerManifest.bin["create-provenance"],
+  ),
+], {
+  cwd: initializedApplication,
+  env: {
+    ...process.env,
+    npm_config_cache: isolatedCache,
+    npm_config_offline: "true",
+    npm_config_update_notifier: "false",
+    PROVENANCE_PACKAGE_SPEC: packedMainSpec,
+  },
+  stdio: "pipe",
+});
+const initializedManifest = JSON.parse(
+  readFileSync(join(initializedApplication, "package.json"), "utf8"),
+);
+assert.equal(
+  initializedManifest.devDependencies["@quality-sh/provenance"],
+  packedMainSpec,
+  "the packed initializer must save the staged SDK as a development dependency",
+);
+assert.equal(
+  initializedManifest.dependencies?.[initializerManifest.name],
+  undefined,
+  "the temporary initializer must not become a project dependency",
+);
+assert.equal(
+  readFileSync(join(initializedApplication, ".gitignore"), "utf8"),
+  ".provenance/cache/\n",
+  "the initializer must keep derived cache data out of Git",
+);
+const initializedCheck = JSON.parse(
+  provenance(["check", "--repo", ".", "--format", "json"], initializedApplication),
+);
+assert.equal(initializedCheck.status, "ok", "the one-command project must validate");
+
+if (process.env.PROVENANCE_TEST_YARN_PNP === "true") {
+  verifyYarnPnpInstall();
+}
 
 const localEngine = join(
   application,
@@ -323,6 +404,81 @@ function provenance(args, cwd) {
       npm_config_update_notifier: "false",
     },
   });
+}
+
+function verifyYarnPnpInstall() {
+  // The manager smoke uses a JavaScript engine fixture. This packed test joins
+  // Yarn's default PnP linker to the real SDK and native platform engine.
+  const yarnApplication = join(temporary, "yarn-pnp-initialized-application");
+  const yarnMainSpec = join(archiveDirectory, mainArchive);
+  const engineResolutions = stageEngineArchivesForYarn();
+  mkdirSync(yarnApplication);
+  writeFileSync(join(yarnApplication, "package.json"), JSON.stringify({
+    name: "provenance-yarn-pnp-install",
+    private: true,
+    version: "1.0.0",
+    packageManager: "yarn@4.9.2",
+    resolutions: {
+      ...engineResolutions,
+      [typescriptManifest.name]: `file:../archives/${typescriptArchive}`,
+    },
+  }));
+  execFileSync(process.execPath, [
+    join(initializerRoot, "bin", "create-provenance.mjs"),
+    "--package-manager", "yarn",
+  ], {
+    cwd: yarnApplication,
+    env: {
+      ...process.env,
+      PROVENANCE_PACKAGE_SPEC: yarnMainSpec,
+      YARN_ENABLE_NETWORK: "false",
+    },
+    stdio: "inherit",
+  });
+  assert.equal(
+    JSON.parse(readFileSync(join(yarnApplication, "package.json"), "utf8"))
+      .devDependencies["@quality-sh/provenance"],
+    yarnMainSpec,
+    "the Yarn PnP initializer must save the staged SDK as a development dependency",
+  );
+  assert.ok(
+    readFileSync(join(yarnApplication, ".pnp.cjs"), "utf8").length > 0,
+    "the Yarn regression test must use Plug'n'Play",
+  );
+  const check = JSON.parse(execFileSync("yarn", [
+    "provenance", "check", "--repo", yarnApplication, "--format", "json",
+  ], { cwd: yarnApplication, encoding: "utf8" }));
+  assert.equal(check.status, "ok", "the Yarn PnP project must validate with the native engine");
+}
+
+function stageEngineArchivesForYarn() {
+  const resolutions = {
+    [engineManifest.name]: `file:../archives/${engineArchive}`,
+  };
+  const targets = [
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+    "x86_64-unknown-linux-gnu",
+  ];
+  for (const target of targets) {
+    if (target === rustTarget) continue;
+
+    const staged = join(temporary, `engine-package-${target}`);
+    execFileSync(process.execPath, [
+      join(packageRoot, "scripts", "package-engine.js"),
+      "--target", target,
+      // Yarn resolves every optional package before it filters by platform.
+      // Only the host archive runs, so keep the other fixtures small.
+      "--binary", join(packageRoot, "bin", "provenance.mjs"),
+      "--out", staged,
+      "--version", version,
+    ]);
+    npm(["pack", staged, "--pack-destination", archiveDirectory]);
+    const manifest = JSON.parse(readFileSync(join(staged, "package.json"), "utf8"));
+    resolutions[manifest.name] = `file:../archives/${archiveName(manifest)}`;
+  }
+  return resolutions;
 }
 
 function archiveNamed(archives, expected) {

@@ -4,13 +4,17 @@ import type {
   FluentSource,
   FluentSpec,
 } from "./fluent-spec.js";
+import type { SourceKind } from "./protocol.js";
 import type { SpecHandle, VerifyOptions } from "./spec.js";
 import type { ImplementationTarget } from "./implementation-reference.js";
 
 /** An immutable Source declaration tied to one spec authoring context. */
 export interface SourceDeclaration<in out SpecKey extends string, out Key extends string> {
   readonly key: Key;
+  id(existingId: string): SourceDeclaration<SpecKey, Key>;
+  adoptUnowned(existingId: string): SourceDeclaration<SpecKey, Key>;
   document(reference: string): SourceDeclaration<SpecKey, Key>;
+  kind(kind: SourceKind): SourceDeclaration<SpecKey, Key>;
   name(name: string): SourceDeclaration<SpecKey, Key>;
 }
 
@@ -23,6 +27,7 @@ export interface RuleDeclaration<
   readonly key: Key;
   statement(text: string): RuleDeclaration<SpecKey, Key, RequirementKey>;
   id(existingId: string): RuleDeclaration<SpecKey, Key, RequirementKey>;
+  adoptUnowned(existingId: string): RuleDeclaration<SpecKey, Key, RequirementKey>;
   implementedBy(target: ImplementationTarget): RuleDeclaration<SpecKey, Key, RequirementKey>;
   verify(
     key: string,
@@ -37,6 +42,8 @@ export interface RequirementDeclaration<
   in out Key extends string,
 > {
   readonly key: Key;
+  id(existingId: string): RequirementDeclaration<SpecKey, Key>;
+  adoptUnowned(existingId: string): RequirementDeclaration<SpecKey, Key>;
   statement(text: string): RequirementDeclaration<SpecKey, Key>;
   description(description: string): RequirementDeclaration<SpecKey, Key>;
   from(

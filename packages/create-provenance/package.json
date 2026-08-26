@@ -1,0 +1,26 @@
+{
+  "name": "@quality-sh/create-provenance",
+  "version": "0.2.1",
+  "description": "Install and initialize Provenance in a TypeScript project",
+  "license": "BUSL-1.1",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/quality-sh/provenance.git"
+  },
+  "type": "module",
+  "files": [
+    "bin",
+    "src",
+    "README.md"
+  ],
+  "bin": {
+    "create-provenance": "bin/create-provenance.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "test:manager-smoke": "node test/manager-smoke.js"
+  }
+}

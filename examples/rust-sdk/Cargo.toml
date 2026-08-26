@@ -1,0 +1,11 @@
+[package]
+name = "rust-sdk-example"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+anyhow = "1.0"
+provenance-sdk = { path = "../../crates/provenance-sdk" }
+
+[workspace]

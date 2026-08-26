@@ -90,7 +90,7 @@ pub fn diagnostic(kind: &str, id: &str, start: usize) -> Value {
         "field": "statement",
         "standard": "ASD-STE100",
         "issue": 9,
-        "analyzer_version": "0.1.0",
+        "analyzer_version": "0.2.1",
         "rule": "8.1",
         "disposition": "violation",
         "span": {"start": start, "end": start + 1},

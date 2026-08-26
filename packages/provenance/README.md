@@ -4,13 +4,13 @@ This package is an optional typed façade over the Provenance Rust engine. It
 does not implement graph semantics or persistence in JavaScript.
 
 ```sh
-npm install @quality-sh/provenance
-npx provenance init --path . --scope default --path-prefix .
+npx --yes @quality-sh/create-provenance@latest
 ```
 
-Those two lines are the whole setup. The install brings the engine for your
-platform, `init` writes `.provenance/state/`, and `npx provenance check` reports
-`ok` on the project it just created.
+The initializer detects npm, pnpm, Yarn, Bun, Deno, or Nub. It adds this SDK as
+an exact development dependency, installs the engine for the current platform,
+writes `.provenance/state/`, and confirms that `npx provenance check` reports
+`ok`.
 
 ## Runtime Rule bindings
 
@@ -141,6 +141,53 @@ ID when Rust finds exactly one owned candidate. If several local Rules could
 become the shared Rule, apply fails instead of guessing. An immutable
 `.id(existingId)` call can choose the canonical record. Other declarations
 omitted from that complete spec are retired, not deleted.
+
+## Adopt existing unowned declarations
+
+Use Declaration adoption only for a migration from existing canonical state.
+The method requires one explicit Stable ID and adds one exact wire target:
+
+```ts
+const policy = source("policy")
+  .adoptUnowned("source_policy")
+  .document("docs/policy.md");
+
+export const migration = defineSpec("existing-requirements")
+  .requirements(
+    requirement("sharing")
+      .adoptUnowned("req_sharing")
+      .statement("Users can securely share documentation")
+      .from(policy),
+  )
+  .build();
+
+const preview = await plan(migration);
+if (preview.conflicts !== 0) throw new Error("Declaration adoption conflicts");
+await apply(migration);
+```
+
+An existing record that is not a document keeps its source type only when the
+declaration states that type. Use `.kind("external_integration")` in place of
+`.document(...)`. `kind` gives no locator, so the canonical URL and reference
+stay as they are. `document(reference)` is the short form of `kind("document")`
+that also gives the reference.
+
+`SourceDeclaration`, `RequirementDeclaration`, and `RuleDeclaration` provide
+the same immutable `adoptUnowned(existingId)` method. Use `.id(existingId)`
+when identity must be explicit but adoption is not requested.
+
+Plan must show no create and no conflict for a valid adoption. Apply keeps the
+Stable ID and definition and adds only the Declaration owner and Declaration
+address. Richer canonical metadata outside the typed declaration surface is
+preserved and does not block adoption. The same request then plans as unchanged.
+After adoption, replace `adoptUnowned(existingId)` with `id(existingId)` before
+a later definition change.
+
+Adoption refuses a missing declaration, an implicit or different ID, a
+duplicate target, a nonexistent record, a definition or relationship change,
+and a record owned by another declaration. One refusal makes the complete
+apply a no-op. A document with no adoption request keeps the default ownership
+conflict behavior.
 
 Materialize only this spec at a deliberate entry point:
 

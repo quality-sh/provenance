@@ -144,6 +144,7 @@ export type {
   RuleEvidence,
   SearchRequest,
   SearchResponse,
+  SourceKind,
   StaleEvidence,
   StaleRequest,
   StaleResponse,

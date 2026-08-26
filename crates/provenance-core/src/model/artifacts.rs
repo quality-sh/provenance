@@ -52,6 +52,24 @@ impl SourceType {
             _ => anyhow::bail!("source type must be a supported provenance source type"),
         }
     }
+
+    /// The wire value that the typed-spec protocol carries for this type.
+    /// `parse` accepts each value that this function gives.
+    #[must_use]
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Policy => "policy",
+            Self::Document => "document",
+            Self::Legislation => "legislation",
+            Self::CompanyAgreement => "company_agreement",
+            Self::SystemState => "system_state",
+            Self::ExternalIntegration => "external_integration",
+            Self::DomainKnowledge => "domain_knowledge",
+            Self::ProjectArtifact => "project_artifact",
+            Self::Incident => "incident",
+            Self::ApiSpec => "api_spec",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

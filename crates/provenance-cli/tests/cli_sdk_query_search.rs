@@ -12,7 +12,7 @@ fn search_matches_record_text_and_bounds_the_page() {
 
     let answer = sdk(repo, "search", &json!({"text": "time bounded"}));
 
-    assert_eq!(answer["protocol_version"], 4);
+    assert_eq!(answer["protocol_version"], 5);
     assert_eq!(answer["operation"], "search");
     assert_eq!(answer["limit"], 50);
     assert_eq!(answer["has_more"], false);
