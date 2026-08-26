@@ -1,13 +1,6 @@
 use serde_json::Value;
 use std::{env, fs, path::PathBuf, process::Command};
 
-const PLATFORM_PACKAGES: [&str; 4] = [
-    "@quality-sh/provenance-darwin-arm64",
-    "@quality-sh/provenance-darwin-x64",
-    "@quality-sh/provenance-linux-x64-gnu",
-    "@quality-sh/provenance-win32-x64-msvc",
-];
-
 #[test]
 fn cli_package_ships_both_native_entry_points() {
     let metadata = cargo_metadata();
@@ -68,8 +61,12 @@ fn native_archives_include_cargo_provenance_but_npm_engines_do_not() {
         .split_once("- name: Package npm engine")
         .unwrap()
         .0;
-    assert!(native.contains("release/cargo-provenance\""));
-    assert!(native.contains("release/cargo-provenance.exe\""));
+    assert_eq!(
+        native
+            .matches("release/cargo-provenance${{ matrix.executable_suffix }}")
+            .count(),
+        2
+    );
 
     let npm_script =
         fs::read_to_string(workspace.join("packages/provenance/scripts/package-engine.js"))
@@ -97,6 +94,16 @@ fn workspace_release_versions_are_unified_at_0_2_2() {
     .unwrap();
     assert_eq!(sdk["version"], "0.2.2");
     assert_eq!(initializer["version"], "0.2.2");
+    let targets: Value =
+        serde_json::from_slice(&fs::read(workspace.join(".github/release-targets.json")).unwrap())
+            .unwrap();
+    let mut expected_platform_packages: Vec<_> = targets
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|target| target["npm"]["name"].as_str().unwrap())
+        .collect();
+    expected_platform_packages.sort_unstable();
     let mut platform_packages: Vec<_> = sdk["optionalDependencies"]
         .as_object()
         .unwrap()
@@ -104,7 +111,7 @@ fn workspace_release_versions_are_unified_at_0_2_2() {
         .map(String::as_str)
         .collect();
     platform_packages.sort_unstable();
-    assert_eq!(platform_packages, PLATFORM_PACKAGES);
+    assert_eq!(platform_packages, expected_platform_packages);
     assert!(sdk["optionalDependencies"]
         .as_object()
         .unwrap()
@@ -123,7 +130,15 @@ fn release_version_preflight_gates_every_artifact_build() {
         script.exists(),
         "release version preflight script is missing"
     );
-    assert!(workflow.contains("verify-versions:"));
+    let preflight = workflow
+        .split_once("  preflight:")
+        .unwrap()
+        .1
+        .split_once("  build:")
+        .unwrap()
+        .0;
+    assert!(preflight.contains("verify-release-versions.sh"));
+    assert!(preflight.contains(".github/release-targets.json"));
     let build_job = workflow
         .split_once("  build:")
         .unwrap()
@@ -131,8 +146,11 @@ fn release_version_preflight_gates_every_artifact_build() {
         .split_once("  publish:")
         .unwrap()
         .0;
-    assert!(build_job.contains("needs: verify-versions"));
+    assert!(build_job.contains("needs: preflight"));
     assert_eq!(workflow.matches("verify-release-versions.sh").count(), 1);
+    let verifier = fs::read_to_string(&script).unwrap();
+    assert!(verifier.contains(".github/release-targets.json"));
+    assert!(!verifier.contains("@quality-sh/provenance-darwin-arm64"));
 
     #[cfg(unix)]
     {
@@ -162,7 +180,19 @@ fn github_release_waits_for_registry_publication() {
         .unwrap()
         .0;
 
-    assert!(publish.contains("needs: [publish-crates, publish-npm]"));
+    for dependency in ["preflight", "publish-crates", "publish-npm"] {
+        assert!(publish.contains(&format!("      - {dependency}")));
+    }
+}
+
+#[test]
+fn release_smoke_waits_for_preflight_and_both_registries() {
+    let workflow = fs::read_to_string(workspace_root().join(".github/workflows/release.yml"))
+        .expect("read release workflow");
+    let smoke = workflow.split_once("  smoke:").unwrap().1;
+
+    assert!(smoke.contains("      - preflight"));
+    assert!(smoke.contains("      - publish"));
 }
 
 fn cargo_metadata() -> Value {

@@ -33,15 +33,10 @@ jobs:
         shell: bash
         run: |
           node packages/provenance/scripts/generate-release-consumers.js --check
-          bash .github/scripts/verify-release-versions.sh "$GITHUB_REF_NAME"
           version="${GITHUB_REF_NAME#v}"
           source .github/scripts/release-smoke/lib.sh
           validate_version "$version"
-          cargo metadata --no-deps --format-version 1 |
-            jq -e --arg version "$version" \
-              '.packages | length > 0 and all(.[]; .version == $version)'
-          test "$version" = "$(node -p "require('./packages/provenance/package.json').version")"
-          test "$version" = "$(node -p "require('./packages/create-provenance/package.json').version")"
+          bash .github/scripts/verify-release-versions.sh "$GITHUB_REF_NAME"
           python3 .github/scripts/release-contract.py \
             "$version" .github/release-targets.json >> "$GITHUB_OUTPUT"
 

@@ -29,12 +29,10 @@ const sdkLock = read("packages/provenance/package-lock.json");
 const initializerManifest = read("packages/create-provenance/package.json");
 const initializerLock = read("packages/create-provenance/package-lock.json");
 const exampleLock = read("examples/typescript-sdk/package-lock.json");
-const expectedPlatformPackages = [
-  "@quality-sh/provenance-darwin-arm64",
-  "@quality-sh/provenance-darwin-x64",
-  "@quality-sh/provenance-linux-x64-gnu",
-  "@quality-sh/provenance-win32-x64-msvc",
-];
+const releaseTargets = read(".github/release-targets.json");
+const expectedPlatformPackages = releaseTargets
+  .map((target) => target.npm.name)
+  .sort();
 
 const expectPlatformPackages = (dependencies, location) => {
   const actual = Object.keys(dependencies).sort();
