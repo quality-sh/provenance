@@ -11,6 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertPackedConsumerScan } from "./packed-consumer-scan.js";
 
 const packageRoot = fileURLToPath(new URL("..", import.meta.url));
 const initializerRoot = fileURLToPath(new URL("../../create-provenance", import.meta.url));
@@ -235,14 +236,8 @@ export function bindClass<
 `);
 writeFileSync(join(application, "consumer.ts"), `
 import { defineSpec } from "@quality-sh/provenance";
-import { rule as bindRule, verifies } from "@quality-sh/provenance/rules";
 import { WorkflowRunner } from "./runtime-types.js";
 import { bindClass, guide, installed, invocation as declareInvocation } from "./helpers.js";
-
-const overtime = bindRule("rule_overtime", (hours: number): boolean => hours > 38);
-const overtimeResult: boolean = overtime(39);
-verifies("rule_overtime", "examples");
-void overtimeResult;
 
 const provenance = defineSpec("packed-typescript-consumer");
 const packedGuide = guide(provenance);
@@ -252,13 +247,14 @@ export const spec = provenance.build(packedInstallation.rules(invocation));
 
 void invocation.verify("packed-consumer", () => undefined);
 `);
+writeFileSync(join(application, "rule-bindings.ts"), readFileSync(join(packageRoot, "test", "fixtures", "packed-consumer", "rule-bindings.ts.fixture"), "utf8"));
 writeFileSync(join(application, "tsconfig.json"), JSON.stringify({
   compilerOptions: {
     module: "NodeNext",
     moduleResolution: "NodeNext",
     target: "ES2022",
     strict: true,
-    noEmit: true,
+    outDir: ".compiled",
     skipLibCheck: true,
   },
   include: ["*.ts"],
@@ -267,17 +263,11 @@ execFileSync(process.execPath, [
   join(application, "node_modules", "typescript", "bin", "tsc"),
   "-p", join(application, "tsconfig.json"),
 ], { cwd: application, stdio: "pipe" });
+execFileSync(process.execPath, [join(application, ".compiled", "rule-bindings.js")], { cwd: application, stdio: "pipe" });
+assertPackedConsumerScan(provenance(["coverage", "scan", "--path", "rule-bindings.ts", "--scope", "default", "--format", "json"], application));
 writeFileSync(join(application, "verify.mjs"), `
 import { apply, defineSpec, plan, requirement, rule, source } from "@quality-sh/provenance";
-import { rule as bindRule, verifies } from "@quality-sh/provenance/rules";
 import { startWorkflow, WorkflowRunner } from "./runtime.mjs";
-const boundStartWorkflow = bindRule("rule_packed_start", startWorkflow);
-if (boundStartWorkflow !== startWorkflow) {
-  throw new Error("the packed rule helper changed the implementation");
-}
-if (verifies("rule_packed_start", "examples") !== undefined) {
-  throw new Error("the packed verifies helper returned a value");
-}
 const spec = defineSpec("packed-install", ({ requirement }) => {
   const installed = requirement("installed", {
     statement: "The installed SDK invokes its package-supplied engine"
