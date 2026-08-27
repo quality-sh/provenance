@@ -12,6 +12,33 @@ an exact development dependency, installs the engine for the current platform,
 writes `.provenance/state/`, and confirms that `npx provenance check` reports
 `ok`.
 
+## Consumer CI
+
+Install the locked project dependencies before each check. Use `npx --no` in
+CI. This command invokes only the `provenance` executable installed in the
+project. It does not approve a registry installation for a missing executable.
+
+```sh
+npm ci
+npx --no provenance check --repo . --strict --base "$BASE_SHA" --format json
+npx --no provenance coverage scan --repo . --path . --scope default \
+  --validate-rules --strict --format json
+```
+
+Set `BASE_SHA` to the target branch commit for a pull request. If `--base` is
+not present, strict statement checking compares Git HEAD with its first parent.
+It uses an empty base for an initial commit. The statement check prints its
+complete ASD-STE100 report before it exits nonzero for a finding.
+
+Configure the CI checkout to include `BASE_SHA`. If the command uses the
+default first parent, the checkout must include that parent. A depth-one
+checkout is not sufficient for a commit that has a parent.
+
+The coverage command is a separate policy gate. Its `--strict` option rejects
+Rule binding and coverage warnings. It does not check Requirement or Rule
+prose. Keep `--path .` when CI must detect missing bindings across the complete
+repository.
+
 ## Runtime Rule bindings
 
 The same install supplies inert helpers that put Rule IDs next to production

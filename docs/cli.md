@@ -33,6 +33,36 @@ ASD-STE100 findings are informational, so the command still exits successfully.
 The array is empty when no Git HEAD is available. This reporting contract does
 not set a repository-wide STE enforcement policy.
 
+`provenance check --strict --format json` selects Git HEAD as the committed
+candidate. By default, it compares that candidate with its first parent. It
+uses an empty base when HEAD is the initial commit. Use `--base <commit>` to
+select a different base, such as the target branch commit for a pull request.
+The check analyzes only Requirement and Rule records that are new or whose
+statement bytes changed between the two commits. Thus, unchanged findings in
+permitted history do not fail the check.
+
+The checkout must contain the selected base commit. A shallow checkout that
+omits the first parent fails with a request for more Git history. It does not
+treat an unavailable parent as the empty initial-commit base.
+
+Strict statement checking uses the same Rust checker as statement writes. It
+also uses the project dictionary reference when the referenced local index is
+available. The command prints the complete JSON report to standard output
+before it exits nonzero for findings. The report identifies the resolved
+`candidate_commit` and `base_commit`. A null `base_commit` identifies the empty
+base for an initial commit. Direct edits to canonical JSONL files do not bypass
+this committed-candidate check.
+
+Strict mode reads candidate statements from Git commits. It resolves the
+project dictionary reference and local index from the working tree. Thus, a
+dirty dictionary reference can change vocabulary findings, but dirty statement
+bytes cannot change the committed candidate.
+
+The `--strict` option for `provenance check` applies only to ASD-STE100 findings
+in committed Requirement and Rule statements. The `--strict` option for
+`provenance coverage scan` applies to Rule binding and coverage warnings. These
+options enforce different reports.
+
 ## Typed SDK protocol (POC)
 
 Rust consumers do not need these one-shot commands. The `provenance-sdk` crate
