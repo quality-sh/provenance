@@ -1,3 +1,6 @@
+use super::batch_merge::{
+    ensure_scope, insert_all, merge_immutable, merge_replaceable, overlay_records,
+};
 use super::{
     read_ideation_landings, read_jsonl, read_legacy_dispositions, IdeationLandingBatch, StateStore,
 };
@@ -7,7 +10,7 @@ use provenance_core::{
     SynthesisPacket,
 };
 use provenance_macros::rule;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 impl StateStore {
     pub(super) fn with_lifecycle_lock<R>(
@@ -341,94 +344,6 @@ pub fn ensure_asserted_synthesis_unchanged(
     )
 }
 
-fn insert_all<'a, T: serde::Serialize>(
-    kind: &str,
-    records: &'a [T],
-    id: impl Fn(&'a T) -> &'a str,
-    seen: &mut BTreeMap<String, serde_json::Value>,
-) -> anyhow::Result<()> {
-    for record in records {
-        let record_id = id(record);
-        let value = serde_json::to_value(record)?;
-        anyhow::ensure!(
-            seen.insert(record_id.to_owned(), value).is_none(),
-            "duplicate immutable {kind} id {record_id}"
-        );
-    }
-    Ok(())
-}
-
-fn ensure_scope(scope: &ScopeId, batch: &IdeationLandingBatch) -> anyhow::Result<()> {
-    for (kind, actual) in batch
-        .contributions
-        .iter()
-        .map(|r| ("contribution", &r.scope_id))
-        .chain(
-            batch
-                .synthesis_packets
-                .iter()
-                .map(|r| ("synthesis packet", &r.scope_id)),
-        )
-        .chain(batch.proposals.iter().map(|r| ("proposal", &r.scope_id)))
-        .chain(batch.assertions.iter().map(|r| ("assertion", &r.scope_id)))
-        .chain(
-            batch
-                .dispositions
-                .iter()
-                .map(|r| ("disposition", &r.scope_id)),
-        )
-    {
-        anyhow::ensure!(actual == scope, "{kind} scope_id must match landing scope");
-    }
-    Ok(())
-}
-
-fn merge_replaceable<T: Clone>(
-    kind: &str,
-    existing: &mut Vec<T>,
-    incoming: &[T],
-    replace: bool,
-    id: impl Fn(&T) -> &str,
-) -> anyhow::Result<()> {
-    let mut incoming_ids = BTreeSet::new();
-    for record in incoming {
-        let record_id = id(record);
-        anyhow::ensure!(
-            incoming_ids.insert(record_id),
-            "duplicate {kind} id {record_id} in batch"
-        );
-        if let Some(index) = existing.iter().position(|current| id(current) == record_id) {
-            anyhow::ensure!(replace, "{kind} {record_id} already exists");
-            existing[index] = record.clone();
-        } else {
-            existing.push(record.clone());
-        }
-    }
-    Ok(())
-}
-
-fn merge_immutable<T: Clone>(
-    kind: &str,
-    existing: &mut Vec<T>,
-    incoming: &[T],
-    id: impl Fn(&T) -> &str,
-) -> anyhow::Result<()> {
-    let mut incoming_ids = BTreeSet::new();
-    for record in incoming {
-        let record_id = id(record);
-        anyhow::ensure!(
-            incoming_ids.insert(record_id),
-            "duplicate {kind} id {record_id} in batch"
-        );
-        anyhow::ensure!(
-            !existing.iter().any(|current| id(current) == record_id),
-            "{kind} {record_id} already exists and is immutable"
-        );
-        existing.push(record.clone());
-    }
-    Ok(())
-}
-
 /// The retired `promotion_decisions.jsonl` shard holds history, not decisions.
 ///
 /// The shard is admitted only when its rows are the shipped-v1 audit itself,
@@ -475,17 +390,3 @@ pub(super) fn validate_legacy_disposition_shard(
 /// how to forge the other.
 const LEGACY_SHARD_REFUSAL: &str =
     "deprecated promotion_decisions.jsonl accepts only the frozen shipped-v1 disposition audit";
-
-pub(super) fn overlay_records<T>(records: &mut Vec<T>, incoming: Vec<T>, id: impl Fn(&T) -> &str) {
-    for record in incoming {
-        if let Some(index) = records
-            .iter()
-            .position(|current| id(current) == id(&record))
-        {
-            records[index] = record;
-        } else {
-            records.push(record);
-        }
-    }
-    records.sort_by(|a, b| id(a).cmp(id(b)));
-}

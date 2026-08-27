@@ -1,3 +1,4 @@
+mod batch_merge;
 mod canonical_artifacts;
 mod domain_writers;
 mod ideation_batches;
@@ -9,6 +10,7 @@ mod proposal_writers;
 pub(crate) mod readers;
 mod requirement_reviews;
 mod rule_writers;
+mod shaping_transitions;
 mod shaping_writers;
 mod statement_policy;
 mod thread_writers;
@@ -40,7 +42,7 @@ pub use requirement_reviews::{requirement_statement_changes, RequirementStatemen
 pub use typed_statement_policy::TypedSpecWriteError;
 
 use crate::{layout::ProvenanceLayout, shards};
-use ideation_batches::overlay_records;
+use batch_merge::overlay_records;
 use provenance_core::{
     ensure_supported_schema_version, AssertionRecord, Boundary, Contribution, DispositionRecord,
     Domain, Edge, ImplementationBinding, Manifest, Message, ProposalCard, Question, Requirement,
