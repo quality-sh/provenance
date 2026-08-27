@@ -13,6 +13,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertPackedConsumerScan } from "./packed-consumer-scan.js";
 import { createPackedCommands } from "./packed-install-commands.js";
+import { verifyPackedSteOnboarding } from "./packed-ste-onboarding.js";
 
 const packageRoot = fileURLToPath(new URL("..", import.meta.url));
 const initializerRoot = fileURLToPath(new URL("../../create-provenance", import.meta.url));
@@ -114,78 +115,21 @@ execFileSync(process.execPath, [
 ], { cwd: application, stdio: "pipe" });
 verifyGeneratedCommandIgnoresStaleGlobal(application);
 
-// The initializer is a temporary command, while the SDK and engine become
-// durable project development dependencies.
-const initializedApplication = join(temporary, "initialized-application");
-const packedMainSpec = `file:../archives/${mainArchive}`;
-mkdirSync(initializedApplication);
-writeFileSync(join(initializedApplication, "package.json"), JSON.stringify({
-  name: "provenance-one-command-install",
-  private: true,
-  version: "1.0.0",
-  type: "module",
-  packageManager: "npm@11.6.2",
-  overrides: {
-    [engineManifest.name]: `file:../archives/${engineArchive}`,
-    "@quality-sh/provenance": packedMainSpec,
-    [typescriptManifest.name]: `file:../archives/${typescriptArchive}`,
-  },
-}));
-npm(
-  [
-    "install",
-    "--offline",
-    "--cache",
-    isolatedCache,
-    "--no-audit",
-    "--no-fund",
-    "--no-save",
-    join(archiveDirectory, initializerArchive),
-  ],
-  { cwd: initializedApplication },
-);
-execFileSync(process.execPath, [
-  join(
-    initializedApplication,
-    "node_modules",
-    ...initializerManifest.name.split("/"),
-    initializerManifest.bin["create-provenance"],
-  ),
-  "--ste-onboarding", "interactive",
-], {
-  cwd: initializedApplication,
-  env: {
-    ...process.env,
-    npm_config_cache: isolatedCache,
-    npm_config_offline: "true",
-    npm_config_update_notifier: "false",
-    PROVENANCE_PACKAGE_SPEC: packedMainSpec,
-  },
-  stdio: "pipe",
+verifyPackedSteOnboarding({
+  archiveDirectory,
+  binaryName,
+  engineArchive,
+  engineManifest,
+  initializerArchive,
+  initializerManifest,
+  isolatedCache,
+  mainArchive,
+  npmCli,
+  temporary,
+  typescriptArchive,
+  typescriptManifest,
+  version,
 });
-const initializedManifest = JSON.parse(
-  readFileSync(join(initializedApplication, "package.json"), "utf8"),
-);
-assert.equal(
-  initializedManifest.devDependencies["@quality-sh/provenance"],
-  packedMainSpec,
-  "the packed initializer must save the staged SDK as a development dependency",
-);
-assert.equal(
-  initializedManifest.dependencies?.[initializerManifest.name],
-  undefined,
-  "the temporary initializer must not become a project dependency",
-);
-assert.equal(
-  readFileSync(join(initializedApplication, ".gitignore"), "utf8"),
-  ".provenance/cache/\n",
-  "the initializer must keep derived cache data out of Git",
-);
-const initializedCheck = JSON.parse(
-  provenance(["check", "--repo", ".", "--format", "json"], initializedApplication),
-);
-assert.equal(initializedCheck.status, "ok", "the one-command project must validate");
-verifyGeneratedCommandIgnoresStaleGlobal(initializedApplication);
 
 if (process.env.PROVENANCE_TEST_YARN_PNP === "true") {
   verifyYarnPnpInstall();

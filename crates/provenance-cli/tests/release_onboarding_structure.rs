@@ -93,6 +93,59 @@ fn release_tests_keep_the_ste_asset_override_on_loopback() {
 }
 
 #[test]
+fn packed_ste_gate_runs_on_every_supported_release_target() {
+    let workspace = workspace_root();
+    let targets: Value = serde_json::from_str(
+        &fs::read_to_string(workspace.join(".github/release-targets.json")).unwrap(),
+    )
+    .unwrap();
+    let workflow = fs::read_to_string(workspace.join(".github/workflows/ci.yml")).unwrap();
+    let packed_job = workflow
+        .split_once("  typescript-sdk-packed-install:")
+        .unwrap()
+        .1
+        .split_once("\n  release-smoke-tools:")
+        .unwrap()
+        .0;
+
+    let mut expected: Vec<_> = targets
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|target| {
+            (
+                target["smoke_os"].as_str().unwrap().to_owned(),
+                target["target"].as_str().unwrap().to_owned(),
+            )
+        })
+        .collect();
+    let matrix = packed_job
+        .split_once("        include:\n")
+        .unwrap()
+        .1
+        .split_once("    steps:\n")
+        .unwrap()
+        .0;
+    let mut actual = Vec::new();
+    let mut runner = None;
+    for line in matrix.lines().map(str::trim) {
+        if let Some(value) = line.strip_prefix("- os: ") {
+            assert!(runner.replace(value.to_owned()).is_none());
+        } else if let Some(value) = line.strip_prefix("target: ") {
+            actual.push((
+                runner.take().expect("target follows its runner"),
+                value.to_owned(),
+            ));
+        }
+    }
+    assert!(runner.is_none(), "each runner needs a target");
+    expected.sort();
+    actual.sort();
+    assert_eq!(actual, expected);
+    assert!(packed_job.contains("npm run test:packed --prefix packages/provenance"));
+}
+
+#[test]
 fn cargo_provenance_is_a_std_only_forwarding_shim() {
     let workspace = workspace_root();
     let crate_root = workspace.join("crates/provenance-cli");
