@@ -12,7 +12,7 @@ Install Provenance as a development dependency and initialize the project.
 Options:
   --path <path>                 Target project (default: current directory)
   --package-manager <manager>  npm, pnpm, yarn, bun, deno, or nub
-  --ste-onboarding <mode>       agent (default) or interactive
+  --ste-onboarding <mode>       interactive (default) or agent
   -h, --help                    Show this help
 `);
   process.exit(0);

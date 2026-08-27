@@ -54,7 +54,7 @@ pub fn prepare(
             )),
         ),
         (SteOnboardingMode::Interactive, None) => (None, Some(interactive_guidance())),
-        (SteOnboardingMode::Agent, None) => match acquire_agent_dictionary() {
+        (SteOnboardingMode::Agent, None) => match acquire_agent_dictionary_blocking() {
             Ok(import) => (
                 Some(import),
                 Some(format!(
@@ -148,12 +148,6 @@ fn import_bytes(bytes: &[u8]) -> anyhow::Result<DictionaryImport> {
 #[rule("rule_ste_dictionary_download_retry_bound")]
 #[rule("rule_ste_dictionary_download_identity")]
 #[rule("rule_ste_dictionary_asset_fallback")]
-fn acquire_agent_dictionary() -> anyhow::Result<DictionaryImport> {
-    std::thread::spawn(acquire_agent_dictionary_blocking)
-        .join()
-        .map_err(|_| anyhow::anyhow!("the STE downloader stopped unexpectedly"))?
-}
-
 fn acquire_agent_dictionary_blocking() -> anyhow::Result<DictionaryImport> {
     let directory = asset_directory().context("no machine cache directory is available")?;
     std::fs::create_dir_all(&directory).context("create the shared STE asset cache")?;
@@ -167,11 +161,10 @@ fn acquire_agent_dictionary_blocking() -> anyhow::Result<DictionaryImport> {
         std::fs::remove_file(&asset).context("remove an invalid cached STE asset")?;
     }
 
-    let client = reqwest::blocking::Client::builder()
+    let client = ureq::AgentBuilder::new()
         .timeout(Duration::from_secs(10))
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .context("build the STE downloader")?;
+        .redirects(0)
+        .build();
     let mut last_error = None;
     for attempt in 0..DOWNLOAD_ATTEMPTS {
         match download(&client).and_then(|bytes| {
@@ -189,25 +182,25 @@ fn acquire_agent_dictionary_blocking() -> anyhow::Result<DictionaryImport> {
     Err(last_error.unwrap_or_else(|| anyhow::anyhow!("the official asset is unavailable")))
 }
 
-fn download(client: &reqwest::blocking::Client) -> anyhow::Result<Vec<u8>> {
+fn download(client: &ureq::Agent) -> anyhow::Result<Vec<u8>> {
     let response = client
-        .get(asset_url())
-        .header(
-            reqwest::header::USER_AGENT,
-            format!("Provenance/{}", env!("CARGO_PKG_VERSION")),
+        .get(&asset_url())
+        .set(
+            "User-Agent",
+            &format!("Provenance/{}", env!("CARGO_PKG_VERSION")),
         )
-        .send()
-        .context("request the official Issue 9 PDF")?
-        .error_for_status()
-        .context("the official Issue 9 PDF request failed")?;
+        .call()
+        .map_err(|error| anyhow::anyhow!("request the official Issue 9 PDF: {error}"))?;
     if response
-        .content_length()
+        .header("Content-Length")
+        .and_then(|length| length.parse::<u64>().ok())
         .is_some_and(|length| length > MAX_ASSET_BYTES)
     {
         anyhow::bail!("the official Issue 9 PDF exceeds the download size limit");
     }
     let mut bytes = Vec::new();
     response
+        .into_reader()
         .take(MAX_ASSET_BYTES + 1)
         .read_to_end(&mut bytes)
         .context("read the official Issue 9 PDF")?;
@@ -238,15 +231,13 @@ fn store_asset(path: &Path, bytes: &[u8]) -> anyhow::Result<()> {
 }
 
 fn asset_url() -> String {
-    if cfg!(debug_assertions) {
-        if let Some(url) = std::env::var_os("PROVENANCE_TEST_STE100_ASSET_URL") {
-            let url = url.to_string_lossy();
-            if let Ok(parsed) = reqwest::Url::parse(&url) {
-                if parsed.scheme() == "http"
-                    && matches!(parsed.host_str(), Some("127.0.0.1" | "localhost"))
-                {
-                    return parsed.into();
-                }
+    if let Some(url) = std::env::var_os("PROVENANCE_TEST_STE100_ASSET_URL") {
+        let url = url.to_string_lossy();
+        if let Ok(parsed) = url::Url::parse(&url) {
+            if parsed.scheme() == "http"
+                && matches!(parsed.host_str(), Some("127.0.0.1" | "localhost"))
+            {
+                return parsed.into();
             }
         }
     }

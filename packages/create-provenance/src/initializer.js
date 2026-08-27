@@ -20,7 +20,7 @@ const lockfiles = new Map([
 export function parseArguments(args, currentDirectory) {
   let projectDirectory = currentDirectory;
   let packageManager;
-  let steOnboarding = "agent";
+  let steOnboarding = "interactive";
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (argument === "--path") {
@@ -57,7 +57,7 @@ export function initializeProject({
   engineArguments = [],
   resolveEngine = installedEngineCommand,
   packageManager,
-  steOnboarding = "agent",
+  steOnboarding = "interactive",
   userAgent = process.env.npm_config_user_agent,
   execute,
 }) {
@@ -76,27 +76,43 @@ export function initializeProject({
   const engine = enginePath === undefined
     ? resolveEngine(directory)
     : { command: enginePath, args: engineArguments };
-  runChecked(run, {
+  const initArgs = [
+    ...engine.args,
+    "init",
+    "--path",
+    directory,
+    "--scope",
+    "default",
+    "--path-prefix",
+    ".",
+  ];
+  const help = run({
     command: engine.command,
-    args: [
-      ...engine.args,
-      "init",
-      "--path",
-      directory,
-      "--scope",
-      "default",
-      "--path-prefix",
-      ".",
+    args: [...engine.args, "init", "--help"],
+    capture: true,
+  });
+  if (supportsSteOnboarding(help)) {
+    initArgs.push(
       "--ste-onboarding",
       steOnboarding,
       "--invocation-channel",
       "typescript",
       "--package-manager",
       selectedManager,
-    ],
+    );
+  }
+  runChecked(run, {
+    command: engine.command,
+    args: initArgs,
     capture: false,
   }, "Provenance initialization");
   return { packageManager: selectedManager };
+}
+
+function supportsSteOnboarding(help) {
+  // The visible onboarding flag and its hidden invocation metadata flags were
+  // introduced as one init capability. Older engines advertise none of them.
+  return help.status === 0 && help.stdout.includes("--ste-onboarding");
 }
 
 function installedEngineCommand(directory) {

@@ -53,7 +53,10 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
             ste_onboarding,
             ste_pdf,
         } => {
-            cargo_init::handle(package.as_deref(), ste_onboarding, ste_pdf)?;
+            tokio::task::spawn_blocking(move || {
+                cargo_init::handle(package.as_deref(), ste_onboarding, ste_pdf)
+            })
+            .await??;
         }
         Command::Init {
             path,
@@ -66,19 +69,22 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
             invocation_channel,
             package_manager,
         } => {
-            repo::init(
-                &path,
-                repo::InitOptions {
-                    scope,
-                    path_prefix,
-                    disposition_actor_ids: disposition_actor_id,
-                    clear_disposition_actors,
-                    ste_onboarding,
-                    ste_pdf,
-                    invocation_channel,
-                    package_manager,
-                },
-            )?;
+            tokio::task::spawn_blocking(move || {
+                repo::init(
+                    &path,
+                    repo::InitOptions {
+                        scope,
+                        path_prefix,
+                        disposition_actor_ids: disposition_actor_id,
+                        clear_disposition_actors,
+                        ste_onboarding,
+                        ste_pdf,
+                        invocation_channel,
+                        package_manager,
+                    },
+                )
+            })
+            .await??;
         }
         Command::Check { repo, format } => {
             check::check(&repo, format)?;
