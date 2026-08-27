@@ -146,6 +146,83 @@ fn initial_commit_uses_an_empty_comparison_base() {
 
 #[test]
 #[verifies("rule_ste_strict_committed_statement_selection", examples)]
+fn strict_check_ignores_dirty_working_tree_statement_edits() {
+    let directory = repository();
+    let repo = directory.path();
+    create_requirement(repo, "req_committed", "Committed statement");
+    let base = commit(repo, "base");
+    std::fs::write(repo.join("README.md"), "Committed candidate change.\n").unwrap();
+    let candidate = commit(repo, "candidate");
+    rewrite_statement(repo, REQUIREMENTS_SHARD, "req_committed", "Dirty; finding");
+
+    let output = check_strict(repo, None);
+
+    assert!(output.status.success());
+    let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(
+        report,
+        json!({
+            "status": "ok",
+            "candidate_commit": candidate,
+            "base_commit": base,
+            "diagnostics": []
+        })
+    );
+}
+
+#[test]
+#[verifies("rule_ste_strict_committed_statement_selection", examples)]
+fn invalid_explicit_base_reports_the_revision_error() {
+    let directory = repository();
+    let repo = directory.path();
+    create_requirement(repo, "req_candidate", "Candidate statement");
+    commit(repo, "candidate");
+
+    let output = check_strict(repo, Some("does-not-exist"));
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert!(String::from_utf8(output.stderr)
+        .unwrap()
+        .contains("Git revision \"does-not-exist\" does not identify a commit"));
+}
+
+#[test]
+#[verifies("rule_ste_strict_committed_statement_selection", examples)]
+fn merge_commit_uses_its_first_parent_as_the_default_base() {
+    let directory = repository();
+    let repo = directory.path();
+    create_requirement(repo, "req_merge", "Original statement");
+    let common = commit(repo, "common base");
+    git(repo, &["checkout", "-b", "side", &common]);
+    std::fs::write(repo.join("SIDE.md"), "Side change.\n").unwrap();
+    commit(repo, "side change");
+    git(repo, &["checkout", "main"]);
+    rewrite_statement(
+        repo,
+        REQUIREMENTS_SHARD,
+        "req_merge",
+        "First parent; finding",
+    );
+    let first_parent = commit(repo, "first parent statement");
+    git(repo, &["merge", "--no-ff", "side", "-m", "merge side"]);
+    let candidate = String::from_utf8(git(repo, &["rev-parse", "HEAD"]).stdout)
+        .unwrap()
+        .trim()
+        .to_owned();
+
+    let output = check_strict(repo, None);
+
+    assert!(output.status.success());
+    let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["status"], "ok");
+    assert_eq!(report["candidate_commit"], candidate);
+    assert_eq!(report["base_commit"], first_parent);
+    assert_eq!(report["diagnostics"], json!([]));
+}
+
+#[test]
+#[verifies("rule_ste_strict_committed_statement_selection", examples)]
 fn shallow_checkout_does_not_mistake_an_unavailable_parent_for_an_empty_base() {
     let scratch = tempfile::tempdir().unwrap();
     let origin = scratch.path().join("origin");
@@ -175,7 +252,7 @@ fn shallow_checkout_does_not_mistake_an_unavailable_parent_for_an_empty_base() {
 
     assert!(!output.status.success());
     assert!(output.stdout.is_empty());
-    assert!(String::from_utf8(output.stderr)
-        .unwrap()
-        .contains("first parent is not available. Fetch more Git history"));
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(stderr.contains("first parent is not available. Fetch more Git history"));
+    assert!(stderr.contains("does not identify a commit"));
 }

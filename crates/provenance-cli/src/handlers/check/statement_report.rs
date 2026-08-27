@@ -1,5 +1,6 @@
+use anyhow::Context;
 use camino::Utf8Path;
-use provenance_core::{Requirement, Rule, ScopeId};
+use provenance_core::{Manifest, Requirement, Rule, Scope, ScopeId};
 use provenance_macros::rule;
 use provenance_store::{
     state_store::StateStore,
@@ -13,51 +14,31 @@ pub(super) struct CommittedStatementAnalysis {
     pub diagnostics: Vec<StatementDiagnostic>,
 }
 
+#[derive(Default)]
+struct StatementFamily {
+    requirements: Vec<Requirement>,
+    rules: Vec<Rule>,
+}
+
 #[rule("rule_ste_manual_changed_statement_report")]
 pub(super) fn changed_statements_from_head(
     store: &StateStore,
     repo: &Utf8Path,
+    manifest: &Manifest,
 ) -> anyhow::Result<Vec<StatementDiagnostic>> {
     if !has_head(repo)? {
         return Ok(Vec::new());
     }
 
-    let manifest = store.manifest()?;
-    let mut base_requirements = Vec::new();
-    let mut base_rules = Vec::new();
-    let mut candidate_requirements = Vec::new();
-    let mut candidate_rules = Vec::new();
-    for scope in manifest.scopes {
-        base_requirements.extend(read_commit_records::<Requirement>(
-            repo,
-            "HEAD",
-            &scope.id,
-            "requirements/req.jsonl",
-        )?);
-        base_rules.extend(read_commit_records::<Rule>(
-            repo,
-            "HEAD",
-            &scope.id,
-            "rules/rule.jsonl",
-        )?);
-        candidate_requirements.extend(store.list_requirements(&scope.id)?);
-        candidate_rules.extend(store.list_rules(&scope.id)?);
-    }
-    let layout = provenance_store::layout::ProvenanceLayout::new(repo.to_owned());
-    let dictionary = provenance_store::dictionary_reference::load_project_dictionary(&layout);
-    Ok(analyze_changed_statements(
-        &base_requirements,
-        &base_rules,
-        &candidate_requirements,
-        &candidate_rules,
-        dictionary.as_ref(),
-    ))
+    let base = read_commit_family(repo, "HEAD", &manifest.scopes)?;
+    let candidate = read_working_family(store, &manifest.scopes)?;
+    Ok(analyze_family_change(repo, &base, &candidate))
 }
 
 #[rule("rule_ste_strict_committed_statement_selection")]
 pub(super) fn changed_statements_from_commits(
-    store: &StateStore,
     repo: &Utf8Path,
+    manifest: &Manifest,
     explicit_base: Option<&str>,
 ) -> anyhow::Result<CommittedStatementAnalysis> {
     let candidate_commit = resolve_commit(repo, "HEAD")?;
@@ -65,48 +46,12 @@ pub(super) fn changed_statements_from_commits(
         Some(base) => Some(resolve_commit(repo, base)?),
         None => first_parent(repo, &candidate_commit)?,
     };
-    let manifest = store.manifest()?;
-    let mut base_requirements = Vec::new();
-    let mut base_rules = Vec::new();
-    let mut candidate_requirements = Vec::new();
-    let mut candidate_rules = Vec::new();
-    for scope in manifest.scopes {
-        if let Some(base) = &base_commit {
-            base_requirements.extend(read_commit_records::<Requirement>(
-                repo,
-                base,
-                &scope.id,
-                "requirements/req.jsonl",
-            )?);
-            base_rules.extend(read_commit_records::<Rule>(
-                repo,
-                base,
-                &scope.id,
-                "rules/rule.jsonl",
-            )?);
-        }
-        candidate_requirements.extend(read_commit_records::<Requirement>(
-            repo,
-            &candidate_commit,
-            &scope.id,
-            "requirements/req.jsonl",
-        )?);
-        candidate_rules.extend(read_commit_records::<Rule>(
-            repo,
-            &candidate_commit,
-            &scope.id,
-            "rules/rule.jsonl",
-        )?);
-    }
-    let layout = provenance_store::layout::ProvenanceLayout::new(repo.to_owned());
-    let dictionary = provenance_store::dictionary_reference::load_project_dictionary(&layout);
-    let diagnostics = analyze_changed_statements(
-        &base_requirements,
-        &base_rules,
-        &candidate_requirements,
-        &candidate_rules,
-        dictionary.as_ref(),
-    );
+    let base = base_commit.as_deref().map_or_else(
+        || Ok(StatementFamily::default()),
+        |base| read_commit_family(repo, base, &manifest.scopes),
+    )?;
+    let candidate = read_commit_family(repo, &candidate_commit, &manifest.scopes)?;
+    let diagnostics = analyze_family_change(repo, &base, &candidate);
     Ok(CommittedStatementAnalysis {
         candidate_commit,
         base_commit,
@@ -152,9 +97,61 @@ fn first_parent(repo: &Utf8Path, candidate: &str) -> anyhow::Result<Option<Strin
     let Some(parent) = object.lines().find_map(|line| line.strip_prefix("parent ")) else {
         return Ok(None);
     };
-    resolve_commit(repo, parent).map(Some).map_err(|_| {
-        anyhow::anyhow!("Git HEAD first parent is not available. Fetch more Git history")
-    })
+    resolve_commit(repo, parent)
+        .map(Some)
+        .context("Git HEAD first parent is not available. Fetch more Git history")
+}
+
+fn read_commit_family(
+    repo: &Utf8Path,
+    commit: &str,
+    scopes: &[Scope],
+) -> anyhow::Result<StatementFamily> {
+    let mut family = StatementFamily::default();
+    for scope in scopes {
+        family
+            .requirements
+            .extend(read_commit_records::<Requirement>(
+                repo,
+                commit,
+                &scope.id,
+                "requirements/req.jsonl",
+            )?);
+        family.rules.extend(read_commit_records::<Rule>(
+            repo,
+            commit,
+            &scope.id,
+            "rules/rule.jsonl",
+        )?);
+    }
+    Ok(family)
+}
+
+fn read_working_family(store: &StateStore, scopes: &[Scope]) -> anyhow::Result<StatementFamily> {
+    let mut family = StatementFamily::default();
+    for scope in scopes {
+        family
+            .requirements
+            .extend(store.list_requirements(&scope.id)?);
+        family.rules.extend(store.list_rules(&scope.id)?);
+    }
+    Ok(family)
+}
+
+fn analyze_family_change(
+    repo: &Utf8Path,
+    base: &StatementFamily,
+    candidate: &StatementFamily,
+) -> Vec<StatementDiagnostic> {
+    let layout = provenance_store::layout::ProvenanceLayout::new(repo.to_owned());
+    let dictionary = provenance_store::dictionary_reference::load_project_dictionary(&layout);
+    analyze_changed_statements(
+        &base.requirements,
+        &base.rules,
+        &candidate.requirements,
+        &candidate.rules,
+        dictionary.as_ref(),
+    )
 }
 
 fn read_commit_records<T: DeserializeOwned>(

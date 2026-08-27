@@ -53,6 +53,11 @@ before it exits nonzero for findings. The report identifies the resolved
 base for an initial commit. Direct edits to canonical JSONL files do not bypass
 this committed-candidate check.
 
+Strict mode reads candidate statements from Git commits. It resolves the
+project dictionary reference and local index from the working tree. Thus, a
+dirty dictionary reference can change vocabulary findings, but dirty statement
+bytes cannot change the committed candidate.
+
 The `--strict` option for `provenance check` applies only to ASD-STE100 findings
 in committed Requirement and Rule statements. The `--strict` option for
 `provenance coverage scan` applies to Rule binding and coverage warnings. These

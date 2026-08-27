@@ -91,7 +91,7 @@ fn collect_report_locked(
 ) -> anyhow::Result<CheckReport> {
     validate_locked(store, manifest)?;
     if strict {
-        let analysis = statement_report::changed_statements_from_commits(store, repo, base)?;
+        let analysis = statement_report::changed_statements_from_commits(repo, manifest, base)?;
         let status = if analysis.diagnostics.is_empty() {
             "ok"
         } else {
@@ -109,7 +109,7 @@ fn collect_report_locked(
     Ok(CheckReport {
         status: "ok",
         commits: None,
-        diagnostics: statement_report::changed_statements_from_head(store, repo)?,
+        diagnostics: statement_report::changed_statements_from_head(store, repo, manifest)?,
     })
 }
 
