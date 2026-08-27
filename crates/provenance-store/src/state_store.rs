@@ -44,10 +44,11 @@ pub use typed_statement_policy::TypedSpecWriteError;
 use crate::{layout::ProvenanceLayout, shards};
 use batch_merge::overlay_records;
 use provenance_core::{
-    ensure_supported_schema_version, AssertionRecord, Boundary, Contribution, DispositionRecord,
-    Domain, Edge, ImplementationBinding, Manifest, Message, ProposalCard, Question, Requirement,
-    Resolution, Rule, SchemaVersion, Scope, ScopeId, Source, SynthesisPacket, Thread, Topic,
-    VerificationBinding,
+    ensure_rbac_section_well_formed as ensure_section_well_formed, ensure_supported_schema_version,
+    ensure_unambiguous_rbac, AssertionRecord, Boundary, Contribution, DispositionRecord, Domain,
+    Edge, ImplementationBinding, Manifest, Message, ProposalCard, Question, RbacSection,
+    Requirement, Resolution, Rule, SchemaVersion, Scope, ScopeId, Source, SynthesisPacket, Thread,
+    Topic, VerificationBinding,
 };
 use readers::{
     deserialize_closed, read_edge_shards, read_ideation_landings, read_jsonl, read_jsonl_closed,
@@ -61,7 +62,9 @@ struct ManifestProjection {
     schema_version: SchemaVersion,
     scopes: Vec<serde_json::Value>,
     #[serde(default, rename = "disposition_actor_ids")]
-    _disposition_actor_ids: Vec<String>,
+    disposition_actor_ids: Vec<String>,
+    #[serde(default)]
+    rbac: Option<RbacSection>,
 }
 
 #[derive(Debug, Clone)]
@@ -98,6 +101,7 @@ impl StateStore {
             let manifest: Manifest =
                 serde_json::from_str(&std::fs::read_to_string(self.layout.manifest_path())?)?;
             ensure_supported_schema_version("manifest", manifest.schema_version)?;
+            ensure_manifest_rbac_laws(&manifest)?;
             Ok(manifest)
         })
     }
@@ -109,6 +113,10 @@ impl StateStore {
         self.with_repository_publication(|| {
             let manifest: ManifestProjection =
                 deserialize_closed(&std::fs::read_to_string(self.layout.manifest_path())?)?;
+            provenance_core::ensure_unambiguous_rbac(
+                &manifest.disposition_actor_ids,
+                manifest.rbac.as_ref(),
+            )?;
             let selected = manifest
                 .scopes
                 .into_iter()
@@ -357,6 +365,18 @@ pub fn serde_name<T: serde::Serialize>(value: &T) -> anyhow::Result<String> {
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("expected string enum serialization"))?
         .to_string())
+}
+
+/// The two rbac laws every manifest reader runs: the ambiguity refusal and
+/// the section well-formedness check. `StateStore::manifest`, the closed
+/// projection, and repository parsing all call this; a future manifest
+/// reader must too.
+pub(crate) fn ensure_manifest_rbac_laws(manifest: &Manifest) -> anyhow::Result<()> {
+    ensure_unambiguous_rbac(&manifest.disposition_actor_ids, manifest.rbac.as_ref())?;
+    if let Some(section) = &manifest.rbac {
+        ensure_section_well_formed(section)?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
