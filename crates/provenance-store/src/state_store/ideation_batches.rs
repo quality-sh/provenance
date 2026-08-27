@@ -124,10 +124,27 @@ impl StateStore {
     }
 
     pub fn validate_ideation_scope(&self, scope: &ScopeId) -> anyhow::Result<()> {
-        self.with_repository_publication(|| self.validate_ideation_scope_snapshot(scope))
+        self.with_repository_publication(|| {
+            let manifest = self.manifest()?;
+            self.validate_ideation_scope_snapshot(scope, &manifest.disposition_actor_ids)
+        })
     }
 
-    fn validate_ideation_scope_snapshot(&self, scope: &ScopeId) -> anyhow::Result<()> {
+    pub fn validate_ideation_scope_with_actor_ids(
+        &self,
+        scope: &ScopeId,
+        disposition_actor_ids: &[String],
+    ) -> anyhow::Result<()> {
+        self.with_repository_publication(|| {
+            self.validate_ideation_scope_snapshot(scope, disposition_actor_ids)
+        })
+    }
+
+    fn validate_ideation_scope_snapshot(
+        &self,
+        scope: &ScopeId,
+        disposition_actor_ids: &[String],
+    ) -> anyhow::Result<()> {
         let mut contributions: Vec<Contribution> =
             read_jsonl(&shards::contributions_path(&self.layout, scope))?;
         let mut synthesis_packets: Vec<SynthesisPacket> =
@@ -201,16 +218,9 @@ impl StateStore {
         let assertions = self.list_assertion_records(scope)?;
         let dispositions = self.list_dispositions(scope)?;
         validate_legacy_disposition_shard(&legacy_dispositions, &proposals)?;
-        // Always supply manifest state. `rule_disposition_actor_allowlist`
-        // alone decides whether a disposition's derived pre-disposition state
-        // requires an allowlisted actor; this read path must not copy that
-        // trigger or substitute an empty list when it believes the rule cannot
-        // fire. Reading unconditionally also refuses a missing manifest just as
-        // every write path does.
-        let manifest = self.manifest()?;
         provenance_core::validate_ideation_aggregate(IdeationAggregate {
             legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
-            disposition_actor_ids: &manifest.disposition_actor_ids,
+            disposition_actor_ids,
             contributions: &contributions,
             synthesis_packets: &synthesis_packets,
             proposals: &proposals,

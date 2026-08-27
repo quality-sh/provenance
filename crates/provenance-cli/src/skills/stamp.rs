@@ -5,7 +5,9 @@
 //! provenance's to delete, so the writer and the reader have to agree on it
 //! down to the byte. They agree by construction here: the three literals
 //! below are the whole format, `header` is the only place a stamp is written,
-//! and `header_hash` is the only place one is read.
+//! and `parse_header` is the only place one is read.
+
+use semver::Version;
 
 /// Everything before the version.
 const PREFIX: &str = "<!-- Installed by provenance ";
@@ -26,17 +28,29 @@ pub fn header(content: &str) -> String {
     )
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub struct SkillStamp<'a> {
+    pub version: Version,
+    pub hash: &'a str,
+}
+
+pub fn parse_header(header: &str) -> Option<SkillStamp<'_>> {
+    let header = header.strip_prefix(PREFIX)?;
+    let (version, hash) = header.split_once(HASH_PREFIX)?;
+    let hash = hash.strip_suffix(SUFFIX)?;
+    let version = Version::parse(version).ok()?;
+    (hash.len() == HASH_LENGTH
+        && hash
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)))
+    .then_some(SkillStamp { version, hash })
+}
+
 /// The hash a `header` line claims, or `None` when the line is not a stamp:
 /// no version, a malformed hash, or anything else in place of the format
 /// `header` writes.
 pub fn header_hash(header: &str) -> Option<&str> {
-    let header = header.strip_prefix(PREFIX)?;
-    let (version, hash) = header.split_once(HASH_PREFIX)?;
-    let hash = hash.strip_suffix(SUFFIX)?;
-    (!version.is_empty()
-        && hash.len() == HASH_LENGTH
-        && hash.bytes().all(|byte| byte.is_ascii_hexdigit()))
-    .then_some(hash)
+    parse_header(header).map(|stamp| stamp.hash)
 }
 
 /// Content hash stamped into installed skill files and read back when proving

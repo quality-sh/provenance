@@ -96,6 +96,29 @@ jobs:
           VERSION: ${{ inputs.version }}
         run: bash .github/scripts/release-smoke/npm-registry.sh "$VERSION"
 
+  deno-registry:
+    name: Deno installation with current engine
+    needs: contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/v${{ inputs.version }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2
+        with:
+          deno-version: 2.9.3
+      - name: Install through Deno and exercise the current npm engine
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+        run: bash .github/scripts/release-smoke/deno-registry.sh "$VERSION"
+
   github-archive:
     name: GitHub archive (${{ matrix.target }})
     needs: contract

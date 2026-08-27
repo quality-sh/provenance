@@ -8,6 +8,9 @@ use std::cell::RefCell;
 use std::collections::BTreeSet;
 use std::io::Write;
 
+mod read_only;
+pub use read_only::with_read_only_validation;
+
 pub struct StateSnapshot {
     _directory: tempfile::TempDir,
     layout: ProvenanceLayout,
@@ -44,6 +47,10 @@ pub fn with_repository_publication<R>(
     layout: &ProvenanceLayout,
     operation: impl FnOnce() -> anyhow::Result<R>,
 ) -> anyhow::Result<R> {
+    let key = layout.publication_lock_path().to_string();
+    if read_only::active(&key) {
+        return operation();
+    }
     prepare_publication_lock(layout)?;
     let lock_path = layout.publication_lock_path();
     let key = lock_path.to_string();

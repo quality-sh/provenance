@@ -20,7 +20,7 @@ must_use_candidate = "allow"
 module_name_repetitions = "allow"
 
 [workspace.package]
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 license = "BUSL-1.1"
 repository = "https://github.com/quality-sh/provenance"
@@ -45,6 +45,7 @@ same-file = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_ignored = "0.1"
 serde_json = "1.0"
+semver = "1.0"
 sha2 = "0.10"
 sqlx = { version = "0.8", default-features = false, features = ["sqlite", "runtime-tokio"] }
 tempfile = "3.10"
@@ -53,10 +54,10 @@ tokio = { version = "1.0", features = ["macros", "net", "rt-multi-thread"] }
 toml = "0.8"
 trybuild = "1.0"
 predicates = "3.1"
-provenance-core = { path = "crates/provenance-core", version = "0.2.1" }
-provenance-macros = { path = "crates/provenance-macros", version = "0.2.1" }
-provenance-scanner = { path = "crates/provenance-scanner", version = "0.2.1" }
-provenance-ste100 = { path = "crates/provenance-ste100", version = "0.2.1" }
-provenance-store = { path = "crates/provenance-store", version = "0.2.1" }
+provenance-core = { path = "crates/provenance-core", version = "0.2.2" }
+provenance-macros = { path = "crates/provenance-macros", version = "0.2.2" }
+provenance-scanner = { path = "crates/provenance-scanner", version = "0.2.2" }
+provenance-ste100 = { path = "crates/provenance-ste100", version = "0.2.2" }
+provenance-store = { path = "crates/provenance-store", version = "0.2.2" }
 walkdir = "2.5"
 windows-sys = { version = "0.52", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }

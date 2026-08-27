@@ -118,8 +118,10 @@ fn selected_scope_ignores_future_data_from_another_scope() {
             "future_field": true
         }));
     std::fs::write(&manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+    let future_edges = temp.path().join(".provenance/state/edges/edges-99.jsonl");
+    std::fs::create_dir_all(future_edges.parent().unwrap()).unwrap();
     std::fs::write(
-        temp.path().join(".provenance/state/edges/edges-99.jsonl"),
+        future_edges,
         r#"{"schema_version":2,"scope_id":"future","id":"edge_future","future_field":true}
 "#,
     )

@@ -1,10 +1,11 @@
 mod copy_tree;
 mod install_decision;
+mod install_plan;
+mod ownership;
 mod render;
 pub mod stamp;
 
 use anyhow::Context;
-use install_decision::{classify_install, InstallVerdict, TargetEntry, TargetState};
 use provenance_macros::rule;
 use render::frontmatter_field;
 use serde::Serialize;
@@ -88,14 +89,6 @@ struct FileInstallReport {
     status: FileStatus,
 }
 
-enum ClaudeInstall {
-    Symlink(FileInstallReport),
-    CopyFallback {
-        reports: Vec<FileInstallReport>,
-        reason: String,
-    },
-}
-
 pub fn list() -> anyhow::Result<Vec<SkillSummary>> {
     let mut summaries = EMBEDDED_SKILLS
         .iter()
@@ -153,140 +146,42 @@ pub fn render_status_markdown(status: &SkillInstallStatus) -> String {
     )
 }
 
-fn install_at(base: &Path, global: bool, force: bool, copy: bool) -> anyhow::Result<InstallReport> {
-    let canonical_dir = base.join(".agents/skills");
-    let claude_dir = base.join(".claude/skills");
-    let mut files = install_canonical_skill_files(&canonical_dir, force)?;
-    let mut link_mode = if copy { "copy" } else { "symlink" };
-    let mut fallback_reason = None;
-
-    for skill in EMBEDDED_SKILLS {
-        if copy {
-            files.extend(copy_skill_dir(skill, &canonical_dir, &claude_dir, force)?);
-            continue;
-        }
-
-        match install_claude_symlink_or_copy(skill, &canonical_dir, &claude_dir, force)? {
-            ClaudeInstall::Symlink(report) => files.push(report),
-            ClaudeInstall::CopyFallback { reports, reason } => {
-                link_mode = "copy-fallback";
-                fallback_reason.get_or_insert(reason);
-                files.extend(reports);
-            }
-        }
-    }
-    files.extend(
-        crate::legacy_cleanup::cleanup(base, global)?
-            .into_iter()
-            .map(|change| file_report(&change.path, change.status)),
-    );
-
-    Ok(InstallReport {
-        global,
-        status: combined_status(&files),
-        canonical_dir: canonical_dir.display().to_string(),
-        claude_dir: claude_dir.display().to_string(),
-        link_mode,
-        fallback_reason,
-        files,
-    })
-}
-
-fn install_canonical_skill_files(
-    skills_dir: &Path,
+pub fn install_at(
+    base: &Path,
+    global: bool,
     force: bool,
-) -> anyhow::Result<Vec<FileInstallReport>> {
-    EMBEDDED_SKILLS
-        .iter()
-        .map(|skill| {
-            let path = skills_dir.join(skill.directory).join("SKILL.md");
-            write_managed_file(&path, &render::skill_file(skill), force)
-        })
-        .collect()
-}
-
-fn install_claude_symlink_or_copy(
-    skill: &EmbeddedSkill,
-    canonical_dir: &Path,
-    claude_dir: &Path,
-    force: bool,
-) -> anyhow::Result<ClaudeInstall> {
-    let name = skill_name(skill)?;
-    let link_path = claude_dir.join(name);
-    let target = relative_claude_target(name);
-    let entry = TargetEntry::read(&link_path)?;
-    // A symlink already pointing at the canonical directory is what this
-    // install writes; a directory can be copied into instead of removed.
-    let state = match &entry {
-        TargetEntry::Vacant => TargetState::Clear,
-        TargetEntry::Symlink(current) if current == &target => TargetState::Ours,
-        TargetEntry::Symlink(_) | TargetEntry::Other => TargetState::Foreign,
-        TargetEntry::Directory => TargetState::ForeignDirectory,
-    };
-
-    let status = match classify_install(state, force) {
-        InstallVerdict::Write => FileStatus::Linked,
-        InstallVerdict::Ours => {
-            return Ok(ClaudeInstall::Symlink(file_report(
-                &link_path,
-                FileStatus::Unchanged,
-            )))
-        }
-        InstallVerdict::CopyInto => {
-            let reason = format!("{} already exists as a directory", link_path.display());
-            return Ok(ClaudeInstall::CopyFallback {
-                reports: copy_skill_dir(skill, canonical_dir, claude_dir, force)
-                    .with_context(|| reason.clone())?,
-                reason,
-            });
-        }
-        InstallVerdict::Refuse => match &entry {
-            TargetEntry::Symlink(current) => anyhow::bail!(
-                "{} points at {}; rerun with --force to overwrite",
-                link_path.display(),
-                current.display()
-            ),
-            _ => anyhow::bail!(
-                "{} exists and is not a skill directory; rerun with --force to overwrite",
-                link_path.display()
-            ),
+    copy: bool,
+) -> anyhow::Result<InstallReport> {
+    install_plan::InstallPlan::build(
+        base,
+        install_plan::InstallRequest::Standalone {
+            global,
+            force,
+            copy,
         },
-        InstallVerdict::Overwrite => {
-            entry.remove(&link_path)?;
-            FileStatus::Updated
-        }
-    };
-
-    create_symlink_or_copy(
-        skill,
-        canonical_dir,
-        claude_dir,
-        &link_path,
-        &target,
-        status,
-    )
+    )?
+    .apply()
 }
 
-fn create_symlink_or_copy(
-    skill: &EmbeddedSkill,
-    canonical_dir: &Path,
-    claude_dir: &Path,
-    link_path: &Path,
-    target: &Path,
-    status: FileStatus,
-) -> anyhow::Result<ClaudeInstall> {
-    if let Some(parent) = link_path.parent() {
-        std::fs::create_dir_all(parent)?;
+pub struct InitSkillPlan(install_plan::InstallPlan);
+
+pub fn plan_init_at(base: &Path) -> anyhow::Result<InitSkillPlan> {
+    Ok(InitSkillPlan(install_plan::InstallPlan::build(
+        base,
+        install_plan::InstallRequest::Init,
+    )?))
+}
+
+impl InitSkillPlan {
+    pub(crate) fn recheck(&self) -> anyhow::Result<()> {
+        self.0.recheck()
     }
-    match create_dir_symlink(target, link_path) {
-        Ok(()) => Ok(ClaudeInstall::Symlink(file_report(link_path, status))),
-        // Callers only reach this with link_path absent or already cleared,
-        // so the copy needs no overwrite permission: force stays false.
-        Err(error) => Ok(ClaudeInstall::CopyFallback {
-            reports: copy_skill_dir(skill, canonical_dir, claude_dir, false)
-                .with_context(|| format!("failed to copy after symlink error: {error}"))?,
-            reason: format!("failed to symlink {}: {error}", link_path.display()),
-        }),
+
+    pub(crate) fn apply_in(
+        self,
+        rollback: &mut crate::atomic_file::FileRollbackJournal,
+    ) -> anyhow::Result<()> {
+        self.0.apply_in(rollback).map(|_| ())
     }
 }
 
@@ -298,97 +193,6 @@ fn create_dir_symlink(target: &Path, link_path: &Path) -> std::io::Result<()> {
 #[cfg(windows)]
 fn create_dir_symlink(target: &Path, link_path: &Path) -> std::io::Result<()> {
     std::os::windows::fs::symlink_dir(target, link_path)
-}
-
-/// Copies one skill from the canonical directory to `.claude/skills`. The
-/// copy holds the full skill directory, not only its `SKILL.md`.
-fn copy_skill_dir(
-    skill: &EmbeddedSkill,
-    canonical_dir: &Path,
-    claude_dir: &Path,
-    force: bool,
-) -> anyhow::Result<Vec<FileInstallReport>> {
-    let name = skill_name(skill)?;
-    let destination = claude_dir.join(name);
-    let entry = TargetEntry::read(&destination)?;
-    // A copy wants a directory here, so an existing one is the container it
-    // fills in rather than something in its way. Swapping our own canonical
-    // symlink for a copy keeps identical content, so it needs no --force;
-    // any other symlink is foreign.
-    let state = match &entry {
-        TargetEntry::Vacant | TargetEntry::Directory => TargetState::Clear,
-        TargetEntry::Symlink(current) if current == &relative_claude_target(name) => {
-            TargetState::Ours
-        }
-        TargetEntry::Symlink(_) | TargetEntry::Other => TargetState::Foreign,
-    };
-    match classify_install(state, force) {
-        // Copying is itself the route a diverted install takes, so there is
-        // nowhere gentler to send it.
-        InstallVerdict::Write | InstallVerdict::CopyInto => {}
-        InstallVerdict::Ours | InstallVerdict::Overwrite => entry.remove(&destination)?,
-        InstallVerdict::Refuse => match &entry {
-            TargetEntry::Symlink(current) => anyhow::bail!(
-                "{} is a symlink to {}; rerun with --force to replace it with a copy",
-                destination.display(),
-                current.display()
-            ),
-            _ => anyhow::bail!(
-                "{} exists and is not a skill directory; rerun with --force to overwrite",
-                destination.display()
-            ),
-        },
-    }
-
-    copy_tree::copy_tree(&canonical_dir.join(name), &destination, force)
-}
-
-fn write_managed_file(
-    path: &Path,
-    contents: &str,
-    force: bool,
-) -> anyhow::Result<FileInstallReport> {
-    write_managed_bytes(path, contents.as_bytes(), force)
-}
-
-/// Writes `contents` at `path` under the installer's ownership rules. The
-/// bytes form also serves the files that a skill directory carries beside its
-/// `SKILL.md`, such as a picture below `assets/`.
-fn write_managed_bytes(
-    path: &Path,
-    contents: &[u8],
-    force: bool,
-) -> anyhow::Result<FileInstallReport> {
-    let existing = if path.exists() {
-        Some(std::fs::read(path)?)
-    } else {
-        None
-    };
-    let state = match &existing {
-        None => TargetState::Clear,
-        Some(current) if current == contents => TargetState::Ours,
-        Some(_) => TargetState::Foreign,
-    };
-    match classify_install(state, force) {
-        InstallVerdict::Ours => return Ok(file_report(path, FileStatus::Unchanged)),
-        InstallVerdict::Refuse => anyhow::bail!(
-            "{} exists and differs; rerun with --force to overwrite",
-            path.display()
-        ),
-        InstallVerdict::Overwrite => {
-            std::fs::write(path, contents)?;
-            return Ok(file_report(path, FileStatus::Updated));
-        }
-        // A managed file is never a directory, so no install is ever
-        // diverted here: write.
-        InstallVerdict::Write | InstallVerdict::CopyInto => {}
-    }
-
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    std::fs::write(path, contents)?;
-    Ok(file_report(path, FileStatus::Installed))
 }
 
 /// An install run reports the strongest change any one of its files

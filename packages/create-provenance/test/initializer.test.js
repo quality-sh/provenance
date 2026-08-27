@@ -85,8 +85,8 @@ for (const [manager, command, args, environment] of managers) {
   });
 }
 
-// @provenance rule: rule_typescript_initializer_installs_dev_dependency
 // @provenance verification: examples
+// @provenance rule: rule_typescript_initializer_installs_dev_dependency
 function verifyExactDevelopmentDependency(manager, command, args, environment) {
   const project = projectDirectory({ packageManager: `${manager}@1.0.0` });
   const invocations = [];
@@ -111,17 +111,25 @@ function verifyExactDevelopmentDependency(manager, command, args, environment) {
       args: ["init", "--path", project, "--scope", "default", "--path-prefix", "."],
       capture: false,
     },
-    {
-      command: "/provenance-engine",
-      args: ["check", "--repo", project, "--format", "json"],
-      capture: true,
-    },
   ]);
-  assert.equal(
-    readFileSync(join(project, ".gitignore"), "utf8"),
-    ".provenance/cache/\n",
-  );
+  assert.throws(() => readFileSync(join(project, ".gitignore")), /ENOENT/);
 }
+
+test("the initializer reports failure when the installed engine rejects init", () => {
+  const project = projectDirectory({ packageManager: "npm@1.0.0" });
+  let invocation = 0;
+
+  assert.throws(
+    () => initializeProject({
+      projectDirectory: project,
+      packageVersion,
+      enginePath: "/provenance-engine",
+      execute: () => ({ status: invocation++ === 0 ? 0 : 23 }),
+    }),
+    /Provenance initialization failed with exit code 23/,
+  );
+  assert.equal(invocation, 2);
+});
 
 const lockfiles = [
   ["package-lock.json", "npm"],
@@ -224,48 +232,6 @@ function verifyPackageManagerSelection() {
   assert.equal(fallback.packageManager, "npm");
 }
 
-test("an existing cache ignore entry is not duplicated", () => {
-  const project = projectDirectory({ packageManager: "npm@11.0.0" });
-  writeFileSync(join(project, ".gitignore"), "dist/\n.provenance/cache/\n");
-
-  initializeProject({
-    projectDirectory: project,
-    packageVersion,
-    enginePath: "/provenance-engine",
-    execute: recordingExecutor([]),
-  });
-
-  assert.equal(
-    readFileSync(join(project, ".gitignore"), "utf8"),
-    "dist/\n.provenance/cache/\n",
-  );
-});
-
-test("a failed validation does not claim success or edit gitignore", () => {
-  verifyFailedValidation();
-});
-
-// @provenance rule: rule_typescript_initializer_validates_project
-// @provenance verification: examples
-function verifyFailedValidation() {
-  const project = projectDirectory({ packageManager: "npm@11.0.0" });
-
-  assert.throws(
-    () => initializeProject({
-      projectDirectory: project,
-      packageVersion,
-      enginePath: "/provenance-engine",
-      execute({ capture }) {
-        return capture
-          ? { status: 0, stdout: JSON.stringify({ status: "error" }) }
-          : { status: 0, stdout: "" };
-      },
-    }),
-    /freshly initialized project did not validate/,
-  );
-  assert.throws(() => readFileSync(join(project, ".gitignore")), /ENOENT/);
-}
-
 test("the command defaults to the current project", () => {
   assert.deepEqual(parseArguments([], "/workspace/application"), {
     projectDirectory: "/workspace/application",
@@ -334,10 +300,7 @@ test("the installed SDK engine is resolved after dependency installation", () =>
     "/project/node_modules/@quality-sh/provenance/bin/provenance.mjs",
     "init",
   ]);
-  assert.deepEqual(invocations[2].args.slice(0, 2), [
-    "/project/node_modules/@quality-sh/provenance/bin/provenance.mjs",
-    "check",
-  ]);
+  assert.equal(invocations.length, 2);
 });
 
 test("Yarn Plug'n'Play resolves the installed SDK through its project loader", () => {

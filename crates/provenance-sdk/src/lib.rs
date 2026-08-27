@@ -19,10 +19,12 @@ pub use provenance_core::protocol::{
     TypedRuleInput, TypedSourceInput, TypedSpecInput,
 };
 pub use provenance_core::{EngineInfo, ScopeId, SourceType, StableId, SDK_PROTOCOL_VERSION};
+pub use provenance_macros::{rule, verifies};
 pub use provenance_store::operations;
 pub use provenance_store::operations::{AffectedRule, TypedSpecPlan};
 pub use provenance_store::state_store::TypedSpecResult;
 
 pub use macros::identifier_matches_key;
+#[doc(hidden)]
 pub use settings::Settings;
 pub use verify::{verify, VerifyTarget};

@@ -2037,7 +2037,7 @@ dependencies = [
 
 [[package]]
 name = "provenance-cli"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -2058,8 +2058,10 @@ dependencies = [
  "remove_dir_all",
  "rustix",
  "same-file",
+ "semver",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tempfile",
  "tokio",
  "walkdir",
@@ -2068,7 +2070,7 @@ dependencies = [
 
 [[package]]
 name = "provenance-core"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "anyhow",
  "camino",
@@ -2081,11 +2083,11 @@ dependencies = [
 
 [[package]]
 name = "provenance-macros"
-version = "0.2.1"
+version = "0.2.2"
 
 [[package]]
 name = "provenance-scanner"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "anyhow",
  "camino",
@@ -2098,7 +2100,7 @@ dependencies = [
 
 [[package]]
 name = "provenance-sdk"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "anyhow",
  "camino",
@@ -2112,7 +2114,7 @@ dependencies = [
 
 [[package]]
 name = "provenance-ste100"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "pdf_oxide",
  "provenance-macros",
@@ -2123,7 +2125,7 @@ dependencies = [
 
 [[package]]
 name = "provenance-store"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "anyhow",
  "camino",
@@ -2365,6 +2367,12 @@ name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
+
+[[package]]
+name = "semver"
+version = "1.0.28"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd"
 
 [[package]]
 name = "serde"

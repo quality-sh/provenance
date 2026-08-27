@@ -6,6 +6,7 @@
 # their bytes must be identical on every platform's checkout.
 skills/** text eol=lf
 crates/provenance-cli/skills/** text eol=lf
+.github/scripts/** text eol=lf
 
 # The installed copies of those skills are compared byte for byte against
 # what `provenance skills install` writes; see

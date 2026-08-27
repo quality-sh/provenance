@@ -76,6 +76,7 @@ pub const fn classify_install(state: TargetState, force: bool) -> InstallVerdict
 /// kinds are raw filesystem facts, and each caller maps them onto a
 /// `TargetState` itself, because the same directory blocks a symlink but is
 /// exactly what a copy wants.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TargetEntry {
     /// Nothing is at the path.
     Vacant,
@@ -90,8 +91,10 @@ pub enum TargetEntry {
 
 impl TargetEntry {
     pub fn read(path: &Path) -> anyhow::Result<Self> {
-        let Ok(metadata) = std::fs::symlink_metadata(path) else {
-            return Ok(Self::Vacant);
+        let metadata = match std::fs::symlink_metadata(path) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Self::Vacant),
+            Err(error) => return Err(error.into()),
         };
         if metadata.file_type().is_symlink() {
             Ok(Self::Symlink(std::fs::read_link(path)?))
@@ -102,15 +105,14 @@ impl TargetEntry {
         }
     }
 
-    /// Removes whatever is at the path. Only sound after a verdict that
-    /// permits it: `Overwrite`, or `Ours` when the caller wants the same
-    /// content in another form.
-    pub fn remove(&self, path: &Path) -> std::io::Result<()> {
-        match self {
-            Self::Vacant => Ok(()),
-            Self::Directory => std::fs::remove_dir_all(path),
-            Self::Symlink(_) | Self::Other => std::fs::remove_file(path),
-        }
+    pub fn recheck(&self, path: &Path) -> anyhow::Result<()> {
+        let current = Self::read(path)?;
+        anyhow::ensure!(
+            &current == self,
+            "{} changed after installation was planned; retry",
+            path.display()
+        );
+        Ok(())
     }
 }
 

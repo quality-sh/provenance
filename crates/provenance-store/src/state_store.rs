@@ -278,15 +278,27 @@ impl StateStore {
         })
     }
     pub fn list_proposal_cards(&self, scope: &ScopeId) -> anyhow::Result<Vec<ProposalCard>> {
-        self.project_proposal_cards(scope, || Ok(()))
+        self.project_proposal_cards(scope, None, || Ok(()))
+    }
+    pub fn list_proposal_cards_with_actor_ids(
+        &self,
+        scope: &ScopeId,
+        disposition_actor_ids: &[String],
+    ) -> anyhow::Result<Vec<ProposalCard>> {
+        self.project_proposal_cards(scope, Some(disposition_actor_ids), || Ok(()))
     }
     fn project_proposal_cards(
         &self,
         scope: &ScopeId,
+        disposition_actor_ids: Option<&[String]>,
         after_validation: impl FnOnce() -> anyhow::Result<()>,
     ) -> anyhow::Result<Vec<ProposalCard>> {
         self.with_repository_publication(|| {
-            self.validate_ideation_scope(scope)?;
+            if let Some(disposition_actor_ids) = disposition_actor_ids {
+                self.validate_ideation_scope_with_actor_ids(scope, disposition_actor_ids)?;
+            } else {
+                self.validate_ideation_scope(scope)?;
+            }
             after_validation()?;
             let assertions = self.list_assertion_records(scope)?;
             let dispositions = self.list_dispositions(scope)?;

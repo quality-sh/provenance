@@ -1,5 +1,7 @@
 //! The macro projection over the string-keyed kernel.
 
+use provenance_macros::rule;
+
 /// Says whether a Rust identifier names a spec key.
 ///
 /// An identifier `_` stands for `-` or `_` in the key, because an
@@ -52,6 +54,7 @@ macro_rules! provenance_spec {
     };
 }
 
+#[rule("rule_nested_rust_implementation_path")]
 /// Records a rule's implementation site, and refuses at compile time a
 /// file path that does not exist in the calling crate.
 ///
@@ -68,6 +71,9 @@ macro_rules! provenance_spec {
 macro_rules! implemented_by {
     ($rule:expr, $file:literal, $symbol:ident) => {{
         const _: &[u8] = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/", $file));
-        $rule.implemented_at($file, stringify!($symbol))
+        $rule.implemented_at(
+            concat!(env!("CARGO_MANIFEST_DIR"), "/", $file),
+            stringify!($symbol),
+        )
     }};
 }

@@ -1,8 +1,10 @@
+mod atomic_file;
 mod cli;
 mod docs;
 mod gitignore;
 mod handlers;
 mod legacy_cleanup;
+mod onboarding;
 mod output;
 mod skills;
 mod wiki;

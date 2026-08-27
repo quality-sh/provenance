@@ -57,7 +57,7 @@ fn proposal_projection_uses_one_publication_snapshot() {
         let store = store.clone();
         let scope = scope.clone();
         std::thread::spawn(move || {
-            store.project_proposal_cards(&scope, || {
+            store.project_proposal_cards(&scope, None, || {
                 validated_tx.send(()).unwrap();
                 release_rx.recv().unwrap();
                 Ok(())
