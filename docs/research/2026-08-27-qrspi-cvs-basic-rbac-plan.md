@@ -1,7 +1,7 @@
 # Plan: basic RBAC grants in the manifest (revised after maintainability review)
 
 date: 2026-08-27
-revised: 2026-08-28 — applies the independent maintainability review and the binding human disposal
+revised: 2026-08-28 — applies the independent maintainability review, the binding human disposal, and the strict-audit corrections (merge-driver claim transport; repo-global scope blocking question)
 bead: provenance-cvs
 epic: provenance-46p
 stage: plan-pending-human-review
@@ -34,6 +34,15 @@ The prior revision of this plan (commit `0ad80e7`) was reviewed independently. T
    import and merge cannot bypass).
 8. Adds responsibility-based file extraction gates before any change presses the hard 500-line limit.
 9. Corrects metadata: bead `provenance-cvs`, epic `provenance-46p`.
+10. Makes the merge-driver claim transport mechanically real. Fact: `.gitattributes` only selects
+   `merge=provenance-jsonl` (`.gitattributes:3`); it passes no arguments. The command template is
+   clone-local git config (`docs/cli.md:281-291`). Automatic Git invocation gets the actor as a
+   literal `--actor-id <id>` argument in that configured command; the handler still receives a
+   typed `RbacClaim` and refuses no-claim, unauthorized, unrecognized-family, path-less, and
+   bad-disposition-identity merges (W4).
+11. Stops hiding the repo-global scope policy. The every-scope rule becomes blocking question 9
+   with named alternatives; census rows 17, 19, and 20 cannot be implemented until the human
+   disposes it (W2, OPEN QUESTIONS).
 
 ## Decisions settled by the human, 2026-08-27 (binding)
 
@@ -236,10 +245,14 @@ Operation-family to capability census (every mutating verb today; unmapped verbs
 | 20 | Repository re-init of an `rbac`-managed repo | `init`/`prepare_init` `crates/provenance-cli/src/handlers/repo.rs:8-23,39-114` | manifest-write. First bootstrap on an empty repository is exempt: the section it creates cannot be consulted before it exists. Re-init demands `manifest-write` and must preserve `rbac` bytes when its flags omit it (W5 test 1) |
 | 21 | Manifest section edits outside init | none — init is the only manifest writer (`repo.rs:87`, rollback write :129-133) | no capability; v1 has no verb for the section (D6) |
 
-Scope reading for repo-global resources (proposed reading of D1, flagged as inference): `scopes[]`
-name manifest scope IDs and are matched against the record scope. The manifest itself and
-`dictionary.json` touch every scope, so the capability on them must be held on every scope then in
-the manifest. Positive-only; no wildcard token exists.
+Scope reading for repo-global resources (BLOCKING QUESTION 9 — not implementation's to settle)
+Facts: the manifest itself and `dictionary.json` sit outside any one scope; they affect every
+scope then listed (writers: `repo.rs:129-133` manifest write, `dictionary_reference.rs:31-37`
+direct write, import's staged swap `handlers/import.rs:207-286`). D1 fixes the four capabilities
+and positive-only explicit scopes; it does not say how a capability on scopes relates to a
+resource that spans them. This plan's proposal — the capability must be held on every scope then
+in the manifest — is the fail-safe option of question 9 below. The human names one option before
+any repo-global gating is implemented. Positive-only; no wildcard token exists.
 
 Fixed refusal wordings (proposed, goldens in W5)
 - Missing claim: `rbac: no actor claim supplied for a mutating operation on an rbac-managed repository`.
@@ -267,7 +280,10 @@ without a registered family. Missing-claim and wrong-principal produce the two d
 
 Rollout gate
 Green workspace suite plus census tests; manual smoke of `sdk apply` against an `rbac` fixture; no
-golden refusal string changes for repos without `rbac`.
+golden refusal string changes for repos without `rbac`. Hold: implementation of the repo-global
+rows (17 import, 19 dictionary, 20 re-init) and the W4 import-gate capability check does not begin
+until the human disposes question 9 by naming one option. Per-scope rows (1-16, 18) are not
+blocked.
 
 Complexity L
 
@@ -397,19 +413,52 @@ Merge driver (mandated closure)
   3. Disposition decision-surface checks per row: merged landings (recognized today,
      `merge/validation.rs:104-109`) and a recognized dispositions family run the family-12 identity
      check against the repo's `rbac` section before the merge writes.
-  4. The merge handler requires the claim: it gains the `--actor-id` flag and resolves it against
-     the manifest; a merge without a claim refuses. Document that `.gitattributes` driver lines must
-     pass the flag.
+  4. Claim transport for automatic Git invocation (mechanically real). Facts: the attribute line
+      at `.gitattributes:3` only selects `merge=provenance-jsonl`; git takes no merge-driver
+      arguments from attribute lines. The command template is clone-local git config, documented
+      at `docs/cli.md:281-291` (`merge.provenance-jsonl.driver "provenance merge-jsonl %O %A %B
+      --output %A --path %P"`), mirrored as comments at `.gitattributes.example:4-5`, and git runs
+      that template through `sh` (`cli_merge_jsonl.rs:202-204`). The v1 transport for automatic
+      invocation is one explicit top-down path: the operator appends a literal `--actor-id <id>`
+      argument to the configured driver command at clone setup, for example
+      `provenance merge-jsonl %O %A %B --output %A --path %P --actor-id <id>`. The handler parses
+      that argv value into one typed `RbacClaim { actor_id }` at the CLI boundary (the same global
+      `--actor-id` flag as W2, added to `MergeJsonl` at `cli.rs:268-281`) and everything
+      downstream is the W2 choke against the manifest. The transport sniffs nothing: the handler
+      never reads environment variables, never runs `git config` itself, never derives the
+      principal from `%P` or any path, and no `StateStore` field carries it.
+      Setup: the documented one-time per-clone config (`docs/cli.md:284-287`) gains the literal
+      `--actor-id <id>`; W6 updates the docs and the `.gitattributes.example:4-5` comment block.
+      Update: changing the acting identity means re-running
+      `git config merge.provenance-jsonl.driver` with the new literal id in that clone. v1 adds no
+      engine verb that writes git config. Between a grant change and that config update, the stale
+      literal id resolves as unauthorized and the merge refuses: fail closed.
+      Failure: on an `rbac`-managed repository the merge refuses — exiting non-zero so git leaves
+      the path unmerged (`merge_jsonl.rs:17-19`, `docs/cli.md:301-303`, proved for real at
+      `cli_merge_jsonl.rs:279-294`) — when the configured command supplies no claim (flag absent or
+      value empty), an unauthorized claim, an unrecognized shard family, a path-less output, or a
+      disposition row failing the family-12 identity check.
+      Honesty (no-authentication posture kept): the literal id is an attestation by whoever
+      configured the clone, the same posture as the disposition attestation caveat
+      (`aggregate_validation.rs:156-158`); v1 adds no authentication. Also a fact, not reopened: a
+      clone that never configures the driver falls back to git's line merge, which never invokes
+      the handler (`docs/cli.md:289-290`); that pre-existing posture stands and `provenance check`
+      remains the detector for it.
 
 Test strategy
 Import: an `rbac` repo refuses an import whose claim lacks `manifest-write`, and refuses imported
 dispositions whose recorded actor is not human-typed; a valid import succeeds (round trip preserving
 the section, `docs/state-format.md:115-120` confirms the manifest travels separately from graph
 exports). Merge: an unrecognized shard and a path-less output refuse; a merged landings row carrying
-a non-human disposition refuses; a clean typed merge with a valid claim succeeds.
+a non-human disposition refuses; a clean typed merge with a valid claim succeeds. Driver transport:
+tests configure the real documented driver command through `git config` and run real `git merge`
+(pattern `cli_merge_jsonl.rs:176-294`): a command without `--actor-id` on an `rbac` repo fails and
+leaves the shard unmerged; a command with an unauthorized literal id fails the same way; a command
+with a granted id merges.
 
 Rollout gate
-Both bypasses have named refusing tests; `provenance check` stays green on merged fixtures.
+Both bypasses have named refusing tests; the W5 test 15 transport matrix is green; `provenance
+check` stays green on merged fixtures.
 
 Complexity M
 
@@ -448,6 +497,10 @@ Matrix carried over from the prior plan, still required
     (`cli_init.rs:136-195` patterns; seeded-actor CLI pattern
     `crates/provenance-cli/tests/cli_import_legacy_audit.rs:257-268` and
     `crates/provenance-cli/tests/cli_import_lifecycle/support.rs:12-22`).
+15. Merge-driver command transport end to end: the configured driver command carries the claim.
+    A real `git config merge.provenance-jsonl.driver` without `--actor-id` fails on an
+    `rbac` repo and git leaves the shard unmerged; an unauthorized literal id fails the same way;
+    a granted id merges (extends `cli_merge_jsonl.rs:176-294`).
 
 Test homes
 Store suites under `crates/provenance-store/src/state_store/tests/proposals/` (seeding style:
@@ -472,8 +525,10 @@ Keep user-facing truth aligned with shipped behavior and list the decisions wort
    stance mirroring lines 7-18.
 2. `docs/cli.md` — update the init example at line 18; extend the attestation paragraph at lines
    395-399 with the claimed-principal model and `--actor-id`; note near the schema coverage at line
-   376 that `schema show --artifact manifest` exists; document the merge driver `--actor-id`
-   requirement from W4.
+   376 that `schema show --artifact manifest` exists; update the merge driver section
+   (`docs/cli.md:270-314`): the documented `merge.provenance-jsonl.driver` template at :284-287
+   gains the literal `--actor-id <id>` argument and the setup text at :281-291 explains choosing
+   and updating it; sync the comment block at `.gitattributes.example:4-5`.
 3. ADR candidates (drafts land in the implementation bead, not here):
    - ADR 0009 candidate: basic RBAC grants in the manifest. Mandatory content: grants are flat and
      positive-only, carry no wildcards, delegation, or expiry, change only through reviewed commits,
@@ -495,7 +550,8 @@ Complexity S
 
 ## OPEN QUESTIONS
 
-None. The prior revision's open questions are disposed:
+One blocking question (9) goes to human review with this plan. The prior revision's open questions
+are disposed:
 
 1 (fallback policy) — settled mechanically: the closed census plus one choke means an unmapped verb
 has no capability to check and refuses.
@@ -509,6 +565,29 @@ not this plan.
 7 (bootstrap) — settled: first init exempt, re-init demands `manifest-write` (census row 20).
 8 (state schema version) — stays 1: additive optional field, precedent
 `docs/state-format.md:7-18`.
+
+9 (BLOCKING — repo-global scope policy; must be disposed before repo-global implementation)
+Facts: the manifest itself and `dictionary.json` sit outside any one scope and affect every scope
+then listed; their writers are init's manifest write (`repo.rs:129-133`), the direct dictionary
+write (`dictionary_reference.rs:31-37`), and import's staged whole-state swap
+(`handlers/import.rs:207-286`). D1 fixes the four capabilities and positive-only explicit scopes;
+it does not say how a capability held on scopes governs a resource that spans them. This plan's
+every-scope proposal is the fail-safe option below, not a recorded decision, and no binding human
+evidence settles one option yet. The human must name one; implementation must not choose.
+
+Alternatives for disposal:
+- Option A (this plan's proposal, fail-safe): the capability must be held on every scope then in
+  the manifest. Adding a scope narrows who can touch repo-global resources; grants must be
+  extended when scopes are added, or import, re-init, and dictionary writes begin refusing.
+- Option B: the capability must be held on at least one scope then in the manifest. Simpler
+  grants; fail-open across scopes — any single-scope grant confers repo-global power.
+- Option C: repo-global mutations refuse on `rbac`-managed repositories in v1. Strongest
+  guarantee; makes census rows 17 (import), 19 (dictionary), and 20 (re-init) unusable after
+  bootstrap until a later design lands.
+
+Affected census rows: 17, 19, 20, plus the W4 import-gate capability check. Hold: implementation
+of these rows does not begin until the human names one option; per-scope rows (1-16, 18) are not
+blocked. This decision is not delegated to implementation review.
 
 ## ACCEPTANCE CHECKLIST
 
@@ -526,6 +605,8 @@ not this plan.
 | Post-window removal cannot deadlock valid dispositions | W5 test 6; retired public APIs absent |
 | Re-init preserves `rbac` bytes | W5 test 1 |
 | Import and merge cannot bypass | W4 refusing tests for both paths |
+| Merge-driver claim transport is mechanically real | W5 test 15: a real `git config` driver command without `--actor-id`, with an unauthorized id, and with a granted id each show their stated outcome |
+| Repo-global scope rule comes from the human, not implementation | Question 9 disposed by name (A, B, or C) before any of census rows 17, 19, 20 land; the PR links the disposal |
 | No engine verb writes the section in v1 | `--help` snapshot lists no manifest-mutation subcommand; public API grep gate in the PR |
 | `schema show` surfaces the section | `provenance schema show --artifact manifest` emits JSON Schema naming `rbac` and the four capabilities |
 | No Rust file crosses 500 lines | `wc -l` gate over changed files in CI or PR checklist; extractions in the size table done first |
@@ -591,6 +672,15 @@ Facts (code read this session)
   (`merge.rs:65-148`). The dispositions shard path
   `.provenance/state/scopes/<scope>/ideation/dispositions.jsonl` is not a recognized family
   (`shards.rs:118-123`).
+- Merge-driver wiring has two halves. `.gitattributes:3` carries only
+  `.provenance/state/**/*.jsonl merge=provenance-jsonl` and passes no arguments; its comment at
+  :2 points at `docs/cli.md`. The command
+  template is clone-local git config, documented at `docs/cli.md:281-291` (template at :284-287,
+  placeholder contract :293-299, non-zero-exit semantics :301-303) and mirrored as comments at
+  `.gitattributes.example:4-5`; git runs the template through `sh`
+  (`cli_merge_jsonl.rs:202-204`). `MergeJsonl` CLI args live at `cli.rs:268-281`. The
+  documented-driver tests run real `git config` plus real `git merge`
+  (`cli_merge_jsonl.rs:176-234` success, :236-294 refusal leaving the shard unmerged).
 - The swarm CLI refuses dispositions in merge output (`swarm_backtrace.rs:77-79`), while the store
   API `land_ideation_batch` accepts them (`state_store.rs:70-82`, `ideation_batches.rs:30-39`).
 - `SDK_PROTOCOL_VERSION` is 5 with handshake refusal elsewhere (`protocol.rs:25,54-63`) and
@@ -617,8 +707,8 @@ Inferences (judgment, not code facts)
   explicit claim.
 - The window numbers (6 opens, next bump closes) are inference from the current constant; the
   mechanism is settled.
-- The scope reading for repo-global resources (capability required on every scope then present) is
-  this plan's fail-safe proposal, not a recorded decision; implementation may refine it in review
-  without touching the capability set.
+- The every-scope reading of repo-global authorization is this plan's fail-safe proposal and
+  Option A of blocking question 9; no binding human evidence settles an option, so disposal is
+  review's decision, not implementation's.
 - Duplicate `(actor_id, scope)` refusal and the exact refusal wordings are proposed goldens, fixed
   at implementation review.
