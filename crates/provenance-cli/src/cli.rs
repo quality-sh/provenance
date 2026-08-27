@@ -49,6 +49,12 @@ pub enum Command {
     Check {
         #[arg(long, default_value = ".")]
         repo: Utf8PathBuf,
+        /// Reject findings in statements committed at Git HEAD.
+        #[arg(long)]
+        strict: bool,
+        /// Compare Git HEAD with this commit instead of its first parent.
+        #[arg(long, requires = "strict")]
+        base: Option<String>,
         #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
         format: OutputFormat,
     },
