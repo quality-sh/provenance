@@ -48,8 +48,12 @@ pub(super) use export::{export_scope, ScopeExport};
 #[allow(clippy::redundant_pub_crate)]
 pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()> {
     match command {
-        Command::CargoInit { package } => {
-            cargo_init::handle(package.as_deref())?;
+        Command::CargoInit {
+            package,
+            ste_onboarding,
+            ste_pdf,
+        } => {
+            cargo_init::handle(package.as_deref(), ste_onboarding, ste_pdf)?;
         }
         Command::Init {
             path,
@@ -57,13 +61,23 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
             path_prefix,
             disposition_actor_id,
             clear_disposition_actors,
+            ste_onboarding,
+            ste_pdf,
+            invocation_channel,
+            package_manager,
         } => {
             repo::init(
                 &path,
-                scope,
-                path_prefix,
-                disposition_actor_id,
-                clear_disposition_actors,
+                repo::InitOptions {
+                    scope,
+                    path_prefix,
+                    disposition_actor_ids: disposition_actor_id,
+                    clear_disposition_actors,
+                    ste_onboarding,
+                    ste_pdf,
+                    invocation_channel,
+                    package_manager,
+                },
             )?;
         }
         Command::Check { repo, format } => {

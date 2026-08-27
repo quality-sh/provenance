@@ -13,6 +13,7 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+fs2.workspace = true
 pdf_oxide = { version = "=0.3.77", default-features = false, features = ["legacy-crypto"] }
 provenance-macros.workspace = true
 serde.workspace = true

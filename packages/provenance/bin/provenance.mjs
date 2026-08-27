@@ -15,7 +15,14 @@ try {
   process.exit(1);
 }
 
-const result = spawnSync(engine, process.argv.slice(2), { stdio: "inherit" });
+const arguments_ = process.argv.slice(2);
+const commandIndex = arguments_.findIndex((argument) => argument !== "--quiet");
+if (arguments_[commandIndex] === "init" && !arguments_.includes("--invocation-channel")) {
+  const manager = process.env.PROVENANCE_PACKAGE_MANAGER ??
+    process.env.npm_config_user_agent?.match(/^([^/\s]+)\//)?.[1] ?? "npm";
+  arguments_.push("--invocation-channel", "typescript", "--package-manager", manager);
+}
+const result = spawnSync(engine, arguments_, { stdio: "inherit" });
 if (result.error !== undefined) {
   process.stderr.write(
     `Provenance engine could not start at ${engine}. Check PROVENANCE_BIN if it is set, ` +

@@ -5,21 +5,19 @@ use provenance_core::{Manifest, RepoPathPrefix, Scope, ScopeId};
 use provenance_macros::rule;
 use provenance_store::layout::ProvenanceLayout;
 
-pub(super) fn init(
-    path: &Utf8Path,
-    scope: Option<String>,
-    path_prefix: Option<Utf8PathBuf>,
-    disposition_actor_ids: Vec<String>,
-    clear_disposition_actors: bool,
-) -> anyhow::Result<()> {
-    prepare_init(
-        path,
-        scope,
-        path_prefix,
-        disposition_actor_ids,
-        clear_disposition_actors,
-    )?
-    .apply()
+pub(super) struct InitOptions {
+    pub(super) scope: Option<String>,
+    pub(super) path_prefix: Option<Utf8PathBuf>,
+    pub(super) disposition_actor_ids: Vec<String>,
+    pub(super) clear_disposition_actors: bool,
+    pub(super) ste_onboarding: crate::cli::SteOnboardingMode,
+    pub(super) ste_pdf: Option<Utf8PathBuf>,
+    pub(super) invocation_channel: crate::cli::InvocationChannel,
+    pub(super) package_manager: Option<crate::cli::PackageManager>,
+}
+
+pub(super) fn init(path: &Utf8Path, options: InitOptions) -> anyhow::Result<()> {
+    prepare_init(path, options)?.apply()
 }
 
 pub(super) struct InitPlan {
@@ -31,20 +29,26 @@ pub(super) struct InitPlan {
     agents_bytes: Vec<u8>,
     gitignore_before: FileSnapshot,
     gitignore_bytes: Vec<u8>,
+    dictionary: crate::ste_onboarding::Plan,
 }
 
 #[rule("rule_init_plans_all_project_writes")]
 #[rule("rule_init_plan_rejection_preserves_targets")]
 #[rule("rule_init_validates_planned_repository")]
-pub(super) fn prepare_init(
-    path: &Utf8Path,
-    scope: Option<String>,
-    path_prefix: Option<Utf8PathBuf>,
-    disposition_actor_ids: Vec<String>,
-    clear_disposition_actors: bool,
-) -> anyhow::Result<InitPlan> {
+pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Result<InitPlan> {
+    let InitOptions {
+        scope,
+        path_prefix,
+        disposition_actor_ids,
+        clear_disposition_actors,
+        ste_onboarding,
+        ste_pdf,
+        invocation_channel,
+        package_manager,
+    } = options;
     super::check::recover_repository_before_init(path)
         .context("failed to recover an interrupted repository publication")?;
+    let invocation = crate::onboarding::Invocation::from_cli(invocation_channel, package_manager)?;
     let layout = ProvenanceLayout::new(path.to_path_buf());
     let manifest_before = FileSnapshot::read(layout.manifest_path().as_std_path())?;
     let manifest_exists = manifest_before.bytes().is_some();
@@ -91,7 +95,7 @@ pub(super) fn prepare_init(
     let agents_before = FileSnapshot::read(agents_path.as_std_path())?;
     let without_legacy =
         crate::legacy_cleanup::project_agents(agents_before.bytes().unwrap_or_default());
-    let agents_bytes = crate::onboarding::project(&without_legacy)?;
+    let agents_bytes = crate::onboarding::project(&without_legacy, &invocation)?;
     let gitignore_path = path.join(".gitignore");
     let gitignore_before = FileSnapshot::read(gitignore_path.as_std_path())?;
     let gitignore_bytes = crate::gitignore::project_ignored(
@@ -101,6 +105,7 @@ pub(super) fn prepare_init(
     .context("failed to ignore the Provenance cache")?;
     super::check::validate_repository_with_manifest(path, &manifest)
         .context("the planned Provenance state is not valid")?;
+    let dictionary = crate::ste_onboarding::prepare(path, ste_onboarding, ste_pdf.as_deref())?;
     Ok(InitPlan {
         path: path.to_path_buf(),
         manifest_before,
@@ -110,6 +115,7 @@ pub(super) fn prepare_init(
         agents_bytes,
         gitignore_before,
         gitignore_bytes,
+        dictionary,
     })
 }
 
@@ -124,6 +130,7 @@ impl InitPlan {
             .recheck(self.path.join("AGENTS.md").as_std_path())?;
         self.gitignore_before
             .recheck(self.path.join(".gitignore").as_std_path())?;
+        self.dictionary.recheck(&self.path)?;
         let mut rollback = FileRollbackJournal::within(self.path.as_std_path());
         let result = (|| -> anyhow::Result<()> {
             rollback.replace(
@@ -148,6 +155,7 @@ impl InitPlan {
                     &self.gitignore_bytes,
                 )?;
             }
+            self.dictionary.apply_in(&self.path, &mut rollback)?;
             Ok(())
         })();
         if let Err(error) = result {
@@ -158,7 +166,9 @@ impl InitPlan {
                 ))),
             };
         }
-        rollback.commit()
+        rollback.commit()?;
+        self.dictionary.print_message();
+        Ok(())
     }
 }
 
@@ -223,10 +233,16 @@ mod tests {
         std::fs::create_dir_all(&repo).unwrap();
         let plan = prepare_init(
             &repo,
-            Some("default".to_owned()),
-            Some(Utf8PathBuf::from(".")),
-            Vec::new(),
-            false,
+            InitOptions {
+                scope: Some("default".to_owned()),
+                path_prefix: Some(Utf8PathBuf::from(".")),
+                disposition_actor_ids: Vec::new(),
+                clear_disposition_actors: false,
+                ste_onboarding: crate::cli::SteOnboardingMode::Interactive,
+                ste_pdf: None,
+                invocation_channel: crate::cli::InvocationChannel::Native,
+                package_manager: None,
+            },
         )
         .unwrap();
         for attempt in 0..100_u8 {

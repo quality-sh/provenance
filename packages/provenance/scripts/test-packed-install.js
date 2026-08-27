@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import {
+  chmodSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
@@ -36,6 +37,7 @@ const typescriptRoot = join(packageRoot, "node_modules", "typescript");
 const typescriptManifest = JSON.parse(
   readFileSync(join(typescriptRoot, "package.json"), "utf8"),
 );
+let staleGlobalOrdinal = 0;
 
 mkdirSync(archiveDirectory);
 execFileSync(process.execPath, [
@@ -90,7 +92,7 @@ npm(
 );
 
 // The second line of the quick start, run as written through the installed bin.
-provenance(["init", "--path", ".", "--scope", "default", "--path-prefix", "."], application);
+provenance(["--quiet", "init", "--path", ".", "--scope", "default", "--path-prefix", "."], application);
 const projectManifest = JSON.parse(
   readFileSync(join(application, ".provenance", "state", "manifest.json"), "utf8"),
 );
@@ -101,6 +103,15 @@ assert.deepEqual(
 );
 const initialCheck = JSON.parse(provenance(["check", "--repo", ".", "--format", "json"], application));
 assert.equal(initialCheck.status, "ok", "a freshly initialized project must validate");
+verifyGeneratedCommandIgnoresStaleGlobal(application);
+execFileSync(process.execPath, [
+  join(application, "node_modules", "@quality-sh", "provenance", "bin", "provenance.mjs"),
+  "--quiet",
+  "init",
+  "--path",
+  ".",
+], { cwd: application, stdio: "pipe" });
+verifyGeneratedCommandIgnoresStaleGlobal(application);
 
 // The initializer is a temporary command, while the SDK and engine become
 // durable project development dependencies.
@@ -139,6 +150,7 @@ execFileSync(process.execPath, [
     ...initializerManifest.name.split("/"),
     initializerManifest.bin["create-provenance"],
   ),
+  "--ste-onboarding", "interactive",
 ], {
   cwd: initializedApplication,
   env: {
@@ -172,6 +184,7 @@ const initializedCheck = JSON.parse(
   provenance(["check", "--repo", ".", "--format", "json"], initializedApplication),
 );
 assert.equal(initializedCheck.status, "ok", "the one-command project must validate");
+verifyGeneratedCommandIgnoresStaleGlobal(initializedApplication);
 
 if (process.env.PROVENANCE_TEST_YARN_PNP === "true") {
   verifyYarnPnpInstall();
@@ -399,6 +412,45 @@ function provenance(args, cwd) {
       npm_config_update_notifier: "false",
     },
   });
+}
+
+function verifyGeneratedCommandIgnoresStaleGlobal(cwd) {
+  const sentinelDirectory = join(temporary, `stale-global-${staleGlobalOrdinal++}`);
+  const sentinel = join(sentinelDirectory, process.platform === "win32" ? "provenance.cmd" : "provenance");
+  const selected = join(sentinelDirectory, "selected");
+  mkdirSync(sentinelDirectory);
+  writeFileSync(
+    sentinel,
+    process.platform === "win32"
+      ? `@echo stale>${selected}\r\n@exit /b 42\r\n`
+      : `#!/bin/sh\nprintf stale > '${selected}'\nexit 42\n`,
+  );
+  if (process.platform !== "win32") chmodSync(sentinel, 0o755);
+
+  const agents = readFileSync(join(cwd, "AGENTS.md"), "utf8");
+  assert.match(agents, /`npx --no provenance prime --quiet`/);
+  const output = execFileSync(process.execPath, [
+    npxCli,
+    "--no",
+    "provenance",
+    "check",
+    "--repo",
+    ".",
+    "--format",
+    "json",
+  ], {
+    cwd,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      PATH: `${sentinelDirectory}${process.platform === "win32" ? ";" : ":"}${process.env.PATH}`,
+      npm_config_offline: "true",
+      npm_config_cache: isolatedCache,
+      npm_config_update_notifier: "false",
+    },
+  });
+  assert.equal(JSON.parse(output).status, "ok");
+  assert.throws(() => readFileSync(selected), /ENOENT/);
 }
 
 function verifyYarnPnpInstall() {

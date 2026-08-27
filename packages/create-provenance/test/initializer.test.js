@@ -108,7 +108,11 @@ function verifyExactDevelopmentDependency(manager, command, args, environment) {
   assert.deepEqual(invocations.slice(1), [
     {
       command: "/provenance-engine",
-      args: ["init", "--path", project, "--scope", "default", "--path-prefix", "."],
+      args: [
+        "init", "--path", project, "--scope", "default", "--path-prefix", ".",
+        "--ste-onboarding", "agent",
+        "--invocation-channel", "typescript", "--package-manager", manager,
+      ],
       capture: false,
     },
   ]);
@@ -236,16 +240,28 @@ test("the command defaults to the current project", () => {
   assert.deepEqual(parseArguments([], "/workspace/application"), {
     projectDirectory: "/workspace/application",
     packageManager: undefined,
+    steOnboarding: "agent",
   });
 });
 
 test("the command accepts a target path and package-manager override", () => {
   assert.deepEqual(
-    parseArguments(["--path", "packages/web", "--package-manager", "bun"], "/workspace"),
+    parseArguments([
+      "--path", "packages/web", "--package-manager", "bun",
+      "--ste-onboarding", "interactive",
+    ], "/workspace"),
     {
       projectDirectory: "/workspace/packages/web",
       packageManager: "bun",
+      steOnboarding: "interactive",
     },
+  );
+});
+
+test("the command rejects an unknown STE onboarding mode", () => {
+  assert.throws(
+    () => parseArguments(["--ste-onboarding", "automatic"], "/workspace"),
+    /Choose one of: agent, interactive/,
   );
 });
 

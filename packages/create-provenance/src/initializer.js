@@ -20,17 +20,23 @@ const lockfiles = new Map([
 export function parseArguments(args, currentDirectory) {
   let projectDirectory = currentDirectory;
   let packageManager;
+  let steOnboarding = "agent";
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (argument === "--path") {
       projectDirectory = resolve(currentDirectory, requiredValue(args, ++index, argument));
     } else if (argument === "--package-manager") {
       packageManager = requiredValue(args, ++index, argument);
+    } else if (argument === "--ste-onboarding") {
+      steOnboarding = requiredValue(args, ++index, argument);
+      if (!new Set(["agent", "interactive"]).has(steOnboarding)) {
+        throw new Error("Unsupported STE onboarding mode. Choose one of: agent, interactive.");
+      }
     } else {
       throw new Error(`Unknown argument '${argument}'.`);
     }
   }
-  return { projectDirectory, packageManager };
+  return { projectDirectory, packageManager, steOnboarding };
 }
 
 function requiredValue(args, index, option) {
@@ -51,6 +57,7 @@ export function initializeProject({
   engineArguments = [],
   resolveEngine = installedEngineCommand,
   packageManager,
+  steOnboarding = "agent",
   userAgent = process.env.npm_config_user_agent,
   execute,
 }) {
@@ -80,6 +87,12 @@ export function initializeProject({
       "default",
       "--path-prefix",
       ".",
+      "--ste-onboarding",
+      steOnboarding,
+      "--invocation-channel",
+      "typescript",
+      "--package-manager",
+      selectedManager,
     ],
     capture: false,
   }, "Provenance initialization");

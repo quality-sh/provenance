@@ -11,7 +11,11 @@ use rollback::{CargoPaths, CargoRollback};
 
 const SDK_CRATE: &str = "provenance-sdk";
 
-pub(super) fn handle(requested_package: Option<&str>) -> anyhow::Result<()> {
+pub(super) fn handle(
+    requested_package: Option<&str>,
+    ste_onboarding: crate::cli::SteOnboardingMode,
+    ste_pdf: Option<Utf8PathBuf>,
+) -> anyhow::Result<()> {
     let metadata = load_metadata()?;
     let package = select_package(&metadata, requested_package)?;
     let path_prefix = package_path_prefix(&metadata.workspace_root, package)?;
@@ -19,10 +23,16 @@ pub(super) fn handle(requested_package: Option<&str>) -> anyhow::Result<()> {
 
     let init = super::repo::prepare_init(
         &metadata.workspace_root,
-        Some("default".to_owned()),
-        Some(path_prefix),
-        Vec::new(),
-        false,
+        super::repo::InitOptions {
+            scope: Some("default".to_owned()),
+            path_prefix: Some(path_prefix),
+            disposition_actor_ids: Vec::new(),
+            clear_disposition_actors: false,
+            ste_onboarding,
+            ste_pdf,
+            invocation_channel: crate::cli::InvocationChannel::Native,
+            package_manager: None,
+        },
     )?;
     let cargo_rollback = prepare_sdk(&metadata.workspace_root, package)?;
     if let Err(error) = init.apply() {

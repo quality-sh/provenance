@@ -1,5 +1,9 @@
-use std::path::{Path, PathBuf};
+use std::{
+    fs::OpenOptions,
+    path::{Path, PathBuf},
+};
 
+use fs2::FileExt;
 use provenance_macros::rule;
 
 use super::{digest, DictionaryImport, DictionaryImportIdentity};
@@ -57,6 +61,21 @@ pub fn store_dictionary_index(
 ) -> Result<PathBuf, DictionaryIndexError> {
     let path = index_path(directory, &import.identity);
     std::fs::create_dir_all(directory).map_err(|error| io_error(directory, &error))?;
+    let lock_path = path.with_extension("lock");
+    let lock = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(&lock_path)
+        .map_err(|error| io_error(&lock_path, &error))?;
+    FileExt::lock_exclusive(&lock).map_err(|error| io_error(&lock_path, &error))?;
+    match load_dictionary_index(directory, &import.identity) {
+        Ok(stored) if stored == *import => return Ok(path),
+        Ok(_) => std::fs::remove_file(&path).map_err(|error| io_error(&path, &error))?,
+        Err(DictionaryIndexError::NotFound { .. }) => {}
+        Err(_) => std::fs::remove_file(&path).map_err(|error| io_error(&path, &error))?,
+    }
     let contents = serde_json::to_vec(import).map_err(|error| DictionaryIndexError::Io {
         path: path.clone(),
         message: error.to_string(),
@@ -183,6 +202,23 @@ mod tests {
 
         assert!(path.starts_with(&directory));
         assert_eq!(loaded, import);
+        std::fs::remove_dir_all(&directory).expect("remove the scratch directory");
+    }
+
+    #[test]
+    #[verifies("rule_ste_dictionary_import_reuse", examples)]
+    fn storing_an_identical_index_again_is_idempotent() {
+        let directory = scratch_directory();
+        let import = fixture_import();
+
+        let first = store_dictionary_index(&import, &directory).expect("store the first index");
+        let second = store_dictionary_index(&import, &directory).expect("store the index again");
+
+        assert_eq!(second, first);
+        assert_eq!(
+            load_dictionary_index(&directory, &import.identity).expect("load the index"),
+            import
+        );
         std::fs::remove_dir_all(&directory).expect("remove the scratch directory");
     }
 
