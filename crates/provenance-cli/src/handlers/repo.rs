@@ -196,6 +196,13 @@ fn read_manifest(layout: &ProvenanceLayout) -> anyhow::Result<Option<Manifest>> 
 fn parse_manifest(bytes: &[u8]) -> anyhow::Result<Manifest> {
     let manifest = serde_json::from_slice::<Manifest>(bytes)?;
     provenance_core::ensure_supported_schema_version("manifest", manifest.schema_version)?;
+    provenance_core::ensure_unambiguous_rbac(
+        &manifest.disposition_actor_ids,
+        manifest.rbac.as_ref(),
+    )?;
+    if let Some(section) = &manifest.rbac {
+        provenance_core::ensure_rbac_section_well_formed(section)?;
+    }
     Ok(manifest)
 }
 

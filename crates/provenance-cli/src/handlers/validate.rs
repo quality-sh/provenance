@@ -9,7 +9,7 @@ use camino::Utf8Path;
 // `provenance-core` and the message names the record kind.
 use provenance_core::{
     ensure_supported_schema_version as ensure_schema_version, validate_optional_confidence_score,
-    AssertionRecord, Contribution, DispositionRecord, ProposalCard, SynthesisPacket,
+    AssertionRecord, Contribution, DispositionRecord, Manifest, ProposalCard, SynthesisPacket,
 };
 use provenance_store::graph_reference::{ExactExport, GraphReference};
 use serde::Serialize;
@@ -72,6 +72,18 @@ pub(super) fn validate_file(
             let value = serde_json::from_str(&json)?;
             super::schema::validate_graph_reference_export(&value)?;
             ExactExport::from_json(json.as_bytes())?;
+        }
+        IdeationArtifactKind::Manifest => {
+            let manifest: Manifest = serde_json::from_str(&json)
+                .map_err(|error| anyhow::anyhow!("manifest violates its closed schema: {error}"))?;
+            provenance_core::ensure_supported_schema_version("manifest", manifest.schema_version)?;
+            provenance_core::ensure_unambiguous_rbac(
+                &manifest.disposition_actor_ids,
+                manifest.rbac.as_ref(),
+            )?;
+            if let Some(section) = &manifest.rbac {
+                provenance_core::ensure_rbac_section_well_formed(section)?;
+            }
         }
     }
     Ok(())

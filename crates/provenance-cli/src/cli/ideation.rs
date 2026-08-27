@@ -25,6 +25,7 @@ pub enum IdeationArtifactKind {
     Proposal,
     Assertion,
     Disposition,
+    Manifest,
     GraphReference,
     GraphReferenceExport,
 }
@@ -37,6 +38,7 @@ impl IdeationArtifactKind {
             Self::Proposal => "proposal",
             Self::Assertion => "assertion",
             Self::Disposition => "disposition",
+            Self::Manifest => "manifest",
             Self::GraphReference => "graph-reference",
             Self::GraphReferenceExport => "graph-reference-export",
         }

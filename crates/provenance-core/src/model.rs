@@ -6,6 +6,7 @@ mod ids;
 mod integrations;
 mod manifest;
 mod parsing;
+mod rbac;
 mod services;
 mod shaping;
 mod validation;
@@ -47,7 +48,12 @@ pub use integrations::{
     DeclarationAddress, ImplementationBinding, RequirementReview, VerificationBinding,
     VerificationMethod, VerificationRun, VerificationRunStatus,
 };
-pub use manifest::{Manifest, RepoPathPrefix, Scope};
+pub use manifest::{DispositionRatification, Manifest, RepoPathPrefix, Scope};
+pub use rbac::{
+    authorize, ensure_disposition_actor_is_human, ensure_rbac_section_well_formed,
+    ensure_unambiguous_rbac, Assignment, Capability, RbacClaim, RbacResource, RbacSection,
+    AMBIGUOUS_MANIFEST_REFUSAL, MISSING_CLAIM_REFUSAL, RATIFICATION_REFUSAL_TAIL,
+};
 pub use services::Domain;
 pub use shaping::{
     ArtifactLink, ArtifactLinkTargetType, Boundary, Question, QuestionStatus, ResolutionMethod,

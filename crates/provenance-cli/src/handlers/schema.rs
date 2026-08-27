@@ -23,6 +23,7 @@ fn schema_for(artifact: IdeationArtifactKind) -> Value {
         IdeationArtifactKind::Proposal => artifacts::proposal::schema(),
         IdeationArtifactKind::Assertion => artifacts::lifecycle::assertion_schema(),
         IdeationArtifactKind::Disposition => artifacts::lifecycle::disposition_schema(),
+        IdeationArtifactKind::Manifest => artifacts::manifest::schema(),
         IdeationArtifactKind::GraphReference => artifacts::graph_reference::reference_schema(),
         IdeationArtifactKind::GraphReferenceExport => artifacts::graph_reference::export_schema(),
     };

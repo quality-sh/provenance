@@ -76,6 +76,7 @@ mod tests {
                 })
                 .collect(),
             disposition_actor_ids: Vec::new(),
+            rbac: None,
         }
     }
 

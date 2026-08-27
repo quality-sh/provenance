@@ -71,6 +71,7 @@ mod legacy_coexistence;
 mod manifest;
 mod proposal_surfaces;
 mod proposals;
+mod rbac_manifest;
 mod shaping;
 mod source_requirements;
 mod threads;
