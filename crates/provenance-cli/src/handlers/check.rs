@@ -1,6 +1,7 @@
 use crate::output::{self, OutputFormat};
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{ensure_supported_schema_version, Manifest};
+use provenance_macros::rule;
 use provenance_store::{layout::ProvenanceLayout, state_store::StateStore};
 use std::collections::BTreeSet;
 
@@ -12,19 +13,39 @@ mod statement_report;
 
 use index::CheckIndex;
 
-pub(super) fn check(repo: &Utf8Path, format: OutputFormat) -> anyhow::Result<()> {
+#[rule("rule_ste_strict_committed_statement_gate")]
+pub(super) fn check(
+    repo: &Utf8Path,
+    strict: bool,
+    base: Option<&str>,
+    format: OutputFormat,
+) -> anyhow::Result<()> {
     let store = StateStore::new(ProvenanceLayout::new(repo.to_path_buf()));
     let report = store.with_repository_publication(|| {
         let manifest = store.manifest()?;
-        collect_report_locked(&store, repo, &manifest)
+        collect_report_locked(&store, repo, &manifest, strict, base)
     })?;
-    output::print(format, &report)
+    let has_findings = !report.diagnostics.is_empty();
+    output::print(format, &report)?;
+    anyhow::ensure!(
+        !strict || !has_findings,
+        "strict statement check found ASD-STE100 findings"
+    );
+    Ok(())
 }
 
 #[derive(serde::Serialize)]
 struct CheckReport {
     status: &'static str,
+    #[serde(flatten, skip_serializing_if = "Option::is_none")]
+    commits: Option<CommitRange>,
     diagnostics: Vec<provenance_store::statement_analysis::StatementDiagnostic>,
+}
+
+#[derive(serde::Serialize)]
+struct CommitRange {
+    candidate_commit: String,
+    base_commit: Option<String>,
 }
 
 pub(super) fn validate_repository(repo: Utf8PathBuf) -> anyhow::Result<()> {
@@ -65,11 +86,30 @@ fn collect_report_locked(
     store: &StateStore,
     repo: &Utf8Path,
     manifest: &Manifest,
+    strict: bool,
+    base: Option<&str>,
 ) -> anyhow::Result<CheckReport> {
     validate_locked(store, manifest)?;
+    if strict {
+        let analysis = statement_report::changed_statements_from_commits(repo, manifest, base)?;
+        let status = if analysis.diagnostics.is_empty() {
+            "ok"
+        } else {
+            "findings"
+        };
+        return Ok(CheckReport {
+            status,
+            commits: Some(CommitRange {
+                candidate_commit: analysis.candidate_commit,
+                base_commit: analysis.base_commit,
+            }),
+            diagnostics: analysis.diagnostics,
+        });
+    }
     Ok(CheckReport {
         status: "ok",
-        diagnostics: statement_report::changed_statements_from_head(store, repo)?,
+        commits: None,
+        diagnostics: statement_report::changed_statements_from_head(store, repo, manifest)?,
     })
 }
 

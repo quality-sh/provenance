@@ -86,8 +86,13 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
             })
             .await??;
         }
-        Command::Check { repo, format } => {
-            check::check(&repo, format)?;
+        Command::Check {
+            repo,
+            strict,
+            base,
+            format,
+        } => {
+            check::check(&repo, strict, base.as_deref(), format)?;
         }
         Command::Docs { command } => {
             docs::handle(command).await?;
