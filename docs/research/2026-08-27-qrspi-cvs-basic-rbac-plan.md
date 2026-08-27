@@ -1,240 +1,624 @@
-# Plan: basic RBAC grants in the manifest
+# Plan: basic RBAC grants in the manifest (revised after maintainability review)
 
 date: 2026-08-27
-bead-id: carried by the launcher subject line ("provenance-cvs basic RBAC grants in manifest"); this worker stage is barred from `bd`, so no raw tracker id is restated here
-epic: basic authorization grants for Provenance state writes
+revised: 2026-08-28 — applies the independent maintainability review and the binding human disposal
+bead: provenance-cvs
+epic: provenance-46p
 stage: plan-pending-human-review
 model: glm-5.3-flash-high
 
-## Decisions restated from review with the human, 2026-08-27
+No implementation begins from this session. This document only specifies HOW.
 
-Four dated comments on the bead record these decisions. They are binding input for this plan.
+## What this revision changed
 
-1. Shape and vocabulary. The manifest gains an `rbac`-keyed section. Assignments are shaped `{actor_id, identity_type?, capabilities[], scopes[]}`. Capabilities form a closed enum of exactly `read`, `edit`, `execute`, `manifest-write`. Grants are flat and positive-only: no wildcards, no delegation, no expiry. Only standard RBAC terms appear in docs and code: principal, resource, capability, assignment. Principal identifiers are chosen to stay compatible with external auth-provider subjects, because OAuth porting is intended later.
-2. Identity constraint and ratification law. An assignment that lacks the human identity type cannot hold `edit` or `execute` on lifecycle decision surfaces; alternatively an explicit marker scheme may carry that fact instead (reviewer picks one). The existing human ratification law stays as it is; fine-grained caps do not come back now.
-3. Enforcement and legacy path. Enforcement rides the single aggregate-validator choke point before any write. Legacy `disposition_actor_ids` entries translate mechanically during exactly one SDK protocol-bump window and are refused when ambiguous after it. `init --disposition-actor-id` is deprecated at the same boundary.
-4. Governance. Grant edits land only through Git review. In v1 the engine exposes no mutation verb for the `rbac` section. The engine makes zero authentication claims.
+The prior revision of this plan (commit `0ad80e7`) was reviewed independently. This revision:
+
+1. Replaces the "mechanical translation" legacy story. Legacy-only manifests keep the existing
+   `disposition_actor_ids` rule byte-for-byte during the window. No synthesized RBAC assignments.
+   No expansion of disposition-only authority into `execute`.
+2. Adds the post-window ratification migration that retires `IdeationAggregate.disposition_actor_ids`
+   and `validate_actor_allowlists` in the same change that removes the manifest field, with every
+   feeder and public validation API enumerated.
+3. Defines one explicit typed authorization context (`RbacClaim`) supplied top-down, resolved inside
+   the publication lock. No ambient store field, thread-local, claim sniffing, or scattered refusals.
+   The census now names `requirement_reviews` and `typed_specs` explicitly, and import gets a named
+   explicit gate.
+4. Closes the merge bypass: unrecognized shard families and shard-path-less merge output refuse in
+   RBAC-managed repositories, and disposition rows in merged output pass the decision-surface checks.
+5. Reuses the existing `IdentityType { human, agent, service }` enum. No second enum. Missing
+   `identity_type` fails closed for human-ratification operations. Removes the settled
+   marker-scheme and protocol-window questions.
+6. Names one ambiguity-refusal function called by every manifest reader, with golden tests.
+7. Adds the mandated test list (re-init preserves RBAC bytes; missing claim vs wrong principal;
+   execute plus human identity; legacy-only unchanged; both regimes refuse; post-window non-deadlock;
+   import and merge cannot bypass).
+8. Adds responsibility-based file extraction gates before any change presses the hard 500-line limit.
+9. Corrects metadata: bead `provenance-cvs`, epic `provenance-46p`.
+
+## Decisions settled by the human, 2026-08-27 (binding)
+
+These are normative. This plan does not reopen them.
+
+- D1 — Shape and vocabulary. The manifest gains an `rbac`-keyed section with flat, positive-only
+  assignments shaped `{actor_id, identity_type?, capabilities[], scopes[]}`. The capability set is
+  closed at exactly `read`, `edit`, `execute`, `manifest-write`. No wildcard, no delegation, no
+  expiry, no fine-grained lifecycle capabilities. Standard RBAC terms only: principal, resource,
+  capability, assignment. Principal identifiers are chosen to stay compatible with external
+  auth-provider subjects; the engine makes no authentication claim.
+- D2 — Identity and ratification. `identity_type` reuses the existing core enum
+  `IdentityType { human, agent, service }` (`crates/provenance-core/src/model/ideation.rs:74-93`).
+  No second enum is created. An assignment that omits `identity_type` fails closed for
+  human-ratification operations. Human ratification is preserved through `identity_type` validation.
+- D3 — Legacy window. Legacy `disposition_actor_ids` survives for exactly one SDK protocol-bump
+  window. Inside the window, legacy-only manifests keep the existing rule byte-for-byte. Both
+  regimes present is ambiguous and refuses. `init --disposition-actor-id` deprecates at that
+  boundary.
+- D4 — Post-window migration. In the same change that removes `disposition_actor_ids`, the
+  aggregate allowlist law is replaced by the RBAC identity rule, and every feeder and public
+  validation API is migrated so the old empty-allowlist law cannot deadlock valid dispositions.
+- D5 — Enforcement. One shared policy choke runs before every write. Authorization arrives as one
+  explicit typed claim supplied top-down from CLI/SDK into mutation entry points, and is resolved
+  against the manifest inside the publication lock. Import has a named explicit gate because it
+  writes outside the normal primitives.
+- D6 — Governance. Grant edits land only by Git review. v1 exposes no engine verb that writes the
+  `rbac` section.
+
+## Hard repository constraint: the 500-line file limit
+
+Every Rust file in this repository, tests included, has a hard 500-line limit. Measured this session:
+
+| File | Lines now | Mandated extraction before RBAC work touches it |
+|---|---|---|
+| `crates/provenance-store/src/publication.rs` | 476 | Extract access/snapshot helpers (`snapshot_state` :400-412, `copy_tree` :414-431, `with_state_path_access` :433-448, `sync_directory`/`sync_tree` :367-398) into a sibling module before adding the gate hook. |
+| `crates/provenance-store/src/state_store/ideation_batches.rs` | 491 | Extract merge helpers (`merge_replaceable` :386-408, `merge_immutable` :410-430, `insert_all` :344-359, `ensure_scope` :361-384, `overlay_records` :479-491) into a sibling module before adding batch gating. |
+| `crates/provenance-store/src/state_store/shaping_writers.rs` | 468 | Split topic/question transitions (`claim_topic` :167 through `update_question` :359) into a sibling module if this file is touched. |
+| `crates/provenance-cli/src/handlers/import.rs` | 437 | Keep exactly one delegated gate call at the entry. If the file must grow, extract staging/publication helpers (`apply_import` :207-286, `rollback_publication` :343-359) first. |
+
+Rules: extraction is responsibility-based, not mechanical line-shuffling; new RBAC types, the policy
+choke, and their tests live in their own modules (W1); any proposed change that would push a file
+over, or within roughly 25 lines of, the limit extracts first. `provenance-core` tests already live
+in separate files (example: `crates/provenance-core/src/model/tests/proposal_lifecycle_dispositions.rs`),
+and new suites follow that layout.
 
 ## APPROACH SUMMARY
 
-Add an optional `rbac` section to `.provenance/state/manifest.json`. Each assignment names one principal, one optional identity type, positive capabilities, and explicit scopes. Four capabilities exist: `read`, `edit`, `execute`, `manifest-write`. There are no wildcards, delegation, or expiry.
+Add an optional `rbac` section to `.provenance/state/manifest.json`
+(`crates/provenance-store/src/layout.rs:21-23`). Each assignment names one principal, one optional
+identity type, positive capabilities, and explicit scopes. Four capabilities exist. There are no
+wildcards, delegation, or expiry.
 
-Enforcement uses one shared policy function placed beside the existing aggregate validator, called before any record lands. A mapping table ties every mutating operation family known today to one capability. Unmapped verbs refuse by default. Callers claim a principal with a CLI flag or SDK field; the engine checks claims only and performs no authentication.
+Every mutating request carries an explicit `RbacClaim { actor_id }` from the CLI or SDK down into
+the mutation entry point. One pure policy function in `provenance-core` resolves the claim against
+the `rbac` section inside the publication lock and refuses anything unauthorized. A census table
+maps every mutating operation family known today to one capability. A verb outside the census has no
+mapped capability, so the choke refuses it; default-deny is a mechanical consequence of the closed
+census, not a new policy choice.
 
-Legacy `disposition_actor_ids` keep working during exactly one SDK protocol window as a mechanical translation source. After the window, ambiguous manifests refuse with fixed wording, and `init --disposition-actor-id` refuses too. Core types land first. Enforcement seams land second, then legacy semantics, then tests and docs.
+Legacy `disposition_actor_ids` keeps its exact current meaning during one SDK protocol-bump window.
+Repos without an `rbac` section behave exactly as they do today. A manifest holding both a non-empty
+legacy list and an `rbac` section refuses. At the next protocol bump the legacy field, the aggregate
+allowlist law, and the init flags are removed together and replaced by the RBAC identity rule.
 
 Grants change only through Git review. v1 adds no engine verb that writes the section.
 
 ## WORKSTREAM BREAKDOWN
 
-### W1 — core types and wire shapes for the manifest section
+### W1 — core types, read law, and the one ambiguity refusal
 
 Goal
-Define closed Rust types for the `rbac` section, deserialize them with unknown-field refusal and snake_case wire names, keep old manifests parseable, and surface the section in `schema show`.
+Define closed Rust types for the `rbac` section, deserialize them with unknown-field refusal, keep
+old manifests parseable, define the read-side ambiguity law as one named function, and surface the
+section in `schema show`.
 
-Touched files with citations
+Types (new module `crates/provenance-core/src/model/rbac/`)
+- `types.rs`: `RbacSection { assignments: Vec<Assignment> }`, `Assignment { actor_id, identity_type:
+  Option<IdentityType>, capabilities: Vec<Capability>, scopes: Vec<String> }`, and
+  `Capability` over `read | edit | execute | manifest-write`. `identity_type` is the existing
+  `IdentityType` (`model/ideation.rs:74-93`); its serde wire values are already `human`, `agent`,
+  `service`. `scopes` hold manifest scope IDs. `actor_id` is a non-empty string; no engine-side
+  parsing beyond non-emptiness, so external subject IDs pass through unchanged (D1).
+- `policy.rs`: the shared choke (W2) and the ambiguity refusal (below).
+- `tests.rs` or `tests/`: round-trip and refusal goldens, kept inside the 500-line limit.
+- Wire closure precedent: `#[serde(deny_unknown_fields)]` on every new struct, as
+  `crates/provenance-core/src/model/ideation/contributions.rs:10` does.
 
-- `crates/provenance-core/src/model/manifest.rs:25-31` — `Manifest` today holds `schema_version`, `scopes`, and `disposition_actor_ids` with `serde(default)` at lines 29-30. Add `#[serde(default)] pub rbac: Option<RbacSection>` here. Add new types `RbacSection { assignments: Vec<Assignment> }` and `Assignment { actor_id, identity_type, capabilities, scopes }` in the same file.
-- Wire closure precedent — `crates/provenance-core/src/model/ideation/contributions.rs:11` puts `#[serde(deny_unknown_fields)]` on every record struct. New RBAC structs copy that attribute. Field names already serialize snake_case by Rust naming convention; no rename attributes are needed.
-- Closed read projection — `crates/provenance-store/src/state_store.rs:56-63` defines `ManifestProjection` with `deny_unknown_fields` and consumed fields only. It must learn the new key, or every manifest carrying `rbac` fails scope lookup inside `closed_manifest_scope` (`state_store.rs:103-120`). Add `#[serde(default)] rbac: Option<RbacSection>` there.
-- Capability enum — a plain serde enum over `read | edit | execute | manifest-write` in `provenance-core`. Serialization matches the wire strings exactly.
-- Manifest path constant — `crates/provenance-store/src/layout.rs:21-23` gives `.provenance/state/manifest.json`; nothing changes here, listed so reviewers see the file under governance.
-- Schema surfacing — `crates/provenance-cli/src/handlers/schema.rs:19-36` maps `IdeationArtifactKind` variants to schema builders and wraps them in a JSON Schema envelope. Add a `Manifest` variant to `crates/provenance-cli/src/cli/ideation.rs:22-30` and an `artifacts::manifest::schema()` module beside the existing ones (`handlers/schema.rs` artifact modules at lines 7-8). Precedent: graph-reference kinds already ride this ideation-named enum.
+Manifest integration
+- `crates/provenance-core/src/model/manifest.rs:25-31` gains
+  `#[serde(default, skip_serializing_if = "Option::is_none")] pub rbac: Option<RbacSection>`.
+  `skip_serializing_if` keeps `init` output byte-stable for repos without the section, because
+  `init` serializes whatever `Manifest` holds (`crates/provenance-cli/src/handlers/repo.rs:87`) and
+  `Manifest::default_with_scope` builds the fresh manifest (`model/manifest.rs:33-43`; golden at
+  `crates/provenance-cli/tests/cli_init.rs:49`).
+- Closed read projection: `ManifestProjection` (`crates/provenance-store/src/state_store.rs:56-63`,
+  `deny_unknown_fields`, consumed by `closed_manifest_scope` at :103-120 through
+  `deserialize_closed`, `crates/provenance-store/src/state_store/readers.rs:259`) must learn the new
+  key or every `rbac`-bearing manifest fails scope lookup. It gains
+  `#[serde(default)] rbac: Option<RbacSection>`.
+- `Manifest` itself stays tolerant of unknown keys in W1. Adding `deny_unknown_fields` to core
+  `Manifest` happens only in the W3 removal change, so legacy fixtures are never refused early.
 
-Migration notes
-Old manifests lack the key; `Option` plus `default` keeps them valid. No state schema bump: the store treats additive metadata as version 1 when optional fields are preserved (docs/state-format.md:7-18), and `Manifest` already gained a field that way (`model/manifest.rs:29-30`). Init-created empty repositories get `rbac: null` omitted on write because `init` serializes whatever `Manifest` holds (`crates/provenance-cli/src/handlers/repo.rs:87`).
+One ambiguity-refusal function (mandated)
+- Name: `ensure_unambiguous_rbac` in `crates/provenance-core/src/model/rbac/policy.rs`.
+- Law: refuse when the manifest holds a non-empty top-level `disposition_actor_ids` and an `rbac`
+  section at the same time. An empty legacy array next to `rbac` is unambiguous — this matters
+  because `Manifest::default_with_scope` writes `"disposition_actor_ids": []`
+  (`model/manifest.rs:41`, `crates/provenance-core/src/scope.rs:78`) and every fresh init ships it.
+- Callers, all of them: `StateStore::manifest` (`state_store.rs:94-101`), the closed projection
+  path in `closed_manifest_scope` (`state_store.rs:103-120`), and repository parsing in
+  `crates/provenance-cli/src/handlers/repo.rs:186-190`. Any future manifest reader must call it;
+  this list is part of the acceptance checklist.
+- Golden refusal wording (proposed, fixed):
+  `ambiguous manifest: disposition_actor_ids and rbac.assignments are both present; move disposition actors into rbac assignments and remove disposition_actor_ids`.
+
+Schema surfacing
+- `crates/provenance-cli/src/handlers/schema.rs:19-36` maps `IdeationArtifactKind` variants to
+  schema builders. Add a `Manifest` variant to `crates/provenance-cli/src/cli/ideation.rs:21-30`
+  and an `artifacts::manifest::schema()` module beside the existing ones
+  (`handlers/schema.rs:7-8`). Precedent: graph-reference kinds already ride this enum.
 
 Test strategy
-Round-trip unit tests in `provenance-core`: parse minimal manifest with and without `rbac`; refuse unknown keys inside assignments and the section; refuse capability strings outside the four-value enum; refuse duplicate `(actor_id, scope)` pairs as one proposed closure rule. Projection test in `provenance-store`: a manifest containing `rbac` passes `closed_manifest_scope`. CLI test: `schema show --artifact manifest` emits definitions naming each capability.
+Round-trip tests in `provenance-core`: parse with and without `rbac`; refuse unknown keys inside
+assignments and the section; refuse capability strings outside the four-value enum; refuse duplicate
+`(actor_id, scope)` pairs inside one section. Golden tests for `ensure_unambiguous_rbac`: both
+refuses, empty-legacy-plus-rbac passes, legacy-only passes. Projection test in `provenance-store`:
+an `rbac`-bearing manifest passes `closed_manifest_scope`. CLI test: `schema show --artifact
+manifest` emits definitions naming each capability.
 
 Rollout gate
-All new unit tests pass, and every existing manifest-parsing test still passes unchanged (for example `crates/provenance-cli/tests/cli_check.rs:151-153` golden manifest strings and `crates/provenance-cli/tests/cli_init.rs:49`).
+New unit tests pass and every existing manifest-parsing test passes unchanged (for example
+`crates/provenance-cli/tests/cli_check.rs:151-153` golden manifest strings).
 
 Complexity M
 
-### W2 — validation integration across all write seams
+### W2 — explicit claims, one policy choke, and the full mutation census
 
 Goal
-Make every mutation ask "does this claimed principal hold the needed capability on this resource?" before bytes move. Keep one choke function; enumerate the seams exhaustively; fall back to refusal.
+Make every mutation ask "does this claimed principal hold the needed capability on this resource?"
+before bytes move, through one choke function fed by one explicit claim.
 
-The choke point, stated faithfully against the code
-The bead's decision says enforcement rides the single aggregate-validator choke point. Fact: the aggregate validator itself (`crates/provenance-core/src/model/ideation/lifecycle/aggregate_validation.rs:51-115`) judges ideation records; writers outside ideation validate locally. The faithful implementation is therefore one pure policy function in `provenance-core` (beside the aggregate validator) invoked at every seam listed below, with the ideation seams reaching it through the existing aggregate call sites. Nearly all shard mutations funnel through two primitives: `StateStore::mutate_jsonl_records` (`crates/provenance-store/src/publication.rs:458-470`) and direct `mutate_jsonl_locked` callers such as verification runs (`verification_runs.rs:82`, `verification_runs.rs:130`). Gating these two primitives plus the named outliers below gives mechanical coverage. Shaping verbs use `with_lifecycle_lock` / `with_repository_publication` wrappers (`ideation_batches.rs:13-21`).
+The claim, top-down (mandated shape)
+- One type: `RbacClaim { actor_id: String }` in `crates/provenance-core/src/model/rbac/types.rs`.
+- Transport: a global `--actor-id` CLI flag (clap `global = true`; precedent `quiet` at
+  `crates/provenance-cli/src/cli.rs:21-22`) read once and threaded through dispatch
+  (`crates/provenance-cli/src/handlers/mod.rs:49-253`) into every mutating handler, and an `actor`
+  claim field on SDK mutating requests. SDK input structs deny unknown fields today
+  (`crates/provenance-core/src/protocol/typed_spec.rs:18-32`), so the claim rides the protocol bump
+  that opens the window (W3); store-side inputs are re-exported at
+  `crates/provenance-store/src/state_store.rs:26-37`.
+- Resolution: mutating entry points pass the claim to the policy function, which reads the manifest
+  inside the publication lock. The primitives already enter that lock
+  (`crates/provenance-store/src/publication.rs:46-65`, `:458-470`), so the check runs against
+  manifest bytes no writer can move concurrently.
+- What is forbidden: no ambient field on `StateStore`, no thread-local claim, no deriving the
+  principal from paths or environment, no refusal logic outside `policy.rs`. Note the boundary:
+  classifying the resource by shard path is required and allowed (it answers "which resource?");
+  discovering the principal from anything other than the explicit claim is not.
 
-Principal claims with zero authentication
-Today's precedent is attestation: a disposition actor id "records who claims to have decided", and repository write access is the only gate behind it (`aggregate_validation.rs:156-158`); docs repeat "local audit attestation, not cryptographic authentication" (docs/cli.md:396-398). V1 extends that model: every mutating request carries a claimed `actor_id`. Proposed transport: a global `--actor-id` flag on the CLI and an `actor` field on SDK mutating requests, both optional at first. Repositories without an `rbac` section behave exactly as today. Repositories with an `rbac` section refuse any mutation whose claim is missing or unauthorized, which pressures clients to upgrade without forcing every existing client through a bump at once.
+The choke point
+- One pure function `authorize(claim, section, needed: Capability, resource) -> Result<()>` in
+  `crates/provenance-core/src/model/rbac/policy.rs`, placed beside the aggregate validator it
+  extends (`crates/provenance-core/src/model/ideation/lifecycle/aggregate_validation.rs:51-115`).
+  Fact: the aggregate validator judges ideation records only; writers outside ideation validate
+  locally, so a single store-level choke is the faithful realization of "one shared policy choke".
+- Two mechanical backstops inside `provenance-store` give the census teeth:
+  `StateStore::mutate_jsonl_records` (`publication.rs:458-470`) and the direct
+  `mutate_jsonl_locked` callers (`crates/provenance-store/src/jsonl.rs`; used at
+  `crates/provenance-store/src/state_store/verification_runs.rs:82` and `:130`) require the claim
+  argument and refuse an unauthorized or absent claim on an `rbac`-managed repository. Shaping
+  verbs ride `with_lifecycle_lock` (`ideation_batches.rs:13-21`) and the publication wrapper, both
+  of which the backstop sits under.
+- Repositories without an `rbac` section behave exactly as today. Repositories with one refuse any
+  mutation whose claim is missing or unauthorized (W5 tests cover missing-vs-wrong wording).
 
-Operation-family to capability mapping table
-This table covers every mutating verb that exists today. Sources: handler listings under `crates/provenance-cli/src/handlers/` and writer entry points in `crates/provenance-store/src/state_store/`.
+Operation-family to capability census (every mutating verb today; unmapped verbs refuse)
 
-| # | Operation family | Representative writer (citation) | Proposed capability |
+| # | Operation family | Writer (citation) | Capability |
 |---|---|---|---|
-| 1 | Typed-spec apply (sources, requirements, rules, bindings, relationships reconciled) | `apply_typed_spec`, typed_specs.rs:112-120; SDK `apply`, operations.rs:79-87 and handlers/sdk.rs:38-47 | execute |
-| 2 | Direct source/domain authoring | create_source writers.rs:11-55; create_domain domain_writers.rs:6 | edit |
-| 3 | Requirement authoring and reference edges | create_requirement writers.rs:57-107; add_source_reference writers.rs:131-187 | edit |
-| 4 | Requirement fog text | set_requirement_fog writers.rs:109-129 (docs/cli.md:435) | edit |
-| 5 | Generic edge maintenance | create_edge/delete_edge writers.rs:189-230 | edit |
-| 6 | Resolution/rule authoring | create_resolution rule_writers.rs:6; create_rule rule_writers.rs:89 | edit |
-| 7 | Boundary/topic/question creation | create_boundary shaping_writers.rs:19-63; create_topic :65-107; create_question :109+ | edit |
-| 8 | Topic/question workflow transitions | claim_topic :167; release_topic :206; close_topic :219; claim_question :227; release_question :255; answer_question :268; update_question :307 | execute |
-| 9 | Thread conversation posts | post_thread_message thread_writers.rs:6 | edit |
-| 10 | Ideation trio authoring (contributions, synthesis packets, proposals) | ideation_writers.rs:8-22, :127-141; proposal_writers.rs:170-203 | execute |
-| 11 | Assertion recording (lifecycle evidence) | write_assertion proposal_writers.rs:135-168; assert batch path :100-115 | execute |
-| 12 | Disposition creation (the lifecycle decision surface) | create_disposition/write_disposition proposal_writers.rs:205-259 | execute + identity_type=human required (decision C2) |
-| 13 | Swarm landing batches | land_ideation_batch ideation_batches.rs:30-39; CLI preflight and landing handlers/swarm_backtrace.rs:66,134,144 | execute; batches containing dispositions also run family 12 checks per row |
-| 14 | Verification begin/complete and binding materialization | begin_verification/:69-78 verification_runs.rs:14-114; complete_verification :116-151; materialize_verification_binding verification_bindings.rs:8; materialize_implementation_binding implementation_bindings.rs:127 | execute |
-| 15 | Scope import publication | handlers/import.rs:26-99 (validation :64-72; staged apply :92) | manifest-write (it replaces whole shards); dispositions inside additionally run family 12 checks |
-| 16 | Merge-driver shard commit | handlers/merge_jsonl.rs handle and `validate_merged_records` call (:16-73); merges untyped JSON, caller must re-gate (merge.rs:65-74, :76-148) | edit (shard family mapped via `ShardFamily`); disposition-family rows additionally pass family 12 identity checks |
-| 17 | Project dictionary reference write | handlers/dictionary.rs import -> set_project_dictionary dictionary_reference.rs:24-39 (writes state_dir/dictionary.json :10-12) | edit |
-| 18 | Repository init (manifest bootstrap and re-init) | repo.rs init :8-23; prepare_init manifest bytes :87; AGENTS/.gitignore side files :88-101 | manifest-write on re-init of an rbac-managed repo; first bootstrap exempt (see OQ7) |
-| 19 | Explicit manifest edits outside init | none — no verb writes manifest.json except init (repo.rs:129-133 rolls back its own write) | manifest-write appears as capability only; the section itself has no mutation verb, per decision C4 |
+| 1 | Typed-spec apply (typed_specs) | `apply_typed_spec` `crates/provenance-store/src/state_store/typed_specs.rs:112-120`; writes at :217-233 through `mutate_jsonl_records` (:396-405); SDK `apply` `crates/provenance-store/src/operations.rs:79-87`, `crates/provenance-cli/src/handlers/sdk.rs:38-47` | execute |
+| 2 | Direct source/domain authoring | `create_source` writers.rs:11; `create_domain` `crates/provenance-store/src/state_store/domain_writers.rs:6` | edit |
+| 3 | Requirement authoring and reference edges | `create_requirement` writers.rs:57; `add_source_reference` writers.rs:131 | edit |
+| 4 | Requirement fog text | `set_requirement_fog` writers.rs:111 | edit |
+| 5 | Generic edge maintenance | `create_edge` writers.rs:189; `delete_edge` writers.rs:221 | edit |
+| 6 | Resolution/rule authoring | `create_resolution` `crates/provenance-store/src/state_store/rule_writers.rs:6`; `create_rule` :89 | edit |
+| 7 | Boundary/topic/question creation | `create_boundary` `crates/provenance-store/src/state_store/shaping_writers.rs:19`; `create_topic` :65; `create_question` :109 | edit |
+| 8 | Topic/question workflow transitions | `claim_topic` shaping_writers.rs:167; `release_topic` :206; `close_topic` :219; `claim_question` :227; `release_question` :255; `answer_question` :268; `update_question` :307 | execute |
+| 9 | Thread conversation posts | `post_thread_message` `crates/provenance-store/src/state_store/thread_writers.rs:6` | edit |
+| 10 | Ideation trio authoring | `create_contribution`/`upsert_contribution` `crates/provenance-store/src/state_store/ideation_writers.rs:8,16`; synthesis :127,135; `create_proposal_card` `crates/provenance-store/src/state_store/proposal_writers.rs:170` | execute |
+| 11 | Assertion recording | `write_assertion` proposal_writers.rs:135-168; assert batch path :100-115 | execute |
+| 12 | Disposition creation (lifecycle decision surface) | `create_disposition`/`write_disposition` proposal_writers.rs:205-271 | execute + recorded actor must resolve to an assignment with `identity_type: human` (D2); missing `identity_type` refuses |
+| 13 | Swarm batch landing | `land_ideation_batch` `crates/provenance-store/src/state_store/ideation_batches.rs:30-39`; CLI preflight and landing `crates/provenance-cli/src/handlers/swarm_backtrace.rs:134,144` | execute; dispositions inside a batch run family-12 checks per row at the store seam. Fact: the CLI refuses dispositions in swarm merge output today (`swarm_backtrace.rs:77-79`), but `land_ideation_batch` is a public store API that accepts them (`state_store.rs:70-82`), so the per-row check belongs in `write_ideation_batch` |
+| 14 | Verification begin/complete and binding materialization | `begin_verification` verification_runs.rs:14-114; `complete_verification` :116-151; `materialize_verification_binding` `crates/provenance-store/src/state_store/verification_bindings.rs:8`; `materialize_implementation_binding` `crates/provenance-store/src/state_store/implementation_bindings.rs:127` | execute |
+| 15 | Requirement review recording (requirement_reviews) | `record_requirement_reviews` `crates/provenance-store/src/state_store/requirement_reviews.rs:62-84`, called only from `apply_typed_spec` (`typed_specs.rs:232`) | inherits family 1 (execute); the write itself rides `mutate_jsonl_records` (:75) under the backstop |
+| 16 | Requirement review clearing (requirement_reviews) | `clear_requirement_reviews` requirement_reviews.rs:90-112, called from `begin_verification` (`verification_runs.rs:112`) | inherits family 14 (execute) |
+| 17 | Scope import publication | `import_scope` `crates/provenance-cli/src/handlers/import.rs:26-99` (aggregate feed :64-72; staged apply :92) | manifest-write via the named explicit import gate (W4); dispositions inside run family-12 checks |
+| 18 | Merge-driver shard commit | `handle` `crates/provenance-cli/src/handlers/merge_jsonl.rs:20-72`; `validate_merged_records` call :46-55 | edit by shard family; refused families and disposition rows per W4 |
+| 19 | Project dictionary reference write | `handlers/dictionary.rs:17-41` -> `set_project_dictionary` `crates/provenance-store/src/dictionary_reference.rs:24-39`, direct `std::fs::write` of `state_dir/dictionary.json` (:31-37) | edit; named outlier gate because the write bypasses both primitives |
+| 20 | Repository re-init of an `rbac`-managed repo | `init`/`prepare_init` `crates/provenance-cli/src/handlers/repo.rs:8-23,39-114` | manifest-write. First bootstrap on an empty repository is exempt: the section it creates cannot be consulted before it exists. Re-init demands `manifest-write` and must preserve `rbac` bytes when its flags omit it (W5 test 1) |
+| 21 | Manifest section edits outside init | none — init is the only manifest writer (`repo.rs:87`, rollback write :129-133) | no capability; v1 has no verb for the section (D6) |
 
-Fallback policy
-Any mutating seam not named above refuses by default once the previous table exists. This default-deny is the reviewer choice flagged in OQ1.
+Scope reading for repo-global resources (proposed reading of D1, flagged as inference): `scopes[]`
+name manifest scope IDs and are matched against the record scope. The manifest itself and
+`dictionary.json` touch every scope, so the capability on them must be held on every scope then in
+the manifest. Positive-only; no wildcard token exists.
 
-Identity law check placement
-Family 12 sites pass the acting principal into the shared function; the function refuses when the assignment's identity_type is not the human value while the operation sits on a lifecycle decision surface. Wording follows the house style of fixed refusals (example precedent: `allowlist_refusal`, aggregate_validation.rs:200-207).
+Fixed refusal wordings (proposed, goldens in W5)
+- Missing claim: `rbac: no actor claim supplied for a mutating operation on an rbac-managed repository`.
+- Wrong principal: `rbac: actor <id> does not hold capability <cap> on scope <scope>`.
+- Ratification failure (family 12): `rbac: disposition actor <id> needs an assignment with identity_type human to end a live proposal`. The same wording covers an assignment whose `identity_type` is absent (D2 fail-closed).
 
 Touched files with citations
-New module `provenance-core/src/model/rbac_policy.rs` next to the aggregate validator (`aggregate_validation.rs:51-115`); primitive hooks in `publication.rs:458-470` and `jsonl.rs` locked mutate used at verification_runs.rs:82,130; CLI flag plumbing in `cli.rs:28+` command tree and handler entry points; SDK input structs under `crates/provenance-core/src/protocol/typed_spec.rs:19-107` gain the actor claim; aggregate-fed call sites keep threading manifest data as they already do (`ideation_writers.rs:113-121`, `proposal_writers.rs:155-163,182-190,249-257`, `ideation_batches.rs:107-116`, `handlers/import.rs:64-72`, `handlers/check.rs:100`).
+New `model/rbac/` modules (W1); primitive hooks in `publication.rs:458-470` and `jsonl.rs`
+(`mutate_jsonl_locked`); store method signatures gain the claim parameter (writers listed in the
+census); CLI flag and dispatch (`cli.rs:28+`, `handlers/mod.rs:49-253`); SDK inputs
+(`protocol/typed_spec.rs:18-32`, `state_store.rs:26-37`). Aggregate-fed call sites already thread
+manifest data and keep doing so: `ideation_writers.rs:115,225`, `proposal_writers.rs:157,184,251`,
+`ideation_batches.rs:107-116`, `handlers/import.rs:64-72`, `handlers/check.rs:100`.
 
 Migration notes
-Ships dark: no behavior change until a manifest carries `rbac`. The actor claim rides the SDK protocol bump described in W3; `SDK_PROTOCOL_VERSION` is currently 5 (`crates/provenance-core/src/protocol.rs:25`) and handshakes enforce it (`protocol.rs:54-63`, advertised operations.rs:56-63).
+Ships dark: no behavior change until a manifest carries `rbac`. The claim fields ride
+`SDK_PROTOCOL_VERSION` 6 (W3); the constant is 5 today
+(`crates/provenance-core/src/protocol.rs:25`, handshake :54-63, advertisement
+`operations.rs:56-63`).
 
 Test strategy
-One acceptance test per family row: refuse without grant, accept with matching grant, accept scoped narrowly, refuse cross-scope. Default-deny proven by simulating a new writer calling the primitives without a registered family (unit-level, since adding a real verb later inherits refusal automatically).
+One acceptance test per census row: refuse without grant, accept with matching grant, accept scoped
+narrowly, refuse cross-scope. Default-deny proven by simulating a new writer calling the primitives
+without a registered family. Missing-claim and wrong-principal produce the two distinct goldens.
 
 Rollout gate
-Green suite on the full workspace plus new family tests; manual smoke of `sdk apply` against an rbac-managed fixture repo; no golden refusal string changes for repos without `rbac`.
+Green workspace suite plus census tests; manual smoke of `sdk apply` against an `rbac` fixture; no
+golden refusal string changes for repos without `rbac`.
 
 Complexity L
 
-### W3 — legacy translation shim and deprecation sequencing
+### W3 — legacy window and the post-window ratification migration
 
 Goal
-Translate the legacy allowlist mechanically, define the one-window boundary, fix ambiguous-state refusal wording, and retire the old init flag at the same boundary.
+Keep the legacy law byte-for-byte inside one protocol window, refuse the ambiguous mix, then remove
+the legacy field, its aggregate law, and its init flags in one change, replacing them with the RBAC
+identity rule.
 
-Semantics
-- Window definition: engines carrying `SDK_PROTOCOL_VERSION = 6` (`protocol.rs:25` holds 5 today) constitute the one window. Bumping to 6 ships both the actor-claim fields (W2) and translation behavior together.
-- During the window: a manifest with non-empty top-level `disposition_actor_ids` and no `rbac` section behaves exactly like today (the allowlist feeds `IdeationAggregate.disposition_actor_ids`, `lifecycle.rs:70`, consumed at aggregate_validation.rs:169; empty list blocks every disposition by design, documented at aggregate_validation.rs:150-154). Each legacy id reads as `{actor_id: <id>, identity_type: human, capabilities: [the disposition authority implied by families 12], scopes: [<every scope present in the manifest>]}`. Expansion is computed at read time; nothing rewrites files during the window.
-- Ambiguity rule during the window: a manifest holding both a non-empty legacy list and an `rbac` section refuses. Refusal wording (proposed): `ambiguous manifest: disposition_actor_ids and rbac.assignments are both present; move disposition actors into rbac assignments and remove disposition_actor_ids`.
-- After the window (next protocol bump): drop the field from `ManifestProjection` (`state_store.rs:56-63` denies unknown fields, so stale manifests fail closed there automatically) and flip core `Manifest` (`model/manifest.rs:25-31`) to `deny_unknown_fields` when removing `disposition_actor_ids`, because core `Manifest` currently tolerates extra keys and would otherwise silently ignore the legacy list.
-- Wildcard note honored: scopes expand per the scope set at translation time. Scopes added later need explicit grants; no wildcard token ever enters storage.
+Window definition
+- The window opens when `SDK_PROTOCOL_VERSION` moves 5 -> 6 (`crates/provenance-core/src/protocol.rs:25`),
+  shipping the claim fields (W2) and the ambiguity refusal (W1) together. The window closes at the
+  next protocol bump, in the same change that removes `disposition_actor_ids`. The mechanism
+  (protocol bump) is settled; the specific numbers are inference from the current constant.
 
-Init deprecation at the same boundary
-`--disposition-actor-id` and `--clear-disposition-actors` live at `crates/provenance-cli/src/cli.rs:34-48` with semantics applied in `repo.rs:82-86`. During the window the flags keep working but print a warning pointing at `rbac.assignments`. After the window they refuse with wording naming the replacement section. Docs anchor points: docs/cli.md:18 (example), docs/cli.md:396-399 (attestation paragraph), plus ADR context that modern disposition actor IDs live in the manifest allowlist (docs/adr/0001-immutable-proposal-lifecycle.md:14).
+Inside the window
+- Legacy-only (non-empty `disposition_actor_ids`, no `rbac`): the existing rule applies
+  byte-for-byte. The allowlist feeds `IdeationAggregate.disposition_actor_ids`
+  (`crates/provenance-core/src/model/ideation/lifecycle.rs:70`) and is consumed by
+  `validate_actor_allowlists` (`aggregate_validation.rs:159-174`), with the empty-list-blocks-all
+  posture (`aggregate_validation.rs:150-154`) and the attestation caveat (:156-158) unchanged. The
+  refusal strings from `allowlist_refusal` (`aggregate_validation.rs:200-207`) do not change. No
+  translation happens; nothing rewrites files; legacy authority stays disposition-only and is never
+  expanded into `execute` or any other capability (D3).
+- `rbac`-only: full W2 enforcement. The legacy law has nothing to say; the manifest carries no
+  non-empty legacy list.
+- Both (non-empty legacy list and `rbac` section): `ensure_unambiguous_rbac` refuses with the W1
+  golden.
+- `init --disposition-actor-id` / `--clear-disposition-actors` (`crates/provenance-cli/src/cli.rs:43-47`,
+  semantics at `crates/provenance-cli/src/handlers/repo.rs:82-86`) keep working and print a
+  deprecation warning pointing at `rbac.assignments`. Docs anchors: `docs/cli.md:18` (example),
+  `docs/cli.md:395-399` (attestation paragraph), `docs/adr/0001-immutable-proposal-lifecycle.md:14`.
 
-Migration notes
-No file migration runs; translation is read-side only. Check validation keeps passing legacy fixtures because `check` threads the same allowlist (`handlers/check/scope.rs:21-71`, `handlers/check/scope/ideation.rs:17-24`).
+Post-window migration (one change, mandated)
+- Wire removal. Drop `disposition_actor_ids` from core `Manifest`
+  (`model/manifest.rs:25-31`) and add `deny_unknown_fields` to it, so a stale manifest refuses at
+  parse with an error naming the field; drop the field from `ManifestProjection`
+  (`state_store.rs:56-63`), which already denies unknown fields and so fails closed automatically.
+  The refusal is serde's unknown-field error naming `disposition_actor_ids`; the golden test asserts
+  that name appears.
+- Aggregate law replacement. Retire `validate_actor_allowlists` and `validate_actor_allowlist`
+  (`aggregate_validation.rs:159-195`) and `allowlist_refusal` (:200-207). The replacement
+  ratification rule keeps the trigger reading — a proposal whose effective pre-disposition state is
+  live (`aggregate_validation.rs:183-186`) — and asks instead: the disposition's recorded actor id
+  resolves to an `rbac` assignment whose `identity_type` is `Human`; an assignment without
+  `identity_type` refuses (D2). The `RbacClaim` of the mutating principal separately needs family-12
+  `execute` (W2). Two checks, both in `policy.rs`.
+- Feeder and public-API census (every site this session's search found; all must migrate so the old
+  empty-allowlist law cannot survive as a hidden second gate):
+  - Field: `IdeationAggregate.disposition_actor_ids` (`lifecycle.rs:70`) — replaced by the resolved
+    ratification input (the repo's assignments or a resolved rule value).
+  - Consumption: `aggregate_validation.rs:169`.
+  - Store feeders: `ideation_batches.rs:110` (`write_ideation_batch`), `:129`
+    (`validate_ideation_scope`), `:133-141` (`validate_ideation_scope_with_actor_ids`),
+    `:223` (`validate_ideation_scope_snapshot`); `ideation_writers.rs:115,225`;
+    `proposal_writers.rs:157,184,251`.
+  - Public validation APIs to retire or re-key: `StateStore::validate_ideation_scope_with_actor_ids`
+    (`ideation_batches.rs:133-141`), `StateStore::list_proposal_cards_with_actor_ids`
+    (`state_store.rs:283-289`, consumed by `project_proposal_cards` :290-318).
+  - CLI feeders: `handlers/import.rs:66`; `handlers/check.rs:100`;
+    `handlers/check/scope.rs:21,64,71`; `handlers/check/scope/ideation.rs:17-24`.
+  - Manifest build/parse sites: `model/manifest.rs:29-30,41`; `scope.rs:78`; `repo.rs:82-86,186-190`;
+    `state_store.rs:61-62`.
+  - Init flags: `cli.rs:43-47`; `repo.rs:12-13,43-44,82-86` — refuse after the window with wording
+    naming `rbac.assignments`.
+  - Test fixtures feeding the field (migration blast radius, updated in the same change):
+    `crates/provenance-store/src/cache/tests/materialization_behavior.rs:16,52,95`;
+    `crates/provenance-store/src/state_store/tests/proposals/lifecycle_validation.rs:449`;
+    `.../disposition_write_gate.rs:379`; `.../projection.rs:285`; `.../disposition_allowlist.rs:16-50`;
+    `.../legacy_shard.rs:195`; `.../disposition_references.rs:290`;
+    `.../ideation_duplicates.rs:53`; `crates/provenance-core/src/model/tests/proposal_lifecycle.rs:68,96,177,285,304,356`;
+    `.../proposal_lifecycle_dispositions.rs:27-284`;
+    `crates/provenance-cli/tests/cli_import_lifecycle/support.rs:12-22`;
+    `crates/provenance-cli/tests/cli_import_legacy_audit.rs:257-268`.
+- Non-deadlock property (mandated): after the boundary, no code path consults an allowlist, so a
+  manifest with no legacy field and a valid human assignment admits a valid disposition. The old
+  "empty list blocks every disposition" posture dies with the field, not beside it.
 
 Test strategy
-Window-inside tests: legacy-only translates (behavior equal to today, reuse scenario shapes from crates/provenance-store/src/state_store/tests/proposals/disposition_allowlist.rs:16-50 and disposition_write_gate.rs:379); rbac-only enforces; both-present refuses with the exact golden message; post-window simulation refuses the legacy key at parse time. CLI tests mirror crates/provenance-cli/tests/cli_init.rs:99-231 patterns for the deprecation warning, then refusal.
+Window-inside: legacy-only behaves exactly as today (reuse scenario shapes from
+`disposition_allowlist.rs:16-50` and `disposition_write_gate.rs:379`; assert the old refusal strings
+byte-for-byte); `rbac`-only enforces; both-present refuses with the exact golden; an empty legacy
+array beside `rbac` does not refuse. Post-window: a manifest carrying `disposition_actor_ids` fails
+parse naming the field; a manifest without it plus a human assignment admits a disposition that the
+old law would have blocked (non-deadlock); the retired public APIs no longer exist (compile-level
+absence is enough in-crate). CLI tests mirror `crates/provenance-cli/tests/cli_init.rs:89-195`
+patterns: warning during the window, refusal after.
 
 Rollout gate
-Golden message tests merged; a window matrix test names all four states explicitly; release notes checklist item recorded in this doc's acceptance list.
+Golden message tests merged; a window-matrix test names all four states explicitly; the removal
+change bumps the protocol version and migrates every census line above in one commit.
+
+Complexity L
+
+### W4 — import and merge bypass closure
+
+Goal
+No side door: import and the git merge driver must pass the same policy choke as direct writes.
+
+Import (named explicit gate, mandated)
+- Fact: import does not write through the primitives. It validates a staged whole-state directory
+  and renames it into place under the publication lock
+  (`crates/provenance-cli/src/handlers/import.rs:61-93`, staging and swap at :207-286).
+- Gate: one explicit call at the top of `import_scope`, inside the existing publication lock, to the
+  same `policy.rs` choke: the claim must hold `manifest-write` (census row 17), and every disposition
+  in the incoming scope passes the family-12 identity check. The existing aggregate feed
+  (:64-72) switches from the allowlist to the W3 replacement at the boundary. The gate stays one
+  delegated call (file-size rule above).
+
+Merge driver (mandated closure)
+- Fact: `ShardFamily` today recognizes only edges, ideation landings, requirements, and rules; every
+  other path merges unchecked (`crates/provenance-store/src/merge/validation.rs:33-47`, `Unrecognized
+  => Ok(())` at :112). Fact: when the handler gets no shard path it merges untyped and, with
+  `--output`, writes unchecked (`crates/provenance-cli/src/handlers/merge_jsonl.rs:28-40`, write at
+  :56-58; the merge itself never inspects fields beyond `id`,
+  `crates/provenance-store/src/merge.rs:65-74,76-148`).
+- In an `rbac`-managed repository:
+  1. Refuse `ShardFamily::Unrecognized` in `validate_merged_records`. Extend typed coverage for the
+     remaining canonical families (sources, domains, boundaries, topics, questions, resolutions,
+     dispositions, assertions, proposal cards, contributions, synthesis packets, threads, messages,
+     requirement reviews, implementation bindings, verification bindings — path shapes at
+     `crates/provenance-store/src/shards.rs:99-151`), or refuse whichever stay unrecognized; no
+     unchecked family survives under RBAC.
+  2. Refuse shard-path-less merge output: when neither `--path` nor a derivable target exists, the
+     result cannot be validated, so it refuses (merge_jsonl.rs:28).
+  3. Disposition decision-surface checks per row: merged landings (recognized today,
+     `merge/validation.rs:104-109`) and a recognized dispositions family run the family-12 identity
+     check against the repo's `rbac` section before the merge writes.
+  4. The merge handler requires the claim: it gains the `--actor-id` flag and resolves it against
+     the manifest; a merge without a claim refuses. Document that `.gitattributes` driver lines must
+     pass the flag.
+
+Test strategy
+Import: an `rbac` repo refuses an import whose claim lacks `manifest-write`, and refuses imported
+dispositions whose recorded actor is not human-typed; a valid import succeeds (round trip preserving
+the section, `docs/state-format.md:115-120` confirms the manifest travels separately from graph
+exports). Merge: an unrecognized shard and a path-less output refuse; a merged landings row carrying
+a non-human disposition refuses; a clean typed merge with a valid claim succeeds.
+
+Rollout gate
+Both bypasses have named refusing tests; `provenance check` stays green on merged fixtures.
 
 Complexity M
 
-### W4 — test matrix
+### W5 — test matrix
 
 Goal
-Prove capability enforcement end to end across the enumerated families and the legacy boundary.
+Prove capability enforcement end to end, the legacy boundary, and the mandated cases.
 
-Matrix (each cell becomes a named test)
-1. Per-capability accept/refuse: for each of `read/edit/execute/manifest-write`, one representative family from the W2 table exercised with a grant present and absent. `read` v1 gates nothing observable (reads ship ungated; see OUT OF SCOPE) — its test asserts only parsing and harmless presence, and documents that fact.
-2. Cross-scope attempts: a principal granted scope A acts on scope B and refuses; B attempt on a scope-less edge family refuses identically.
-3. Identity-type violation case: an assignment without the human identity type drives a disposition onto a live proposal and refuses with the fixed wording; the same call with a human-typed assignment succeeds. Reuses live-state fixtures shaped like disposition_allowlist.rs and the trigger logic provenance-core already proves (`validate_actor_allowlist`, aggregate_validation.rs:176-195 with its trigger test at :377-413).
-4. Legacy-compat window, both sides: covered by W3 matrix items, executed through real CLI invocations using the harness pattern in crates/provenance-cli/tests/cli_import_lifecycle/support.rs:12-22 where actor ids seed init.
-5. Swarm landing composition: a batch mixing contributions plus dispositions passes/failed correctly per-row (family 13 composition).
-6. Merge-driver gate: a merged dispositions shard bypassing direct writes still refuses when the survivor lacks authority, asserting the merge.rs warning scenario (`merge.rs:65-74`).
-7. Import round trip: export of an rbac repo re-imports (export preserves canonical records; graph-reference exclusion list confirms manifest handled separately, docs/state-format.md:115-120).
-8. Unmapped fallback: default-deny proof per W2.
-9. Schema surface: `schema show --artifact manifest` matches its compiled expectation.
+Mandated cases (each becomes a named test)
+1. Re-init preserves `rbac` bytes: flags omitted on re-init leave the section untouched (pattern of
+   `crates/provenance-cli/tests/cli_init.rs:89-118`).
+2. Missing claim differs from wrong principal: the two goldens from W2, asserted as different
+   strings.
+3. `execute` plus human identity admits a disposition: a human-typed assignment plus a valid claim
+   records a disposition on a live proposal; the same call with `agent` or with `identity_type`
+   absent refuses with the family-12 golden.
+4. Legacy-only unchanged: inside the window, allowlist behavior and refusal strings are
+   byte-for-byte today's (`disposition_allowlist.rs:16-50`, `aggregate_validation.rs:200-207`).
+5. Both regimes refuse: `ensure_unambiguous_rbac` golden via `StateStore::manifest`, the closed
+   projection, and repo parsing (all three readers).
+6. Post-window old law cannot deadlock: no legacy field, human assignment present, disposition
+   succeeds.
+7. Import cannot bypass: W4 import tests.
+8. Merge cannot bypass: W4 merge tests.
 
-Touched files with citations
-Test homes follow existing layout: store-level suites under crates/provenance-store/src/state_store/tests/proposals/ (see lifecycle_validation.rs:449 for allowlist seeding style); crate-level suites in crates/provenance-core/src/model/tests/proposal_lifecycle_dispositions.rs:27-284 (refusal message goldens exist at :260-261); CLI black-box suites under crates/provenance-cli/tests/ (cli_init.rs, cli_check.rs:151-153 manifest goldens, cli_import_legacy_audit.rs:263-265).
+Matrix carried over from the prior plan, still required
+9. Per-capability accept/refuse for each of the four capabilities through a representative census
+   row; `read` gates nothing observable in v1 (reads ship ungated; its test asserts parsing and
+   harmless presence only).
+10. Cross-scope attempts: a principal granted scope A acting on scope B refuses.
+11. Swarm landing composition: a batch mixing contributions and dispositions passes or fails per row
+    (census row 13, store seam).
+12. Default-deny: an unregistered synthetic writer refuses at the primitive backstop.
+13. Schema surface: `schema show --artifact manifest` matches its compiled expectation.
+14. Init deprecation: warning during the window, refusal after
+    (`cli_init.rs:136-195` patterns; seeded-actor CLI pattern
+    `crates/provenance-cli/tests/cli_import_legacy_audit.rs:257-268` and
+    `crates/provenance-cli/tests/cli_import_lifecycle/support.rs:12-22`).
+
+Test homes
+Store suites under `crates/provenance-store/src/state_store/tests/proposals/` (seeding style:
+`lifecycle_validation.rs:449`); core suite
+`crates/provenance-core/src/model/tests/proposal_lifecycle_dispositions.rs:27-284` (existing goldens
+at :260-261); CLI black-box suites under `crates/provenance-cli/tests/`
+(`cli_check.rs:151-153`, `cli_init.rs`). New RBAC unit tests live in the `model/rbac/` test module
+(500-line rule).
 
 Rollout gate
-Whole matrix green locally and in CI; count of new tests recorded in the PR description.
+Whole matrix green locally and in CI; the count of new tests is recorded in the PR description.
 
 Complexity M
 
-### W5 — docs updates inventory
+### W6 — docs updates inventory
 
 Goal
-Keep user-facing truth aligned with shipped behavior and list the architecture decisions worth recording.
+Keep user-facing truth aligned with shipped behavior and list the decisions worth recording.
 
-Inventory
-1. docs/state-format.md — new paragraph after the manifest sentence at line 5 documenting the `rbac` section shape, flat positive-only grants, Git-review-only editing, and the additive-no-version-bump stance mirroring lines 7-18.
-2. docs/cli.md — update the init example at line 18; extend the attestation paragraph at lines 396-399 with the claimed-principal model and the `--actor-id` flag; add one sentence near the schema coverage at lines 380-389 noting `schema show --artifact manifest`.
-3. ADR candidates list (new numbered file drafts deferred to implementation):
-   - ADR 0009 candidate: basic RBAC grants in the manifest. Mandatory content: governance privilege-escalation statement — grants are flat and positive-only, carry no wildcards, delegation, or expiry, change only through reviewed commits, and the engine exposes no verb that writes the section in v1; ratification law untouched per docs/adr/0001-immutable-proposal-lifecycle.md (its allowlist statement at line 14 predates and remains true during the window).
-   - ADR 0010 candidate (conditional): chosen identity-constraint encoding (enum vs explicit marker scheme, OQ2).
-   - ADR 0011 candidate (optional): unmapped-operation fallback policy (OQ1 outcome).
-4. CONTEXT.md domain terms — add principal, resource, capability, assignment only (decision C4 restricts vocabulary); editing CONTEXT.md is part of the implementation bead, listed here so reviewers see the touchpoint.
+1. `docs/state-format.md` — new paragraph after the manifest sentence at line 5: the `rbac` section
+   shape, flat positive-only grants, Git-review-only editing, and the additive no-version-bump
+   stance mirroring lines 7-18.
+2. `docs/cli.md` — update the init example at line 18; extend the attestation paragraph at lines
+   395-399 with the claimed-principal model and `--actor-id`; note near the schema coverage at line
+   376 that `schema show --artifact manifest` exists; document the merge driver `--actor-id`
+   requirement from W4.
+3. ADR candidates (drafts land in the implementation bead, not here):
+   - ADR 0009 candidate: basic RBAC grants in the manifest. Mandatory content: grants are flat and
+     positive-only, carry no wildcards, delegation, or expiry, change only through reviewed commits,
+     and the engine exposes no verb that writes the section in v1; the legacy window and the
+     post-window ratification replacement; no authentication claim
+     (`docs/adr/0001-immutable-proposal-lifecycle.md:14` stays true only inside the window, and the
+     ADR says when it stops).
+4. `CONTEXT.md` domain terms — add principal, resource, capability, assignment only (D1). Editing
+   CONTEXT.md belongs to the implementation bead; listed so reviewers see the touchpoint.
 
 Test strategy
-Docs-only diff; verify examples compile conceptually by pasting commands from the test suite in W3/W4 (flag strings must match the implemented CLI exactly).
+Docs-only diff; paste commands from the W3/W5 suites so flag strings match the implemented CLI.
 
 Rollout gate
-Reviewer finds no doc contradicting shipped behavior; grep for `wildcard`, `delegat`, `expir` in new sections returns no normative grant features.
+No doc contradicts shipped behavior; grep for `wildcard`, `delegat`, `expir` in new sections returns
+no normative grant features.
 
 Complexity S
 
-## OPEN QUESTIONS FOR HUMAN REVIEW
+## OPEN QUESTIONS
 
-1. Fallback policy confirmation. Recommendation: unmapped mutating verbs refuse by default. Alternative: log-and-allow during the transition. Flagged as reviewer choice per the bead summary.
-2. Identity-constraint encoding. Option A: `identity_type` closed enum `{"human","service"}`, absent field defaults to `"human"` (preserves today's attestation behavior). Option B: unconstrained type plus explicit marker scheme on decision surfaces. Decision C2 allows either; pick one.
-3. Lifecycle decision surface enumeration. Proposal: disposition creation including dispositions arriving inside swarm batches, imports, and merged shards. Excluded: assertions, proposal creation, topic closes, question answers. Confirm the boundary.
-4. Family split sanity. Two rows deserve scrutiny: typed-spec apply as `execute` even though it retires/updates requirement content (row 1); topic/question creation as `edit` versus their transitions as `execute` (rows 7 vs 8). Confirm or redraw.
-5. Claimed-principal transport. Global `--actor-id` plus SDK `actor` field, activated by bumping `SDK_PROTOCOL_VERSION` from 5 (protocol.rs:25) — confirm this bump is the intended "one protocol-bump window".
-6. Translation expansion risk. Expanding a repo-global legacy allowlist to every current scope grows stale after new scopes appear; new scopes then need fresh grants. Acceptable, or prefer dual authority until window close?
-7. Bootstrap. First init on an empty repository cannot consult the section it creates; re-init of an rbac-managed repo demands `manifest-write`. Confirm the bootstrap exemption.
-8. State schema version stays 1. Additive optional field, precedent docs/state-format.md:7-18. Confirm no version bump accompanies the section.
+None. The prior revision's open questions are disposed:
+
+1 (fallback policy) — settled mechanically: the closed census plus one choke means an unmapped verb
+has no capability to check and refuses.
+2 (identity encoding) — settled by D2: reuse `IdentityType`, fail closed when absent.
+3 (decision-surface enumeration) — settled as dispositions wherever they arrive: direct writes,
+swarm batches, imports, merged shards (W4, census row 13).
+4 (family split) — the census table above is the reviewed mapping; changes to it go through review,
+not this plan.
+5 (protocol window) — settled as the SDK protocol bump; numbers are inference (W3).
+6 (translation expansion) — moot: no translation exists; legacy stays legacy (D3).
+7 (bootstrap) — settled: first init exempt, re-init demands `manifest-write` (census row 20).
+8 (state schema version) — stays 1: additive optional field, precedent
+`docs/state-format.md:7-18`.
 
 ## ACCEPTANCE CHECKLIST
 
 | Promised outcome | Observable verification |
 |---|---|
-| Manifest accepts `rbac` section; unknown keys inside it refuse | `cargo test -p provenance-core` includes new round-trip and deny tests for `model/manifest.rs` types |
-| Old manifests keep parsing everywhere | Existing suites pass unmodified: `crates/provenance-cli/tests/cli_check.rs:151-153`, `cli_init.rs`, `state_store/tests/proposals/*` |
-| Closed read projection understands the key | `provenance-store` test exercising `closed_manifest_scope` (state_store.rs:103-120) with an `rbac`-bearing manifest |
-| Every mutating family maps to a capability; all others refuse | W2 family-by-family store tests; fallback test refusing an unregistered synthetic writer |
-| Claims without authority refuse cross-scope | Matrix test 2 in W4 |
-| Non-human identity cannot drive lifecycle decisions | Matrix test 3 golden refusal message, reuse of aggregate-validation fixture style (aggregate_validation.rs:384-413) |
-| Legacy allowlist translates inside the window | W3 four-state matrix (legacy-only, rbac-only, both-refused golden, post-window refusal), building on disposition_allowlist.rs:16-50 scenarios |
-| `init --disposition-actor-id` warns during window, refuses after | CLI tests cloned from cli_init.rs:99-231 with warning and refusal assertions |
-| No engine mutation verb writes the section in v1 | Absence assertion: CLI `--help` snapshot lists no manifest-mutation subcommand; public API grep gate documented in PR |
-| `schema show` surfaces the section | `provenance schema show --artifact manifest` emits JSON Schema naming `rbac`, four capabilities; CLI test beside handlers/schema.rs tests module (:50-51) |
-| Docs match behavior | Sections exist at docs/state-format.md line 5 area and docs/cli.md lines 18, 380-399; ste100 dictionary does not govern docs, so reviewer eyeball plus link check |
-| ADR candidates recorded with mandatory escalation statement | Draft bullets visible in W5; final ADRs land in their own implementation bead |
+| Manifest accepts `rbac`; unknown keys inside it refuse | `cargo test -p provenance-core` round-trip and deny tests in `model/rbac/` |
+| Old manifests keep parsing everywhere | Existing suites pass unmodified: `cli_check.rs:151-153`, `cli_init.rs`, `state_store/tests/proposals/*` |
+| Closed read projection understands the key | `provenance-store` test on `closed_manifest_scope` (`state_store.rs:103-120`) with an `rbac`-bearing manifest |
+| One ambiguity refusal, all readers call it | Golden tests on `ensure_unambiguous_rbac` through `StateStore::manifest`, `closed_manifest_scope`, and `repo.rs:186-190`; grep gate in the PR shows no fourth reader |
+| Every mutating family maps to a capability; others refuse | W2 census tests; fallback test refusing an unregistered synthetic writer |
+| Missing claim and wrong principal refuse differently | W5 test 2 with both goldens |
+| Non-human (or untyped) identity cannot end a live proposal | W5 test 3 golden; absent `identity_type` takes the same refusal |
+| Legacy-only behavior byte-for-byte inside the window | W5 test 4 asserting today's refusal strings |
+| Both regimes refuse; empty legacy array beside `rbac` does not | W5 test 5 goldens |
+| Post-window removal cannot deadlock valid dispositions | W5 test 6; retired public APIs absent |
+| Re-init preserves `rbac` bytes | W5 test 1 |
+| Import and merge cannot bypass | W4 refusing tests for both paths |
+| No engine verb writes the section in v1 | `--help` snapshot lists no manifest-mutation subcommand; public API grep gate in the PR |
+| `schema show` surfaces the section | `provenance schema show --artifact manifest` emits JSON Schema naming `rbac` and the four capabilities |
+| No Rust file crosses 500 lines | `wc -l` gate over changed files in CI or PR checklist; extractions in the size table done first |
+| Docs match behavior | Sections exist at `docs/state-format.md` line 5 area and `docs/cli.md` lines 18, 376-399; reviewer eyeball plus link check |
+| ADR candidate recorded with escalation statement | W6 bullet visible; final ADR lands in its own implementation bead |
 
 ## OUT OF SCOPE RESTATED
 
-- SQLite served-read flip (`provenance-1wh`) is adjacent work and stays out of this plan. Interfaces where read-gating may later attach without redesign: the reader layer (`StateStore::list_*`, `crates/provenance-store/src/state_store.rs:146-250`), the closed readers module (`readers.rs`, wired at `state_store.rs:50-53`), the projection helpers (`project_proposal_cards`, `state_store.rs:290-318`), and the query/response envelope built in `crates/provenance-core/src/protocol/response.rs`.
-- Authentication, signatures, tokens, identity proofs: excluded forever by decision C4 for v1; the actor id remains an attestation (precedent citation aggregate_validation.rs:156-158).
-- Delegation, expiry, wildcard scopes, revocation tooling, role hierarchies: excluded by the flat positive-only decision (C1).
-- Read enforcement of `read`: planned attach points noted above, activation out of scope.
-- Any external auth-provider/OAuth integration beyond choosing subject-compatible identifier syntax (C1).
-- Migration scripts rewriting manifests: translation stays read-side during the window (W3).
-- Wiki ownership marker and cache artifacts: different files entirely (`crates/provenance-cli/src/wiki/publish/manifest.rs:9-14` describes an OwnershipManifest generator marker; lock and cache files are non-state per docs/state-format.md:99-105); untouched by this plan.
+- Read enforcement of `read`: v1 ships reads ungated. Later attach points, noted so no redesign is
+  needed: the reader layer (`StateStore::list_*`, `state_store.rs:146-250`), the closed readers
+  module (`crates/provenance-store/src/state_store/readers.rs`, wired at `state_store.rs:50-53`),
+  the projection helpers (`project_proposal_cards`, `state_store.rs:290-318`), and the response
+  envelope (`crates/provenance-core/src/protocol/response.rs`).
+- The SQLite served-read flip (`provenance-1wh`): adjacent work, untouched.
+- Authentication, signatures, tokens, identity proofs: excluded for v1 by D1; the actor id stays an
+  attestation (precedent `aggregate_validation.rs:156-158`).
+- Any external auth-provider/OAuth integration beyond choosing subject-compatible identifier syntax
+  (D1).
+- Fine-grained authorization: capabilities beyond the four, per-record scopes, delegation, expiry,
+  wildcards, revocation tooling, role hierarchies: excluded by D1.
+- Migration scripts rewriting manifests: the window is read-side only; the removal change is a wire
+  type change, not a data migration (W3).
+- Wiki ownership marker and cache artifacts: different files
+  (`crates/provenance-cli/src/wiki/publish/manifest.rs:11` describes the `OwnershipManifest`
+  generator marker; lock and cache files are non-state per `docs/state-format.md:70-75,99-106`);
+  untouched by this plan.
 
 ## FACTS AND INFERENCES
 
-Facts (code checked this session)
+Facts (code read this session)
 
-- `Manifest` holds exactly `schema_version`, `scopes`, `disposition_actor_ids` with `serde(default)` (crates/provenance-core/src/model/manifest.rs:25-31).
-- Store reads go through `StateStore::manifest()` (state_store.rs:94-101) and a `deny_unknown_fields` projection (state_store.rs:56-63) used by scope lookups (:103-120).
-- The ideation aggregate validator is the central ideation gate (aggregate_validation.rs:51-115); the disposition actor allowlist rule, its refusal copies, its "empty list blocks everything" posture, and the attestation caveat live at aggregate_validation.rs:150-207.
-- Writers exist for sources, requirements, fog, references, edges (writers.rs:11-230), domains (domain_writers.rs:6), resolutions/rules (rule_writers.rs:6,89), threads (thread_writers.rs:6), boundaries/topics/questions plus transitions (shaping_writers.rs:19-307), ideation trio and dispositions (ideation_writers.rs:8-141, proposal_writers.rs:100-259), batch landings (ideation_batches.rs:30-39,116), typed specs (typed_specs.rs:112-131), verification runs and bindings (verification_runs.rs:14-151, verification_bindings.rs:8, implementation_bindings.rs:127), dictionary reference (dictionary_reference.rs:24-39 writing state_dir/dictionary.json at :10-12).
-- Import validates then applies staged state under the publication lock (handlers/import.rs:61-93); merge-driver output is re-gated through shard-typed validation (handlers/merge_jsonl.rs:16-73; merge.rs:65-74).
-- Init is the only manifest writer (repo.rs:87, rollback journal :127-161); its flags sit at cli.rs:34-48.
-- `SDK_PROTOCOL_VERSION` is 5 with handshake refusal elsewhere (protocol.rs:25,54-63) and advertisement through EngineInfo (operations.rs:56-63).
-- Schema show derives from `IdeationArtifactKind` (handlers/schema.rs:19-36; cli/ideation.rs:22-30).
-- The wiki ownership manifest is unrelated (wiki/publish/manifest.rs:9-14). Cache/lock files are declared non-state (docs/state-format.md:70-73,99-105).
+- Core `Manifest` holds exactly `schema_version`, `scopes`, `disposition_actor_ids` with
+  `serde(default)` (`crates/provenance-core/src/model/manifest.rs:25-31`); it has no
+  `deny_unknown_fields`, so unknown keys are silently ignored today.
+- `Manifest::default_with_scope` writes an empty `disposition_actor_ids`
+  (`model/manifest.rs:33-43`, `crates/provenance-core/src/scope.rs:78`), and `init` serializes
+  whatever the manifest holds (`crates/provenance-cli/src/handlers/repo.rs:87`), so every fresh
+  init ships the key with `[]` (`crates/provenance-cli/tests/cli_init.rs:49`).
+- `IdentityType { human, agent, service }` exists with serde renames and `parse`
+  (`crates/provenance-core/src/model/ideation.rs:74-93`); the CLI disposition handler already
+  parses actor type through it (`crates/provenance-cli/src/handlers/dispositions.rs:41`).
+- Store reads go through `StateStore::manifest` (`state_store.rs:94-101`) and the
+  `deny_unknown_fields` `ManifestProjection` (`state_store.rs:56-63`) used by `closed_manifest_scope`
+  (:103-120) via `deserialize_closed` (`readers.rs:259`). Repo parsing is the third reader
+  (`repo.rs:186-190`).
+- The aggregate validator is the ideation gate (`aggregate_validation.rs:51-115`); the allowlist
+  rule, its empty-list posture, its refusal copies, and the attestation caveat live at
+  `aggregate_validation.rs:150-207`; the trigger test sits at :376-413.
+- `IdeationAggregate.disposition_actor_ids` is fed from `ideation_batches.rs:110,129,139,223`,
+  `ideation_writers.rs:115,225`, `proposal_writers.rs:157,184,251`, `handlers/import.rs:66`, and
+  `handlers/check.rs:100`; the public actor-keyed APIs are `validate_ideation_scope_with_actor_ids`
+  (`ideation_batches.rs:133-141`) and `list_proposal_cards_with_actor_ids`
+  (`state_store.rs:283-289`).
+- Nearly all shard mutations funnel through `StateStore::mutate_jsonl_records`
+  (`publication.rs:458-470`, inside `with_repository_publication` :46-65) or direct
+  `mutate_jsonl_locked` calls (`verification_runs.rs:82,130`). Named outliers that bypass both:
+  `set_project_dictionary` (`dictionary_reference.rs:31-37`, direct `std::fs::write`), import's
+  staged whole-state swap (`handlers/import.rs:207-286`), and init's manifest write
+  (`repo.rs:129-133`).
+- `ShardFamily` recognizes edges, landings, requirements, rules; everything else merges unchecked
+  (`merge/validation.rs:33-47,112`). Merge output without a shard path is untyped and, with
+  `--output`, written unchecked (`merge_jsonl.rs:28-58`). `merge_records` inspects only `id`
+  (`merge.rs:65-148`). The dispositions shard path
+  `.provenance/state/scopes/<scope>/ideation/dispositions.jsonl` is not a recognized family
+  (`shards.rs:118-123`).
+- The swarm CLI refuses dispositions in merge output (`swarm_backtrace.rs:77-79`), while the store
+  API `land_ideation_batch` accepts them (`state_store.rs:70-82`, `ideation_batches.rs:30-39`).
+- `SDK_PROTOCOL_VERSION` is 5 with handshake refusal elsewhere (`protocol.rs:25,54-63`) and
+  advertisement through `EngineInfo` (`operations.rs:56-63`). `TypedSpecInput` denies unknown
+  fields (`crates/provenance-core/src/protocol/typed_spec.rs:18-32`).
+- `requirement_reviews` writes ride `mutate_jsonl_records`
+  (`requirement_reviews.rs:75,101`) and are invoked from `apply_typed_spec`
+  (`typed_specs.rs:232`) and `begin_verification` (`verification_runs.rs:112`).
+- File sizes measured this session: `publication.rs` 476; `ideation_batches.rs` 491;
+  `shaping_writers.rs` 468; `import.rs` 437; `manifest.rs` 44.
+- `init` flags live at `cli.rs:34-48` with semantics at `repo.rs:82-86`; re-init preserve behavior
+  is golden-tested (`cli_init.rs:89-118`).
+- Docs anchors: `docs/state-format.md:5` (manifest sentence), :7-18 (additive stance), :70-75 and
+  :99-106 (cache/lock non-state), :115-120 (graph-reference exclusion); `docs/cli.md:18` (init
+   example), :376-389 (schema helpers), :395-399 (attestation), :435 (fog);
+  `docs/adr/0001-immutable-proposal-lifecycle.md:14` (allowlist statement).
 
-Inferences (judgment, pending reviewer disposal via the open questions)
+Inferences (judgment, not code facts)
 
-- "Single aggregate-validator choke point" is best realized as one pure policy function beside the aggregate validator, invoked from each enumerated seam, because non-ideation writers never enter aggregate validation today (files cited above).
-- The "one SDK protocol-bump window" maps naturally onto raising `SDK_PROTOCOL_VERSION` 5→6 alongside the actor-claim fields; nothing in the inputs pinned the number, only the mechanism.
-- Post-window refusal of the legacy key is mechanical once `ManifestProjection` drops the field; core `Manifest` additionally needs `deny_unknown_fields` or it would ignore stale keys silently (core struct lacks the attribute today, manifest.rs:25-31).
-- Operation-to-capability assignments, the family boundaries, default-deny, bootstrap exemption, and identifier syntax details are proposals, not recorded decisions; open questions 1-8 hold them for disposal.
+- "One shared policy choke" is realized as one pure function beside the aggregate validator because
+  non-ideation writers never enter aggregate validation today.
+- Classifying a resource by shard path inside the primitives is resource identification, not claim
+  discovery; the prohibition on path sniffing targets the principal, which only ever comes from the
+  explicit claim.
+- The window numbers (6 opens, next bump closes) are inference from the current constant; the
+  mechanism is settled.
+- The scope reading for repo-global resources (capability required on every scope then present) is
+  this plan's fail-safe proposal, not a recorded decision; implementation may refine it in review
+  without touching the capability set.
+- Duplicate `(actor_id, scope)` refusal and the exact refusal wordings are proposed goldens, fixed
+  at implementation review.
