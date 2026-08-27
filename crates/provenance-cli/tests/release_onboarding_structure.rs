@@ -44,6 +44,16 @@ fn cargo_install_emits_the_exact_init_next_step_from_the_cli_build_script() {
 }
 
 #[test]
+fn windows_cli_reserves_enough_main_thread_stack_for_argument_parsing() {
+    let build_script = fs::read_to_string(workspace_root().join("crates/provenance-cli/build.rs"))
+        .expect("read provenance-cli build script");
+
+    assert!(build_script.contains("CARGO_CFG_TARGET_OS"));
+    assert!(build_script.contains("CARGO_CFG_TARGET_ENV"));
+    assert!(build_script.contains("cargo:rustc-link-arg-bin=provenance=/STACK:8388608"));
+}
+
+#[test]
 fn cargo_provenance_is_a_std_only_forwarding_shim() {
     let workspace = workspace_root();
     let crate_root = workspace.join("crates/provenance-cli");
