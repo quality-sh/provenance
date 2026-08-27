@@ -235,9 +235,7 @@ to humans explicitly, never chosen silently.
   (`packages/provenance/src/engine.ts` 53), so no per-op SDK logic changes.
 
 *Gates.* Each operation flips its default path only after its differential suite passes. Until
-flip, it keeps answering over canonical, as today. No flag day.
-
-*Complexity L.*
+flip, it keeps answering over canonical, as today. No flag day. *Complexity L.*
 
 ---
 
@@ -348,8 +346,8 @@ cost carried by earlier workstreams).
 Each item blocks a named deliverable. None relitigates settled decisions.
 
 1. **Lock reversal window.** W3 picks snapshot-under-publication-lock with stated costs. Reverse it
-   before the reader-entry helper freezes if a cheaper accepted inconsistency is preferred. Blocks:
-   W3 flip order start.
+   before the reader-entry helper freezes if a cheaper accepted inconsistency is preferred.
+   Blocks: W3 flip order start.
 2. **Stamp representation tie-in.** Open decision #5 upstream owns serial-versus-digest. W1 stores
    both columns meanwhile. Confirm dual storage or pick now. Blocks: migration 018 final shape.
 3. **Budget exposure.** Do visit/scan budgets appear as request fields, config only, or both? Plan
