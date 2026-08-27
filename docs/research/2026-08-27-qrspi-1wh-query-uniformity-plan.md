@@ -13,11 +13,16 @@ Structure finished in the based-on document. Human disposal settled the authorit
 durable truth; the earlier shards-served authority position is superseded. This revision folds
 in an independent maintainability review: truthful catch-up, per-operation stamp semantics,
 atomic projection writers, one traversal core, digest-machinery reuse, corrected counts and
-citations, and file-growth gates. A strict audit then found three internal contradictions
-in this plan; this revision corrects them: one catch-up skip algorithm, serial allocation
-that survives pruning and journal loss on a durable floor, and an owned async-safe
-publication guard that replaces the withdrawn `block_on` bridge. It adds no new positions
-on other settled questions.
+citations, and file-growth gates. One audit round then corrected three internal
+contradictions: one catch-up skip algorithm, serial allocation on a durable floor, and an
+owned async-safe publication guard that replaces the withdrawn `block_on` bridge. A final
+audit found two blockers and one serial-state ambiguity; this revision fixes them: every
+full-freshness catch-up now hashes the complete canonical bytes of every projection family,
+because a write journal cannot prove absence of writes that bypass it; the process-global
+holder registry is withdrawn for one owned publication guard passed as an explicit
+capability; and the durable head is normalized at entry and after every commit, with serial
+comparison scoped to the projection instance. It adds no new positions on other settled
+questions.
 
 Path shorthand: `core` = `crates/provenance-core/src`, `store` = `crates/provenance-store/src`.
 Citations give file and line range under those roots unless a full path is needed.
@@ -30,14 +35,17 @@ carries a stamp: a monotonic serial plus a projection digest covering every fami
 stores (W1). The stamp names the attested domains and the live constituents it does not
 attest (W3 table). Readers default to catch-up: compare stamp to canonical, materialize what
 changed, answer locally. A response may claim full freshness only under the W2 truth rules:
-complete shard bytes are hashed whenever the journal cannot prove event coverage. Strict
-refusal is opt-in through one policy knob (W5).
+the catch-up pass reads and hashes the complete canonical bytes of every projection family;
+size, mtime, and journal coverage never replace that hash. Strict refusal is opt-in through
+one policy knob (W5).
 
 Incremental materialization is the steady-state path (W2). Total reload is bootstrap and
-repair only. Every write to `provenance.db`, including total rebuild, holds the repository
-publication lock across migrations and transaction commit through an owned async-safe
-publication guard (W2). Writers record invalidation events in a journal module beside
-`publication.rs`; the guard and its lock helpers live in a sibling module too.
+repair only; unchanged families are not reparsed and their rows are not rewritten. Every
+write to `provenance.db`, including total rebuild, holds the repository publication lock
+across migrations and transaction commit through one owned async-safe publication guard,
+passed as an explicit capability to locked helper variants (W2). Writers record invalidation
+events in a journal module beside `publication.rs`; the guard, the locked helper variants,
+and the journal live in sibling modules.
 
 The eight operations survive as contract presets over one Relation traversal core with two
 declared provider fronts (W4). Domain and Boundary become addressable through a superset node
@@ -109,9 +117,9 @@ doc State classes row, based-on document lines 256–264). Open question 5 below
 (`crates/provenance-store/migrations/001_initial_cache.sql` … `017_remove_services_shards.sql`),
 numbered 018. It creates the three family tables plus: a `projection_revision` table (serial
 INTEGER primary key, digest TEXT, created_at) and a `projection_family_digests` table
-(scope_id, family, digest, record_count, size_bytes, mtime_ns) for cheap W2 comparisons. The
-metadata columns are the necessary half of the W2 skip rule; proven journal coverage is the
-other half (W2 skip rule). Store serial and digest together because open
+(scope_id, family, digest, record_count, size_bytes, mtime_ns). The digest column is the
+baseline for the W2 step-3 comparison; `size_bytes` and `mtime_ns` are diagnostic metadata
+and never license a skip (W2 truth rules). Store serial and digest together because open
 decision #5 upstream (companion doc line 442) has not fixed the representation; both columns
 avoid a later migration.
 
@@ -136,8 +144,9 @@ makes false freshness claims; that is why the disposal demands this domain exist
 **W2 — Incremental materialization, journal, atomic writers**
 
 *Goal.* Steady-state refresh stops deleting sixteen tables per pass (`materialize.rs` 45–68).
-Catch-up applies only what changed and may claim freshness only when the truth rules hold.
-Every projection write is atomic under the publication lock.
+Catch-up reparses and rewrites only what changed, verifies every family by complete-byte
+hashing, and may claim freshness only when the truth rules hold. Every projection write is
+atomic under the publication lock.
 
 *Facts — the unlocked write window today.* `materialize_state` (`materialize.rs` 19–43)
 takes the publication lock only for its snapshot (`materialize.rs` 20, via
@@ -217,8 +226,9 @@ the caller waits on itself forever.
 *Design — owned publication guard (inference; replaces the bridge).* A new sibling module
 `store/publication/guard.rs` lands before any `publication.rs` edit; `publication.rs` gains
 only `mod guard;`, a re-export, and delegation, beside the existing siblings
-(`publication.rs` 11, 474, 476). The module owns one canonical lock primitive — the
-exclusive advisory file lock on `layout.publication_lock_path()` — behind two entry shapes:
+(`publication.rs` 11, 474, 476). The module holds the guard, the locked `*_under_guard`
+helper variants, and one canonical lock primitive — the exclusive advisory file lock on
+`layout.publication_lock_path()` — behind two entry shapes:
 
 - `publication_guard(layout) -> anyhow::Result<PublicationGuard>`, the async entry. The
     blocking lock wait runs on the runtime's blocking pool (`tokio::task::spawn_blocking`;
@@ -229,27 +239,36 @@ exclusive advisory file lock on `layout.publication_lock_path()` — behind two 
     `block_on`, no dedicated bridge thread, and no worker thread blocks while the guard
     is held; only the acquisition wait can block, and it blocks off the workers.
 - `with_repository_publication`, the existing synchronous entry. Its body delegates
-    acquisition, holder bookkeeping, recovery, and release to the same guard-module
-    helpers. The 48 production call sites keep one lock primitive and one behavior. The
+    acquisition, recovery, and release to the same guard-module helpers, over the same
+    low-level lock acquisition primitive, and keeps the current synchronous nesting reuse
+    for callers that nest on one thread (`HELD_LOCKS`, `publication.rs` 25–27, 57–59),
+    unchanged. The 48 production call sites keep one lock primitive and one behavior. The
     guard entry honors the same read-only bypass (`read_only::active`, `publication.rs`
     51–53).
 
-Holder bookkeeping moves from the thread-local into one process-global registry keyed by
-lock path. A holder is recorded by task id for async holders and thread id for sync
-holders, so nesting is recognized after task migration, and a nested request reuses the
-held lock instead of opening a second file description. Concrete case: the rebuild holds
-the guard and calls `snapshot_state` (`materialize.rs` 20; `publication.rs` 400–412); the
-inner synchronous request matches the same task in the registry and runs inside the held
-lock.
+*Design — explicit guard capability, no holder registry (final-audit correction; replaces
+the process-global registry).* The earlier text moved holder bookkeeping into one
+process-global registry keyed by lock path and indexed by task and thread ids. That design
+is withdrawn: hidden global state is complex, and this plan needs no reentrancy across
+await points. One owned `PublicationGuard` is the only holder record. The async
+materializer acquires it once and passes an explicit `&PublicationGuard` capability to
+locked helper variants — for example `snapshot_state_under_guard(&guard, layout)` in place
+of `snapshot_state` (`publication.rs` 400–412) inside `materialize_state`
+(`materialize.rs` 20). A helper that takes the guard reference cannot be called without a
+held guard; that is a compile-time API boundary, checked by the type system where
+practical, not by runtime state. Helpers under the async path never reacquire the
+publication lock. No task ids, no thread ids, no task-local registry, no global registry,
+no `block_on`, no dedicated bridge thread.
 
-*Deadlock rules for the new path.* One: never open a second description of a held lock
-file; the registry serves nested requests from the lock already held. Two: the publication
-lock stays the outermost lock — journal appends and shard locks are leaf locks taken only
-inside a held guard or publication section, and no helper takes a leaf lock before
-requesting the guard. Three: nothing running under a held guard spawns and awaits a task
-that itself requests the publication lock. Four: while the guard is held, the holder
-awaits only work that needs no second publication section — migrations, the one SQLite
-transaction, journal append, journal prune.
+*Lock order (stated once, simple).* The publication lock is the outermost lock. Journal
+appends, shard locks, and the SQLite file are leaf locks, taken only inside a held guard
+or publication section; no helper takes a leaf lock before requesting the guard. Locked
+helpers take `&PublicationGuard` and never request the publication lock. While the guard
+is held, the holder awaits only work that needs no second publication section —
+migrations, the one SQLite transaction, journal append, journal prune, head fsync. Nothing
+running under a held guard spawns and awaits a task that itself requests the publication
+lock. Plan code never nests the two entry shapes: a guard scope calls only
+`*_under_guard` helpers; a synchronous publication section calls only synchronous code.
 
 *Design — journal module (review mandate: place it before growing `publication.rs`).*
 `publication.rs` is 476 lines today (`wc -l`), against the hard 500-line limit per Rust file.
@@ -259,142 +278,180 @@ only `mod journal;` plus re-exports. Journal entry: `{ sequence, scope, family, 
 operation }`, appended as JSONL under the cache directory. Events carry family names from
 `PROJECTION_FAMILIES`; families with no SQLite table are recorded but ignored by catch-up.
 
-*Serial space (review mandate rewrite; one monotonic serial over a durable floor).*
-(Audit correction: the earlier text seeded allocation from the journal tail; pruning can
-empty that tail, so that seeding is withdrawn.) One monotonic serial space covers journal
-sequences and `projection_revision.serial`. Three durable values bound it: the stored
-revision serial (W1's `projection_revision` table), the journal tail (append-only JSONL;
-each event line carries its sequence), and a sequence head — the next sequence the
-allocator will hand out — kept as one small durable record in the journal directory.
-Design rules (inference):
+*Serial space (review mandate rewrite; one monotonic serial over a normalized durable
+head).* (Audit corrections: tail-seeded allocation was withdrawn because pruning can empty
+the tail; the final audit adds head normalization at entry, the post-commit head fsync,
+and the restart-scope statement.) One monotonic serial space covers journal sequences and
+`projection_revision.serial`. Three durable values bound it: the stored revision serial
+(W1's `projection_revision` table), the journal tail (append-only JSONL; each event line
+carries its sequence), and a sequence head — the next sequence the allocator will hand
+out — kept as one small durable record in the journal directory. Design rules
+(inference):
 
-- Allocation. Allocation happens inside the guard scope. The next sequence is
-    `floor + 1`, where `floor` is the highest of: `sequence_head − 1`, the highest
-    sequence in the journal tail, and the stored revision serial. Durable write order per
-    event: append and fsync the event line, then advance the sequence head. A crash
-    between canonical commit and append leaves both tail and head behind; the floor still
-    never reuses a number. A crash between append and head advance leaves the tail ahead
-    of the head; the floor takes the max, so no sequence is reused.
-- Coverage bounds. The window a pass must account for is sequences
-    `stored_serial + 1 ..= head − 1`. The coverage floor is the stored serial; the
-    coverage high-water is `head − 1`. The window is proven when the tail holds a gapless
-    run anchored at `stored_serial + 1` and reaching `head − 1`, or when the window is
-    empty because `head − 1 == stored_serial`. Pruning removes only drained events, so
-    pruning can never empty the window below the floor.
-- Commit and rollback. One SQLite transaction commits rows, the new revision row (serial
-    plus digest), and the refreshed `projection_family_digests` rows together, or not at
-    all. The new serial is `max(stored_serial + 1, highest drained sequence, tail
-    high-water at pass start)`. A rollback consumes nothing durable: floors recompute
-    from durable state on the next pass, and because every committed serial is at least
-    `stored_serial + 1`, no committed revision ever shares a number with another. Pruning
-    runs after commit; a crash before it leaves drained events in the tail, the next pass
-    re-drains them harmlessly (step 2 re-derivation is idempotent) and prunes again.
-- No-restart rule. While any stored revision survives, every later allocation exceeds it —
-    whatever happened to the journal. A pruned-empty tail, a lost journal file, or a
-    truncated tail all raise the floor from the stored serial. Only total cache loss
-    (database, journal, and head gone together) leaves no surviving revision; the space
-    may then restart at 1, and the digest distinguishes the new stamp domain. Stamps are
-    cache-local; serial comparison across a total-loss restart is not promised.
-- Loss behavior. Journal lost or unreadable with the database alive: the floor is the
-    stored serial, the head rebuilds at `stored_serial + 1`, and the pass can prove no
-    coverage, so it hashes complete shard bytes for every family (skip rule below); the
-    refreshed family digest rows re-establish coverage in that commit. Database lost with
-    the journal alive: total rebuild seeds its serial from the same floor (`max(tail
-    high-water, head − 1)` when either survives, else 1), so surviving journal numbers
-    are never reused downward. Both lost: rebuild from 1.
+- Entry normalization. The first step under the guard, before any allocation or coverage
+    calculation, repairs the head: read the stored revision serial, the head record, and
+    the highest sequence in the journal tail; the normalized head is one plus the highest
+    of the stored revision serial, the head record minus one, and that tail high-water.
+    Persist and fsync the record when it moves. The head is derived state; any durable
+    component that survives a crash raises it again.
+- Allocation. Allocation happens inside the guard scope, after normalization. An event
+    consumes the current head: append and fsync the event line, then advance the head
+    record by one. A crash between canonical commit and append leaves both tail and head
+    behind; entry normalization still never reuses a number. A crash between append and
+    head advance leaves the tail ahead of the head; normalization takes the max, so no
+    sequence is reused.
+- Coverage bounds. The window a pass drains is sequences `stored_serial + 1 ..= head − 1`,
+    computed after entry normalization. While the pass holds the guard, writers cannot
+    append, so the tail is frozen for the pass and the window it computes is complete. A
+    gapped or truncated tail narrows what step 2 drains; it cannot hide a change, because
+    step 3 hashes every family regardless.
+- Commit, head fsync, prune. One SQLite transaction commits rows, the new revision row
+    (serial plus digest), and the refreshed `projection_family_digests` rows together, or
+    not at all. The new serial is the normalized head. After the transaction commits, the
+    pass normalizes and fsyncs the head to at least committed serial plus one, and only
+    then prunes the drained events, so the tail holds only sequences above the new serial.
+    A crash between the database commit and head normalization recovers from the stored
+    revision: the committed serial is durable in SQLite, entry normalization raises the
+    head above it on the next pass, and no sequence at or below it is reused. A crash
+    before pruning leaves drained events in the tail; the next pass re-drains them
+    harmlessly (step 2 re-derivation is idempotent) and prunes again. A rollback consumes
+    nothing durable: the head never moved for the rolled-back pass, no committed revision
+    ever held the number, and the next pass recomputes it.
+- Monotonicity and restart scope. While any durable component survives, the next
+    committed serial exceeds every serial that component last showed. The stored revision
+    floors the head while the database lives. When the database is lost with the journal
+    or head alive, rebuild seeds its serial from the same normalization max
+    (`max(tail high-water, head − 1)`, else 1), so surviving journal numbers are never
+    reused downward. Only total cache loss (database, journal, and head record gone
+    together) permits a restart at 1. That restart is scoped to the projection instance:
+    serials carry no meaning across instances, and the digest does not reliably
+    distinguish a restart, because identical canonical bytes produce the same digest. How
+    the wire stamp keeps clients from comparing serials across instances is open question
+    7, and it blocks the stamp freeze.
+- Loss behavior. Journal lost or unreadable with the database alive: entry normalization
+    floors the head at `stored_serial + 1`, and the pass runs its normal complete-byte
+    hashing; the refreshed family digest rows keep the comparison baseline current.
+    Database lost with the journal alive: total rebuild seeds its serial from the
+    normalization max above. Both lost: rebuild from 1.
 - Interleaving. Rebuild and catch-up serialize on the publication guard. A catch-up that
     starts after a rebuild's commit sees the rebuild's serial and drains nothing. A
-    rebuild re-derives every family from complete bytes, so it re-establishes full
-    coverage at its own serial.
+    rebuild re-derives every family from complete bytes and stores fresh family digest
+    rows at its own serial.
 
 *Truthful catch-up (review mandate).* `catch_up_state(layout) -> CatchUpReport` beside
-`materialize_state`:
+`materialize_state`. All steps run inside one guard scope (W2 guard design):
 
+- Step 0. Take the publication guard; run serial-space entry normalization.
 - Step 1. Read stored revision. Absent or behind schema → run `materialize_state`.
-- Step 2. Drain journal events newer than the stored serial. For each drained
-  (scope, family), re-read that family's complete shard bytes, re-derive rows, and replace
-  them keyed by scope and id. Events are hints that name what to re-derive; row content
-  always comes from shard bytes, so a phantom event (canonical rollback after append) can
-  never inject a row that canonical does not hold.
-- Step 3. Byte-verify the rest, under one skip rule. (Audit correction: the earlier text
-    let a family with no event skip on size and mtime alone; that contradicted the truth
-    rule below and the same-size test, and is withdrawn.) For each stored (scope, family)
-    not re-derived in step 2: skip on a size and mtime match against
-    `projection_family_digests` only when this pass proved event coverage for that exact
-    scope and family — the window `stored_serial + 1 ..= head − 1` is proven per the
-    serial-space rules, and every event in it naming this scope and family was applied in
-    step 2, or no event in it names this scope and family. Any missing proof forces a
-    complete-byte hash: read the family's complete shard bytes, replace rows when the
-    digest differs, and refresh the family digest metadata either way.
+- Step 2. Drain journal events in the window `stored_serial + 1 ..= head − 1`. For each
+  drained (scope, family), re-read that family's complete shard bytes, re-derive rows,
+  and replace them keyed by scope and id, and hash the bytes read so the family digest
+  row is refreshed. Events are hints that name what to re-derive; row content always
+  comes from shard bytes, so a phantom event (canonical rollback after append) can never
+  inject a row that canonical does not hold.
+- Step 3. Hash-verify every remaining family. (Final-audit correction: the earlier text
+    let a family with no event skip on size and mtime inside a proven journal window, and
+    then admitted that an out-of-band same-size edit with a restored mtime could defeat
+    that check. The admitted case and the skip rule are withdrawn together: a write
+    journal cannot prove absence of writes that bypass it.) For each stored (scope,
+    family) not re-derived in step 2: read the family's complete shard bytes and hash
+    them. When the digest equals the stored family digest, the bytes are identical to the
+    bytes the stored rows were derived from, so the pass skips deserialization and row
+    replacement and refreshes only the family digest row's observed metadata. When the
+    digest differs, the pass re-derives rows from those bytes and replaces them. Size and
+    mtime never replace the hash: a matching size with a restored mtime is still hashed,
+    and so is a moved mtime.
 - Step 4. Commit rows, the new revision row, and the refreshed family digest rows in one
-    transaction; then prune drained journal events, so the tail holds only sequences above
-    the new serial.
+    transaction; then normalize and fsync the head to at least committed serial plus one;
+    then prune drained journal events, so the tail holds only sequences above the new
+    serial.
+
+Step 3 is what makes a full-freshness claim truthful, and it is also why incremental
+materialization survives: a family whose bytes hash to the stored digest is never
+reparsed and its rows are never rewritten. Total reload stays bootstrap and repair only.
 
 *Freshness claims (the truth rules).* A response may claim full freshness for a domain
-only when every stored (scope, family) behind it was either re-derived from complete shard
-bytes in step 2 or skipped in step 3 under the proven-coverage rule. The journal proves
-coverage only when it is present, readable, anchored at `stored_serial + 1`, gapless
-through `head − 1`, and fully drained. Journal off, lost, unreadable, truncated, gapped,
-unanchored, or pruned past its floor proves nothing: step 3 hashes complete shard bytes
-for every family before any full-freshness claim. Metadata never licenses a skip by
-itself. Default:
-`cache.catchup_journal` is ON when `read.freshness_policy` is `catch_up` or
-`refuse_stale`; journal-off remains possible but pays full hashing per catch-up.
+only when the pass that produced the current stamp read and hashed the complete canonical
+bytes of every stored (scope, family) behind it — re-derived in step 2, or hash-compared
+in step 3 — and committed the matching family digest rows. Nothing else licenses the
+claim. The journal is a work hint. It names what to re-derive, and it can never prove
+that unjournaled bytes are unchanged, because it cannot see writes that bypass it.
+Journal off, lost, unreadable, truncated, gapped, or pruned past its floor changes only
+which families step 2 covers; step 3 hashes every family either way, so none of those
+states weakens a freshness claim. A pass that cannot read a family's complete bytes fails
+and commits nothing, so it makes no freshness claim (`refuse_stale` surfaces that as the
+typed refusal). Default: `cache.catchup_journal` is ON when `read.freshness_policy` is
+`catch_up` or `refuse_stale`; the journal stays a default-on work hint, never proof.
 
 *Crash-consistency analysis.*
 
 - Repository side keeps its existing recovery machinery (`publication.rs` 177–208). W2 adds
   no second recovery story there.
 - Torn window: crash between canonical commit and journal append loses the event and
-    leaves both tail and head behind the canonical truth. The uncovered family then fails
-    its metadata check (the commit moved size or mtime) or is hashed, so step 3 detects
-    it; the sweep is required, not optional tuning. Correctness never depends on the
-    journal; the journal only licenses skips.
+    leaves both tail and head behind the canonical truth. Step 3 hashes every family
+    regardless, so the un-journaled family shows a digest difference and the pass
+    re-derives it. Detection never depended on the journal or on metadata movement; the
+    journal only saves that family the digest-mismatch discovery. Correctness never
+    depends on the journal.
 - Head window: crash between journal append and head advance leaves the tail ahead of the
-    head. The allocation floor takes the max of both, so no sequence is reused and the
+    head. Entry normalization takes the max of both, so no sequence is reused and the
     next pass drains the event.
 - Lost window: an externally lost or truncated event line leaves a gap or an unanchored
-    tail. The next pass proves no coverage and hashes every family (truth rules above);
-    it never answers from unproven metadata.
+    tail. Step 2 drains what survives; step 3 hashes every family regardless, so the
+    change the lost line named is still found. A truncated tail can lower the tail
+    high-water, but entry normalization still floors the head at the stored revision and
+    the head record.
 - SQLite side: one transaction per catch-up or rebuild. A killed process leaves the
     previous stamped state readable, never half-applied. Rows, the revision row (serial
-    and digest), and the family digest metadata commit together or not at all.
+    and digest), and the family digest rows commit together or not at all. A crash after
+    that commit but before head normalization and prune recovers from the stored
+    revision: entry normalization repairs the head, and re-drained events re-derive
+    idempotently.
 - Rollback behavior: canonical rollback after journal append leaves a phantom event;
     step 2 re-derives from bytes, so the phantom is harmless. SQLite rollback leaves the
-    stored serial and digests untouched; the allocated serial was never durable, and the
-    next pass recomputes the floors and may reuse the number, because no committed
-    revision ever held it.
+    stored serial and digests untouched; the pass never committed, so the normalized head
+    was never claimed by a revision, and the next pass recomputes it and may reuse the
+    number, because no committed revision ever held it.
 - Interleaving: rebuild and catch-up serialize on the publication guard. A catch-up that
     starts after a rebuild's commit sees the rebuild's serial and drains nothing.
 - Idempotence: re-derived rows keyed by scope and id. Replaying drained events converges
     to the same rows.
-- Cost honesty (inference): journal-off catch-up hashes O(total shard bytes) per pass.
-    Journal-on steady state re-derives only drained families and hashes only families the
-    metadata check flags; an unprovable journal hashes everything. Known residual, stated
-    not solved: inside a proven window, an out-of-band same-size edit that also restores
-    the stored `mtime_ns` defeats metadata comparison. Writer-path changes are always
-    journaled, so only such hand edits are exposed. No fixture corpus exists to measure
-    costs yet.
+- Cost honesty (inference): every catch-up pass that may claim full freshness reads and
+    hashes O(total canonical bytes) — the complete shard bytes of every projection
+    family. That is the stated price of truthful freshness; no cheaper check (size,
+    mtime, journal coverage) can prove that unjournaled bytes are unchanged. The journal
+    still bounds the expensive half of the work: families whose digest matches the stored
+    baseline are not reparsed and their rows are not rewritten, so an unchanged family
+    costs one read and one hash. Total reload remains bootstrap or repair. No fixture
+    corpus exists to measure costs yet.
 
 *Test strategy.* Equivalence property leads: after every supported trigger sequence,
 catch-up output compares equal — rows and digest — to a fresh total rebuild. Crash injection
 drives failures at labeled points (canonical committed / journal appended / head advanced /
-db commit pending) and asserts a consistent readable state plus correct recovery. One test
-per enumerated trigger, including hand-edited JSONL. Replay test drains the same journal
-twice and asserts zero row churn. Same-size mutation test (review mandate, aligned to the
-one skip rule): rewrite one shard with equal byte length and an explicitly reset mtime —
-journal off; and again journal on with the tail truncated, so the journal proves no
-coverage. Both runs must detect the change through hashing (assert on the hasher's
-invocation count), which pins the rule that metadata alone never licenses a skip for an
-uncovered family. A third leg pins the licensed case: journal on, window proven, no event
-for the family, metadata match — the pass skips the hash and stays incremental. Serial
-tests: after a pruned-empty tail, after journal and head loss, and after a truncated tail,
-the next committed serial still exceeds the stored revision serial; a gapped tail forces a
-full hash; total cache loss restarts at 1 with a different digest. Guard tests: catch-up
-holds the guard across migrations and commit while a concurrent canonical write waits; a
-nested synchronous publication call inside a held guard completes through the registry; no
-held scope opens a second lock file description. Interleaving test: rebuild against
-catch-up under the guard; assert ordering and a single serial progression.
+db commit pending / db committed before head fsync) and asserts a consistent readable state
+plus correct recovery, including head recovery from the stored revision. One test per
+enumerated trigger, including hand-edited JSONL. Replay test drains the same journal twice
+and asserts zero row churn. Same-size mutation tests (final-audit correction, aligned to
+unconditional hashing) share one fixture: rewrite one shard with equal byte length and an
+explicitly reset mtime. Leg one, journal off: the pass hashes the edited family, detects
+the digest change, and replaces the rows. Leg two, journal on with a drained window and no
+event for the family — the exact case the withdrawn skip rule got wrong: the pass still
+hashes the family although size and mtime match (assert on the hasher's invocation count),
+detects the change, and replaces the rows. Leg three, journal on with no out-of-band edit:
+every family is hashed, every digest matches the stored baseline, and no family is
+reparsed or rewritten (assert on parse and row-write counters), which pins incremental
+materialization. Serial tests: after a pruned-empty tail, after journal and head loss, and
+after a truncated tail, entry normalization repairs the head and the next committed serial
+still exceeds the stored revision serial; a crash injected between the database commit and
+head normalization recovers from the stored revision; a gapped tail still hashes every
+family; total cache loss restarts at 1, with serials scoped to the fresh projection
+instance (open question 7 owns cross-instance stamp semantics). Guard tests: catch-up
+holds the guard across migrations and commit while a concurrent canonical write waits;
+`snapshot_state_under_guard` runs inside a held guard and opens no second lock file
+description; locked helpers take `&PublicationGuard`, so a call without a held guard is a
+compile error; the synchronous `with_repository_publication` path keeps its current
+nesting behavior, covered by the existing publication tests. Interleaving test: rebuild
+against catch-up under the guard; assert ordering and a single serial progression.
 
 *Gates.* The equivalence suite must pass before W5 flips any default serving path to cached
 mode.
@@ -631,8 +688,9 @@ after the harness runs green on the whole corpus. *Complexity L.*
 *File-growth gates (review mandate; the hard limit is 500 lines per Rust file, tests
 included; no CI line-count gate exists today, so this plan makes the discipline binding).*
 
-- `publication.rs` is 476 lines. Journal logic (`publication/journal.rs`) and the async
-  publication guard (`publication/guard.rs`) land in sibling modules (W2) before any
+- `publication.rs` is 476 lines. Journal logic (`publication/journal.rs`), the owned
+  publication guard, and the locked `*_under_guard` helper variants
+  (`publication/guard.rs`) land in sibling responsibility modules (W2) before any
   `publication.rs` edit; `publication.rs` gains only module wiring and delegation.
 - Catch-up, sweep, and journal-drain logic land as responsibility modules beside the
   orchestrator: `store/cache/materialize/catch_up.rs` and `store/cache/materialize/sweep.rs`,
@@ -658,9 +716,12 @@ included; no CI line-count gate exists today, so this plan makes the discipline 
 - `read.visit_budget` and `read.scan_budget`: defaults fixed at implementation; requests may
   override downward within caps added in W3.
 - `cache.catchup_journal`: boolean enabling the write-side event journal. Default follows
-  the freshness policy: ON under `catch_up` and `refuse_stale`, OFF under `annotate_only`
-  unless set. Off means sweep-driven catch-up with full hashing: simpler, slower steady
-  state; allowed for repositories that want fewer moving parts.
+   the freshness policy: ON under `catch_up` and `refuse_stale`, OFF under `annotate_only`
+   unless set. The journal is a work hint, not a freshness proof: every full-freshness
+   catch-up hashes the complete canonical bytes of every family, with the journal on or
+   off. Off loses the drain hint and the precise event trail, so changed families are
+   found by digest comparison alone; allowed for repositories that want fewer moving
+   parts.
 
 *MCP consumer q82f handoff (settled by disposal).* Generation starts when all of these hold:
 
@@ -683,7 +744,7 @@ incremental mode. *Complexity M* (staging itself; cost carried by earlier workst
 Each item blocks a named deliverable. None relitigates settled decisions. Two earlier
 questions left this list. The lock-reversal question is gone because the disposal preserves
 snapshot-consistent reads. The journal-first ordering question is gone because, under the W2
-design, the journal only licenses skips and shard bytes decide truth, so its placement cannot
+design, the journal is a work hint and shard bytes decide truth, so its placement cannot
 affect correctness; the plan appends events after the canonical commit, inside the same
 locked section.
 
@@ -703,6 +764,12 @@ locked section.
 6. **cache.md amendment scope.** Stage 1 rewrites lines 3–9 for stamp semantics and removes
    the stale services and service-bindings wording from line 3. Confirm the rewrite angle
    before W5 stage 1. Blocks: rollout stage 1 docs landing.
+7. **Projection-instance identity in the stamp.** After total cache loss the serial space
+   may restart at 1, and the digest does not distinguish that restart when the canonical
+   bytes are identical. Either the wire stamp gains a projection-instance identifier, so
+   clients can refuse serial comparison across instances, or the client contract states
+   plainly that serials compare only within one projection instance. Blocks: W3 stamp
+   freeze and the q82f freshness guidance.
 
 === D. ACCEPTANCE CHECKLIST ===
 
@@ -718,11 +785,11 @@ commands or test invocations against fixtures, checked by a human reading output
 | Evidence hides which collection truncated (`evidence.rs` 60–63, OR merge 85) | Fixture where implementations and reviews both exceed limit; response shows true per-collection flags; each collection paginates to completion independently |
 | Domain/Boundary unaddressable (`NodeType` lacks them, `query.rs` 45 requires membership; GetQuery at 42–49) | `sdk get --node-type domain <id>` returns the record; neighbors traversal crosses `Requirement.domain_id`; serde round-trip includes new variants; gap outputs unchanged (harness green) |
 | Unlocked reads risk torn views (`queries.rs` 26–30 no lock; contrast `state_adapter.rs` 10) | Concurrency test interleaves a publication with reads; every observed response self-consistent, stamped serial matches snapshot contents; helper logs lock acquisitions |
-| Metadata-only sweep misses same-size edits (no mtime movement within timestamp resolution) | Same-size mutation test (W2): journal-off run and uncovered-family run both detect the edit through hashing; a metadata-only comparator demonstrably misses it on the same fixture |
+| Metadata-only comparison misses same-size edits, and journal coverage cannot prove unjournaled bytes unchanged | Same-size mutation tests (W2): journal-off and drained-window runs both hash the edited family and replace its rows; a size-and-mtime-only comparator demonstrably misses the edit on the same fixture, which is why size and mtime never license a skip |
 | Wildcard match arms erode the closed vocabularies | Source-scan gate fails when a `_` arm matches `RelationKind` or `NodeType` in a production crate; exhaustion proofs pin variant coverage (`edge_validation.rs` 54–123 pattern) |
 | Projection writers race canonical publications (today's unlocked window, `materialize.rs` 27–37) | Interleaving test (W2): rebuild and catch-up serialize under the publication guard; single serial progression; crash injection at labeled points leaves the previous stamped state readable |
-| Synchronous closure around async SQLite work would block a worker or self-deadlock on the thread-local reentrancy check (audit correction to the withdrawn `block_on` bridge) | Guard tests (W2): catch-up holds the guard across migrations and commit while a concurrent canonical write waits; a nested synchronous publication call inside a held guard completes through the registry; no held scope opens a second lock file description |
-| Serial restart after pruning or journal loss would order stamps wrongly (audit correction to the earlier tail-seeded allocation) | Serial tests (W2): after a pruned-empty tail, journal and head loss, and a truncated tail, the next committed serial still exceeds the stored revision serial; total cache loss restarts at 1 with a different digest |
+| Synchronous closure around async SQLite work would block a worker or self-deadlock on the thread-local reentrancy check (audit correction to the withdrawn `block_on` bridge) | Guard tests (W2): catch-up holds the guard across migrations and commit while a concurrent canonical write waits; `snapshot_state_under_guard` runs inside a held guard with no second lock acquisition; locked helpers take `&PublicationGuard`, so a guard-free call is a compile error; no held scope opens a second lock file description |
+| Serial restart after pruning, journal loss, or a crash between commit and head normalization would order stamps wrongly (audit correction to the earlier tail-seeded allocation) | Serial tests (W2): after a pruned-empty tail, journal and head loss, a truncated tail, and an injected crash between the database commit and head normalization, entry normalization repairs the head and the next committed serial still exceeds the stored revision serial; total cache loss restarts at 1, with serials scoped to one projection instance (open question 7) |
 
 === E. OUT OF SCOPE RESTATED ===
 
