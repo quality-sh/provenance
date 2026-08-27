@@ -85,7 +85,7 @@ This exposes the central contradiction of the brief. Rd classes fog as working s
 **7. Content-equality preconditions exist at per-record grain today.**
 `ideation_batches.rs:263-272`: "Once any assertion cites a record, that record is frozen: a replacement is accepted only when it serializes to exactly what is already stored." Enforced at `:274-289`. Note the retry shape. An identical replacement passes. Only a different replacement refuses. This matches what an unchanged Change Set retry needs. Same pattern elsewhere: "A review is identified by that exact restatement, so re-applying the same change never reopens a cleared review" (`state-format.md:56-63`).
 
-**8. Whole-set digests have one deployment here. The pain is documented.**
+**8. Whole-set digests have one deployment here. Its cost is documented.**
 `ideation_batches.rs:432-448`: the shipped-v1 fingerprint freezes a terminal set by SHA-256. "Membership is a property of the whole set, so a row appended beside genuine history changes the fingerprint and takes the whole shard down with it." A frozen audit tolerates this cost. Interactive planning likely would not. This shows seed A's price directly.
 
 **9. The merge driver can create canonical state that no local transaction produced.**
@@ -146,21 +146,21 @@ Four candidates survive. Each candidate section covers seven points: position, m
 
 *Position.* The precondition equals the existing `sha256:` digest over the target scope's v1 projection. `plan(ChangeSet, scope)` computes D from state. `commit(ChangeSet, scope, D, approvals)` recomputes D under the publication lock. Refuse unless equal.
 
-*Mechanism sketch.* Reuse `canonical_bytes` and `digest` verbatim. The single-definition doctrine holds by construction. Equal Change Set plus equal base gives equal digest. Rd invariant 2 follows free. Recompute sits inside `with_repository_publication` (finding 11), using its reentrancy. Storage: none; recomputed always. Transport: opaque self-versioned string. Refusal mirrors `GraphReferenceError::Mismatched{field:"base_graph_digest", expected, actual}` (`graph_reference.rs:50-54,342-352`).
+*Mechanism sketch.* Reuse `canonical_bytes` and `digest` verbatim. The single-definition doctrine holds by construction. Equal Change Set plus equal base gives equal digest. Rd invariant 2 then holds without added work. Recompute sits inside `with_repository_publication` (finding 11), using its reentrancy. Storage: none; recomputed always. Transport: opaque self-versioned string. Refusal mirrors `GraphReferenceError::Mismatched{field:"base_graph_digest", expected, actual}` (`graph_reference.rs:50-54,342-352`).
 
 *Preserves.* Lock order and recovery untouched. Single-digest doctrine untouched. Blind-put writers untouched. Read pins and write preconditions share one vocabulary. One concept fewer overall.
 
-*Interleave annoyance.* Maximum here. Any change to a projected family invalidates open plans — fog edit, claim, opened question (all projected, fact 6). Ordinary shaping poisons planning whenever they share a scope.
+*Interleave annoyance.* Maximum here. Any change to a projected family invalidates open plans — fog edit, claim, opened question (all projected, fact 6). When shaping and planning share a scope, ordinary shaping invalidates those plans.
 
 *Retry.* Unchanged Change Set plus unchanged base yields byte-identical digest. Admission is idempotent, matching the exact-serialization precedent (`ideation_batches.rs:274-289`). Moved base forces replan-and-reapprove, then the same Change Set replays.
 
-*Clone determinism.* Strongest footing available. The module exists so two agreeing machines print the same digits (`canonical.rs:1-7`).
+*Clone determinism.* The strongest base available. The module exists so two agreeing machines print the same digits (`canonical.rs:1-7`).
 
 *Merge driver.* A clean union changes D, forcing honest refuse-and-replan. Conflicts keep D unusable until resolution. No special cases anywhere.
 
-*Ceremony asymmetry.* Structurally broken. Fog needs no approval, yet every fog edit invalidates other actors' planned commits. Ceremony-free writes purchase cross-actor replans. Also: docs' family-scoped sketch (`cli.md:285-287`) cannot be honoured here.
+*Ceremony asymmetry.* Structurally broken. Fog needs no approval, yet every fog edit invalidates other actors' planned commits. Ceremony-free writes cause replans for other actors. Also: docs' family-scoped sketch (`cli.md:285-287`) cannot be honoured here.
 
-*What makes it wrong.* Suppose shaping and planning routinely interleave. Then refusal pressure rewards hold-the-lock mega-changes and review quality degrades. Maximum invalidation strength gets bought where minimum suffices.
+*What makes it wrong.* Suppose shaping and planning routinely interleave. Refusal pressure then encourages large write batches taken under one lock. Review quality degrades as a result. It applies maximum invalidation strength where minimum suffices.
 
 ---
 
@@ -172,7 +172,7 @@ Four candidates survive. Each candidate section covers seven points: position, m
 
 *Preserves.* Canonical-byte discipline as restriction of one function. Ownership and adoption checks precede writes. Retire-in-place lives intra-family (`retired:true` in the same family, captured). Multi-record atomicity rides staged publication.
 
-*Interleave annoyance.* Sharply reduced. Unfamily'd churn stops forcing replans. Fog still bites when the requirement family is touched; restatement plans inherently touch it. Disjoint records inside one family still collide: granularity is family-level, not record-level.
+*Interleave annoyance.* Sharply reduced. Unfamily'd churn stops forcing replans. Fog still triggers replans when the requirement family is touched; restatement plans inherently touch it. Disjoint records inside one family still collide: granularity is family-level, not record-level.
 
 *Retry.* Unchanged Change Set yields same family set and components. Idempotent admission results. Partial drift names the guilty family, telling clients whether replanning could help.
 
@@ -200,7 +200,7 @@ Four candidates survive. Each candidate section covers seven points: position, m
 
 *Merge driver.* Post-merge recomputation localizes trivially. Leaves rehash, ancestors fold up. Conflicts fail before publication, so lattices never observe conflicted intermediates.
 
-*What makes it wrong.* Complexity creep threatens. Component equivalence across canonicalizer evolution needs maintenance. B's soundness problem arrives multiplied by projection consumers trusting components. Over-engineering risk for v1 stands as candid criticism. Several benefits land in projections and queries, outside this bead's commitment.
+*What makes it wrong.* Complexity creep threatens. Component equivalence across canonicalizer evolution needs maintenance. B's soundness problem returns multiplied by projection consumers trusting components. This candid criticism applies: version 1 carries over-engineering risk. Several benefits land in projections and queries, outside this bead's commitment.
 
 ---
 
@@ -212,7 +212,7 @@ Four candidates survive. Each candidate section covers seven points: position, m
 
 *Preserves.* Total alignment with existing exact-state vocabulary. References and exports remain artifacts of committed graphs. Strongest audit story: a committed transaction pins *where* (commit) plus *what* (digest).
 
-*Interleave annoyance.* Pathological one way precisely: the commit component fires independent of graph movement. Any commit voids open tokens even in frozen scopes — README, Cargo.lock alike. Cure exists narrowly: `issue` checks only selected-scope canonical bytes (fact 5). Replicating narrowness demotes commit-mismatch to advisory metadata. Then D collapses into A plus provenance logging.
+*Interleave annoyance.* It fails in one specific way: the commit component fires independent of graph movement. Any commit voids open tokens even in frozen scopes — README, Cargo.lock alike. Cure exists narrowly: `issue` checks only selected-scope canonical bytes (fact 5). Replicating narrowness demotes commit-mismatch to advisory metadata. Then D reduces to A plus provenance logging.
 
 *Retry.* All parts revalidate means accept. Any part moved means named via ordered `Mismatched{field:…}`. Idempotent and diagnosable.
 
@@ -234,7 +234,7 @@ Four candidates survive. Each candidate section covers seven points: position, m
 
 **Decisions reserved explicitly to the human reviewer.**
 
-1. Choose among A (simplest, roughest edges), B (scoped; conditional on a closure audit never performed), C (most machinery, best locality, pays off projections too), D (provenance-rich; churn-hostile if strict, decays to A if loose). No ranking offered.
+1. Choose among A (simplest, roughest edges), B (scoped; conditional on a closure audit never performed), C (most machinery, best locality, also serves projections), D (provenance-rich; refuses often when strict; becomes A plus logging when loose). No ranking offered.
 2. Resolve the projection-boundary contradiction. Are fog and open Topics/Questions inside the write-precondition universe? Options visible: split write-time projection from reference projection; relocate fog out of `Requirement`; accept cross-actor replans as the price of one canonicalization. Docs gesture at family-scoped low-ceremony writes (`cli.md:285-287`).
 3. If B or C favoured: authorize the closure-proof programme. Enumerate each operation's true read/write families; evidence exists they span edges/bindings/reviews; registry-check them; conservative wide default for unaudited operations.
 4. Fix Git participation for v1. Either keep the engine commit-free (today's reality) with landing owned by humans/CI, or consciously open decision 9 for specific state classes, accepting shallow-CI constraints.
