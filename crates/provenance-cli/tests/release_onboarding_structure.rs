@@ -146,6 +146,17 @@ fn packed_ste_gate_runs_on_every_supported_release_target() {
 }
 
 #[test]
+fn pinned_actionlint_accepts_the_canonical_intel_runner() {
+    let config =
+        fs::read_to_string(workspace_root().join(".github/actionlint.yaml")).unwrap_or_default();
+
+    assert!(
+        config.contains("    - macos-15-intel"),
+        "actionlint 1.7.7 needs the newer hosted runner in its configured label set"
+    );
+}
+
+#[test]
 fn cargo_provenance_is_a_std_only_forwarding_shim() {
     let workspace = workspace_root();
     let crate_root = workspace.join("crates/provenance-cli");
