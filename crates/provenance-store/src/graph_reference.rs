@@ -1,7 +1,7 @@
 mod canonical;
 mod export;
 mod git;
-mod projection;
+pub(crate) mod projection;
 
 use camino::Utf8Path;
 use provenance_core::{ensure_supported_schema_version, SchemaVersion, SUPPORTED_SCHEMA_VERSION};
@@ -403,7 +403,7 @@ fn reference_identity(
     format!("grf1_{}", sha256(framed.as_bytes()))
 }
 
-fn incomplete(error: impl std::fmt::Display) -> GraphReferenceError {
+pub(super) fn incomplete(error: impl std::fmt::Display) -> GraphReferenceError {
     GraphReferenceError::Incomplete {
         detail: error.to_string(),
     }

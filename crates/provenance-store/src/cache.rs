@@ -3,6 +3,8 @@ mod health;
 mod impact;
 mod materialize;
 mod prime;
+mod projection_digest;
+pub(crate) mod projection_families;
 mod traceability;
 
 pub use gaps::*;
@@ -10,6 +12,7 @@ pub use health::*;
 pub use impact::*;
 pub use materialize::{materialize_empty_state, materialize_state};
 pub use prime::*;
+pub use projection_digest::projection_digest;
 pub use traceability::*;
 
 use crate::layout::ProvenanceLayout;

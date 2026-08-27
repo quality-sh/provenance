@@ -47,7 +47,7 @@ pub struct GraphExport {
     pub edges: Vec<Edge>,
 }
 
-pub(super) fn load_projection(
+pub fn load_projection(
     repository: &Utf8Path,
     scope: &str,
 ) -> Result<GraphExport, GraphReferenceError> {
