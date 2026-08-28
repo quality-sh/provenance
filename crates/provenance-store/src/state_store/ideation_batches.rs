@@ -2,12 +2,13 @@ use super::batch_merge::{
     ensure_scope, insert_all, merge_immutable, merge_replaceable, overlay_records,
 };
 use super::{
-    read_ideation_landings, read_jsonl, read_legacy_dispositions, IdeationLandingBatch, StateStore,
+    read_ideation_landings, read_jsonl, read_legacy_dispositions, IdeationLandingBatch,
+    MutationAuth, StateStore,
 };
 use crate::shards;
 use provenance_core::{
-    AssertionRecord, Contribution, DispositionRecord, IdeationAggregate, ProposalCard, ScopeId,
-    SynthesisPacket,
+    AssertionRecord, Capability, Contribution, DispositionRecord, IdeationAggregate, ProposalCard,
+    RbacClaim, ScopeId, SynthesisPacket,
 };
 use provenance_macros::rule;
 use std::collections::BTreeMap;
@@ -30,26 +31,32 @@ impl StateStore {
         read_ideation_landings(&shards::ideation_landings_path(&self.layout, scope))
     }
 
+    /// Lands a swarm batch. Beyond the `execute` capability, dispositions in
+    /// the batch run the family-12 human-ratification check per row at this
+    /// store seam, through the aggregate validation below.
     pub fn land_ideation_batch(
         &self,
+        claim: Option<&RbacClaim>,
         scope: &ScopeId,
         incoming: IdeationLandingBatch,
         replace: bool,
     ) -> anyhow::Result<()> {
         self.with_lifecycle_lock(scope, || {
-            self.write_ideation_batch(scope, incoming, replace)
+            self.write_ideation_batch(claim, scope, incoming, replace)
         })
     }
 
     pub(super) fn write_ideation_batch(
         &self,
+        claim: Option<&RbacClaim>,
         scope: &ScopeId,
         incoming: IdeationLandingBatch,
         replace: bool,
     ) -> anyhow::Result<()> {
         ensure_scope(scope, &incoming)?;
         let path = shards::ideation_landings_path(&self.layout, scope);
-        self.mutate_jsonl_records(&path, |landings: &mut Vec<IdeationLandingBatch>| {
+        let auth = MutationAuth::new(claim, Capability::Execute, scope);
+        self.mutate_jsonl_records(&path, auth, |landings: &mut Vec<IdeationLandingBatch>| {
             let mut contributions = self.list_contributions(scope)?;
             let mut synthesis_packets = self.list_synthesis_packets(scope)?;
             let mut proposals = self.list_proposal_definitions(scope)?;
@@ -110,7 +117,7 @@ impl StateStore {
             let manifest = self.manifest()?;
             provenance_core::validate_ideation_aggregate(IdeationAggregate {
                 legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
-                disposition_actor_ids: &manifest.disposition_actor_ids,
+                ratification: manifest.disposition_ratification(),
                 contributions: &contributions,
                 synthesis_packets: &synthesis_packets,
                 proposals: &proposals,
@@ -129,24 +136,42 @@ impl StateStore {
     pub fn validate_ideation_scope(&self, scope: &ScopeId) -> anyhow::Result<()> {
         self.with_repository_publication(|| {
             let manifest = self.manifest()?;
-            self.validate_ideation_scope_snapshot(scope, &manifest.disposition_actor_ids)
+            self.validate_ideation_scope_snapshot(scope, manifest.disposition_ratification())
         })
     }
 
+    /// The legacy-actor-keyed validation. Kept through the one-window
+    /// compatibility period for callers still holding an explicit allowlist;
+    /// retired together with the field at the next protocol bump.
     pub fn validate_ideation_scope_with_actor_ids(
         &self,
         scope: &ScopeId,
         disposition_actor_ids: &[String],
     ) -> anyhow::Result<()> {
         self.with_repository_publication(|| {
-            self.validate_ideation_scope_snapshot(scope, disposition_actor_ids)
+            self.validate_ideation_scope_snapshot(
+                scope,
+                provenance_core::DispositionRatification::LegacyAllowlist(disposition_actor_ids),
+            )
+        })
+    }
+
+    /// Validation against an already-resolved ratification regime, for
+    /// readers that parsed the manifest themselves (repository check).
+    pub fn validate_ideation_scope_with_ratification(
+        &self,
+        scope: &ScopeId,
+        ratification: provenance_core::DispositionRatification<'_>,
+    ) -> anyhow::Result<()> {
+        self.with_repository_publication(|| {
+            self.validate_ideation_scope_snapshot(scope, ratification)
         })
     }
 
     fn validate_ideation_scope_snapshot(
         &self,
         scope: &ScopeId,
-        disposition_actor_ids: &[String],
+        ratification: provenance_core::DispositionRatification<'_>,
     ) -> anyhow::Result<()> {
         let mut contributions: Vec<Contribution> =
             read_jsonl(&shards::contributions_path(&self.layout, scope))?;
@@ -223,7 +248,7 @@ impl StateStore {
         validate_legacy_disposition_shard(&legacy_dispositions, &proposals)?;
         provenance_core::validate_ideation_aggregate(IdeationAggregate {
             legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
-            disposition_actor_ids,
+            ratification,
             contributions: &contributions,
             synthesis_packets: &synthesis_packets,
             proposals: &proposals,

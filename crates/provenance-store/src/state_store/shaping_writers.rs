@@ -1,6 +1,6 @@
-use super::{CreateBoundaryInput, CreateQuestionInput, CreateTopicInput, StateStore};
+use super::{CreateBoundaryInput, CreateQuestionInput, CreateTopicInput, MutationAuth, StateStore};
 use crate::shards;
-use provenance_core::{Boundary, Question, Topic, SUPPORTED_SCHEMA_VERSION};
+use provenance_core::{Boundary, Capability, Question, RbacClaim, Topic, SUPPORTED_SCHEMA_VERSION};
 
 mod artifact_links;
 
@@ -8,11 +8,19 @@ mod artifact_links;
 pub(in crate::state_store) use artifact_links::sort_artifact_links;
 
 impl StateStore {
-    pub fn create_boundary(&self, input: CreateBoundaryInput) -> anyhow::Result<Boundary> {
-        self.with_repository_publication(|| self.write_boundary(input))
+    pub fn create_boundary(
+        &self,
+        claim: Option<&RbacClaim>,
+        input: CreateBoundaryInput,
+    ) -> anyhow::Result<Boundary> {
+        self.with_repository_publication(|| self.write_boundary(claim, input))
     }
 
-    fn write_boundary(&self, input: CreateBoundaryInput) -> anyhow::Result<Boundary> {
+    fn write_boundary(
+        &self,
+        claim: Option<&RbacClaim>,
+        input: CreateBoundaryInput,
+    ) -> anyhow::Result<Boundary> {
         let CreateBoundaryInput {
             scope_id,
             id,
@@ -35,7 +43,8 @@ impl StateStore {
             );
         }
         let path = shards::boundaries_path(&self.layout, &scope_id);
-        self.mutate_jsonl_records(&path, |records: &mut Vec<Boundary>| {
+        let auth = MutationAuth::new(claim, Capability::Edit, &scope_id);
+        self.mutate_jsonl_records(&path, auth, |records: &mut Vec<Boundary>| {
             let boundary = Boundary {
                 schema_version: SUPPORTED_SCHEMA_VERSION,
                 scope_id: scope_id.clone(),
@@ -54,11 +63,19 @@ impl StateStore {
         })
     }
 
-    pub fn create_topic(&self, input: CreateTopicInput) -> anyhow::Result<Topic> {
-        self.with_repository_publication(|| self.write_topic(input))
+    pub fn create_topic(
+        &self,
+        claim: Option<&RbacClaim>,
+        input: CreateTopicInput,
+    ) -> anyhow::Result<Topic> {
+        self.with_repository_publication(|| self.write_topic(claim, input))
     }
 
-    fn write_topic(&self, input: CreateTopicInput) -> anyhow::Result<Topic> {
+    fn write_topic(
+        &self,
+        claim: Option<&RbacClaim>,
+        input: CreateTopicInput,
+    ) -> anyhow::Result<Topic> {
         let CreateTopicInput {
             scope_id,
             id,
@@ -76,7 +93,8 @@ impl StateStore {
         self.validate_artifact_links(&scope_id, &links)?;
         sort_artifact_links(&mut links);
         let path = shards::topics_path(&self.layout, &scope_id);
-        self.mutate_jsonl_records(&path, |records: &mut Vec<Topic>| {
+        let auth = MutationAuth::new(claim, Capability::Edit, &scope_id);
+        self.mutate_jsonl_records(&path, auth, |records: &mut Vec<Topic>| {
             let topic = Topic {
                 schema_version: SUPPORTED_SCHEMA_VERSION,
                 scope_id: scope_id.clone(),
@@ -98,11 +116,19 @@ impl StateStore {
         })
     }
 
-    pub fn create_question(&self, input: CreateQuestionInput) -> anyhow::Result<Question> {
-        self.with_repository_publication(|| self.write_question(input))
+    pub fn create_question(
+        &self,
+        claim: Option<&RbacClaim>,
+        input: CreateQuestionInput,
+    ) -> anyhow::Result<Question> {
+        self.with_repository_publication(|| self.write_question(claim, input))
     }
 
-    fn write_question(&self, input: CreateQuestionInput) -> anyhow::Result<Question> {
+    fn write_question(
+        &self,
+        claim: Option<&RbacClaim>,
+        input: CreateQuestionInput,
+    ) -> anyhow::Result<Question> {
         let CreateQuestionInput {
             scope_id,
             id,
@@ -130,7 +156,8 @@ impl StateStore {
         self.validate_artifact_links(&scope_id, &links)?;
         sort_artifact_links(&mut links);
         let path = shards::questions_path(&self.layout, &scope_id);
-        self.mutate_jsonl_records(&path, |records: &mut Vec<Question>| {
+        let auth = MutationAuth::new(claim, Capability::Edit, &scope_id);
+        self.mutate_jsonl_records(&path, auth, |records: &mut Vec<Question>| {
             let question = Question {
                 schema_version: SUPPORTED_SCHEMA_VERSION,
                 scope_id: scope_id.clone(),

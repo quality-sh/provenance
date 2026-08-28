@@ -24,7 +24,7 @@ fn rejected_disposition_allows_blocked_or_contested_proposal_without_assertion()
 
         crate::validate_ideation_aggregate(crate::IdeationAggregate {
             legacy_policy: crate::LegacyProposalPolicy::ModernOnly,
-            disposition_actor_ids: &["reviewer".into()],
+            ratification: crate::DispositionRatification::LegacyAllowlist(&["reviewer".into()]),
             contributions: &contributions,
             synthesis_packets: &synthesis_packets,
             proposals: &proposals,
@@ -60,7 +60,7 @@ fn validate_ratified_acceptance(identity_type: &str, names_artifact: bool) -> an
 
     crate::validate_ideation_aggregate(crate::IdeationAggregate {
         legacy_policy: crate::LegacyProposalPolicy::ModernOnly,
-        disposition_actor_ids: &["reviewer".into()],
+        ratification: crate::DispositionRatification::LegacyAllowlist(&["reviewer".into()]),
         contributions: &contributions,
         synthesis_packets: &synthesis_packets,
         proposals: &proposals,
@@ -106,7 +106,7 @@ fn accepted_disposition_still_requires_assertion() {
 
     let error = crate::validate_ideation_aggregate(crate::IdeationAggregate {
         legacy_policy: crate::LegacyProposalPolicy::ModernOnly,
-        disposition_actor_ids: &["reviewer".into()],
+        ratification: crate::DispositionRatification::LegacyAllowlist(&["reviewer".into()]),
         contributions: &contributions,
         synthesis_packets: &synthesis_packets,
         proposals: &proposals,
@@ -134,7 +134,7 @@ fn rejected_or_deferred_disposition_can_override_asserted_state() {
 
         crate::validate_ideation_aggregate(crate::IdeationAggregate {
             legacy_policy: crate::LegacyProposalPolicy::ModernOnly,
-            disposition_actor_ids: &["reviewer".into()],
+            ratification: crate::DispositionRatification::LegacyAllowlist(&["reviewer".into()]),
             contributions: &contributions,
             synthesis_packets: &synthesis_packets,
             proposals: &proposals,
@@ -225,7 +225,7 @@ fn validate_allowlist_case(
 
     crate::validate_ideation_aggregate(crate::IdeationAggregate {
         legacy_policy: crate::LegacyProposalPolicy::ModernOnly,
-        disposition_actor_ids: allowlist,
+        ratification: crate::DispositionRatification::LegacyAllowlist(allowlist),
         contributions: &contributions,
         synthesis_packets: &synthesis_packets,
         proposals: &proposals,
@@ -281,7 +281,7 @@ fn allowlist_ignores_actor_shaped_ids_on_other_record_kinds() {
 
     crate::validate_ideation_aggregate(crate::IdeationAggregate {
         legacy_policy: crate::LegacyProposalPolicy::ModernOnly,
-        disposition_actor_ids: &["reviewer".into()],
+        ratification: crate::DispositionRatification::LegacyAllowlist(&["reviewer".into()]),
         contributions: &contributions,
         synthesis_packets: &synthesis_packets,
         proposals: &proposals,

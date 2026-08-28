@@ -6,7 +6,10 @@ use provenance_store::{
     state_store::{CreateSourceInput, StateStore},
 };
 
-pub(super) fn handle(command: SourcesCommand) -> anyhow::Result<()> {
+pub(super) fn handle(
+    command: SourcesCommand,
+    actor_claim: Option<&provenance_core::RbacClaim>,
+) -> anyhow::Result<()> {
     match command {
         SourcesCommand::Create {
             repo,
@@ -24,8 +27,9 @@ pub(super) fn handle(command: SourcesCommand) -> anyhow::Result<()> {
             origin_message,
             format,
         } => {
-            let source =
-                StateStore::new(ProvenanceLayout::new(repo)).create_source(CreateSourceInput {
+            let source = StateStore::new(ProvenanceLayout::new(repo)).create_source(
+                actor_claim,
+                CreateSourceInput {
                     scope_id: ScopeId::new(scope)?,
                     id: StableId::new(id)?,
                     name,
@@ -38,7 +42,8 @@ pub(super) fn handle(command: SourcesCommand) -> anyhow::Result<()> {
                     superseded_by: superseded_by.map(StableId::new).transpose()?,
                     origin_thread: origin_thread.map(StableId::new).transpose()?,
                     origin_message: origin_message.map(StableId::new).transpose()?,
-                })?;
+                },
+            )?;
             output::print(format, &source)?;
         }
     }

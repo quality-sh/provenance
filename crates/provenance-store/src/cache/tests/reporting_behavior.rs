@@ -92,42 +92,48 @@ fn seed_unsourced_chain(layout: &ProvenanceLayout, scope: &ScopeId) {
     let store = StateStore::new(layout.clone());
     create_requirement(&store, scope, "req_unsourced", RequirementStatus::Active);
     store
-        .create_resolution(CreateResolutionInput {
-            scope_id: scope.clone(),
-            id: sid("res_unsourced"),
-            title: "Unsourced decision".into(),
-            requirement_id: Some(sid("req_unsourced")),
-            position: "Adopt".into(),
-            rationale: "Settles the requirement".into(),
-            status: ResolutionStatus::Proposed,
-            context: None,
-            enforcement: None,
-            confidence: None,
-            inputs: Vec::new(),
-            made_by: None,
-            approved_by: None,
-            approved_at: None,
-            superseded_by: None,
-            origin_thread: None,
-            origin_message: None,
-        })
+        .create_resolution(
+            None,
+            CreateResolutionInput {
+                scope_id: scope.clone(),
+                id: sid("res_unsourced"),
+                title: "Unsourced decision".into(),
+                requirement_id: Some(sid("req_unsourced")),
+                position: "Adopt".into(),
+                rationale: "Settles the requirement".into(),
+                status: ResolutionStatus::Proposed,
+                context: None,
+                enforcement: None,
+                confidence: None,
+                inputs: Vec::new(),
+                made_by: None,
+                approved_by: None,
+                approved_at: None,
+                superseded_by: None,
+                origin_thread: None,
+                origin_message: None,
+            },
+        )
         .unwrap();
     store
-        .create_rule(CreateRuleInput {
-            scope_id: scope.clone(),
-            id: sid("rule_unsourced"),
-            name: None,
-            description: None,
-            requirement_id: Some(sid("req_unsourced")),
-            resolution_id: Some(sid("res_unsourced")),
-            statement: "A rule with no source behind it".into(),
-            status: RuleStatus::Active,
-            severity: RuleSeverity::High,
-            source_document: None,
-            source_section: None,
-            origin_thread: None,
-            origin_message: None,
-        })
+        .create_rule(
+            None,
+            CreateRuleInput {
+                scope_id: scope.clone(),
+                id: sid("rule_unsourced"),
+                name: None,
+                description: None,
+                requirement_id: Some(sid("req_unsourced")),
+                resolution_id: Some(sid("res_unsourced")),
+                statement: "A rule with no source behind it".into(),
+                status: RuleStatus::Active,
+                severity: RuleSeverity::High,
+                source_document: None,
+                source_section: None,
+                origin_thread: None,
+                origin_message: None,
+            },
+        )
         .unwrap();
 }
 
@@ -172,21 +178,24 @@ fn requirement_produced_rule_does_not_need_a_resolution() {
     create_requirement(&store, &scope, "req_half", RequirementStatus::Active);
     attach_source(&store, &scope, "req_half", "source_anchor");
     store
-        .create_rule(CreateRuleInput {
-            scope_id: scope.clone(),
-            id: sid("rule_half"),
-            name: None,
-            description: None,
-            requirement_id: Some(sid("req_half")),
-            resolution_id: None,
-            statement: "A rule that needs no ambiguity resolved".into(),
-            status: RuleStatus::Active,
-            severity: RuleSeverity::High,
-            source_document: None,
-            source_section: None,
-            origin_thread: None,
-            origin_message: None,
-        })
+        .create_rule(
+            None,
+            CreateRuleInput {
+                scope_id: scope.clone(),
+                id: sid("rule_half"),
+                name: None,
+                description: None,
+                requirement_id: Some(sid("req_half")),
+                resolution_id: None,
+                statement: "A rule that needs no ambiguity resolved".into(),
+                status: RuleStatus::Active,
+                severity: RuleSeverity::High,
+                source_document: None,
+                source_section: None,
+                origin_thread: None,
+                origin_message: None,
+            },
+        )
         .unwrap();
 
     assert!(orphan_rules(&layout, &scope).unwrap().is_empty());
@@ -211,42 +220,48 @@ fn rule_without_a_producing_requirement_remains_orphaned() {
     create_requirement(&store, &scope, "req_decided", RequirementStatus::Active);
     attach_source(&store, &scope, "req_decided", "source_anchor");
     store
-        .create_resolution(CreateResolutionInput {
-            scope_id: scope.clone(),
-            id: sid("res_decided"),
-            title: "Decision that does not bind the rule to its requirement".into(),
-            requirement_id: Some(sid("req_decided")),
-            position: "Adopt".into(),
-            rationale: "Settles the requirement".into(),
-            status: ResolutionStatus::Proposed,
-            context: None,
-            enforcement: None,
-            confidence: None,
-            inputs: Vec::new(),
-            made_by: None,
-            approved_by: None,
-            approved_at: None,
-            superseded_by: None,
-            origin_thread: None,
-            origin_message: None,
-        })
+        .create_resolution(
+            None,
+            CreateResolutionInput {
+                scope_id: scope.clone(),
+                id: sid("res_decided"),
+                title: "Decision that does not bind the rule to its requirement".into(),
+                requirement_id: Some(sid("req_decided")),
+                position: "Adopt".into(),
+                rationale: "Settles the requirement".into(),
+                status: ResolutionStatus::Proposed,
+                context: None,
+                enforcement: None,
+                confidence: None,
+                inputs: Vec::new(),
+                made_by: None,
+                approved_by: None,
+                approved_at: None,
+                superseded_by: None,
+                origin_thread: None,
+                origin_message: None,
+            },
+        )
         .unwrap();
     store
-        .create_rule(CreateRuleInput {
-            scope_id: scope.clone(),
-            id: sid("rule_unattached"),
-            name: None,
-            description: None,
-            requirement_id: None,
-            resolution_id: Some(sid("res_decided")),
-            statement: "A rule with no producing requirement".into(),
-            status: RuleStatus::Active,
-            severity: RuleSeverity::High,
-            source_document: None,
-            source_section: None,
-            origin_thread: None,
-            origin_message: None,
-        })
+        .create_rule(
+            None,
+            CreateRuleInput {
+                scope_id: scope.clone(),
+                id: sid("rule_unattached"),
+                name: None,
+                description: None,
+                requirement_id: None,
+                resolution_id: Some(sid("res_decided")),
+                statement: "A rule with no producing requirement".into(),
+                status: RuleStatus::Active,
+                severity: RuleSeverity::High,
+                source_document: None,
+                source_section: None,
+                origin_thread: None,
+                origin_message: None,
+            },
+        )
         .unwrap();
 
     let orphans = orphan_rules(&layout, &scope).unwrap();
@@ -277,43 +292,49 @@ fn seed_rule_with_producers(
     }
     if has_resolution {
         store
-            .create_resolution(CreateResolutionInput {
-                scope_id: scope.clone(),
-                id: sid("res_rule"),
-                title: "Rule decision".into(),
-                requirement_id: has_requirement.then(|| sid("req_rule")),
-                position: "Adopt".into(),
-                rationale: "Decides the rule".into(),
-                status: ResolutionStatus::Proposed,
-                context: None,
-                enforcement: None,
-                confidence: None,
-                inputs: Vec::new(),
-                made_by: None,
-                approved_by: None,
-                approved_at: None,
-                superseded_by: None,
-                origin_thread: None,
-                origin_message: None,
-            })
+            .create_resolution(
+                None,
+                CreateResolutionInput {
+                    scope_id: scope.clone(),
+                    id: sid("res_rule"),
+                    title: "Rule decision".into(),
+                    requirement_id: has_requirement.then(|| sid("req_rule")),
+                    position: "Adopt".into(),
+                    rationale: "Decides the rule".into(),
+                    status: ResolutionStatus::Proposed,
+                    context: None,
+                    enforcement: None,
+                    confidence: None,
+                    inputs: Vec::new(),
+                    made_by: None,
+                    approved_by: None,
+                    approved_at: None,
+                    superseded_by: None,
+                    origin_thread: None,
+                    origin_message: None,
+                },
+            )
             .unwrap();
     }
     store
-        .create_rule(CreateRuleInput {
-            scope_id: scope.clone(),
-            id: sid("rule_under_test"),
-            name: None,
-            description: None,
-            requirement_id: has_requirement.then(|| sid("req_rule")),
-            resolution_id: has_resolution.then(|| sid("res_rule")),
-            statement: "A rule under producer conformance test".into(),
-            status: RuleStatus::Active,
-            severity: RuleSeverity::High,
-            source_document: None,
-            source_section: None,
-            origin_thread: None,
-            origin_message: None,
-        })
+        .create_rule(
+            None,
+            CreateRuleInput {
+                scope_id: scope.clone(),
+                id: sid("rule_under_test"),
+                name: None,
+                description: None,
+                requirement_id: has_requirement.then(|| sid("req_rule")),
+                resolution_id: has_resolution.then(|| sid("res_rule")),
+                statement: "A rule under producer conformance test".into(),
+                status: RuleStatus::Active,
+                severity: RuleSeverity::High,
+                source_document: None,
+                source_section: None,
+                origin_thread: None,
+                origin_message: None,
+            },
+        )
         .unwrap();
 }
 
@@ -378,16 +399,19 @@ fn orphan_health_and_gaps_name_the_same_rules() {
 fn gaps_flag_requirements_without_domain_id_but_not_requirements_with_one() {
     let (_dir, layout, scope) = seeded_layout();
     StateStore::new(layout.clone())
-        .create_requirement(CreateRequirementInput {
-            scope_id: scope.clone(),
-            id: sid("req_missing_domain"),
-            statement: "Rostering rules need a domain".into(),
-            description: None,
-            status: RequirementStatus::Active,
-            domain_id: None,
-            origin_thread: None,
-            origin_message: None,
-        })
+        .create_requirement(
+            None,
+            CreateRequirementInput {
+                scope_id: scope.clone(),
+                id: sid("req_missing_domain"),
+                statement: "Rostering rules need a domain".into(),
+                description: None,
+                status: RequirementStatus::Active,
+                domain_id: None,
+                origin_thread: None,
+                origin_message: None,
+            },
+        )
         .unwrap();
     let gaps = find_gaps(&layout, &scope).unwrap();
     assert!(gaps.iter().any(|gap| gap.kind == GapKind::MissingDomainId

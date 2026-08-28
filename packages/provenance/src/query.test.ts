@@ -61,7 +61,7 @@ async function readsTheEnginesBoundedAnswers(): Promise<void> {
   await apply();
 
   const fetched = await get({ node_type: "rule", id: expiry.id });
-  assert.equal(fetched.protocol_version, 5);
+  assert.equal(fetched.protocol_version, 6);
   assert.equal(fetched.operation, "get");
   assert.equal(fetched.found, true);
   assert.equal(fetched.node?.id, expiry.id);

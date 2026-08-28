@@ -44,9 +44,15 @@ mod wiki;
 #[allow(clippy::redundant_pub_crate)]
 pub(super) use export::{export_scope, ScopeExport};
 
+/// The parsed actor claim from the global `--actor-id` flag, threaded
+/// top-down into every mutating handler. Read-only commands ignore it.
 #[allow(clippy::too_many_lines)]
 #[allow(clippy::redundant_pub_crate)]
-pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()> {
+pub(super) async fn dispatch(
+    command: Command,
+    quiet: bool,
+    actor_claim: Option<&provenance_core::RbacClaim>,
+) -> anyhow::Result<()> {
     match command {
         Command::CargoInit {
             package,
@@ -77,6 +83,7 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
                         path_prefix,
                         disposition_actor_ids: disposition_actor_id,
                         clear_disposition_actors,
+                        actor_claim: actor_claim.cloned(),
                         ste_onboarding,
                         ste_pdf,
                         invocation_channel,
@@ -98,7 +105,7 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
             docs::handle(command).await?;
         }
         Command::Dictionary { command } => {
-            dictionary::handle(command)?;
+            dictionary::handle(command, actor_claim)?;
         }
         Command::Wiki { command } => {
             wiki::handle(command).await?;
@@ -107,28 +114,28 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
             materialize::handle(repo, format).await?;
         }
         Command::Sources { command } => {
-            sources::handle(command)?;
+            sources::handle(command, actor_claim)?;
         }
         Command::Requirements { command } => {
-            requirements::handle(command)?;
+            requirements::handle(command, actor_claim)?;
         }
         Command::Edges { command } => {
-            edges::handle(command)?;
+            edges::handle(command, actor_claim)?;
         }
         Command::GraphReference { command } => {
             graph_reference::handle(command)?;
         }
         Command::Domains { command } => {
-            domains::handle(command)?;
+            domains::handle(command, actor_claim)?;
         }
         Command::Boundaries { command } => {
-            boundaries::handle(command)?;
+            boundaries::handle(command, actor_claim)?;
         }
         Command::Topics { command } => {
-            topics::handle(command)?;
+            topics::handle(command, actor_claim)?;
         }
         Command::Questions { command } => {
-            questions::handle(command, quiet)?;
+            questions::handle(command, quiet, actor_claim)?;
         }
         Command::Graph {
             requirement_id,
@@ -139,10 +146,10 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
             graph::handle(requirement_id, repo, scope, format)?;
         }
         Command::Resolutions { command } => {
-            resolutions::handle(command)?;
+            resolutions::handle(command, actor_claim)?;
         }
         Command::Rules { command } => {
-            rules::handle(command)?;
+            rules::handle(command, actor_claim)?;
         }
         Command::Traceability {
             rule_id,
@@ -160,19 +167,19 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
             gaps::handle(repo, scope, format)?;
         }
         Command::Thread { command } => {
-            thread::handle(command)?;
+            thread::handle(command, actor_claim)?;
         }
         Command::Contributions { command } => {
-            contributions::handle(command, quiet)?;
+            contributions::handle(command, quiet, actor_claim)?;
         }
         Command::SynthesisPackets { command } => {
-            synthesis_packets::handle(command, quiet)?;
+            synthesis_packets::handle(command, quiet, actor_claim)?;
         }
         Command::Proposals { command } => {
-            proposals::handle(command, quiet)?;
+            proposals::handle(command, quiet, actor_claim)?;
         }
         Command::Dispositions { command } => {
-            dispositions::handle(command)?;
+            dispositions::handle(command, actor_claim)?;
         }
         Command::Prime {
             repo,
@@ -233,7 +240,7 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
             sdk::handle(command)?;
         }
         Command::SwarmBacktrace { command } => {
-            swarm_backtrace::handle(command)?;
+            swarm_backtrace::handle(command, actor_claim)?;
         }
         Command::Skills { command } => {
             skills::handle(command)?;
@@ -263,7 +270,7 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
             dry_run,
             format,
         } => {
-            import::handle(repo, scope, input, dry_run, format)?;
+            import::handle(repo, scope, input, dry_run, format, actor_claim)?;
         }
         Command::MergeJsonl {
             base,
@@ -271,9 +278,18 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
             theirs,
             output,
             path,
+            actor_id,
             format,
         } => {
-            merge_jsonl::handle(&base, &ours, &theirs, output, path.as_deref(), format)?;
+            merge_jsonl::handle(
+                &base,
+                &ours,
+                &theirs,
+                output,
+                path.as_deref(),
+                actor_id,
+                format,
+            )?;
         }
     }
     Ok(())

@@ -12,63 +12,70 @@ use provenance_macros::verifies;
 fn shaping_records_are_written_deterministically_and_validate_relationships() {
     let (_dir, store, scope) = seeded_source_requirement_store();
 
+    let topic = |id: &str, title: &str, status, links: Vec<ArtifactLink>| CreateTopicInput {
+        scope_id: scope.clone(),
+        id: StableId::new(id).unwrap(),
+        requirement_id: StableId::new("req_overtime").unwrap(),
+        title: title.into(),
+        status,
+        links,
+    };
     store
-        .create_topic(CreateTopicInput {
-            scope_id: scope.clone(),
-            id: StableId::new("topic_b").unwrap(),
-            requirement_id: StableId::new("req_overtime").unwrap(),
-            title: "B topic".into(),
-            status: TopicStatus::Open,
-            links: Vec::new(),
-        })
+        .create_topic(
+            None,
+            topic("topic_b", "B topic", TopicStatus::Open, Vec::new()),
+        )
+        .unwrap();
+    let links = vec![
+        ArtifactLink {
+            target_type: ArtifactLinkTargetType::Source,
+            target_id: StableId::new("source_schads").unwrap(),
+        },
+        ArtifactLink {
+            target_type: ArtifactLinkTargetType::Requirement,
+            target_id: StableId::new("req_overtime").unwrap(),
+        },
+        ArtifactLink {
+            target_type: ArtifactLinkTargetType::Source,
+            target_id: StableId::new("source_schads").unwrap(),
+        },
+    ];
+    store
+        .create_topic(
+            None,
+            topic("topic_a", "A topic", TopicStatus::Explored, links),
+        )
         .unwrap();
     store
-        .create_topic(CreateTopicInput {
-            scope_id: scope.clone(),
-            id: StableId::new("topic_a").unwrap(),
-            requirement_id: StableId::new("req_overtime").unwrap(),
-            title: "A topic".into(),
-            status: TopicStatus::Explored,
-            links: vec![
-                ArtifactLink {
-                    target_type: ArtifactLinkTargetType::Source,
-                    target_id: StableId::new("source_schads").unwrap(),
-                },
-                ArtifactLink {
-                    target_type: ArtifactLinkTargetType::Requirement,
-                    target_id: StableId::new("req_overtime").unwrap(),
-                },
-                ArtifactLink {
-                    target_type: ArtifactLinkTargetType::Source,
-                    target_id: StableId::new("source_schads").unwrap(),
-                },
-            ],
-        })
-        .unwrap();
-    store
-        .create_boundary(CreateBoundaryInput {
-            scope_id: scope.clone(),
-            id: StableId::new("boundary_no_manual_rework").unwrap(),
-            requirement_id: StableId::new("req_overtime").unwrap(),
-            statement: "No manual rework".into(),
-            source_ref: Some(SourceReference {
-                source_id: StableId::new("source_schads").unwrap(),
-                clause: Some("28.1".into()),
-            }),
-        })
+        .create_boundary(
+            None,
+            CreateBoundaryInput {
+                scope_id: scope.clone(),
+                id: StableId::new("boundary_no_manual_rework").unwrap(),
+                requirement_id: StableId::new("req_overtime").unwrap(),
+                statement: "No manual rework".into(),
+                source_ref: Some(SourceReference {
+                    source_id: StableId::new("source_schads").unwrap(),
+                    clause: Some("28.1".into()),
+                }),
+            },
+        )
         .unwrap();
     let question = store
-        .create_question(CreateQuestionInput {
-            scope_id: scope.clone(),
-            id: StableId::new("question_threshold").unwrap(),
-            topic_id: StableId::new("topic_a").unwrap(),
-            question: "Which threshold applies?".into(),
-            resolution_method: ResolutionMethod::Grill,
-            status: QuestionStatus::Open,
-            answer: None,
-            links: Vec::new(),
-            resolution_id: None,
-        })
+        .create_question(
+            None,
+            CreateQuestionInput {
+                scope_id: scope.clone(),
+                id: StableId::new("question_threshold").unwrap(),
+                topic_id: StableId::new("topic_a").unwrap(),
+                question: "Which threshold applies?".into(),
+                resolution_method: ResolutionMethod::Grill,
+                status: QuestionStatus::Open,
+                answer: None,
+                links: Vec::new(),
+                resolution_id: None,
+            },
+        )
         .unwrap();
 
     let topics = store.list_topics(&scope).unwrap();
@@ -87,17 +94,20 @@ fn shaping_records_are_written_deterministically_and_validate_relationships() {
     );
     assert_eq!(question.requirement_id.as_str(), "req_overtime");
     assert!(store
-        .create_question(CreateQuestionInput {
-            scope_id: scope,
-            id: StableId::new("question_missing_topic").unwrap(),
-            topic_id: StableId::new("topic_missing").unwrap(),
-            question: "Missing topic?".into(),
-            resolution_method: ResolutionMethod::Grill,
-            status: QuestionStatus::Open,
-            answer: None,
-            links: Vec::new(),
-            resolution_id: None,
-        })
+        .create_question(
+            None,
+            CreateQuestionInput {
+                scope_id: scope,
+                id: StableId::new("question_missing_topic").unwrap(),
+                topic_id: StableId::new("topic_missing").unwrap(),
+                question: "Missing topic?".into(),
+                resolution_method: ResolutionMethod::Grill,
+                status: QuestionStatus::Open,
+                answer: None,
+                links: Vec::new(),
+                resolution_id: None,
+            }
+        )
         .unwrap_err()
         .to_string()
         .contains("topic does not exist"));
@@ -109,44 +119,51 @@ fn shaping_records_are_written_deterministically_and_validate_relationships() {
 fn topic_claims_are_check_and_set_and_clear_on_close() {
     let (_dir, store, scope) = seeded_requirement_store();
     store
-        .create_topic(CreateTopicInput {
-            scope_id: scope.clone(),
-            id: StableId::new("topic_overtime").unwrap(),
-            requirement_id: StableId::new("req_overtime").unwrap(),
-            title: "Overtime eligibility".into(),
-            status: TopicStatus::Open,
-            links: Vec::new(),
-        })
+        .create_topic(
+            None,
+            CreateTopicInput {
+                scope_id: scope.clone(),
+                id: StableId::new("topic_overtime").unwrap(),
+                requirement_id: StableId::new("req_overtime").unwrap(),
+                title: "Overtime eligibility".into(),
+                status: TopicStatus::Open,
+                links: Vec::new(),
+            },
+        )
         .unwrap();
     let topic_id = StableId::new("topic_overtime").unwrap();
 
-    let claimed = store.claim_topic(&scope, &topic_id, "agent-one").unwrap();
+    let claimed = store
+        .claim_topic(None, &scope, &topic_id, "agent-one")
+        .unwrap();
     assert_eq!(claimed.topic.claimed_by.as_deref(), Some("agent-one"));
     assert!(claimed.topic.claimed_at.unwrap() > 0);
 
     let err = store
-        .claim_topic(&scope, &topic_id, "agent-two")
+        .claim_topic(None, &scope, &topic_id, "agent-two")
         .unwrap_err();
     assert!(err
         .to_string()
         .contains("topic topic_overtime is already claimed by agent-one"));
 
-    let released = store.release_topic(&scope, &topic_id).unwrap();
+    let released = store.release_topic(None, &scope, &topic_id).unwrap();
     assert_eq!(released.claimed_by, None);
     assert_eq!(released.claimed_at, None);
     assert!(store
-        .release_topic(&scope, &topic_id)
+        .release_topic(None, &scope, &topic_id)
         .unwrap_err()
         .to_string()
         .contains("topic topic_overtime is not claimed"));
 
-    store.claim_topic(&scope, &topic_id, "agent-two").unwrap();
-    let closed = store.close_topic(&scope, &topic_id).unwrap();
+    store
+        .claim_topic(None, &scope, &topic_id, "agent-two")
+        .unwrap();
+    let closed = store.close_topic(None, &scope, &topic_id).unwrap();
     assert_eq!(closed.status, TopicStatus::Closed);
     assert_eq!(closed.claimed_by, None);
     assert_eq!(closed.claimed_at, None);
     assert!(store
-        .claim_topic(&scope, &topic_id, "agent-one")
+        .claim_topic(None, &scope, &topic_id, "agent-one")
         .unwrap_err()
         .to_string()
         .contains("closed"));
@@ -162,43 +179,50 @@ fn topic_claims_are_check_and_set_and_clear_on_close() {
 fn question_claims_clear_when_answered() {
     let (_dir, store, scope) = seeded_requirement_store();
     store
-        .create_topic(CreateTopicInput {
-            scope_id: scope.clone(),
-            id: StableId::new("topic_overtime").unwrap(),
-            requirement_id: StableId::new("req_overtime").unwrap(),
-            title: "Overtime eligibility".into(),
-            status: TopicStatus::Open,
-            links: Vec::new(),
-        })
+        .create_topic(
+            None,
+            CreateTopicInput {
+                scope_id: scope.clone(),
+                id: StableId::new("topic_overtime").unwrap(),
+                requirement_id: StableId::new("req_overtime").unwrap(),
+                title: "Overtime eligibility".into(),
+                status: TopicStatus::Open,
+                links: Vec::new(),
+            },
+        )
         .unwrap();
     store
-        .create_question(CreateQuestionInput {
-            scope_id: scope.clone(),
-            id: StableId::new("question_threshold").unwrap(),
-            topic_id: StableId::new("topic_overtime").unwrap(),
-            question: "Which threshold applies?".into(),
-            resolution_method: ResolutionMethod::Research,
-            status: QuestionStatus::Open,
-            answer: None,
-            links: Vec::new(),
-            resolution_id: None,
-        })
+        .create_question(
+            None,
+            CreateQuestionInput {
+                scope_id: scope.clone(),
+                id: StableId::new("question_threshold").unwrap(),
+                topic_id: StableId::new("topic_overtime").unwrap(),
+                question: "Which threshold applies?".into(),
+                resolution_method: ResolutionMethod::Research,
+                status: QuestionStatus::Open,
+                answer: None,
+                links: Vec::new(),
+                resolution_id: None,
+            },
+        )
         .unwrap();
     let question_id = StableId::new("question_threshold").unwrap();
 
     let claimed = store
-        .claim_question(&scope, &question_id, "agent-one")
+        .claim_question(None, &scope, &question_id, "agent-one")
         .unwrap();
     assert_eq!(claimed.claimed_by.as_deref(), Some("agent-one"));
     assert_eq!(claimed.resolution_method, ResolutionMethod::Research);
     assert!(store
-        .claim_question(&scope, &question_id, "agent-two")
+        .claim_question(None, &scope, &question_id, "agent-two")
         .unwrap_err()
         .to_string()
         .contains("question question_threshold is already claimed by agent-one"));
 
     let answered = store
         .answer_question(
+            None,
             &scope,
             &question_id,
             "Use the SCHADS threshold.".into(),
@@ -213,7 +237,7 @@ fn question_claims_clear_when_answered() {
     assert_eq!(answered.claimed_by, None);
     assert_eq!(answered.claimed_at, None);
     assert!(store
-        .claim_question(&scope, &question_id, "agent-two")
+        .claim_question(None, &scope, &question_id, "agent-two")
         .unwrap_err()
         .to_string()
         .contains("answered"));
@@ -228,60 +252,72 @@ fn question_claims_clear_when_answered() {
 fn question_claims_clear_when_an_update_blocks_them_on_a_human() {
     let (_dir, store, scope) = seeded_requirement_store();
     store
-        .create_topic(CreateTopicInput {
-            scope_id: scope.clone(),
-            id: StableId::new("topic_overtime").unwrap(),
-            requirement_id: StableId::new("req_overtime").unwrap(),
-            title: "Overtime eligibility".into(),
-            status: TopicStatus::Open,
-            links: Vec::new(),
-        })
+        .create_topic(
+            None,
+            CreateTopicInput {
+                scope_id: scope.clone(),
+                id: StableId::new("topic_overtime").unwrap(),
+                requirement_id: StableId::new("req_overtime").unwrap(),
+                title: "Overtime eligibility".into(),
+                status: TopicStatus::Open,
+                links: Vec::new(),
+            },
+        )
         .unwrap();
     store
-        .create_question(CreateQuestionInput {
-            scope_id: scope.clone(),
-            id: StableId::new("question_threshold").unwrap(),
-            topic_id: StableId::new("topic_overtime").unwrap(),
-            question: "Which threshold applies?".into(),
-            resolution_method: ResolutionMethod::Research,
-            status: QuestionStatus::Open,
-            answer: None,
-            links: Vec::new(),
-            resolution_id: None,
-        })
+        .create_question(
+            None,
+            CreateQuestionInput {
+                scope_id: scope.clone(),
+                id: StableId::new("question_threshold").unwrap(),
+                topic_id: StableId::new("topic_overtime").unwrap(),
+                question: "Which threshold applies?".into(),
+                resolution_method: ResolutionMethod::Research,
+                status: QuestionStatus::Open,
+                answer: None,
+                links: Vec::new(),
+                resolution_id: None,
+            },
+        )
         .unwrap();
     let question_id = StableId::new("question_threshold").unwrap();
     store
-        .claim_question(&scope, &question_id, "agent-one")
+        .claim_question(None, &scope, &question_id, "agent-one")
         .unwrap();
 
     let retargeted = store
-        .update_question(UpdateQuestionInput {
-            scope_id: scope.clone(),
-            id: question_id.clone(),
-            resolution_method: Some(ResolutionMethod::Grill),
-            status: None,
-            links: None,
-            resolution_id: None,
-        })
+        .update_question(
+            None,
+            UpdateQuestionInput {
+                scope_id: scope.clone(),
+                id: question_id.clone(),
+                resolution_method: Some(ResolutionMethod::Grill),
+                status: None,
+                links: None,
+                resolution_id: None,
+            },
+        )
         .unwrap();
     assert_eq!(retargeted.claimed_by.as_deref(), Some("agent-one"));
 
     let blocked = store
-        .update_question(UpdateQuestionInput {
-            scope_id: scope.clone(),
-            id: question_id.clone(),
-            resolution_method: None,
-            status: Some(QuestionStatus::BlockedOnHuman),
-            links: None,
-            resolution_id: None,
-        })
+        .update_question(
+            None,
+            UpdateQuestionInput {
+                scope_id: scope.clone(),
+                id: question_id.clone(),
+                resolution_method: None,
+                status: Some(QuestionStatus::BlockedOnHuman),
+                links: None,
+                resolution_id: None,
+            },
+        )
         .unwrap();
     assert_eq!(blocked.status, QuestionStatus::BlockedOnHuman);
     assert_eq!(blocked.claimed_by, None);
     assert_eq!(blocked.claimed_at, None);
     assert!(store
-        .claim_question(&scope, &question_id, "agent-two")
+        .claim_question(None, &scope, &question_id, "agent-two")
         .unwrap_err()
         .to_string()
         .contains("blocked_on_human"));

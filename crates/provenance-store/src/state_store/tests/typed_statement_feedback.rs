@@ -45,7 +45,7 @@ fn plan_reports_created_requirements_and_rules_in_stable_order_with_utf8_spans()
 fn plan_reports_statement_changed_requirements_and_rules() {
     let (_directory, store, scope) = initialized_store();
     store
-        .apply_typed_spec(&scope, spec("Clean requirement", "Clean rule", None))
+        .apply_typed_spec(None, &scope, spec("Clean requirement", "Clean rule", None))
         .unwrap();
 
     let result = store
@@ -64,12 +64,13 @@ fn plan_reports_statement_changed_requirements_and_rules() {
 fn unrelated_update_allows_an_unchanged_grandfathered_invalid_statement() {
     let (_directory, store, scope) = initialized_store();
     store
-        .apply_typed_spec(&scope, spec("Clean requirement", "Clean rule", None))
+        .apply_typed_spec(None, &scope, spec("Clean requirement", "Clean rule", None))
         .unwrap();
     grandfather_requirement(&store, "Grandfathered; requirement");
 
     let result = store
         .apply_typed_spec(
+            None,
             &scope,
             spec(
                 "Grandfathered; requirement",
@@ -96,14 +97,14 @@ fn unrelated_update_allows_an_unchanged_grandfathered_invalid_statement() {
 fn apply_returns_plan_diagnostics_before_any_state_edge_or_binding_write() {
     let (_directory, store, scope) = initialized_store();
     store
-        .apply_typed_spec(&scope, spec("Clean requirement", "Clean rule", None))
+        .apply_typed_spec(None, &scope, spec("Clean requirement", "Clean rule", None))
         .unwrap();
     let rejected = spec_with_source_and_implementation("Changed; requirement");
     let planned =
         serde_json::to_value(store.plan_typed_spec(&scope, rejected.clone()).unwrap()).unwrap();
     let before = canonical_state(&store);
 
-    let error = store.apply_typed_spec(&scope, rejected).unwrap_err();
+    let error = store.apply_typed_spec(None, &scope, rejected).unwrap_err();
     let typed = error
         .downcast_ref::<crate::state_store::TypedSpecWriteError>()
         .expect("apply preserves its typed STE100 report");

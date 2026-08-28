@@ -6,7 +6,10 @@ use provenance_store::{
     state_store::{PostMessageInput, StateStore},
 };
 
-pub(super) fn handle(command: ThreadCommand) -> anyhow::Result<()> {
+pub(super) fn handle(
+    command: ThreadCommand,
+    actor_claim: Option<&provenance_core::RbacClaim>,
+) -> anyhow::Result<()> {
     match command {
         ThreadCommand::Post {
             repo,
@@ -18,6 +21,7 @@ pub(super) fn handle(command: ThreadCommand) -> anyhow::Result<()> {
             format,
         } => {
             let result = StateStore::new(ProvenanceLayout::new(repo)).post_thread_message(
+                actor_claim,
                 PostMessageInput {
                     scope_id: ScopeId::new(scope)?,
                     parent: ThreadParent {

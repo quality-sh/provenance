@@ -19,7 +19,10 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeSet;
 
-pub(super) fn handle(command: SwarmBacktraceCommand) -> anyhow::Result<()> {
+pub(super) fn handle(
+    command: SwarmBacktraceCommand,
+    actor_claim: Option<&provenance_core::RbacClaim>,
+) -> anyhow::Result<()> {
     match command {
         SwarmBacktraceCommand::Land {
             repo,
@@ -27,7 +30,7 @@ pub(super) fn handle(command: SwarmBacktraceCommand) -> anyhow::Result<()> {
             run_dir,
             replace,
             format,
-        } => land(repo, scope, &run_dir, replace, format),
+        } => land(repo, scope, &run_dir, replace, format, actor_claim),
     }
 }
 
@@ -69,6 +72,7 @@ fn land(
     run_dir: &Utf8Path,
     replace: bool,
     format: OutputFormat,
+    actor_claim: Option<&provenance_core::RbacClaim>,
 ) -> anyhow::Result<()> {
     anyhow::ensure!(run_dir.is_dir(), "--run-dir must be an existing directory");
     let scope_id = ScopeId::new(scope)?;
@@ -142,6 +146,7 @@ fn land(
     )?;
 
     store.land_ideation_batch(
+        actor_claim,
         &scope_id,
         IdeationLandingBatch {
             contributions,

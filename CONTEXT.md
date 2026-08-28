@@ -143,3 +143,19 @@ Acceptance recorded when a human action resolves the relevant problem and produc
 ## Frozen legacy terminal
 
 A pre-lifecycle proposal row whose terminal definition is covered by the compiled, versioned shipped-v1 fingerprint. It remains readable but cannot be asserted, disposed again, replaced, or used as authority for new lifecycle ingress.
+
+## Principal
+
+The actor a mutation is attributed to. The CLI and SDK carry it as an explicit claim value; it is an attestation, never authentication.
+
+## Capability
+
+One of exactly four grant words — read, edit, execute, manifest-write. Flat and positive-only; no wildcard, delegation, or expiry exists.
+
+## Assignment
+
+One principal's positive capabilities on explicit manifest scopes. Git review is the only way assignments change.
+
+## Resource
+
+The thing a capability is asked for: one manifest scope, or a repo-global resource (the manifest itself, the project dictionary, an import swap) that spans every scope then listed.

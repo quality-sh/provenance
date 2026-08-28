@@ -4,9 +4,11 @@
 //! transitions enforce.
 
 use super::shaping_writers::sort_artifact_links;
-use super::{ProposalDemand, StateStore, TopicClaim, UpdateQuestionInput};
+use super::{MutationAuth, ProposalDemand, StateStore, TopicClaim, UpdateQuestionInput};
 use crate::shards;
-use provenance_core::{Question, QuestionStatus, ScopeId, StableId, Topic, TopicStatus};
+use provenance_core::{
+    Capability, Question, QuestionStatus, RbacClaim, ScopeId, StableId, Topic, TopicStatus,
+};
 use provenance_macros::rule;
 
 #[cfg(test)]
@@ -14,10 +16,12 @@ mod claim_eligibility_tests;
 impl StateStore {
     pub fn claim_topic(
         &self,
+        claim: Option<&RbacClaim>,
         scope_id: &ScopeId,
         id: &StableId,
         actor: &str,
     ) -> anyhow::Result<TopicClaim> {
+        let auth = MutationAuth::new(claim, Capability::Execute, scope_id);
         let actor = validated_actor(actor)?;
         let claimed_at = now_ms()?;
         self.with_repository_publication(|| {
@@ -36,7 +40,7 @@ impl StateStore {
             }
             let surfaced_proposals =
                 self.surface_proposals(scope_id, &ProposalDemand::for_topic(&current_topic))?;
-            let topic = self.update_topic(scope_id, id, |topic| {
+            let topic = self.update_topic(auth, scope_id, id, |topic| {
                 if let Some(holder) = &topic.claimed_by {
                     anyhow::bail!("topic {} is already claimed by {holder}", topic.id.as_str());
                 }
@@ -51,8 +55,14 @@ impl StateStore {
         })
     }
 
-    pub fn release_topic(&self, scope_id: &ScopeId, id: &StableId) -> anyhow::Result<Topic> {
-        self.update_topic(scope_id, id, |topic| {
+    pub fn release_topic(
+        &self,
+        claim: Option<&RbacClaim>,
+        scope_id: &ScopeId,
+        id: &StableId,
+    ) -> anyhow::Result<Topic> {
+        let auth = MutationAuth::new(claim, Capability::Execute, scope_id);
+        self.update_topic(auth, scope_id, id, |topic| {
             anyhow::ensure!(
                 topic.claimed_by.is_some(),
                 "topic {} is not claimed",
@@ -64,8 +74,14 @@ impl StateStore {
         })
     }
 
-    pub fn close_topic(&self, scope_id: &ScopeId, id: &StableId) -> anyhow::Result<Topic> {
-        self.update_topic(scope_id, id, |topic| {
+    pub fn close_topic(
+        &self,
+        claim: Option<&RbacClaim>,
+        scope_id: &ScopeId,
+        id: &StableId,
+    ) -> anyhow::Result<Topic> {
+        let auth = MutationAuth::new(claim, Capability::Execute, scope_id);
+        self.update_topic(auth, scope_id, id, |topic| {
             topic.status = TopicStatus::Closed;
             clear_topic_claim_on_exit(topic);
             Ok(())
@@ -74,13 +90,15 @@ impl StateStore {
 
     pub fn claim_question(
         &self,
+        claim: Option<&RbacClaim>,
         scope_id: &ScopeId,
         id: &StableId,
         actor: &str,
     ) -> anyhow::Result<Question> {
         let actor = validated_actor(actor)?;
         let claimed_at = now_ms()?;
-        self.mutate_question(scope_id, id, |question| {
+        let auth = MutationAuth::new(claim, Capability::Execute, scope_id);
+        self.mutate_question(auth, scope_id, id, |question| {
             let status = ShapingStatus::Question(question.status);
             if let Some(blocking) = claim_blocking_status(status) {
                 anyhow::bail!(
@@ -100,8 +118,14 @@ impl StateStore {
         })
     }
 
-    pub fn release_question(&self, scope_id: &ScopeId, id: &StableId) -> anyhow::Result<Question> {
-        self.mutate_question(scope_id, id, |question| {
+    pub fn release_question(
+        &self,
+        claim: Option<&RbacClaim>,
+        scope_id: &ScopeId,
+        id: &StableId,
+    ) -> anyhow::Result<Question> {
+        let auth = MutationAuth::new(claim, Capability::Execute, scope_id);
+        self.mutate_question(auth, scope_id, id, |question| {
             anyhow::ensure!(
                 question.claimed_by.is_some(),
                 "question {} is not claimed",
@@ -115,18 +139,20 @@ impl StateStore {
 
     pub fn answer_question(
         &self,
+        claim: Option<&RbacClaim>,
         scope_id: &ScopeId,
         id: &StableId,
         answer: String,
         resolution_id: Option<StableId>,
     ) -> anyhow::Result<Question> {
         self.with_repository_publication(|| {
-            self.write_question_answer(scope_id, id, answer, resolution_id)
+            self.write_question_answer(claim, scope_id, id, answer, resolution_id)
         })
     }
 
     fn write_question_answer(
         &self,
+        claim: Option<&RbacClaim>,
         scope_id: &ScopeId,
         id: &StableId,
         answer: String,
@@ -141,7 +167,8 @@ impl StateStore {
                 "resolution does not exist"
             );
         }
-        self.mutate_question(scope_id, id, |question| {
+        let auth = MutationAuth::new(claim, Capability::Execute, scope_id);
+        self.mutate_question(auth, scope_id, id, |question| {
             question.status = QuestionStatus::Answered;
             question.answer = Some(answer);
             if resolution_id.is_some() {
@@ -152,11 +179,19 @@ impl StateStore {
         })
     }
 
-    pub fn update_question(&self, input: UpdateQuestionInput) -> anyhow::Result<Question> {
-        self.with_repository_publication(|| self.write_question_update(input))
+    pub fn update_question(
+        &self,
+        claim: Option<&RbacClaim>,
+        input: UpdateQuestionInput,
+    ) -> anyhow::Result<Question> {
+        self.with_repository_publication(|| self.write_question_update(claim, input))
     }
 
-    fn write_question_update(&self, input: UpdateQuestionInput) -> anyhow::Result<Question> {
+    fn write_question_update(
+        &self,
+        claim: Option<&RbacClaim>,
+        input: UpdateQuestionInput,
+    ) -> anyhow::Result<Question> {
         let UpdateQuestionInput {
             scope_id,
             id,
@@ -184,7 +219,8 @@ impl StateStore {
             self.validate_artifact_links(&scope_id, links)?;
             sort_artifact_links(links);
         }
-        self.mutate_question(&scope_id, &id, |question| {
+        let auth = MutationAuth::new(claim, Capability::Execute, &scope_id);
+        self.mutate_question(auth, &scope_id, &id, |question| {
             if let Some(resolution_method) = resolution_method {
                 question.resolution_method = resolution_method;
             }
@@ -208,12 +244,13 @@ impl StateStore {
 
     fn update_topic(
         &self,
+        auth: MutationAuth<'_>,
         scope_id: &ScopeId,
         id: &StableId,
         mutate: impl FnOnce(&mut Topic) -> anyhow::Result<()>,
     ) -> anyhow::Result<Topic> {
         let path = shards::topics_path(&self.layout, scope_id);
-        self.mutate_jsonl_records(&path, |records: &mut Vec<Topic>| {
+        self.mutate_jsonl_records(&path, auth, |records: &mut Vec<Topic>| {
             let topic = records
                 .iter_mut()
                 .find(|topic| &topic.id == id)
@@ -225,12 +262,13 @@ impl StateStore {
 
     fn mutate_question(
         &self,
+        auth: MutationAuth<'_>,
         scope_id: &ScopeId,
         id: &StableId,
         mutate: impl FnOnce(&mut Question) -> anyhow::Result<()>,
     ) -> anyhow::Result<Question> {
         let path = shards::questions_path(&self.layout, scope_id);
-        self.mutate_jsonl_records(&path, |records: &mut Vec<Question>| {
+        self.mutate_jsonl_records(&path, auth, |records: &mut Vec<Question>| {
             let question = records
                 .iter_mut()
                 .find(|question| &question.id == id)

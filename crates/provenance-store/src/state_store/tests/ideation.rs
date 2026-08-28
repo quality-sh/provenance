@@ -13,54 +13,60 @@ fn ideation_output_records_are_written_deterministically() {
     let (_dir, store, scope) = initialized_store();
 
     store
-        .create_contribution(CreateContributionInput {
-            scope_id: scope.clone(),
-            id: StableId::new("contrib_b").unwrap(),
-            target: IdeationTarget {
-                artifact_type: IdeationTargetType::Requirement,
-                artifact_id: StableId::new("req_overtime").unwrap(),
+        .create_contribution(
+            None,
+            CreateContributionInput {
+                scope_id: scope.clone(),
+                id: StableId::new("contrib_b").unwrap(),
+                target: IdeationTarget {
+                    artifact_type: IdeationTargetType::Requirement,
+                    artifact_id: StableId::new("req_overtime").unwrap(),
+                },
+                participant_slot: "reviewer".into(),
+                stance: ContributionStance::Support,
+                strongest_finding: "Supported by evidence".into(),
+                evidence_references: Vec::new(),
+                material_claims: Vec::new(),
+                risks: Vec::new(),
+                objections: Vec::new(),
+                challenges: Vec::new(),
+                suggested_artifact_changes: Vec::new(),
+                unsupported_recommendations: Vec::new(),
+                uncertainty: UncertaintyRating {
+                    level: UncertaintyLevel::Low,
+                    rationale: "Direct evidence".into(),
+                },
+                open_questions: Vec::new(),
             },
-            participant_slot: "reviewer".into(),
-            stance: ContributionStance::Support,
-            strongest_finding: "Supported by evidence".into(),
-            evidence_references: Vec::new(),
-            material_claims: Vec::new(),
-            risks: Vec::new(),
-            objections: Vec::new(),
-            challenges: Vec::new(),
-            suggested_artifact_changes: Vec::new(),
-            unsupported_recommendations: Vec::new(),
-            uncertainty: UncertaintyRating {
-                level: UncertaintyLevel::Low,
-                rationale: "Direct evidence".into(),
-            },
-            open_questions: Vec::new(),
-        })
+        )
         .unwrap();
     store
-        .create_contribution(CreateContributionInput {
-            scope_id: scope.clone(),
-            id: StableId::new("contrib_a").unwrap(),
-            target: IdeationTarget {
-                artifact_type: IdeationTargetType::Requirement,
-                artifact_id: StableId::new("req_overtime").unwrap(),
+        .create_contribution(
+            None,
+            CreateContributionInput {
+                scope_id: scope.clone(),
+                id: StableId::new("contrib_a").unwrap(),
+                target: IdeationTarget {
+                    artifact_type: IdeationTargetType::Requirement,
+                    artifact_id: StableId::new("req_overtime").unwrap(),
+                },
+                participant_slot: "refuter".into(),
+                stance: ContributionStance::NeedsMoreEvidence,
+                strongest_finding: "Needs more evidence".into(),
+                evidence_references: Vec::new(),
+                material_claims: Vec::new(),
+                risks: Vec::new(),
+                objections: Vec::new(),
+                challenges: Vec::new(),
+                suggested_artifact_changes: Vec::new(),
+                unsupported_recommendations: Vec::new(),
+                uncertainty: UncertaintyRating {
+                    level: UncertaintyLevel::High,
+                    rationale: "Missing source".into(),
+                },
+                open_questions: Vec::new(),
             },
-            participant_slot: "refuter".into(),
-            stance: ContributionStance::NeedsMoreEvidence,
-            strongest_finding: "Needs more evidence".into(),
-            evidence_references: Vec::new(),
-            material_claims: Vec::new(),
-            risks: Vec::new(),
-            objections: Vec::new(),
-            challenges: Vec::new(),
-            suggested_artifact_changes: Vec::new(),
-            unsupported_recommendations: Vec::new(),
-            uncertainty: UncertaintyRating {
-                level: UncertaintyLevel::High,
-                rationale: "Missing source".into(),
-            },
-            open_questions: Vec::new(),
-        })
+        )
         .unwrap();
 
     assert_eq!(
@@ -93,7 +99,9 @@ fn invalid_lifecycle_batch_is_rejected_without_partial_writes() {
         }))
         .unwrap();
 
-    store.land_ideation_batch(&scope, batch, false).unwrap_err();
+    store
+        .land_ideation_batch(None, &scope, batch, false)
+        .unwrap_err();
     assert!(store.list_contributions(&scope).unwrap().is_empty());
     assert!(store.list_assertion_records(&scope).unwrap().is_empty());
 }
@@ -103,6 +111,7 @@ fn direct_contribution_create_and_replace_respect_landed_records() {
     let (_dir, store, scope) = initialized_store();
     store
         .land_ideation_batch(
+            None,
             &scope,
             IdeationLandingBatch {
                 contributions: vec![contribution(&scope, "landed")],
@@ -116,12 +125,12 @@ fn direct_contribution_create_and_replace_respect_landed_records() {
         .unwrap();
 
     let error = store
-        .create_contribution(contribution_input(&scope, "direct"))
+        .create_contribution(None, contribution_input(&scope, "direct"))
         .unwrap_err();
     assert!(error.to_string().contains("contribution already exists"));
 
     store
-        .upsert_contribution(contribution_input(&scope, "replacement"))
+        .upsert_contribution(None, contribution_input(&scope, "replacement"))
         .unwrap();
     let records = store.list_contributions(&scope).unwrap();
     assert_eq!(records.len(), 1);
@@ -133,6 +142,7 @@ fn direct_synthesis_create_and_replace_respect_landed_records() {
     let (_dir, store, scope) = initialized_store();
     store
         .land_ideation_batch(
+            None,
             &scope,
             IdeationLandingBatch {
                 contributions: Vec::new(),
@@ -146,14 +156,14 @@ fn direct_synthesis_create_and_replace_respect_landed_records() {
         .unwrap();
 
     let error = store
-        .create_synthesis_packet(synthesis_input(&scope, "direct"))
+        .create_synthesis_packet(None, synthesis_input(&scope, "direct"))
         .unwrap_err();
     assert!(error
         .to_string()
         .contains("synthesis packet already exists"));
 
     store
-        .upsert_synthesis_packet(synthesis_input(&scope, "replacement"))
+        .upsert_synthesis_packet(None, synthesis_input(&scope, "replacement"))
         .unwrap();
     let records = store.list_synthesis_packets(&scope).unwrap();
     assert_eq!(records.len(), 1);
@@ -260,15 +270,17 @@ fn direct_replacement_cannot_retarget_asserted_evidence() {
         "dispositions": []
     }))
     .unwrap();
-    store.land_ideation_batch(&scope, batch, false).unwrap();
+    store
+        .land_ideation_batch(None, &scope, batch, false)
+        .unwrap();
 
     let contribution_error = store
-        .upsert_contribution(contribution_input(&scope, "replacement"))
+        .upsert_contribution(None, contribution_input(&scope, "replacement"))
         .unwrap_err()
         .to_string();
     assert!(contribution_error.contains("referenced by an assertion"));
     let synthesis_error = store
-        .upsert_synthesis_packet(synthesis_input(&scope, "replacement"))
+        .upsert_synthesis_packet(None, synthesis_input(&scope, "replacement"))
         .unwrap_err()
         .to_string();
     assert!(synthesis_error.contains("referenced by an assertion"));

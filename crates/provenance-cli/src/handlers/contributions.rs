@@ -11,7 +11,11 @@ use provenance_store::{
     state_store::{CreateContributionInput, StateStore},
 };
 
-pub(super) fn handle(command: ContributionsCommand, quiet: bool) -> anyhow::Result<()> {
+pub(super) fn handle(
+    command: ContributionsCommand,
+    quiet: bool,
+    actor_claim: Option<&provenance_core::RbacClaim>,
+) -> anyhow::Result<()> {
     match command {
         ContributionsCommand::Create {
             repo,
@@ -73,9 +77,9 @@ pub(super) fn handle(command: ContributionsCommand, quiet: bool) -> anyhow::Resu
                 )?,
             };
             let contribution = if replace {
-                store.upsert_contribution(input)?
+                store.upsert_contribution(actor_claim, input)?
             } else {
-                store.create_contribution(input)?
+                store.create_contribution(actor_claim, input)?
             };
             output::print(format, &contribution)?;
         }

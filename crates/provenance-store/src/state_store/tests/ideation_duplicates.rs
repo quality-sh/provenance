@@ -10,11 +10,11 @@ fn exact_duplicate_proposal_id_is_rejected_at_batch_ingress() {
     }))
     .unwrap();
     store
-        .land_ideation_batch(&scope, initial.clone(), false)
+        .land_ideation_batch(None, &scope, initial.clone(), false)
         .unwrap();
 
     let error = store
-        .land_ideation_batch(&scope, initial, false)
+        .land_ideation_batch(None, &scope, initial, false)
         .unwrap_err();
 
     assert!(error
@@ -27,7 +27,7 @@ fn exact_duplicate_assertion_id_is_rejected_at_batch_ingress() {
     let (_dir, store, scope) = initialized_store();
     let initial = asserted_batch();
     store
-        .land_ideation_batch(&scope, initial.clone(), false)
+        .land_ideation_batch(None, &scope, initial.clone(), false)
         .unwrap();
     let replay = IdeationLandingBatch {
         contributions: Vec::new(),
@@ -38,7 +38,7 @@ fn exact_duplicate_assertion_id_is_rejected_at_batch_ingress() {
     };
 
     let error = store
-        .land_ideation_batch(&scope, replay, false)
+        .land_ideation_batch(None, &scope, replay, false)
         .unwrap_err();
 
     assert!(error
@@ -68,7 +68,7 @@ fn exact_duplicate_disposition_id_is_rejected_at_batch_ingress() {
     }))
     .unwrap();
     store
-        .land_ideation_batch(&scope, initial.clone(), false)
+        .land_ideation_batch(None, &scope, initial.clone(), false)
         .unwrap();
     let replay = IdeationLandingBatch {
         contributions: Vec::new(),
@@ -79,7 +79,7 @@ fn exact_duplicate_disposition_id_is_rejected_at_batch_ingress() {
     };
 
     let error = store
-        .land_ideation_batch(&scope, replay, false)
+        .land_ideation_batch(None, &scope, replay, false)
         .unwrap_err();
 
     assert!(error

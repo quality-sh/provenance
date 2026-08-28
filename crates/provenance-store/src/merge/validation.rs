@@ -36,15 +36,68 @@ pub enum ShardFamily {
     Edges,
     /// `.provenance/state/scopes/<scope>/ideation/landings.jsonl`
     IdeationLandings,
-    /// `.provenance/state/scopes/<scope>/requirements/*.jsonl`
+    /// `.provenance/state/scopes/<scope>/requirements/req.jsonl`
     Requirements,
+    /// `.provenance/state/scopes/<scope>/requirements/review.jsonl`
+    RequirementReviews,
     /// `.provenance/state/scopes/<scope>/rules/*.jsonl`
     Rules,
-    /// Any other path, including unrecognized per-scope record families such
-    /// as `sources` and `resolutions`, and files outside the state directory.
-    /// Merged records pass unchecked.
+    /// `.provenance/state/scopes/<scope>/sources/*.jsonl`
+    Sources,
+    /// `.provenance/state/scopes/<scope>/domains/*.jsonl`
+    Domains,
+    /// `.provenance/state/scopes/<scope>/boundaries/*.jsonl`
+    Boundaries,
+    /// `.provenance/state/scopes/<scope>/topics/*.jsonl`
+    Topics,
+    /// `.provenance/state/scopes/<scope>/questions/*.jsonl`
+    Questions,
+    /// `.provenance/state/scopes/<scope>/resolutions/*.jsonl`
+    Resolutions,
+    /// `.provenance/state/scopes/<scope>/ideation/contributions.jsonl`
+    Contributions,
+    /// `.provenance/state/scopes/<scope>/ideation/synthesis_packets.jsonl`
+    SynthesisPackets,
+    /// `.provenance/state/scopes/<scope>/ideation/proposal_cards.jsonl`
+    ProposalCards,
+    /// `.provenance/state/scopes/<scope>/ideation/dispositions.jsonl`
+    Dispositions,
+    /// `.provenance/state/scopes/<scope>/ideation/assertions.jsonl`
+    Assertions,
+    /// `.provenance/state/scopes/<scope>/threads/threads.jsonl`
+    Threads,
+    /// `.provenance/state/scopes/<scope>/threads/<month>.jsonl`
+    Messages,
+    /// `.provenance/state/scopes/<scope>/implementations/binding.jsonl`
+    ImplementationBindings,
+    /// `.provenance/state/scopes/<scope>/verifications/binding.jsonl`
+    VerificationBindings,
+    /// Any other path, including files outside the state directory.
+    /// Merged records pass unchecked outside the rbac regime.
     Unrecognized,
 }
+
+/// A message shard is one month file: digits and dashes, `.jsonl` ending.
+fn is_message_shard_name(name: &str) -> bool {
+    let stem = name.strip_suffix(".jsonl");
+    stem.is_some_and(|stem| {
+        !stem.is_empty() && stem.chars().all(|c| c.is_ascii_digit() || c == '-')
+    })
+}
+
+/// The scoped record families one directory level below `scopes/<scope>/`.
+const SCOPED_FAMILY_DIRS: [(&str, ShardFamily); 10] = [
+    ("sources", ShardFamily::Sources),
+    ("domains", ShardFamily::Domains),
+    ("boundaries", ShardFamily::Boundaries),
+    ("topics", ShardFamily::Topics),
+    ("questions", ShardFamily::Questions),
+    ("resolutions", ShardFamily::Resolutions),
+    ("requirements", ShardFamily::Requirements),
+    ("rules", ShardFamily::Rules),
+    ("implementations", ShardFamily::ImplementationBindings),
+    ("verifications", ShardFamily::VerificationBindings),
+];
 
 impl ShardFamily {
     /// Recognizes the family from the path the merged result will be stored at.
@@ -60,13 +113,17 @@ impl ShardFamily {
         };
         let in_state = directory.parent().and_then(Utf8Path::file_name) == Some("state");
         if in_state && directory.file_name() == Some("edges") {
-            Self::Edges
-        } else if is_scoped_family(path, "requirements") {
-            Self::Requirements
-        } else if is_scoped_family(path, "rules") {
-            Self::Rules
-        } else if path.file_name() == Some("landings.jsonl")
-            && directory.file_name() == Some("ideation")
+            return Self::Edges;
+        }
+        for (dir, family) in SCOPED_FAMILY_DIRS {
+            if is_scoped_family(path, dir) {
+                if family == Self::Requirements && path.file_name() == Some("review.jsonl") {
+                    return Self::RequirementReviews;
+                }
+                return family;
+            }
+        }
+        if directory.file_name() == Some("ideation")
             && directory
                 .parent()
                 .and_then(Utf8Path::parent)
@@ -77,10 +134,34 @@ impl ShardFamily {
                 .and_then(Utf8Path::parent)
                 .is_some_and(|directory| directory.file_name() == Some("state"))
         {
-            Self::IdeationLandings
-        } else {
-            Self::Unrecognized
+            return match path.file_name() {
+                Some("landings.jsonl") => Self::IdeationLandings,
+                Some("contributions.jsonl") => Self::Contributions,
+                Some("synthesis_packets.jsonl") => Self::SynthesisPackets,
+                Some("proposal_cards.jsonl") => Self::ProposalCards,
+                Some("dispositions.jsonl") => Self::Dispositions,
+                Some("assertions.jsonl") => Self::Assertions,
+                _ => Self::Unrecognized,
+            };
         }
+        if directory.file_name() == Some("threads")
+            && directory
+                .parent()
+                .and_then(Utf8Path::parent)
+                .is_some_and(|directory| directory.file_name() == Some("scopes"))
+            && directory
+                .parent()
+                .and_then(Utf8Path::parent)
+                .and_then(Utf8Path::parent)
+                .is_some_and(|directory| directory.file_name() == Some("state"))
+        {
+            return match path.file_name() {
+                Some("threads.jsonl") => Self::Threads,
+                Some(name) if is_message_shard_name(name) => Self::Messages,
+                _ => Self::Unrecognized,
+            };
+        }
+        Self::Unrecognized
     }
 }
 
@@ -109,7 +190,26 @@ pub fn validate_merged_records(
         }
         ShardFamily::Requirements => validate_typed_records::<Requirement>(records, "requirement"),
         ShardFamily::Rules => validate_typed_records::<Rule>(records, "rule"),
-        ShardFamily::Unrecognized => Ok(()),
+        // The remaining canonical families stay unchecked outside the rbac
+        // regime, exactly as before this release; under rbac the gate in
+        // `merge::rbac` types and authorizes every one of them instead.
+        ShardFamily::RequirementReviews
+        | ShardFamily::Sources
+        | ShardFamily::Domains
+        | ShardFamily::Boundaries
+        | ShardFamily::Topics
+        | ShardFamily::Questions
+        | ShardFamily::Resolutions
+        | ShardFamily::Contributions
+        | ShardFamily::SynthesisPackets
+        | ShardFamily::ProposalCards
+        | ShardFamily::Dispositions
+        | ShardFamily::Assertions
+        | ShardFamily::Threads
+        | ShardFamily::Messages
+        | ShardFamily::ImplementationBindings
+        | ShardFamily::VerificationBindings
+        | ShardFamily::Unrecognized => Ok(()),
     }
 }
 

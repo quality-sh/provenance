@@ -6,7 +6,7 @@ use super::policy::{
     RATIFICATION_REFUSAL_TAIL,
 };
 use super::types::{Assignment, Capability, RbacClaim, RbacResource, RbacSection};
-use crate::{Manifest, ScopeId};
+use crate::{Manifest, RepoPathPrefix, ScopeId};
 use serde_json::json;
 
 fn scope_id(name: &str) -> ScopeId {
@@ -283,4 +283,31 @@ fn capability_wire_names_are_the_four_documented_words() {
         assert_eq!(Capability::parse(word).unwrap(), capability);
     }
     assert!(Capability::parse("own").is_err());
+}
+
+fn manifest_with(rbac: Option<RbacSection>, legacy: Vec<String>) -> Manifest {
+    Manifest {
+        schema_version: crate::SchemaVersion(1),
+        scopes: vec![crate::Scope {
+            id: scope_id("default"),
+            path_prefix: RepoPathPrefix::new("."),
+        }],
+        disposition_actor_ids: legacy,
+        rbac,
+    }
+}
+
+#[test]
+fn the_manifest_resolves_the_ratification_regime_from_the_section() {
+    let legacy = manifest_with(None, vec!["ben".to_string()]);
+    assert!(matches!(
+        legacy.disposition_ratification(),
+        crate::DispositionRatification::LegacyAllowlist(_)
+    ));
+
+    let rbac = manifest_with(Some(section(vec![])), Vec::new());
+    assert!(matches!(
+        rbac.disposition_ratification(),
+        crate::DispositionRatification::RbacAssignments(_)
+    ));
 }

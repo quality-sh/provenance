@@ -7,7 +7,7 @@ pub mod scope;
 pub mod threads;
 
 pub use model::{
-    disposition_requires_prior_assertion, effective_proposal_state,
+    authorize, disposition_requires_prior_assertion, effective_proposal_state,
     ensure_disposition_actor_is_human, ensure_rbac_section_well_formed,
     ensure_supported_schema_version, ensure_unambiguous_rbac, is_shipped_legacy_disposition_audit,
     packet_qualifies_proposal, validate_assertion_intrinsic, validate_commit_pin,

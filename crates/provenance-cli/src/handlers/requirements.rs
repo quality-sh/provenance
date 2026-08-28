@@ -12,7 +12,11 @@ struct FogView {
     fog: Option<String>,
 }
 
-pub(super) fn handle(command: RequirementsCommand) -> anyhow::Result<()> {
+#[allow(clippy::too_many_lines)]
+pub(super) fn handle(
+    command: RequirementsCommand,
+    actor_claim: Option<&provenance_core::RbacClaim>,
+) -> anyhow::Result<()> {
     match command {
         RequirementsCommand::Create {
             repo,
@@ -27,6 +31,7 @@ pub(super) fn handle(command: RequirementsCommand) -> anyhow::Result<()> {
             format,
         } => {
             let requirement = StateStore::new(ProvenanceLayout::new(repo)).create_requirement(
+                actor_claim,
                 CreateRequirementInput {
                     scope_id: ScopeId::new(scope)?,
                     id: StableId::new(id)?,
@@ -50,6 +55,7 @@ pub(super) fn handle(command: RequirementsCommand) -> anyhow::Result<()> {
                 format,
             } => {
                 let edge = StateStore::new(ProvenanceLayout::new(repo)).add_source_reference(
+                    actor_claim,
                     AddSourceReferenceInput {
                         scope_id: ScopeId::new(scope)?,
                         source_id: StableId::new(source_id)?,
@@ -70,6 +76,7 @@ pub(super) fn handle(command: RequirementsCommand) -> anyhow::Result<()> {
             } => {
                 let requirement = StateStore::new(ProvenanceLayout::new(repo))
                     .set_requirement_fog(
+                        actor_claim,
                         &ScopeId::new(scope)?,
                         &StableId::new(requirement_id)?,
                         Some(text),
@@ -104,6 +111,7 @@ pub(super) fn handle(command: RequirementsCommand) -> anyhow::Result<()> {
             } => {
                 let requirement = StateStore::new(ProvenanceLayout::new(repo))
                     .set_requirement_fog(
+                        actor_claim,
                         &ScopeId::new(scope)?,
                         &StableId::new(requirement_id)?,
                         None,

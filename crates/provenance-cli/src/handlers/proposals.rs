@@ -13,7 +13,11 @@ use provenance_store::{
 };
 
 #[allow(clippy::too_many_lines)]
-pub(super) fn handle(command: ProposalsCommand, quiet: bool) -> anyhow::Result<()> {
+pub(super) fn handle(
+    command: ProposalsCommand,
+    quiet: bool,
+    actor_claim: Option<&provenance_core::RbacClaim>,
+) -> anyhow::Result<()> {
     match command {
         ProposalsCommand::Create {
             repo,
@@ -66,6 +70,7 @@ pub(super) fn handle(command: ProposalsCommand, quiet: bool) -> anyhow::Result<(
             };
             let proposal = match (assertion_id, synthesis_packet_id) {
                 (Some(assertion_id), Some(synthesis_packet_id)) => store.create_asserted_proposal(
+                    actor_claim,
                     input,
                     CreateAssertionInput {
                         scope_id,
@@ -75,7 +80,7 @@ pub(super) fn handle(command: ProposalsCommand, quiet: bool) -> anyhow::Result<(
                         supporting_claim_ids,
                     },
                 )?,
-                (None, None) => store.create_proposal_card(input)?,
+                (None, None) => store.create_proposal_card(actor_claim, input)?,
                 _ => unreachable!("clap requires both atomic assertion arguments"),
             };
             output::print(format, &proposal)?;
@@ -102,9 +107,9 @@ pub(super) fn handle(command: ProposalsCommand, quiet: bool) -> anyhow::Result<(
             };
             let assertion = if resolve_human_gate {
                 let decision_keys = stable_ids(decision_key)?;
-                store.assert_proposal_after_human_decision(input, &decision_keys)?
+                store.assert_proposal_after_human_decision(actor_claim, input, &decision_keys)?
             } else {
-                store.assert_proposal(input)?
+                store.assert_proposal(actor_claim, input)?
             };
             output::print(format, &assertion)?;
         }

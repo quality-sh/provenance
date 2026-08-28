@@ -1,16 +1,23 @@
-use super::{serde_name, PostMessageInput, PostMessageResult, StateStore};
+use super::{serde_name, MutationAuth, PostMessageInput, PostMessageResult, StateStore};
 use crate::shards;
-use provenance_core::{Message, StableId, Thread, ThreadStatus, SUPPORTED_SCHEMA_VERSION};
+use provenance_core::{
+    Capability, Message, RbacClaim, StableId, Thread, ThreadStatus, SUPPORTED_SCHEMA_VERSION,
+};
 
 impl StateStore {
     pub fn post_thread_message(
         &self,
+        claim: Option<&RbacClaim>,
         input: PostMessageInput,
     ) -> anyhow::Result<PostMessageResult> {
-        self.with_repository_publication(|| self.write_thread_message(input))
+        self.with_repository_publication(|| self.write_thread_message(claim, input))
     }
 
-    fn write_thread_message(&self, input: PostMessageInput) -> anyhow::Result<PostMessageResult> {
+    fn write_thread_message(
+        &self,
+        claim: Option<&RbacClaim>,
+        input: PostMessageInput,
+    ) -> anyhow::Result<PostMessageResult> {
         let PostMessageInput {
             scope_id,
             parent,
@@ -19,46 +26,50 @@ impl StateStore {
         } = input;
         anyhow::ensure!(!body.trim().is_empty(), "message body must not be empty");
         let threads_path = shards::threads_path(&self.layout, &scope_id);
-        let thread = self.mutate_jsonl_records(&threads_path, |threads: &mut Vec<Thread>| {
-            let matching: Vec<_> = threads
-                .iter()
-                .filter(|thread| thread.parent == parent)
-                .cloned()
-                .collect();
-            let thread = if let Some(canonical) =
-                provenance_core::threads::choose_canonical_active_thread(&matching)
-            {
-                let canonical = canonical.clone();
-                provenance_core::threads::archive_non_canonical_siblings(
-                    threads,
-                    &parent,
-                    &canonical.id,
-                );
-                canonical
-            } else {
-                let base_id = format!(
-                    "thread_{}_{}",
-                    serde_name(&parent.node_type)?,
-                    parent.node_id.as_str()
-                );
-                let thread = Thread {
-                    schema_version: SUPPORTED_SCHEMA_VERSION,
-                    scope_id: scope_id.clone(),
-                    id: next_thread_id(threads, &base_id)?,
-                    parent: parent.clone(),
-                    status: ThreadStatus::Active,
-                    created_at: 1,
+        let auth = MutationAuth::new(claim, Capability::Edit, &scope_id);
+        let thread =
+            self.mutate_jsonl_records(&threads_path, auth.clone(), |threads: &mut Vec<Thread>| {
+                let matching: Vec<_> = threads
+                    .iter()
+                    .filter(|thread| thread.parent == parent)
+                    .cloned()
+                    .collect();
+                let thread = if let Some(canonical) =
+                    provenance_core::threads::choose_canonical_active_thread(&matching)
+                {
+                    let canonical = canonical.clone();
+                    provenance_core::threads::archive_non_canonical_siblings(
+                        threads,
+                        &parent,
+                        &canonical.id,
+                    );
+                    canonical
+                } else {
+                    let base_id = format!(
+                        "thread_{}_{}",
+                        serde_name(&parent.node_type)?,
+                        parent.node_id.as_str()
+                    );
+                    let thread = Thread {
+                        schema_version: SUPPORTED_SCHEMA_VERSION,
+                        scope_id: scope_id.clone(),
+                        id: next_thread_id(threads, &base_id)?,
+                        parent: parent.clone(),
+                        status: ThreadStatus::Active,
+                        created_at: 1,
+                    };
+                    threads.push(thread.clone());
+                    thread
                 };
-                threads.push(thread.clone());
-                thread
-            };
-            threads.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
-            Ok(thread)
-        })?;
+                threads.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
+                Ok(thread)
+            })?;
 
         let messages_path = shards::messages_path(&self.layout, &scope_id);
-        let message =
-            self.mutate_jsonl_records(&messages_path, |messages: &mut Vec<Message>| {
+        let message = self.mutate_jsonl_records(
+            &messages_path,
+            auth.clone(),
+            |messages: &mut Vec<Message>| {
                 let created_at = messages
                     .iter()
                     .map(|message| message.created_at)
@@ -82,7 +93,8 @@ impl StateStore {
                         .then(a.id.as_str().cmp(b.id.as_str()))
                 });
                 Ok(message)
-            })?;
+            },
+        )?;
         Ok(PostMessageResult { thread, message })
     }
 }

@@ -5,6 +5,7 @@ mod ideation_batches;
 mod ideation_writers;
 mod implementation_bindings;
 mod inputs;
+pub(crate) mod mutation;
 mod proposal_surfaces;
 mod proposal_writers;
 pub(crate) mod readers;
@@ -37,6 +38,7 @@ pub use inputs::{
     TypedRuleInput, TypedSourceInput, TypedSpecDiagnostic, TypedSpecInput, TypedSpecResult,
     UpdateQuestionInput,
 };
+pub(crate) use mutation::MutationAuth;
 pub use proposal_surfaces::{ProposalDemand, ProposalSurfaceReason, SurfacedProposal, TopicClaim};
 pub use requirement_reviews::{requirement_statement_changes, RequirementStatementChange};
 pub use typed_statement_policy::TypedSpecWriteError;
@@ -295,19 +297,36 @@ impl StateStore {
         scope: &ScopeId,
         disposition_actor_ids: &[String],
     ) -> anyhow::Result<Vec<ProposalCard>> {
-        self.project_proposal_cards(scope, Some(disposition_actor_ids), || Ok(()))
+        self.project_proposal_cards(
+            scope,
+            Some(provenance_core::DispositionRatification::LegacyAllowlist(
+                disposition_actor_ids,
+            )),
+            || Ok(()),
+        )
+    }
+    /// Projection against an already-resolved ratification regime, for the
+    /// repository check. Retired together with the actor-keyed variant at the
+    /// next protocol bump.
+    pub fn list_proposal_cards_with_ratification(
+        &self,
+        scope: &ScopeId,
+        ratification: provenance_core::DispositionRatification<'_>,
+    ) -> anyhow::Result<Vec<ProposalCard>> {
+        self.project_proposal_cards(scope, Some(ratification), || Ok(()))
     }
     fn project_proposal_cards(
         &self,
         scope: &ScopeId,
-        disposition_actor_ids: Option<&[String]>,
+        ratification: Option<provenance_core::DispositionRatification<'_>>,
         after_validation: impl FnOnce() -> anyhow::Result<()>,
     ) -> anyhow::Result<Vec<ProposalCard>> {
         self.with_repository_publication(|| {
-            if let Some(disposition_actor_ids) = disposition_actor_ids {
-                self.validate_ideation_scope_with_actor_ids(scope, disposition_actor_ids)?;
-            } else {
-                self.validate_ideation_scope(scope)?;
+            match ratification {
+                Some(ratification) => {
+                    self.validate_ideation_scope_with_ratification(scope, ratification)?;
+                }
+                None => self.validate_ideation_scope(scope)?,
             }
             after_validation()?;
             let assertions = self.list_assertion_records(scope)?;

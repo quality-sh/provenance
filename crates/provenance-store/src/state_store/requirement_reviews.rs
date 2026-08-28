@@ -3,7 +3,7 @@ use provenance_core::{
 };
 use sha2::{Digest, Sha256};
 
-use super::{ReconciledResource, StateStore, TypedResourceKind};
+use super::{MutationAuth, ReconciledResource, StateStore, TypedResourceKind};
 use crate::shards;
 
 /// One restated Requirement obligation drawn from a reconciliation.
@@ -61,6 +61,7 @@ impl StateStore {
     /// review a verification run already cleared does not reopen itself.
     pub(crate) fn record_requirement_reviews(
         &self,
+        auth: MutationAuth<'_>,
         scope: &ScopeId,
         reviews: Vec<RequirementReviewInput>,
     ) -> anyhow::Result<()> {
@@ -72,7 +73,7 @@ impl StateStore {
             .map(|review| review.into_record(scope))
             .collect::<anyhow::Result<Vec<_>>>()?;
         let path = shards::requirement_reviews_path(&self.layout, scope);
-        self.mutate_jsonl_records(&path, |records: &mut Vec<RequirementReview>| {
+        self.mutate_jsonl_records(&path, auth, |records: &mut Vec<RequirementReview>| {
             for record in desired {
                 if !records.iter().any(|existing| existing.id == record.id) {
                     records.push(record);
@@ -89,6 +90,7 @@ impl StateStore {
     /// clear, because an earlier run cannot vouch for a later change.
     pub(crate) fn clear_requirement_reviews(
         &self,
+        auth: MutationAuth<'_>,
         scope: &ScopeId,
         rule_id: &StableId,
         run_id: &StableId,
@@ -98,7 +100,7 @@ impl StateStore {
         if !path.exists() {
             return Ok(());
         }
-        self.mutate_jsonl_records(&path, |records: &mut Vec<RequirementReview>| {
+        self.mutate_jsonl_records(&path, auth, |records: &mut Vec<RequirementReview>| {
             for record in records.iter_mut().filter(|record| {
                 record.rule_id == *rule_id
                     && record.cleared_at.is_none()

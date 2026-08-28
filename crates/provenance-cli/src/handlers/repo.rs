@@ -1,15 +1,21 @@
 use crate::atomic_file::{FileRollbackJournal, FileSnapshot};
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
-use provenance_core::{Manifest, RepoPathPrefix, Scope, ScopeId};
+use provenance_core::{Capability, Manifest, RepoPathPrefix, Scope, ScopeId};
 use provenance_macros::rule;
 use provenance_store::layout::ProvenanceLayout;
+
+pub(super) const DISPOSITION_ACTOR_DEPRECATION: &str =
+    "warning: init --disposition-actor-id / --clear-disposition-actors are deprecated inside the \
+     rbac compatibility window and are removed at the next protocol bump; move disposition \
+     authority into rbac.assignments in .provenance/state/manifest.json";
 
 pub(super) struct InitOptions {
     pub(super) scope: Option<String>,
     pub(super) path_prefix: Option<Utf8PathBuf>,
     pub(super) disposition_actor_ids: Vec<String>,
     pub(super) clear_disposition_actors: bool,
+    pub(super) actor_claim: Option<provenance_core::RbacClaim>,
     pub(super) ste_onboarding: crate::cli::SteOnboardingMode,
     pub(super) ste_pdf: Option<Utf8PathBuf>,
     pub(super) invocation_channel: crate::cli::InvocationChannel,
@@ -17,6 +23,9 @@ pub(super) struct InitOptions {
 }
 
 pub(super) fn init(path: &Utf8Path, options: InitOptions) -> anyhow::Result<()> {
+    if !options.disposition_actor_ids.is_empty() || options.clear_disposition_actors {
+        eprintln!("{DISPOSITION_ACTOR_DEPRECATION}");
+    }
     prepare_init(path, options)?.apply()
 }
 
@@ -41,11 +50,13 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
         path_prefix,
         disposition_actor_ids,
         clear_disposition_actors,
+        actor_claim,
         ste_onboarding,
         ste_pdf,
         invocation_channel,
         package_manager,
     } = options;
+    let actor_claim = actor_claim.as_ref();
     super::check::recover_repository_before_init(path)
         .context("failed to recover an interrupted repository publication")?;
     let invocation = crate::onboarding::Invocation::from_cli(invocation_channel, package_manager)?;
@@ -61,11 +72,24 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
         "disposition actor IDs must not be empty"
     );
     let mut manifest = if manifest_exists {
-        parse_manifest(
+        let parsed = parse_manifest(
             manifest_before
                 .bytes()
                 .ok_or_else(|| anyhow::anyhow!("manifest disappeared during init"))?,
-        )?
+        )?;
+        // Re-init of an rbac-managed repository demands manifest-write held on
+        // every scope then listed (settled Option A). First bootstrap is
+        // exempt: the section it creates cannot be consulted before it exists.
+        if let Some(section) = &parsed.rbac {
+            let scopes: Vec<ScopeId> = parsed.scopes.iter().map(|s| s.id.clone()).collect();
+            provenance_core::authorize(
+                actor_claim,
+                section,
+                Capability::ManifestWrite,
+                provenance_core::RbacResource::RepoGlobal(&scopes),
+            )?;
+        }
+        parsed
     } else {
         let scope = scope.as_deref().ok_or_else(|| {
             anyhow::anyhow!("--scope is required when initializing a new repository")
@@ -245,6 +269,7 @@ mod tests {
                 path_prefix: Some(Utf8PathBuf::from(".")),
                 disposition_actor_ids: Vec::new(),
                 clear_disposition_actors: false,
+                actor_claim: None,
                 ste_onboarding: crate::cli::SteOnboardingMode::Interactive,
                 ste_pdf: None,
                 invocation_channel: crate::cli::InvocationChannel::Native,

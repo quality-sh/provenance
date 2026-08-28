@@ -12,16 +12,19 @@ fn direct_disposition_rejects_missing_canonical_artifact_without_writing() {
     let (_dir, store, scope) = initialized_store();
     allow_actor(&store);
     store
-        .create_proposal_card(proposal_input(
-            &scope,
-            "proposal_missing_artifact",
-            "Missing artifact",
-            PromotionState::Proposed,
-        ))
+        .create_proposal_card(
+            None,
+            proposal_input(
+                &scope,
+                "proposal_missing_artifact",
+                "Missing artifact",
+                PromotionState::Proposed,
+            ),
+        )
         .unwrap();
 
     let error = store
-        .create_disposition(input(&scope, "requirement", "req_missing"))
+        .create_disposition(None, input(&scope, "requirement", "req_missing"))
         .unwrap_err()
         .to_string();
 
@@ -41,12 +44,15 @@ fn direct_disposition_rejects_wrong_kind_and_wrong_scope_targets() {
         let (_dir, store, scope) = initialized_store();
         allow_actor(&store);
         store
-            .create_proposal_card(proposal_input(
-                &scope,
-                "proposal_artifact",
-                "Artifact",
-                PromotionState::Proposed,
-            ))
+            .create_proposal_card(
+                None,
+                proposal_input(
+                    &scope,
+                    "proposal_artifact",
+                    "Artifact",
+                    PromotionState::Proposed,
+                ),
+            )
             .unwrap();
         let state = store.layout.state_dir();
         if artifact_id == "artifact_collision" {
@@ -62,7 +68,7 @@ fn direct_disposition_rejects_wrong_kind_and_wrong_scope_targets() {
         }
 
         let error = store
-            .create_disposition(input(&scope, artifact_type, artifact_id))
+            .create_disposition(None, input(&scope, artifact_type, artifact_id))
             .unwrap_err()
             .to_string();
         assert!(
@@ -79,12 +85,15 @@ fn direct_disposition_rejects_every_canonical_kind_misfiled_in_the_scope_shard()
         let (_dir, store, scope) = initialized_store();
         allow_actor(&store);
         store
-            .create_proposal_card(proposal_input(
-                &scope,
-                "proposal_artifact",
-                "Artifact",
-                PromotionState::Proposed,
-            ))
+            .create_proposal_card(
+                None,
+                proposal_input(
+                    &scope,
+                    "proposal_artifact",
+                    "Artifact",
+                    PromotionState::Proposed,
+                ),
+            )
             .unwrap();
         write_jsonl(
             &canonical_shard_path(&store.layout, &scope, artifact_type),
@@ -93,7 +102,7 @@ fn direct_disposition_rejects_every_canonical_kind_misfiled_in_the_scope_shard()
         assert_misfiled_record_is_in_canonical_shard(&store, &scope, artifact_type);
 
         let error = store
-            .create_disposition(input(&scope, artifact_type, "artifact_misfiled"))
+            .create_disposition(None, input(&scope, artifact_type, "artifact_misfiled"))
             .unwrap_err()
             .to_string();
 
@@ -110,12 +119,15 @@ fn scope_validation_rejects_a_persisted_missing_canonical_artifact() {
     let (_dir, store, scope) = initialized_store();
     allow_actor(&store);
     store
-        .create_proposal_card(proposal_input(
-            &scope,
-            "proposal_artifact",
-            "Artifact",
-            PromotionState::Proposed,
-        ))
+        .create_proposal_card(
+            None,
+            proposal_input(
+                &scope,
+                "proposal_artifact",
+                "Artifact",
+                PromotionState::Proposed,
+            ),
+        )
         .unwrap();
     write_jsonl(
         &crate::shards::dispositions_path(&store.layout, &scope),
@@ -137,12 +149,15 @@ fn scope_validation_rejects_a_misfiled_canonical_artifact() {
     let (_dir, store, scope) = initialized_store();
     allow_actor(&store);
     store
-        .create_proposal_card(proposal_input(
-            &scope,
-            "proposal_artifact",
-            "Artifact",
-            PromotionState::Proposed,
-        ))
+        .create_proposal_card(
+            None,
+            proposal_input(
+                &scope,
+                "proposal_artifact",
+                "Artifact",
+                PromotionState::Proposed,
+            ),
+        )
         .unwrap();
     write_jsonl(
         &store
@@ -172,12 +187,15 @@ fn batch_rejects_a_misfiled_canonical_artifact_without_landing() {
     let (_dir, store, scope) = initialized_store();
     allow_actor(&store);
     store
-        .create_proposal_card(proposal_input(
-            &scope,
-            "proposal_artifact",
-            "Artifact",
-            PromotionState::Proposed,
-        ))
+        .create_proposal_card(
+            None,
+            proposal_input(
+                &scope,
+                "proposal_artifact",
+                "Artifact",
+                PromotionState::Proposed,
+            ),
+        )
         .unwrap();
     write_jsonl(
         &store
@@ -197,7 +215,7 @@ fn batch_rejects_a_misfiled_canonical_artifact_without_landing() {
     .unwrap();
 
     let error = store
-        .land_ideation_batch(&scope, batch, false)
+        .land_ideation_batch(None, &scope, batch, false)
         .unwrap_err()
         .to_string();
 
@@ -221,12 +239,15 @@ fn duplicate_disposition_cannot_mutate_frozen_external_action() {
         r#"{"schema_version":1,"scope_id":"default","id":"req_existing","statement":"Existing","status":"active"}"#,
     );
     store
-        .create_proposal_card(proposal_input(
-            &scope,
-            "proposal_artifact",
-            "Artifact",
-            PromotionState::Proposed,
-        ))
+        .create_proposal_card(
+            None,
+            proposal_input(
+                &scope,
+                "proposal_artifact",
+                "Artifact",
+                PromotionState::Proposed,
+            ),
+        )
         .unwrap();
     let mut original = input(&scope, "requirement", "req_existing");
     original.external_action = Some(ExternalActionCorrelation {
@@ -235,7 +256,7 @@ fn duplicate_disposition_cannot_mutate_frozen_external_action() {
         kind: "issue".into(),
         key: "44".into(),
     });
-    store.create_disposition(original).unwrap();
+    store.create_disposition(None, original).unwrap();
     let mut replacement = input(&scope, "requirement", "req_existing");
     replacement.external_action = Some(ExternalActionCorrelation {
         system: "linear".into(),
@@ -245,7 +266,7 @@ fn duplicate_disposition_cannot_mutate_frozen_external_action() {
     });
 
     let error = store
-        .create_disposition(replacement)
+        .create_disposition(None, replacement)
         .unwrap_err()
         .to_string();
 

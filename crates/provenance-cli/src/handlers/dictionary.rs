@@ -16,19 +16,27 @@ struct DictionaryImportSummary<'a> {
     unapproved_rows: usize,
 }
 
-pub(super) fn handle(command: DictionaryCommand) -> anyhow::Result<()> {
+pub(super) fn handle(
+    command: DictionaryCommand,
+    actor_claim: Option<&provenance_core::RbacClaim>,
+) -> anyhow::Result<()> {
     match command {
-        DictionaryCommand::Import { pdf, repo, format } => import(&pdf, &repo, format),
+        DictionaryCommand::Import { pdf, repo, format } => import(&pdf, &repo, actor_claim, format),
     }
 }
 
-fn import(pdf: &Utf8Path, repo: &Utf8Path, format: OutputFormat) -> anyhow::Result<()> {
+fn import(
+    pdf: &Utf8Path,
+    repo: &Utf8Path,
+    actor_claim: Option<&provenance_core::RbacClaim>,
+    format: OutputFormat,
+) -> anyhow::Result<()> {
     let bytes = std::fs::read(pdf)
         .map_err(|error| anyhow::anyhow!("read the dictionary PDF at {pdf}: {error}"))?;
     let import = provenance_ste100::import_dictionary(&bytes)
         .map_err(|error| anyhow::anyhow!("import the dictionary: {error}"))?;
     let layout = ProvenanceLayout::new(repo.to_owned());
-    provenance_store::dictionary_reference::set_project_dictionary(&layout, &import)?;
+    provenance_store::dictionary_reference::set_project_dictionary(&layout, actor_claim, &import)?;
 
     let approved_rows = import
         .entries

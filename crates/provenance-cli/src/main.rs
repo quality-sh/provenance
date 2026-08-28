@@ -17,5 +17,10 @@ use cli::Cli;
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let quiet = cli.quiet;
-    handlers::dispatch(cli.command, quiet).await
+    let actor_claim = cli
+        .actor_id
+        .as_deref()
+        .map(provenance_core::RbacClaim::new)
+        .transpose()?;
+    handlers::dispatch(cli.command, quiet, actor_claim.as_ref()).await
 }

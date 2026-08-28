@@ -7,7 +7,10 @@ use provenance_store::{
     state_store::{CreateResolutionInput, StateStore},
 };
 
-pub(super) fn handle(command: ResolutionsCommand) -> anyhow::Result<()> {
+pub(super) fn handle(
+    command: ResolutionsCommand,
+    actor_claim: Option<&provenance_core::RbacClaim>,
+) -> anyhow::Result<()> {
     match command {
         ResolutionsCommand::Create {
             repo,
@@ -33,6 +36,7 @@ pub(super) fn handle(command: ResolutionsCommand) -> anyhow::Result<()> {
             format,
         } => {
             let resolution = StateStore::new(ProvenanceLayout::new(repo)).create_resolution(
+                actor_claim,
                 CreateResolutionInput {
                     scope_id: ScopeId::new(scope)?,
                     id: StableId::new(id)?,

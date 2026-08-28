@@ -1,19 +1,23 @@
-use provenance_core::{StableId, VerificationBinding, SUPPORTED_SCHEMA_VERSION};
+use provenance_core::{
+    Capability, RbacClaim, StableId, VerificationBinding, SUPPORTED_SCHEMA_VERSION,
+};
 use sha2::{Digest, Sha256};
 
-use super::{MaterializeVerificationBindingInput, StateStore};
+use super::{MaterializeVerificationBindingInput, MutationAuth, StateStore};
 use crate::shards;
 
 impl StateStore {
     pub fn materialize_verification_binding(
         &self,
+        claim: Option<&RbacClaim>,
         input: MaterializeVerificationBindingInput,
     ) -> anyhow::Result<VerificationBinding> {
-        self.with_repository_publication(|| self.write_verification_binding(input))
+        self.with_repository_publication(|| self.write_verification_binding(claim, input))
     }
 
     fn write_verification_binding(
         &self,
+        claim: Option<&RbacClaim>,
         input: MaterializeVerificationBindingInput,
     ) -> anyhow::Result<VerificationBinding> {
         anyhow::ensure!(!input.key.trim().is_empty(), "key must not be empty");
@@ -60,7 +64,8 @@ impl StateStore {
             symbol: input.symbol,
         };
         let path = shards::verification_bindings_path(&self.layout, &input.scope_id);
-        self.mutate_jsonl_records(&path, |records: &mut Vec<VerificationBinding>| {
+        let auth = MutationAuth::new(claim, Capability::Execute, &input.scope_id);
+        self.mutate_jsonl_records(&path, auth, |records: &mut Vec<VerificationBinding>| {
             retire_replaced(records, &binding);
             if let Some(existing) = records.iter_mut().find(|record| record.id == id) {
                 *existing = binding.clone();

@@ -133,39 +133,46 @@ async fn materialize_state_caches_fog_resolution_method_and_claim_state() {
     let store = StateStore::new(layout.clone());
     store
         .set_requirement_fog(
+            None,
             &scope,
             &sid("req_schads_overtime"),
             Some("sleepover rules; something about broken shifts".into()),
         )
         .unwrap();
     store
-        .create_topic(CreateTopicInput {
-            scope_id: scope.clone(),
-            id: sid("topic_overtime"),
-            requirement_id: sid("req_schads_overtime"),
-            title: "Overtime eligibility".into(),
-            status: TopicStatus::Open,
-            links: Vec::new(),
-        })
+        .create_topic(
+            None,
+            CreateTopicInput {
+                scope_id: scope.clone(),
+                id: sid("topic_overtime"),
+                requirement_id: sid("req_schads_overtime"),
+                title: "Overtime eligibility".into(),
+                status: TopicStatus::Open,
+                links: Vec::new(),
+            },
+        )
         .unwrap();
     store
-        .create_question(CreateQuestionInput {
-            scope_id: scope.clone(),
-            id: sid("question_threshold"),
-            topic_id: sid("topic_overtime"),
-            question: "Which threshold applies?".into(),
-            resolution_method: ResolutionMethod::Verify,
-            status: QuestionStatus::Open,
-            answer: None,
-            links: Vec::new(),
-            resolution_id: None,
-        })
+        .create_question(
+            None,
+            CreateQuestionInput {
+                scope_id: scope.clone(),
+                id: sid("question_threshold"),
+                topic_id: sid("topic_overtime"),
+                question: "Which threshold applies?".into(),
+                resolution_method: ResolutionMethod::Verify,
+                status: QuestionStatus::Open,
+                answer: None,
+                links: Vec::new(),
+                resolution_id: None,
+            },
+        )
         .unwrap();
     store
-        .claim_topic(&scope, &sid("topic_overtime"), "agent-one")
+        .claim_topic(None, &scope, &sid("topic_overtime"), "agent-one")
         .unwrap();
     store
-        .claim_question(&scope, &sid("question_threshold"), "agent-two")
+        .claim_question(None, &scope, &sid("question_threshold"), "agent-two")
         .unwrap();
 
     materialize_state(&layout).await.unwrap();
@@ -204,45 +211,51 @@ async fn materialize_state_caches_enriched_source_and_resolution_fields() {
     let (_dir, layout, scope) = empty_layout();
     let store = StateStore::new(layout.clone());
     store
-        .create_source(CreateSourceInput {
-            scope_id: scope.clone(),
-            id: sid("source_sah"),
-            name: "Support at Home".into(),
-            source_type: SourceType::Legislation,
-            url: Some("https://example.test/sah".into()),
-            reference: Some("Department guidance".into()),
-            commit_pin: None,
-            effective_date: Some(1_714_521_600_000),
-            review_date: Some(1_717_200_000_000),
-            superseded_by: Some(sid("source_sah_2025")),
-            origin_thread: None,
-            origin_message: None,
-        })
+        .create_source(
+            None,
+            CreateSourceInput {
+                scope_id: scope.clone(),
+                id: sid("source_sah"),
+                name: "Support at Home".into(),
+                source_type: SourceType::Legislation,
+                url: Some("https://example.test/sah".into()),
+                reference: Some("Department guidance".into()),
+                commit_pin: None,
+                effective_date: Some(1_714_521_600_000),
+                review_date: Some(1_717_200_000_000),
+                superseded_by: Some(sid("source_sah_2025")),
+                origin_thread: None,
+                origin_message: None,
+            },
+        )
         .unwrap();
     store
-        .create_resolution(CreateResolutionInput {
-            scope_id: scope,
-            id: sid("res_sah"),
-            title: "SAH extraction".into(),
-            requirement_id: None,
-            position: "Keep as draft extraction".into(),
-            rationale: "Needs human review".into(),
-            status: ResolutionStatus::Draft,
-            context: Some("Codebase scan".into()),
-            enforcement: Some("specification".into()),
-            confidence: Some(0.91),
-            inputs: vec![ResolutionInput {
-                input_type: ResolutionInputType::Regulatory,
-                reference: "SAH program manual".into(),
-                summary: "Program rules reviewed".into(),
-            }],
-            made_by: Some("Analyst One".into()),
-            approved_by: Some("Approver Two".into()),
-            approved_at: Some(1_714_780_800_000),
-            superseded_by: Some(sid("res_sah_2025")),
-            origin_thread: None,
-            origin_message: None,
-        })
+        .create_resolution(
+            None,
+            CreateResolutionInput {
+                scope_id: scope,
+                id: sid("res_sah"),
+                title: "SAH extraction".into(),
+                requirement_id: None,
+                position: "Keep as draft extraction".into(),
+                rationale: "Needs human review".into(),
+                status: ResolutionStatus::Draft,
+                context: Some("Codebase scan".into()),
+                enforcement: Some("specification".into()),
+                confidence: Some(0.91),
+                inputs: vec![ResolutionInput {
+                    input_type: ResolutionInputType::Regulatory,
+                    reference: "SAH program manual".into(),
+                    summary: "Program rules reviewed".into(),
+                }],
+                made_by: Some("Analyst One".into()),
+                approved_by: Some("Approver Two".into()),
+                approved_at: Some(1_714_780_800_000),
+                superseded_by: Some(sid("res_sah_2025")),
+                origin_thread: None,
+                origin_message: None,
+            },
+        )
         .unwrap();
     materialize_state(&layout).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();

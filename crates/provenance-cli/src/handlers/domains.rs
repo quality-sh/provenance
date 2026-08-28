@@ -6,7 +6,10 @@ use provenance_store::{
     state_store::{CreateDomainInput, StateStore},
 };
 
-pub(super) fn handle(command: DomainsCommand) -> anyhow::Result<()> {
+pub(super) fn handle(
+    command: DomainsCommand,
+    actor_claim: Option<&provenance_core::RbacClaim>,
+) -> anyhow::Result<()> {
     match command {
         DomainsCommand::Create {
             repo,
@@ -17,14 +20,16 @@ pub(super) fn handle(command: DomainsCommand) -> anyhow::Result<()> {
             color,
             format,
         } => {
-            let domain =
-                StateStore::new(ProvenanceLayout::new(repo)).create_domain(CreateDomainInput {
+            let domain = StateStore::new(ProvenanceLayout::new(repo)).create_domain(
+                actor_claim,
+                CreateDomainInput {
                     scope_id: ScopeId::new(scope)?,
                     id: StableId::new(id)?,
                     name,
                     description,
                     color,
-                })?;
+                },
+            )?;
             output::print(format, &domain)?;
         }
         DomainsCommand::List {

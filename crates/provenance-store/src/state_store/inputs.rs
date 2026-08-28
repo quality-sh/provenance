@@ -213,6 +213,9 @@ pub struct TypedSpecResult {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BeginVerificationInput {
+    /// The mutating principal's claim, riding the v6 protocol window.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor: Option<provenance_core::RbacClaim>,
     #[serde(default)]
     pub rule: Option<String>,
     #[serde(default)]
@@ -256,6 +259,9 @@ pub struct DeclarationReferenceInput {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CompleteVerificationInput {
+    /// The mutating principal's claim, riding the v6 protocol window.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor: Option<provenance_core::RbacClaim>,
     pub run: String,
     pub status: String,
     #[serde(default)]

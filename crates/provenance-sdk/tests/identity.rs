@@ -141,16 +141,19 @@ fn a_kernel_authored_requirement_adopts_one_exact_unowned_identity() {
     let scope = ScopeId::new("default").unwrap();
     let store = StateStore::new(ProvenanceLayout::new(root.clone()));
     store
-        .create_requirement(CreateRequirementInput {
-            scope_id: scope.clone(),
-            id: StableId::new("req_existing").unwrap(),
-            statement: "The canonical Requirement keeps its identity".to_string(),
-            description: None,
-            status: RequirementStatus::Active,
-            domain_id: None,
-            origin_thread: None,
-            origin_message: None,
-        })
+        .create_requirement(
+            None,
+            CreateRequirementInput {
+                scope_id: scope.clone(),
+                id: StableId::new("req_existing").unwrap(),
+                statement: "The canonical Requirement keeps its identity".to_string(),
+                description: None,
+                status: RequirementStatus::Active,
+                domain_id: None,
+                origin_thread: None,
+                origin_message: None,
+            },
+        )
         .unwrap();
     let document = spec("migration")
         .requirements([requirement("canonical")

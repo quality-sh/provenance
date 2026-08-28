@@ -10,6 +10,7 @@ use provenance_core::{
 };
 
 #[test]
+#[allow(clippy::too_many_lines)] // one continuous seed-and-assert scenario
 fn modern_lifecycle_coexists_with_frozen_shipped_records() {
     let directory = tempfile::tempdir().unwrap();
     let root = camino::Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
@@ -52,28 +53,31 @@ fn modern_lifecycle_coexists_with_frozen_shipped_records() {
     )
     .unwrap();
     store
-        .create_proposal_card(CreateProposalCardInput {
-            scope_id: scope.clone(),
-            id: StableId::new("proposal_modern").unwrap(),
-            proposal_key: "modern".into(),
-            proposal_type: ProposalType::RequirementCandidate,
-            title: "Modern".into(),
-            summary: "Modern candidate".into(),
-            confidence: None,
-            traceability: ProposalTraceability {
-                target: provenance_core::IdeationTarget {
-                    artifact_type: provenance_core::IdeationTargetType::Requirement,
-                    artifact_id: StableId::new("req_modern").unwrap(),
+        .create_proposal_card(
+            None,
+            CreateProposalCardInput {
+                scope_id: scope.clone(),
+                id: StableId::new("proposal_modern").unwrap(),
+                proposal_key: "modern".into(),
+                proposal_type: ProposalType::RequirementCandidate,
+                title: "Modern".into(),
+                summary: "Modern candidate".into(),
+                confidence: None,
+                traceability: ProposalTraceability {
+                    target: provenance_core::IdeationTarget {
+                        artifact_type: provenance_core::IdeationTargetType::Requirement,
+                        artifact_id: StableId::new("req_modern").unwrap(),
+                    },
+                    source_ids: vec![],
+                    evidence_references: vec![],
+                    supporting_claim_ids: vec![StableId::new("claim_modern").unwrap()],
                 },
-                source_ids: vec![],
-                evidence_references: vec![],
-                supporting_claim_ids: vec![StableId::new("claim_modern").unwrap()],
+                promotion_state: PromotionState::Proposed,
+                builds_on: vec![],
+                duplicate_of: None,
+                superseded_by: None,
             },
-            promotion_state: PromotionState::Proposed,
-            builds_on: vec![],
-            duplicate_of: None,
-            superseded_by: None,
-        })
+        )
         .unwrap();
     synthesis.evidence_gaps.clear();
     crate::jsonl::write_jsonl_atomic(
@@ -82,29 +86,35 @@ fn modern_lifecycle_coexists_with_frozen_shipped_records() {
     )
     .unwrap();
     store
-        .assert_proposal(CreateAssertionInput {
-            scope_id: scope.clone(),
-            id: AssertionId::new("assertion_modern").unwrap(),
-            proposal_id: StableId::new("proposal_modern").unwrap(),
-            synthesis_packet_id: StableId::new("synthesis_modern").unwrap(),
-            supporting_claim_ids: vec![StableId::new("claim_modern").unwrap()],
-        })
+        .assert_proposal(
+            None,
+            CreateAssertionInput {
+                scope_id: scope.clone(),
+                id: AssertionId::new("assertion_modern").unwrap(),
+                proposal_id: StableId::new("proposal_modern").unwrap(),
+                synthesis_packet_id: StableId::new("synthesis_modern").unwrap(),
+                supporting_claim_ids: vec![StableId::new("claim_modern").unwrap()],
+            },
+        )
         .unwrap();
     store
-        .create_disposition(CreateDispositionInput {
-            scope_id: scope,
-            id: StableId::new("disposition_modern").unwrap(),
-            proposal_id: StableId::new("proposal_modern").unwrap(),
-            decision: DispositionDecision::Accepted,
-            rationale: "Reviewed".into(),
-            actor: DispositionActor {
-                identity_type: IdentityType::Agent,
-                id: "codex-review-panel-gpt55-medium".into(),
-                name: None,
+        .create_disposition(
+            None,
+            CreateDispositionInput {
+                scope_id: scope,
+                id: StableId::new("disposition_modern").unwrap(),
+                proposal_id: StableId::new("proposal_modern").unwrap(),
+                decision: DispositionDecision::Accepted,
+                rationale: "Reviewed".into(),
+                actor: DispositionActor {
+                    identity_type: IdentityType::Agent,
+                    id: "codex-review-panel-gpt55-medium".into(),
+                    name: None,
+                },
+                canonical_artifact: None,
+                external_action: None,
             },
-            canonical_artifact: None,
-            external_action: None,
-        })
+        )
         .unwrap();
 }
 

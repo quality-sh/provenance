@@ -8,15 +8,15 @@ mod rule_addresses;
 use std::collections::{BTreeMap, BTreeSet};
 
 use provenance_core::{
-    DeclarationAddress, Edge, ImplementationBinding, Requirement, Rule, ScopeId, Source, StableId,
-    SUPPORTED_SCHEMA_VERSION,
+    Capability, DeclarationAddress, Edge, ImplementationBinding, RbacClaim, Requirement, Rule,
+    ScopeId, Source, StableId, SUPPORTED_SCHEMA_VERSION,
 };
 use provenance_macros::rule;
 
 use super::requirement_reviews;
 use super::{
-    ReconcileState, ReconciledResource, StateStore, TypedDeclarationKind, TypedFieldChange,
-    TypedRequirementInput, TypedRuleInput, TypedSpecInput, TypedSpecResult,
+    MutationAuth, ReconcileState, ReconciledResource, StateStore, TypedDeclarationKind,
+    TypedFieldChange, TypedRequirementInput, TypedRuleInput, TypedSpecInput, TypedSpecResult,
 };
 use crate::shards;
 use identity::{
@@ -111,11 +111,12 @@ impl StateStore {
     /// human's records.
     pub fn apply_typed_spec(
         &self,
+        claim: Option<&RbacClaim>,
         scope_id: &ScopeId,
         input: TypedSpecInput,
     ) -> anyhow::Result<TypedSpecResult> {
         self.with_repository_publication(|| {
-            self.reconcile_typed_spec(scope_id, input, ReconcileMode::Apply)
+            self.reconcile_typed_spec(claim, scope_id, input, ReconcileMode::Apply)
         })
     }
 
@@ -126,12 +127,13 @@ impl StateStore {
         input: TypedSpecInput,
     ) -> anyhow::Result<TypedSpecResult> {
         self.with_repository_publication(|| {
-            self.reconcile_typed_spec(scope_id, input, ReconcileMode::Plan)
+            self.reconcile_typed_spec(None, scope_id, input, ReconcileMode::Plan)
         })
     }
 
     fn reconcile_typed_spec(
         &self,
+        claim: Option<&RbacClaim>,
         scope_id: &ScopeId,
         input: TypedSpecInput,
         mode: ReconcileMode,
@@ -216,28 +218,70 @@ impl StateStore {
 
         if matches!(mode, ReconcileMode::Apply) {
             super::typed_statement_policy::ensure_typed_spec_is_writable(&result)?;
-            replace_records(self, &shards::sources_path(&self.layout, scope_id), sources)?;
-            replace_records(
-                self,
-                &shards::requirements_path(&self.layout, scope_id),
+            self.persist_reconciliation(
+                claim,
+                scope_id,
+                sources,
                 requirements,
-            )?;
-            replace_records(self, &shards::rules_path(&self.layout, scope_id), rules)?;
-            replace_records(
-                self,
-                &shards::implementation_bindings_path(&self.layout, scope_id),
+                rules,
+                graph,
                 implementation_reconciliation.records,
+                &requirement_resources,
+                &rule_resources,
             )?;
-            relationships::reconcile(self, scope_id, graph)?;
-            self.raise_requirement_reviews(scope_id, &requirement_resources, &rule_resources)?;
         }
-
         Ok(result)
+    }
+
+    /// Writes one applied reconciliation: the four replaced shards, the
+    /// relationship reconciliation, and the review notices, all under the
+    /// claim's `execute` authorization.
+    #[allow(clippy::too_many_arguments)]
+    fn persist_reconciliation(
+        &self,
+        claim: Option<&RbacClaim>,
+        scope_id: &ScopeId,
+        sources: Vec<Source>,
+        requirements: Vec<Requirement>,
+        rules: Vec<Rule>,
+        graph: DesiredTypedGraph<'_>,
+        implementation_records: Vec<ImplementationBinding>,
+        requirement_resources: &[ReconciledResource],
+        rule_resources: &[ReconciledResource],
+    ) -> anyhow::Result<()> {
+        let auth = MutationAuth::new(claim, Capability::Execute, scope_id);
+        replace_records(
+            self,
+            auth.clone(),
+            &shards::sources_path(&self.layout, scope_id),
+            sources,
+        )?;
+        replace_records(
+            self,
+            auth.clone(),
+            &shards::requirements_path(&self.layout, scope_id),
+            requirements,
+        )?;
+        replace_records(
+            self,
+            auth.clone(),
+            &shards::rules_path(&self.layout, scope_id),
+            rules,
+        )?;
+        replace_records(
+            self,
+            auth.clone(),
+            &shards::implementation_bindings_path(&self.layout, scope_id),
+            implementation_records,
+        )?;
+        relationships::reconcile(self, claim, scope_id, graph)?;
+        self.raise_requirement_reviews(auth, scope_id, requirement_resources, rule_resources)
     }
 
     /// Puts the evidence of every Rule under a restated Requirement up for review.
     fn raise_requirement_reviews(
         &self,
+        auth: MutationAuth<'_>,
         scope_id: &ScopeId,
         requirements: &[ReconciledResource],
         rules: &[ReconciledResource],
@@ -269,7 +313,7 @@ impl StateStore {
                 }
             }));
         }
-        self.record_requirement_reviews(scope_id, reviews)
+        self.record_requirement_reviews(auth, scope_id, reviews)
     }
 
     fn current_typed_state(
@@ -395,10 +439,11 @@ fn spec_result(
 
 fn replace_records<T: serde::de::DeserializeOwned + serde::Serialize>(
     store: &StateStore,
+    auth: MutationAuth<'_>,
     path: &camino::Utf8Path,
     replacement: Vec<T>,
 ) -> anyhow::Result<()> {
-    store.mutate_jsonl_records(path, |records| {
+    store.mutate_jsonl_records(path, auth, |records: &mut Vec<T>| {
         *records = replacement;
         Ok(())
     })

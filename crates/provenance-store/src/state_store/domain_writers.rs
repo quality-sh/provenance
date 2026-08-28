@@ -1,9 +1,13 @@
-use super::{CreateDomainInput, StateStore};
+use super::{CreateDomainInput, MutationAuth, StateStore};
 use crate::shards;
-use provenance_core::{Domain, SUPPORTED_SCHEMA_VERSION};
+use provenance_core::{Capability, Domain, RbacClaim, SUPPORTED_SCHEMA_VERSION};
 
 impl StateStore {
-    pub fn create_domain(&self, input: CreateDomainInput) -> anyhow::Result<Domain> {
+    pub fn create_domain(
+        &self,
+        claim: Option<&RbacClaim>,
+        input: CreateDomainInput,
+    ) -> anyhow::Result<Domain> {
         let CreateDomainInput {
             scope_id,
             id,
@@ -12,7 +16,8 @@ impl StateStore {
             color,
         } = input;
         let path = shards::domains_path(&self.layout, &scope_id);
-        self.mutate_jsonl_records(&path, |records: &mut Vec<Domain>| {
+        let auth = MutationAuth::new(claim, Capability::Edit, &scope_id);
+        self.mutate_jsonl_records(&path, auth, |records: &mut Vec<Domain>| {
             let domain = Domain {
                 schema_version: SUPPORTED_SCHEMA_VERSION,
                 scope_id: scope_id.clone(),

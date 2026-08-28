@@ -18,11 +18,10 @@ fn refuses_a_disposition_naming_a_proposal_that_was_never_created() {
     allow_actor(&store);
 
     let error = store
-        .create_disposition(rejected_input(
-            &scope,
-            "disposition_ghost",
-            "proposal_ghost",
-        ))
+        .create_disposition(
+            None,
+            rejected_input(&scope, "disposition_ghost", "proposal_ghost"),
+        )
         .unwrap_err()
         .to_string();
 
@@ -36,27 +35,28 @@ fn refuses_a_second_disposition_on_a_proposal_already_disposed() {
     let (_dir, store, scope) = initialized_store();
     allow_actor(&store);
     store
-        .create_proposal_card(proposal_input(
-            &scope,
-            "proposal_overtime",
-            "Overtime",
-            PromotionState::Proposed,
-        ))
+        .create_proposal_card(
+            None,
+            proposal_input(
+                &scope,
+                "proposal_overtime",
+                "Overtime",
+                PromotionState::Proposed,
+            ),
+        )
         .unwrap();
     store
-        .create_disposition(rejected_input(
-            &scope,
-            "disposition_first",
-            "proposal_overtime",
-        ))
+        .create_disposition(
+            None,
+            rejected_input(&scope, "disposition_first", "proposal_overtime"),
+        )
         .unwrap();
 
     let error = store
-        .create_disposition(rejected_input(
-            &scope,
-            "disposition_second",
-            "proposal_overtime",
-        ))
+        .create_disposition(
+            None,
+            rejected_input(&scope, "disposition_second", "proposal_overtime"),
+        )
         .unwrap_err()
         .to_string();
 
@@ -83,12 +83,15 @@ fn admits_exactly_the_writes_the_four_conditions_allow() {
     let (_dir, store, scope) = seeded_requirement_store();
     let canonical_artifacts = store.canonical_artifact_index(&scope).unwrap();
     store
-        .create_proposal_card(proposal_input(
-            &scope,
-            "proposal_overtime",
-            "Overtime",
-            PromotionState::Proposed,
-        ))
+        .create_proposal_card(
+            None,
+            proposal_input(
+                &scope,
+                "proposal_overtime",
+                "Overtime",
+                PromotionState::Proposed,
+            ),
+        )
         .unwrap();
     let proposals = store.list_proposal_definitions(&scope).unwrap();
     let assertion = AssertionRecord {
@@ -159,12 +162,15 @@ fn a_person_accepts_a_tournament_winner_without_a_swarm_assertion() {
     let (_dir, store, scope) = seeded_requirement_store();
     let canonical_artifacts = store.canonical_artifact_index(&scope).unwrap();
     store
-        .create_proposal_card(proposal_input(
-            &scope,
-            "proposal_overtime",
-            "Overtime",
-            PromotionState::Proposed,
-        ))
+        .create_proposal_card(
+            None,
+            proposal_input(
+                &scope,
+                "proposal_overtime",
+                "Overtime",
+                PromotionState::Proposed,
+            ),
+        )
         .unwrap();
     let proposals = store.list_proposal_definitions(&scope).unwrap();
     let accepted = disposition_by(
@@ -185,12 +191,15 @@ fn acceptance_without_an_assertion_still_needs_a_person_and_an_artifact() {
     let (_dir, store, scope) = seeded_requirement_store();
     let canonical_artifacts = store.canonical_artifact_index(&scope).unwrap();
     store
-        .create_proposal_card(proposal_input(
-            &scope,
-            "proposal_overtime",
-            "Overtime",
-            PromotionState::Proposed,
-        ))
+        .create_proposal_card(
+            None,
+            proposal_input(
+                &scope,
+                "proposal_overtime",
+                "Overtime",
+                PromotionState::Proposed,
+            ),
+        )
         .unwrap();
     let proposals = store.list_proposal_definitions(&scope).unwrap();
     for (identity, artifact) in [

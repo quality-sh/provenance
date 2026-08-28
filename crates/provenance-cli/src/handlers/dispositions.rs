@@ -10,7 +10,10 @@ use provenance_store::{
     state_store::{CreateDispositionInput, StateStore},
 };
 
-pub(super) fn handle(command: DispositionsCommand) -> anyhow::Result<()> {
+pub(super) fn handle(
+    command: DispositionsCommand,
+    actor_claim: Option<&provenance_core::RbacClaim>,
+) -> anyhow::Result<()> {
     match command {
         DispositionsCommand::Create {
             repo,
@@ -30,7 +33,16 @@ pub(super) fn handle(command: DispositionsCommand) -> anyhow::Result<()> {
             external_key,
             format,
         } => {
+            // The recorded actor is the acting principal on the disposition
+            // path: the subcommand's own --actor-id is an explicit argv
+            // attestation, so it doubles as the claim when the global flag
+            // did not carry one (it is shadowed inside this subcommand).
+            let fallback = provenance_core::RbacClaim {
+                actor_id: actor_id.clone(),
+            };
+            let claim = actor_claim.unwrap_or(&fallback);
             let disposition = StateStore::new(ProvenanceLayout::new(repo)).create_disposition(
+                Some(claim),
                 CreateDispositionInput {
                     scope_id: ScopeId::new(scope)?,
                     id: StableId::new(id)?,

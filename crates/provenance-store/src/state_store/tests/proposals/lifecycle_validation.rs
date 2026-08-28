@@ -1,8 +1,10 @@
-use super::{super::initialized_store, proposal_input};
+use super::super::initialized_store;
+use super::proposal_input;
+mod lifecycle_seed;
 use crate::state_store::{CreateAssertionInput, CreateDispositionInput, ProposalDemand};
+use lifecycle_seed::{actor, allow_actor, disposition_input, seed_blocked_evidence};
 use provenance_core::{
-    DispositionActor, DispositionDecision, IdeationTarget, IdeationTargetType, IdentityType,
-    PromotionState, StableId,
+    DispositionDecision, IdeationTarget, IdeationTargetType, PromotionState, StableId,
 };
 use provenance_macros::verifies;
 
@@ -29,12 +31,15 @@ fn deprecated_disposition_shard_rejects_modern_records() {
     let (_dir, store, scope) = initialized_store();
     allow_actor(&store, "reviewer");
     store
-        .create_proposal_card(proposal_input(
-            &scope,
-            "proposal_modern",
-            "Modern proposal",
-            PromotionState::Proposed,
-        ))
+        .create_proposal_card(
+            None,
+            proposal_input(
+                &scope,
+                "proposal_modern",
+                "Modern proposal",
+                PromotionState::Proposed,
+            ),
+        )
         .unwrap();
     let path = crate::shards::legacy_promotion_decisions_path(&store.layout, &scope);
     std::fs::write(
@@ -64,12 +69,15 @@ fn deprecated_disposition_shard_rejects_modern_records() {
 fn direct_modern_proposal_write_rejects_terminal_ingress() {
     let (_dir, store, scope) = initialized_store();
     let error = store
-        .create_proposal_card(proposal_input(
-            &scope,
-            "proposal_forged",
-            "Forged terminal",
-            PromotionState::Accepted,
-        ))
+        .create_proposal_card(
+            None,
+            proposal_input(
+                &scope,
+                "proposal_forged",
+                "Forged terminal",
+                PromotionState::Accepted,
+            ),
+        )
         .unwrap_err()
         .to_string();
 
@@ -89,10 +97,10 @@ fn accepted_disposition_requires_an_assertion() {
         PromotionState::Proposed,
     );
     proposal.traceability.supporting_claim_ids = vec![StableId::new("claim_overtime").unwrap()];
-    store.create_proposal_card(proposal).unwrap();
+    store.create_proposal_card(None, proposal).unwrap();
 
     let error = store
-        .create_disposition(disposition_input(scope, "ben"))
+        .create_disposition(None, disposition_input(scope, "ben"))
         .unwrap_err()
         .to_string();
 
@@ -105,45 +113,57 @@ fn rejected_disposition_does_not_require_an_assertion() {
     let (_dir, store, scope) = initialized_store();
     allow_actor(&store, "ben");
     store
-        .create_proposal_card(proposal_input(
-            &scope,
-            "proposal_rejected",
-            "Rejected",
-            PromotionState::Proposed,
-        ))
+        .create_proposal_card(
+            None,
+            proposal_input(
+                &scope,
+                "proposal_rejected",
+                "Rejected",
+                PromotionState::Proposed,
+            ),
+        )
         .unwrap();
 
     store
-        .create_disposition(CreateDispositionInput {
-            scope_id: scope.clone(),
-            id: StableId::new("disposition_rejected").unwrap(),
-            proposal_id: StableId::new("proposal_rejected").unwrap(),
-            decision: DispositionDecision::Rejected,
-            rationale: "Did not pass adjudication".into(),
-            actor: actor("ben"),
-            canonical_artifact: None,
-            external_action: None,
-        })
+        .create_disposition(
+            None,
+            CreateDispositionInput {
+                scope_id: scope.clone(),
+                id: StableId::new("disposition_rejected").unwrap(),
+                proposal_id: StableId::new("proposal_rejected").unwrap(),
+                decision: DispositionDecision::Rejected,
+                rationale: "Did not pass adjudication".into(),
+                actor: actor("ben"),
+                canonical_artifact: None,
+                external_action: None,
+            },
+        )
         .unwrap();
     store
-        .create_proposal_card(proposal_input(
-            &scope,
-            "proposal_deferred",
-            "Deferred",
-            PromotionState::Proposed,
-        ))
+        .create_proposal_card(
+            None,
+            proposal_input(
+                &scope,
+                "proposal_deferred",
+                "Deferred",
+                PromotionState::Proposed,
+            ),
+        )
         .unwrap();
     store
-        .create_disposition(CreateDispositionInput {
-            scope_id: scope.clone(),
-            id: StableId::new("disposition_deferred").unwrap(),
-            proposal_id: StableId::new("proposal_deferred").unwrap(),
-            decision: DispositionDecision::Deferred,
-            rationale: "Wait for policy".into(),
-            actor: actor("ben"),
-            canonical_artifact: None,
-            external_action: None,
-        })
+        .create_disposition(
+            None,
+            CreateDispositionInput {
+                scope_id: scope.clone(),
+                id: StableId::new("disposition_deferred").unwrap(),
+                proposal_id: StableId::new("proposal_deferred").unwrap(),
+                decision: DispositionDecision::Deferred,
+                rationale: "Wait for policy".into(),
+                actor: actor("ben"),
+                canonical_artifact: None,
+                external_action: None,
+            },
+        )
         .unwrap();
 
     assert_eq!(
@@ -178,16 +198,19 @@ fn direct_assertion_uses_the_aggregate_evidence_validator() {
         PromotionState::Proposed,
     );
     proposal.traceability.supporting_claim_ids = vec![StableId::new("claim_overtime").unwrap()];
-    store.create_proposal_card(proposal).unwrap();
+    store.create_proposal_card(None, proposal).unwrap();
 
     let error = store
-        .assert_proposal(CreateAssertionInput {
-            scope_id: scope,
-            id: provenance_core::AssertionId::new("assertion_overtime").unwrap(),
-            proposal_id: StableId::new("proposal_overtime").unwrap(),
-            synthesis_packet_id: StableId::new("synthesis_missing").unwrap(),
-            supporting_claim_ids: vec![StableId::new("claim_overtime").unwrap()],
-        })
+        .assert_proposal(
+            None,
+            CreateAssertionInput {
+                scope_id: scope,
+                id: provenance_core::AssertionId::new("assertion_overtime").unwrap(),
+                proposal_id: StableId::new("proposal_overtime").unwrap(),
+                synthesis_packet_id: StableId::new("synthesis_missing").unwrap(),
+                supporting_claim_ids: vec![StableId::new("claim_overtime").unwrap()],
+            },
+        )
         .unwrap_err()
         .to_string();
 
@@ -223,7 +246,7 @@ fn assertion_rejects_conflicting_duplicate_evidence_ids() {
         PromotionState::Proposed,
     );
     proposal.traceability.supporting_claim_ids = vec![StableId::new("claim_overtime").unwrap()];
-    store.create_proposal_card(proposal).unwrap();
+    store.create_proposal_card(None, proposal).unwrap();
     let mut packets = store.list_synthesis_packets(&scope).unwrap();
     packets[0].evidence_gaps.clear();
     crate::jsonl::write_jsonl_atomic(
@@ -233,13 +256,16 @@ fn assertion_rejects_conflicting_duplicate_evidence_ids() {
     .unwrap();
 
     let error = store
-        .assert_proposal(CreateAssertionInput {
-            scope_id: scope,
-            id: provenance_core::AssertionId::new("assertion_overtime").unwrap(),
-            proposal_id: StableId::new("proposal_overtime").unwrap(),
-            synthesis_packet_id: StableId::new("synthesis_overtime").unwrap(),
-            supporting_claim_ids: vec![StableId::new("claim_overtime").unwrap()],
-        })
+        .assert_proposal(
+            None,
+            CreateAssertionInput {
+                scope_id: scope,
+                id: provenance_core::AssertionId::new("assertion_overtime").unwrap(),
+                proposal_id: StableId::new("proposal_overtime").unwrap(),
+                synthesis_packet_id: StableId::new("synthesis_overtime").unwrap(),
+                supporting_claim_ids: vec![StableId::new("claim_overtime").unwrap()],
+            },
+        )
         .unwrap_err()
         .to_string();
 
@@ -269,10 +295,11 @@ fn resolving_one_human_decision_preserves_other_blockers() {
         PromotionState::Proposed,
     );
     proposal.traceability.supporting_claim_ids = vec![StableId::new("claim_overtime").unwrap()];
-    store.create_proposal_card(proposal).unwrap();
+    store.create_proposal_card(None, proposal).unwrap();
 
     let error = store
         .assert_proposal_after_human_decision(
+            None,
             CreateAssertionInput {
                 scope_id: scope.clone(),
                 id: provenance_core::AssertionId::new("assertion_overtime").unwrap(),
@@ -345,7 +372,7 @@ fn resolving_winner_gate_asserts_only_the_selected_proposal() {
         PromotionState::Proposed,
     );
     winner.traceability.supporting_claim_ids = vec![StableId::new("claim_overtime").unwrap()];
-    store.create_proposal_card(winner).unwrap();
+    store.create_proposal_card(None, winner).unwrap();
     let mut loser = proposal_input(
         &scope,
         "proposal_comp_time",
@@ -354,10 +381,11 @@ fn resolving_winner_gate_asserts_only_the_selected_proposal() {
     );
     loser.proposal_key = "comp_time".into();
     loser.traceability.supporting_claim_ids = vec![StableId::new("claim_comp_time").unwrap()];
-    store.create_proposal_card(loser).unwrap();
+    store.create_proposal_card(None, loser).unwrap();
 
     store
         .assert_proposal_after_human_decision(
+            None,
             CreateAssertionInput {
                 scope_id: scope.clone(),
                 id: provenance_core::AssertionId::new("assertion_overtime").unwrap(),
@@ -382,12 +410,15 @@ fn resolving_winner_gate_asserts_only_the_selected_proposal() {
 fn repository_actor_allowlist_rejects_unlisted_disposition_actor() {
     let (_dir, store, scope) = initialized_store();
     store
-        .create_proposal_card(proposal_input(
-            &scope,
-            "proposal_overtime",
-            "Overtime",
-            PromotionState::Proposed,
-        ))
+        .create_proposal_card(
+            None,
+            proposal_input(
+                &scope,
+                "proposal_overtime",
+                "Overtime",
+                PromotionState::Proposed,
+            ),
+        )
         .unwrap();
     crate::jsonl::write_jsonl_atomic(
         &crate::shards::assertion_records_path(&store.layout, &scope),
@@ -403,7 +434,7 @@ fn repository_actor_allowlist_rejects_unlisted_disposition_actor() {
     .unwrap();
 
     let error = store
-        .create_disposition(disposition_input(scope, "forged-reviewer"))
+        .create_disposition(None, disposition_input(scope, "forged-reviewer"))
         .unwrap_err()
         .to_string();
 
@@ -411,66 +442,4 @@ fn repository_actor_allowlist_rejects_unlisted_disposition_actor() {
         error.contains("no disposition actors configured"),
         "{error}"
     );
-}
-
-fn seed_blocked_evidence(store: &crate::state_store::StateStore, scope: &provenance_core::ScopeId) {
-    let contribution: provenance_core::Contribution = serde_json::from_value(serde_json::json!({
-        "schema_version": 1, "scope_id": "default", "id": "contribution_overtime",
-        "target": {"artifact_type": "requirement", "artifact_id": "req_overtime"},
-        "participant_slot": "reviewer", "stance": "support", "strongest_finding": "Observed",
-        "evidence_references": [{"reference_id": "evidence_overtime", "evidence_type": "source", "summary": "Pinned"}],
-        "material_claims": [{"claim_id": "claim_overtime", "statement": "Observed", "evidence_type": "source", "evidence_reference_ids": ["evidence_overtime"]}],
-        "risks": [], "objections": [], "challenges": [], "suggested_artifact_changes": [],
-        "unsupported_recommendations": [], "uncertainty": {"level": "low", "rationale": "Direct"}, "open_questions": []
-    })).unwrap();
-    let synthesis: provenance_core::SynthesisPacket = serde_json::from_value(serde_json::json!({
-        "schema_version": 1, "scope_id": "default", "id": "synthesis_overtime",
-        "target": {"artifact_type": "requirement", "artifact_id": "req_overtime"}, "summary": "Adjudicated",
-        "consensus": [], "contested_claims": [], "minority_objections": [],
-        "evidence_gaps": [{"question": "Unverified", "needed_evidence_type": "source", "blocking_promotion": true}],
-        "unsupported_speculation": [], "open_questions": [],
-        "suggested_artifacts": [{"proposal_id": "proposal_overtime", "proposal_key": "overtime", "proposal_type": "requirement_candidate", "summary": "Candidate", "origin_participant_slots": ["reviewer"]}],
-        "required_human_decisions": []
-    })).unwrap();
-    crate::jsonl::write_jsonl_atomic(
-        &crate::shards::contributions_path(&store.layout, scope),
-        &[contribution],
-    )
-    .unwrap();
-    crate::jsonl::write_jsonl_atomic(
-        &crate::shards::synthesis_packets_path(&store.layout, scope),
-        &[synthesis],
-    )
-    .unwrap();
-}
-
-fn allow_actor(store: &crate::state_store::StateStore, id: &str) {
-    let mut manifest = store.manifest().unwrap();
-    manifest.disposition_actor_ids.push(id.into());
-    std::fs::write(
-        store.layout.manifest_path(),
-        serde_json::to_vec(&manifest).unwrap(),
-    )
-    .unwrap();
-}
-
-fn disposition_input(scope_id: provenance_core::ScopeId, actor_id: &str) -> CreateDispositionInput {
-    CreateDispositionInput {
-        scope_id,
-        id: StableId::new("disposition_overtime").unwrap(),
-        proposal_id: StableId::new("proposal_overtime").unwrap(),
-        decision: DispositionDecision::Accepted,
-        rationale: "Reviewed".into(),
-        actor: actor(actor_id),
-        canonical_artifact: None,
-        external_action: None,
-    }
-}
-
-fn actor(id: &str) -> DispositionActor {
-    DispositionActor {
-        identity_type: IdentityType::Human,
-        id: id.into(),
-        name: None,
-    }
 }

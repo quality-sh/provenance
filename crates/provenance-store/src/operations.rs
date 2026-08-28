@@ -83,7 +83,8 @@ pub fn apply(
 ) -> anyhow::Result<TypedSpecResult> {
     let repo = discover_repository(repo)?;
     normalize_implementation_context(&repo, &mut input)?;
-    StateStore::new(ProvenanceLayout::new(repo)).apply_typed_spec(scope, input)
+    let claim = input.actor.clone();
+    StateStore::new(ProvenanceLayout::new(repo)).apply_typed_spec(claim.as_ref(), scope, input)
 }
 
 /// Opens one verification run against a durable binding.
@@ -97,7 +98,8 @@ pub fn begin_verification(
         .map_err(anyhow::Error::msg)?
         .to_string();
     normalize_verification_context(&repo, &mut input)?;
-    StateStore::new(ProvenanceLayout::new(repo)).begin_verification(scope, input)
+    let claim = input.actor.clone();
+    StateStore::new(ProvenanceLayout::new(repo)).begin_verification(claim.as_ref(), scope, input)
 }
 
 /// Completes one verification run as passed or failed.
@@ -107,7 +109,8 @@ pub fn complete_verification(
     input: CompleteVerificationInput,
 ) -> anyhow::Result<provenance_core::VerificationRun> {
     let repo = discover_repository(repo)?;
-    StateStore::new(ProvenanceLayout::new(repo)).complete_verification(scope, input)
+    let claim = input.actor.clone();
+    StateStore::new(ProvenanceLayout::new(repo)).complete_verification(claim.as_ref(), scope, input)
 }
 
 /// Lists verification runs, optionally for one Rule.

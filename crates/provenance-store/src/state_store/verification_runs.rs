@@ -1,21 +1,26 @@
 use provenance_core::{
-    validate_optional_commit_pin, ScopeId, StableId, VerificationMethod, VerificationRun,
-    VerificationRunStatus, SUPPORTED_SCHEMA_VERSION,
+    validate_optional_commit_pin, Capability, RbacClaim, ScopeId, StableId, VerificationMethod,
+    VerificationRun, VerificationRunStatus, SUPPORTED_SCHEMA_VERSION,
 };
 use std::str::FromStr as _;
 
 use super::requirement_reviews::now_millis;
 use super::{
     BeginVerificationInput, CompleteVerificationInput, MaterializeVerificationBindingInput,
-    StateStore,
+    MutationAuth, StateStore,
 };
 
 impl StateStore {
+    /// Begins a verification run (family 14, `execute`). The run shard keeps
+    /// its own advisory lock, so this writer goes through the direct-lock
+    /// primitive with the same backstop.
     pub fn begin_verification(
         &self,
+        claim: Option<&RbacClaim>,
         scope_id: ScopeId,
         input: BeginVerificationInput,
     ) -> anyhow::Result<VerificationRun> {
+        let auth = MutationAuth::new(claim, Capability::Execute, &scope_id);
         anyhow::ensure!(
             !input.declared_by.trim().is_empty(),
             "declared_by must not be empty"
@@ -66,8 +71,9 @@ impl StateStore {
                 anyhow::bail!("begin verification requires either rule or declaration")
             }
         };
-        let binding =
-            self.materialize_verification_binding(MaterializeVerificationBindingInput {
+        let binding = self.materialize_verification_binding(
+            claim,
+            MaterializeVerificationBindingInput {
                 scope_id: scope_id.clone(),
                 rule_id: rule_id.clone(),
                 key: input.key,
@@ -75,13 +81,15 @@ impl StateStore {
                 declared_by: input.declared_by.clone(),
                 file: file.clone(),
                 symbol: input.symbol.clone(),
-            })?;
+            },
+        )?;
         let started_at = now_millis()?;
         let path = self.layout.verification_runs_path(&scope_id);
         let lock_path = self.layout.verification_runs_lock_path(&scope_id);
-        let run = crate::jsonl::mutate_jsonl_locked(
+        let run = self.mutate_locked_records(
             &path,
             &lock_path,
+            auth.clone(),
             |records: &mut Vec<VerificationRun>| {
                 let id = next_run_id(records, started_at)?;
                 let run = VerificationRun {
@@ -109,12 +117,13 @@ impl StateStore {
                 Ok(run)
             },
         )?;
-        self.clear_requirement_reviews(&run.scope_id, &run.rule_id, &run.id, run.started_at)?;
+        self.clear_requirement_reviews(auth, &run.scope_id, &run.rule_id, &run.id, run.started_at)?;
         Ok(run)
     }
 
     pub fn complete_verification(
         &self,
+        claim: Option<&RbacClaim>,
         scope_id: &ScopeId,
         input: CompleteVerificationInput,
     ) -> anyhow::Result<VerificationRun> {
@@ -127,9 +136,10 @@ impl StateStore {
         let completed_at = now_millis()?;
         let path = self.layout.verification_runs_path(scope_id);
         let lock_path = self.layout.verification_runs_lock_path(scope_id);
-        crate::jsonl::mutate_jsonl_locked(
+        self.mutate_locked_records(
             &path,
             &lock_path,
+            MutationAuth::new(claim, Capability::Execute, scope_id),
             |records: &mut Vec<VerificationRun>| {
                 let run = records
                     .iter_mut()

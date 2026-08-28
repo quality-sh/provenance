@@ -28,6 +28,9 @@ pub(super) fn handle(
             path_prefix: Some(path_prefix),
             disposition_actor_ids: Vec::new(),
             clear_disposition_actors: false,
+            // First bootstrap on a fresh repository: the rbac section the
+            // plan creates cannot be consulted before it exists.
+            actor_claim: None,
             ste_onboarding,
             ste_pdf,
             invocation_channel: crate::cli::InvocationChannel::Native,

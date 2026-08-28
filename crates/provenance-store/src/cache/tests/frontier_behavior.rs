@@ -21,27 +21,33 @@ fn add_topic_question(
     status: QuestionStatus,
 ) {
     store
-        .create_topic(CreateTopicInput {
-            scope_id: scope.clone(),
-            id: sid(topic),
-            requirement_id: sid(requirement),
-            title: topic.to_string(),
-            status: TopicStatus::Open,
-            links: Vec::new(),
-        })
+        .create_topic(
+            None,
+            CreateTopicInput {
+                scope_id: scope.clone(),
+                id: sid(topic),
+                requirement_id: sid(requirement),
+                title: topic.to_string(),
+                status: TopicStatus::Open,
+                links: Vec::new(),
+            },
+        )
         .unwrap();
     store
-        .create_question(CreateQuestionInput {
-            scope_id: scope.clone(),
-            id: sid(question),
-            topic_id: sid(topic),
-            question: "Which path should this take?".into(),
-            resolution_method: ResolutionMethod::Grill,
-            status,
-            answer: None,
-            links: Vec::new(),
-            resolution_id: None,
-        })
+        .create_question(
+            None,
+            CreateQuestionInput {
+                scope_id: scope.clone(),
+                id: sid(question),
+                topic_id: sid(topic),
+                question: "Which path should this take?".into(),
+                resolution_method: ResolutionMethod::Grill,
+                status,
+                answer: None,
+                links: Vec::new(),
+                resolution_id: None,
+            },
+        )
         .unwrap();
 }
 
@@ -58,28 +64,31 @@ fn ordinary_prime_does_not_expand_into_a_global_proposal_queue() {
     let (_dir, layout, scope) = empty_layout();
     let store = StateStore::new(layout.clone());
     store
-        .create_proposal_card(CreateProposalCardInput {
-            scope_id: scope.clone(),
-            id: sid("proposal_demand_only"),
-            proposal_key: "demand-only".into(),
-            proposal_type: ProposalType::RequirementCandidate,
-            title: "Demand only".into(),
-            summary: "Surface only when territory is claimed".into(),
-            confidence: None,
-            traceability: ProposalTraceability {
-                target: IdeationTarget {
-                    artifact_type: IdeationTargetType::Requirement,
-                    artifact_id: sid("req_demand_only"),
+        .create_proposal_card(
+            None,
+            CreateProposalCardInput {
+                scope_id: scope.clone(),
+                id: sid("proposal_demand_only"),
+                proposal_key: "demand-only".into(),
+                proposal_type: ProposalType::RequirementCandidate,
+                title: "Demand only".into(),
+                summary: "Surface only when territory is claimed".into(),
+                confidence: None,
+                traceability: ProposalTraceability {
+                    target: IdeationTarget {
+                        artifact_type: IdeationTargetType::Requirement,
+                        artifact_id: sid("req_demand_only"),
+                    },
+                    source_ids: Vec::new(),
+                    evidence_references: Vec::new(),
+                    supporting_claim_ids: Vec::new(),
                 },
-                source_ids: Vec::new(),
-                evidence_references: Vec::new(),
-                supporting_claim_ids: Vec::new(),
+                builds_on: Vec::new(),
+                promotion_state: PromotionState::Proposed,
+                duplicate_of: None,
+                superseded_by: None,
             },
-            builds_on: Vec::new(),
-            promotion_state: PromotionState::Proposed,
-            duplicate_of: None,
-            superseded_by: None,
-        })
+        )
         .unwrap();
 
     let prime = prime_context(&layout, &scope, false).unwrap();
@@ -99,20 +108,23 @@ fn find_gaps_reports_the_frontier_taxonomy() {
     create_source(&store, &scope, "source_anchor");
     create_source(&store, &scope, "source_unused");
     store
-        .create_source(CreateSourceInput {
-            scope_id: scope.clone(),
-            id: sid("source_dangling"),
-            name: "source_dangling".into(),
-            source_type: SourceType::Policy,
-            url: None,
-            reference: None,
-            commit_pin: None,
-            effective_date: None,
-            review_date: None,
-            superseded_by: Some(sid("source_missing")),
-            origin_thread: None,
-            origin_message: None,
-        })
+        .create_source(
+            None,
+            CreateSourceInput {
+                scope_id: scope.clone(),
+                id: sid("source_dangling"),
+                name: "source_dangling".into(),
+                source_type: SourceType::Policy,
+                url: None,
+                reference: None,
+                commit_pin: None,
+                effective_date: None,
+                review_date: None,
+                superseded_by: Some(sid("source_missing")),
+                origin_thread: None,
+                origin_message: None,
+            },
+        )
         .unwrap();
     for (id, status) in [
         ("req_missing_source", RequirementStatus::Active),
@@ -128,81 +140,96 @@ fn find_gaps_reports_the_frontier_taxonomy() {
         }
     }
     store
-        .add_source_reference(AddSourceReferenceInput {
-            scope_id: scope.clone(),
-            source_id: sid("source_dangling"),
-            requirement_id: sid("req_question_topic"),
-            clause: None,
-        })
+        .add_source_reference(
+            None,
+            AddSourceReferenceInput {
+                scope_id: scope.clone(),
+                source_id: sid("source_dangling"),
+                requirement_id: sid("req_question_topic"),
+                clause: None,
+            },
+        )
         .unwrap();
     store
-        .create_resolution(CreateResolutionInput {
-            scope_id: scope.clone(),
-            id: sid("res_decision_without_rule"),
-            title: "res_decision_without_rule".into(),
-            requirement_id: Some(sid("req_decided_no_rule")),
-            position: "Adopt".into(),
-            rationale: "Resolves frontier".into(),
-            status: ResolutionStatus::Approved,
-            context: None,
-            enforcement: None,
-            confidence: None,
-            inputs: Vec::new(),
-            made_by: None,
-            approved_by: None,
-            approved_at: None,
-            superseded_by: None,
-            origin_thread: None,
-            origin_message: None,
-        })
+        .create_resolution(
+            None,
+            CreateResolutionInput {
+                scope_id: scope.clone(),
+                id: sid("res_decision_without_rule"),
+                title: "res_decision_without_rule".into(),
+                requirement_id: Some(sid("req_decided_no_rule")),
+                position: "Adopt".into(),
+                rationale: "Resolves frontier".into(),
+                status: ResolutionStatus::Approved,
+                context: None,
+                enforcement: None,
+                confidence: None,
+                inputs: Vec::new(),
+                made_by: None,
+                approved_by: None,
+                approved_at: None,
+                superseded_by: None,
+                origin_thread: None,
+                origin_message: None,
+            },
+        )
         .unwrap();
     store
-        .create_resolution(CreateResolutionInput {
-            scope_id: scope.clone(),
-            id: sid("res_orphan"),
-            title: "res_orphan".into(),
-            requirement_id: None,
-            position: "Adopt".into(),
-            rationale: "Resolves frontier".into(),
-            status: ResolutionStatus::Approved,
-            context: None,
-            enforcement: None,
-            confidence: None,
-            inputs: Vec::new(),
-            made_by: None,
-            approved_by: None,
-            approved_at: None,
-            superseded_by: None,
-            origin_thread: None,
-            origin_message: None,
-        })
+        .create_resolution(
+            None,
+            CreateResolutionInput {
+                scope_id: scope.clone(),
+                id: sid("res_orphan"),
+                title: "res_orphan".into(),
+                requirement_id: None,
+                position: "Adopt".into(),
+                rationale: "Resolves frontier".into(),
+                status: ResolutionStatus::Approved,
+                context: None,
+                enforcement: None,
+                confidence: None,
+                inputs: Vec::new(),
+                made_by: None,
+                approved_by: None,
+                approved_at: None,
+                superseded_by: None,
+                origin_thread: None,
+                origin_message: None,
+            },
+        )
         .unwrap();
     store
-        .create_rule(CreateRuleInput {
-            scope_id: scope.clone(),
-            id: sid("rule_orphan"),
-            name: None,
-            description: None,
-            requirement_id: None,
-            resolution_id: None,
-            statement: "An unattached rule exists".into(),
-            status: RuleStatus::Active,
-            severity: RuleSeverity::High,
-            source_document: None,
-            source_section: None,
-            origin_thread: None,
-            origin_message: None,
-        })
+        .create_rule(
+            None,
+            CreateRuleInput {
+                scope_id: scope.clone(),
+                id: sid("rule_orphan"),
+                name: None,
+                description: None,
+                requirement_id: None,
+                resolution_id: None,
+                statement: "An unattached rule exists".into(),
+                status: RuleStatus::Active,
+                severity: RuleSeverity::High,
+                source_document: None,
+                source_section: None,
+                origin_thread: None,
+                origin_message: None,
+            },
+        )
         .unwrap();
     store
-        .create_edge(CreateEdgeInput {
-            scope_id: scope.clone(),
-            edge_type: EdgeType::Contradicts,
-            from_type: NodeType::Requirement,
-            from_id: sid("req_contradicts_a"),
-            to_type: NodeType::Requirement,
-            to_id: sid("req_contradicts_b"),
-        })
+        .create_edge(
+            None,
+            CreateEdgeInput {
+                scope_id: scope.clone(),
+                edge_type: EdgeType::Contradicts,
+                from_type: NodeType::Requirement,
+                from_id: sid("req_contradicts_a"),
+                to_type: NodeType::Requirement,
+                to_id: sid("req_contradicts_b"),
+            },
+        )
         .unwrap();
     add_topic_question(
         &store,
@@ -294,14 +321,17 @@ fn prime_renders_frontier_gap_subjects() {
         attach_source(&store, &scope, id, "source_anchor");
     }
     store
-        .create_edge(CreateEdgeInput {
-            scope_id: scope.clone(),
-            edge_type: EdgeType::Contradicts,
-            from_type: NodeType::Requirement,
-            from_id: sid("req_contradicts_a"),
-            to_type: NodeType::Requirement,
-            to_id: sid("req_contradicts_b"),
-        })
+        .create_edge(
+            None,
+            CreateEdgeInput {
+                scope_id: scope.clone(),
+                edge_type: EdgeType::Contradicts,
+                from_type: NodeType::Requirement,
+                from_id: sid("req_contradicts_a"),
+                to_type: NodeType::Requirement,
+                to_id: sid("req_contradicts_b"),
+            },
+        )
         .unwrap();
     add_topic_question(
         &store,

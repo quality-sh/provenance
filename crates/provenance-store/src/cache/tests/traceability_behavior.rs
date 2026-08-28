@@ -24,42 +24,48 @@ fn seed_two_producers(layout: &ProvenanceLayout, scope: &ScopeId) {
     attach_source(&store, scope, "req_direct", "source_direct");
     attach_source(&store, scope, "req_resolved", "source_resolved");
     store
-        .create_resolution(CreateResolutionInput {
-            scope_id: scope.clone(),
-            id: sid("res_indirect"),
-            title: "Indirect decision".into(),
-            requirement_id: Some(sid("req_resolved")),
-            position: "Adopt".into(),
-            rationale: "Settles the other requirement".into(),
-            status: ResolutionStatus::Proposed,
-            context: None,
-            enforcement: None,
-            confidence: None,
-            inputs: Vec::new(),
-            made_by: None,
-            approved_by: None,
-            approved_at: None,
-            superseded_by: None,
-            origin_thread: None,
-            origin_message: None,
-        })
+        .create_resolution(
+            None,
+            CreateResolutionInput {
+                scope_id: scope.clone(),
+                id: sid("res_indirect"),
+                title: "Indirect decision".into(),
+                requirement_id: Some(sid("req_resolved")),
+                position: "Adopt".into(),
+                rationale: "Settles the other requirement".into(),
+                status: ResolutionStatus::Proposed,
+                context: None,
+                enforcement: None,
+                confidence: None,
+                inputs: Vec::new(),
+                made_by: None,
+                approved_by: None,
+                approved_at: None,
+                superseded_by: None,
+                origin_thread: None,
+                origin_message: None,
+            },
+        )
         .unwrap();
     store
-        .create_rule(CreateRuleInput {
-            scope_id: scope.clone(),
-            id: sid("rule_two_producers"),
-            name: None,
-            description: None,
-            requirement_id: Some(sid("req_direct")),
-            resolution_id: Some(sid("res_indirect")),
-            statement: "Both producers are recorded".into(),
-            status: RuleStatus::Active,
-            severity: RuleSeverity::High,
-            source_document: None,
-            source_section: None,
-            origin_thread: None,
-            origin_message: None,
-        })
+        .create_rule(
+            None,
+            CreateRuleInput {
+                scope_id: scope.clone(),
+                id: sid("rule_two_producers"),
+                name: None,
+                description: None,
+                requirement_id: Some(sid("req_direct")),
+                resolution_id: Some(sid("res_indirect")),
+                statement: "Both producers are recorded".into(),
+                status: RuleStatus::Active,
+                severity: RuleSeverity::High,
+                source_document: None,
+                source_section: None,
+                origin_thread: None,
+                origin_message: None,
+            },
+        )
         .unwrap();
 }
 

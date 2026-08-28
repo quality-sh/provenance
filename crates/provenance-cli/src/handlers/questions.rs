@@ -8,7 +8,11 @@ use provenance_store::{
 };
 
 #[allow(clippy::too_many_lines)]
-pub(super) fn handle(command: QuestionsCommand, quiet: bool) -> anyhow::Result<()> {
+pub(super) fn handle(
+    command: QuestionsCommand,
+    quiet: bool,
+    actor_claim: Option<&provenance_core::RbacClaim>,
+) -> anyhow::Result<()> {
     match command {
         QuestionsCommand::Create {
             repo,
@@ -25,6 +29,7 @@ pub(super) fn handle(command: QuestionsCommand, quiet: bool) -> anyhow::Result<(
         } => {
             warn_if_skills_missing(&repo, quiet)?;
             let question = StateStore::new(ProvenanceLayout::new(repo)).create_question(
+                actor_claim,
                 CreateQuestionInput {
                     scope_id: ScopeId::new(scope)?,
                     id: StableId::new(id)?,
@@ -61,6 +66,7 @@ pub(super) fn handle(command: QuestionsCommand, quiet: bool) -> anyhow::Result<(
         } => {
             warn_if_skills_missing(&repo, quiet)?;
             let question = StateStore::new(ProvenanceLayout::new(repo)).update_question(
+                actor_claim,
                 UpdateQuestionInput {
                     scope_id: ScopeId::new(scope)?,
                     id: StableId::new(id)?,
@@ -87,6 +93,7 @@ pub(super) fn handle(command: QuestionsCommand, quiet: bool) -> anyhow::Result<(
         } => {
             warn_if_skills_missing(&repo, quiet)?;
             let question = StateStore::new(ProvenanceLayout::new(repo)).claim_question(
+                actor_claim,
                 &ScopeId::new(scope)?,
                 &StableId::new(id)?,
                 &actor,
@@ -100,8 +107,11 @@ pub(super) fn handle(command: QuestionsCommand, quiet: bool) -> anyhow::Result<(
             format,
         } => {
             warn_if_skills_missing(&repo, quiet)?;
-            let question = StateStore::new(ProvenanceLayout::new(repo))
-                .release_question(&ScopeId::new(scope)?, &StableId::new(id)?)?;
+            let question = StateStore::new(ProvenanceLayout::new(repo)).release_question(
+                actor_claim,
+                &ScopeId::new(scope)?,
+                &StableId::new(id)?,
+            )?;
             output::print(format, &question)?;
         }
         QuestionsCommand::Answer {
@@ -114,6 +124,7 @@ pub(super) fn handle(command: QuestionsCommand, quiet: bool) -> anyhow::Result<(
         } => {
             warn_if_skills_missing(&repo, quiet)?;
             let question = StateStore::new(ProvenanceLayout::new(repo)).answer_question(
+                actor_claim,
                 &ScopeId::new(scope)?,
                 &StableId::new(id)?,
                 answer,

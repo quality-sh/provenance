@@ -10,12 +10,15 @@ use provenance_macros::verifies;
 fn proposal_projection_rejects_unlisted_disposition_actor() {
     let (_dir, store, scope) = initialized_store();
     store
-        .create_proposal_card(proposal_input(
-            &scope,
-            "proposal_overtime",
-            "Overtime",
-            PromotionState::Proposed,
-        ))
+        .create_proposal_card(
+            None,
+            proposal_input(
+                &scope,
+                "proposal_overtime",
+                "Overtime",
+                PromotionState::Proposed,
+            ),
+        )
         .unwrap();
     crate::jsonl::write_jsonl_atomic(
         &crate::shards::dispositions_path(&store.layout, &scope),
@@ -44,12 +47,15 @@ fn proposal_projection_rejects_unlisted_disposition_actor() {
 fn proposal_projection_uses_one_publication_snapshot() {
     let (_dir, store, scope) = initialized_store();
     store
-        .create_proposal_card(proposal_input(
-            &scope,
-            "proposal_overtime",
-            "Overtime",
-            PromotionState::Proposed,
-        ))
+        .create_proposal_card(
+            None,
+            proposal_input(
+                &scope,
+                "proposal_overtime",
+                "Overtime",
+                PromotionState::Proposed,
+            ),
+        )
         .unwrap();
     let (validated_tx, validated_rx) = std::sync::mpsc::channel();
     let (release_tx, release_rx) = std::sync::mpsc::channel();
@@ -98,21 +104,27 @@ fn proposal_projection_uses_one_publication_snapshot() {
 fn modern_proposal_rejects_duplicate_create() {
     let (_dir, store, scope) = initialized_store();
     store
-        .create_proposal_card(proposal_input(
-            &scope,
-            "proposal_overtime",
-            "Original",
-            PromotionState::Proposed,
-        ))
+        .create_proposal_card(
+            None,
+            proposal_input(
+                &scope,
+                "proposal_overtime",
+                "Original",
+                PromotionState::Proposed,
+            ),
+        )
         .unwrap();
 
     let error = store
-        .create_proposal_card(proposal_input(
-            &scope,
-            "proposal_overtime",
-            "Divergent",
-            PromotionState::Proposed,
-        ))
+        .create_proposal_card(
+            None,
+            proposal_input(
+                &scope,
+                "proposal_overtime",
+                "Divergent",
+                PromotionState::Proposed,
+            ),
+        )
         .unwrap_err()
         .to_string();
     assert!(error.contains("immutable"), "{error}");
@@ -141,7 +153,7 @@ fn ratification_records_a_disposition_without_mutating_proposal_definition() {
         let barrier = barrier.clone();
         threads.push(std::thread::spawn(move || {
             barrier.wait();
-            store.create_disposition(disposition_input(scope, id))
+            store.create_disposition(None, disposition_input(scope, id))
         }));
     }
     barrier.wait();
@@ -181,12 +193,15 @@ fn ratification_records_a_disposition_without_mutating_proposal_definition() {
 fn validation_rejects_divergent_duplicate_before_landing_overlay() {
     let (_dir, store, scope) = initialized_store();
     let proposal = store
-        .create_proposal_card(proposal_input(
-            &scope,
-            "proposal_duplicate",
-            "Original",
-            PromotionState::Proposed,
-        ))
+        .create_proposal_card(
+            None,
+            proposal_input(
+                &scope,
+                "proposal_duplicate",
+                "Original",
+                PromotionState::Proposed,
+            ),
+        )
         .unwrap();
     let mut divergent = proposal;
     divergent.title = "Forged overlay".into();
@@ -213,12 +228,15 @@ fn validation_rejects_divergent_duplicate_before_landing_overlay() {
 fn unregistered_terminal_row_is_not_legacy_compatibility() {
     let (_dir, store, scope) = initialized_store();
     let mut proposal = store
-        .create_proposal_card(proposal_input(
-            &scope,
-            "proposal_forged",
-            "Forged",
-            PromotionState::Proposed,
-        ))
+        .create_proposal_card(
+            None,
+            proposal_input(
+                &scope,
+                "proposal_forged",
+                "Forged",
+                PromotionState::Proposed,
+            ),
+        )
         .unwrap();
     proposal.promotion_state = PromotionState::Accepted;
     crate::jsonl::write_jsonl_atomic(
@@ -270,7 +288,7 @@ fn seed_proposal_ready_for_disposition(store: &StateStore, scope: &ScopeId) {
         PromotionState::Proposed,
     );
     proposal.traceability.supporting_claim_ids = vec![StableId::new("claim_overtime").unwrap()];
-    store.create_proposal_card(proposal).unwrap();
+    store.create_proposal_card(None, proposal).unwrap();
     synthesis.evidence_gaps.clear();
     crate::jsonl::write_jsonl_atomic(
         &crate::shards::synthesis_packets_path(&store.layout, scope),

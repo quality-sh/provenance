@@ -7,7 +7,10 @@ use provenance_store::{
     state_store::{CreateBoundaryInput, StateStore},
 };
 
-pub(super) fn handle(command: BoundariesCommand) -> anyhow::Result<()> {
+pub(super) fn handle(
+    command: BoundariesCommand,
+    actor_claim: Option<&provenance_core::RbacClaim>,
+) -> anyhow::Result<()> {
     match command {
         BoundariesCommand::Create {
             repo,
@@ -20,6 +23,7 @@ pub(super) fn handle(command: BoundariesCommand) -> anyhow::Result<()> {
             format,
         } => {
             let boundary = StateStore::new(ProvenanceLayout::new(repo)).create_boundary(
+                actor_claim,
                 CreateBoundaryInput {
                     scope_id: ScopeId::new(scope)?,
                     id: StableId::new(id)?,
