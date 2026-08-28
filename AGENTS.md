@@ -109,13 +109,36 @@ per-repo dial, not a property of a Rule.
 
 The Rule record's `--source-document` and `--source-section` fields cite source
 material. They do not count as an implementation binding; code bindings come from
-scanner-recognized attributes, helpers, decorators, or comments.
+scanner-recognized attributes, helpers, decorators, or comments. They are citations, not
+a planned home for the code: do not write an intended file path or symbol into them. A
+Rule record holds no planned code location.
+
+A Requirement alone is enough to anchor a Rule. `--resolution-id` is optional and belongs
+only on a Rule that a Resolution really produced. Run `provenance --version` before a
+session; an obsolete installed binary can demand a Resolution producer and push you into
+recording one that never existed.
 
 Rules follow behavioural obligations, not code shape. Do not mint one Rule per function,
 and do not split one obligation across five Rules because the match has five arms. Prose
 intent lives in the Requirement, Rule, and any Resolution that produced it. A Rule with
 no function or type behind it is unimplemented—an ordinary state, not a different graph
 artifact. Never write a `#[verifies]` test that asserts nothing to clear a warning.
+
+Keep four facts independent: Rule lifecycle, decision grounding, implementation binding,
+and verification binding. Lifecycle says whether the Rule is draft, under review, active,
+deprecated, or archived; it does not say that code or evidence exists. Source evidence, a
+Requirement, a ratified Resolution, or explicit human ratification can ground the decision.
+`provenance traceability <rule_id>` reads the upstream graph chain. Implementation and
+verification are separate code bindings, evaluated only by the canonical coverage scan
+described above.
+
+`prime` and `traceability` are graph reads and do not scan code. They may explain that an
+active Rule is allowed to precede its implementation, but absence of a binding in those
+views is not an implementation verdict. Never call a Rule invented, invalid, or unsupported
+because no code implements it. This repository plans first, so a Rule can be unimplemented
+until somebody writes the code. Where agent-authored behaviour has no source, Requirement,
+ratified Resolution, or explicit human ratification behind it, leave the Rule `draft` or
+`review`, keep the change a `proposed` proposal, or keep an open Question against it.
 
 ## Rule Doc Headers
 

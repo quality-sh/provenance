@@ -2,7 +2,7 @@
 name: provenance-grounded-writing
 description: Write specific, evidence-grounded statements for requirements, rules, sources, resolutions, and boundaries — not generic capability language. Use before calling `requirements create`, `rules create`, `sources create`, `resolutions create`, or `boundaries create`, especially for a root or mid-level requirement, a statement merging several candidates, or a resolution's position and rationale.
 ---
-<!-- Installed by provenance 0.2.2; content hash fnv1a64:a123bc878ef09e2d -->
+<!-- Installed by provenance 0.2.2; content hash fnv1a64:a0fc3ac080dd8d24 -->
 
 # Grounded writing
 
@@ -105,28 +105,34 @@ Rule — bad: "The system shall enforce approval validation" — restates a clas
 and names no atomic, testable behaviour.
 
 Rule — good: "An expense strictly above the submitting employee's delegated authority
-limit needs a second approver; an expense at the limit does not." In this codebase,
-`ApprovalService.php`'s `requires_second_approver($expense, $employee)` is its primary
-implementation. Its code location may also serve as a source citation on the record,
-but that citation does not bind the implementation:
+limit needs a second approver." The statement holds no semicolon, because the write gate
+applies ASD-STE100 Issue 9. Put the behaviour at the limit in a second Rule, or in the
+description. `--source-document` and `--source-section` cite where the obligation was
+read, which here is the policy clause:
 
 ```sh
 provenance rules create --scope <scope> \
   --id rule_exp_apr_003 \
   --requirement-id <requirement_id> \
-  --statement "An expense strictly above the submitting employee's delegated authority limit needs a second approver; an expense at the limit does not" \
+  --statement "An expense strictly above the submitting employee's delegated authority limit needs a second approver" \
   --severity high \
-  --source-document ApprovalService.php \
-  --source-section requires_second_approver \
+  --source-document "Finance Policy v3 (2026 revision)" \
+  --source-section "4.2 Delegated authority" \
   --format json
 ```
 
-Then bind the implementation in the code so the scanner can see the relationship, and
-bind the test that runs the threshold cases with the same id and its method—in Rust,
-`#[rule("rule_exp_apr_003")]` and `#[verifies("rule_exp_apr_003", examples)]`. If no
-primary implementation exists—the limit is re-checked inline in three controllers—the
-Rule remains valid but Unimplemented. The `provenance-shaping` skill has the full Rule
-and binding flow.
+Do not put the file where you expect to write the code into `--source-document`. These
+fields are citations to source material. They name no home for the code and reserve no
+file for it. A Rule holds no planned code location at all; the location becomes known
+when a binding exists.
+
+Bind the implementation in the code, so the scanner can see the relationship, and bind
+the test that runs the threshold cases with the same id and its method—in Rust,
+`#[rule("rule_exp_apr_003")]` on `requires_second_approver` and
+`#[verifies("rule_exp_apr_003", examples)]` on the test. If no primary implementation
+exists—the limit is re-checked inline in three controllers, or nobody has written it
+yet—the Rule remains valid and is Unimplemented. The `provenance-shaping` skill has the
+full Rule and binding flow, and the audit rules that go with it.
 
 Resolution — bad: position "Require a second approver above a threshold," rationale "Team
 decided this was the right approach" — no number, no alternative, no reason one lost. Good:
