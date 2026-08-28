@@ -1,6 +1,7 @@
 mod gaps;
 mod health;
 mod impact;
+mod implementation;
 mod materialize;
 mod prime;
 mod traceability;
@@ -8,6 +9,7 @@ mod traceability;
 pub use gaps::*;
 pub use health::*;
 pub use impact::*;
+pub use implementation::*;
 pub use materialize::{materialize_empty_state, materialize_state};
 pub use prime::*;
 pub use traceability::*;

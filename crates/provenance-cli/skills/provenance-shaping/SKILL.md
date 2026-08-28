@@ -24,6 +24,27 @@ graph before you move on. The graph holds state between turns, not the conversat
 One question per session is **not** the invariant. Grill turns can drain a topic question
 by question; expensive methods claim one question and often stop at a phase boundary.
 
+## Check your CLI
+
+Run this before the first graph write of a session:
+
+```sh
+provenance --version
+```
+
+An installed binary that is older than this skill accepts different flags, and it can
+refuse work that the current CLI allows. One obsolete release required a Resolution
+producer on every Rule, which pushed agents into inventing a Resolution for a Rule that a
+Requirement alone had produced. A binary that does not understand `--version` at all is
+far behind; reinstall it before you shape anything:
+
+```sh
+cargo install provenance-cli --force
+```
+
+Do not model the graph around what an old binary accepts. If a command and this skill
+disagree, update the binary first, then shape.
+
 ## Start every session
 
 1. Confirm the repo has a Provenance store. If absent, ask before initializing unless the
@@ -256,15 +277,22 @@ evidence verifies it; those absences are Unimplemented and Unverified, not reaso
 change the artifact's kind.
 
 1. **The record.** The statement names the precise behavioural obligation in one clause.
-   `--source-document` and `--source-section` may cite the source behind the Rule; they
-   never count as an implementation binding. Bind known implementation through a
-   scanner-recognized attribute, helper, decorator, or comment.
+   `--source-document` and `--source-section` cite the source material the obligation was
+   read out of, such as an award, a standard, or a policy clause. They are citations. They
+   are not a planned home for the code, they reserve no file for it, and they never count
+   as an implementation binding. Do not write an intended file path or symbol into them.
+   Bind implementation, when it exists, through a scanner-recognized attribute, helper,
+   decorator, or comment.
+
+   A Requirement is enough to anchor a Rule. Pass `--resolution-id` only when a Resolution
+   really produced the Rule. A Resolution producer is not required, and inventing one to
+   satisfy the command misrecords how the obligation arose. If the CLI rejects a Rule that
+   cites only a Requirement, the installed binary is out of date; see "Check your CLI".
 
    ```sh
    provenance rules create --scope <scope> \
      --id rule_<stable_slug> \
      --requirement-id <anchor_requirement_id> \
-     --resolution-id res_<stable_slug> \
      --statement "<atomic behavioural obligation, in one clause>" \
      --severity high \
      --format json
@@ -394,6 +422,41 @@ Before final response:
 
 3. Tell the user what landed, what remains, and the next commands. Use artifact names and
    ids together, never bare ids.
+
+## Auditing a Rule
+
+An audit asks two separate questions. Keep them apart. A finding that mixes them is the
+error that calls a planned Rule invented.
+
+**Decision fidelity: is the Rule true to what was decided?** Audit the Rule against its
+sources, the Requirement it refines, and the ratified decisions that produced it.
+
+- The statement gives one atomic behavioural obligation.
+- A Source, a Requirement, or a Resolution supports that statement.
+  `provenance traceability <rule_id> --scope <scope> --format json` prints that chain.
+- No ratified decision disagrees with it.
+
+A Rule that fails decision fidelity is unsupported. Report it, and name the source,
+Requirement, or decision that it disagrees with.
+
+**Implementation fidelity: does the code do what the Rule says?** Audit the code against
+the Rule.
+
+- `provenance coverage scan --path . --scope <scope> --validate-rules` reports an active
+  Rule that has no primary implementation as unimplemented. `provenance prime` and
+  `provenance traceability` derive and report the same state.
+- Unimplemented is absence. It is an ordinary state of a planned obligation.
+
+**Never report a Rule as invented, invalid, or unsupported because no code implements it.**
+Code absence is evidence about implementation fidelity only. Provenance is planning-first:
+Rules are written before the code exists, and each one is unimplemented until a person
+writes that code. An audit that reads this absence as invention reports the method as a
+defect.
+
+When agent-authored behaviour has no source, Requirement, or ratified decision behind it,
+leave it where a human can still refuse it. Keep the Rule `draft` or `review`, keep the
+change a `proposed` proposal, or keep an open Question against it. Do not make it `active`
+to clear a report.
 
 ## Landing checklist
 

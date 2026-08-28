@@ -1,3 +1,4 @@
+use crate::cache::{ImplementationIndex, ImplementationState};
 use crate::layout::ProvenanceLayout;
 use crate::state_store::StateStore;
 use provenance_core::{Edge, EdgeType, NodeType, Requirement, Resolution, Rule, Source};
@@ -8,9 +9,14 @@ use provenance_core::{Edge, EdgeType, NodeType, Requirement, Resolution, Rule, S
 /// into the rule, the resolves edge from its resolution, and the source
 /// references on the requirements reached. A reader asked about one rule, so
 /// handing back every edge in the scope answers a question nobody asked.
+///
+/// `implementation` is derived, never stored. The chain above a Rule and the
+/// code below it are separate questions, and a trace that answered only the
+/// first left a reader to guess the second from silence.
 #[derive(Debug, serde::Serialize)]
 pub struct TraceabilityView {
     pub rule: Rule,
+    pub implementation: ImplementationState,
     pub resolutions: Vec<Resolution>,
     pub requirements: Vec<Requirement>,
     pub sources: Vec<Source>,
@@ -23,10 +29,11 @@ pub fn trace_rule(
     rule_id: &provenance_core::StableId,
 ) -> anyhow::Result<TraceabilityView> {
     let store = StateStore::new(layout.clone());
-    store.with_repository_publication(|| trace_rule_locked(scope, rule_id, &store))
+    store.with_repository_publication(|| trace_rule_locked(layout, scope, rule_id, &store))
 }
 
 fn trace_rule_locked(
+    layout: &ProvenanceLayout,
     scope: &provenance_core::ScopeId,
     rule_id: &provenance_core::StableId,
     store: &StateStore,
@@ -106,6 +113,7 @@ fn trace_rule_locked(
         .filter(|source| source_ids.iter().any(|id| id == &source.id))
         .collect();
     Ok(TraceabilityView {
+        implementation: ImplementationIndex::build(layout, store, scope)?.state(&rule),
         rule,
         resolutions,
         requirements,
