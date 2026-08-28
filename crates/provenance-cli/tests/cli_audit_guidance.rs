@@ -19,27 +19,67 @@ fn skill(name: &str) -> String {
     String::from_utf8(output).unwrap()
 }
 
+fn normalized(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 /// An audit weighs a Rule against sources, Requirements, and ratified
 /// decisions. Those three are named, and the two fidelities are kept apart.
 #[test]
 fn shaping_guidance_audits_a_rule_against_its_grounding_and_not_against_code() {
     let shaping = skill("provenance-shaping");
+    let prose = normalized(&shaping);
 
     assert!(shaping.contains("## Auditing a Rule"), "{shaping}");
     assert!(shaping.contains("Decision fidelity"), "{shaping}");
     assert!(shaping.contains("Implementation fidelity"), "{shaping}");
     assert!(
-        shaping.contains(
-            "Audit the Rule against its\nsources, the Requirement it refines, and the \
-             ratified decisions that produced it."
+        prose.contains(
+            "Audit the Rule against its sources, the Requirement it refines, and the ratified \
+             decisions that produced it."
         ),
         "{shaping}"
     );
     assert!(
-        shaping.contains(
-            "**Never report a Rule as invented, invalid, or unsupported because no code \
-             implements it.**"
+        prose.contains(
+            "Never report a Rule as invented, invalid, or unsupported because no code \
+             implements it."
         ),
+        "{shaping}"
+    );
+}
+
+/// Lifecycle, grounding, implementation, and verification are separate facts.
+/// Only the coverage scanner derives the two code-binding absence findings.
+#[test]
+fn shaping_guidance_keeps_rule_facts_independent_and_scanning_explicit() {
+    let shaping = skill("provenance-shaping");
+    let prose = normalized(&shaping);
+
+    for fact in [
+        "Rule lifecycle",
+        "decision grounding",
+        "implementation binding",
+        "verification binding",
+    ] {
+        assert!(
+            prose.contains(fact),
+            "shaping guidance does not name {fact}: {shaping}"
+        );
+    }
+    assert!(
+        prose.contains(
+            "Source evidence, a Requirement, a ratified Resolution, or explicit human \
+             ratification can support a Rule."
+        ),
+        "{shaping}"
+    );
+    assert!(
+        prose.contains("Prime and traceability are graph reads. They do not scan code"),
+        "{shaping}"
+    );
+    assert!(
+        prose.contains("provenance coverage scan --path . --scope <scope> --validate-rules"),
         "{shaping}"
     );
 }
@@ -49,6 +89,7 @@ fn shaping_guidance_audits_a_rule_against_its_grounding_and_not_against_code() {
 #[test]
 fn shaping_guidance_keeps_unsupported_behaviour_out_of_active() {
     let shaping = skill("provenance-shaping");
+    let prose = normalized(&shaping);
 
     for state in [
         "`draft`",
@@ -62,7 +103,7 @@ fn shaping_guidance_keeps_unsupported_behaviour_out_of_active() {
         );
     }
     assert!(
-        shaping.contains("Do not make it `active`\nto clear a report."),
+        prose.contains("Do not make it `active` to clear a report."),
         "{shaping}"
     );
 }

@@ -425,15 +425,27 @@ Before final response:
 
 ## Auditing a Rule
 
-An audit asks two separate questions. Keep them apart. A finding that mixes them is the
-error that calls a planned Rule invented.
+Preserve four independent facts when you audit:
+
+- **Rule lifecycle** is `draft`, `review`, `active`, `deprecated`, or `archived`. It says
+  where the Rule stands in review, not whether code or verification exists.
+- **decision grounding** says why the obligation is legitimate. Source evidence, a
+  Requirement, a ratified Resolution, or explicit human ratification can support a Rule.
+- **implementation binding** links the Rule to primary production code when that code
+  exists.
+- **verification binding** links the Rule to evidence and its verification method when
+  that evidence exists.
+
+Do not derive one fact from another. In particular, code absence never tests whether the
+Rule is valid. A finding that makes that inference calls a planned Rule invented.
 
 **Decision fidelity: is the Rule true to what was decided?** Audit the Rule against its
 sources, the Requirement it refines, and the ratified decisions that produced it.
 
 - The statement gives one atomic behavioural obligation.
-- A Source, a Requirement, or a Resolution supports that statement.
-  `provenance traceability <rule_id> --scope <scope> --format json` prints that chain.
+- Source evidence, a Requirement, a ratified Resolution, or recorded explicit human
+  ratification supports that statement. `provenance traceability <rule_id> --scope <scope>
+  --format json` prints the available upstream graph chain.
 - No ratified decision disagrees with it.
 
 A Rule that fails decision fidelity is unsupported. Report it, and name the source,
@@ -443,9 +455,14 @@ Requirement, or decision that it disagrees with.
 the Rule.
 
 - `provenance coverage scan --path . --scope <scope> --validate-rules` reports an active
-  Rule that has no primary implementation as unimplemented. `provenance prime` and
-  `provenance traceability` derive and report the same state.
+  Rule that has no primary implementation as unimplemented. Only that canonical scan
+  derives the code-binding absence findings.
 - Unimplemented is absence. It is an ordinary state of a planned obligation.
+
+Prime and traceability are graph reads. They do not scan code, so they must not assert an
+implementation or verification verdict. They can explain that an active Rule with no cited
+code evidence is allowed to be unimplemented; the canonical scanner must run before you
+report that derived state.
 
 **Never report a Rule as invented, invalid, or unsupported because no code implements it.**
 Code absence is evidence about implementation fidelity only. Provenance is planning-first:
@@ -453,10 +470,10 @@ Rules are written before the code exists, and each one is unimplemented until a 
 writes that code. An audit that reads this absence as invention reports the method as a
 defect.
 
-When agent-authored behaviour has no source, Requirement, or ratified decision behind it,
-leave it where a human can still refuse it. Keep the Rule `draft` or `review`, keep the
-change a `proposed` proposal, or keep an open Question against it. Do not make it `active`
-to clear a report.
+When agent-authored behaviour has no source evidence, Requirement, ratified Resolution, or
+explicit human ratification behind it, leave it where a human can still refuse it. Keep the
+Rule `draft` or `review`, keep the change a `proposed` proposal, or keep an open Question
+against it. Do not make it `active` to clear a report.
 
 ## Landing checklist
 

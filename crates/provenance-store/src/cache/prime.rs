@@ -1,4 +1,4 @@
-use crate::cache::{find_gaps, GapItem, ImplementationIndex, ImplementationState, ABSENCE_NOTE};
+use crate::cache::{find_gaps, GapItem};
 use crate::layout::ProvenanceLayout;
 use crate::state_store::StateStore;
 use provenance_core::{Edge, EdgeType, Message, Requirement, Rule, Source, Thread};
@@ -18,24 +18,10 @@ pub struct PrimeThreadView {
     pub messages: Vec<Message>,
 }
 
-/// One Rule as prime reports it: the record, plus where it stands against
-/// the code.
-///
-/// The record is flattened, so every field a reader already consumed stays
-/// where it was and `implementation` joins it. Prime is the command an agent
-/// runs to load context, so a Rule that arrives without this state arrives
-/// looking like a claim about code that may not be there.
-#[derive(Debug, serde::Serialize)]
-pub struct PrimeRuleView {
-    #[serde(flatten)]
-    pub rule: Rule,
-    pub implementation: ImplementationState,
-}
-
 #[derive(Debug, serde::Serialize)]
 pub struct PrimeContextView {
     pub scope_id: String,
-    pub rules: Vec<PrimeRuleView>,
+    pub rules: Vec<Rule>,
     pub gaps: Vec<GapItem>,
     pub threads: Vec<PrimeThreadView>,
 }
@@ -75,17 +61,12 @@ fn prime_context_locked(
     } else {
         Vec::new()
     };
-    let implementations = ImplementationIndex::build(layout, store, scope)?;
     Ok(PrimeContextView {
         scope_id: scope.as_str().to_string(),
         rules: store
             .list_rules(scope)?
             .into_iter()
             .filter(|rule| !rule.retired)
-            .map(|rule| PrimeRuleView {
-                implementation: implementations.state(&rule),
-                rule,
-            })
             .collect(),
         gaps: find_gaps(layout, scope)?,
         threads,
@@ -94,16 +75,11 @@ fn prime_context_locked(
 
 pub fn render_prime_markdown(view: &PrimeContextView) -> String {
     let mut out = format!(
-        "# Provenance Prime\n\nScope: {}\n\n## Rules\n\n{ABSENCE_NOTE}\n\n",
+        "# Provenance Prime\n\nScope: {}\n\n## Rules\n",
         view.scope_id
     );
-    for item in &view.rules {
-        let _ = writeln!(
-            out,
-            "- {} ({})",
-            item.rule.id.as_str(),
-            item.implementation.word()
-        );
+    for rule in &view.rules {
+        let _ = writeln!(out, "- {}", rule.id.as_str());
     }
     out.push_str("\n## Gaps\n");
     if view.gaps.is_empty() {

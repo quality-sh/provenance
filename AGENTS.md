@@ -124,15 +124,21 @@ intent lives in the Requirement, Rule, and any Resolution that produced it. A Ru
 no function or type behind it is unimplemented—an ordinary state, not a different graph
 artifact. Never write a `#[verifies]` test that asserts nothing to clear a warning.
 
-Audit a Rule on two separate questions. Decision fidelity asks whether the Rule is true to
-its sources, the Requirement it refines, and the ratified decisions that produced it;
-`provenance traceability <rule_id>` prints that chain. Implementation fidelity asks whether
-code does what the Rule says; `provenance prime`, `provenance traceability`, and
-`coverage scan --validate-rules` all derive and report that. Never call a Rule invented,
-invalid, or unsupported because no code implements it. This repository plans first, so a
-Rule is unimplemented until somebody writes the code. Where agent-authored behaviour has no
-source, Requirement, or ratified decision behind it, leave the Rule `draft` or `review`,
-keep the change a `proposed` proposal, or keep an open Question against it.
+Keep four facts independent: Rule lifecycle, decision grounding, implementation binding,
+and verification binding. Lifecycle says whether the Rule is draft, under review, active,
+deprecated, or archived; it does not say that code or evidence exists. Source evidence, a
+Requirement, a ratified Resolution, or explicit human ratification can ground the decision.
+`provenance traceability <rule_id>` reads the upstream graph chain. Implementation and
+verification are separate code bindings, evaluated only by the canonical coverage scan
+described above.
+
+`prime` and `traceability` are graph reads and do not scan code. They may explain that an
+active Rule is allowed to precede its implementation, but absence of a binding in those
+views is not an implementation verdict. Never call a Rule invented, invalid, or unsupported
+because no code implements it. This repository plans first, so a Rule can be unimplemented
+until somebody writes the code. Where agent-authored behaviour has no source, Requirement,
+ratified Resolution, or explicit human ratification behind it, leave the Rule `draft` or
+`review`, keep the change a `proposed` proposal, or keep an open Question against it.
 
 ## Rule Doc Headers
 
