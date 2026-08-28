@@ -21,10 +21,34 @@ pub fn load_project_dictionary(layout: &ProvenanceLayout) -> Option<DictionaryIm
 }
 
 /// Stores the index in the machine data directory and writes the project reference.
+///
+/// This write bypasses both mutation primitives (a direct `fs::write` of
+/// `state/dictionary.json`), so it carries its own named gate: on an
+/// rbac-managed repository the claim must hold `edit` on every scope then
+/// listed — the settled Option A rule for repo-global resources.
 pub fn set_project_dictionary(
     layout: &ProvenanceLayout,
+    claim: Option<&provenance_core::RbacClaim>,
     import: &DictionaryImport,
 ) -> anyhow::Result<Utf8PathBuf> {
+    let manifest_path = layout.manifest_path();
+    if manifest_path.exists() {
+        let manifest: provenance_core::Manifest =
+            serde_json::from_str(&std::fs::read_to_string(manifest_path)?)?;
+        if let Some(section) = &manifest.rbac {
+            let scopes: Vec<provenance_core::ScopeId> = manifest
+                .scopes
+                .iter()
+                .map(|scope| scope.id.clone())
+                .collect();
+            provenance_core::authorize(
+                claim,
+                section,
+                provenance_core::Capability::Edit,
+                provenance_core::RbacResource::RepoGlobal(&scopes),
+            )?;
+        }
+    }
     let directory = index_directory().context("no machine data directory is available")?;
     provenance_ste100::store_dictionary_index(import, &directory)
         .context("store the dictionary index")?;

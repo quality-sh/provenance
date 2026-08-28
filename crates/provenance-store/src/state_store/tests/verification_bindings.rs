@@ -1,6 +1,6 @@
 use super::seeded_requirement_store;
 use crate::state_store::{
-    BeginVerificationInput, CreateRuleInput, MaterializeVerificationBindingInput,
+    BeginVerificationInput, CreateRuleInput, MaterializeVerificationBindingInput, MutationAuth,
 };
 use provenance_core::{RuleSeverity, RuleStatus, StableId, VerificationMethod};
 
@@ -11,21 +11,24 @@ fn seeded_rule_store() -> (
 ) {
     let (directory, store, scope) = seeded_requirement_store();
     store
-        .create_rule(CreateRuleInput {
-            scope_id: scope.clone(),
-            id: StableId::new("rule_expiry").unwrap(),
-            name: None,
-            description: None,
-            requirement_id: Some(StableId::new("req_overtime").unwrap()),
-            resolution_id: None,
-            statement: "Share links expire".into(),
-            status: RuleStatus::Active,
-            severity: RuleSeverity::Medium,
-            source_document: None,
-            source_section: None,
-            origin_thread: None,
-            origin_message: None,
-        })
+        .create_rule(
+            None,
+            CreateRuleInput {
+                scope_id: scope.clone(),
+                id: StableId::new("rule_expiry").unwrap(),
+                name: None,
+                description: None,
+                requirement_id: Some(StableId::new("req_overtime").unwrap()),
+                resolution_id: None,
+                statement: "Share links expire".into(),
+                status: RuleStatus::Active,
+                severity: RuleSeverity::Medium,
+                source_document: None,
+                source_section: None,
+                origin_thread: None,
+                origin_message: None,
+            },
+        )
         .unwrap();
     (directory, store, scope)
 }
@@ -46,14 +49,16 @@ fn input(scope: &provenance_core::ScopeId) -> MaterializeVerificationBindingInpu
 fn repeated_materialization_updates_one_binding_with_stable_identity() {
     let (_directory, store, scope) = seeded_rule_store();
     let first = store
-        .materialize_verification_binding(input(&scope))
+        .materialize_verification_binding(None, input(&scope))
         .unwrap();
     let mut changed = input(&scope);
     changed.method = VerificationMethod::Property;
     changed.file = "tests/property.test.ts".into();
     changed.symbol = Some("expiry property".into());
 
-    let second = store.materialize_verification_binding(changed).unwrap();
+    let second = store
+        .materialize_verification_binding(None, changed)
+        .unwrap();
     let stored = store.list_verification_bindings(&scope).unwrap();
 
     assert_eq!(first.id, second.id);
@@ -69,15 +74,17 @@ fn repeated_materialization_updates_one_binding_with_stable_identity() {
 fn identity_changes_with_owner_rule_or_explicit_key() {
     let (_directory, store, scope) = seeded_rule_store();
     let first = store
-        .materialize_verification_binding(input(&scope))
+        .materialize_verification_binding(None, input(&scope))
         .unwrap();
     let mut another_key = input(&scope);
     another_key.key = "another-check".into();
-    let second = store.materialize_verification_binding(another_key).unwrap();
+    let second = store
+        .materialize_verification_binding(None, another_key)
+        .unwrap();
     let mut another_owner = input(&scope);
     another_owner.declared_by = "test://another".into();
     let third = store
-        .materialize_verification_binding(another_owner)
+        .materialize_verification_binding(None, another_owner)
         .unwrap();
 
     assert_ne!(first.id, second.id);
@@ -100,28 +107,31 @@ fn explicit_identity_is_independent_of_the_containing_scope() {
     )
     .unwrap();
     store
-        .create_rule(CreateRuleInput {
-            scope_id: other_scope.clone(),
-            id: StableId::new("rule_expiry").unwrap(),
-            name: None,
-            description: None,
-            requirement_id: None,
-            resolution_id: None,
-            statement: "Share links expire".into(),
-            status: RuleStatus::Active,
-            severity: RuleSeverity::Medium,
-            source_document: None,
-            source_section: None,
-            origin_thread: None,
-            origin_message: None,
-        })
+        .create_rule(
+            None,
+            CreateRuleInput {
+                scope_id: other_scope.clone(),
+                id: StableId::new("rule_expiry").unwrap(),
+                name: None,
+                description: None,
+                requirement_id: None,
+                resolution_id: None,
+                statement: "Share links expire".into(),
+                status: RuleStatus::Active,
+                severity: RuleSeverity::Medium,
+                source_document: None,
+                source_section: None,
+                origin_thread: None,
+                origin_message: None,
+            },
+        )
         .unwrap();
 
     let first = store
-        .materialize_verification_binding(input(&scope))
+        .materialize_verification_binding(None, input(&scope))
         .unwrap();
     let second = store
-        .materialize_verification_binding(input(&other_scope))
+        .materialize_verification_binding(None, input(&other_scope))
         .unwrap();
 
     assert_eq!(first.id, second.id);
@@ -133,7 +143,7 @@ fn materialization_requires_a_known_rule_and_filled_identity_fields() {
     let mut unknown = input(&scope);
     unknown.rule_id = StableId::new("rule_missing").unwrap();
     assert!(store
-        .materialize_verification_binding(unknown)
+        .materialize_verification_binding(None, unknown)
         .unwrap_err()
         .to_string()
         .contains("does not exist"));
@@ -141,7 +151,7 @@ fn materialization_requires_a_known_rule_and_filled_identity_fields() {
     let mut blank_key = input(&scope);
     blank_key.key = "  ".into();
     assert!(store
-        .materialize_verification_binding(blank_key)
+        .materialize_verification_binding(None, blank_key)
         .unwrap_err()
         .to_string()
         .contains("key must not be empty"));
@@ -149,7 +159,7 @@ fn materialization_requires_a_known_rule_and_filled_identity_fields() {
     let mut blank_owner = input(&scope);
     blank_owner.declared_by = String::new();
     assert!(store
-        .materialize_verification_binding(blank_owner)
+        .materialize_verification_binding(None, blank_owner)
         .unwrap_err()
         .to_string()
         .contains("declared_by must not be empty"));
@@ -157,7 +167,7 @@ fn materialization_requires_a_known_rule_and_filled_identity_fields() {
     let mut outside = input(&scope);
     outside.file = "../outside.test.ts".into();
     assert!(store
-        .materialize_verification_binding(outside)
+        .materialize_verification_binding(None, outside)
         .unwrap_err()
         .to_string()
         .contains("repository-relative"));
@@ -165,7 +175,7 @@ fn materialization_requires_a_known_rule_and_filled_identity_fields() {
     let mut platform_specific = input(&scope);
     platform_specific.file = r"tests\share-links.test.ts".into();
     assert!(store
-        .materialize_verification_binding(platform_specific)
+        .materialize_verification_binding(None, platform_specific)
         .unwrap_err()
         .to_string()
         .contains("repository-relative"));
@@ -177,8 +187,10 @@ fn beginning_a_run_materializes_and_cites_the_canonical_binding() {
 
     let run = store
         .begin_verification(
+            None,
             scope.clone(),
             BeginVerificationInput {
+                actor: None,
                 rule: Some("rule_expiry".into()),
                 declaration: None,
                 key: "share-link-expiry".into(),
@@ -206,12 +218,13 @@ fn beginning_a_run_materializes_and_cites_the_canonical_binding() {
 fn active_binding_view_excludes_retired_history() {
     let (_directory, store, scope) = seeded_rule_store();
     store
-        .materialize_verification_binding(input(&scope))
+        .materialize_verification_binding(None, input(&scope))
         .unwrap();
     let path = crate::shards::verification_bindings_path(&store.layout, &scope);
     store
         .mutate_jsonl_records(
             &path,
+            MutationAuth::new(None, provenance_core::Capability::Edit, &scope),
             |records: &mut Vec<provenance_core::VerificationBinding>| {
                 records[0].retired = true;
                 Ok(())

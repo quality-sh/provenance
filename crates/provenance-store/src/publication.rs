@@ -365,17 +365,42 @@ impl crate::state_store::StateStore {
         with_repository_publication(&self.layout, operation)
     }
 
+    /// The write primitive nearly every shard mutation funnels through.
+    ///
+    /// `auth` carries the caller's claim and census capability; the backstop
+    /// refuses before the mutation closure runs on an rbac-managed
+    /// repository.
     pub(crate) fn mutate_jsonl_records<T, R>(
         &self,
         path: &Utf8Path,
+        auth: crate::state_store::MutationAuth<'_>,
         mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<R>,
     ) -> anyhow::Result<R>
     where
         T: DeserializeOwned + Serialize,
     {
         self.with_repository_publication(|| {
+            self.ensure_mutation_authorized(auth)?;
             let lock_path = self.layout.state_shard_lock_path(path)?;
             crate::jsonl::mutate_jsonl_locked(path, &lock_path, mutate)
+        })
+    }
+
+    /// The direct-lock variant used by writers that keep their own advisory
+    /// lock file (verification runs). Same backstop, same law.
+    pub(crate) fn mutate_locked_records<T, R>(
+        &self,
+        path: &Utf8Path,
+        lock_path: &Utf8Path,
+        auth: crate::state_store::MutationAuth<'_>,
+        mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<R>,
+    ) -> anyhow::Result<R>
+    where
+        T: DeserializeOwned + Serialize,
+    {
+        self.with_repository_publication(|| {
+            self.ensure_mutation_authorized(auth)?;
+            crate::jsonl::mutate_jsonl_locked(path, lock_path, mutate)
         })
     }
 }

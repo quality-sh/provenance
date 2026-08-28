@@ -1,25 +1,29 @@
 use super::*;
+use crate::state_store::MutationAuth;
 
 #[test]
 fn noscope_sized_source_and_requirement_adoption_preserves_all_ids_and_edges() {
     let (_dir, store, scope) = initialized_store();
     create_unowned_source(&store, &scope, "Policy");
     store
-        .create_rule(CreateRuleInput {
-            scope_id: scope.clone(),
-            id: StableId::new("rule_unrelated").unwrap(),
-            name: None,
-            description: None,
-            requirement_id: None,
-            resolution_id: None,
-            statement: "The unrelated Rule stays unowned".to_string(),
-            status: RuleStatus::Active,
-            severity: RuleSeverity::Medium,
-            source_document: None,
-            source_section: None,
-            origin_thread: None,
-            origin_message: None,
-        })
+        .create_rule(
+            None,
+            CreateRuleInput {
+                scope_id: scope.clone(),
+                id: StableId::new("rule_unrelated").unwrap(),
+                name: None,
+                description: None,
+                requirement_id: None,
+                resolution_id: None,
+                statement: "The unrelated Rule stays unowned".to_string(),
+                status: RuleStatus::Active,
+                severity: RuleSeverity::Medium,
+                source_document: None,
+                source_section: None,
+                origin_thread: None,
+                origin_message: None,
+            },
+        )
         .unwrap();
 
     let mut requirements = Vec::new();
@@ -29,12 +33,15 @@ fn noscope_sized_source_and_requirement_adoption_preserves_all_ids_and_edges() {
         let statement = format!("Canonical Requirement number {index} stays stable");
         create_unowned_requirement(&store, &scope, &id, &statement);
         store
-            .add_source_reference(AddSourceReferenceInput {
-                scope_id: scope.clone(),
-                source_id: StableId::new("source_policy").unwrap(),
-                requirement_id: StableId::new(&id).unwrap(),
-                clause: None,
-            })
+            .add_source_reference(
+                None,
+                AddSourceReferenceInput {
+                    scope_id: scope.clone(),
+                    source_id: StableId::new("source_policy").unwrap(),
+                    requirement_id: StableId::new(&id).unwrap(),
+                    clause: None,
+                },
+            )
             .unwrap();
         let mut declaration = requirement(&format!("canonical-{index:02}"), Some(&id), &statement);
         declaration.sources.push("policy".to_string());
@@ -43,12 +50,17 @@ fn noscope_sized_source_and_requirement_adoption_preserves_all_ids_and_edges() {
     }
     let edges_path = crate::shards::edges_path(&store.layout);
     store
-        .mutate_jsonl_records(&edges_path, |edges: &mut Vec<provenance_core::Edge>| {
-            edges[0].id = StableId::new("edge_imported_identity").unwrap();
-            Ok(())
-        })
+        .mutate_jsonl_records(
+            &edges_path,
+            MutationAuth::new(None, provenance_core::Capability::Edit, &scope),
+            |edges: &mut Vec<provenance_core::Edge>| {
+                edges[0].id = StableId::new("edge_imported_identity").unwrap();
+                Ok(())
+            },
+        )
         .unwrap();
     let input = TypedSpecInput {
+        actor: None,
         schema_version: SUPPORTED_SCHEMA_VERSION.0,
         spec: "migration".to_string(),
         declared_by: OWNER.to_string(),
@@ -68,7 +80,7 @@ fn noscope_sized_source_and_requirement_adoption_preserves_all_ids_and_edges() {
     let plan = store.plan_typed_spec(&scope, input.clone()).unwrap();
     assert_eq!((plan.created, plan.conflicts), (0, 0));
     assert_eq!(plan.resources.len(), 71);
-    store.apply_typed_spec(&scope, input.clone()).unwrap();
+    store.apply_typed_spec(None, &scope, input.clone()).unwrap();
     assert_eq!(store.list_requirements(&scope).unwrap().len(), 70);
     assert_eq!(store.list_sources(&scope).unwrap().len(), 1);
     let edges = store.list_edges().unwrap();

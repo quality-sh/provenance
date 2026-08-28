@@ -1,17 +1,19 @@
 use super::canonical_artifacts::CanonicalArtifactIndex;
 use super::{
-    serde_name, CreateAssertionInput, CreateDispositionInput, CreateProposalCardInput, StateStore,
+    serde_name, CreateAssertionInput, CreateDispositionInput, CreateProposalCardInput,
+    MutationAuth, StateStore,
 };
 use crate::shards;
 use provenance_core::{
-    validate_optional_confidence_score, AssertionRecord, DispositionRecord, PromotionState,
-    ProposalCard, ScopeId, StableId, SUPPORTED_SCHEMA_VERSION,
+    validate_optional_confidence_score, AssertionRecord, Capability, DispositionRecord,
+    PromotionState, ProposalCard, RbacClaim, ScopeId, StableId, SUPPORTED_SCHEMA_VERSION,
 };
 use provenance_macros::rule;
 
 impl StateStore {
     pub fn create_asserted_proposal(
         &self,
+        claim: Option<&RbacClaim>,
         proposal: CreateProposalCardInput,
         assertion: CreateAssertionInput,
     ) -> anyhow::Result<ProposalCard> {
@@ -35,6 +37,7 @@ impl StateStore {
                 supporting_claim_ids: assertion.supporting_claim_ids,
             };
             self.write_ideation_batch(
+                claim,
                 &scope,
                 super::IdeationLandingBatch {
                     contributions: Vec::new(),
@@ -49,13 +52,18 @@ impl StateStore {
         })
     }
 
-    pub fn assert_proposal(&self, input: CreateAssertionInput) -> anyhow::Result<AssertionRecord> {
+    pub fn assert_proposal(
+        &self,
+        claim: Option<&RbacClaim>,
+        input: CreateAssertionInput,
+    ) -> anyhow::Result<AssertionRecord> {
         let scope = input.scope_id.clone();
-        self.with_lifecycle_lock(&scope, || self.write_assertion(input))
+        self.with_lifecycle_lock(&scope, || self.write_assertion(claim, input))
     }
 
     pub fn assert_proposal_after_human_decision(
         &self,
+        claim: Option<&RbacClaim>,
         input: CreateAssertionInput,
         decision_keys: &[StableId],
     ) -> anyhow::Result<AssertionRecord> {
@@ -100,6 +108,7 @@ impl StateStore {
                 supporting_claim_ids: input.supporting_claim_ids,
             };
             self.write_ideation_batch(
+                claim,
                 &scope,
                 super::IdeationLandingBatch {
                     contributions: Vec::new(),
@@ -132,7 +141,11 @@ impl StateStore {
         Ok(())
     }
 
-    fn write_assertion(&self, input: CreateAssertionInput) -> anyhow::Result<AssertionRecord> {
+    fn write_assertion(
+        &self,
+        claim: Option<&RbacClaim>,
+        input: CreateAssertionInput,
+    ) -> anyhow::Result<AssertionRecord> {
         let assertion = AssertionRecord {
             schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: input.scope_id.clone(),
@@ -143,7 +156,8 @@ impl StateStore {
         };
         self.ensure_proposal_not_disposed(&input.scope_id, &assertion.proposal_id)?;
         let path = shards::assertion_records_path(&self.layout, &input.scope_id);
-        self.mutate_jsonl_records(&path, |records: &mut Vec<AssertionRecord>| {
+        let auth = MutationAuth::new(claim, Capability::Execute, &input.scope_id);
+        self.mutate_jsonl_records(&path, auth, |records: &mut Vec<AssertionRecord>| {
             anyhow::ensure!(
                 !records.iter().any(|record| {
                     record.id == assertion.id || record.proposal_id == assertion.proposal_id
@@ -152,9 +166,10 @@ impl StateStore {
             );
             let mut assertions = self.list_assertion_records(&input.scope_id)?;
             assertions.push(assertion.clone());
+            let manifest = self.manifest()?;
             provenance_core::validate_ideation_aggregate(provenance_core::IdeationAggregate {
                 legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
-                disposition_actor_ids: &self.manifest()?.disposition_actor_ids,
+                ratification: manifest.disposition_ratification(),
                 contributions: &self.list_contributions(&input.scope_id)?,
                 synthesis_packets: &self.list_synthesis_packets(&input.scope_id)?,
                 proposals: &self.list_proposal_definitions(&input.scope_id)?,
@@ -169,19 +184,25 @@ impl StateStore {
 
     pub fn create_proposal_card(
         &self,
+        claim: Option<&RbacClaim>,
         input: CreateProposalCardInput,
     ) -> anyhow::Result<ProposalCard> {
         let scope = input.scope_id.clone();
-        self.with_lifecycle_lock(&scope, || self.write_proposal_card(input))
+        self.with_lifecycle_lock(&scope, || self.write_proposal_card(claim, input))
     }
 
-    fn write_proposal_card(&self, input: CreateProposalCardInput) -> anyhow::Result<ProposalCard> {
+    fn write_proposal_card(
+        &self,
+        claim: Option<&RbacClaim>,
+        input: CreateProposalCardInput,
+    ) -> anyhow::Result<ProposalCard> {
         let candidate = proposal_from_input(input)?;
         let mut proposals = self.list_proposal_definitions(&candidate.scope_id)?;
         proposals.push(candidate.clone());
+        let manifest = self.manifest()?;
         provenance_core::validate_ideation_aggregate(provenance_core::IdeationAggregate {
             legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
-            disposition_actor_ids: &self.manifest()?.disposition_actor_ids,
+            ratification: manifest.disposition_ratification(),
             contributions: &self.list_contributions(&candidate.scope_id)?,
             synthesis_packets: &self.list_synthesis_packets(&candidate.scope_id)?,
             proposals: &proposals,
@@ -189,7 +210,8 @@ impl StateStore {
             dispositions: &self.list_dispositions(&candidate.scope_id)?,
         })?;
         let path = shards::proposal_cards_path(&self.layout, &candidate.scope_id);
-        self.mutate_jsonl_records(&path, |records: &mut Vec<ProposalCard>| {
+        let auth = MutationAuth::new(claim, Capability::Execute, &candidate.scope_id);
+        self.mutate_jsonl_records(&path, auth, |records: &mut Vec<ProposalCard>| {
             if let Some(index) = records.iter().position(|record| record.id == candidate.id) {
                 anyhow::bail!(
                     "proposal {} already exists and is immutable",
@@ -204,14 +226,16 @@ impl StateStore {
 
     pub fn create_disposition(
         &self,
+        claim: Option<&RbacClaim>,
         input: CreateDispositionInput,
     ) -> anyhow::Result<DispositionRecord> {
         let scope = input.scope_id.clone();
-        self.with_lifecycle_lock(&scope, || self.write_disposition(input))
+        self.with_lifecycle_lock(&scope, || self.write_disposition(claim, input))
     }
 
     fn write_disposition(
         &self,
+        claim: Option<&RbacClaim>,
         input: CreateDispositionInput,
     ) -> anyhow::Result<DispositionRecord> {
         let CreateDispositionInput {
@@ -246,9 +270,10 @@ impl StateStore {
             &self.canonical_artifact_index(&scope_id)?,
         )?;
         dispositions.push(disposition.clone());
+        let manifest = self.manifest()?;
         provenance_core::validate_ideation_aggregate(provenance_core::IdeationAggregate {
             legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
-            disposition_actor_ids: &self.manifest()?.disposition_actor_ids,
+            ratification: manifest.disposition_ratification(),
             contributions: &self.list_contributions(&scope_id)?,
             synthesis_packets: &self.list_synthesis_packets(&scope_id)?,
             proposals: &proposals,
@@ -256,8 +281,10 @@ impl StateStore {
             dispositions: &dispositions,
         })?;
         let dispositions_path = shards::dispositions_path(&self.layout, &scope_id);
+        let auth = MutationAuth::new(claim, Capability::Execute, &scope_id);
         self.mutate_jsonl_records(
             &dispositions_path,
+            auth,
             |records: &mut Vec<DispositionRecord>| {
                 anyhow::ensure!(
                     !records.iter().any(|record| record.id == disposition.id),

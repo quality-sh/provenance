@@ -1,14 +1,20 @@
 use super::{
-    AddSourceReferenceInput, CreateEdgeInput, CreateRequirementInput, CreateSourceInput, StateStore,
+    AddSourceReferenceInput, CreateEdgeInput, CreateRequirementInput, CreateSourceInput,
+    MutationAuth, StateStore,
 };
 use crate::shards;
 use provenance_core::{
-    edge_validation::validate_edge_endpoint, validate_optional_commit_pin, Edge, EdgeType,
-    NodeType, Requirement, ScopeId, Source, SourceReference, StableId, SUPPORTED_SCHEMA_VERSION,
+    edge_validation::validate_edge_endpoint, validate_optional_commit_pin, Capability, Edge,
+    EdgeType, NodeType, RbacClaim, Requirement, ScopeId, Source, SourceReference, StableId,
+    SUPPORTED_SCHEMA_VERSION,
 };
 
 impl StateStore {
-    pub fn create_source(&self, input: CreateSourceInput) -> anyhow::Result<Source> {
+    pub fn create_source(
+        &self,
+        claim: Option<&RbacClaim>,
+        input: CreateSourceInput,
+    ) -> anyhow::Result<Source> {
         let CreateSourceInput {
             scope_id,
             id,
@@ -25,7 +31,8 @@ impl StateStore {
         } = input;
         let commit_pin = validate_optional_commit_pin(commit_pin)?;
         let path = shards::sources_path(&self.layout, &scope_id);
-        self.mutate_jsonl_records(&path, |records: &mut Vec<Source>| {
+        let auth = MutationAuth::new(claim, Capability::Edit, &scope_id);
+        self.mutate_jsonl_records(&path, auth, |records: &mut Vec<Source>| {
             let source = Source {
                 schema_version: SUPPORTED_SCHEMA_VERSION,
                 scope_id: scope_id.clone(),
@@ -54,11 +61,19 @@ impl StateStore {
         })
     }
 
-    pub fn create_requirement(&self, input: CreateRequirementInput) -> anyhow::Result<Requirement> {
-        self.with_repository_publication(|| self.write_requirement(input))
+    pub fn create_requirement(
+        &self,
+        claim: Option<&RbacClaim>,
+        input: CreateRequirementInput,
+    ) -> anyhow::Result<Requirement> {
+        self.with_repository_publication(|| self.write_requirement(claim, input))
     }
 
-    fn write_requirement(&self, input: CreateRequirementInput) -> anyhow::Result<Requirement> {
+    fn write_requirement(
+        &self,
+        claim: Option<&RbacClaim>,
+        input: CreateRequirementInput,
+    ) -> anyhow::Result<Requirement> {
         let CreateRequirementInput {
             scope_id,
             id,
@@ -79,7 +94,8 @@ impl StateStore {
             );
         }
         let path = shards::requirements_path(&self.layout, &scope_id);
-        self.mutate_jsonl_records(&path, |records: &mut Vec<Requirement>| {
+        let auth = MutationAuth::new(claim, Capability::Edit, &scope_id);
+        self.mutate_jsonl_records(&path, auth, |records: &mut Vec<Requirement>| {
             let requirement = Requirement {
                 schema_version: SUPPORTED_SCHEMA_VERSION,
                 scope_id: scope_id.clone(),
@@ -110,6 +126,7 @@ impl StateStore {
     /// on a requirement.
     pub fn set_requirement_fog(
         &self,
+        claim: Option<&RbacClaim>,
         scope_id: &ScopeId,
         id: &StableId,
         fog: Option<String>,
@@ -118,7 +135,8 @@ impl StateStore {
             anyhow::ensure!(!fog.trim().is_empty(), "fog text must not be empty");
         }
         let path = shards::requirements_path(&self.layout, scope_id);
-        self.mutate_jsonl_records(&path, |records: &mut Vec<Requirement>| {
+        let auth = MutationAuth::new(claim, Capability::Edit, scope_id);
+        self.mutate_jsonl_records(&path, auth, |records: &mut Vec<Requirement>| {
             let requirement = records
                 .iter_mut()
                 .find(|requirement| &requirement.id == id)
@@ -128,11 +146,19 @@ impl StateStore {
         })
     }
 
-    pub fn add_source_reference(&self, input: AddSourceReferenceInput) -> anyhow::Result<Edge> {
-        self.with_repository_publication(|| self.write_source_reference(input))
+    pub fn add_source_reference(
+        &self,
+        claim: Option<&RbacClaim>,
+        input: AddSourceReferenceInput,
+    ) -> anyhow::Result<Edge> {
+        self.with_repository_publication(|| self.write_source_reference(claim, input))
     }
 
-    fn write_source_reference(&self, input: AddSourceReferenceInput) -> anyhow::Result<Edge> {
+    fn write_source_reference(
+        &self,
+        claim: Option<&RbacClaim>,
+        input: AddSourceReferenceInput,
+    ) -> anyhow::Result<Edge> {
         let AddSourceReferenceInput {
             scope_id,
             source_id,
@@ -155,28 +181,34 @@ impl StateStore {
             clause,
         };
         let requirements_path = shards::requirements_path(&self.layout, &scope_id);
-        self.mutate_jsonl_records(&requirements_path, |requirements: &mut Vec<Requirement>| {
-            let requirement = requirements
-                .iter_mut()
-                .find(|requirement| requirement.id == requirement_id)
-                .ok_or_else(|| anyhow::anyhow!("requirement does not exist"))?;
-            if !requirement
-                .source_refs
-                .iter()
-                .any(|existing| existing == &source_ref)
-            {
-                requirement.source_refs.push(source_ref);
-                requirement.source_refs.sort_by(|a, b| {
-                    a.source_id
-                        .as_str()
-                        .cmp(b.source_id.as_str())
-                        .then(a.clause.cmp(&b.clause))
-                });
-                requirements.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
-            }
-            Ok(())
-        })?;
+        let auth = MutationAuth::new(claim, Capability::Edit, &scope_id);
+        self.mutate_jsonl_records(
+            &requirements_path,
+            auth.clone(),
+            |requirements: &mut Vec<Requirement>| {
+                let requirement = requirements
+                    .iter_mut()
+                    .find(|requirement| requirement.id == requirement_id)
+                    .ok_or_else(|| anyhow::anyhow!("requirement does not exist"))?;
+                if !requirement
+                    .source_refs
+                    .iter()
+                    .any(|existing| existing == &source_ref)
+                {
+                    requirement.source_refs.push(source_ref.clone());
+                    requirement.source_refs.sort_by(|a, b| {
+                        a.source_id
+                            .as_str()
+                            .cmp(b.source_id.as_str())
+                            .then(a.clause.cmp(&b.clause))
+                    });
+                    requirements.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
+                }
+                Ok(())
+            },
+        )?;
         self.add_edge(
+            auth,
             scope_id,
             EdgeType::References,
             NodeType::Source,
@@ -186,22 +218,32 @@ impl StateStore {
         )
     }
 
-    pub fn create_edge(&self, input: CreateEdgeInput) -> anyhow::Result<Edge> {
-        self.create_edge_after_validation(input, || Ok(()))
+    pub fn create_edge(
+        &self,
+        claim: Option<&RbacClaim>,
+        input: CreateEdgeInput,
+    ) -> anyhow::Result<Edge> {
+        self.create_edge_after_validation(claim, input, || Ok(()))
     }
 
     pub(super) fn create_edge_after_validation(
         &self,
+        claim: Option<&RbacClaim>,
         input: CreateEdgeInput,
         after_validation: impl FnOnce() -> anyhow::Result<()>,
     ) -> anyhow::Result<Edge> {
-        self.with_repository_publication(|| self.write_edge(input, after_validation))
+        self.with_repository_publication(|| {
+            let auth = MutationAuth::new(claim, Capability::Edit, &input.scope_id);
+            self.ensure_mutation_authorized(auth.clone())?;
+            self.write_edge(input, after_validation, auth)
+        })
     }
 
     fn write_edge(
         &self,
         input: CreateEdgeInput,
         after_validation: impl FnOnce() -> anyhow::Result<()>,
+        auth: MutationAuth<'_>,
     ) -> anyhow::Result<Edge> {
         let CreateEdgeInput {
             scope_id,
@@ -215,12 +257,32 @@ impl StateStore {
         self.ensure_edge_endpoint_exists(&scope_id, from_type, &from_id, "from")?;
         self.ensure_edge_endpoint_exists(&scope_id, to_type, &to_id, "to")?;
         after_validation()?;
-        self.add_edge(scope_id, edge_type, from_type, from_id, to_type, to_id)
+        self.add_edge(
+            auth, scope_id, edge_type, from_type, from_id, to_type, to_id,
+        )
     }
 
-    pub fn delete_edge(&self, scope_id: &ScopeId, id: &StableId) -> anyhow::Result<Edge> {
+    pub fn delete_edge(
+        &self,
+        claim: Option<&RbacClaim>,
+        scope_id: &ScopeId,
+        id: &StableId,
+    ) -> anyhow::Result<Edge> {
+        self.delete_edge_authorized(
+            MutationAuth::new(claim, Capability::Edit, scope_id),
+            scope_id,
+            id,
+        )
+    }
+
+    pub(crate) fn delete_edge_authorized(
+        &self,
+        auth: MutationAuth<'_>,
+        scope_id: &ScopeId,
+        id: &StableId,
+    ) -> anyhow::Result<Edge> {
         let path = shards::edges_path(&self.layout);
-        self.mutate_jsonl_records(&path, |records: &mut Vec<Edge>| {
+        self.mutate_jsonl_records(&path, auth, |records: &mut Vec<Edge>| {
             let index = records
                 .iter()
                 .position(|record| &record.scope_id == scope_id && &record.id == id)
@@ -229,8 +291,10 @@ impl StateStore {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn add_edge(
         &self,
+        auth: MutationAuth<'_>,
         scope_id: ScopeId,
         edge_type: EdgeType,
         from_type: NodeType,
@@ -251,7 +315,7 @@ impl StateStore {
             label: None,
         };
         let path = shards::edges_path(&self.layout);
-        self.mutate_jsonl_records(&path, |records: &mut Vec<Edge>| {
+        self.mutate_jsonl_records(&path, auth, |records: &mut Vec<Edge>| {
             if let Some(existing) = records.iter().find(|record| {
                 record.scope_id == edge.scope_id
                     && record.edge_type == edge.edge_type

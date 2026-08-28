@@ -4,6 +4,8 @@
 
 Scopes live in `manifest.json`; shard paths derive from scope IDs. Cache files and volatile fields are forbidden in state shards.
 
+`manifest.json` may also carry an optional `rbac` section: an `assignments` list where each assignment names one principal (`actor_id`), an optional `identity_type` (`human`, `agent`, or `service`), positive `capabilities` from the closed set `read`, `edit`, `execute`, `manifest-write`, and the explicit `scopes` the capabilities apply to. Grants are flat and positive-only: no wildcards, delegation, or expiry. The section changes only through reviewed commits; the engine exposes no verb that writes it. A repository without the section behaves exactly as before, and a manifest with a non-empty legacy `disposition_actor_ids` list beside the section is refused as ambiguous. Inside the current protocol window the legacy allowlist keeps its exact shipped meaning; the next protocol bump removes the field and replaces the allowlist law with the rbac human-ratification rule.
+
 Schema version `1` includes the local graph fields plus imported/cloud review metadata. Optional fields are omitted when absent, but preserved when present: domain grouping for root requirements, requirement descriptions and source references, source references/clauses/effective/review/supersession dates/commit pins, draft/review statuses, resolution context/enforcement/confidence/input references/actor approval/supersession metadata, resolved thread status, rule name/severity/status and source-document citations, proposal confidence, and material-claim confidence.
 
 Sources, Requirements, and Rules may also carry `declared_by`. It names the

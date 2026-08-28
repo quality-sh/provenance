@@ -60,6 +60,8 @@ export interface TypedSpecDocument {
   schema_version: 1;
   spec: string;
   declared_by: string;
+  /** The mutating principal's claim, riding the v6 protocol window. */
+  actor?: { actor_id: string };
   adopt_unowned?: AdoptionTarget[];
   sources: SourceDeclaration[];
   requirements: RequirementDeclaration[];

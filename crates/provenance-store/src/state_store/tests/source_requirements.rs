@@ -6,40 +6,49 @@ use provenance_core::{EdgeType, RequirementStatus, SourceType, StableId};
 fn source_requirement_records_are_written_deterministically() {
     let (_dir, store, scope) = initialized_store();
     store
-        .create_source(CreateSourceInput {
-            scope_id: scope.clone(),
-            id: StableId::new("source_schads").unwrap(),
-            name: "SCHADS Award".into(),
-            source_type: SourceType::Policy,
-            url: None,
-            reference: None,
-            commit_pin: None,
-            effective_date: None,
-            review_date: None,
-            superseded_by: None,
-            origin_thread: None,
-            origin_message: None,
-        })
+        .create_source(
+            None,
+            CreateSourceInput {
+                scope_id: scope.clone(),
+                id: StableId::new("source_schads").unwrap(),
+                name: "SCHADS Award".into(),
+                source_type: SourceType::Policy,
+                url: None,
+                reference: None,
+                commit_pin: None,
+                effective_date: None,
+                review_date: None,
+                superseded_by: None,
+                origin_thread: None,
+                origin_message: None,
+            },
+        )
         .unwrap();
     store
-        .create_requirement(CreateRequirementInput {
-            scope_id: scope.clone(),
-            id: StableId::new("req_overtime").unwrap(),
-            statement: "Overtime".into(),
-            description: None,
-            status: RequirementStatus::Active,
-            domain_id: None,
-            origin_thread: None,
-            origin_message: None,
-        })
+        .create_requirement(
+            None,
+            CreateRequirementInput {
+                scope_id: scope.clone(),
+                id: StableId::new("req_overtime").unwrap(),
+                statement: "Overtime".into(),
+                description: None,
+                status: RequirementStatus::Active,
+                domain_id: None,
+                origin_thread: None,
+                origin_message: None,
+            },
+        )
         .unwrap();
     store
-        .add_source_reference(AddSourceReferenceInput {
-            scope_id: scope.clone(),
-            source_id: StableId::new("source_schads").unwrap(),
-            requirement_id: StableId::new("req_overtime").unwrap(),
-            clause: None,
-        })
+        .add_source_reference(
+            None,
+            AddSourceReferenceInput {
+                scope_id: scope.clone(),
+                source_id: StableId::new("source_schads").unwrap(),
+                requirement_id: StableId::new("req_overtime").unwrap(),
+                clause: None,
+            },
+        )
         .unwrap();
     assert_eq!(
         store.list_sources(&scope).unwrap()[0].id.as_str(),
@@ -78,20 +87,23 @@ fn concurrent_source_creates_preserve_all_records() {
 
     for index in 0..200 {
         store
-            .create_source(CreateSourceInput {
-                scope_id: scope.clone(),
-                id: StableId::new(format!("source_seed_{index:03}")).unwrap(),
-                name: format!("Seed {index:03}"),
-                source_type: SourceType::Policy,
-                url: None,
-                reference: None,
-                commit_pin: None,
-                effective_date: None,
-                review_date: None,
-                superseded_by: None,
-                origin_thread: None,
-                origin_message: None,
-            })
+            .create_source(
+                None,
+                CreateSourceInput {
+                    scope_id: scope.clone(),
+                    id: StableId::new(format!("source_seed_{index:03}")).unwrap(),
+                    name: format!("Seed {index:03}"),
+                    source_type: SourceType::Policy,
+                    url: None,
+                    reference: None,
+                    commit_pin: None,
+                    effective_date: None,
+                    review_date: None,
+                    superseded_by: None,
+                    origin_thread: None,
+                    origin_message: None,
+                },
+            )
             .unwrap();
     }
 
@@ -105,20 +117,23 @@ fn concurrent_source_creates_preserve_all_records() {
         handles.push(std::thread::spawn(move || {
             barrier.wait();
             store
-                .create_source(CreateSourceInput {
-                    scope_id: scope,
-                    id: StableId::new(format!("source_concurrent_{index:03}")).unwrap(),
-                    name: format!("Concurrent {index:03}"),
-                    source_type: SourceType::Policy,
-                    url: None,
-                    reference: None,
-                    commit_pin: None,
-                    effective_date: None,
-                    review_date: None,
-                    superseded_by: None,
-                    origin_thread: None,
-                    origin_message: None,
-                })
+                .create_source(
+                    None,
+                    CreateSourceInput {
+                        scope_id: scope,
+                        id: StableId::new(format!("source_concurrent_{index:03}")).unwrap(),
+                        name: format!("Concurrent {index:03}"),
+                        source_type: SourceType::Policy,
+                        url: None,
+                        reference: None,
+                        commit_pin: None,
+                        effective_date: None,
+                        review_date: None,
+                        superseded_by: None,
+                        origin_thread: None,
+                        origin_message: None,
+                    },
+                )
                 .unwrap();
         }));
     }
@@ -164,20 +179,23 @@ fn repository_publication_cannot_overwrite_a_concurrent_writer() {
         let scope = scope.clone();
         std::thread::spawn(move || {
             store
-                .create_source(CreateSourceInput {
-                    scope_id: scope,
-                    id: StableId::new("source_after_snapshot").unwrap(),
-                    name: "After snapshot".into(),
-                    source_type: SourceType::Policy,
-                    url: None,
-                    reference: None,
-                    commit_pin: None,
-                    effective_date: None,
-                    review_date: None,
-                    superseded_by: None,
-                    origin_thread: None,
-                    origin_message: None,
-                })
+                .create_source(
+                    None,
+                    CreateSourceInput {
+                        scope_id: scope,
+                        id: StableId::new("source_after_snapshot").unwrap(),
+                        name: "After snapshot".into(),
+                        source_type: SourceType::Policy,
+                        url: None,
+                        reference: None,
+                        commit_pin: None,
+                        effective_date: None,
+                        review_date: None,
+                        superseded_by: None,
+                        origin_thread: None,
+                        origin_message: None,
+                    },
+                )
                 .unwrap();
             writer_done_tx.send(()).unwrap();
         })
@@ -220,12 +238,15 @@ fn repository_publication_excludes_an_entire_multi_shard_write() {
         let scope = scope.clone();
         std::thread::spawn(move || {
             store
-                .add_source_reference(AddSourceReferenceInput {
-                    scope_id: scope,
-                    source_id: StableId::new("source_schads").unwrap(),
-                    requirement_id: StableId::new("req_overtime").unwrap(),
-                    clause: Some("clause 1".into()),
-                })
+                .add_source_reference(
+                    None,
+                    AddSourceReferenceInput {
+                        scope_id: scope,
+                        source_id: StableId::new("source_schads").unwrap(),
+                        requirement_id: StableId::new("req_overtime").unwrap(),
+                        clause: Some("clause 1".into()),
+                    },
+                )
                 .unwrap();
             writer_done_tx.send(()).unwrap();
         })
@@ -254,6 +275,7 @@ fn requirement_fog_is_set_and_cleared_as_free_text() {
 
     let updated = store
         .set_requirement_fog(
+            None,
             &scope,
             &requirement_id,
             Some("something about public holidays and sleepovers".into()),
@@ -269,11 +291,11 @@ fn requirement_fog_is_set_and_cleared_as_free_text() {
     );
 
     let cleared = store
-        .set_requirement_fog(&scope, &requirement_id, None)
+        .set_requirement_fog(None, &scope, &requirement_id, None)
         .unwrap();
     assert_eq!(cleared.fog, None);
     assert!(store
-        .set_requirement_fog(&scope, &StableId::new("req_missing").unwrap(), None)
+        .set_requirement_fog(None, &scope, &StableId::new("req_missing").unwrap(), None)
         .unwrap_err()
         .to_string()
         .contains("requirement does not exist"));

@@ -23,28 +23,34 @@ fn scope_validation_accepts_explicit_disposition_actor_ids() {
     )
     .unwrap();
     store
-        .create_proposal_card(proposal_input(
-            &scope,
-            "proposal_rejected",
-            "Rejected",
-            PromotionState::Proposed,
-        ))
+        .create_proposal_card(
+            None,
+            proposal_input(
+                &scope,
+                "proposal_rejected",
+                "Rejected",
+                PromotionState::Proposed,
+            ),
+        )
         .unwrap();
     store
-        .create_disposition(CreateDispositionInput {
-            scope_id: scope.clone(),
-            id: StableId::new("disposition_rejected").unwrap(),
-            proposal_id: StableId::new("proposal_rejected").unwrap(),
-            decision: DispositionDecision::Rejected,
-            rationale: "Did not pass adjudication".into(),
-            actor: DispositionActor {
-                identity_type: IdentityType::Human,
-                id: "ben".into(),
-                name: None,
+        .create_disposition(
+            None,
+            CreateDispositionInput {
+                scope_id: scope.clone(),
+                id: StableId::new("disposition_rejected").unwrap(),
+                proposal_id: StableId::new("proposal_rejected").unwrap(),
+                decision: DispositionDecision::Rejected,
+                rationale: "Did not pass adjudication".into(),
+                actor: DispositionActor {
+                    identity_type: IdentityType::Human,
+                    id: "ben".into(),
+                    name: None,
+                },
+                canonical_artifact: None,
+                external_action: None,
             },
-            canonical_artifact: None,
-            external_action: None,
-        })
+        )
         .unwrap();
 
     manifest.disposition_actor_ids.clear();

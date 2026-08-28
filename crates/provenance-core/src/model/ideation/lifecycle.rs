@@ -1,7 +1,7 @@
 use super::{DispositionDecision, PromotionState};
 use crate::model::{
-    validate_optional_confidence_score, Contribution, DispositionRecord, ProposalCard,
-    SchemaVersion, ScopeId, StableId, SynthesisPacket,
+    validate_optional_confidence_score, Contribution, DispositionRatification, DispositionRecord,
+    ProposalCard, SchemaVersion, ScopeId, StableId, SynthesisPacket,
 };
 use provenance_macros::rule;
 use serde::{Deserialize, Serialize};
@@ -67,7 +67,10 @@ pub type Assertion = AssertionRecord;
 #[derive(Clone, Copy)]
 pub struct IdeationAggregate<'a> {
     pub legacy_policy: LegacyProposalPolicy,
-    pub disposition_actor_ids: &'a [String],
+    /// The resolved authority for recording dispositions: the legacy manifest
+    /// allowlist inside the one-window compatibility period, or the rbac
+    /// assignments whose `identity_type` must ratify each decision.
+    pub ratification: DispositionRatification<'a>,
     pub contributions: &'a [Contribution],
     pub synthesis_packets: &'a [SynthesisPacket],
     pub proposals: &'a [ProposalCard],

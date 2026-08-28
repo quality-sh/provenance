@@ -10,19 +10,16 @@ fn semicolon_free_requirement_and_rule_are_written() {
     let (_dir, store, scope) = initialized_store();
 
     let requirement = store
-        .create_requirement(requirement_input(
-            &scope,
-            "req_clean",
-            "A clean requirement",
-        ))
+        .create_requirement(
+            None,
+            requirement_input(&scope, "req_clean", "A clean requirement"),
+        )
         .unwrap();
     let rule = store
-        .create_rule(rule_input(
-            &scope,
-            "rule_clean",
-            "A clean rule",
-            &requirement.id,
-        ))
+        .create_rule(
+            None,
+            rule_input(&scope, "rule_clean", "A clean rule", &requirement.id),
+        )
         .unwrap();
 
     assert_eq!(store.list_requirements(&scope).unwrap(), vec![requirement]);
@@ -37,11 +34,10 @@ fn semicolon_requirement_returns_rule_8_1_details_without_changing_canonical_sta
     let before = canonical_state(&store.layout.state_dir());
 
     let error = store
-        .create_requirement(requirement_input(
-            &scope,
-            "req_rejected",
-            "First clause; second clause",
-        ))
+        .create_requirement(
+            None,
+            requirement_input(&scope, "req_rejected", "First clause; second clause"),
+        )
         .unwrap_err();
 
     assert_rule_8_1_report(&error, 12);
@@ -53,22 +49,28 @@ fn semicolon_requirement_returns_rule_8_1_details_without_changing_canonical_sta
 fn semicolon_rule_returns_rule_8_1_details_without_changing_canonical_state_or_edges() {
     let (_dir, store, scope) = seeded_requirement_store();
     store
-        .create_rule(rule_input(
-            &scope,
-            "rule_existing",
-            "Existing relationship",
-            &StableId::new("req_overtime").unwrap(),
-        ))
+        .create_rule(
+            None,
+            rule_input(
+                &scope,
+                "rule_existing",
+                "Existing relationship",
+                &StableId::new("req_overtime").unwrap(),
+            ),
+        )
         .unwrap();
     let before = canonical_state(&store.layout.state_dir());
 
     let error = store
-        .create_rule(rule_input(
-            &scope,
-            "rule_rejected",
-            "First clause; second clause",
-            &StableId::new("req_overtime").unwrap(),
-        ))
+        .create_rule(
+            None,
+            rule_input(
+                &scope,
+                "rule_rejected",
+                "First clause; second clause",
+                &StableId::new("req_overtime").unwrap(),
+            ),
+        )
         .unwrap_err();
 
     assert_rule_8_1_report(&error, 12);

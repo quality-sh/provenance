@@ -24,7 +24,7 @@ fn neighbors_of_a_rule_are_the_requirements_that_produce_it() {
 
     let answer = sdk(repo, "neighbors", &json!({"id": ids.rule.as_str()}));
 
-    assert_eq!(answer["protocol_version"], 5);
+    assert_eq!(answer["protocol_version"], 6);
     assert_eq!(answer["operation"], "neighbors");
     assert_eq!(answer["id"], ids.rule);
     assert_eq!(answer["has_more"], false);

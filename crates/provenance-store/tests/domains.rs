@@ -26,51 +26,63 @@ fn seeded_store() -> (tempfile::TempDir, StateStore, ScopeId) {
 
 fn seed_domains_and_rule(store: &StateStore, scope: &ScopeId) {
     store
-        .create_domain(CreateDomainInput {
-            scope_id: scope.clone(),
-            id: StableId::new("domain_payroll").unwrap(),
-            name: "Payroll".into(),
-            description: Some("Payroll compliance".into()),
-            color: Some("#3b82f6".into()),
-        })
+        .create_domain(
+            None,
+            CreateDomainInput {
+                scope_id: scope.clone(),
+                id: StableId::new("domain_payroll").unwrap(),
+                name: "Payroll".into(),
+                description: Some("Payroll compliance".into()),
+                color: Some("#3b82f6".into()),
+            },
+        )
         .unwrap();
     store
-        .create_domain(CreateDomainInput {
-            scope_id: scope.clone(),
-            id: StableId::new("domain_awards").unwrap(),
-            name: "Awards".into(),
-            description: None,
-            color: None,
-        })
+        .create_domain(
+            None,
+            CreateDomainInput {
+                scope_id: scope.clone(),
+                id: StableId::new("domain_awards").unwrap(),
+                name: "Awards".into(),
+                description: None,
+                color: None,
+            },
+        )
         .unwrap();
     store
-        .create_requirement(CreateRequirementInput {
-            scope_id: scope.clone(),
-            id: StableId::new("req_overtime").unwrap(),
-            statement: "Overtime must be traceable".into(),
-            description: None,
-            status: RequirementStatus::Discovery,
-            domain_id: Some(StableId::new("domain_payroll").unwrap()),
-            origin_thread: None,
-            origin_message: None,
-        })
+        .create_requirement(
+            None,
+            CreateRequirementInput {
+                scope_id: scope.clone(),
+                id: StableId::new("req_overtime").unwrap(),
+                statement: "Overtime must be traceable".into(),
+                description: None,
+                status: RequirementStatus::Discovery,
+                domain_id: Some(StableId::new("domain_payroll").unwrap()),
+                origin_thread: None,
+                origin_message: None,
+            },
+        )
         .unwrap();
     store
-        .create_rule(CreateRuleInput {
-            scope_id: scope.clone(),
-            id: StableId::new("rule_overtime").unwrap(),
-            name: None,
-            description: None,
-            requirement_id: Some(StableId::new("req_overtime").unwrap()),
-            resolution_id: None,
-            statement: "Pay overtime after threshold".into(),
-            status: RuleStatus::Active,
-            severity: RuleSeverity::High,
-            source_document: None,
-            source_section: None,
-            origin_thread: None,
-            origin_message: None,
-        })
+        .create_rule(
+            None,
+            CreateRuleInput {
+                scope_id: scope.clone(),
+                id: StableId::new("rule_overtime").unwrap(),
+                name: None,
+                description: None,
+                requirement_id: Some(StableId::new("req_overtime").unwrap()),
+                resolution_id: None,
+                statement: "Pay overtime after threshold".into(),
+                status: RuleStatus::Active,
+                severity: RuleSeverity::High,
+                source_document: None,
+                source_section: None,
+                origin_thread: None,
+                origin_message: None,
+            },
+        )
         .unwrap();
 }
 
@@ -101,13 +113,16 @@ fn a_second_domain_with_the_same_name_is_refused() {
     seed_domains_and_rule(&store, &scope);
 
     assert!(store
-        .create_domain(CreateDomainInput {
-            scope_id: scope,
-            id: StableId::new("domain_payroll_again").unwrap(),
-            name: "Payroll".into(),
-            description: None,
-            color: None,
-        })
+        .create_domain(
+            None,
+            CreateDomainInput {
+                scope_id: scope,
+                id: StableId::new("domain_payroll_again").unwrap(),
+                name: "Payroll".into(),
+                description: None,
+                color: None,
+            }
+        )
         .unwrap_err()
         .to_string()
         .contains("domain name already exists"));

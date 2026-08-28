@@ -22,7 +22,7 @@ pub use typed_spec::{
     TypedRequirementInput, TypedRuleInput, TypedSourceInput, TypedSpecInput,
 };
 
-pub const SDK_PROTOCOL_VERSION: u32 = 5;
+pub const SDK_PROTOCOL_VERSION: u32 = 6;
 
 /// How many records a query returns when the caller names no limit.
 pub const QUERY_DEFAULT_LIMIT: usize = 50;

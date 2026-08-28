@@ -44,6 +44,7 @@ fn document(
     adopt_unowned: Vec<TypedAdoptionTarget>,
 ) -> TypedSpecInput {
     TypedSpecInput {
+        actor: None,
         schema_version: SUPPORTED_SCHEMA_VERSION.0,
         spec: "migration".to_string(),
         declared_by: owner.to_string(),
@@ -56,35 +57,41 @@ fn document(
 
 fn create_unowned_requirement(store: &StateStore, scope: &ScopeId, id: &str, statement: &str) {
     store
-        .create_requirement(CreateRequirementInput {
-            scope_id: scope.clone(),
-            id: StableId::new(id).unwrap(),
-            statement: statement.to_string(),
-            description: None,
-            status: RequirementStatus::Active,
-            domain_id: None,
-            origin_thread: None,
-            origin_message: None,
-        })
+        .create_requirement(
+            None,
+            CreateRequirementInput {
+                scope_id: scope.clone(),
+                id: StableId::new(id).unwrap(),
+                statement: statement.to_string(),
+                description: None,
+                status: RequirementStatus::Active,
+                domain_id: None,
+                origin_thread: None,
+                origin_message: None,
+            },
+        )
         .unwrap();
 }
 
 fn create_unowned_source(store: &StateStore, scope: &ScopeId, name: &str) {
     store
-        .create_source(CreateSourceInput {
-            scope_id: scope.clone(),
-            id: StableId::new("source_policy").unwrap(),
-            name: name.to_string(),
-            source_type: SourceType::Document,
-            url: None,
-            reference: Some("docs/policy.md".to_string()),
-            commit_pin: None,
-            effective_date: None,
-            review_date: None,
-            superseded_by: None,
-            origin_thread: None,
-            origin_message: None,
-        })
+        .create_source(
+            None,
+            CreateSourceInput {
+                scope_id: scope.clone(),
+                id: StableId::new("source_policy").unwrap(),
+                name: name.to_string(),
+                source_type: SourceType::Document,
+                url: None,
+                reference: Some("docs/policy.md".to_string()),
+                commit_pin: None,
+                effective_date: None,
+                review_date: None,
+                superseded_by: None,
+                origin_thread: None,
+                origin_message: None,
+            },
+        )
         .unwrap();
 }
 
@@ -106,7 +113,7 @@ fn explicit_id_without_adoption_keeps_the_default_conflict_and_bytes() {
     assert_eq!(plan.resources[0].changes[0].field, "declared_by");
     assert_eq!(plan.resources[0].changes[0].before, "unowned");
     assert_eq!(plan.resources[0].changes[0].after, OWNER);
-    assert!(store.apply_typed_spec(&scope, input).is_err());
+    assert!(store.apply_typed_spec(None, &scope, input).is_err());
     assert_eq!(std::fs::read(path).unwrap(), before);
 }
 
@@ -131,7 +138,7 @@ fn exact_requirement_adoption_changes_only_owner_and_address_then_replays_unchan
     fields.sort_unstable();
     assert_eq!(fields, ["address", "declared_by"]);
 
-    let applied = store.apply_typed_spec(&scope, input.clone()).unwrap();
+    let applied = store.apply_typed_spec(None, &scope, input.clone()).unwrap();
     assert_eq!(
         (applied.created, applied.conflicts, applied.moved),
         (0, 0, 1)
@@ -158,7 +165,7 @@ fn adoption_never_transfers_a_declaration_between_owners() {
         vec![requirement("canonical", Some("req_existing"), STATEMENT)],
         Vec::new(),
     );
-    store.apply_typed_spec(&scope, owner_a).unwrap();
+    store.apply_typed_spec(None, &scope, owner_a).unwrap();
     let before = store.list_requirements(&scope).unwrap();
     let owner_b = document(
         "spec://owner/b",
@@ -168,7 +175,7 @@ fn adoption_never_transfers_a_declaration_between_owners() {
 
     let plan = store.plan_typed_spec(&scope, owner_b.clone()).unwrap();
     assert_eq!(plan.conflicts, 1);
-    assert!(store.apply_typed_spec(&scope, owner_b).is_err());
+    assert!(store.apply_typed_spec(None, &scope, owner_b).is_err());
     assert_eq!(store.list_requirements(&scope).unwrap(), before);
 }
 
@@ -258,7 +265,9 @@ fn adoption_conflicts_when_definition_or_source_relationship_differs() {
             .changes
             .iter()
             .any(|change| change.field == "statement" || change.field == "description"));
-        assert!(store.apply_typed_spec(&scope, mismatch.clone()).is_err());
+        assert!(store
+            .apply_typed_spec(None, &scope, mismatch.clone())
+            .is_err());
         assert_eq!(std::fs::read(&path).unwrap(), before);
     }
 
@@ -307,7 +316,7 @@ fn adoption_conflicts_when_source_metadata_differs() {
         .changes
         .iter()
         .any(|change| change.field == "name"));
-    assert!(store.apply_typed_spec(&scope, input).is_err());
+    assert!(store.apply_typed_spec(None, &scope, input).is_err());
     assert_eq!(store.list_sources(&scope).unwrap(), before);
 }
 
@@ -322,6 +331,7 @@ fn mixed_valid_and_foreign_adoption_is_an_atomic_no_op() {
     );
     store
         .apply_typed_spec(
+            None,
             &scope,
             document(
                 "spec://owner/a",
@@ -357,7 +367,7 @@ fn mixed_valid_and_foreign_adoption_is_an_atomic_no_op() {
 
     let plan = store.plan_typed_spec(&scope, input.clone()).unwrap();
     assert_eq!(plan.conflicts, 1);
-    assert!(store.apply_typed_spec(&scope, input).is_err());
+    assert!(store.apply_typed_spec(None, &scope, input).is_err());
     assert_eq!(store.list_requirements(&scope).unwrap(), before);
 }
 
@@ -369,23 +379,26 @@ fn an_exact_unowned_rule_can_be_adopted_without_changing_its_relationship() {
         vec![requirement("canonical", Some("req_owned"), STATEMENT)],
         Vec::new(),
     );
-    store.apply_typed_spec(&scope, base).unwrap();
+    store.apply_typed_spec(None, &scope, base).unwrap();
     store
-        .create_rule(CreateRuleInput {
-            scope_id: scope.clone(),
-            id: StableId::new("rule_existing").unwrap(),
-            name: None,
-            description: None,
-            requirement_id: Some(StableId::new("req_owned").unwrap()),
-            resolution_id: None,
-            statement: "The canonical Rule keeps its identity".to_string(),
-            status: RuleStatus::Active,
-            severity: RuleSeverity::Medium,
-            source_document: None,
-            source_section: None,
-            origin_thread: None,
-            origin_message: None,
-        })
+        .create_rule(
+            None,
+            CreateRuleInput {
+                scope_id: scope.clone(),
+                id: StableId::new("rule_existing").unwrap(),
+                name: None,
+                description: None,
+                requirement_id: Some(StableId::new("req_owned").unwrap()),
+                resolution_id: None,
+                statement: "The canonical Rule keeps its identity".to_string(),
+                status: RuleStatus::Active,
+                severity: RuleSeverity::Medium,
+                source_document: None,
+                source_section: None,
+                origin_thread: None,
+                origin_message: None,
+            },
+        )
         .unwrap();
     let mut input = document(
         OWNER,
@@ -406,7 +419,7 @@ fn an_exact_unowned_rule_can_be_adopted_without_changing_its_relationship() {
 
     let plan = store.plan_typed_spec(&scope, input.clone()).unwrap();
     assert_eq!((plan.created, plan.conflicts), (0, 0));
-    store.apply_typed_spec(&scope, input).unwrap();
+    store.apply_typed_spec(None, &scope, input).unwrap();
     let rule = store
         .list_rules(&scope)
         .unwrap()

@@ -26,6 +26,7 @@ pub(super) fn import_scope(
     scope: String,
     input: Utf8PathBuf,
     dry_run: bool,
+    actor_claim: Option<&provenance_core::RbacClaim>,
 ) -> anyhow::Result<ImportReport> {
     let input = std::fs::read_to_string(input)?;
     let exported = deserialize_scope_export(&input)?;
@@ -59,9 +60,16 @@ pub(super) fn import_scope(
     provenance_store::publication::with_repository_publication(&live_layout, || {
         let store = StateStore::new(live_layout.clone());
         let manifest = store.manifest()?;
+        // Census row 17: import publishes a whole scope outside the normal
+        // primitives, so it carries the named explicit gate — the claim must
+        // hold manifest-write on every scope then listed (settled Option A).
+        // Dispositions in the incoming scope run the family-12 human check
+        // through the aggregate validation below.
+        store
+            .ensure_repo_global_mutation(actor_claim, provenance_core::Capability::ManifestWrite)?;
         provenance_core::validate_ideation_aggregate(provenance_core::IdeationAggregate {
             legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
-            disposition_actor_ids: &manifest.disposition_actor_ids,
+            ratification: manifest.disposition_ratification(),
             contributions: &exported.contributions,
             synthesis_packets: &exported.synthesis_packets,
             proposals: &exported.proposal_cards,
@@ -208,8 +216,9 @@ pub(super) fn handle(
     input: Utf8PathBuf,
     dry_run: bool,
     format: OutputFormat,
+    actor_claim: Option<&provenance_core::RbacClaim>,
 ) -> anyhow::Result<()> {
-    let report = import_scope(repo, scope, input, dry_run)?;
+    let report = import_scope(repo, scope, input, dry_run, actor_claim)?;
     output::print(format, &report)?;
     Ok(())
 }

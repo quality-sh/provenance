@@ -192,7 +192,7 @@ fn landing_tolerates_the_terminal_rows_the_aggregate_tolerates() {
         let by_aggregate =
             provenance_core::validate_ideation_aggregate(provenance_core::IdeationAggregate {
                 legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
-                disposition_actor_ids: &store.manifest().unwrap().disposition_actor_ids,
+                ratification: store.manifest().unwrap().disposition_ratification(),
                 contributions: &[],
                 synthesis_packets: &[],
                 proposals: &proposals,
@@ -200,6 +200,7 @@ fn landing_tolerates_the_terminal_rows_the_aggregate_tolerates() {
                 dispositions: &dispositions,
             });
         let by_landing = store.land_ideation_batch(
+            None,
             &scope,
             crate::state_store::IdeationLandingBatch {
                 contributions: Vec::new(),

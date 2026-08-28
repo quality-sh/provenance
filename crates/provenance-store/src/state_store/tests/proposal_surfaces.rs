@@ -91,7 +91,7 @@ fn seed_asserted_proposal(
         PromotionState::Proposed,
     );
     proposal.traceability.supporting_claim_ids = vec![StableId::new("claim_a").unwrap()];
-    store.create_proposal_card(proposal).unwrap();
+    store.create_proposal_card(None, proposal).unwrap();
     synthesis.evidence_gaps.clear();
     crate::jsonl::write_jsonl_atomic(
         &crate::shards::synthesis_packets_path(&store.layout, scope),
@@ -134,7 +134,7 @@ fn changed_paths_surface_only_undisposed_proposals_with_matching_evidence_sites(
             PromotionState::Proposed,
         ),
     ] {
-        store.create_proposal_card(input).unwrap();
+        store.create_proposal_card(None, input).unwrap();
     }
 
     let surfaced = store
@@ -157,14 +157,17 @@ fn changed_paths_surface_only_undisposed_proposals_with_matching_evidence_sites(
 fn combined_demand_reports_deduplicated_reasons_in_deterministic_order() {
     let (_dir, store, scope) = initialized_store();
     store
-        .create_proposal_card(proposal_input(
-            &scope,
-            "proposal_matching",
-            IdeationTargetType::Requirement,
-            "req_overtime",
-            Some("src/payroll.rs"),
-            PromotionState::Proposed,
-        ))
+        .create_proposal_card(
+            None,
+            proposal_input(
+                &scope,
+                "proposal_matching",
+                IdeationTargetType::Requirement,
+                "req_overtime",
+                Some("src/payroll.rs"),
+                PromotionState::Proposed,
+            ),
+        )
         .unwrap();
     let target = IdeationTarget {
         artifact_type: IdeationTargetType::Requirement,
@@ -238,7 +241,9 @@ fn topic_claim_atomically_surfaces_matching_asserted_proposal_with_derived_state
     )
     .unwrap();
 
-    let claim = store.claim_topic(&scope, &topic_id, "agent-one").unwrap();
+    let claim = store
+        .claim_topic(None, &scope, &topic_id, "agent-one")
+        .unwrap();
 
     assert_eq!(claim.topic.claimed_by.as_deref(), Some("agent-one"));
     assert_eq!(claim.surfaced_proposals.len(), 1);
@@ -306,7 +311,7 @@ fn a_topic_claim_surfaces_proposals_in_its_explicit_territory() {
             PromotionState::Proposed,
         ),
     ] {
-        store.create_proposal_card(input).unwrap();
+        store.create_proposal_card(None, input).unwrap();
     }
 
     let surfaced = store

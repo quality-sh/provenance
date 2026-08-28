@@ -165,12 +165,15 @@ fn seed_threads(store: &StateStore, scope: &ScopeId, threads: &[Thread]) {
 
 fn post(store: &StateStore, scope: &ScopeId, parent: &ThreadParent) -> Thread {
     store
-        .post_thread_message(PostMessageInput {
-            scope_id: scope.clone(),
-            parent: parent.clone(),
-            role: MessageRole::User,
-            body: "posted".into(),
-        })
+        .post_thread_message(
+            None,
+            PostMessageInput {
+                scope_id: scope.clone(),
+                parent: parent.clone(),
+                role: MessageRole::User,
+                body: "posted".into(),
+            },
+        )
         .unwrap()
         .thread
 }

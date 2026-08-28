@@ -3,8 +3,8 @@ use super::{
     validate_proposal_intrinsic, AssertionRecord, IdeationAggregate,
 };
 use crate::model::{
-    disposition_requires_prior_assertion, validate_disposition_intrinsic, DispositionRecord,
-    PromotionState, ProposalCard, SchemaVersion,
+    disposition_requires_prior_assertion, validate_disposition_intrinsic, DispositionRatification,
+    DispositionRecord, PromotionState, ProposalCard, SchemaVersion,
 };
 use provenance_macros::rule;
 use serde::Serialize;
@@ -141,17 +141,20 @@ fn validate_disposition_intrinsics(dispositions: &[DispositionRecord]) -> anyhow
     Ok(())
 }
 
-/// Who may dispose of a live proposal.
+/// Who may dispose of a live proposal, resolved by regime.
 ///
-/// A disposition ends a proposal's life, so only an actor named in the
-/// repository's manifest may record one. The check bites on a proposal whose
-/// effective pre-disposition state is live (`proposed` or `asserted`); a legacy
-/// terminal row is frozen by its shipped fingerprint and carries its own audit.
+/// A disposition ends a proposal's life, so the recorded actor must carry the
+/// repository's disposition authority. The check bites on a proposal whose
+/// effective pre-disposition state is live (`proposed` or `asserted`); a
+/// legacy terminal row is frozen by its shipped fingerprint and carries its
+/// own audit.
 ///
-/// The allowlist is manifest state, written at `provenance init` and read
-/// on every write path that validates the aggregate. An empty list therefore
-/// blocks every disposition, which is the safe default for a repository that
-/// has not yet said who decides.
+/// Inside the one-window compatibility period the two regimes are the legacy
+/// manifest allowlist — an empty list blocks every disposition, the safe
+/// default for a repository that has not yet said who decides — and the rbac
+/// assignments, where the recorded actor must resolve to an assignment whose
+/// `identity_type` is `human`. At the next protocol bump the legacy arm and
+/// its field are removed together.
 ///
 /// The actor id is an attestation, not proof of identity. Nothing here checks
 /// a key or a signature: the id records who claims to have decided, and write
@@ -162,12 +165,28 @@ fn validate_actor_allowlists(
 ) -> anyhow::Result<()> {
     for disposition in aggregate.dispositions {
         if let Some(proposal) = proposals.get(disposition.proposal_id.as_str()) {
-            validate_actor_allowlist(
-                proposal,
-                aggregate.assertions,
-                &disposition.actor.id,
-                aggregate.disposition_actor_ids,
-            )?;
+            match aggregate.ratification {
+                DispositionRatification::LegacyAllowlist(disposition_actor_ids) => {
+                    validate_actor_allowlist(
+                        proposal,
+                        aggregate.assertions,
+                        &disposition.actor.id,
+                        disposition_actor_ids,
+                    )?;
+                }
+                DispositionRatification::RbacAssignments(assignments) => {
+                    let requires_ratification = matches!(
+                        effective_proposal_state(proposal, aggregate.assertions, &[]),
+                        PromotionState::Proposed | PromotionState::Asserted
+                    );
+                    if requires_ratification {
+                        crate::ensure_disposition_actor_is_human(
+                            &disposition.actor.id,
+                            assignments,
+                        )?;
+                    }
+                }
+            }
         }
     }
     Ok(())

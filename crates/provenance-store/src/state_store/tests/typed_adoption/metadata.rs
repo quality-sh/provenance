@@ -2,62 +2,75 @@ use super::*;
 
 fn seed_external_metadata(store: &StateStore, scope: &ScopeId) {
     store
-        .create_source(CreateSourceInput {
-            scope_id: scope.clone(),
-            id: StableId::new("source_metadata").unwrap(),
-            name: "Policy".to_string(),
-            source_type: SourceType::Document,
-            url: Some("https://example.test/policy".to_string()),
-            reference: Some("docs/policy.md".to_string()),
-            commit_pin: Some("0123456789abcdef0123456789abcdef01234567".to_string()),
-            effective_date: Some(1_700_000_000_000),
-            review_date: None,
-            superseded_by: None,
-            origin_thread: None,
-            origin_message: None,
-        })
+        .create_source(
+            None,
+            CreateSourceInput {
+                scope_id: scope.clone(),
+                id: StableId::new("source_metadata").unwrap(),
+                name: "Policy".to_string(),
+                source_type: SourceType::Document,
+                url: Some("https://example.test/policy".to_string()),
+                reference: Some("docs/policy.md".to_string()),
+                commit_pin: Some("0123456789abcdef0123456789abcdef01234567".to_string()),
+                effective_date: Some(1_700_000_000_000),
+                review_date: None,
+                superseded_by: None,
+                origin_thread: None,
+                origin_message: None,
+            },
+        )
         .unwrap();
     store
-        .create_requirement(CreateRequirementInput {
-            scope_id: scope.clone(),
-            id: StableId::new("req_metadata").unwrap(),
-            statement: STATEMENT.to_string(),
-            description: Some("Metadata authored outside the typed spec".to_string()),
-            status: RequirementStatus::Active,
-            domain_id: None,
-            origin_thread: None,
-            origin_message: None,
-        })
+        .create_requirement(
+            None,
+            CreateRequirementInput {
+                scope_id: scope.clone(),
+                id: StableId::new("req_metadata").unwrap(),
+                statement: STATEMENT.to_string(),
+                description: Some("Metadata authored outside the typed spec".to_string()),
+                status: RequirementStatus::Active,
+                domain_id: None,
+                origin_thread: None,
+                origin_message: None,
+            },
+        )
         .unwrap();
     store
-        .add_source_reference(AddSourceReferenceInput {
-            scope_id: scope.clone(),
-            source_id: StableId::new("source_metadata").unwrap(),
-            requirement_id: StableId::new("req_metadata").unwrap(),
-            clause: Some("section 4".to_string()),
-        })
+        .add_source_reference(
+            None,
+            AddSourceReferenceInput {
+                scope_id: scope.clone(),
+                source_id: StableId::new("source_metadata").unwrap(),
+                requirement_id: StableId::new("req_metadata").unwrap(),
+                clause: Some("section 4".to_string()),
+            },
+        )
         .unwrap();
     store
-        .create_rule(CreateRuleInput {
-            scope_id: scope.clone(),
-            id: StableId::new("rule_metadata").unwrap(),
-            name: None,
-            description: None,
-            requirement_id: Some(StableId::new("req_metadata").unwrap()),
-            resolution_id: None,
-            statement: "The canonical Rule keeps its identity".to_string(),
-            status: RuleStatus::Active,
-            severity: RuleSeverity::High,
-            source_document: Some("docs/policy.md".to_string()),
-            source_section: Some("Enforcement".to_string()),
-            origin_thread: None,
-            origin_message: None,
-        })
+        .create_rule(
+            None,
+            CreateRuleInput {
+                scope_id: scope.clone(),
+                id: StableId::new("rule_metadata").unwrap(),
+                name: None,
+                description: None,
+                requirement_id: Some(StableId::new("req_metadata").unwrap()),
+                resolution_id: None,
+                statement: "The canonical Rule keeps its identity".to_string(),
+                status: RuleStatus::Active,
+                severity: RuleSeverity::High,
+                source_document: Some("docs/policy.md".to_string()),
+                source_section: Some("Enforcement".to_string()),
+                origin_thread: None,
+                origin_message: None,
+            },
+        )
         .unwrap();
 }
 
 fn adoption_input() -> TypedSpecInput {
     TypedSpecInput {
+        actor: None,
         schema_version: SUPPORTED_SCHEMA_VERSION.0,
         spec: "migration".to_string(),
         declared_by: OWNER.to_string(),
@@ -103,7 +116,7 @@ fn adoption_preserves_metadata_outside_the_typed_declaration_surface() {
 
     let plan = store.plan_typed_spec(&scope, input.clone()).unwrap();
     assert_eq!((plan.created, plan.conflicts), (0, 0));
-    store.apply_typed_spec(&scope, input).unwrap();
+    store.apply_typed_spec(None, &scope, input).unwrap();
 
     let source = &store.list_sources(&scope).unwrap()[0];
     assert_eq!(

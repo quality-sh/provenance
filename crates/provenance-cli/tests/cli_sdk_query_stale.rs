@@ -91,7 +91,7 @@ fn stale_reports_the_evidence_sites_a_commit_range_disturbed() {
 
     let answer = sdk(repo, "stale", &json!({"base": base.as_str()}));
 
-    assert_eq!(answer["protocol_version"], 5);
+    assert_eq!(answer["protocol_version"], 6);
     assert_eq!(answer["operation"], "stale");
     assert_eq!(answer["base"], base);
     assert_eq!(answer["has_more"], false);

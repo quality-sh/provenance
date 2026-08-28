@@ -1,13 +1,23 @@
-use super::{CreateResolutionInput, CreateRuleInput, StateStore};
+use super::{CreateResolutionInput, CreateRuleInput, MutationAuth, StateStore};
 use crate::shards;
-use provenance_core::{EdgeType, NodeType, Resolution, Rule, SUPPORTED_SCHEMA_VERSION};
+use provenance_core::{
+    Capability, EdgeType, NodeType, RbacClaim, Resolution, Rule, SUPPORTED_SCHEMA_VERSION,
+};
 
 impl StateStore {
-    pub fn create_resolution(&self, input: CreateResolutionInput) -> anyhow::Result<Resolution> {
-        self.with_repository_publication(|| self.write_resolution(input))
+    pub fn create_resolution(
+        &self,
+        claim: Option<&RbacClaim>,
+        input: CreateResolutionInput,
+    ) -> anyhow::Result<Resolution> {
+        self.with_repository_publication(|| self.write_resolution(claim, input))
     }
 
-    fn write_resolution(&self, input: CreateResolutionInput) -> anyhow::Result<Resolution> {
+    fn write_resolution(
+        &self,
+        claim: Option<&RbacClaim>,
+        input: CreateResolutionInput,
+    ) -> anyhow::Result<Resolution> {
         let CreateResolutionInput {
             scope_id,
             id,
@@ -36,37 +46,40 @@ impl StateStore {
             );
         }
         let path = shards::resolutions_path(&self.layout, &scope_id);
-        let resolution = self.mutate_jsonl_records(&path, |records: &mut Vec<Resolution>| {
-            let resolution = Resolution {
-                schema_version: SUPPORTED_SCHEMA_VERSION,
-                scope_id: scope_id.clone(),
-                id: id.clone(),
-                title,
-                position,
-                rationale,
-                status,
-                context,
-                enforcement,
-                confidence,
-                inputs,
-                made_by,
-                approved_by,
-                approved_at,
-                superseded_by,
-                review_on: None,
-                origin_thread,
-                origin_message,
-            };
-            anyhow::ensure!(
-                !records.iter().any(|record| record.id == resolution.id),
-                "resolution already exists"
-            );
-            records.push(resolution.clone());
-            records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
-            Ok(resolution)
-        })?;
+        let auth = MutationAuth::new(claim, Capability::Edit, &scope_id);
+        let resolution =
+            self.mutate_jsonl_records(&path, auth.clone(), |records: &mut Vec<Resolution>| {
+                let resolution = Resolution {
+                    schema_version: SUPPORTED_SCHEMA_VERSION,
+                    scope_id: scope_id.clone(),
+                    id: id.clone(),
+                    title,
+                    position,
+                    rationale,
+                    status,
+                    context,
+                    enforcement,
+                    confidence,
+                    inputs,
+                    made_by,
+                    approved_by,
+                    approved_at,
+                    superseded_by,
+                    review_on: None,
+                    origin_thread,
+                    origin_message,
+                };
+                anyhow::ensure!(
+                    !records.iter().any(|record| record.id == resolution.id),
+                    "resolution already exists"
+                );
+                records.push(resolution.clone());
+                records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
+                Ok(resolution)
+            })?;
         if let Some(requirement_id) = requirement_id {
             self.add_edge(
+                auth.clone(),
                 scope_id.clone(),
                 EdgeType::Needs,
                 NodeType::Requirement,
@@ -75,6 +88,7 @@ impl StateStore {
                 id.clone(),
             )?;
             self.add_edge(
+                auth,
                 scope_id,
                 EdgeType::Resolves,
                 NodeType::Resolution,
@@ -86,11 +100,19 @@ impl StateStore {
         Ok(resolution)
     }
 
-    pub fn create_rule(&self, input: CreateRuleInput) -> anyhow::Result<Rule> {
-        self.with_repository_publication(|| self.write_rule(input))
+    pub fn create_rule(
+        &self,
+        claim: Option<&RbacClaim>,
+        input: CreateRuleInput,
+    ) -> anyhow::Result<Rule> {
+        self.with_repository_publication(|| self.write_rule(claim, input))
     }
 
-    fn write_rule(&self, input: CreateRuleInput) -> anyhow::Result<Rule> {
+    fn write_rule(
+        &self,
+        claim: Option<&RbacClaim>,
+        input: CreateRuleInput,
+    ) -> anyhow::Result<Rule> {
         let CreateRuleInput {
             scope_id,
             id,
@@ -124,7 +146,8 @@ impl StateStore {
             );
         }
         let path = shards::rules_path(&self.layout, &scope_id);
-        let rule = self.mutate_jsonl_records(&path, |records: &mut Vec<Rule>| {
+        let auth = MutationAuth::new(claim, Capability::Edit, &scope_id);
+        let rule = self.mutate_jsonl_records(&path, auth.clone(), |records: &mut Vec<Rule>| {
             let rule = Rule {
                 schema_version: SUPPORTED_SCHEMA_VERSION,
                 scope_id: scope_id.clone(),
@@ -152,6 +175,7 @@ impl StateStore {
         })?;
         if let Some(requirement_id) = requirement_id {
             self.add_edge(
+                auth.clone(),
                 scope_id.clone(),
                 EdgeType::Produces,
                 NodeType::Requirement,
@@ -162,6 +186,7 @@ impl StateStore {
         }
         if let Some(resolution_id) = resolution_id {
             self.add_edge(
+                auth,
                 scope_id,
                 EdgeType::Produces,
                 NodeType::Resolution,

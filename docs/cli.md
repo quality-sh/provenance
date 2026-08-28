@@ -283,8 +283,17 @@ once:
 
 ```sh
 git config merge.provenance-jsonl.name "Provenance canonical JSONL merge"
-git config merge.provenance-jsonl.driver "provenance merge-jsonl %O %A %B --output %A --path %P"
+git config merge.provenance-jsonl.driver "provenance merge-jsonl %O %A %B --output %A --path %P --actor-id <ACTOR_ID>"
 ```
+
+In an rbac-managed repository (one whose manifest carries an `rbac` section) the literal
+`--actor-id <ACTOR_ID>` argument is required: git passes no merge-driver arguments through
+`.gitattributes`, so the clone-local template is the only place the claim can travel. The id
+is an attestation configured at clone setup; changing the acting identity means re-running
+`git config merge.provenance-jsonl.driver` with the new id in that clone. A merge whose
+command carries no claim, an unauthorized id, an unrecognized shard path, or a disposition
+recorded by an actor without a human-typed assignment exits non-zero and git leaves the path
+unmerged. In repositories without the section the driver behaves exactly as before.
 
 Until a clone does, git silently falls back to its usual line merge for those
 files. `provenance` must be on the `PATH` git runs with; otherwise use an
@@ -374,8 +383,8 @@ shaping/ideation commands emit a non-blocking stderr hint when skills are missin
 suppressible with `--quiet`.
 
 Ideation JSON flags accept inline JSON or `@path/to/payload.json`. Artifact helpers:
-`provenance schema show contribution|synthesis-packet|proposal|assertion|disposition --format json` prints
-canonical record schemas, and `provenance validate contribution|synthesis-packet|proposal|assertion|disposition
+`provenance schema show contribution|synthesis-packet|proposal|assertion|disposition|manifest --format json` prints
+canonical record schemas, and `provenance validate contribution|synthesis-packet|proposal|assertion|disposition|manifest
 --input artifact.json --format json` validates full closed records, including nested stable IDs,
 unknown-field rejection, and assertion evidence cardinality.
 Contributions and synthesis packets support intentional `--replace`. Proposal definitions,
@@ -393,10 +402,24 @@ Create a proposal with optional assertion lineage using repeatable `--builds-on
 and no contested claim or blocking gate, record `provenance proposals assert --id <id>
 --proposal-id <proposal> --synthesis-packet-id <packet> --supporting-claim-id <claim>`.
 Only then may `dispositions create` record accepted, rejected, or deferred state.
-The actor ID must appear in the manifest allowlist configured by repeatable
-`provenance init --disposition-actor-id`; this is local audit attestation, not cryptographic
-authentication. Re-running `init` preserves manifest settings whose flags are omitted; use
-`--clear-disposition-actors` to empty the allowlist explicitly.
+Inside the current protocol window the actor ID must appear in the manifest allowlist
+configured by repeatable `provenance init --disposition-actor-id`; this is local audit
+attestation, not cryptographic authentication. Re-running `init` preserves manifest settings
+whose flags are omitted; use `--clear-disposition-actors` to empty the allowlist explicitly.
+These flags are deprecated: at the next protocol bump disposition authority moves to
+`rbac.assignments` in `manifest.json`.
+
+## Access grants in the manifest
+
+A repository whose `manifest.json` carries an `rbac` section is rbac-managed: every mutating
+command must carry `--actor-id <ACTOR_ID>`, a claim about who acts, and the claim must hold the
+command's capability on the scope it writes. The capabilities are `read`, `edit`, `execute`,
+and `manifest-write`; grants are flat, positive-only, and change only through reviewed commits.
+A missing or unauthorized claim refuses before any byte moves; repositories without the section
+behave exactly as before. `--actor-id` is an attestation, not authentication. Repo-global
+writes — re-init, scope import, and the project dictionary — demand the capability on every
+scope then listed, so adding a scope narrows repo-global authority until grants cover it.
+`provenance schema show manifest` prints the closed section schema.
 
 Demand-driven proposal review uses `provenance proposals surface`. Pass one or more exact,
 repository-relative `--changed-path` values to surface undisposed proposals whose own

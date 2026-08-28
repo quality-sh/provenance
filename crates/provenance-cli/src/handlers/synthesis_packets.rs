@@ -10,7 +10,11 @@ use provenance_store::{
     state_store::{CreateSynthesisPacketInput, StateStore},
 };
 
-pub(super) fn handle(command: SynthesisPacketsCommand, quiet: bool) -> anyhow::Result<()> {
+pub(super) fn handle(
+    command: SynthesisPacketsCommand,
+    quiet: bool,
+    actor_claim: Option<&provenance_core::RbacClaim>,
+) -> anyhow::Result<()> {
     match command {
         SynthesisPacketsCommand::Create {
             repo,
@@ -71,9 +75,9 @@ pub(super) fn handle(command: SynthesisPacketsCommand, quiet: bool) -> anyhow::R
                 )?,
             };
             let synthesis_packet = if replace {
-                store.upsert_synthesis_packet(input)?
+                store.upsert_synthesis_packet(actor_claim, input)?
             } else {
-                store.create_synthesis_packet(input)?
+                store.create_synthesis_packet(actor_claim, input)?
             };
             output::print(format, &synthesis_packet)?;
         }

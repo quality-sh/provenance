@@ -20,6 +20,11 @@ pub struct Cli {
     /// the warning that this repository has no shaping skills installed.
     #[arg(long, global = true)]
     pub quiet: bool,
+    /// Actor ID attested for this run, carried as one claim value into every
+    /// mutating operation. Required by repositories whose manifest carries an
+    /// rbac section; an attestation, not authentication.
+    #[arg(long, global = true, value_name = "ACTOR_ID")]
+    pub actor_id: Option<String>,
     #[command(subcommand)]
     pub command: Command,
 }
@@ -276,6 +281,12 @@ pub enum Command {
         /// type the file holds and which write-time checks to re-apply.
         #[arg(long)]
         path: Option<Utf8PathBuf>,
+        /// Actor ID for automatic git invocation: the configured driver
+        /// command carries a literal `--actor-id <id>` argument, so the merge
+        /// can pass the same policy choke as direct writes. The value is an
+        /// attestation configured at clone setup, not authentication.
+        #[arg(long)]
+        actor_id: Option<String>,
         #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
         format: OutputFormat,
     },

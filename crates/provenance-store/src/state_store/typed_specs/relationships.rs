@@ -1,20 +1,26 @@
 use std::collections::BTreeSet;
 
-use provenance_core::{DeclarationAddress, EdgeType, NodeType, ScopeId, StableId};
+use provenance_core::{
+    Capability, DeclarationAddress, EdgeType, NodeType, RbacClaim, ScopeId, StableId,
+};
 
+use super::super::MutationAuth;
 use super::{rule_address, DesiredTypedGraph};
 use crate::state_store::StateStore;
 
 pub(super) fn reconcile(
     store: &StateStore,
+    claim: Option<&RbacClaim>,
     scope_id: &ScopeId,
     graph: DesiredTypedGraph<'_>,
 ) -> anyhow::Result<()> {
+    let auth = MutationAuth::new(claim, Capability::Execute, scope_id);
     let references = desired_references(graph);
     let produces = desired_produces(graph)?;
-    remove_superseded_edges(store, scope_id, graph, &references, &produces)?;
+    remove_superseded_edges(store, auth.clone(), scope_id, graph, &references, &produces)?;
     for (source, requirement) in references {
         store.add_edge(
+            auth.clone(),
             scope_id.clone(),
             EdgeType::References,
             NodeType::Source,
@@ -25,6 +31,7 @@ pub(super) fn reconcile(
     }
     for (requirement, rule) in produces {
         store.add_edge(
+            auth.clone(),
             scope_id.clone(),
             EdgeType::Produces,
             NodeType::Requirement,
@@ -65,8 +72,10 @@ fn desired_produces(graph: DesiredTypedGraph<'_>) -> anyhow::Result<BTreeSet<(St
     Ok(relationships)
 }
 
+#[allow(clippy::needless_pass_by_value)]
 fn remove_superseded_edges(
     store: &StateStore,
+    auth: MutationAuth<'_>,
     scope_id: &ScopeId,
     graph: DesiredTypedGraph<'_>,
     references: &BTreeSet<(String, String)>,
@@ -133,7 +142,7 @@ fn remove_superseded_edges(
         .map(|edge| edge.id)
         .collect::<Vec<_>>();
     for id in stale {
-        store.delete_edge(scope_id, &id)?;
+        store.delete_edge_authorized(auth.clone(), scope_id, &id)?;
     }
     Ok(())
 }

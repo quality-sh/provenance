@@ -68,7 +68,10 @@ fn statement_preview(statement: &str) -> String {
     }
 }
 
-pub(super) fn handle(command: RulesCommand) -> anyhow::Result<()> {
+pub(super) fn handle(
+    command: RulesCommand,
+    actor_claim: Option<&provenance_core::RbacClaim>,
+) -> anyhow::Result<()> {
     match command {
         RulesCommand::Create {
             repo,
@@ -87,8 +90,9 @@ pub(super) fn handle(command: RulesCommand) -> anyhow::Result<()> {
             origin_message,
             format,
         } => {
-            let rule =
-                StateStore::new(ProvenanceLayout::new(repo)).create_rule(CreateRuleInput {
+            let rule = StateStore::new(ProvenanceLayout::new(repo)).create_rule(
+                actor_claim,
+                CreateRuleInput {
                     scope_id: ScopeId::new(scope)?,
                     id: StableId::new(id)?,
                     name,
@@ -102,7 +106,8 @@ pub(super) fn handle(command: RulesCommand) -> anyhow::Result<()> {
                     source_section,
                     origin_thread: origin_thread.map(StableId::new).transpose()?,
                     origin_message: origin_message.map(StableId::new).transpose()?,
-                })?;
+                },
+            )?;
             output::print(format, &rule)?;
         }
         RulesCommand::List {

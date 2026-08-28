@@ -21,6 +21,9 @@ pub struct TypedSpecInput {
     pub schema_version: u32,
     pub spec: String,
     pub declared_by: String,
+    /// The mutating principal's claim, riding the v6 protocol window.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor: Option<super::super::RbacClaim>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub adopt_unowned: Vec<TypedAdoptionTarget>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

@@ -16,7 +16,7 @@ fn resolve_symbol_names_the_rule_implemented_at_a_code_site() {
         &json!({"file": "share-links.ts", "symbol": "createShareLink"}),
     );
 
-    assert_eq!(answer["protocol_version"], 5);
+    assert_eq!(answer["protocol_version"], 6);
     assert_eq!(answer["operation"], "resolve-symbol");
     assert_eq!(answer["file"], "share-links.ts");
     assert_eq!(answer["symbol"], "createShareLink");

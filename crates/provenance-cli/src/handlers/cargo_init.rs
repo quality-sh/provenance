@@ -23,6 +23,7 @@ pub(super) fn handle(requested_package: Option<&str>) -> anyhow::Result<()> {
         Some(path_prefix),
         Vec::new(),
         false,
+        None,
     )?;
     let cargo_rollback = prepare_sdk(&metadata.workspace_root, package)?;
     if let Err(error) = init.apply() {

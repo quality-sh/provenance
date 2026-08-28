@@ -1,9 +1,11 @@
 use super::*;
+use crate::state_store::MutationAuth;
 
 fn seeded_rule_with_implementation() -> (tempfile::TempDir, StateStore, ScopeId) {
     let (dir, store, scope) = initialized_store();
     store
         .apply_typed_spec(
+            None,
             &scope,
             document(
                 OWNER,
@@ -17,38 +19,45 @@ fn seeded_rule_with_implementation() -> (tempfile::TempDir, StateStore, ScopeId)
         )
         .unwrap();
     store
-        .create_rule(CreateRuleInput {
-            scope_id: scope.clone(),
-            id: StableId::new("rule_existing").unwrap(),
-            name: None,
-            description: None,
-            requirement_id: Some(StableId::new("req_owned").unwrap()),
-            resolution_id: None,
-            statement: "The canonical Rule keeps its identity".to_string(),
-            status: RuleStatus::Active,
-            severity: RuleSeverity::Medium,
-            source_document: None,
-            source_section: None,
-            origin_thread: None,
-            origin_message: None,
-        })
+        .create_rule(
+            None,
+            CreateRuleInput {
+                scope_id: scope.clone(),
+                id: StableId::new("rule_existing").unwrap(),
+                name: None,
+                description: None,
+                requirement_id: Some(StableId::new("req_owned").unwrap()),
+                resolution_id: None,
+                statement: "The canonical Rule keeps its identity".to_string(),
+                status: RuleStatus::Active,
+                severity: RuleSeverity::Medium,
+                source_document: None,
+                source_section: None,
+                origin_thread: None,
+                origin_message: None,
+            },
+        )
         .unwrap();
     let source_dir = store.layout.root().join("src");
     std::fs::create_dir_all(&source_dir).unwrap();
     std::fs::write(source_dir.join("enforcement.rs"), "fn enforce() {}\n").unwrap();
     store
-        .materialize_implementation_binding(MaterializeImplementationBindingInput {
-            scope_id: scope.clone(),
-            rule_id: StableId::new("rule_existing").unwrap(),
-            declared_by: OWNER.to_string(),
-            file: camino::Utf8PathBuf::from("src/enforcement.rs"),
-            symbol: "enforce".to_string(),
-        })
+        .materialize_implementation_binding(
+            None,
+            MaterializeImplementationBindingInput {
+                scope_id: scope.clone(),
+                rule_id: StableId::new("rule_existing").unwrap(),
+                declared_by: OWNER.to_string(),
+                file: camino::Utf8PathBuf::from("src/enforcement.rs"),
+                symbol: "enforce".to_string(),
+            },
+        )
         .unwrap();
     let path = crate::shards::implementation_bindings_path(&store.layout, &scope);
     store
         .mutate_jsonl_records(
             &path,
+            MutationAuth::new(None, provenance_core::Capability::Edit, &scope),
             |records: &mut Vec<provenance_core::ImplementationBinding>| {
                 records[0].id = StableId::new("implementation_binding_imported").unwrap();
                 Ok(())
@@ -96,13 +105,13 @@ fn rule_adoption_preserves_an_exact_or_omitted_existing_implementation() {
         .changes
         .iter()
         .all(|change| change.field != "implementation")));
-    store.apply_typed_spec(&scope, exact).unwrap();
+    store.apply_typed_spec(None, &scope, exact).unwrap();
 
     let omitted = adoption_input(None);
     let replay = store.plan_typed_spec(&scope, omitted.clone()).unwrap();
     assert_eq!(replay.conflicts, 0);
     assert_eq!(replay.implementation_bindings.len(), 1);
-    store.apply_typed_spec(&scope, omitted).unwrap();
+    store.apply_typed_spec(None, &scope, omitted).unwrap();
     let bindings = store.list_implementation_bindings(&scope).unwrap();
     assert_eq!(bindings.len(), 1);
     assert_eq!(bindings[0].id.as_str(), "implementation_binding_imported");

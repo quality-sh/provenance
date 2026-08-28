@@ -1,10 +1,12 @@
 use std::collections::BTreeSet;
 
-use provenance_core::{ImplementationBinding, Rule, ScopeId, StableId, SUPPORTED_SCHEMA_VERSION};
+use provenance_core::{
+    Capability, ImplementationBinding, RbacClaim, Rule, ScopeId, StableId, SUPPORTED_SCHEMA_VERSION,
+};
 use sha2::{Digest, Sha256};
 
 use super::typed_specs::DesiredTypedGraph;
-use super::{MaterializeImplementationBindingInput, StateStore, TypedFieldChange};
+use super::{MaterializeImplementationBindingInput, MutationAuth, StateStore, TypedFieldChange};
 use crate::shards;
 
 pub(super) struct Reconciliation {
@@ -126,9 +128,15 @@ fn desired_bindings(
 impl StateStore {
     pub fn materialize_implementation_binding(
         &self,
+        claim: Option<&RbacClaim>,
         input: MaterializeImplementationBindingInput,
     ) -> anyhow::Result<ImplementationBinding> {
         self.with_repository_publication(|| {
+            self.ensure_mutation_authorized(MutationAuth::new(
+                claim,
+                Capability::Execute,
+                &input.scope_id,
+            ))?;
             anyhow::ensure!(
                 !input.declared_by.trim().is_empty(),
                 "declared_by must not be empty"
@@ -158,7 +166,8 @@ impl StateStore {
                 symbol: input.symbol,
             };
             let path = shards::implementation_bindings_path(&self.layout, &input.scope_id);
-            self.mutate_jsonl_records(&path, |records: &mut Vec<ImplementationBinding>| {
+            let auth = MutationAuth::new(claim, Capability::Execute, &input.scope_id);
+            self.mutate_jsonl_records(&path, auth, |records: &mut Vec<ImplementationBinding>| {
                 anyhow::ensure!(
                     !records.iter().any(|record| {
                         record.rule_id == binding.rule_id

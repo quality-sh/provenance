@@ -1,28 +1,32 @@
-use super::{CreateContributionInput, CreateSynthesisPacketInput, StateStore};
+use super::{CreateContributionInput, CreateSynthesisPacketInput, MutationAuth, StateStore};
 use crate::shards;
 use provenance_core::{
-    validate_optional_confidence_score, Contribution, SynthesisPacket, SUPPORTED_SCHEMA_VERSION,
+    validate_optional_confidence_score, Capability, Contribution, RbacClaim, SynthesisPacket,
+    SUPPORTED_SCHEMA_VERSION,
 };
 
 impl StateStore {
     pub fn create_contribution(
         &self,
+        claim: Option<&RbacClaim>,
         input: CreateContributionInput,
     ) -> anyhow::Result<Contribution> {
         let scope = input.scope_id.clone();
-        self.with_lifecycle_lock(&scope, || self.write_contribution(input, false))
+        self.with_lifecycle_lock(&scope, || self.write_contribution(claim, input, false))
     }
 
     pub fn upsert_contribution(
         &self,
+        claim: Option<&RbacClaim>,
         input: CreateContributionInput,
     ) -> anyhow::Result<Contribution> {
         let scope = input.scope_id.clone();
-        self.with_lifecycle_lock(&scope, || self.write_contribution(input, true))
+        self.with_lifecycle_lock(&scope, || self.write_contribution(claim, input, true))
     }
 
     fn write_contribution(
         &self,
+        claim: Option<&RbacClaim>,
         input: CreateContributionInput,
         replace: bool,
     ) -> anyhow::Result<Contribution> {
@@ -43,8 +47,8 @@ impl StateStore {
             uncertainty,
             open_questions,
         } = input;
-        for claim in &material_claims {
-            validate_optional_confidence_score(claim.confidence)?;
+        for material_claim in &material_claims {
+            validate_optional_confidence_score(material_claim.confidence)?;
         }
         let contribution = Contribution {
             schema_version: SUPPORTED_SCHEMA_VERSION,
@@ -73,6 +77,7 @@ impl StateStore {
         if landed {
             anyhow::ensure!(replace, "contribution already exists");
             self.write_ideation_batch(
+                claim,
                 &scope_id,
                 super::IdeationLandingBatch {
                     contributions: vec![contribution.clone()],
@@ -86,7 +91,8 @@ impl StateStore {
             return Ok(contribution);
         }
         let path = shards::contributions_path(&self.layout, &scope_id);
-        self.mutate_jsonl_records(&path, |records: &mut Vec<Contribution>| {
+        let auth = MutationAuth::new(claim, Capability::Execute, &scope_id);
+        self.mutate_jsonl_records(&path, auth, |records: &mut Vec<Contribution>| {
             if let Some(index) = records
                 .iter()
                 .position(|record| record.id == contribution.id)
@@ -110,9 +116,10 @@ impl StateStore {
             } else {
                 contributions.push(contribution.clone());
             }
+            let manifest = self.manifest()?;
             provenance_core::validate_ideation_aggregate(provenance_core::IdeationAggregate {
                 legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
-                disposition_actor_ids: &self.manifest()?.disposition_actor_ids,
+                ratification: manifest.disposition_ratification(),
                 contributions: &contributions,
                 synthesis_packets: &self.list_synthesis_packets(&scope_id)?,
                 proposals: &self.list_proposal_definitions(&scope_id)?,
@@ -126,22 +133,25 @@ impl StateStore {
 
     pub fn create_synthesis_packet(
         &self,
+        claim: Option<&RbacClaim>,
         input: CreateSynthesisPacketInput,
     ) -> anyhow::Result<SynthesisPacket> {
         let scope = input.scope_id.clone();
-        self.with_lifecycle_lock(&scope, || self.write_synthesis_packet(input, false))
+        self.with_lifecycle_lock(&scope, || self.write_synthesis_packet(claim, input, false))
     }
 
     pub fn upsert_synthesis_packet(
         &self,
+        claim: Option<&RbacClaim>,
         input: CreateSynthesisPacketInput,
     ) -> anyhow::Result<SynthesisPacket> {
         let scope = input.scope_id.clone();
-        self.with_lifecycle_lock(&scope, || self.write_synthesis_packet(input, true))
+        self.with_lifecycle_lock(&scope, || self.write_synthesis_packet(claim, input, true))
     }
 
     fn write_synthesis_packet(
         &self,
+        claim: Option<&RbacClaim>,
         input: CreateSynthesisPacketInput,
         replace: bool,
     ) -> anyhow::Result<SynthesisPacket> {
@@ -183,6 +193,7 @@ impl StateStore {
         if landed {
             anyhow::ensure!(replace, "synthesis packet already exists");
             self.write_ideation_batch(
+                claim,
                 &scope_id,
                 super::IdeationLandingBatch {
                     contributions: Vec::new(),
@@ -196,7 +207,8 @@ impl StateStore {
             return Ok(synthesis_packet);
         }
         let path = shards::synthesis_packets_path(&self.layout, &scope_id);
-        self.mutate_jsonl_records(&path, |records: &mut Vec<SynthesisPacket>| {
+        let auth = MutationAuth::new(claim, Capability::Execute, &scope_id);
+        self.mutate_jsonl_records(&path, auth, |records: &mut Vec<SynthesisPacket>| {
             if let Some(index) = records
                 .iter()
                 .position(|record| record.id == synthesis_packet.id)
@@ -220,9 +232,10 @@ impl StateStore {
             } else {
                 synthesis_packets.push(synthesis_packet.clone());
             }
+            let manifest = self.manifest()?;
             provenance_core::validate_ideation_aggregate(provenance_core::IdeationAggregate {
                 legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
-                disposition_actor_ids: &self.manifest()?.disposition_actor_ids,
+                ratification: manifest.disposition_ratification(),
                 contributions: &self.list_contributions(&scope_id)?,
                 synthesis_packets: &synthesis_packets,
                 proposals: &self.list_proposal_definitions(&scope_id)?,

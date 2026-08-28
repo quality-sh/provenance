@@ -17,20 +17,23 @@ const REQUIREMENT_STATEMENT: &str = "The provider reads the environment key at i
 
 fn create_unowned_brief(store: &StateStore, scope: &ScopeId) {
     store
-        .create_source(CreateSourceInput {
-            scope_id: scope.clone(),
-            id: StableId::new(BRIEF_ID).unwrap(),
-            name: BRIEF_NAME.to_string(),
-            source_type: SourceType::ExternalIntegration,
-            url: None,
-            reference: Some(BRIEF_REFERENCE.to_string()),
-            commit_pin: None,
-            effective_date: None,
-            review_date: None,
-            superseded_by: None,
-            origin_thread: None,
-            origin_message: None,
-        })
+        .create_source(
+            None,
+            CreateSourceInput {
+                scope_id: scope.clone(),
+                id: StableId::new(BRIEF_ID).unwrap(),
+                name: BRIEF_NAME.to_string(),
+                source_type: SourceType::ExternalIntegration,
+                url: None,
+                reference: Some(BRIEF_REFERENCE.to_string()),
+                commit_pin: None,
+                effective_date: None,
+                review_date: None,
+                superseded_by: None,
+                origin_thread: None,
+                origin_message: None,
+            },
+        )
         .unwrap();
 }
 
@@ -55,12 +58,15 @@ fn fluent_adoption_of_an_external_integration_source_keeps_its_kind() {
     create_unowned_brief(&store, &scope);
     create_unowned_requirement(&store, &scope, REQUIREMENT_ID, REQUIREMENT_STATEMENT);
     store
-        .add_source_reference(AddSourceReferenceInput {
-            scope_id: scope.clone(),
-            source_id: StableId::new(BRIEF_ID).unwrap(),
-            requirement_id: StableId::new(REQUIREMENT_ID).unwrap(),
-            clause: None,
-        })
+        .add_source_reference(
+            None,
+            AddSourceReferenceInput {
+                scope_id: scope.clone(),
+                source_id: StableId::new(BRIEF_ID).unwrap(),
+                requirement_id: StableId::new(REQUIREMENT_ID).unwrap(),
+                clause: None,
+            },
+        )
         .unwrap();
     let input = fluent_input();
 
@@ -85,7 +91,7 @@ fn fluent_adoption_of_an_external_integration_source_keeps_its_kind() {
         (0, 0, 0, 0, 2)
     );
 
-    store.apply_typed_spec(&scope, input.clone()).unwrap();
+    store.apply_typed_spec(None, &scope, input.clone()).unwrap();
 
     let sources = store.list_sources(&scope).unwrap();
     assert_eq!(sources.len(), 1);

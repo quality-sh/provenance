@@ -5,8 +5,10 @@ use provenance_macros::rule;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
+pub mod rbac;
 pub mod validation;
 
+pub use rbac::validate_rbac_merged_records;
 pub use validation::{changed_statement_diagnostics, validate_merged_records, ShardFamily};
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]

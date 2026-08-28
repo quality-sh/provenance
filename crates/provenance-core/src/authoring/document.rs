@@ -52,6 +52,7 @@ impl SpecDocument {
             schema_version: SUPPORTED_SCHEMA_VERSION.0,
             spec: self.spec.clone(),
             declared_by: declared_by.into(),
+            actor: None,
             adopt_unowned: self.adopt_unowned.clone(),
             sources: self.sources.clone(),
             requirements: self.requirements.clone(),

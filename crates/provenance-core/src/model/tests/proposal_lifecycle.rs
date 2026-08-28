@@ -65,7 +65,7 @@ fn lineage_rejects_missing_immutable_assertion_id() {
 
     let error = crate::validate_ideation_aggregate(crate::IdeationAggregate {
         legacy_policy: crate::LegacyProposalPolicy::ModernOnly,
-        disposition_actor_ids: &[],
+        ratification: crate::DispositionRatification::LegacyAllowlist(&[]),
         contributions: &[],
         synthesis_packets: &[],
         proposals: &[proposal],
@@ -93,7 +93,7 @@ fn lineage_rejects_cycles_through_assertion_owners() {
 
     let error = crate::validate_ideation_aggregate(crate::IdeationAggregate {
         legacy_policy: crate::LegacyProposalPolicy::ModernOnly,
-        disposition_actor_ids: &[],
+        ratification: crate::DispositionRatification::LegacyAllowlist(&[]),
         contributions: &[],
         synthesis_packets: &[],
         proposals: &proposals,
@@ -174,7 +174,7 @@ fn assertion_rejects_evidence_reference_owned_by_multiple_contributions() {
 
     let error = crate::validate_ideation_aggregate(crate::IdeationAggregate {
         legacy_policy: crate::LegacyProposalPolicy::ModernOnly,
-        disposition_actor_ids: &[],
+        ratification: crate::DispositionRatification::LegacyAllowlist(&[]),
         contributions: &contributions,
         synthesis_packets: &synthesis_packets,
         proposals: &proposals,
@@ -282,7 +282,7 @@ fn divergent_duplicate_immutable_ids_fail_closed() {
 
     let error = crate::validate_ideation_aggregate(crate::IdeationAggregate {
         legacy_policy: crate::LegacyProposalPolicy::ModernOnly,
-        disposition_actor_ids: &[],
+        ratification: crate::DispositionRatification::LegacyAllowlist(&[]),
         contributions: &[],
         synthesis_packets: &[],
         proposals: &[first, divergent],
@@ -301,7 +301,7 @@ fn byte_identical_duplicate_immutable_ids_fail_closed() {
 
     let error = crate::validate_ideation_aggregate(crate::IdeationAggregate {
         legacy_policy: crate::LegacyProposalPolicy::ModernOnly,
-        disposition_actor_ids: &[],
+        ratification: crate::DispositionRatification::LegacyAllowlist(&[]),
         contributions: &[],
         synthesis_packets: &[],
         proposals: &[proposal.clone(), proposal],
@@ -353,7 +353,7 @@ fn validate_fixture(
     let assertions = vec![serde_json::from_value(assertion).unwrap()];
     crate::validate_ideation_aggregate(crate::IdeationAggregate {
         legacy_policy: crate::LegacyProposalPolicy::ModernOnly,
-        disposition_actor_ids: &[],
+        ratification: crate::DispositionRatification::LegacyAllowlist(&[]),
         contributions: &contributions,
         synthesis_packets: &synthesis_packets,
         proposals: &proposals,
