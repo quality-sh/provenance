@@ -61,6 +61,8 @@ export interface ConfigureOptions {
   scope?: string;
   owner?: string;
   verificationOwner?: string;
+  /** The mutating principal's actor id, sent as the v6 claim. */
+  actor?: string;
 }
 
 export interface SourceOptions {
@@ -188,6 +190,12 @@ interface SdkSettings {
   scope: string;
   owner: string;
   verificationOwner: string;
+  actor?: string;
+}
+
+/** The configured principal's claim, or nothing when no actor is set. */
+function actorClaim(): { actor_id: string } | undefined {
+  return settings.actor === undefined ? undefined : { actor_id: settings.actor };
 }
 
 export function configure(options: ConfigureOptions): void {
@@ -261,8 +269,8 @@ export async function apply(
     engineSettings(),
     "apply",
     spec === undefined
-      ? registry.document(settings.owner)
-      : specDocument(spec, settings.owner),
+      ? { ...registry.document(settings.owner), actor: actorClaim() }
+      : { ...specDocument(spec, settings.owner), actor: actorClaim() },
   );
   if (spec === undefined) {
     registry.assign(result);
@@ -374,6 +382,7 @@ async function complete(
   error?: string,
 ): Promise<void> {
   await invokeEngine<VerificationRun>(engineSettings(), "complete-verification", {
+    actor: actorClaim(),
     run,
     status,
     error,
@@ -412,6 +421,7 @@ async function runVerification(
     "begin-verification",
     {
       ...target,
+      actor: actorClaim(),
       key,
       method: options.method ?? "examples",
       declared_by: settings.verificationOwner,
@@ -453,6 +463,7 @@ function defaults(): SdkSettings {
     scope: process.env.PROVENANCE_SCOPE ?? "default",
     owner: process.env.PROVENANCE_SPEC_OWNER ?? "spec://typescript",
     verificationOwner: process.env.PROVENANCE_VERIFICATION_OWNER ?? "ci://typescript",
+    actor: process.env.PROVENANCE_ACTOR_ID,
   };
 }
 

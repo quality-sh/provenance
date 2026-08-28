@@ -85,3 +85,41 @@ fn the_closed_projection_refuses_the_ambiguous_manifest() {
     let error = outcome.expect_err("both regimes must refuse through the closed projection");
     assert_eq!(error.to_string(), AMBIGUOUS_MANIFEST_REFUSAL);
 }
+
+fn malformed_section_manifest_body() -> String {
+    r#"{
+        "schema_version": 1,
+        "scopes": [{"id": "default", "path_prefix": "."}],
+        "disposition_actor_ids": [],
+        "rbac": {"assignments": [
+            {"actor_id": "reviewer", "capabilities": ["edit"], "scopes": ["default"]},
+            {"actor_id": "reviewer", "capabilities": ["read"], "scopes": ["default"]}
+        ]}
+    }"#
+    .to_string()
+}
+
+#[test]
+fn the_store_reader_refuses_a_malformed_section() {
+    let (_dir, store, _scope) = initialized_store();
+    write_manifest(&store, malformed_section_manifest_body());
+
+    let error = store.manifest().unwrap_err();
+    assert!(
+        error.to_string().contains("duplicate rbac grant"),
+        "a repeated (actor, scope) grant refuses through the store reader: {error}"
+    );
+}
+
+#[test]
+fn the_closed_projection_refuses_a_malformed_section() {
+    let (_dir, store, scope) = initialized_store();
+    write_manifest(&store, malformed_section_manifest_body());
+
+    let outcome = store.closed_manifest_scope(&scope);
+    let error = outcome.expect_err("a malformed section must refuse through the closed projection");
+    assert!(
+        error.to_string().contains("duplicate rbac grant"),
+        "the closed projection runs the section well-formedness law: {error}"
+    );
+}

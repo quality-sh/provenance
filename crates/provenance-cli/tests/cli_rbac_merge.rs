@@ -191,6 +191,188 @@ fn a_manifestless_repository_merges_exactly_as_before() {
 }
 
 #[test]
+fn the_merge_driver_refuses_a_malformed_rbac_section() {
+    let directory = merge_fixture(Some("merger"));
+    let repository = directory.path();
+    // The same actor granted `default` twice: a malformed section, which
+    // every reader must refuse before consulting any grant.
+    std::fs::write(
+        manifest_path(repository),
+        r#"{
+      "schema_version": 1,
+      "scopes": [{"id": "default", "path_prefix": "."}],
+      "disposition_actor_ids": [],
+      "rbac": {"assignments": [
+        {"actor_id": "merger", "capabilities": ["edit"], "scopes": ["default"]},
+        {"actor_id": "merger", "capabilities": ["read"], "scopes": ["default"]}
+      ]}
+    }"#,
+    )
+    .unwrap();
+
+    let output = run_merge(repository);
+    assert!(
+        !output.status.success(),
+        "a malformed section must refuse the merge"
+    );
+    let merged = std::fs::read_to_string(shard(repository)).unwrap();
+    assert!(!merged.contains("edge_theirs"), "{merged}");
+}
+
+#[test]
+fn the_merge_driver_authorizes_and_writes_inside_the_publication_lock() {
+    let directory = merge_fixture(Some("merger"));
+    let repository = directory.path().to_path_buf();
+
+    // Hold the repository publication lock from this test process, exactly
+    // the way any provenance writer would.
+    let layout = provenance_store::layout::ProvenanceLayout::new(
+        camino::Utf8PathBuf::from_path_buf(repository.clone()).unwrap(),
+    );
+    let store = provenance_store::state_store::StateStore::new(layout);
+    let (acquired_tx, acquired_rx) = std::sync::mpsc::channel();
+    let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+    let holder = std::thread::spawn(move || {
+        store
+            .with_repository_publication(|| {
+                acquired_tx.send(()).unwrap();
+                release_rx.recv().unwrap();
+                Ok(())
+            })
+            .unwrap();
+    });
+    acquired_rx
+        .recv_timeout(std::time::Duration::from_secs(10))
+        .expect("the holder acquired the publication lock");
+
+    let merge = std::thread::spawn(move || {
+        std::process::Command::new("git")
+            .args(["merge", "theirs", "-m", "merge"])
+            .current_dir(&repository)
+            .env_remove("GIT_DIR")
+            .output()
+            .expect("run git merge")
+    });
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    assert!(
+        !merge.is_finished(),
+        "the merge driver must authorize and write inside the publication lock, \
+         not against manifest bytes a concurrent writer may move"
+    );
+
+    release_tx.send(()).unwrap();
+    holder.join().unwrap();
+    let output = merge.join().unwrap();
+    assert!(
+        output.status.success(),
+        "the granted merge completes once the lock frees: {}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+fn source(id: &str) -> String {
+    format!(
+        "{{\"schema_version\":1,\"scope_id\":\"default\",\"id\":\"{id}\",\
+         \"declared_by\":null,\"declaration_address\":null,\"retired\":false,\
+         \"name\":\"Policy\",\"source_type\":\"policy\",\"url\":null,\"reference\":null,\
+         \"commit_pin\":null,\"effective_date\":null,\"review_date\":null,\
+         \"superseded_by\":null,\"origin_thread\":null,\"origin_message\":null}}\n"
+    )
+}
+
+/// A git repository whose conflicting shard is a scoped sources shard, so
+/// the rbac gate must authorize the merge against the scope the shard
+/// actually sits under — `.provenance/state/scopes/default`.
+fn scoped_sources_fixture(actor_id: Option<&str>, grants: &str) -> tempfile::TempDir {
+    let directory = tempfile::tempdir().unwrap();
+    let repository = directory.path();
+    git(repository, &["init", "--initial-branch", "main"]);
+    git(repository, &["config", "user.email", "fixture@example.com"]);
+    git(repository, &["config", "user.name", "Fixture"]);
+    let shard_path = repository.join(".provenance/state/scopes/default/sources/source.jsonl");
+    std::fs::create_dir_all(shard_path.parent().unwrap()).unwrap();
+    std::fs::write(
+        repository.join(".gitattributes"),
+        ".provenance/state/**/*.jsonl merge=provenance-jsonl\n",
+    )
+    .unwrap();
+    std::fs::write(manifest_path(repository), grants).unwrap();
+    let base_source = source("source_base");
+    std::fs::write(&shard_path, &base_source).unwrap();
+    git(repository, &["add", "."]);
+    git(repository, &["commit", "-m", "base"]);
+    git(repository, &["checkout", "-b", "theirs"]);
+    std::fs::write(
+        &shard_path,
+        format!("{base_source}{}", source("source_theirs")),
+    )
+    .unwrap();
+    git(repository, &["add", "."]);
+    git(repository, &["commit", "-m", "theirs"]);
+    git(repository, &["checkout", "main"]);
+    std::fs::write(
+        &shard_path,
+        format!("{base_source}{}", source("source_ours")),
+    )
+    .unwrap();
+    git(repository, &["add", "."]);
+    git(repository, &["commit", "-m", "ours"]);
+    configure_driver(repository, actor_id);
+    directory
+}
+
+fn sources_shard(repository: &Path) -> std::path::PathBuf {
+    repository.join(".provenance/state/scopes/default/sources/source.jsonl")
+}
+
+#[test]
+fn a_merge_of_a_scoped_shard_authorizes_the_scope_the_shard_sits_under() {
+    let grants = r#"{
+      "schema_version": 1,
+      "scopes": [{"id": "default", "path_prefix": "."}],
+      "disposition_actor_ids": [],
+      "rbac": {"assignments": [
+        {"actor_id": "merger", "identity_type": "human", "capabilities": ["edit"], "scopes": ["default"]}
+      ]}
+    }"#;
+    let directory = scoped_sources_fixture(Some("merger"), grants);
+    let repository = directory.path();
+
+    let output = run_merge(repository);
+    assert!(
+        output.status.success(),
+        "a merger granted edit on `default` must merge a default-scope shard: {}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let merged = std::fs::read_to_string(sources_shard(repository)).unwrap();
+    assert!(merged.contains("source_theirs"), "{merged}");
+}
+
+#[test]
+fn a_merge_of_a_scoped_shard_refuses_a_principal_granted_only_another_scope() {
+    let grants = r#"{
+      "schema_version": 1,
+      "scopes": [{"id": "default", "path_prefix": "."}, {"id": "docs", "path_prefix": "docs"}],
+      "disposition_actor_ids": [],
+      "rbac": {"assignments": [
+        {"actor_id": "merger", "identity_type": "human", "capabilities": ["edit"], "scopes": ["docs"]}
+      ]}
+    }"#;
+    let directory = scoped_sources_fixture(Some("merger"), grants);
+    let repository = directory.path();
+
+    let output = run_merge(repository);
+    assert!(
+        !output.status.success(),
+        "a principal holding edit only on `docs` must not merge a default-scope shard"
+    );
+    let merged = std::fs::read_to_string(sources_shard(repository)).unwrap();
+    assert!(!merged.contains("source_theirs"), "{merged}");
+}
+
+#[test]
 fn an_rbac_repository_refuses_a_pathless_merge_output() {
     let directory = tempfile::tempdir().unwrap();
     let sides = directory.path().join("sides");

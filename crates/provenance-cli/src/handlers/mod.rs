@@ -75,6 +75,9 @@ pub(super) async fn dispatch(
             invocation_channel,
             package_manager,
         } => {
+            // The claim is cloned before the blocking closure so the closure
+            // stays 'static; the borrow itself never crosses the boundary.
+            let actor_claim = actor_claim.cloned();
             tokio::task::spawn_blocking(move || {
                 repo::init(
                     &path,
@@ -83,7 +86,7 @@ pub(super) async fn dispatch(
                         path_prefix,
                         disposition_actor_ids: disposition_actor_id,
                         clear_disposition_actors,
-                        actor_claim: actor_claim.cloned(),
+                        actor_claim,
                         ste_onboarding,
                         ste_pdf,
                         invocation_channel,

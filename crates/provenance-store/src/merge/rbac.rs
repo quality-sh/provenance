@@ -134,14 +134,19 @@ fn authorize_shard_scope(
     )
 }
 
+/// The scope a scoped shard family belongs to: the directory the shard sits
+/// in lives under `.provenance/state/scopes/<scope>/`, so the scope is the
+/// child of the `scopes` directory on the shard's own path. Walking from the
+/// shard toward the root, the directory seen immediately before the `scopes`
+/// directory is that child.
 fn scoped_family_scope(shard_path: &Utf8Path) -> Option<ScopeId> {
-    let directory = shard_path.parent()?;
-    let mut ancestors = directory.ancestors();
-    while let Some(ancestor) = ancestors.next() {
+    let mut ancestors = shard_path.parent()?.ancestors();
+    let mut child = ancestors.next()?;
+    for ancestor in ancestors {
         if ancestor.file_name() == Some("scopes") {
-            let scope_dir = ancestors.next()?;
-            return ScopeId::new(scope_dir.file_name()?).ok();
+            return ScopeId::new(child.file_name()?).ok();
         }
+        child = ancestor;
     }
     None
 }
@@ -181,4 +186,38 @@ fn ensure_disposition_rows_are_human(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn scope_of(path: &str) -> Option<String> {
+        scoped_family_scope(Utf8Path::new(path)).map(|scope| scope.as_str().to_owned())
+    }
+
+    #[test]
+    fn a_scoped_shard_resolves_the_scope_it_sits_under() {
+        assert_eq!(
+            scope_of(".provenance/state/scopes/default/sources/foo.jsonl").as_deref(),
+            Some("default"),
+            "the scope directory is the child of the scopes directory on the shard's path"
+        );
+        assert_eq!(
+            scope_of("/repo/.provenance/state/scopes/docs/requirements/req.jsonl").as_deref(),
+            Some("docs")
+        );
+    }
+
+    #[test]
+    fn a_shard_outside_any_scope_resolves_no_scope() {
+        assert_eq!(scope_of(".provenance/state/edges/edges-00.jsonl"), None);
+        assert_eq!(scope_of(".provenance/state/manifest.json"), None);
+        assert_eq!(scope_of("sources/foo.jsonl"), None);
+    }
+
+    #[test]
+    fn a_scope_less_shard_directly_under_scopes_resolves_no_scope() {
+        assert_eq!(scope_of(".provenance/state/scopes/foo.jsonl"), None);
+    }
 }

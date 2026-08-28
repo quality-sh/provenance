@@ -72,7 +72,7 @@ pub fn verify<'a, E: std::fmt::Display>(
         Some(repository.clone()),
         scope.clone(),
         BeginVerificationInput {
-            actor: None,
+            actor: settings.actor.clone(),
             rule,
             declaration,
             key: key.to_string(),
@@ -88,7 +88,7 @@ pub fn verify<'a, E: std::fmt::Display>(
             Some(repository.clone()),
             &scope,
             CompleteVerificationInput {
-                actor: None,
+                actor: settings.actor.clone(),
                 run: run.id.as_str().to_string(),
                 status: status.to_string(),
                 error,

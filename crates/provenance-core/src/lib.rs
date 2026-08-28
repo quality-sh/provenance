@@ -8,7 +8,7 @@ pub mod threads;
 
 pub use model::{
     authorize, disposition_requires_prior_assertion, effective_proposal_state,
-    ensure_disposition_actor_is_human, ensure_rbac_section_well_formed,
+    ensure_disposition_actor_is_human, ensure_manifest_rbac_laws, ensure_rbac_section_well_formed,
     ensure_supported_schema_version, ensure_unambiguous_rbac, is_shipped_legacy_disposition_audit,
     packet_qualifies_proposal, validate_assertion_intrinsic, validate_commit_pin,
     validate_confidence_score, validate_disposition_admissible, validate_disposition_intrinsic,

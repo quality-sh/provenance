@@ -39,6 +39,7 @@ pub(super) struct InitPlan {
     gitignore_before: FileSnapshot,
     gitignore_bytes: Vec<u8>,
     dictionary: crate::ste_onboarding::Plan,
+    actor_claim: Option<provenance_core::RbacClaim>,
 }
 
 #[rule("rule_init_plans_all_project_writes")]
@@ -72,24 +73,11 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
         "disposition actor IDs must not be empty"
     );
     let mut manifest = if manifest_exists {
-        let parsed = parse_manifest(
+        parse_manifest(
             manifest_before
                 .bytes()
                 .ok_or_else(|| anyhow::anyhow!("manifest disappeared during init"))?,
-        )?;
-        // Re-init of an rbac-managed repository demands manifest-write held on
-        // every scope then listed (settled Option A). First bootstrap is
-        // exempt: the section it creates cannot be consulted before it exists.
-        if let Some(section) = &parsed.rbac {
-            let scopes: Vec<ScopeId> = parsed.scopes.iter().map(|s| s.id.clone()).collect();
-            provenance_core::authorize(
-                actor_claim,
-                section,
-                Capability::ManifestWrite,
-                provenance_core::RbacResource::RepoGlobal(&scopes),
-            )?;
-        }
-        parsed
+        )?
     } else {
         let scope = scope.as_deref().ok_or_else(|| {
             anyhow::anyhow!("--scope is required when initializing a new repository")
@@ -140,13 +128,33 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
         gitignore_before,
         gitignore_bytes,
         dictionary,
+        actor_claim: actor_claim.cloned(),
     })
 }
 
 impl InitPlan {
+    /// Applies the plan. A re-init — any repository that already has a
+    /// manifest — decides and writes inside one publication-critical section:
+    /// the manifest-write decision resolves against the manifest bytes the
+    /// recheck just confirmed current, and the protected writes happen in the
+    /// same section, so no concurrent writer can move the manifest between
+    /// the decision and the bytes (census row 20). First bootstrap is exempt:
+    /// the rbac section it creates cannot be consulted before it exists, and
+    /// no publication lock directory may precede the repository it serves.
     #[rule("rule_init_apply_rolls_back_owned_changes")]
     pub(super) fn apply(self) -> anyhow::Result<()> {
         let layout = ProvenanceLayout::new(self.path.clone());
+        let reinit = self.manifest_before.bytes().is_some();
+        if reinit {
+            provenance_store::publication::with_repository_publication(&layout, || {
+                self.apply_prepared(&layout, true)
+            })
+        } else {
+            self.apply_prepared(&layout, false)
+        }
+    }
+
+    fn apply_prepared(self, layout: &ProvenanceLayout, reinit: bool) -> anyhow::Result<()> {
         self.manifest_before
             .recheck(layout.manifest_path().as_std_path())?;
         self.skills.recheck()?;
@@ -155,6 +163,9 @@ impl InitPlan {
         self.gitignore_before
             .recheck(self.path.join(".gitignore").as_std_path())?;
         self.dictionary.recheck(&self.path)?;
+        if reinit {
+            self.authorize_reinit()?;
+        }
         let mut rollback = FileRollbackJournal::within(self.path.as_std_path());
         let result = (|| -> anyhow::Result<()> {
             rollback.replace(
@@ -194,6 +205,28 @@ impl InitPlan {
         self.dictionary.print_message();
         Ok(())
     }
+
+    /// The re-init decision, made inside the publication-critical section
+    /// against the snapshot bytes the recheck above tied to the live file:
+    /// on an rbac-managed repository the claim must hold `manifest-write` on
+    /// every scope then listed (settled Option A).
+    fn authorize_reinit(&self) -> anyhow::Result<()> {
+        let bytes = self
+            .manifest_before
+            .bytes()
+            .ok_or_else(|| anyhow::anyhow!("re-init requires an existing manifest"))?;
+        let manifest = parse_manifest(bytes)?;
+        let Some(section) = &manifest.rbac else {
+            return Ok(());
+        };
+        let scopes: Vec<ScopeId> = manifest.scopes.iter().map(|s| s.id.clone()).collect();
+        provenance_core::authorize(
+            self.actor_claim.as_ref(),
+            section,
+            Capability::ManifestWrite,
+            provenance_core::RbacResource::RepoGlobal(&scopes),
+        )
+    }
 }
 
 pub(super) fn scope_path_prefix(
@@ -220,13 +253,10 @@ fn read_manifest(layout: &ProvenanceLayout) -> anyhow::Result<Option<Manifest>> 
 fn parse_manifest(bytes: &[u8]) -> anyhow::Result<Manifest> {
     let manifest = serde_json::from_slice::<Manifest>(bytes)?;
     provenance_core::ensure_supported_schema_version("manifest", manifest.schema_version)?;
-    provenance_core::ensure_unambiguous_rbac(
+    provenance_core::ensure_manifest_rbac_laws(
         &manifest.disposition_actor_ids,
         manifest.rbac.as_ref(),
     )?;
-    if let Some(section) = &manifest.rbac {
-        provenance_core::ensure_rbac_section_well_formed(section)?;
-    }
     Ok(manifest)
 }
 
@@ -300,5 +330,71 @@ mod tests {
         ] {
             assert!(!repo.join(path).exists(), "{path} survived rollback");
         }
+    }
+
+    fn reinit_options() -> InitOptions {
+        InitOptions {
+            scope: None,
+            path_prefix: None,
+            disposition_actor_ids: Vec::new(),
+            clear_disposition_actors: false,
+            actor_claim: None,
+            ste_onboarding: crate::cli::SteOnboardingMode::Interactive,
+            ste_pdf: None,
+            invocation_channel: crate::cli::InvocationChannel::Native,
+            package_manager: None,
+        }
+    }
+
+    fn bootstrap(directory: &std::path::Path) -> anyhow::Result<(Utf8PathBuf, ProvenanceLayout)> {
+        let repo = Utf8PathBuf::from_path_buf(directory.join("repo")).unwrap();
+        std::fs::create_dir_all(&repo).unwrap();
+        prepare_init(
+            &repo,
+            InitOptions {
+                scope: Some("default".to_owned()),
+                path_prefix: Some(Utf8PathBuf::from(".")),
+                ..reinit_options()
+            },
+        )?
+        .apply()?;
+        let layout = ProvenanceLayout::new(repo.clone());
+        Ok((repo, layout))
+    }
+
+    #[test]
+    fn reinit_applies_inside_the_publication_critical_section() {
+        let directory = tempfile::tempdir().unwrap();
+        let (repo, layout) = bootstrap(directory.path()).unwrap();
+
+        let plan = prepare_init(&repo, reinit_options()).unwrap();
+
+        let (acquired_tx, acquired_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+        let store = provenance_store::state_store::StateStore::new(layout);
+        let holder = std::thread::spawn(move || {
+            store
+                .with_repository_publication(|| {
+                    acquired_tx.send(()).unwrap();
+                    release_rx.recv().unwrap();
+                    Ok(())
+                })
+                .unwrap();
+        });
+        acquired_rx
+            .recv_timeout(std::time::Duration::from_secs(10))
+            .expect("the holder acquired the publication lock");
+
+        let reinit = std::thread::spawn(move || plan.apply());
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        assert!(
+            !reinit.is_finished(),
+            "re-init must decide and write inside the publication-critical section, \
+             not before or beside it"
+        );
+
+        release_tx.send(()).unwrap();
+        holder.join().unwrap();
+        reinit.join().unwrap().expect("the re-init completes");
     }
 }

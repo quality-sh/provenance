@@ -175,6 +175,92 @@ test("the callback option-object Requirement keeps an explicit ID", async () => 
   );
 });
 
+test("apply and verification carry the configured actor claim", async () => {
+  const recorder = recordingEngine({
+    apply: {
+      declared_by: "spec://typescript/actor-transport",
+      created: 0,
+      updated: 0,
+      moved: 0,
+      retired: 0,
+      conflicts: 0,
+      unchanged: 0,
+      resources: [],
+    },
+  });
+  configure({
+    engine: recorder.engine,
+    owner: "spec://typescript/actor-transport",
+    actor: "reviewer",
+  });
+  const spec = defineSpec("actor-transport", ({ requirement }) => {
+    const sharing = requirement("sharing", {
+      statement: "Users can securely share documentation",
+    });
+    return {
+      expiry: sharing.rule("expiry", {
+        statement: "Share links expire within 30 days",
+      }),
+    };
+  });
+
+  await apply(spec);
+  await spec.handles.expiry.verify(
+    "actor-transport-expiry",
+    () => undefined,
+    { method: "examples", file: "src/actor.test.ts", symbol: "checkExpiry" },
+  );
+
+  const commands = Object.fromEntries(
+    recorder.requests().map(({ command, input }) => [command, input]),
+  );
+  assert.deepEqual(
+    (commands["apply"] as { actor?: unknown }).actor,
+    { actor_id: "reviewer" },
+    "apply must carry the mutating principal's claim",
+  );
+  assert.deepEqual(
+    (commands["begin-verification"] as { actor?: unknown }).actor,
+    { actor_id: "reviewer" },
+    "begin-verification must carry the claim",
+  );
+  assert.deepEqual(
+    (commands["complete-verification"] as { actor?: unknown }).actor,
+    { actor_id: "reviewer" },
+    "complete-verification must carry the claim",
+  );
+});
+
+test("apply without a configured actor sends no claim field", async () => {
+  const recorder = recordingEngine({
+    apply: {
+      declared_by: "spec://typescript/no-actor",
+      created: 0,
+      updated: 0,
+      moved: 0,
+      retired: 0,
+      conflicts: 0,
+      unchanged: 0,
+      resources: [],
+    },
+  });
+  configure({ engine: recorder.engine, owner: "spec://typescript/no-actor" });
+  const spec = defineSpec("no-actor", ({ requirement }) => ({
+    canonical: requirement("canonical", {
+      statement: "No claim, no actor field",
+    }),
+  }));
+
+  await apply(spec);
+
+  const request = recorder.requests().find(({ command }) => command === "apply");
+  assert.equal(
+    (request?.input as { actor?: unknown }).actor,
+    undefined,
+    "an unset actor must stay absent, not an empty claim",
+  );
+});
+
 test("verify sends the same durable binding key on repeated runs", async () => {
   const recorder = recordingEngine();
   configure({ engine: recorder.engine, repository: repository() });

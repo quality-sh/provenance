@@ -62,6 +62,24 @@ pub fn ensure_rbac_section_well_formed(section: &RbacSection) -> anyhow::Result<
     Ok(())
 }
 
+/// The two manifest read laws in one call.
+///
+/// Every manifest reader calls exactly this — the store reader, the closed
+/// projection, repository parsing, the merge driver, and
+/// `validate --artifact manifest` — so no reader can see grants the laws
+/// would have refused. A future reader must too; that list is part of the
+/// acceptance checklist.
+pub fn ensure_manifest_rbac_laws(
+    disposition_actor_ids: &[String],
+    rbac: Option<&RbacSection>,
+) -> anyhow::Result<()> {
+    ensure_unambiguous_rbac(disposition_actor_ids, rbac)?;
+    if let Some(section) = rbac {
+        ensure_rbac_section_well_formed(section)?;
+    }
+    Ok(())
+}
+
 /// The one policy choke: does this claimed principal hold the needed
 /// capability on this resource?
 ///

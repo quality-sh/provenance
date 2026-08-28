@@ -77,13 +77,10 @@ pub(super) fn validate_file(
             let manifest: Manifest = serde_json::from_str(&json)
                 .map_err(|error| anyhow::anyhow!("manifest violates its closed schema: {error}"))?;
             provenance_core::ensure_supported_schema_version("manifest", manifest.schema_version)?;
-            provenance_core::ensure_unambiguous_rbac(
+            provenance_core::ensure_manifest_rbac_laws(
                 &manifest.disposition_actor_ids,
                 manifest.rbac.as_ref(),
             )?;
-            if let Some(section) = &manifest.rbac {
-                provenance_core::ensure_rbac_section_well_formed(section)?;
-            }
         }
     }
     Ok(())

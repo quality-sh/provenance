@@ -4,7 +4,7 @@
 //! SDKs; the Rust SDK runs in process and does not read it.
 
 use camino::Utf8PathBuf;
-use provenance_core::ScopeId;
+use provenance_core::{RbacClaim, ScopeId};
 
 /// What the process environment says about repository, scope, and owners.
 #[derive(Debug, Clone)]
@@ -18,6 +18,10 @@ pub struct Settings {
     pub owner: String,
     /// `PROVENANCE_VERIFICATION_OWNER`, default `ci://rust`.
     pub verification_owner: String,
+    /// `PROVENANCE_ACTOR_ID` — the mutating principal's claim, sent with
+    /// every mutating request the facade makes. Absent when unset, and an
+    /// unset claim refuses on an rbac-managed repository.
+    pub actor: Option<RbacClaim>,
 }
 
 impl Settings {
@@ -29,6 +33,10 @@ impl Settings {
                 .unwrap_or_else(|_| "spec://rust".to_string()),
             verification_owner: std::env::var("PROVENANCE_VERIFICATION_OWNER")
                 .unwrap_or_else(|_| "ci://rust".to_string()),
+            actor: std::env::var("PROVENANCE_ACTOR_ID")
+                .ok()
+                .filter(|id| !id.trim().is_empty())
+                .and_then(|id| RbacClaim::new(id).ok()),
         }
     }
 
