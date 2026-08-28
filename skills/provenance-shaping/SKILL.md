@@ -166,10 +166,12 @@ as such rather than being replaced by a vague Rule merely to close the gap.
 
 Proposals are not part of the computed graph frontier and are not a batch-review inbox.
 Claiming a topic atomically consults and returns undisposed `proposed` and `asserted`
-proposals targeting the topic, its anchor requirement, or its explicit artifact links;
-each result includes its derived state and deterministic reasons. For diff-driven work,
-run `provenance proposals surface
---scope <scope> --changed-path <repo-relative-path> --format json` (repeat the path flag).
+proposals targeting the topic, its anchor requirement, the requirement's direct domain,
+the topic's questions, or its explicit artifact links; each result includes its derived state
+and deterministic reasons. If the topic claim is part of diff-driven work, repeat
+`--changed-path <repo-relative-path>` on `topics claim`. Otherwise run `provenance proposals
+surface --scope <scope> --changed-path <repo-relative-path> --format json` (repeat the path
+flag).
 Review only those surfaced proposals. Use a complete list only for a deliberately bounded
 set of competing, contested, or conflicting proposals that jointly blocks the turn.
 
@@ -182,7 +184,7 @@ Claim before work so concurrent sessions skip what you are touching.
 
 | Method | Claim | Command |
 |---|---|---|
-| `grill` | whole topic | `provenance topics claim --scope <scope> --id <topic_id> --actor <agent> --format json` |
+| `grill` | whole topic | `provenance topics claim --scope <scope> --id <topic_id> --actor <agent> [--changed-path <path>...] --format json` |
 | `prototype` | single question | `provenance questions claim --scope <scope> --id <question_id> --actor <agent> --format json` |
 | `research` | single question | `provenance questions claim --scope <scope> --id <question_id> --actor <agent> --format json` |
 | `verify` | single question | `provenance questions claim --scope <scope> --id <question_id> --actor <agent> --format json` |

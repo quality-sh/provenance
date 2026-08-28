@@ -44,12 +44,13 @@ pub(super) fn handle(command: TopicsCommand) -> anyhow::Result<()> {
             scope,
             id,
             actor,
+            changed_path,
             format,
         } => {
             let store = StateStore::new(ProvenanceLayout::new(repo));
             let scope = ScopeId::new(scope)?;
             let topic_id = StableId::new(id)?;
-            let claim = store.claim_topic(&scope, &topic_id, &actor)?;
+            let claim = store.claim_topic(&scope, &topic_id, &actor, changed_path)?;
             output::print(format, &claim)?;
         }
         TopicsCommand::Release {

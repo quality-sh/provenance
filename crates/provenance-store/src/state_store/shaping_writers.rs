@@ -164,14 +164,23 @@ impl StateStore {
         })
     }
 
-    pub fn claim_topic(
+    pub fn claim_topic<I, S>(
         &self,
         scope_id: &ScopeId,
         id: &StableId,
         actor: &str,
-    ) -> anyhow::Result<TopicClaim> {
+        changed_paths: I,
+    ) -> anyhow::Result<TopicClaim>
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
         let actor = validated_actor(actor)?;
         let claimed_at = now_ms()?;
+        let changed_paths = changed_paths
+            .into_iter()
+            .map(Into::into)
+            .collect::<Vec<_>>();
         self.with_repository_publication(|| {
             let current_topic = self
                 .list_topics(scope_id)?
@@ -186,8 +195,9 @@ impl StateStore {
                     current_topic.id.as_str()
                 );
             }
-            let surfaced_proposals =
-                self.surface_proposals(scope_id, &ProposalDemand::for_topic(&current_topic))?;
+            let mut demand = ProposalDemand::for_topic(&current_topic, changed_paths.clone());
+            demand.extend_targets(self.topic_structural_territory(scope_id, &current_topic)?);
+            let surfaced_proposals = self.surface_proposals(scope_id, &demand)?;
             let topic = self.update_topic(scope_id, id, |topic| {
                 if let Some(holder) = &topic.claimed_by {
                     anyhow::bail!("topic {} is already claimed by {holder}", topic.id.as_str());

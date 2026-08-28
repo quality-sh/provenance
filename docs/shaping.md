@@ -177,14 +177,18 @@ land their candidates through the same durable shapes (ported from the Convex
 The proposal shard is evidence-backed context, not a batch-review inbox. Undisposed
 proposals surface when current work enters territory they already name:
 
-- a diff touches an exact repository-relative `file_path` in the proposal's evidence;
+- a diff touches a repository-relative `file_path` in the proposal's evidence, after lexical
+  normalization; a cited directory covers its changed descendants;
 - a shaping session claims the proposal's target topic, the topic's anchor requirement,
-  or one of the topic's explicit artifact links; or
+  the requirement's direct domain, one of the topic's questions, or one of its explicit
+  artifact links; or
 - an external work item such as a bug explicitly identifies one of those typed targets.
 
 Use `provenance proposals surface --scope <scope> --changed-path <path>` for changed files.
 Topic claims derive matching `proposed` and `asserted` views and persist the claim in the
-same publication operation, so invalid lifecycle state cannot leave a claim behind.
+same publication operation, so invalid lifecycle state cannot leave a claim behind. When a
+claiming integration already knows changed files, it repeats `--changed-path <path>` on
+`topics claim`; Provenance does not invent a diff range or derive paths from proposal evidence.
 Integrations that already know a typed territory can use `provenance proposals surface
 --scope <scope> --target-type <type> --target-id <id>`; Provenance does not infer territory
 from issue text, titles, graph proximity, or similar filenames.
@@ -202,7 +206,7 @@ and verifies the exact scoped, typed artifact reference before persistence. When
 owned by another system, record its generic system/scope/kind/key correlation on the immutable
 disposition; do not add issue-, commit-, ticket-, or deployment-specific lifecycle fields.
 
-Both `proposed` and `asserted` remain undisposed and surface only on exact path or typed
+Both `proposed` and `asserted` remain undisposed and surface only on normalized path or typed
 territory demand. `provenance prime` does not globally consult proposals. Dispositions
 require a repository-allowlisted actor ID; this is an audit attestation under repository
 and CLI access, not cryptographic identity verification.

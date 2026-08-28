@@ -122,11 +122,11 @@ An immutable modern candidate definition. It is always authored as `proposed`; a
 
 ## Proposal demand
 
-A bounded occasion to consult undisposed Proposals because current work names an exact changed evidence path or an explicit typed Territory. Proposal demand is not a global review queue.
+A bounded occasion to consult undisposed Proposals because current work names a changed evidence path or an explicit typed Territory. Proposal demand is not a global review queue.
 
 ## Territory
 
-The typed artifacts explicitly claimed by current shaping work: a Topic, its anchor Requirement, and its declared artifact links. Similar names or graph proximity do not expand Territory.
+The typed artifacts claimed by current shaping work: a Topic, its anchor Requirement, that Requirement's direct Domain, the Topic's Questions, and its declared artifact links. Similar names or graph proximity do not expand Territory.
 
 ## Assertion
 

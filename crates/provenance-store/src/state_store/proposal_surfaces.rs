@@ -4,6 +4,7 @@ use provenance_core::{
 };
 use provenance_macros::rule;
 use serde::Serialize;
+use std::path::{Component, Path};
 
 use super::StateStore;
 
@@ -26,7 +27,11 @@ impl ProposalDemand {
         Self::new(Vec::new(), vec![target])
     }
 
-    pub fn for_topic(topic: &Topic) -> Self {
+    pub(crate) fn for_topic<I, S>(topic: &Topic, paths: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
         let mut targets = vec![
             IdeationTarget {
                 artifact_type: IdeationTargetType::Topic,
@@ -46,22 +51,29 @@ impl ProposalDemand {
             },
             artifact_id: link.target_id.clone(),
         }));
-        Self::new(Vec::new(), targets)
+        Self::new(paths.into_iter().map(Into::into).collect(), targets)
     }
 
     pub fn new(mut changed_paths: Vec<String>, mut targets: Vec<IdeationTarget>) -> Self {
+        changed_paths = changed_paths
+            .into_iter()
+            .map(|path| normalize_repo_path(&path).into_string())
+            .collect();
         changed_paths.sort();
         changed_paths.dedup();
-        targets.sort_by(|left, right| {
-            target_sort_key(left)
-                .cmp(&target_sort_key(right))
-                .then_with(|| left.artifact_id.as_str().cmp(right.artifact_id.as_str()))
-        });
-        targets.dedup();
+        sort_targets(&mut targets);
         Self {
             changed_paths,
             targets,
         }
+    }
+
+    pub(crate) fn extend_targets<I>(&mut self, targets: I)
+    where
+        I: IntoIterator<Item = IdeationTarget>,
+    {
+        self.targets.extend(targets);
+        sort_targets(&mut self.targets);
     }
 }
 
@@ -86,6 +98,34 @@ pub struct TopicClaim {
 }
 
 impl StateStore {
+    pub(crate) fn topic_structural_territory(
+        &self,
+        scope: &ScopeId,
+        topic: &Topic,
+    ) -> anyhow::Result<Vec<IdeationTarget>> {
+        let mut targets = self
+            .list_questions(scope)?
+            .into_iter()
+            .filter(|question| question.topic_id == topic.id)
+            .map(|question| IdeationTarget {
+                artifact_type: IdeationTargetType::Question,
+                artifact_id: question.id,
+            })
+            .collect::<Vec<_>>();
+        if let Some(domain_id) = self
+            .list_requirements(scope)?
+            .into_iter()
+            .find(|requirement| requirement.id == topic.requirement_id)
+            .and_then(|requirement| requirement.domain_id)
+        {
+            targets.push(IdeationTarget {
+                artifact_type: IdeationTargetType::Domain,
+                artifact_id: domain_id,
+            });
+        }
+        Ok(targets)
+    }
+
     pub fn surface_proposals(
         &self,
         scope: &ScopeId,
@@ -107,22 +147,8 @@ impl StateStore {
     }
 }
 
-/// A proposal nobody has disposed of surfaces to a worker when the work
-/// touches ground the proposal already claims. The returned reasons are those
-/// overlaps; an empty list means the proposal stays out of the worker's way.
-///
-/// Undisposed is read from the projected promotion state rather than the state
-/// the stored row claims: only `proposed` and `asserted` pass. Once a human
-/// accepts, rejects, or defers a proposal, or it is marked duplicate or
-/// superseded, it never surfaces again, however well it matches.
-///
-/// Either trigger alone surfaces the proposal:
-/// - evidence site: the work touches a file the proposal cited as evidence;
-/// - territory: the work lands on the artifact the proposal is about, matched
-///   on both artifact type and id.
-///
-/// Every reason names the overlap that produced it, so the worker can see why
-/// the proposal arrived.
+/// An undisposed proposal surfaces exactly when changed work intersects a cited
+/// file or directory, or the demanded territory equals its typed target.
 #[rule("rule_proposal_surfacing")]
 pub(super) fn surfacing_reasons(
     proposal: &ProposalCard,
@@ -140,7 +166,8 @@ pub(super) fn surfacing_reasons(
             .traceability
             .evidence_references
             .iter()
-            .any(|reference| reference.file_path.as_deref() == Some(path.as_str()))
+            .filter_map(|reference| reference.file_path.as_deref())
+            .any(|cited| evidence_path_matches(cited, path))
         {
             reasons.push(ProposalSurfaceReason::EvidenceSite { path: path.clone() });
         }
@@ -155,6 +182,41 @@ pub(super) fn surfacing_reasons(
     reasons
 }
 
+/// Evidence paths are repository-relative lexical coordinates, not filesystem
+/// lookups. `.` and `..` components are normalized without requiring either
+/// path to exist, and a citation matches both itself and changed descendants.
+fn evidence_path_matches(cited: &str, changed: &str) -> bool {
+    let cited = normalize_repo_path(cited);
+    let changed = Path::new(changed);
+    changed == cited.as_std_path() || changed.starts_with(cited.as_std_path())
+}
+
+fn normalize_repo_path(path: &str) -> camino::Utf8PathBuf {
+    let mut parts = Vec::new();
+    for component in Path::new(path).components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if parts.last().is_some_and(|part| part != "..") {
+                    parts.pop();
+                } else {
+                    parts.push("..".to_owned());
+                }
+            }
+            Component::Normal(value) => parts.push(value.to_string_lossy().into_owned()),
+            Component::RootDir => parts.push("/".to_owned()),
+            Component::Prefix(value) => {
+                parts.push(value.as_os_str().to_string_lossy().into_owned());
+            }
+        }
+    }
+    let mut normalized = camino::Utf8PathBuf::new();
+    for part in parts {
+        normalized.push(part);
+    }
+    normalized
+}
+
 const fn target_sort_key(target: &IdeationTarget) -> u8 {
     match target.artifact_type {
         IdeationTargetType::Source => 0,
@@ -165,4 +227,13 @@ const fn target_sort_key(target: &IdeationTarget) -> u8 {
         IdeationTargetType::Question => 5,
         IdeationTargetType::Domain => 6,
     }
+}
+
+fn sort_targets(targets: &mut Vec<IdeationTarget>) {
+    targets.sort_by(|left, right| {
+        target_sort_key(left)
+            .cmp(&target_sort_key(right))
+            .then_with(|| left.artifact_id.as_str().cmp(right.artifact_id.as_str()))
+    });
+    targets.dedup();
 }

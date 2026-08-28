@@ -8,6 +8,7 @@ use provenance_core::{
 use provenance_macros::verifies;
 
 mod properties;
+mod topic_claims;
 
 fn proposal_input(
     scope: &provenance_core::ScopeId,
@@ -154,6 +155,78 @@ fn changed_paths_surface_only_undisposed_proposals_with_matching_evidence_sites(
 
 #[test]
 #[verifies("rule_proposal_surfacing", examples)]
+fn evidence_paths_are_lexical_and_directory_aware_without_matching_siblings() {
+    let (_dir, store, scope) = initialized_store();
+    for input in [
+        proposal_input(
+            &scope,
+            "proposal_file",
+            IdeationTargetType::Requirement,
+            "req_file",
+            Some("./src/payroll.rs"),
+            PromotionState::Proposed,
+        ),
+        proposal_input(
+            &scope,
+            "proposal_directory",
+            IdeationTargetType::Requirement,
+            "req_directory",
+            Some("src/payroll"),
+            PromotionState::Proposed,
+        ),
+        proposal_input(
+            &scope,
+            "proposal_sibling",
+            IdeationTargetType::Requirement,
+            "req_sibling",
+            Some("src/pay"),
+            PromotionState::Proposed,
+        ),
+        proposal_input(
+            &scope,
+            "proposal_parent_escape",
+            IdeationTargetType::Requirement,
+            "req_parent_escape",
+            Some("../../src/payroll.rs"),
+            PromotionState::Proposed,
+        ),
+    ] {
+        store.create_proposal_card(input).unwrap();
+    }
+
+    let surfaced = store
+        .surface_proposals(
+            &scope,
+            &ProposalDemand::for_changed_paths([
+                "src/payroll.rs",
+                "./src/payroll/calculator.rs",
+                "src/leave.rs",
+            ]),
+        )
+        .unwrap();
+
+    assert_eq!(
+        surfaced
+            .iter()
+            .map(|surface| surface.proposal.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["proposal_directory", "proposal_file"]
+    );
+    assert_eq!(
+        serde_json::to_value(&surfaced[0].reasons).unwrap(),
+        serde_json::json!([{
+            "trigger": "evidence_site",
+            "path": "src/payroll/calculator.rs"
+        }])
+    );
+    assert_eq!(
+        serde_json::to_value(&surfaced[1].reasons).unwrap(),
+        serde_json::json!([{"trigger": "evidence_site", "path": "src/payroll.rs"}])
+    );
+}
+
+#[test]
+#[verifies("rule_proposal_surfacing", examples)]
 fn combined_demand_reports_deduplicated_reasons_in_deterministic_order() {
     let (_dir, store, scope) = initialized_store();
     store
@@ -238,7 +311,9 @@ fn topic_claim_atomically_surfaces_matching_asserted_proposal_with_derived_state
     )
     .unwrap();
 
-    let claim = store.claim_topic(&scope, &topic_id, "agent-one").unwrap();
+    let claim = store
+        .claim_topic(&scope, &topic_id, "agent-one", Vec::<String>::new())
+        .unwrap();
 
     assert_eq!(claim.topic.claimed_by.as_deref(), Some("agent-one"));
     assert_eq!(claim.surfaced_proposals.len(), 1);
@@ -310,7 +385,10 @@ fn a_topic_claim_surfaces_proposals_in_its_explicit_territory() {
     }
 
     let surfaced = store
-        .surface_proposals(&scope, &ProposalDemand::for_topic(&topic))
+        .surface_proposals(
+            &scope,
+            &ProposalDemand::for_topic(&topic, Vec::<String>::new()),
+        )
         .unwrap();
 
     assert_eq!(

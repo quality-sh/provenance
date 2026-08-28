@@ -69,6 +69,9 @@ pub enum TopicsCommand {
         /// Actor name recorded on the claim.
         #[arg(long)]
         actor: String,
+        /// Repository-relative changed path known by the claiming caller.
+        #[arg(long)]
+        changed_path: Vec<String>,
         #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
         format: OutputFormat,
     },

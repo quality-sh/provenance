@@ -428,17 +428,21 @@ The actor ID must appear in the manifest allowlist configured by repeatable
 authentication. Re-running `init` preserves manifest settings whose flags are omitted; use
 `--clear-disposition-actors` to empty the allowlist explicitly.
 
-Demand-driven proposal review uses `provenance proposals surface`. Pass one or more exact,
+Demand-driven proposal review uses `provenance proposals surface`. Pass one or more
 repository-relative `--changed-path` values to surface undisposed proposals whose own
-evidence sites are touched. Pass `--target-type <type> --target-id <id>` when current work
+evidence sites are touched. Paths are normalized lexically, so `./src/x.rs` and `src/x.rs`
+name the same site; a cited directory also matches changed descendants. Pass
+`--target-type <type> --target-id <id>` when current work
 already names an explicit proposal territory; both target flags are required together and
 may be combined with changed paths. Results include every matching proposal and the
 `evidence_site` or `territory` reasons it surfaced, in deterministic order, and each nested
 proposal carries its derived `proposed` or `asserted` state. `topics claim` returns the
-claimed topic plus proposals targeting that topic, its anchor requirement, or its explicit
-artifact links. Consultation and claim persistence share one publication operation: a
-lifecycle read failure writes no claim. The surface itself is a read-time view and writes
-no queue or trigger state.
+claimed topic plus proposals targeting that topic, its anchor requirement, the requirement's
+direct domain, the topic's questions, or its explicit artifact links. Repeat
+`--changed-path` on `topics claim` for paths the claiming caller already knows; those paths
+are evaluated together with the derived territory. Consultation and claim persistence share
+one publication operation: a lifecycle read failure writes no claim. The surface itself is
+a read-time view and writes no queue or trigger state.
 
 An accepted `dispositions create` record may link a human's action to the canonical
 source, requirement, resolution, or rule it produced using `--canonical-artifact-type` and

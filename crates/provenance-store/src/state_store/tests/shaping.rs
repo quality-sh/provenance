@@ -120,12 +120,14 @@ fn topic_claims_are_check_and_set_and_clear_on_close() {
         .unwrap();
     let topic_id = StableId::new("topic_overtime").unwrap();
 
-    let claimed = store.claim_topic(&scope, &topic_id, "agent-one").unwrap();
+    let claimed = store
+        .claim_topic(&scope, &topic_id, "agent-one", Vec::<String>::new())
+        .unwrap();
     assert_eq!(claimed.topic.claimed_by.as_deref(), Some("agent-one"));
     assert!(claimed.topic.claimed_at.unwrap() > 0);
 
     let err = store
-        .claim_topic(&scope, &topic_id, "agent-two")
+        .claim_topic(&scope, &topic_id, "agent-two", Vec::<String>::new())
         .unwrap_err();
     assert!(err
         .to_string()
@@ -140,13 +142,15 @@ fn topic_claims_are_check_and_set_and_clear_on_close() {
         .to_string()
         .contains("topic topic_overtime is not claimed"));
 
-    store.claim_topic(&scope, &topic_id, "agent-two").unwrap();
+    store
+        .claim_topic(&scope, &topic_id, "agent-two", Vec::<String>::new())
+        .unwrap();
     let closed = store.close_topic(&scope, &topic_id).unwrap();
     assert_eq!(closed.status, TopicStatus::Closed);
     assert_eq!(closed.claimed_by, None);
     assert_eq!(closed.claimed_at, None);
     assert!(store
-        .claim_topic(&scope, &topic_id, "agent-one")
+        .claim_topic(&scope, &topic_id, "agent-one", Vec::<String>::new())
         .unwrap_err()
         .to_string()
         .contains("closed"));

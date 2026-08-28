@@ -162,7 +162,12 @@ async fn materialize_state_caches_fog_resolution_method_and_claim_state() {
         })
         .unwrap();
     store
-        .claim_topic(&scope, &sid("topic_overtime"), "agent-one")
+        .claim_topic(
+            &scope,
+            &sid("topic_overtime"),
+            "agent-one",
+            Vec::<String>::new(),
+        )
         .unwrap();
     store
         .claim_question(&scope, &sid("question_threshold"), "agent-two")
