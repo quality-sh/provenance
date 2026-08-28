@@ -10,7 +10,7 @@ mod traceability;
 pub use gaps::*;
 pub use health::*;
 pub use impact::*;
-pub use materialize::{materialize_empty_state, materialize_state};
+pub use materialize::{catch_up_state, materialize_empty_state, materialize_state, CatchUpReport};
 pub use prime::*;
 pub use projection_digest::projection_digest;
 pub use traceability::*;
@@ -23,6 +23,13 @@ use std::str::FromStr;
 pub struct MaterializeReport {
     pub records_loaded: u64,
     pub migrations_applied: Vec<String>,
+    /// The revision serial this rebuild committed, zero when no rows
+    /// loaded and no revision was stamped.
+    pub serial: i64,
+    /// The projection digest the rebuild stamped, empty when unstamped.
+    pub digest: String,
+    /// The projection instance the serial belongs to.
+    pub instance_id: String,
 }
 
 pub async fn open_cache(layout: &ProvenanceLayout) -> anyhow::Result<SqlitePool> {

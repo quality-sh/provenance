@@ -1,5 +1,6 @@
 use super::super::*;
 use super::fixtures::*;
+use crate::state_store::StateStore;
 use sqlx::{Executor, Row};
 
 async fn revision_row(layout: &ProvenanceLayout) -> anyhow::Result<Option<(i64, String, String)>> {
@@ -28,7 +29,8 @@ async fn materialize_stamps_a_projection_revision() {
         !instance_id.is_empty(),
         "every projection names its instance"
     );
-    let expected = projection_digest(&layout).unwrap();
+    let store = StateStore::new(layout.clone());
+    let expected = projection_digest(&layout, &store.manifest().unwrap()).unwrap();
     assert_eq!(
         digest, expected,
         "stamp digest must cover every stored family"
@@ -53,7 +55,12 @@ async fn rebuilding_after_total_cache_loss_mints_a_new_projection_instance() {
     materialize_state(&layout).await.unwrap();
     let (_, instance_before, _) = revision_row(&layout).await.unwrap().unwrap();
 
-    std::fs::remove_file(layout.cache_db_path()).unwrap();
+    for suffix in ["", "-wal", "-shm", "-journal"] {
+        let path = camino::Utf8PathBuf::from(format!("{}{suffix}", layout.cache_db_path()));
+        if path.exists() {
+            std::fs::remove_file(&path).unwrap();
+        }
+    }
     materialize_state(&layout).await.unwrap();
 
     let (_, instance_after, _) = revision_row(&layout).await.unwrap().unwrap();

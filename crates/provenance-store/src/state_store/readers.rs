@@ -183,7 +183,7 @@ fn read_records<T: DeserializeOwned>(
 const fn leave_as_written(_value: &mut serde_json::Value) {}
 
 pub(super) fn read_jsonl<T: DeserializeOwned>(path: &Utf8Path) -> anyhow::Result<Vec<T>> {
-    crate::publication::with_state_path_access(path, || read_jsonl_unlocked(path))
+    read_jsonl_unlocked(path)
 }
 
 fn read_jsonl_unlocked<T: DeserializeOwned>(path: &Utf8Path) -> anyhow::Result<Vec<T>> {
@@ -193,18 +193,16 @@ fn read_jsonl_unlocked<T: DeserializeOwned>(path: &Utf8Path) -> anyhow::Result<V
 pub(super) fn read_ideation_landings<T: DeserializeOwned>(
     path: &Utf8Path,
 ) -> anyhow::Result<Vec<T>> {
-    crate::publication::with_state_path_access(path, || {
-        read_records(
-            path,
-            Fields::Open,
-            leave_as_written,
-            IDEATION_LANDING_RECORD_FIELDS,
-        )
-    })
+    read_records(
+        path,
+        Fields::Open,
+        leave_as_written,
+        IDEATION_LANDING_RECORD_FIELDS,
+    )
 }
 
 pub(super) fn read_legacy_dispositions(path: &Utf8Path) -> anyhow::Result<Vec<DispositionRecord>> {
-    crate::publication::with_state_path_access(path, || read_legacy_dispositions_unlocked(path))
+    read_legacy_dispositions_unlocked(path)
 }
 
 fn read_legacy_dispositions_unlocked(path: &Utf8Path) -> anyhow::Result<Vec<DispositionRecord>> {
@@ -249,7 +247,7 @@ fn rename_key(object: &mut serde_json::Map<String, serde_json::Value>, old: &str
 }
 
 pub(super) fn read_jsonl_closed<T: DeserializeOwned>(path: &Utf8Path) -> anyhow::Result<Vec<T>> {
-    crate::publication::with_state_path_access(path, || read_jsonl_closed_unlocked(path))
+    read_jsonl_closed_unlocked(path)
 }
 
 fn read_jsonl_closed_unlocked<T: DeserializeOwned>(path: &Utf8Path) -> anyhow::Result<Vec<T>> {
@@ -303,33 +301,37 @@ fn read_jsonl_shards<T: DeserializeOwned>(
     Ok(records)
 }
 
+/// Reads every message month shard behind `scope`.
+///
+/// The reader takes no publication lock: callers that need a view
+/// consistent against concurrent publications hold the publication guard
+/// themselves (the served read path does; gap policy already does), and
+/// callers inside a held guard scope must never request the lock again.
 pub(super) fn read_message_shards(
     layout: &ProvenanceLayout,
     scope: &ScopeId,
 ) -> anyhow::Result<Vec<Message>> {
-    crate::publication::with_repository_publication(layout, || {
-        let threads_dir = shards::threads_path(layout, scope)
-            .parent()
-            .expect("threads path must have a parent")
-            .to_path_buf();
-        if !threads_dir.exists() {
-            return Ok(Vec::new());
-        }
-        let mut shard_paths = Vec::new();
-        for entry in std::fs::read_dir(&threads_dir)? {
-            let entry = entry?;
-            if entry.file_type()?.is_file() {
-                let path = Utf8PathBuf::from_path_buf(entry.path()).map_err(|path| {
-                    anyhow::anyhow!("non-UTF-8 message shard path: {}", path.display())
-                })?;
-                if is_message_month_shard(&path) {
-                    shard_paths.push(path);
-                }
+    let threads_dir = shards::threads_path(layout, scope)
+        .parent()
+        .expect("threads path must have a parent")
+        .to_path_buf();
+    if !threads_dir.exists() {
+        return Ok(Vec::new());
+    }
+    let mut shard_paths = Vec::new();
+    for entry in std::fs::read_dir(&threads_dir)? {
+        let entry = entry?;
+        if entry.file_type()?.is_file() {
+            let path = Utf8PathBuf::from_path_buf(entry.path()).map_err(|path| {
+                anyhow::anyhow!("non-UTF-8 message shard path: {}", path.display())
+            })?;
+            if is_message_month_shard(&path) {
+                shard_paths.push(path);
             }
         }
-        shard_paths.sort();
-        read_jsonl_shards(shard_paths, "message")
-    })
+    }
+    shard_paths.sort();
+    read_jsonl_shards(shard_paths, "message")
 }
 
 fn is_message_month_shard(path: &Utf8Path) -> bool {
@@ -344,34 +346,35 @@ fn is_message_month_shard(path: &Utf8Path) -> bool {
         && &bytes[7..] == b".jsonl"
 }
 
+/// Reads every edge shard, optionally closing the edges over one scope.
+///
+/// Like `read_message_shards`, the reader takes no publication lock;
+/// callers needing a consistent view hold the publication guard.
 pub(super) fn read_edge_shards(
     layout: &ProvenanceLayout,
     closed_scope: Option<&ScopeId>,
 ) -> anyhow::Result<Vec<Edge>> {
-    crate::publication::with_repository_publication(layout, || {
-        let edges_dir = layout.edges_dir();
-        if !edges_dir.exists() {
-            return Ok(Vec::new());
-        }
-        let mut shard_paths = Vec::new();
-        for entry in std::fs::read_dir(&edges_dir)? {
-            let entry = entry?;
-            if entry.file_type()?.is_file() {
-                let path = Utf8PathBuf::from_path_buf(entry.path()).map_err(|path| {
-                    anyhow::anyhow!("non-UTF-8 edge shard path: {}", path.display())
-                })?;
-                if path.extension() == Some("jsonl") {
-                    shard_paths.push(path);
-                }
+    let edges_dir = layout.edges_dir();
+    if !edges_dir.exists() {
+        return Ok(Vec::new());
+    }
+    let mut shard_paths = Vec::new();
+    for entry in std::fs::read_dir(&edges_dir)? {
+        let entry = entry?;
+        if entry.file_type()?.is_file() {
+            let path = Utf8PathBuf::from_path_buf(entry.path())
+                .map_err(|path| anyhow::anyhow!("non-UTF-8 edge shard path: {}", path.display()))?;
+            if path.extension() == Some("jsonl") {
+                shard_paths.push(path);
             }
         }
-        shard_paths.sort();
-        if let Some(scope) = closed_scope {
-            read_closed_edges(shard_paths, scope)
-        } else {
-            read_jsonl_shards(shard_paths, "edge")
-        }
-    })
+    }
+    shard_paths.sort();
+    if let Some(scope) = closed_scope {
+        read_closed_edges(shard_paths, scope)
+    } else {
+        read_jsonl_shards(shard_paths, "edge")
+    }
 }
 
 fn read_closed_edges(paths: Vec<Utf8PathBuf>, scope: &ScopeId) -> anyhow::Result<Vec<Edge>> {

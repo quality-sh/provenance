@@ -130,17 +130,26 @@ impl StateStore {
         })
     }
 
+    /// Validates under a publication guard the caller holds, without
+    /// requesting the lock again.
+    pub fn validate_ideation_scope_under_guard(
+        &self,
+        guard: &crate::publication::guard::PublicationGuard,
+        scope: &ScopeId,
+    ) -> anyhow::Result<()> {
+        let manifest = self.manifest_under_guard(guard)?;
+        self.validate_ideation_scope_snapshot(scope, &manifest.disposition_actor_ids)
+    }
+
     pub fn validate_ideation_scope_with_actor_ids(
         &self,
         scope: &ScopeId,
         disposition_actor_ids: &[String],
     ) -> anyhow::Result<()> {
-        self.with_repository_publication(|| {
-            self.validate_ideation_scope_snapshot(scope, disposition_actor_ids)
-        })
+        self.validate_ideation_scope_snapshot(scope, disposition_actor_ids)
     }
 
-    fn validate_ideation_scope_snapshot(
+    pub(crate) fn validate_ideation_scope_snapshot(
         &self,
         scope: &ScopeId,
         disposition_actor_ids: &[String],

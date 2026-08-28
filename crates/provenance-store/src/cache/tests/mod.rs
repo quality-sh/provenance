@@ -1,3 +1,4 @@
+mod catch_up_behavior;
 mod fixtures;
 mod frontier_behavior;
 mod gap_rule_behavior;

@@ -14,9 +14,15 @@ use crate::state_store::StateStore;
 use super::projection_families::{family_records, PROJECTION_FAMILIES};
 
 /// Hashes the full projection state behind `layout`.
-pub fn projection_digest(layout: &ProvenanceLayout) -> anyhow::Result<String> {
+///
+/// The manifest is an explicit input: callers holding a publication guard
+/// pass the manifest they read under it, so the digest never requests a
+/// lock inside a held scope.
+pub fn projection_digest(
+    layout: &ProvenanceLayout,
+    manifest: &provenance_core::Manifest,
+) -> anyhow::Result<String> {
     let store = StateStore::new(layout.clone());
-    let manifest = store.manifest()?;
     let mut families = Vec::new();
     for family in PROJECTION_FAMILIES {
         let mut records = family_records(family, &store, &manifest.scopes)?;

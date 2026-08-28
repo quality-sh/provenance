@@ -51,16 +51,21 @@ fn proposal_projection_uses_one_publication_snapshot() {
             PromotionState::Proposed,
         ))
         .unwrap();
+    // The projection read runs inside one held publication guard and must
+    // complete without requesting the lock again; the concurrent publisher
+    // waits for the guard instead of interleaving with the projection.
     let (validated_tx, validated_rx) = std::sync::mpsc::channel();
     let (release_tx, release_rx) = std::sync::mpsc::channel();
     let reader = {
         let store = store.clone();
         let scope = scope.clone();
         std::thread::spawn(move || {
-            store.project_proposal_cards(&scope, None, || {
-                validated_tx.send(()).unwrap();
-                release_rx.recv().unwrap();
-                Ok(())
+            crate::publication::with_repository_publication(&store.layout, || {
+                store.project_proposal_cards(&scope, None, || {
+                    validated_tx.send(()).unwrap();
+                    release_rx.recv().unwrap();
+                    Ok(())
+                })
             })
         })
     };

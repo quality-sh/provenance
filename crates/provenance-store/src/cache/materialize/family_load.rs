@@ -15,6 +15,19 @@ pub(super) async fn clear_family(
     Ok(())
 }
 
+/// Removes one scope's rows of one family's table.
+pub(super) async fn clear_family_scope(
+    tx: &mut Transaction<'_, Sqlite>,
+    family: &ProjectionFamily,
+    scope: &ScopeId,
+) -> anyhow::Result<()> {
+    sqlx::query(&format!("DELETE FROM {} WHERE scope_id = ?", family.table))
+        .bind(scope.as_str())
+        .execute(&mut **tx)
+        .await?;
+    Ok(())
+}
+
 /// Re-derives one family's rows for one scope from the canonical readers.
 ///
 /// Row content always comes from the `StateStore` over canonical bytes, so

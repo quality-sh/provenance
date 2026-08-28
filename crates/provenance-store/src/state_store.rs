@@ -92,12 +92,33 @@ impl StateStore {
         Self { layout }
     }
     pub fn manifest(&self) -> anyhow::Result<Manifest> {
-        self.with_repository_publication(|| {
-            let manifest: Manifest =
-                serde_json::from_str(&std::fs::read_to_string(self.layout.manifest_path())?)?;
-            ensure_supported_schema_version("manifest", manifest.schema_version)?;
-            Ok(manifest)
-        })
+        self.with_repository_publication(|| self.manifest_body())
+    }
+
+    /// Reads the manifest under a publication guard the caller holds.
+    ///
+    /// The explicit guard is the capability: a helper that takes it never
+    /// requests the publication lock, so the async materializer can read
+    /// inside one held guard scope without nesting.
+    pub fn manifest_under_guard(
+        &self,
+        _guard: &crate::publication::guard::PublicationGuard,
+    ) -> anyhow::Result<Manifest> {
+        self.manifest_body()
+    }
+
+    fn manifest_body(&self) -> anyhow::Result<Manifest> {
+        let manifest: Manifest =
+            serde_json::from_str(&std::fs::read_to_string(self.layout.manifest_path())?)?;
+        ensure_supported_schema_version("manifest", manifest.schema_version)?;
+        Ok(manifest)
+    }
+
+    /// Reads the manifest without requesting the publication lock. Only
+    /// for callers that already hold the guard or answer read-only
+    /// requests inside a held scope.
+    pub(crate) fn manifest_unlocked(&self) -> anyhow::Result<Manifest> {
+        self.manifest_body()
     }
 
     pub(crate) fn closed_manifest_scope(
@@ -255,27 +276,23 @@ impl StateStore {
         scope: &ScopeId,
         after_direct_read: impl FnOnce() -> anyhow::Result<()>,
     ) -> anyhow::Result<Vec<Contribution>> {
-        self.with_repository_publication(|| {
-            let mut records = read_jsonl(&shards::contributions_path(&self.layout, scope))?;
-            after_direct_read()?;
-            for batch in self.list_ideation_landings(scope)? {
-                overlay_records(&mut records, batch.contributions, |record| {
-                    record.id.as_str()
-                });
-            }
-            Ok(records)
-        })
+        let mut records = read_jsonl(&shards::contributions_path(&self.layout, scope))?;
+        after_direct_read()?;
+        for batch in self.list_ideation_landings(scope)? {
+            overlay_records(&mut records, batch.contributions, |record| {
+                record.id.as_str()
+            });
+        }
+        Ok(records)
     }
     pub fn list_synthesis_packets(&self, scope: &ScopeId) -> anyhow::Result<Vec<SynthesisPacket>> {
-        self.with_repository_publication(|| {
-            let mut records = read_jsonl(&shards::synthesis_packets_path(&self.layout, scope))?;
-            for batch in self.list_ideation_landings(scope)? {
-                overlay_records(&mut records, batch.synthesis_packets, |record| {
-                    record.id.as_str()
-                });
-            }
-            Ok(records)
-        })
+        let mut records = read_jsonl(&shards::synthesis_packets_path(&self.layout, scope))?;
+        for batch in self.list_ideation_landings(scope)? {
+            overlay_records(&mut records, batch.synthesis_packets, |record| {
+                record.id.as_str()
+            });
+        }
+        Ok(records)
     }
     pub fn list_proposal_cards(&self, scope: &ScopeId) -> anyhow::Result<Vec<ProposalCard>> {
         self.project_proposal_cards(scope, None, || Ok(()))
@@ -293,60 +310,56 @@ impl StateStore {
         disposition_actor_ids: Option<&[String]>,
         after_validation: impl FnOnce() -> anyhow::Result<()>,
     ) -> anyhow::Result<Vec<ProposalCard>> {
-        self.with_repository_publication(|| {
-            if let Some(disposition_actor_ids) = disposition_actor_ids {
-                self.validate_ideation_scope_with_actor_ids(scope, disposition_actor_ids)?;
-            } else {
-                self.validate_ideation_scope(scope)?;
-            }
-            after_validation()?;
-            let assertions = self.list_assertion_records(scope)?;
-            let dispositions = self.list_dispositions(scope)?;
-            Ok(self
-                .list_proposal_definitions(scope)?
-                .into_iter()
-                .map(|mut proposal| {
-                    proposal.promotion_state = provenance_core::effective_proposal_state(
-                        &proposal,
-                        &assertions,
-                        &dispositions,
-                    );
-                    proposal
-                })
-                .collect())
-        })
+        // Validation reads canonical state only, so it needs no
+        // publication section of its own; callers that write hold the
+        // guard, and readers may run inside one held guard scope.
+        if let Some(disposition_actor_ids) = disposition_actor_ids {
+            self.validate_ideation_scope_with_actor_ids(scope, disposition_actor_ids)?;
+        } else {
+            let manifest = self.manifest_unlocked()?;
+            self.validate_ideation_scope_snapshot(scope, &manifest.disposition_actor_ids)?;
+        }
+        after_validation()?;
+        let assertions = self.list_assertion_records(scope)?;
+        let dispositions = self.list_dispositions(scope)?;
+        Ok(self
+            .list_proposal_definitions(scope)?
+            .into_iter()
+            .map(|mut proposal| {
+                proposal.promotion_state = provenance_core::effective_proposal_state(
+                    &proposal,
+                    &assertions,
+                    &dispositions,
+                );
+                proposal
+            })
+            .collect())
     }
     pub fn list_proposal_definitions(&self, scope: &ScopeId) -> anyhow::Result<Vec<ProposalCard>> {
-        self.with_repository_publication(|| {
-            let mut records = read_jsonl(&shards::proposal_cards_path(&self.layout, scope))?;
-            for batch in self.list_ideation_landings(scope)? {
-                overlay_records(&mut records, batch.proposals, |record| record.id.as_str());
-            }
-            Ok(records)
-        })
+        let mut records = read_jsonl(&shards::proposal_cards_path(&self.layout, scope))?;
+        for batch in self.list_ideation_landings(scope)? {
+            overlay_records(&mut records, batch.proposals, |record| record.id.as_str());
+        }
+        Ok(records)
     }
     pub fn list_dispositions(&self, scope: &ScopeId) -> anyhow::Result<Vec<DispositionRecord>> {
-        self.with_repository_publication(|| {
-            let mut records = read_jsonl(&shards::dispositions_path(&self.layout, scope))?;
-            records.extend(read_legacy_dispositions(
-                &shards::legacy_promotion_decisions_path(&self.layout, scope),
-            )?);
-            for batch in self.list_ideation_landings(scope)? {
-                overlay_records(&mut records, batch.dispositions, |record| {
-                    record.id.as_str()
-                });
-            }
-            Ok(records)
-        })
+        let mut records = read_jsonl(&shards::dispositions_path(&self.layout, scope))?;
+        records.extend(read_legacy_dispositions(
+            &shards::legacy_promotion_decisions_path(&self.layout, scope),
+        )?);
+        for batch in self.list_ideation_landings(scope)? {
+            overlay_records(&mut records, batch.dispositions, |record| {
+                record.id.as_str()
+            });
+        }
+        Ok(records)
     }
     pub fn list_assertion_records(&self, scope: &ScopeId) -> anyhow::Result<Vec<AssertionRecord>> {
-        self.with_repository_publication(|| {
-            let mut records = read_jsonl(&shards::assertion_records_path(&self.layout, scope))?;
-            for batch in self.list_ideation_landings(scope)? {
-                overlay_records(&mut records, batch.assertions, |record| record.id.as_str());
-            }
-            Ok(records)
-        })
+        let mut records = read_jsonl(&shards::assertion_records_path(&self.layout, scope))?;
+        for batch in self.list_ideation_landings(scope)? {
+            overlay_records(&mut records, batch.assertions, |record| record.id.as_str());
+        }
+        Ok(records)
     }
 }
 

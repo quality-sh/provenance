@@ -161,27 +161,31 @@ fn direct_synthesis_create_and_replace_respect_landed_records() {
 }
 
 #[test]
-fn composite_ideation_list_holds_publication_lock_between_reads() {
+fn composite_ideation_list_answers_inside_one_held_publication_guard() {
     let (_dir, store, scope) = initialized_store();
     crate::jsonl::write_jsonl_atomic(
         &crate::shards::contributions_path(&store.layout, &scope),
         &[contribution(&scope, "direct")],
     )
     .unwrap();
-    let (direct_read_tx, direct_read_rx) = std::sync::mpsc::channel();
+    let (read_started_tx, read_started_rx) = std::sync::mpsc::channel();
     let (release_tx, release_rx) = std::sync::mpsc::channel();
-    let reader = {
-        let store = store.clone();
-        let scope = scope.clone();
-        std::thread::spawn(move || {
-            store.list_contributions_after_direct_read(&scope, || {
-                direct_read_tx.send(()).unwrap();
+    // The composite read runs inside one held publication guard and must
+    // complete without requesting the lock again; the concurrent publisher
+    // waits for the guard instead of interleaving between the direct read
+    // and the landing overlay.
+    let reader_store = store.clone();
+    let reader_scope = scope.clone();
+    let reader = std::thread::spawn(move || {
+        crate::publication::with_repository_publication(&reader_store.layout, || {
+            reader_store.list_contributions_after_direct_read(&reader_scope, || {
+                read_started_tx.send(()).unwrap();
                 release_rx.recv().unwrap();
                 Ok(())
             })
         })
-    };
-    direct_read_rx.recv().unwrap();
+    });
+    read_started_rx.recv().unwrap();
 
     let (published_tx, published_rx) = std::sync::mpsc::channel();
     let publisher = {

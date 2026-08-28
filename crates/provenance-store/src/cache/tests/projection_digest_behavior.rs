@@ -6,13 +6,19 @@ use crate::{cache::projection_families, state_store::StateStore};
 
 const CONTRIBUTION_LINE: &str = r#"{"schema_version":1,"scope_id":"default","id":"contrib_new","target":{"artifact_type":"requirement","artifact_id":"req_schads_overtime"},"participant_slot":"reviewer","stance":"support","strongest_finding":"finding","evidence_references":[],"material_claims":[],"risks":[],"objections":[],"challenges":[],"suggested_artifact_changes":[],"unsupported_recommendations":[],"uncertainty":{"level":"low","rationale":"none"},"open_questions":[]}"#;
 
+fn projection_digest_for_test(layout: &ProvenanceLayout) -> String {
+    let store = StateStore::new(layout.clone());
+    let manifest = store.manifest().unwrap();
+    projection_digest(layout, &manifest).unwrap()
+}
+
 #[test]
 fn same_canonical_state_digests_identically() {
     let (_left_dir, left, _scope) = seeded_layout();
     let (_right_dir, right, _scope) = seeded_layout();
 
-    let left_digest = projection_digest(&left).unwrap();
-    let right_digest = projection_digest(&right).unwrap();
+    let left_digest = projection_digest_for_test(&left);
+    let right_digest = projection_digest_for_test(&right);
 
     assert_eq!(left_digest, right_digest);
     assert!(left_digest.starts_with("sha256:"));
@@ -21,7 +27,7 @@ fn same_canonical_state_digests_identically() {
 #[test]
 fn changing_one_family_record_changes_projection_digest() {
     let (_dir, layout, _scope) = seeded_layout();
-    let before = projection_digest(&layout).unwrap();
+    let before = projection_digest_for_test(&layout);
 
     let domain_shard =
         crate::shards::domains_path(&layout, &provenance_core::ScopeId::new("default").unwrap());
@@ -30,7 +36,7 @@ fn changing_one_family_record_changes_projection_digest() {
         .replace("Payroll", "Renumeration");
     std::fs::write(&domain_shard, edited).unwrap();
 
-    let after = projection_digest(&layout).unwrap();
+    let after = projection_digest_for_test(&layout);
 
     assert_ne!(before, after);
 }
@@ -38,7 +44,7 @@ fn changing_one_family_record_changes_projection_digest() {
 #[test]
 fn ideation_change_moves_projection_digest_but_not_graph_digest() {
     let (_dir, layout, scope) = seeded_layout();
-    let before = projection_digest(&layout).unwrap();
+    let before = projection_digest_for_test(&layout);
     let graph_before =
         graph_digest(&load_projection(layout.root(), scope.as_str()).unwrap()).unwrap();
 
@@ -49,7 +55,7 @@ fn ideation_change_moves_projection_digest_but_not_graph_digest() {
     lines.push('\n');
     std::fs::write(&ideation, lines).unwrap();
 
-    let after = projection_digest(&layout).unwrap();
+    let after = projection_digest_for_test(&layout);
     let graph_after =
         graph_digest(&load_projection(layout.root(), scope.as_str()).unwrap()).unwrap();
 
@@ -98,7 +104,9 @@ fn digest_assembler_is_table_driven() {
     let walked =
         digest(&canonical_bytes(&serde_json::json!({ "families": families_json })).unwrap());
 
-    let assembled = projection_digest(&layout).unwrap();
+    let store = StateStore::new(layout.clone());
+    let manifest = store.manifest().unwrap();
+    let assembled = projection_digest(&layout, &manifest).unwrap();
 
     assert_eq!(assembled, walked);
 }

@@ -278,7 +278,7 @@ fn publication_lock_marker_is_cleared_after_panic() {
     });
     assert!(panic.is_err());
     let key = layout.publication_lock_path().to_string();
-    assert!(!HELD_LOCKS.with(|locks| locks.borrow().contains(&key)));
+    assert!(!guard::nested_lock_held(&key));
 
     let transaction = layout.import_transactions_dir().join("completed");
     std::fs::create_dir(&transaction).unwrap();

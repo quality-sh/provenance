@@ -21,13 +21,24 @@ pub(super) struct FamilyBaseline {
     pub size_bytes: i64,
     pub mtime_ns: i64,
 }
+fn placeholder_scope() -> &'static ScopeId {
+    static PLACEHOLDER: std::sync::OnceLock<ScopeId> = std::sync::OnceLock::new();
+    PLACEHOLDER.get_or_init(|| ScopeId::new("global").expect("literal scope id parses"))
+}
+
 /// Hashes a family's shard bytes and records the diagnostic metadata.
+///
+/// A global family covers every scope in one shard, so its baseline is
+/// read once and stored under the empty scope key.
 pub(super) fn shard_baseline(
     family: &ProjectionFamily,
     layout: &ProvenanceLayout,
-    scope: &ScopeId,
+    scope: Option<&ScopeId>,
 ) -> FamilyBaseline {
-    let path = (family.shard)(layout, scope);
+    let path = scope.map_or_else(
+        || (family.shard)(layout, placeholder_scope()),
+        |scope| (family.shard)(layout, scope),
+    );
     let bytes = std::fs::read(&path).unwrap_or_default();
     let metadata = std::fs::metadata(&path).ok();
     FamilyBaseline {

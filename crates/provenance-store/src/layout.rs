@@ -69,6 +69,17 @@ impl ProvenanceLayout {
     pub fn publication_lock_path(&self) -> Utf8PathBuf {
         self.cache_dir().join("locks/repository.publication.lock")
     }
+    /// Directory holding the projection write journal: the event tail and
+    /// the sequence head record.
+    pub fn journal_dir(&self) -> Utf8PathBuf {
+        self.cache_dir().join("journal")
+    }
+    pub fn journal_events_path(&self) -> Utf8PathBuf {
+        self.journal_dir().join("events.jsonl")
+    }
+    pub fn journal_head_path(&self) -> Utf8PathBuf {
+        self.journal_dir().join("head.json")
+    }
     pub fn publication_marker_path(&self) -> Utf8PathBuf {
         self.cache_dir().join("import-publication.json")
     }

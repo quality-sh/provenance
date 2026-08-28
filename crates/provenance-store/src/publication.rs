@@ -4,12 +4,18 @@ use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{ensure_supported_schema_version, SchemaVersion, SUPPORTED_SCHEMA_VERSION};
 use provenance_macros::rule;
 use serde::{de::DeserializeOwned, Serialize};
-use std::cell::RefCell;
-use std::collections::BTreeSet;
 use std::io::Write;
 
+pub mod guard;
+pub(crate) mod journal;
 mod read_only;
+pub use guard::snapshot_state_under_guard;
 pub use read_only::with_read_only_validation;
+
+#[cfg(test)]
+mod guard_tests;
+#[cfg(test)]
+mod journal_tests;
 
 pub struct StateSnapshot {
     _directory: tempfile::TempDir,
@@ -22,46 +28,11 @@ impl StateSnapshot {
     }
 }
 
-thread_local! {
-    static HELD_LOCKS: RefCell<BTreeSet<String>> = const { RefCell::new(BTreeSet::new()) };
-}
-
-struct HeldPublicationLock {
-    key: String,
-}
-
-impl HeldPublicationLock {
-    fn new(key: String) -> Self {
-        HELD_LOCKS.with(|locks| locks.borrow_mut().insert(key.clone()));
-        Self { key }
-    }
-}
-
-impl Drop for HeldPublicationLock {
-    fn drop(&mut self) {
-        HELD_LOCKS.with(|locks| locks.borrow_mut().remove(&self.key));
-    }
-}
-
 pub fn with_repository_publication<R>(
     layout: &ProvenanceLayout,
     operation: impl FnOnce() -> anyhow::Result<R>,
 ) -> anyhow::Result<R> {
-    let key = layout.publication_lock_path().to_string();
-    if read_only::active(&key) {
-        return operation();
-    }
-    prepare_publication_lock(layout)?;
-    let lock_path = layout.publication_lock_path();
-    let key = lock_path.to_string();
-    if HELD_LOCKS.with(|locks| locks.borrow().contains(&key)) {
-        return operation();
-    }
-    crate::jsonl::with_advisory_lock(&lock_path, || {
-        let _held_lock = HeldPublicationLock::new(key);
-        prepare_import_transactions_dir(layout)?;
-        recover_pending_publication(layout).and_then(|()| operation())
-    })
+    guard::synchronous_publication(layout, operation)
 }
 
 fn prepare_publication_lock(layout: &ProvenanceLayout) -> anyhow::Result<()> {
@@ -398,53 +369,7 @@ pub fn sync_tree(path: &Utf8Path) -> anyhow::Result<()> {
 }
 
 pub fn snapshot_state(layout: &ProvenanceLayout) -> anyhow::Result<StateSnapshot> {
-    with_repository_publication(layout, || {
-        let directory = tempfile::tempdir()?;
-        let root = Utf8PathBuf::from_path_buf(directory.path().to_path_buf())
-            .map_err(|path| anyhow::anyhow!("snapshot path is not UTF-8: {}", path.display()))?;
-        let snapshot_layout = ProvenanceLayout::new(root);
-        copy_tree(&layout.state_dir(), &snapshot_layout.state_dir())?;
-        Ok(StateSnapshot {
-            _directory: directory,
-            layout: snapshot_layout,
-        })
-    })
-}
-
-fn copy_tree(source: &Utf8Path, destination: &Utf8Path) -> anyhow::Result<()> {
-    std::fs::create_dir_all(destination)?;
-    for entry in std::fs::read_dir(source)? {
-        let entry = entry?;
-        let source_child = Utf8PathBuf::from_path_buf(entry.path())
-            .map_err(|path| anyhow::anyhow!("state path is not UTF-8: {}", path.display()))?;
-        let destination_child = destination.join(entry.file_name().to_string_lossy().as_ref());
-        let file_type = std::fs::symlink_metadata(&source_child)?.file_type();
-        if file_type.is_dir() {
-            copy_tree(&source_child, &destination_child)?;
-        } else if file_type.is_file() {
-            std::fs::copy(source_child, destination_child)?;
-        } else {
-            anyhow::bail!("unsupported state entry: {source_child}");
-        }
-    }
-    Ok(())
-}
-
-pub(crate) fn with_state_path_access<R>(
-    path: &Utf8Path,
-    operation: impl FnOnce() -> anyhow::Result<R>,
-) -> anyhow::Result<R> {
-    let Some(state_dir) = path.ancestors().find(|ancestor| {
-        ancestor.file_name() == Some("state")
-            && ancestor.parent().and_then(Utf8Path::file_name) == Some(".provenance")
-    }) else {
-        return operation();
-    };
-    let root = state_dir
-        .parent()
-        .and_then(Utf8Path::parent)
-        .ok_or_else(|| anyhow::anyhow!("state path has no repository root"))?;
-    with_repository_publication(&ProvenanceLayout::new(root), operation)
+    with_repository_publication(layout, || guard::snapshot_body(layout))
 }
 
 impl crate::state_store::StateStore {
@@ -465,8 +390,30 @@ impl crate::state_store::StateStore {
     {
         self.with_repository_publication(|| {
             let lock_path = self.layout.state_shard_lock_path(path)?;
-            crate::jsonl::mutate_jsonl_locked(path, &lock_path, mutate)
+            let result = crate::jsonl::mutate_jsonl_locked(path, &lock_path, mutate)?;
+            self.record_shard_invalidation(path)?;
+            Ok(result)
         })
+    }
+
+    /// Records one invalidation event for a mutated canonical shard,
+    /// inside the publication section that committed the write. The
+    /// journal is a work hint for catch-up; correctness never depends on
+    /// it because the sweep hashes every family regardless.
+    fn record_shard_invalidation(&self, path: &Utf8Path) -> anyhow::Result<()> {
+        let Some((scope, family)) = journal::shard_event_key(&self.layout, path) else {
+            return Ok(());
+        };
+        journal::record_events(
+            &self.layout,
+            &[journal::JournalEvent {
+                sequence: 0,
+                scope,
+                family,
+                record_id: String::new(),
+                operation: "upsert".to_string(),
+            }],
+        )
     }
 }
 
