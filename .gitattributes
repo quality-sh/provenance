@@ -17,3 +17,6 @@ crates/provenance-cli/skills/** text eol=lf
 
 # Release shell scripts run under Bash on Unix and Windows runners.
 .github/scripts/**/*.sh text eol=lf
+
+# The packed onboarding gate serves a generated synthetic PDF fixture.
+packages/provenance/test/fixtures/*.pdf binary

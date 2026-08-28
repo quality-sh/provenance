@@ -92,6 +92,90 @@ fn release_tests_keep_the_ste_asset_override_on_loopback() {
     assert!(onboarding.contains("localhost"));
 }
 
+fn packed_install_job(workflow: &str) -> &str {
+    workflow
+        .split_once("  typescript-sdk-packed-install:")
+        .unwrap()
+        .1
+        .split_once("  release-smoke-tools:")
+        .unwrap()
+        .0
+}
+
+fn packed_target_pairs(workflow: &str) -> Vec<(String, String)> {
+    let matrix = packed_install_job(workflow)
+        .split_once("        include:")
+        .unwrap()
+        .1
+        .split_once("    steps:")
+        .unwrap()
+        .0;
+    let mut targets = Vec::new();
+    let mut runner = None;
+    for line in matrix.lines().map(str::trim) {
+        if let Some(value) = line.strip_prefix("- os: ") {
+            assert!(runner.replace(value.to_owned()).is_none());
+        } else if let Some(value) = line.strip_prefix("target: ") {
+            targets.push((
+                runner.take().expect("target follows its runner"),
+                value.to_owned(),
+            ));
+        }
+    }
+    assert!(runner.is_none(), "each runner needs a target");
+    targets
+}
+
+#[test]
+fn packed_ste_gate_runs_on_every_supported_release_target() {
+    let workspace = workspace_root();
+    let targets: Value = serde_json::from_str(
+        &fs::read_to_string(workspace.join(".github/release-targets.json")).unwrap(),
+    )
+    .unwrap();
+    let workflow = fs::read_to_string(workspace.join(".github/workflows/ci.yml")).unwrap();
+    let packed_job = packed_install_job(&workflow);
+
+    let mut expected: Vec<_> = targets
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|target| {
+            (
+                target["smoke_os"].as_str().unwrap().to_owned(),
+                target["target"].as_str().unwrap().to_owned(),
+            )
+        })
+        .collect();
+    let mut actual = packed_target_pairs(&workflow);
+    expected.sort();
+    actual.sort();
+    assert_eq!(actual, expected);
+    assert!(packed_job.contains("npm run test:packed --prefix packages/provenance"));
+}
+
+#[test]
+fn packed_target_parser_accepts_windows_line_endings() {
+    let workflow = fs::read_to_string(workspace_root().join(".github/workflows/ci.yml")).unwrap();
+    let windows_workflow = workflow.replace("\r\n", "\n").replace('\n', "\r\n");
+
+    assert_eq!(
+        packed_target_pairs(&windows_workflow),
+        packed_target_pairs(&workflow)
+    );
+}
+
+#[test]
+fn pinned_actionlint_accepts_the_canonical_intel_runner() {
+    let config =
+        fs::read_to_string(workspace_root().join(".github/actionlint.yaml")).unwrap_or_default();
+
+    assert!(
+        config.contains("    - macos-15-intel"),
+        "actionlint 1.7.7 needs the newer hosted runner in its configured label set"
+    );
+}
+
 #[test]
 fn cargo_provenance_is_a_std_only_forwarding_shim() {
     let workspace = workspace_root();
