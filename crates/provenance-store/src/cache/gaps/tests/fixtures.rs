@@ -164,17 +164,51 @@ pub fn compute_for(
     questions: &[Question],
     edges: &[Edge],
 ) -> Vec<GapItem> {
-    let scope = scope_id();
-    compute_gaps(&GapGraph {
-        scope: &scope,
+    compute_for_full(&FixtureFamilies {
         sources,
+        domains: &[],
+        boundaries: &[],
         requirements,
         resolutions,
         rules,
         topics,
         questions,
         edges,
+        ideation_targets: &[],
+    })
+}
+
+/// The families one superset gap computation reads.
+pub struct FixtureFamilies<'a> {
+    pub sources: &'a [Source],
+    pub domains: &'a [provenance_core::Domain],
+    pub boundaries: &'a [provenance_core::Boundary],
+    pub requirements: &'a [Requirement],
+    pub resolutions: &'a [Resolution],
+    pub rules: &'a [Rule],
+    pub topics: &'a [Topic],
+    pub questions: &'a [Question],
+    pub edges: &'a [Edge],
+    pub ideation_targets: &'a [(String, provenance_core::IdeationTarget)],
+}
+
+/// The full-arity fixture entry, including the domains, boundaries, and
+/// ideation targets the superset scans read.
+pub fn compute_for_full(families: &FixtureFamilies<'_>) -> Vec<GapItem> {
+    let scope = scope_id();
+    compute_gaps(&GapGraph {
+        scope: &scope,
+        sources: families.sources,
+        domains: families.domains,
+        boundaries: families.boundaries,
+        requirements: families.requirements,
+        resolutions: families.resolutions,
+        rules: families.rules,
+        topics: families.topics,
+        questions: families.questions,
+        edges: families.edges,
         threads: &[],
+        ideation_targets: families.ideation_targets,
     })
 }
 

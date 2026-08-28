@@ -9,7 +9,7 @@ use provenance_core::{NodeType, ScopeId, StableId};
 ///
 /// Active views leave retired records out. The order is node type then
 /// canonical ID, so two runs over the same state answer the same bytes.
-pub(super) fn load(
+pub(in crate::operations::queries) fn load(
     store: &StateStore,
     scope: &ScopeId,
     include_retired: bool,
@@ -60,7 +60,7 @@ pub(super) fn load(
     Ok(nodes)
 }
 
-pub(super) fn find<'a>(
+pub(in crate::operations::queries) fn find<'a>(
     nodes: &'a [GraphNode],
     node_type: Option<NodeType>,
     id: &StableId,
@@ -70,7 +70,7 @@ pub(super) fn find<'a>(
     })
 }
 
-pub(super) fn get(
+pub(in crate::operations::queries) fn get(
     store: &StateStore,
     scope: &ScopeId,
     request: GetQuery,
@@ -80,12 +80,13 @@ pub(super) fn get(
     let nodes = load(store, scope, request.include_retired)?;
     let node = find(&nodes, Some(request.node_type), &id).cloned();
     Ok(GetResult {
+        stamp: None,
         found: node.is_some(),
         node,
     })
 }
 
-pub(super) fn search(
+pub(in crate::operations::queries) fn search(
     store: &StateStore,
     scope: &ScopeId,
     request: SearchQuery,
@@ -112,14 +113,16 @@ pub(super) fn search(
         .collect::<Vec<_>>();
     let (nodes, has_more) = take_page(matched, request.limit);
     Ok(SearchResult {
+        stamp: None,
         limit: request.limit,
         has_more,
         nodes,
+        next_cursor: None,
     })
 }
 
 /// Fixes the order node types are read in.
-pub(super) const fn rank(node_type: NodeType) -> u8 {
+pub(in crate::operations::queries) const fn rank(node_type: NodeType) -> u8 {
     match node_type {
         NodeType::Source => 0,
         NodeType::Requirement => 1,
@@ -127,5 +130,35 @@ pub(super) const fn rank(node_type: NodeType) -> u8 {
         NodeType::Rule => 3,
         NodeType::Topic => 4,
         NodeType::Question => 5,
+        NodeType::Domain => 6,
+        NodeType::Boundary => 7,
+    }
+}
+
+#[cfg(test)]
+mod rank_order {
+    use super::*;
+
+    /// The disposal pins Domain and Boundary to the slots after the
+    /// existing kinds: existing relative ordering does not change, so
+    /// existing page boundaries do not move.
+    #[test]
+    fn domain_and_boundary_append_after_the_existing_kinds() {
+        let order = [
+            NodeType::Source,
+            NodeType::Requirement,
+            NodeType::Resolution,
+            NodeType::Rule,
+            NodeType::Topic,
+            NodeType::Question,
+            NodeType::Domain,
+            NodeType::Boundary,
+        ];
+        let mut ranks = order.iter().map(|kind| rank(*kind)).collect::<Vec<_>>();
+        let mut sorted = ranks.clone();
+        sorted.sort_unstable();
+        assert_eq!(ranks, sorted, "rank increases exactly with contract order");
+        ranks.dedup();
+        assert_eq!(ranks.len(), order.len(), "every kind owns one slot");
     }
 }

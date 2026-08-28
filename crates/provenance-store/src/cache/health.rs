@@ -65,6 +65,19 @@ pub fn graph_evidence(
     store.with_repository_publication(|| graph_evidence_locked(scope, &store, include_retired))
 }
 
+/// Reads the graph evidence under a publication guard the caller holds,
+/// without requesting the lock again.
+pub fn graph_evidence_under_guard(
+    guard: &crate::publication::guard::PublicationGuard,
+    layout: &ProvenanceLayout,
+    scope: &provenance_core::ScopeId,
+    include_retired: bool,
+) -> anyhow::Result<GraphEvidence> {
+    let store = StateStore::new(layout.clone());
+    let _ = guard;
+    graph_evidence_locked(scope, &store, include_retired)
+}
+
 fn graph_evidence_locked(
     scope: &provenance_core::ScopeId,
     store: &StateStore,

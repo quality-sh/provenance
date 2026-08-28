@@ -7,15 +7,15 @@ use provenance_core::{NodeType, ScopeId, StableId};
 use provenance_scanner::source_sites;
 use std::collections::BTreeSet;
 
-use super::super::sites::relative;
 use super::{bindings::Bindings, records};
+use crate::operations::sites::relative;
 
 /// Names the Rules bound to one code site.
 ///
 /// Scanner sites carry a line and a symbol; canonical bindings carry a
 /// symbol only. A request that names a line therefore reads scanned sites,
 /// and a request that names only a file reads both.
-pub(super) fn resolve(
+pub(in crate::operations::queries) fn resolve(
     repo: &Utf8Path,
     store: &StateStore,
     scope: &ScopeId,
@@ -63,6 +63,7 @@ pub(super) fn resolve(
         .collect::<Vec<_>>();
     let (rules, has_more) = take_page(matched, request.limit);
     Ok(ResolveSymbolResult {
+        stamp: None,
         file: request.file,
         symbol: request.symbol,
         limit: request.limit,

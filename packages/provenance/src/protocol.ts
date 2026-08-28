@@ -215,11 +215,48 @@ interface QueryRequest {
 
 interface PagedRequest extends QueryRequest {
   limit?: number;
+  /** Continuation token from a previous truncated page. */
+  cursor?: string;
+  /** Caps the steps a walk may expand; overrides downward within caps. */
+  visit_budget?: number;
+  /** Caps the working-tree scan a live half may consume. */
+  scan_budget?: number;
 }
 
 interface PagedResponse extends QueryEnvelope {
   limit: number;
   has_more: boolean;
+  /** Continuation token when `has_more` is true. */
+  next_cursor?: string;
+  /** The freshness claim behind this answer. */
+  stamp?: FreshnessStamp;
+}
+
+/** The projection domains an answer's fields come from. */
+export type AttestedDomain = "graph" | "bindings" | "reviews";
+
+/** A constituent an answer uses that the stamp does not attest. */
+export type LiveConstituent =
+  | "verification_runs"
+  | "stale_diff"
+  | "scanner_sites"
+  | "unattested";
+
+/** How the serving pass produced the stamp. */
+export type FreshnessPolicy = "catch_up" | "annotate_only" | "refuse_stale";
+
+/**
+ * The freshness claim behind one served response. Serials mean nothing
+ * across projection instances, so refuse serial comparison whenever the
+ * `instance` differs.
+ */
+export interface FreshnessStamp {
+  instance: string;
+  serial: number;
+  digest: string;
+  policy: FreshnessPolicy;
+  attested: AttestedDomain[];
+  live: LiveConstituent[];
 }
 
 export interface GetRequest extends QueryRequest {

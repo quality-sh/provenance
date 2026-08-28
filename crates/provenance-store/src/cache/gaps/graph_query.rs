@@ -1,7 +1,7 @@
 use super::model::node_type_word;
 use provenance_core::{
-    Edge, EdgeType, NodeType, Question, Requirement, Resolution, Rule, ScopeId, Source, StableId,
-    Thread, Topic,
+    Boundary, Domain, Edge, EdgeType, IdeationTarget, NodeType, Question, Requirement, Resolution,
+    Rule, ScopeId, Source, StableId, Thread, Topic,
 };
 use std::collections::BTreeSet;
 
@@ -34,6 +34,8 @@ impl RuleProducer {
 pub struct GapGraph<'a> {
     pub scope: &'a ScopeId,
     pub sources: &'a [Source],
+    pub domains: &'a [Domain],
+    pub boundaries: &'a [Boundary],
     pub requirements: &'a [Requirement],
     pub resolutions: &'a [Resolution],
     pub rules: &'a [Rule],
@@ -41,6 +43,8 @@ pub struct GapGraph<'a> {
     pub questions: &'a [Question],
     pub edges: &'a [Edge],
     pub threads: &'a [Thread],
+    /// Ideation targets to scan for dangling references.
+    pub ideation_targets: &'a [(String, IdeationTarget)],
 }
 
 /// Read-only joins over a [`GapGraph`].
@@ -104,6 +108,11 @@ impl<'a, 'graph> GraphQuery<'a, 'graph> {
         self.graph.topics.iter().any(|topic| topic.id == *id)
     }
 
+    /// Whether an ideation target resolves over the superset vocabulary.
+    pub fn ideation_target_exists(&self, target: &IdeationTarget) -> bool {
+        self.node_exists(target.node_type(), &target.artifact_id)
+    }
+
     pub fn node_exists(&self, node_type: NodeType, id: &StableId) -> bool {
         match node_type {
             NodeType::Source => self.source_exists(id),
@@ -116,6 +125,12 @@ impl<'a, 'graph> GraphQuery<'a, 'graph> {
                 .questions
                 .iter()
                 .any(|question| question.id == *id),
+            NodeType::Domain => self.graph.domains.iter().any(|domain| domain.id == *id),
+            NodeType::Boundary => self
+                .graph
+                .boundaries
+                .iter()
+                .any(|boundary| boundary.id == *id),
         }
     }
 

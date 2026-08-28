@@ -307,6 +307,14 @@ impl StateStore {
                 .list_questions(scope_id)?
                 .iter()
                 .any(|question| &question.id == id),
+            NodeType::Domain => self
+                .list_domains(scope_id)?
+                .iter()
+                .any(|domain| &domain.id == id),
+            NodeType::Boundary => self
+                .list_boundaries(scope_id)?
+                .iter()
+                .any(|boundary| &boundary.id == id),
         };
         anyhow::ensure!(exists, "{side} endpoint does not exist");
         Ok(())

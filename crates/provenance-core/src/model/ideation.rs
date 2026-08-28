@@ -55,6 +55,12 @@ pub enum CanonicalArtifactType {
     Resolution,
     #[serde(rename = "rule")]
     Rule,
+    #[serde(rename = "topic")]
+    Topic,
+    #[serde(rename = "question")]
+    Question,
+    #[serde(rename = "domain")]
+    Domain,
 }
 
 impl CanonicalArtifactType {
@@ -64,8 +70,11 @@ impl CanonicalArtifactType {
             "requirement" => Ok(Self::Requirement),
             "resolution" => Ok(Self::Resolution),
             "rule" => Ok(Self::Rule),
+            "topic" => Ok(Self::Topic),
+            "question" => Ok(Self::Question),
+            "domain" => Ok(Self::Domain),
             _ => anyhow::bail!(
-                "canonical artifact type must be source, requirement, resolution, or rule"
+                "canonical artifact type must be source, requirement, resolution, rule, topic, question, or domain"
             ),
         }
     }
@@ -278,6 +287,21 @@ pub struct IdeationTarget {
     pub artifact_type: IdeationTargetType,
     #[serde(alias = "artifactId")]
     pub artifact_id: StableId,
+}
+
+impl IdeationTarget {
+    /// The graph node kind this target points at.
+    pub const fn node_type(&self) -> crate::model::graph::NodeType {
+        match self.artifact_type {
+            IdeationTargetType::Source => crate::model::graph::NodeType::Source,
+            IdeationTargetType::Requirement => crate::model::graph::NodeType::Requirement,
+            IdeationTargetType::Resolution => crate::model::graph::NodeType::Resolution,
+            IdeationTargetType::Rule => crate::model::graph::NodeType::Rule,
+            IdeationTargetType::Topic => crate::model::graph::NodeType::Topic,
+            IdeationTargetType::Question => crate::model::graph::NodeType::Question,
+            IdeationTargetType::Domain => crate::model::graph::NodeType::Domain,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

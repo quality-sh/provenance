@@ -12,6 +12,29 @@ pub(super) fn add_reference_gaps(query: &GraphQuery<'_, '_>, gaps: &mut Vec<GapI
     add_question_refs(query, gaps);
     add_thread_refs(query, gaps);
     add_edge_refs(query, gaps);
+    add_ideation_target_refs(query, gaps);
+}
+
+/// The ideation-target check: every ideation record names a target in the
+/// superset vocabulary, and a target that does not resolve surfaces as a
+/// typed gap item rather than silently dangling.
+fn add_ideation_target_refs(query: &GraphQuery<'_, '_>, gaps: &mut Vec<GapItem>) {
+    for (subject, target) in query.graph.ideation_targets {
+        if !query.ideation_target_exists(target) {
+            gaps.push(
+                GapItem::new(
+                    GapKind::DanglingReference,
+                    target.node_type(),
+                    &target.artifact_id,
+                    format!(
+                        "{subject} points at missing target {}",
+                        target.artifact_id.as_str()
+                    ),
+                )
+                .with_related(target.node_type(), &target.artifact_id),
+            );
+        }
+    }
 }
 
 fn add_requirement_source_refs(query: &GraphQuery<'_, '_>, gaps: &mut Vec<GapItem>) {

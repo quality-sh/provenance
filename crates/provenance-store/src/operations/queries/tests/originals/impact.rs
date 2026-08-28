@@ -6,15 +6,15 @@ use provenance_core::protocol::{
 use provenance_core::{NodeType, ScopeId, StableId};
 use std::collections::BTreeSet;
 
-use super::super::sites;
 use super::{bindings::Bindings, records, walk};
+use crate::operations::sites;
 
 /// Names every Rule a record reaches, with the code standing behind it.
 ///
 /// A Requirement reaches its Rules directly; a Source reaches them through
 /// the Requirements it grounds. The walk is bounded by the same depth cap
 /// `trace` uses, so no request can pull the whole graph back.
-pub(super) fn impact(
+pub(in crate::operations::queries) fn impact(
     repo: &Utf8Path,
     store: &StateStore,
     scope: &ScopeId,
@@ -73,9 +73,11 @@ pub(super) fn impact(
         .map(|rule| Ok(evidence.affected_rule(repo, StableId::new(rule)?)))
         .collect::<anyhow::Result<Vec<_>>>()?;
     Ok(ImpactResult {
+        stamp: None,
         id: request.id,
         limit: request.limit,
         has_more,
         affected_rules,
+        next_cursor: None,
     })
 }

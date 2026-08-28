@@ -78,6 +78,10 @@ needs a daemon:
 
 ```sh
 printf '%s' '{"node_type":"rule","id":"<rule-id>"}' | provenance sdk get --repo . --scope default --format json
+
+SDK queries answer from the cached projection and carry a freshness
+stamp naming what the answer attests; `node_type` accepts source,
+requirement, resolution, rule, topic, question, domain, and boundary.
 printf '%s' '{"text":"time bounded","limit":20}' | provenance sdk search --repo . --scope default --format json
 printf '%s' '{"id":"<rule-id>","direction":"in"}' | provenance sdk neighbors --repo . --scope default --format json
 printf '%s' '{"id":"<source-id>","direction":"out","max_depth":2}' | provenance sdk trace --repo . --scope default --format json

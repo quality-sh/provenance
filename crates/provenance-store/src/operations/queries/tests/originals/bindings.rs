@@ -5,13 +5,13 @@ use provenance_core::{ImplementationBinding, ScopeId, VerificationBinding};
 ///
 /// Active views leave retired bindings out; the flag is the only way to see
 /// them, and it reads the same way in every primitive.
-pub(super) struct Bindings {
+pub(in crate::operations::queries) struct Bindings {
     pub implementations: Vec<ImplementationBinding>,
     pub verifications: Vec<VerificationBinding>,
 }
 
 impl Bindings {
-    pub(super) fn load(
+    pub(in crate::operations::queries) fn load(
         store: &StateStore,
         scope: &ScopeId,
         include_retired: bool,

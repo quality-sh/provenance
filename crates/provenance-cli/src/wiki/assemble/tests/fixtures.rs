@@ -348,9 +348,12 @@ pub(super) fn gap_kinds(gaps: &[crate::wiki::model::GapNotice]) -> Vec<GapKind> 
 
 pub(super) fn compute_state_gaps(state: &ScopeExport) -> Vec<GapItem> {
     let scope = scope_id();
+    let ideation_targets: Vec<(String, provenance_core::IdeationTarget)> = Vec::new();
     compute_gaps(&GapGraph {
         scope: &scope,
         sources: &state.sources,
+        domains: &state.domains,
+        boundaries: &state.boundaries,
         requirements: &state.requirements,
         resolutions: &state.resolutions,
         rules: &state.rules,
@@ -358,6 +361,7 @@ pub(super) fn compute_state_gaps(state: &ScopeExport) -> Vec<GapItem> {
         questions: &state.questions,
         edges: &state.edges,
         threads: &state.threads,
+        ideation_targets: &ideation_targets,
     })
 }
 

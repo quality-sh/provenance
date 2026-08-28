@@ -8,7 +8,10 @@ use std::collections::BTreeSet;
 
 use super::records;
 
-pub(super) fn scoped_edges(store: &StateStore, scope: &ScopeId) -> anyhow::Result<Vec<Edge>> {
+pub(in crate::operations::queries) fn scoped_edges(
+    store: &StateStore,
+    scope: &ScopeId,
+) -> anyhow::Result<Vec<Edge>> {
     let mut edges = store
         .list_edges()?
         .into_iter()
@@ -61,7 +64,7 @@ fn selected(edge: &Edge, edge_types: &[EdgeType]) -> bool {
     edge_types.is_empty() || edge_types.contains(&edge.edge_type)
 }
 
-pub(super) fn neighbors(
+pub(in crate::operations::queries) fn neighbors(
     store: &StateStore,
     scope: &ScopeId,
     request: NeighborsQuery,
@@ -88,14 +91,16 @@ pub(super) fn neighbors(
     found.sort_by_key(neighbor_order);
     let (neighbors, has_more) = take_page(found, request.limit);
     Ok(NeighborsResult {
+        stamp: None,
         id: request.id,
         limit: request.limit,
         has_more,
         neighbors,
+        next_cursor: None,
     })
 }
 
-pub(super) fn trace(
+pub(in crate::operations::queries) fn trace(
     store: &StateStore,
     scope: &ScopeId,
     request: TraceQuery,
@@ -138,11 +143,13 @@ pub(super) fn trace(
     }
     let (nodes, has_more) = take_page(reached, request.limit);
     Ok(TraceResult {
+        stamp: None,
         id: request.id,
         max_depth: request.max_depth,
         limit: request.limit,
         has_more,
         nodes,
+        next_cursor: None,
     })
 }
 

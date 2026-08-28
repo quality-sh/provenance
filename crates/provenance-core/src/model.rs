@@ -6,6 +6,7 @@ mod ids;
 mod integrations;
 mod manifest;
 mod parsing;
+pub mod relations;
 mod services;
 mod shaping;
 mod validation;
@@ -48,6 +49,7 @@ pub use integrations::{
     VerificationMethod, VerificationRun, VerificationRunStatus,
 };
 pub use manifest::{Manifest, RepoPathPrefix, Scope};
+pub use relations::{RelationDerivation, RelationEndpoint, RelationKind};
 pub use services::Domain;
 pub use shaping::{
     ArtifactLink, ArtifactLinkTargetType, Boundary, Question, QuestionStatus, ResolutionMethod,

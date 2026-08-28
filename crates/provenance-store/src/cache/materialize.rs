@@ -40,7 +40,7 @@ pub async fn materialize_empty_state(
     })
 }
 
-pub use catch_up::{catch_up_state, CatchUpReport};
+pub use catch_up::{catch_up_state, catch_up_state_under_guard, CatchUpReport};
 
 pub async fn materialize_state(layout: &ProvenanceLayout) -> anyhow::Result<MaterializeReport> {
     let guard = publication::guard::publication_guard(layout).await?;

@@ -20,6 +20,7 @@ pub const DROP_RUNTIME_LEFTOVERS_MIGRATION_ID: &str = "015";
 pub const DROP_RULE_CODE_AND_SERVICES_MIGRATION_ID: &str = "016";
 pub const REMOVE_SERVICES_SHARDS_MIGRATION_ID: &str = "017";
 pub const PROJECTION_STAMPS_MIGRATION_ID: &str = "018";
+pub const PAYLOAD_COLUMNS_MIGRATION_ID: &str = "019";
 const INITIAL_SQL: &str = include_str!("../migrations/001_initial_cache.sql");
 const SOURCE_REQUIREMENT_SQL: &str =
     include_str!("../migrations/002_sources_requirements_edges.sql");
@@ -45,6 +46,7 @@ const DROP_RULE_CODE_AND_SERVICES_SQL: &str =
 const REMOVE_SERVICES_SHARDS_SQL: &str =
     include_str!("../migrations/017_remove_services_shards.sql");
 const PROJECTION_STAMPS_SQL: &str = include_str!("../migrations/018_projection_stamps.sql");
+const PAYLOAD_COLUMNS_SQL: &str = include_str!("../migrations/019_payload_columns.sql");
 
 pub async fn run_migrations(
     pool: &SqlitePool,
@@ -93,6 +95,7 @@ pub async fn run_migrations(
             REMOVE_SERVICES_SHARDS_SQL,
         ),
         (PROJECTION_STAMPS_MIGRATION_ID, PROJECTION_STAMPS_SQL),
+        (PAYLOAD_COLUMNS_MIGRATION_ID, PAYLOAD_COLUMNS_SQL),
     ] {
         let already_applied: Option<String> =
             sqlx::query_scalar("SELECT id FROM _schema_migrations WHERE id = ?")
@@ -181,7 +184,7 @@ mod tests {
             run_migrations(&pool, &layout).await.unwrap(),
             vec![
                 "001", "002", "003", "004", "005", "006", "007", "008", "009", "010", "011", "012",
-                "013", "014", "015", "016", "017", "018"
+                "013", "014", "015", "016", "017", "018", "019"
             ]
         );
         assert!(run_migrations(&pool, &layout).await.unwrap().is_empty());
@@ -189,7 +192,7 @@ mod tests {
             applied_migrations(&pool).await.unwrap(),
             vec![
                 "001", "002", "003", "004", "005", "006", "007", "008", "009", "010", "011", "012",
-                "013", "014", "015", "016", "017", "018"
+                "013", "014", "015", "016", "017", "018", "019"
             ]
         );
     }

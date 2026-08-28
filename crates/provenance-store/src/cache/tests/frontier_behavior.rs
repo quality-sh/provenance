@@ -83,11 +83,20 @@ fn ordinary_prime_does_not_expand_into_a_global_proposal_queue() {
         .unwrap();
 
     let prime = prime_context(&layout, &scope, false).unwrap();
+    let rendered = serde_json::to_string(&prime).unwrap();
 
-    assert!(!serde_json::to_string(&prime)
-        .unwrap()
-        .contains("proposal_demand_only"));
-    assert!(!render_prime_markdown(&prime).contains("proposal_demand_only"));
+    // The proposal itself never becomes a frontier subject: existing is
+    // not a reason to expand the queue. Its dangling target does surface,
+    // as the typed DanglingReference gap item the plan requires.
+    let prime_gaps = &prime.gaps;
+    assert!(prime_gaps
+        .iter()
+        .all(|gap| gap.kind != GapKind::UnexploredTopic && gap.kind != GapKind::OpenQuestion));
+    assert!(prime_gaps
+        .iter()
+        .any(|gap| gap.kind == GapKind::DanglingReference && gap.node_id == "req_demand_only"));
+    assert!(rendered.contains("req_demand_only"));
+    assert!(!render_prime_markdown(&prime).contains("frontier subject proposal"));
 }
 
 #[test]

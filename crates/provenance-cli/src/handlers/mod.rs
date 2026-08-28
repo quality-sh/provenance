@@ -205,7 +205,7 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
             coverage::handle(command)?;
         }
         Command::Sdk { command } => {
-            sdk::handle(command)?;
+            sdk::handle(command).await?;
         }
         Command::SwarmBacktrace { command } => {
             swarm_backtrace::handle(command)?;

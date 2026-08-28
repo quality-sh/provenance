@@ -7,5 +7,6 @@ include!("tests/ideation.rs");
 include!("tests/integrations.rs");
 include!("tests/proposal_lifecycle.rs");
 include!("tests/proposal_lifecycle_dispositions.rs");
+include!("tests/relations.rs");
 include!("tests/services.rs");
 include!("tests/shaping.rs");

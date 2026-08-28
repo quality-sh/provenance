@@ -1,5 +1,5 @@
 mod catch_up_behavior;
-mod fixtures;
+pub mod fixtures;
 mod frontier_behavior;
 mod gap_rule_behavior;
 mod materialization_behavior;

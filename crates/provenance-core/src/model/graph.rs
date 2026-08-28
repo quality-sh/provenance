@@ -17,6 +17,10 @@ pub enum NodeType {
     Topic,
     #[serde(rename = "question")]
     Question,
+    #[serde(rename = "domain")]
+    Domain,
+    #[serde(rename = "boundary")]
+    Boundary,
 }
 
 impl NodeType {
@@ -28,8 +32,10 @@ impl NodeType {
             "rule" => Ok(Self::Rule),
             "topic" => Ok(Self::Topic),
             "question" => Ok(Self::Question),
+            "domain" => Ok(Self::Domain),
+            "boundary" => Ok(Self::Boundary),
             _ => anyhow::bail!(
-                "parent type must be source, requirement, resolution, rule, topic, or question"
+                "parent type must be source, requirement, resolution, rule, topic, question, domain, or boundary"
             ),
         }
     }

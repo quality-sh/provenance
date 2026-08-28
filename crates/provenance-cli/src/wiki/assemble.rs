@@ -56,9 +56,12 @@ fn build_corpus_with_coverage(
 ) -> WikiCorpus {
     let resolver = coverage.map_or_else(|| resolver.clone(), |scan| resolver.with_coverage(scan));
     let scope_id = provenance_core::ScopeId::new(&state.scope).expect("export scope is valid");
+    let ideation_targets: Vec<(String, provenance_core::IdeationTarget)> = Vec::new();
     let graph = GapGraph {
         scope: &scope_id,
         sources: &state.sources,
+        domains: &state.domains,
+        boundaries: &state.boundaries,
         requirements: &state.requirements,
         resolutions: &state.resolutions,
         rules: &state.rules,
@@ -66,6 +69,7 @@ fn build_corpus_with_coverage(
         questions: &state.questions,
         edges: &state.edges,
         threads: &state.threads,
+        ideation_targets: &ideation_targets,
     };
     let gaps = compute_gaps(&graph);
     let assembler = Assembler {

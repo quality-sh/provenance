@@ -1,6 +1,14 @@
 mod node;
 mod query;
 mod response;
+mod stamp;
+#[cfg(test)]
+mod stamp_tests;
+
+pub use stamp::{
+    decode_cursor, encode_cursor, resolve_budget, AttestedDomain, FreshnessPolicy, FreshnessStamp,
+    LiveConstituent, SCAN_BUDGET_CAP, SCAN_BUDGET_DEFAULT, VISIT_BUDGET_CAP, VISIT_BUDGET_DEFAULT,
+};
 mod typed_spec;
 
 use camino::Utf8PathBuf;
@@ -14,8 +22,8 @@ pub use query::{
     SearchQuery, StaleQuery, TraceQuery,
 };
 pub use response::{
-    EvidenceResult, GetResult, ImpactResult, NeighborsResult, QueryResponse, ResolveSymbolResult,
-    SearchResult, StaleEvidence, StaleResult, TraceResult,
+    CollectionPage, EvidenceResult, GetResult, ImpactResult, NeighborsResult, QueryResponse,
+    ResolveSymbolResult, SearchResult, StaleEvidence, StaleResult, TraceResult,
 };
 pub use typed_spec::{
     CheckStatementRequest, TypedAdoptionTarget, TypedDeclarationKind, TypedImplementationInput,

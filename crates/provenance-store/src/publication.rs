@@ -401,6 +401,9 @@ impl crate::state_store::StateStore {
     /// journal is a work hint for catch-up; correctness never depends on
     /// it because the sweep hashes every family regardless.
     fn record_shard_invalidation(&self, path: &Utf8Path) -> anyhow::Result<()> {
+        if !crate::operations::read_policy::journal_enabled(&self.layout) {
+            return Ok(());
+        }
         let Some((scope, family)) = journal::shard_event_key(&self.layout, path) else {
             return Ok(());
         };

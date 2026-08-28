@@ -61,6 +61,8 @@ pub struct SearchQuery {
     pub include_retired: bool,
     #[serde(default = "default_limit")]
     pub limit: usize,
+    #[serde(default)]
+    pub cursor: Option<String>,
 }
 
 /// Read the records one hop from a record.
@@ -80,6 +82,8 @@ pub struct NeighborsQuery {
     pub include_retired: bool,
     #[serde(default = "default_limit")]
     pub limit: usize,
+    #[serde(default)]
+    pub cursor: Option<String>,
 }
 
 /// Walk outward from a record for a bounded number of hops.
@@ -101,6 +105,11 @@ pub struct TraceQuery {
     pub include_retired: bool,
     #[serde(default = "default_limit")]
     pub limit: usize,
+    #[serde(default)]
+    pub cursor: Option<String>,
+    /// Caps the steps the walk may expand; overrides downward within caps.
+    #[serde(default)]
+    pub visit_budget: Option<usize>,
 }
 
 /// Read the Rules a record reaches, with the code standing behind them.
@@ -116,6 +125,14 @@ pub struct ImpactQuery {
     pub include_retired: bool,
     #[serde(default = "default_limit")]
     pub limit: usize,
+    #[serde(default)]
+    pub cursor: Option<String>,
+    /// Caps the steps the walk may expand; overrides downward within caps.
+    #[serde(default)]
+    pub visit_budget: Option<usize>,
+    /// Caps the working-tree scan the live half may consume.
+    #[serde(default)]
+    pub scan_budget: Option<usize>,
 }
 
 /// Read everything standing behind one Rule.
@@ -171,4 +188,7 @@ pub struct ResolveSymbolQuery {
     pub include_retired: bool,
     #[serde(default = "default_limit")]
     pub limit: usize,
+    /// Caps the working-tree scan the live half may consume.
+    #[serde(default)]
+    pub scan_budget: Option<usize>,
 }

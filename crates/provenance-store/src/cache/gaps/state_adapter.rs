@@ -1,7 +1,8 @@
 use super::{compute_gaps, graph_query::GapGraph, model::GapItem};
 use crate::{layout::ProvenanceLayout, state_store::StateStore};
 use provenance_core::{
-    Edge, NodeType, Question, Requirement, Resolution, Rule, ScopeId, Source, Thread, Topic,
+    Edge, IdeationTarget, NodeType, Question, Requirement, Resolution, Rule, ScopeId, Source,
+    Thread, Topic,
 };
 use std::collections::BTreeSet;
 
@@ -21,6 +22,8 @@ fn find_gaps_locked(scope: &ScopeId, store: &StateStore) -> anyhow::Result<Vec<G
 /// build the same graph the gap policy sees, so the two cannot drift.
 pub(in crate::cache) struct GraphRecords {
     pub(in crate::cache) sources: Vec<Source>,
+    pub(in crate::cache) domains: Vec<provenance_core::Domain>,
+    pub(in crate::cache) boundaries: Vec<provenance_core::Boundary>,
     pub(in crate::cache) requirements: Vec<Requirement>,
     pub(in crate::cache) resolutions: Vec<Resolution>,
     pub(in crate::cache) rules: Vec<Rule>,
@@ -28,6 +31,8 @@ pub(in crate::cache) struct GraphRecords {
     pub(in crate::cache) questions: Vec<Question>,
     pub(in crate::cache) edges: Vec<Edge>,
     pub(in crate::cache) threads: Vec<Thread>,
+    /// Ideation records whose targets the dangling scan checks.
+    pub(in crate::cache) ideation_targets: Vec<(String, IdeationTarget)>,
 }
 
 impl GraphRecords {
@@ -93,8 +98,29 @@ impl GraphRecords {
             !retired.contains(edge.from_type, edge.from_id.as_str())
                 && !retired.contains(edge.to_type, edge.to_id.as_str())
         });
+        let mut ideation_targets = Vec::new();
+        for contribution in store.list_contributions(scope)? {
+            ideation_targets.push((
+                format!("contribution {}", contribution.id.as_str()),
+                contribution.target.clone(),
+            ));
+        }
+        for packet in store.list_synthesis_packets(scope)? {
+            ideation_targets.push((
+                format!("synthesis packet {}", packet.id.as_str()),
+                packet.target.clone(),
+            ));
+        }
+        for proposal in store.list_proposal_cards(scope)? {
+            ideation_targets.push((
+                format!("proposal {}", proposal.id.as_str()),
+                proposal.traceability.target.clone(),
+            ));
+        }
         Ok(Self {
             sources,
+            domains: store.list_domains(scope)?,
+            boundaries: store.list_boundaries(scope)?,
             requirements,
             resolutions,
             rules,
@@ -102,6 +128,7 @@ impl GraphRecords {
             questions,
             edges,
             threads: store.list_threads(scope)?,
+            ideation_targets,
         })
     }
 
@@ -109,6 +136,8 @@ impl GraphRecords {
         GapGraph {
             scope,
             sources: &self.sources,
+            domains: &self.domains,
+            boundaries: &self.boundaries,
             requirements: &self.requirements,
             resolutions: &self.resolutions,
             rules: &self.rules,
@@ -116,6 +145,7 @@ impl GraphRecords {
             questions: &self.questions,
             edges: &self.edges,
             threads: &self.threads,
+            ideation_targets: &self.ideation_targets,
         }
     }
 }
@@ -151,6 +181,7 @@ impl RetiredNodes {
             NodeType::Resolution => self.resolutions.contains(id),
             NodeType::Topic => self.topics.contains(id),
             NodeType::Question => self.questions.contains(id),
+            NodeType::Domain | NodeType::Boundary => false,
         }
     }
 }

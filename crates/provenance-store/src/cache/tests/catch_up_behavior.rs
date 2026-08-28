@@ -72,17 +72,22 @@ fn truncate_journal_tail(layout: &ProvenanceLayout, keep_lines: usize) {
 
 #[tokio::test]
 async fn catch_up_after_materialize_commits_a_new_stamp_and_prunes_the_journal() {
-    let (_dir, layout, _scope) = seeded_layout();
+    let (_dir, layout, scope) = seeded_layout();
     materialize_state(&layout).await.unwrap();
+    let store = StateStore::new(layout.clone());
+    create_requirement(
+        &store,
+        &scope,
+        "req_journaled",
+        provenance_core::RequirementStatus::Active,
+    );
     let (serial_before, instance, digest_before) = revision(&layout).await;
-    let events = layout.journal_events_path();
-    std::fs::write(&events, "").unwrap();
 
     let report = catch_up_state(&layout).await.unwrap();
 
     let (serial_after, instance_after, digest_after) = revision(&layout).await;
     assert!(!report.rebuilt);
-    assert_eq!(report.journal_drained, 0);
+    assert_eq!(report.journal_drained, 1);
     assert!(
         serial_after > serial_before,
         "a committed pass advances the serial"
@@ -91,15 +96,38 @@ async fn catch_up_after_materialize_commits_a_new_stamp_and_prunes_the_journal()
         instance, instance_after,
         "the instance survives a normal pass"
     );
-    assert_eq!(
-        digest_before, digest_after,
-        "identical bytes keep the digest still"
-    );
+    assert_ne!(digest_before, digest_after, "changed bytes move the digest");
+    let events = layout.journal_events_path();
     let tail = std::fs::read_to_string(&events).unwrap();
     assert!(
         tail.trim().is_empty(),
         "pruning leaves the tail above the new serial"
     );
+}
+
+#[tokio::test]
+async fn catch_up_that_changes_nothing_keeps_the_stored_stamp_byte_identical() {
+    let (_dir, layout, _scope) = seeded_layout();
+    materialize_state(&layout).await.unwrap();
+    let (serial_before, instance_before, digest_before) = revision(&layout).await;
+    let events = layout.journal_events_path();
+    std::fs::write(&events, "").unwrap();
+
+    let report = catch_up_state(&layout).await.unwrap();
+
+    let (serial_after, instance_after, digest_after) = revision(&layout).await;
+    assert!(!report.rebuilt);
+    assert_eq!(report.families_rederived.len(), 0);
+    assert!(
+        report.families_verified > 0,
+        "the pass still verified every family"
+    );
+    assert_eq!(
+        serial_after, serial_before,
+        "an unchanged pass spends no serial"
+    );
+    assert_eq!(instance_before, instance_after);
+    assert_eq!(digest_before, digest_after);
 }
 
 #[tokio::test]
@@ -211,10 +239,17 @@ async fn catch_up_restarts_at_one_after_total_cache_loss() {
 
 #[tokio::test]
 async fn truncated_tail_still_hashes_every_family_and_advances_the_serial() {
-    let (_dir, layout, _scope) = seeded_layout();
+    let (_dir, layout, scope) = seeded_layout();
     materialize_state(&layout).await.unwrap();
     let (serial_before, _, _) = revision(&layout).await;
     truncate_journal_tail(&layout, 0);
+    // A lost event still names a real change: mutate a shard after the
+    // truncation so the pass has something to commit.
+    let domains = crate::shards::domains_path(&layout, &scope);
+    let edited = std::fs::read_to_string(&domains)
+        .unwrap()
+        .replace("Payroll", "PayrolX");
+    std::fs::write(&domains, edited).unwrap();
 
     let report = catch_up_state(&layout).await.unwrap();
 
@@ -227,6 +262,10 @@ async fn truncated_tail_still_hashes_every_family_and_advances_the_serial() {
         "the committed stamp still covers every family"
     );
     assert!(!report.rebuilt);
+    assert!(report
+        .families_rederived
+        .iter()
+        .any(|family| family == "domains"));
 }
 
 #[tokio::test]
@@ -300,5 +339,31 @@ async fn unjournaled_byte_changes_are_found_by_digest_comparison_alone() {
             .any(|family| family == "rules"),
         "the sweep must find the unjournaled change, got {:?}",
         report.families_rederived
+    );
+}
+
+#[tokio::test]
+async fn probe_event_flow() {
+    let (_dir, layout, scope) = seeded_layout();
+    materialize_state(&layout).await.unwrap();
+    let store = StateStore::new(layout.clone());
+    create_requirement(
+        &store,
+        &scope,
+        "req_probe",
+        provenance_core::RequirementStatus::Active,
+    );
+    println!(
+        "events file: {:?}",
+        std::fs::read_to_string(layout.journal_events_path())
+    );
+    println!(
+        "head file: {:?}",
+        std::fs::read_to_string(layout.journal_head_path())
+    );
+    let r = catch_up_state(&layout).await.unwrap();
+    println!(
+        "catchup rebuilt={} drained={} rederived={:?} serial={}",
+        r.rebuilt, r.journal_drained, r.families_rederived, r.serial
     );
 }

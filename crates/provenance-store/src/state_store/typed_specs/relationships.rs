@@ -128,7 +128,16 @@ fn remove_superseded_edges(
                         edge.to_id.as_str().to_string(),
                     ))
             }
-            _ => false,
+            // Typed-spec reconciliation only manages these two edge
+            // families; every other declared edge type is out of scope and
+            // simply does not stale-anything here.
+            EdgeType::RefinesInto
+            | EdgeType::DependsOn
+            | EdgeType::Contradicts
+            | EdgeType::Supersedes
+            | EdgeType::Needs
+            | EdgeType::Resolves
+            | EdgeType::Spawns => false,
         })
         .map(|edge| edge.id)
         .collect::<Vec<_>>();

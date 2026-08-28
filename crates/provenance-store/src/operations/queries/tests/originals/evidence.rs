@@ -1,11 +1,13 @@
 use crate::state_store::StateStore;
 use camino::Utf8Path;
 use provenance_core::protocol::{
-    ensure_limit, ensure_protocol_version, take_page, EvidenceQuery, EvidenceResult, StaleEvidence,
+    ensure_limit, ensure_protocol_version, take_page, CollectionPage, EvidenceQuery,
+    EvidenceResult, StaleEvidence,
 };
 use provenance_core::{ScopeId, StableId};
 
-use super::{bindings::Bindings, stale};
+use super::bindings::Bindings;
+use crate::operations::queries::stale;
 
 /// Everything standing behind one Rule, kept apart by kind.
 ///
@@ -13,7 +15,7 @@ use super::{bindings::Bindings, stale};
 /// separate records and stay separate here. Review required says the
 /// Requirement was restated; stale says the code carrying the evidence
 /// changed, and it is read from a diff the caller names.
-pub(super) fn evidence(
+pub(in crate::operations::queries) fn evidence(
     repo: &Utf8Path,
     store: &StateStore,
     scope: &ScopeId,
@@ -80,9 +82,26 @@ pub(super) fn evidence(
         })
         .transpose()?;
     Ok(EvidenceResult {
+        stamp: None,
         rule_id: request.rule,
         limit: request.limit,
         has_more: cut_implementations || cut_verifications || cut_runs || cut_reviews,
+        implementation_bindings_page: CollectionPage {
+            has_more: false,
+            next_cursor: None,
+        },
+        verification_bindings_page: CollectionPage {
+            has_more: false,
+            next_cursor: None,
+        },
+        verification_runs_page: CollectionPage {
+            has_more: false,
+            next_cursor: None,
+        },
+        reviews_page: CollectionPage {
+            has_more: false,
+            next_cursor: None,
+        },
         implementation_bindings,
         verification_bindings,
         verification_runs,

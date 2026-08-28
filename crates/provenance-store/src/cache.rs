@@ -10,7 +10,10 @@ mod traceability;
 pub use gaps::*;
 pub use health::*;
 pub use impact::*;
-pub use materialize::{catch_up_state, materialize_empty_state, materialize_state, CatchUpReport};
+pub use materialize::{
+    catch_up_state, catch_up_state_under_guard, materialize_empty_state, materialize_state,
+    CatchUpReport,
+};
 pub use prime::*;
 pub use projection_digest::projection_digest;
 pub use traceability::*;
@@ -44,4 +47,4 @@ pub(crate) fn serde_name<T: serde::Serialize>(value: &T) -> anyhow::Result<Strin
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

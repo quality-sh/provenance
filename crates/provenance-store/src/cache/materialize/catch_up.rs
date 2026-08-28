@@ -42,6 +42,7 @@ pub struct CatchUpReport {
 struct StoredRevision {
     serial: i64,
     instance_id: String,
+    digest: String,
 }
 
 async fn read_revision(pool: &Pool<Sqlite>) -> anyhow::Result<Option<StoredRevision>> {
@@ -51,6 +52,7 @@ async fn read_revision(pool: &Pool<Sqlite>) -> anyhow::Result<Option<StoredRevis
     Ok(row.map(|row| StoredRevision {
         serial: row.get("serial"),
         instance_id: row.get("instance_id"),
+        digest: row.get("digest"),
     }))
 }
 
@@ -136,14 +138,28 @@ pub async fn catch_up_state_under_guard(
         }
     }
 
-    // Step 4. Commit rows, the new revision, and the baselines together.
+    // Step 4. Commit rows, the new revision, and the baselines together -
+    // but only when something changed. A pass that re-verified every
+    // family against the stored baseline and found no difference leaves
+    // the stored stamp standing: the pass that committed it hashed every
+    // family behind it, and this pass has just re-proven it current, so a
+    // repeat read answers byte for byte identically.
+    if work.is_empty() {
+        pool.close().await;
+        return Ok(CatchUpReport {
+            rebuilt: false,
+            families_rederived: Vec::new(),
+            families_verified: verified,
+            journal_drained: drained.len(),
+            serial: stored.serial,
+            digest: stored.digest.clone(),
+            instance_id: stored.instance_id.clone(),
+            migrations_applied,
+        });
+    }
     let serial = i64::try_from(head).unwrap_or(i64::MAX);
-    eprintln!("DBG before-digest");
     let digest = crate::cache::projection_digest::projection_digest(layout, &manifest)?;
-    eprintln!("DBG after-digest");
-    eprintln!("DBG before-begin");
     let mut tx = pool.begin().await?;
-    eprintln!("DBG begin-ok");
     for (family, scope) in &work {
         rederive_family(&mut tx, &store, family, scope.as_ref(), &manifest).await?;
     }

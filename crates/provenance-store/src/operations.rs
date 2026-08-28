@@ -19,7 +19,9 @@ use crate::state_store::{
 
 mod plan;
 pub mod queries;
+pub(crate) mod read_policy;
 mod sites;
+pub mod traversal;
 
 pub use plan::{AffectedRule, ReviewReason, RuleEvidence, TypedSpecPlan};
 

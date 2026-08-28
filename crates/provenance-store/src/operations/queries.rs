@@ -1,8 +1,11 @@
-//! The eight structured query operations.
+//! The eight structured query operations, served from the projection.
 //!
 //! Every primitive is one named operation with typed parameters and a
-//! bounded answer. Each resolves its repository, reads state, and writes
-//! nothing.
+//! bounded answer. Each resolves its repository, takes the reader policy,
+//! and answers from the stamped projection inside one held publication
+//! guard; the freshness stamp travels with every answer. The pre-re-back
+//! executors survive verbatim beside the tests for the differential
+//! harness.
 
 use camino::Utf8PathBuf;
 use provenance_core::protocol::{
@@ -12,91 +15,83 @@ use provenance_core::protocol::{
 };
 use provenance_core::ScopeId;
 
-use crate::layout::ProvenanceLayout;
-use crate::state_store::StateStore;
-
-mod bindings;
-mod evidence;
-mod impact;
-mod records;
+mod served_evidence;
+mod served_graph;
+mod served_live;
 mod stale;
-mod symbols;
-mod walk;
+pub(crate) mod trace_token;
 
-fn open(repo: Option<Utf8PathBuf>) -> anyhow::Result<(Utf8PathBuf, StateStore)> {
-    let repo = super::discover_repository(repo)?;
-    let store = StateStore::new(ProvenanceLayout::new(repo.clone()));
-    Ok((repo, store))
-}
-
-pub fn get(
+/// Fetch one record by canonical id.
+pub async fn get(
     repo: Option<Utf8PathBuf>,
     scope: &ScopeId,
     request: GetQuery,
 ) -> anyhow::Result<GetResult> {
-    let (_, store) = open(repo)?;
-    records::get(&store, scope, request)
+    served_graph::get(repo, scope, request).await
 }
 
-pub fn search(
+/// Find records whose text contains a phrase.
+pub async fn search(
     repo: Option<Utf8PathBuf>,
     scope: &ScopeId,
     request: SearchQuery,
 ) -> anyhow::Result<SearchResult> {
-    let (_, store) = open(repo)?;
-    records::search(&store, scope, request)
+    served_graph::search(repo, scope, request).await
 }
 
-pub fn neighbors(
+/// Read the records one hop from a record.
+pub async fn neighbors(
     repo: Option<Utf8PathBuf>,
     scope: &ScopeId,
     request: NeighborsQuery,
 ) -> anyhow::Result<NeighborsResult> {
-    let (_, store) = open(repo)?;
-    walk::neighbors(&store, scope, request)
+    served_graph::neighbors(repo, scope, request).await
 }
 
-pub fn trace(
+/// Walk outward from a record for a bounded number of hops.
+pub async fn trace(
     repo: Option<Utf8PathBuf>,
     scope: &ScopeId,
     request: TraceQuery,
 ) -> anyhow::Result<TraceResult> {
-    let (_, store) = open(repo)?;
-    walk::trace(&store, scope, request)
+    served_graph::trace(repo, scope, request).await
 }
 
-pub fn impact(
+/// Read the Rules a record reaches, with the code standing behind them.
+pub async fn impact(
     repo: Option<Utf8PathBuf>,
     scope: &ScopeId,
     request: ImpactQuery,
 ) -> anyhow::Result<ImpactResult> {
-    let (repo, store) = open(repo)?;
-    impact::impact(&repo, &store, scope, request)
+    served_live::impact(repo, scope, request).await
 }
 
-pub fn evidence(
+/// Read everything standing behind one Rule.
+pub async fn evidence(
     repo: Option<Utf8PathBuf>,
     scope: &ScopeId,
     request: EvidenceQuery,
 ) -> anyhow::Result<EvidenceResult> {
-    let (repo, store) = open(repo)?;
-    evidence::evidence(&repo, &store, scope, request)
+    served_evidence::evidence(repo, scope, request).await
 }
 
+/// Read which evidence sites a commit range disturbed.
 pub fn stale(
     repo: Option<Utf8PathBuf>,
     scope: &ScopeId,
     request: StaleQuery,
 ) -> anyhow::Result<StaleResult> {
-    let (repo, _) = open(repo)?;
-    stale::stale(&repo, scope, request)
+    served_live::stale(repo, scope, request)
 }
 
-pub fn resolve_symbol(
+/// Read the Rules bound to one code site.
+pub async fn resolve_symbol(
     repo: Option<Utf8PathBuf>,
     scope: &ScopeId,
     request: ResolveSymbolQuery,
 ) -> anyhow::Result<ResolveSymbolResult> {
-    let (repo, store) = open(repo)?;
-    symbols::resolve(&repo, &store, scope, request)
+    served_live::resolve_symbol(repo, scope, request).await
 }
+
+#[cfg(test)]
+mod tests;

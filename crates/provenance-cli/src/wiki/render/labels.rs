@@ -206,6 +206,8 @@ pub(in crate::wiki::render) const fn node_type_word(node_type: NodeType) -> &'st
         NodeType::Rule => "rule",
         NodeType::Topic => "topic",
         NodeType::Question => "question",
+        NodeType::Domain => "domain",
+        NodeType::Boundary => "boundary",
     }
 }
 

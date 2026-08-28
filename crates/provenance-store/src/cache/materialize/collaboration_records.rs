@@ -11,10 +11,12 @@ pub(super) async fn load_threads(
 ) -> anyhow::Result<u64> {
     let mut loaded = 0;
     for thread in store.list_threads(scope)? {
-        sqlx::query("INSERT INTO threads (scope_id, id, parent_type, parent_id, status, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+        let payload = serde_json::to_string(&thread)?;
+        sqlx::query("INSERT INTO threads (scope_id, id, parent_type, parent_id, status, created_at, payload) VALUES (?, ?, ?, ?, ?, ?, ?)")
             .bind(thread.scope_id.as_str()).bind(thread.id.as_str())
             .bind(serde_name(&thread.parent.node_type)?).bind(thread.parent.node_id.as_str())
             .bind(serde_name(&thread.status)?).bind(thread.created_at)
+            .bind(payload)
             .execute(&mut **tx).await?;
         loaded += 1;
     }
@@ -28,10 +30,12 @@ pub(super) async fn load_messages(
 ) -> anyhow::Result<u64> {
     let mut loaded = 0;
     for message in store.list_messages(scope)? {
-        sqlx::query("INSERT INTO messages (scope_id, id, thread_id, role, body, created_at, ai_metadata) VALUES (?, ?, ?, ?, ?, ?, ?)")
+        let payload = serde_json::to_string(&message)?;
+        sqlx::query("INSERT INTO messages (scope_id, id, thread_id, role, body, created_at, ai_metadata, payload) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
             .bind(message.scope_id.as_str()).bind(message.id.as_str()).bind(message.thread_id.as_str())
             .bind(serde_name(&message.role)?).bind(message.body).bind(message.created_at)
             .bind(message.ai_metadata.map(|value| value.to_string()))
+            .bind(payload)
             .execute(&mut **tx).await?;
         loaded += 1;
     }
@@ -121,12 +125,14 @@ pub(super) async fn load_dispositions(
 ) -> anyhow::Result<u64> {
     let mut loaded = 0;
     for disposition in store.list_dispositions(scope)? {
-        sqlx::query("INSERT INTO dispositions (scope_id, id, proposal_id, decision, rationale, actor, canonical_artifact, external_action) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+        let payload = serde_json::to_string(&disposition)?;
+        sqlx::query("INSERT INTO dispositions (scope_id, id, proposal_id, decision, rationale, actor, canonical_artifact, external_action, payload) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
             .bind(disposition.scope_id.as_str()).bind(disposition.id.as_str()).bind(disposition.proposal_id.as_str())
             .bind(serde_name(&disposition.decision)?).bind(&disposition.rationale)
             .bind(serde_json::to_string(&disposition.actor)?)
             .bind(disposition.canonical_artifact.as_ref().map(serde_json::to_string).transpose()?)
             .bind(disposition.external_action.as_ref().map(serde_json::to_string).transpose()?)
+            .bind(payload)
             .execute(&mut **tx).await?;
         loaded += 1;
     }
