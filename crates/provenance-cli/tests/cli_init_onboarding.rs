@@ -8,19 +8,35 @@ const INSTRUCTIONS: &str = r#"## Provenance
 Requirements live in a Provenance graph. Plan changes with the graph and update
 it in the same change.
 
+- Use the `provenance-grounded-writing` skill before you write or change a
+  Requirement or Rule statement.
+- Before a graph write, send `{"statement":"<statement>"}` to
+  `provenance sdk check-statement --format json`. A clean report covers only the
+  ASD-STE100 Issue 9 checks that Provenance implements. It does not prove full
+  conformance.
 - Plan: `provenance prime --quiet`
 - New obligation: `provenance rules create --scope default --id rule_<slug> --requirement-id <req> --statement "<testable clause>"`
 - Annotate implementation with `rule`, tests with `verifies`. Annotations move
   with code.
 - To change a Requirement, Rule, or past decision, create a Proposal. A human decides each
   Proposal.
+- Write graph state only through the Provenance CLI or SDK. Do not edit
+  `.provenance/state` directly.
 - Pre-commit: `provenance check --quiet` and
   `provenance coverage scan --path . --scope default --validate-rules`.
-  Commit graph updates with the code."#;
+  Commit graph updates with the code.
+- ASD owns ASD-STE100. STEMG maintains it. Use the official Issue 9 request page:
+  https://www.asd-ste100.org/STE_downloads.html#article02-2l. Provenance names
+  only its implemented checks and makes no compliance or endorsement claim."#;
 
 #[test]
 #[verifies("rule_init_installs_bundled_skills", examples)]
 #[verifies("rule_init_owns_agents_provenance_section", examples)]
+#[verifies("rule_init_native_command", examples)]
+#[verifies("rule_init_grounded_writing_guidance", examples)]
+#[verifies("rule_init_statement_preflight_guidance", examples)]
+#[verifies("rule_init_statement_claim_limit", examples)]
+#[verifies("rule_init_canonical_write_path", examples)]
 fn init_installs_bundled_skills_and_ratified_instructions() {
     let temporary = tempfile::tempdir().unwrap();
     let repo = temporary.path().join("repo");
@@ -64,6 +80,29 @@ fn init_onboarding_is_idempotent() {
         std::fs::read(repo.join(".agents/skills/provenance-shaping/SKILL.md")).unwrap(),
         skill
     );
+}
+
+#[test]
+#[verifies("rule_init_typescript_local_command", examples)]
+fn typescript_init_writes_a_package_local_command() {
+    let temporary = tempfile::tempdir().unwrap();
+    let repo = temporary.path().join("repo");
+
+    init_with(
+        &repo,
+        &[
+            "--invocation-channel",
+            "typescript",
+            "--package-manager",
+            "npm",
+        ],
+    )
+    .success();
+
+    let agents = read_agents(&repo);
+    assert!(agents.contains("`npx --no provenance prime --quiet`"));
+    assert!(agents.contains("`npx --no provenance sdk check-statement --format json`"));
+    assert!(!agents.contains("`provenance prime --quiet`"));
 }
 
 #[cfg(unix)]
@@ -375,18 +414,21 @@ fn init_does_not_claim_a_blockquoted_provenance_heading() {
 }
 
 fn init(repo: &Path) -> assert_cmd::assert::Assert {
+    init_with(repo, &[])
+}
+
+fn init_with(repo: &Path, extra: &[&str]) -> assert_cmd::assert::Assert {
     let mut command = Command::cargo_bin("provenance").unwrap();
-    command
-        .args([
-            "init",
-            "--path",
-            repo.to_str().unwrap(),
-            "--scope",
-            "default",
-            "--path-prefix",
-            ".",
-        ])
-        .assert()
+    command.args([
+        "init",
+        "--path",
+        repo.to_str().unwrap(),
+        "--scope",
+        "default",
+        "--path-prefix",
+        ".",
+    ]);
+    command.args(extra).assert()
 }
 
 fn read_agents(repo: &Path) -> String {

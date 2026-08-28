@@ -20,17 +20,23 @@ const lockfiles = new Map([
 export function parseArguments(args, currentDirectory) {
   let projectDirectory = currentDirectory;
   let packageManager;
+  let steOnboarding = "interactive";
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (argument === "--path") {
       projectDirectory = resolve(currentDirectory, requiredValue(args, ++index, argument));
     } else if (argument === "--package-manager") {
       packageManager = requiredValue(args, ++index, argument);
+    } else if (argument === "--ste-onboarding") {
+      steOnboarding = requiredValue(args, ++index, argument);
+      if (!new Set(["agent", "interactive"]).has(steOnboarding)) {
+        throw new Error("Unsupported STE onboarding mode. Choose one of: agent, interactive.");
+      }
     } else {
       throw new Error(`Unknown argument '${argument}'.`);
     }
   }
-  return { projectDirectory, packageManager };
+  return { projectDirectory, packageManager, steOnboarding };
 }
 
 function requiredValue(args, index, option) {
@@ -51,6 +57,7 @@ export function initializeProject({
   engineArguments = [],
   resolveEngine = installedEngineCommand,
   packageManager,
+  steOnboarding = "interactive",
   userAgent = process.env.npm_config_user_agent,
   execute,
 }) {
@@ -69,21 +76,43 @@ export function initializeProject({
   const engine = enginePath === undefined
     ? resolveEngine(directory)
     : { command: enginePath, args: engineArguments };
+  const initArgs = [
+    ...engine.args,
+    "init",
+    "--path",
+    directory,
+    "--scope",
+    "default",
+    "--path-prefix",
+    ".",
+  ];
+  const help = run({
+    command: engine.command,
+    args: [...engine.args, "init", "--help"],
+    capture: true,
+  });
+  if (supportsSteOnboarding(help)) {
+    initArgs.push(
+      "--ste-onboarding",
+      steOnboarding,
+      "--invocation-channel",
+      "typescript",
+      "--package-manager",
+      selectedManager,
+    );
+  }
   runChecked(run, {
     command: engine.command,
-    args: [
-      ...engine.args,
-      "init",
-      "--path",
-      directory,
-      "--scope",
-      "default",
-      "--path-prefix",
-      ".",
-    ],
+    args: initArgs,
     capture: false,
   }, "Provenance initialization");
   return { packageManager: selectedManager };
+}
+
+function supportsSteOnboarding(help) {
+  // The visible onboarding flag and its hidden invocation metadata flags were
+  // introduced as one init capability. Older engines advertise none of them.
+  return help.status === 0 && help.stdout.includes("--ste-onboarding");
 }
 
 function installedEngineCommand(directory) {

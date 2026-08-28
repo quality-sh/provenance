@@ -9,9 +9,10 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertPackedConsumerScan } from "./packed-consumer-scan.js";
+import { createPackedCommands } from "./packed-install-commands.js";
 
 const packageRoot = fileURLToPath(new URL("..", import.meta.url));
 const initializerRoot = fileURLToPath(new URL("../../create-provenance", import.meta.url));
@@ -21,7 +22,6 @@ const releaseTargets = JSON.parse(
 );
 const npmCli = process.env.npm_execpath;
 assert.ok(npmCli, "run this test through npm so its CLI path is known");
-const npxCli = join(dirname(npmCli), "npx-cli.js");
 const version = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8")).version;
 const temporary = mkdtempSync(join(tmpdir(), "provenance-packed-install-"));
 process.once("exit", () => rmSync(temporary, { recursive: true, force: true }));
@@ -36,6 +36,9 @@ const typescriptRoot = join(packageRoot, "node_modules", "typescript");
 const typescriptManifest = JSON.parse(
   readFileSync(join(typescriptRoot, "package.json"), "utf8"),
 );
+const { provenance, verifyGeneratedCommandIgnoresStaleGlobal } = createPackedCommands({
+  temporary, npmCli, isolatedCache,
+});
 
 mkdirSync(archiveDirectory);
 execFileSync(process.execPath, [
@@ -90,7 +93,7 @@ npm(
 );
 
 // The second line of the quick start, run as written through the installed bin.
-provenance(["init", "--path", ".", "--scope", "default", "--path-prefix", "."], application);
+provenance(["--quiet", "init", "--path", ".", "--scope", "default", "--path-prefix", "."], application);
 const projectManifest = JSON.parse(
   readFileSync(join(application, ".provenance", "state", "manifest.json"), "utf8"),
 );
@@ -101,6 +104,15 @@ assert.deepEqual(
 );
 const initialCheck = JSON.parse(provenance(["check", "--repo", ".", "--format", "json"], application));
 assert.equal(initialCheck.status, "ok", "a freshly initialized project must validate");
+verifyGeneratedCommandIgnoresStaleGlobal(application);
+execFileSync(process.execPath, [
+  join(application, "node_modules", "@quality-sh", "provenance", "bin", "provenance.mjs"),
+  "--quiet",
+  "init",
+  "--path",
+  ".",
+], { cwd: application, stdio: "pipe" });
+verifyGeneratedCommandIgnoresStaleGlobal(application);
 
 // The initializer is a temporary command, while the SDK and engine become
 // durable project development dependencies.
@@ -139,6 +151,7 @@ execFileSync(process.execPath, [
     ...initializerManifest.name.split("/"),
     initializerManifest.bin["create-provenance"],
   ),
+  "--ste-onboarding", "interactive",
 ], {
   cwd: initializedApplication,
   env: {
@@ -172,6 +185,7 @@ const initializedCheck = JSON.parse(
   provenance(["check", "--repo", ".", "--format", "json"], initializedApplication),
 );
 assert.equal(initializedCheck.status, "ok", "the one-command project must validate");
+verifyGeneratedCommandIgnoresStaleGlobal(initializedApplication);
 
 if (process.env.PROVENANCE_TEST_YARN_PNP === "true") {
   verifyYarnPnpInstall();
@@ -385,21 +399,6 @@ assert.doesNotMatch(
   /registry\.npmjs\.org|canceled due to missing packages/,
   `the installed bin must not send the quick start to the registry, said: ${guidance}`,
 );
-
-function provenance(args, cwd) {
-  const { PROVENANCE_BIN: _removed, ...environment } = process.env;
-  return execFileSync(process.execPath, [npxCli, "--no", "provenance", ...args], {
-    cwd,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-    env: {
-      ...environment,
-      npm_config_offline: "true",
-      npm_config_cache: isolatedCache,
-      npm_config_update_notifier: "false",
-    },
-  });
-}
 
 function verifyYarnPnpInstall() {
   // The manager smoke uses a JavaScript engine fixture. This packed test joins

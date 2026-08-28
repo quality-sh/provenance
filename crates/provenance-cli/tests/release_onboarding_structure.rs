@@ -54,6 +54,45 @@ fn windows_cli_reserves_enough_main_thread_stack_for_argument_parsing() {
 }
 
 #[test]
+fn ste_download_client_carries_no_quic_transport() {
+    let workspace = workspace_root();
+    let root_manifest = fs::read_to_string(workspace.join("Cargo.toml")).unwrap();
+    let cli_manifest =
+        fs::read_to_string(workspace.join("crates/provenance-cli/Cargo.toml")).unwrap();
+    let lock = fs::read_to_string(workspace.join("Cargo.lock")).unwrap();
+
+    assert!(root_manifest.contains("ureq ="));
+    assert!(cli_manifest.contains("ureq.workspace = true"));
+    assert!(!root_manifest.contains("reqwest ="));
+    assert!(!cli_manifest.contains("reqwest.workspace = true"));
+    assert!(!lock.contains("name = \"quinn-proto\""));
+}
+
+#[test]
+fn init_download_work_runs_on_tokios_blocking_pool() {
+    let workspace = workspace_root();
+    let handlers = fs::read_to_string(workspace.join("crates/provenance-cli/src/handlers/mod.rs"))
+        .expect("read command dispatcher");
+    let onboarding =
+        fs::read_to_string(workspace.join("crates/provenance-cli/src/ste_onboarding.rs"))
+            .expect("read STE onboarding");
+
+    assert!(handlers.matches("tokio::task::spawn_blocking").count() >= 2);
+    assert!(!onboarding.contains("std::thread::spawn"));
+}
+
+#[test]
+fn release_tests_keep_the_ste_asset_override_on_loopback() {
+    let onboarding =
+        fs::read_to_string(workspace_root().join("crates/provenance-cli/src/ste_onboarding.rs"))
+            .expect("read STE onboarding");
+
+    assert!(!onboarding.contains("cfg!(debug_assertions)"));
+    assert!(onboarding.contains("127.0.0.1"));
+    assert!(onboarding.contains("localhost"));
+}
+
+#[test]
 fn cargo_provenance_is_a_std_only_forwarding_shim() {
     let workspace = workspace_root();
     let crate_root = workspace.join("crates/provenance-cli");

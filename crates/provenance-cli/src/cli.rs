@@ -11,7 +11,31 @@ pub use ideation::{IdeationArtifactKind, SchemaCommand};
 
 use crate::output::OutputFormat;
 use camino::Utf8PathBuf;
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
+
+#[derive(Clone, Copy, Debug, Default, ValueEnum)]
+pub enum InvocationChannel {
+    #[default]
+    Native,
+    Typescript,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum PackageManager {
+    Npm,
+    Pnpm,
+    Yarn,
+    Bun,
+    Deno,
+    Nub,
+}
+
+#[derive(Clone, Copy, Debug, Default, ValueEnum)]
+pub enum SteOnboardingMode {
+    Agent,
+    #[default]
+    Interactive,
+}
 
 #[derive(Parser)]
 #[command(name = "provenance", version)]
@@ -30,6 +54,10 @@ pub enum Command {
     CargoInit {
         #[arg(long)]
         package: Option<String>,
+        #[arg(long, value_enum, default_value_t)]
+        ste_onboarding: SteOnboardingMode,
+        #[arg(long)]
+        ste_pdf: Option<Utf8PathBuf>,
     },
     Init {
         #[arg(long)]
@@ -45,6 +73,14 @@ pub enum Command {
         /// Empty the repository-local disposition actor allowlist.
         #[arg(long, conflicts_with = "disposition_actor_id")]
         clear_disposition_actors: bool,
+        #[arg(long, value_enum, default_value_t)]
+        ste_onboarding: SteOnboardingMode,
+        #[arg(long)]
+        ste_pdf: Option<Utf8PathBuf>,
+        #[arg(long, value_enum, default_value_t, hide = true)]
+        invocation_channel: InvocationChannel,
+        #[arg(long, value_enum, hide = true)]
+        package_manager: Option<PackageManager>,
     },
     Check {
         #[arg(long, default_value = ".")]

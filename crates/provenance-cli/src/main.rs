@@ -7,6 +7,7 @@ mod legacy_cleanup;
 mod onboarding;
 mod output;
 mod skills;
+mod ste_onboarding;
 mod wiki;
 
 use clap::Parser;

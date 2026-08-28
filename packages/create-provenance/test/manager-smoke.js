@@ -48,7 +48,9 @@ import { join } from "node:path";
 
 const [operation, ...args] = process.argv.slice(2);
 const value = (name) => args[args.indexOf(name) + 1];
-if (operation === "init") {
+if (operation === "init" && args.includes("--help")) {
+  process.stdout.write("--ste-onboarding");
+} else if (operation === "init") {
   const root = value("--path");
   mkdirSync(join(root, ".provenance", "state"), { recursive: true });
   writeFileSync(join(root, ".provenance", "state", "manifest.json"), "{}\\n");

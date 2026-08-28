@@ -47,6 +47,12 @@ test("the README states the scope of package-manager policy overrides", () => {
   assert.match(readme, /replaces the configured release-age exclusion list/s);
 });
 
+test("the command help names interactive onboarding as the default", () => {
+  const command = readFileSync(new URL("../bin/create-provenance.mjs", import.meta.url), "utf8");
+
+  assert.match(command, /interactive \(default\) or agent/);
+});
+
 const managers = [
   ["npm", "npm", ["install", "--save-dev", "--save-exact", packageSpec]],
   ["pnpm", "pnpm", ["add", "--save-dev", "--save-exact", packageSpec]],
@@ -108,7 +114,16 @@ function verifyExactDevelopmentDependency(manager, command, args, environment) {
   assert.deepEqual(invocations.slice(1), [
     {
       command: "/provenance-engine",
-      args: ["init", "--path", project, "--scope", "default", "--path-prefix", "."],
+      args: ["init", "--help"],
+      capture: true,
+    },
+    {
+      command: "/provenance-engine",
+      args: [
+        "init", "--path", project, "--scope", "default", "--path-prefix", ".",
+        "--ste-onboarding", "interactive",
+        "--invocation-channel", "typescript", "--package-manager", manager,
+      ],
       capture: false,
     },
   ]);
@@ -128,7 +143,41 @@ test("the initializer reports failure when the installed engine rejects init", (
     }),
     /Provenance initialization failed with exit code 23/,
   );
-  assert.equal(invocation, 2);
+  assert.equal(invocation, 3);
+});
+
+test("an engine without onboarding capability receives only legacy init flags", () => {
+  const project = projectDirectory({ packageManager: "npm@1.0.0" });
+  const invocations = [];
+
+  initializeProject({
+    projectDirectory: project,
+    packageVersion,
+    enginePath: "/provenance-engine",
+    execute(invocation) {
+      invocations.push(invocation);
+      if (invocation.args.includes("--ste-onboarding")) {
+        return { status: 2, stdout: "" };
+      }
+      if (invocation.args.at(-2) === "init" && invocation.args.at(-1) === "--help") {
+        return { status: 0, stdout: "Usage: provenance init [OPTIONS]\n" };
+      }
+      return { status: 0, stdout: "" };
+    },
+  });
+
+  assert.deepEqual(invocations.slice(1), [
+    {
+      command: "/provenance-engine",
+      args: ["init", "--help"],
+      capture: true,
+    },
+    {
+      command: "/provenance-engine",
+      args: ["init", "--path", project, "--scope", "default", "--path-prefix", "."],
+      capture: false,
+    },
+  ]);
 });
 
 const lockfiles = [
@@ -236,16 +285,28 @@ test("the command defaults to the current project", () => {
   assert.deepEqual(parseArguments([], "/workspace/application"), {
     projectDirectory: "/workspace/application",
     packageManager: undefined,
+    steOnboarding: "interactive",
   });
 });
 
 test("the command accepts a target path and package-manager override", () => {
   assert.deepEqual(
-    parseArguments(["--path", "packages/web", "--package-manager", "bun"], "/workspace"),
+    parseArguments([
+      "--path", "packages/web", "--package-manager", "bun",
+      "--ste-onboarding", "interactive",
+    ], "/workspace"),
     {
       projectDirectory: "/workspace/packages/web",
       packageManager: "bun",
+      steOnboarding: "interactive",
     },
+  );
+});
+
+test("the command rejects an unknown STE onboarding mode", () => {
+  assert.throws(
+    () => parseArguments(["--ste-onboarding", "automatic"], "/workspace"),
+    /Choose one of: agent, interactive/,
   );
 });
 
@@ -296,11 +357,11 @@ test("the installed SDK engine is resolved after dependency installation", () =>
   });
 
   assert.equal(resolvedAfterInstallation, true);
-  assert.deepEqual(invocations[1].args.slice(0, 2), [
+  assert.deepEqual(invocations[2].args.slice(0, 2), [
     "/project/node_modules/@quality-sh/provenance/bin/provenance.mjs",
     "init",
   ]);
-  assert.equal(invocations.length, 2);
+  assert.equal(invocations.length, 3);
 });
 
 test("Yarn Plug'n'Play resolves the installed SDK through its project loader", () => {
@@ -375,8 +436,12 @@ function projectDirectory(manifest = {}) {
 function recordingExecutor(invocations) {
   return (invocation) => {
     invocations.push(invocation);
-    return invocation.capture
-      ? { status: 0, stdout: JSON.stringify({ status: "ok" }) }
-      : { status: 0, stdout: "" };
+    if (invocation.capture && invocation.args.at(-1) === "--help") {
+      return {
+        status: 0,
+        stdout: "--ste-onboarding",
+      };
+    }
+    return { status: 0, stdout: "" };
   };
 }
