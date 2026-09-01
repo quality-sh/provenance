@@ -191,6 +191,8 @@ fn capture_survives_missing_home() {
         .env_remove("HOMEDRIVE")
         .env_remove("HOMEPATH")
         .env("TMPDIR", &tmpdir)
+        .env("TMP", &tmpdir)
+        .env("TEMP", &tmpdir)
         .args([
             "dogfood",
             "note",
