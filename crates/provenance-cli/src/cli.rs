@@ -371,7 +371,16 @@ pub enum DogfoodCommand {
 
 #[cfg(feature = "dogfood")]
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Serialize, serde::Deserialize,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    ValueEnum,
+    serde::Serialize,
+    serde::Deserialize,
 )]
 #[serde(rename_all = "kebab-case")]
 pub enum DogfoodCategory {
@@ -384,7 +393,16 @@ pub enum DogfoodCategory {
 
 #[cfg(feature = "dogfood")]
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Serialize, serde::Deserialize,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    ValueEnum,
+    serde::Serialize,
+    serde::Deserialize,
 )]
 #[serde(rename_all = "kebab-case")]
 pub enum DogfoodSeverity {
