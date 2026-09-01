@@ -240,6 +240,76 @@ pub enum Command {
         #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
         format: OutputFormat,
     },
+    /// Dev-build-only: record pain-point notes about provenance itself.
+    #[cfg(feature = "dogfood")]
+    Dogfood {
+        #[command(subcommand)]
+        command: DogfoodCommand,
+    },
+}
+
+/// Dev-build-only agent feedback about provenance itself. Notes are appended
+/// to a local spool; nothing ever leaves the machine.
+#[cfg(feature = "dogfood")]
+#[derive(Subcommand)]
+pub enum DogfoodCommand {
+    /// Record one pain-point note. Cheap by design: three enums and a sentence.
+    Note {
+        /// The part of provenance the note concerns: a subcommand name, or "general".
+        #[arg(long)]
+        surface: String,
+        #[arg(long, value_enum)]
+        category: DogfoodCategory,
+        /// Impact the pain had on the task at hand.
+        #[arg(long, value_enum)]
+        severity: DogfoodSeverity,
+        /// What you were trying to do, what happened, what you expected.
+        #[arg(long)]
+        detail: Option<String>,
+        #[arg(long)]
+        suggestion: Option<String>,
+        /// One-line summary of the pain point.
+        summary: String,
+    },
+    /// Print the local note spool.
+    List {
+        #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
+        format: OutputFormat,
+    },
+    /// Aggregate the spool; optionally join session metadata supplied by a
+    /// sister system via the provenance-dogfood-enrichment/v1 contract.
+    Report {
+        /// Enrichment JSON conforming to provenance-dogfood-enrichment/v1
+        /// (a file path, or "-" for stdin).
+        #[arg(long)]
+        enrich: Option<Utf8PathBuf>,
+        #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
+        format: OutputFormat,
+    },
+}
+
+#[cfg(feature = "dogfood")]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Serialize, serde::Deserialize,
+)]
+#[serde(rename_all = "kebab-case")]
+pub enum DogfoodCategory {
+    Friction,
+    Confusion,
+    Missing,
+    Bug,
+    Idea,
+}
+
+#[cfg(feature = "dogfood")]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Serialize, serde::Deserialize,
+)]
+#[serde(rename_all = "kebab-case")]
+pub enum DogfoodSeverity {
+    Blocked,
+    Workaround,
+    Annoyance,
 }
 
 #[derive(Subcommand)]

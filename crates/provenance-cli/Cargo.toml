@@ -27,6 +27,8 @@ walkdir.workspace = true
 [features]
 default = []
 scanner = []
+# Dev-only agent feedback capture. Never enable in release builds.
+dogfood = []
 
 [dev-dependencies]
 assert_cmd.workspace = true

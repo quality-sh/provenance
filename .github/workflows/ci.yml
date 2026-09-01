@@ -29,6 +29,7 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo clippy -p provenance-cli --features dogfood --all-targets -- -D warnings
 
   test:
     name: Test
@@ -38,3 +39,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace
+      - run: cargo test -p provenance-cli --features dogfood
+      - name: Release build must not contain dogfood
+        run: |
+          cargo build --release -p provenance-cli --features scanner
+          if grep -q dogfood target/release/provenance; then
+            echo 'release binary contains dogfood marker' >&2
+            exit 1
+          fi

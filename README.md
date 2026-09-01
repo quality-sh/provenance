@@ -7,7 +7,7 @@ Provenance is a tool for building requirements traceability, from source to requ
 ### Installation
 
 ```sh
-cargo build --release -p provenance-cli --all-features
+cargo build --release -p provenance-cli --features scanner
 ```
 
 The binary lands at `target/release/provenance`. Put it on your PATH.
