@@ -1,10 +1,13 @@
 //! The catch-up journal: a work hint, never proof.
 //!
-//! Writers append one event per committed shard write, inside the
-//! publication section that committed it. Catch-up drains events to learn
-//! what to re-derive cheaply; every freshness claim still rests on hashing
-//! complete shard bytes, so a lost, gapped, truncated, or absent journal
-//! costs speed and never correctness.
+//! Writers append events after the rename-atomic shard write, inside the
+//! publication section that committed it. The shard write itself is not
+//! fsynced, so a machine crash can un-publish a canonical write whose hint
+//! survived; the phantom event is harmless, because catch-up re-derives
+//! rows from the bytes actually on disk, never from the event. Catch-up
+//! drains events to learn what to re-derive cheaply; every freshness claim
+//! still rests on hashing the complete byte domains, so a lost, gapped,
+//! truncated, or absent journal costs speed and never correctness.
 //!
 //! One monotonic sequence space covers events and the stored revision
 //! serial. Three durable values bound it: the stored serial in the database, the
@@ -39,8 +42,11 @@ fn events_path(layout: &ProvenanceLayout) -> Utf8PathBuf {
     journal_dir(layout).join("events.jsonl")
 }
 
+/// The head record lives beside the events directory, not inside it, so
+/// deleting the event log — a legal cache cleanup — never resets the
+/// allocation floor while the database is alive.
 fn head_path(layout: &ProvenanceLayout) -> Utf8PathBuf {
-    journal_dir(layout).join("head.json")
+    layout.cache_dir().join("journal.head.json")
 }
 
 #[derive(Serialize, Deserialize)]
@@ -63,7 +69,7 @@ pub fn read_head_record(layout: &ProvenanceLayout) -> anyhow::Result<Option<i64>
 }
 
 fn write_head_record(layout: &ProvenanceLayout, next_sequence: i64) -> anyhow::Result<()> {
-    let dir = journal_dir(layout);
+    let dir = layout.cache_dir();
     std::fs::create_dir_all(&dir)?;
     let record = HeadRecord {
         schema_version: provenance_core::SUPPORTED_SCHEMA_VERSION.0,
@@ -74,6 +80,22 @@ fn write_head_record(layout: &ProvenanceLayout, next_sequence: i64) -> anyhow::R
     temporary.as_file().sync_all()?;
     temporary.persist(head_path(layout))?;
     super::sync_directory(&dir)
+}
+
+/// Raises the head past a serial that is about to commit, fsynced, BEFORE
+/// the database transaction commits.
+///
+/// Ordering is the point: once the revision row is durable, no writer may
+/// allocate its serial again, and a crash between the commit and any later
+/// bookkeeping must not reopen that window. Raising the head first closes
+/// it — a crash after the commit leaves the head already past the serial; a
+/// crash before the commit (rollback) burns an unused number, which is a
+/// harmless gap in a monotonic space.
+pub fn reserve_committed_serial(layout: &ProvenanceLayout, serial: i64) -> anyhow::Result<()> {
+    if read_head_record(layout)?.unwrap_or(1) <= serial {
+        write_head_record(layout, serial + 1)?;
+    }
+    Ok(())
 }
 
 /// Reads the surviving tail, skipping lines that do not parse.
@@ -152,16 +174,18 @@ pub fn append_event(
     Ok(event)
 }
 
-/// Journals one committed shard write, keyed by declared family.
+/// Journals one committed shard write, keyed by declared family domains.
 ///
 /// Runs inside the writer's held publication section, after the shard write
-/// committed. A path outside the family table journals nothing.
+/// committed. One written file can feed several families — the ideation
+/// landings overlay feeds five — so one write may leave several events. A
+/// path outside every domain journals nothing.
 pub(super) fn record_shard_write(
     layout: &ProvenanceLayout,
     path: &camino::Utf8Path,
 ) -> anyhow::Result<()> {
     crate::test_probes::at("writer_canonical_committed")?;
-    if let Some((family, scope)) = crate::cache::family_for_shard_path(layout, path) {
+    for (family, scope) in crate::cache::families_for_shard_path(layout, path) {
         append_event(
             layout,
             scope.as_ref().map_or("", provenance_core::ScopeId::as_str),

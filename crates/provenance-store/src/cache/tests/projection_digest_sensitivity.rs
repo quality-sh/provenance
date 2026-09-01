@@ -80,7 +80,7 @@ fn fresh_record(family: ProjectionFamily, scope: &str) -> serde_json::Value {
 /// the same validation materialization runs: one contribution with a claim,
 /// one qualifying synthesis packet, one proposal resting on the claim, one
 /// assertion, and one deferred disposition by an allowed actor.
-fn aggregate_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
+pub(super) fn aggregate_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
     let (dir, layout, scope) = seeded_layout();
     seed_integration_shards(&layout, scope.as_str());
 

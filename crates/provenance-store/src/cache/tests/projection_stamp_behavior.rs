@@ -148,9 +148,13 @@ async fn materialization_stores_a_revision_stamp_with_instance_identity() {
     let pool = open_cache(&layout).await.unwrap();
 
     let (serial, digest, instance) = stamp(&pool).await;
-    // Serials are opaque inside one instance; journaled writer events may
-    // have consumed sequences before the first materialization.
-    assert!(serial >= 1);
+    // The committed serial and the fsynced head move together: after a
+    // pass, the head is exactly one past the serial it committed.
+    assert_eq!(
+        crate::publication::read_head_record(&layout).unwrap(),
+        Some(serial + 1),
+        "the head must sit one past the committed serial"
+    );
     assert!(
         digest.starts_with("sha256:") && digest.len() == 71,
         "{digest}"

@@ -2,55 +2,107 @@ use super::super::*;
 use super::fixtures::*;
 use crate::publication::events_in_window;
 use crate::state_store::StateStore;
-use provenance_core::ScopeId;
+
+fn touch(path: &camino::Utf8Path) {
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    if !path.exists() {
+        std::fs::write(path, b"").unwrap();
+    }
+}
+
+fn mapped_families(
+    layout: &crate::layout::ProvenanceLayout,
+    path: &camino::Utf8Path,
+) -> Vec<ProjectionFamily> {
+    families_for_shard_path(layout, path)
+        .into_iter()
+        .map(|(family, _)| family)
+        .collect()
+}
 
 #[test]
-fn every_declared_shard_path_maps_back_to_its_family() {
+fn every_declared_shard_path_maps_back_to_its_own_family_alone() {
     let (_dir, layout, scope) = empty_layout();
     for family in ProjectionFamily::ALL {
         let shard_scope = family.is_scoped().then_some(&scope);
         let path = family.shard_path(&layout, shard_scope).unwrap();
-        let (mapped, mapped_scope) = family_for_shard_path(&layout, &path)
-            .unwrap_or_else(|| panic!("no mapping for {}", family.family_name()));
-        assert_eq!(mapped, family, "path {path} must map by declared family");
-        assert_eq!(mapped_scope.as_ref(), shard_scope, "{path}");
+        touch(&path);
+        assert_eq!(
+            mapped_families(&layout, &path),
+            vec![family],
+            "mapping for {path}"
+        );
     }
 }
 
 #[test]
-fn sibling_files_in_one_directory_map_to_their_own_families() {
+fn every_contributing_file_maps_to_the_families_it_feeds() {
     let (_dir, layout, scope) = empty_layout();
-    let reviews = crate::shards::requirement_reviews_path(&layout, &scope);
-    let requirements = crate::shards::requirements_path(&layout, &scope);
-    let messages = crate::shards::messages_path(&layout, &scope);
-    let threads = crate::shards::threads_path(&layout, &scope);
+
+    let landings = crate::shards::ideation_landings_path(&layout, &scope);
+    touch(&landings);
     assert_eq!(
-        family_for_shard_path(&layout, &reviews).unwrap().0,
-        ProjectionFamily::RequirementReviews
+        mapped_families(&layout, &landings),
+        vec![
+            ProjectionFamily::Contributions,
+            ProjectionFamily::SynthesisPackets,
+            ProjectionFamily::ProposalCards,
+            ProjectionFamily::AssertionRecords,
+            ProjectionFamily::Dispositions,
+        ],
+        "the landings overlay feeds five families"
     );
+
+    let legacy = crate::shards::legacy_promotion_decisions_path(&layout, &scope);
+    touch(&legacy);
     assert_eq!(
-        family_for_shard_path(&layout, &requirements).unwrap().0,
-        ProjectionFamily::Requirements
+        mapped_families(&layout, &legacy),
+        vec![ProjectionFamily::Dispositions]
     );
+
+    let late_month = crate::shards::threads_path(&layout, &scope)
+        .parent()
+        .unwrap()
+        .join("2031-12.jsonl");
+    touch(&late_month);
     assert_eq!(
-        family_for_shard_path(&layout, &messages).unwrap().0,
-        ProjectionFamily::Messages
+        mapped_families(&layout, &late_month),
+        vec![ProjectionFamily::Messages]
     );
+
+    let second_edges = crate::shards::edges_path(&layout)
+        .parent()
+        .unwrap()
+        .join("edges-07.jsonl");
+    touch(&second_edges);
     assert_eq!(
-        family_for_shard_path(&layout, &threads).unwrap().0,
-        ProjectionFamily::Threads
+        mapped_families(&layout, &second_edges),
+        vec![ProjectionFamily::Edges]
     );
 }
 
 #[test]
-fn a_path_outside_the_family_table_maps_to_nothing() {
+fn a_path_outside_canonical_state_maps_to_nothing() {
     let (_dir, layout, _scope) = empty_layout();
-    assert!(family_for_shard_path(&layout, &layout.manifest_path()).is_none());
+    assert!(families_for_shard_path(&layout, &layout.manifest_path()).is_empty());
+    let cache_file = layout.cache_dir().join("journal/events.jsonl");
+    assert!(families_for_shard_path(&layout, &cache_file).is_empty());
+}
+
+#[test]
+fn an_unclaimed_canonical_path_broadcasts_as_suspect() {
+    let (_dir, layout, _scope) = empty_layout();
     let stray = layout
         .scopes_dir()
         .join("default")
         .join("requirements/notes.jsonl");
-    assert!(family_for_shard_path(&layout, &stray).is_none());
+    let mapped = mapped_families(&layout, &stray);
+    assert_eq!(
+        mapped.len(),
+        ProjectionFamily::ALL.len() - 1,
+        "a scoped write no domain claims hints every scoped family: {mapped:?}"
+    );
+    assert!(!mapped.contains(&ProjectionFamily::Edges));
 }
 
 #[test]
@@ -73,32 +125,29 @@ fn committed_writes_leave_journal_events_named_by_family() {
 }
 
 #[test]
-fn a_crash_before_the_journal_append_loses_only_the_hint() {
+fn a_journal_failure_degrades_to_a_lost_hint_and_never_fails_the_write() {
     let (_dir, layout, scope) = empty_layout();
     let store = StateStore::new(layout.clone());
     crate::test_probes::crash_at("writer_canonical_committed");
-    let error = ScopeId::new("default")
-        .and_then(|_| {
-            store.create_source(crate::state_store::CreateSourceInput {
-                scope_id: scope.clone(),
-                id: sid("source_crashed"),
-                name: "Crashed".into(),
-                source_type: provenance_core::SourceType::Policy,
-                url: None,
-                reference: None,
-                commit_pin: None,
-                effective_date: None,
-                review_date: None,
-                superseded_by: None,
-                origin_thread: None,
-                origin_message: None,
-            })
-        })
-        .unwrap_err();
+    let created = store.create_source(crate::state_store::CreateSourceInput {
+        scope_id: scope.clone(),
+        id: sid("source_survives"),
+        name: "Survives".into(),
+        source_type: provenance_core::SourceType::Policy,
+        url: None,
+        reference: None,
+        commit_pin: None,
+        effective_date: None,
+        review_date: None,
+        superseded_by: None,
+        origin_thread: None,
+        origin_message: None,
+    });
     crate::test_probes::disarm("writer_canonical_committed");
-    assert!(error.to_string().contains("injected crash"), "{error}");
 
-    // The canonical write survived; the journal never heard about it.
+    // The canonical write committed before the journal ran, so the caller
+    // sees success; the lost hint costs the sweep one digest comparison.
+    created.expect("a journal failure must not fail the committed write");
     assert_eq!(store.list_sources(&scope).unwrap().len(), 1);
     assert!(events_in_window(&layout, 1, i64::MAX).unwrap().is_empty());
 }

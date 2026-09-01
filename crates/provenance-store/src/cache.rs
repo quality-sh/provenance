@@ -15,8 +15,8 @@ pub use prime::*;
 pub use projection_digest::{
     family_content_digests, revision_digest, revision_digest_from_stored_rows, FamilyContentDigest,
 };
-pub(crate) use projection_families::family_for_shard_path;
 pub use projection_families::ProjectionFamily;
+pub(crate) use projection_families::{domain_bytes, domain_metadata, families_for_shard_path};
 pub use traceability::*;
 
 use crate::layout::ProvenanceLayout;

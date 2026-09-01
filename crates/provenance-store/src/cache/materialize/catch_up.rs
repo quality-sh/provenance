@@ -67,6 +67,11 @@ async fn catch_up_with_guard(
     let snapshot = publication::snapshot_state_under_guard(guard, layout)?;
     let store = StateStore::new(snapshot.layout().clone());
     let manifest = store.manifest()?;
+    // Rebuild's gatekeeper holds for catch-up too: an aggregate the
+    // validator refuses commits nothing, whether or not its bytes moved.
+    for scope in &manifest.scopes {
+        store.validate_ideation_scope(&scope.id)?;
+    }
     let mut scopes: Vec<ScopeId> = manifest
         .scopes
         .iter()
@@ -111,11 +116,13 @@ async fn catch_up_with_guard(
 
     report.digest = revision_digest_from_stored_rows(&stamp_rows)?;
     stamp::insert_revision(&mut tx, head, &report.digest).await?;
+    publication::reserve_committed_serial(layout, head)?;
     crate::test_probes::at("catch_up_before_commit")?;
     tx.commit().await?;
     crate::test_probes::at("db_committed_before_head_fsync")?;
     publication::normalize_head(layout, head)?;
     publication::prune_up_to(layout, head)?;
+    pool.close().await;
     Ok(report)
 }
 
@@ -163,13 +170,10 @@ impl Sweep<'_> {
         let scope_name = scope.map_or("", ScopeId::as_str).to_string();
         let key = (family.family_name().to_string(), scope_name.clone());
 
-        let path = family.shard_path(self.snapshot_layout, scope)?;
-        let bytes = match std::fs::read(&path) {
-            Ok(bytes) => bytes,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
-            Err(error) => return Err(error.into()),
-        };
+        let domain = family.byte_domain(self.snapshot_layout, scope)?;
+        let bytes = crate::cache::domain_bytes(&domain)?;
         report.families_hashed += 1;
+        crate::test_probes::at("catch_up_unit_hashed")?;
         let shard_digest = canonical_digest::digest(&bytes);
 
         let stored_row = self.baseline.get(&key);
@@ -260,6 +264,7 @@ async fn rebuild(
     )
     .fetch_one(pool)
     .await?;
+    pool.close().await;
     Ok(CatchUpReport {
         serial,
         digest,
@@ -272,25 +277,12 @@ async fn rebuild(
     })
 }
 
-/// Size and mtime of the canonical shard file: diagnostic only, never a
-/// comparison input.
+/// Size and mtime across the family's live byte domain: diagnostic only,
+/// never a comparison input.
 fn observed_metadata(
     layout: &ProvenanceLayout,
     family: ProjectionFamily,
     scope: Option<&ScopeId>,
 ) -> anyhow::Result<(i64, i64)> {
-    let path = family.shard_path(layout, scope)?;
-    match std::fs::metadata(&path) {
-        Ok(metadata) => {
-            let mtime = metadata
-                .modified()?
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_or(0, |duration| {
-                    i64::try_from(duration.as_nanos()).unwrap_or(i64::MAX)
-                });
-            Ok((i64::try_from(metadata.len())?, mtime))
-        }
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok((0, 0)),
-        Err(error) => Err(error.into()),
-    }
+    crate::cache::domain_metadata(&family.byte_domain(layout, scope)?)
 }

@@ -17,20 +17,26 @@ entropy when the database first materializes; serials compare only within
 one instance. The database can be deleted and rebuilt with
 `provenance materialize`; loss degrades speed, never correctness.
 
-Catch-up is the steady-state refresh. Writers journal each committed shard
-write as a hint under `.provenance/cache/journal/`; a catch-up pass drains
-the hints, hashes the complete bytes of every stored family, and reparses
-only the families whose bytes moved. The journal is never proof: a lost,
-gapped, or absent journal changes only speed, because the hash sweep runs
-either way. Every projection write — rebuild and catch-up — runs under the
-repository publication lock from snapshot through commit.
+Catch-up is the steady-state refresh. Writers that go through the shared
+shard-mutation seam journal a hint under `.provenance/cache/journal/`;
+writes that bypass that seam leave no hint and are found by the hash sweep
+instead. A catch-up pass validates the aggregate, drains the hints, hashes
+the complete byte domain of every stored family — every file that family's
+readers read, month shards, edge shards, and the ideation landings overlay
+included — and reparses only the families whose bytes moved. The journal
+is never proof: a lost, gapped, or absent journal changes only speed,
+because the hash sweep runs either way. Every projection write — rebuild
+and catch-up — runs under the repository publication lock from snapshot
+through commit.
 
 Migrations are applied transactionally and record applied versions in SQLite.
 Materialization runs the same lifecycle aggregate validator used by direct
 writes, swarm landing, import, and `check` before clearing or loading cache
-tables. It copies canonical state under the repository publication lock, then
-loads that coherent snapshot without holding a synchronous filesystem lock
-across asynchronous SQLite work.
+tables. Projection writes hold an owned publication guard: the lock belongs
+to an open file description rather than a thread, acquisition waits on the
+blocking pool, and the guard stays held across the asynchronous SQLite
+transaction from snapshot through commit, so no canonical publication can
+interleave with a projection write.
 
 Typed SDK verification runs are also derived cache data, stored as JSONL under
 `.provenance/cache/scopes/<scope>/verification-runs.jsonl`. They record local

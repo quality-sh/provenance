@@ -7,6 +7,16 @@
 //! it releases on `Drop`. Acquisition waits on the blocking pool, so no
 //! runtime worker blocks. Locked helpers take `&PublicationGuard`, so a call
 //! without a held guard does not compile.
+//!
+//! CONSTRAINT for future callers (W5 serving): while a guard is held across
+//! awaits, a synchronous `with_repository_publication` section entered ON a
+//! runtime worker thread blocks that worker in `flock` with no awareness of
+//! the guard. N such callers on N workers starve the runtime, and the
+//! guard-holder's continuation can never run to release the lock. Today's
+//! one-command CLI cannot reach this. A served process must route
+//! synchronous publication sections off the worker threads
+//! (`spawn_blocking`) or make those callers async before it serves
+//! concurrent requests.
 
 use super::{
     prepare_import_transactions_dir, prepare_publication_lock, read_only,

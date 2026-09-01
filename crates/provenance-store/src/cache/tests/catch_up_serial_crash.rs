@@ -114,9 +114,15 @@ async fn total_cache_loss_restarts_the_serial_inside_a_fresh_instance() {
     materialize_state(&layout).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
     let (_, first_digest, first_instance) = stamped(&pool).await;
-    drop(pool);
-    // SQLite pools may hold the file; remove db and sidecars and journal.
-    for name in ["provenance.db", "provenance.db-shm", "provenance.db-wal"] {
+    pool.close().await;
+    // Total loss means every durable component: the database and its
+    // sidecars, the event log, and the head record beside it.
+    for name in [
+        "provenance.db",
+        "provenance.db-shm",
+        "provenance.db-wal",
+        "journal.head.json",
+    ] {
         let path = layout.cache_dir().join(name);
         if path.exists() {
             std::fs::remove_file(path).unwrap();
@@ -237,4 +243,73 @@ async fn catch_up_holds_the_publication_lock_at_commit() {
     catch_up_state(&layout).await.unwrap();
     crate::test_probes::disarm("catch_up_before_commit");
     assert!(fired.get(), "the commit probe must have run");
+}
+
+#[tokio::test]
+async fn a_writer_after_a_pre_head_fsync_crash_never_reuses_the_committed_serial() {
+    let (_dir, layout, scope) = seeded_layout();
+    materialize_state(&layout).await.unwrap();
+    let store = StateStore::new(layout.clone());
+    create_source(&store, &scope, "source_before_crash");
+
+    crate::test_probes::crash_at("db_committed_before_head_fsync");
+    let error = catch_up_state(&layout).await.unwrap_err();
+    crate::test_probes::disarm("db_committed_before_head_fsync");
+    assert!(error.to_string().contains("injected crash"), "{error}");
+
+    let pool = open_cache(&layout).await.unwrap();
+    let (committed_serial, _, _) = stamped(&pool).await;
+    pool.close().await;
+
+    // The pass committed, but the crash landed before the post-commit head
+    // fsync. A writer arriving now must still allocate past the committed
+    // serial, or its event dies undrained when the next window opens.
+    create_source(&store, &scope, "source_after_crash");
+    let newest = events_in_window(&layout, 1, i64::MAX)
+        .unwrap()
+        .iter()
+        .map(|event| event.sequence)
+        .max()
+        .unwrap();
+    assert!(
+        newest > committed_serial,
+        "event sequence {newest} must exceed the committed serial {committed_serial}"
+    );
+
+    let report = catch_up_state(&layout).await.unwrap();
+    assert!(
+        report.events_drained >= 1,
+        "the writer's event must be drained, not pruned undrained: {report:?}"
+    );
+}
+
+#[tokio::test]
+async fn deleting_the_journal_directory_never_resets_the_sequence_space() {
+    let (_dir, layout, scope) = seeded_layout();
+    materialize_state(&layout).await.unwrap();
+    let pool = open_cache(&layout).await.unwrap();
+    let (committed_serial, _, _) = stamped(&pool).await;
+    pool.close().await;
+
+    let journal_dir = layout.cache_dir().join("journal");
+    if journal_dir.exists() {
+        std::fs::remove_dir_all(&journal_dir).unwrap();
+    }
+
+    let store = StateStore::new(layout.clone());
+    create_source(&store, &scope, "source_after_journal_loss");
+    let newest = events_in_window(&layout, 1, i64::MAX)
+        .unwrap()
+        .iter()
+        .map(|event| event.sequence)
+        .max()
+        .unwrap();
+    assert!(
+        newest > committed_serial,
+        "event sequence {newest} must exceed the committed serial {committed_serial} \
+         after the events directory is lost"
+    );
+
+    let report = catch_up_state(&layout).await.unwrap();
+    assert!(report.events_drained >= 1, "{report:?}");
 }

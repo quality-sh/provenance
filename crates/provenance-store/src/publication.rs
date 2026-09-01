@@ -13,9 +13,9 @@ mod journal;
 mod read_only;
 pub use guard::{publication_guard, snapshot_state_under_guard, PublicationGuard};
 
-pub use journal::{
-    append_event, events_in_window, normalize_head, prune_up_to, read_head_record, JournalEvent,
-};
+#[cfg(test)]
+pub(crate) use journal::read_head_record;
+pub(crate) use journal::{events_in_window, normalize_head, prune_up_to, reserve_committed_serial};
 pub use read_only::with_read_only_validation;
 
 pub struct StateSnapshot {
@@ -474,7 +474,12 @@ impl crate::state_store::StateStore {
         self.with_repository_publication(|| {
             let lock_path = self.layout.state_shard_lock_path(path)?;
             let result = crate::jsonl::mutate_jsonl_locked(path, &lock_path, mutate)?;
-            journal::record_shard_write(&self.layout, path)?;
+            // The journal is a hint. The canonical write above committed, so
+            // an emission failure degrades to a lost hint — the hash sweep
+            // still finds the change — and never fails the caller's write.
+            if let Err(error) = journal::record_shard_write(&self.layout, path) {
+                eprintln!("provenance: journal hint dropped for {path}: {error}");
+            }
             Ok(result)
         })
     }

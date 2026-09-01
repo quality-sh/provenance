@@ -38,7 +38,7 @@ async fn stored_digest(pool: &sqlx::SqlitePool) -> String {
 }
 
 /// Catch-up output must equal a fresh total rebuild, rows and digest.
-async fn assert_catch_up_equals_rebuild(layout: &crate::layout::ProvenanceLayout) {
+pub(super) async fn assert_catch_up_equals_rebuild(layout: &crate::layout::ProvenanceLayout) {
     let report = catch_up_state(layout).await.unwrap();
     let pool = open_cache(layout).await.unwrap();
     let caught_up_rows = dump_family_tables(&pool).await;
@@ -131,9 +131,19 @@ async fn an_unchanged_pass_hashes_everything_and_rewrites_nothing() {
     let digest_before = stored_digest(&pool).await;
     drop(pool);
 
+    let hashed = std::rc::Rc::new(std::cell::Cell::new(0u64));
+    let counter = hashed.clone();
+    crate::test_probes::arm("catch_up_unit_hashed", move || {
+        counter.set(counter.get() + 1);
+        Ok(())
+    });
     let report = catch_up_state(&layout).await.unwrap();
+    crate::test_probes::disarm("catch_up_unit_hashed");
     assert!(!report.rebuilt);
-    assert_eq!(report.families_hashed, 19, "every family is hashed, always");
+    // The hasher itself is instrumented; the report's counter must agree
+    // with what actually ran.
+    assert_eq!(hashed.get(), 19, "every family is hashed, always");
+    assert_eq!(report.families_hashed, hashed.get());
     assert_eq!(report.families_rederived, 0, "no family is reparsed");
     assert_eq!(report.rows_written, 0, "no row is rewritten");
     assert_eq!(
@@ -228,12 +238,17 @@ async fn a_same_size_edit_inside_a_drained_window_without_an_event_is_still_hash
     std::fs::write(&path, &edited).unwrap();
     filetime::set_file_mtime(&path, mtime).unwrap();
 
+    let hashed = std::rc::Rc::new(std::cell::Cell::new(0u64));
+    let counter = hashed.clone();
+    crate::test_probes::arm("catch_up_unit_hashed", move || {
+        counter.set(counter.get() + 1);
+        Ok(())
+    });
     let report = catch_up_state(&layout).await.unwrap();
+    crate::test_probes::disarm("catch_up_unit_hashed");
     assert!(report.events_drained >= 1, "the window was open");
-    assert_eq!(
-        report.families_hashed, 19,
-        "the drain never excuses the sweep"
-    );
+    assert_eq!(hashed.get(), 19, "the drain never excuses the sweep");
+    assert_eq!(report.families_hashed, hashed.get());
     let pool = open_cache(&layout).await.unwrap();
     let statement: String =
         sqlx::query_scalar("SELECT statement FROM rules WHERE id = 'rule_schads_pay_001'")

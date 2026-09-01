@@ -12,6 +12,7 @@ use sqlx::{Sqlite, Transaction};
 pub(super) async fn write_stamp(
     tx: &mut Transaction<'_, Sqlite>,
     store: &StateStore,
+    snapshot_layout: &ProvenanceLayout,
     layout: &ProvenanceLayout,
     scopes: &[ScopeId],
     serial: i64,
@@ -29,8 +30,9 @@ pub(super) async fn write_stamp(
     sqlx::query("DELETE FROM projection_family_digests")
         .execute(&mut **tx)
         .await?;
+    crate::test_probes::at("stamp_before_baselines")?;
     for family in &families {
-        let (shard_digest, size_bytes, mtime_ns) = shard_baseline(layout, family)?;
+        let (shard_digest, size_bytes, mtime_ns) = shard_baseline(snapshot_layout, layout, family)?;
         insert_family_digest_row(
             tx,
             &family.scope_id,
@@ -87,12 +89,14 @@ pub(super) async fn insert_family_digest_row(
     Ok(())
 }
 
-/// Hashes the shard file the family's rows were derived from.
+/// Hashes the byte domain the family's rows were derived from.
 ///
-/// The byte hash is the catch-up comparison baseline; size and mtime are
-/// diagnostic metadata and never license a skip. An absent shard hashes as
-/// empty bytes, so a later pass that still finds no file sees a match.
+/// The hash reads the SNAPSHOT tree — the same bytes the rows came from —
+/// so a live edit racing the rebuild cannot poison the baseline; the next
+/// pass sees the difference and re-derives. Size and mtime come from the
+/// live tree and are diagnostic metadata only; they never license a skip.
 fn shard_baseline(
+    snapshot_layout: &ProvenanceLayout,
     layout: &ProvenanceLayout,
     family: &FamilyContentDigest,
 ) -> anyhow::Result<(String, i64, i64)> {
@@ -101,25 +105,10 @@ fn shard_baseline(
     } else {
         Some(ScopeId::new(&family.scope_id)?)
     };
-    let path = family.kind.shard_path(layout, scope.as_ref())?;
-    let bytes = match std::fs::read(&path) {
-        Ok(bytes) => bytes,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
-        Err(error) => return Err(error.into()),
-    };
-    let (size_bytes, mtime_ns) = match std::fs::metadata(&path) {
-        Ok(metadata) => {
-            let mtime = metadata
-                .modified()?
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_or(0, |duration| {
-                    i64::try_from(duration.as_nanos()).unwrap_or(i64::MAX)
-                });
-            (i64::try_from(metadata.len())?, mtime)
-        }
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => (0, 0),
-        Err(error) => return Err(error.into()),
-    };
+    let domain = family.kind.byte_domain(snapshot_layout, scope.as_ref())?;
+    let bytes = crate::cache::domain_bytes(&domain)?;
+    let (size_bytes, mtime_ns) =
+        crate::cache::domain_metadata(&family.kind.byte_domain(layout, scope.as_ref())?)?;
     Ok((
         crate::canonical_digest::digest(&bytes),
         size_bytes,

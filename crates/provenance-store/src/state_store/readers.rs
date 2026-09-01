@@ -308,28 +308,40 @@ pub(super) fn read_message_shards(
     scope: &ScopeId,
 ) -> anyhow::Result<Vec<Message>> {
     crate::publication::with_repository_publication(layout, || {
-        let threads_dir = shards::threads_path(layout, scope)
-            .parent()
-            .expect("threads path must have a parent")
-            .to_path_buf();
-        if !threads_dir.exists() {
-            return Ok(Vec::new());
-        }
-        let mut shard_paths = Vec::new();
-        for entry in std::fs::read_dir(&threads_dir)? {
-            let entry = entry?;
-            if entry.file_type()?.is_file() {
-                let path = Utf8PathBuf::from_path_buf(entry.path()).map_err(|path| {
-                    anyhow::anyhow!("non-UTF-8 message shard path: {}", path.display())
-                })?;
-                if is_message_month_shard(&path) {
-                    shard_paths.push(path);
-                }
+        read_jsonl_shards(message_shard_paths(layout, scope)?, "message")
+    })
+}
+
+/// Every month shard the message reader reads, sorted.
+///
+/// This discovery is the message family's byte domain: the projection's
+/// hash sweep and journal mapping call it too, so what the reader reads and
+/// what the stamp attests can never be two different sets of files.
+pub fn message_shard_paths(
+    layout: &ProvenanceLayout,
+    scope: &ScopeId,
+) -> anyhow::Result<Vec<Utf8PathBuf>> {
+    let threads_dir = shards::threads_path(layout, scope)
+        .parent()
+        .expect("threads path must have a parent")
+        .to_path_buf();
+    if !threads_dir.exists() {
+        return Ok(Vec::new());
+    }
+    let mut shard_paths = Vec::new();
+    for entry in std::fs::read_dir(&threads_dir)? {
+        let entry = entry?;
+        if entry.file_type()?.is_file() {
+            let path = Utf8PathBuf::from_path_buf(entry.path()).map_err(|path| {
+                anyhow::anyhow!("non-UTF-8 message shard path: {}", path.display())
+            })?;
+            if is_message_month_shard(&path) {
+                shard_paths.push(path);
             }
         }
-        shard_paths.sort();
-        read_jsonl_shards(shard_paths, "message")
-    })
+    }
+    shard_paths.sort();
+    Ok(shard_paths)
 }
 
 fn is_message_month_shard(path: &Utf8Path) -> bool {
@@ -349,29 +361,37 @@ pub(super) fn read_edge_shards(
     closed_scope: Option<&ScopeId>,
 ) -> anyhow::Result<Vec<Edge>> {
     crate::publication::with_repository_publication(layout, || {
-        let edges_dir = layout.edges_dir();
-        if !edges_dir.exists() {
-            return Ok(Vec::new());
-        }
-        let mut shard_paths = Vec::new();
-        for entry in std::fs::read_dir(&edges_dir)? {
-            let entry = entry?;
-            if entry.file_type()?.is_file() {
-                let path = Utf8PathBuf::from_path_buf(entry.path()).map_err(|path| {
-                    anyhow::anyhow!("non-UTF-8 edge shard path: {}", path.display())
-                })?;
-                if path.extension() == Some("jsonl") {
-                    shard_paths.push(path);
-                }
-            }
-        }
-        shard_paths.sort();
+        let shard_paths = edge_shard_paths(layout)?;
         if let Some(scope) = closed_scope {
             read_closed_edges(shard_paths, scope)
         } else {
             read_jsonl_shards(shard_paths, "edge")
         }
     })
+}
+
+/// Every edge shard the edge reader reads, sorted.
+///
+/// Like [`message_shard_paths`], this is the edges family's byte domain:
+/// the reader, the hash sweep, and the journal mapping share it.
+pub fn edge_shard_paths(layout: &ProvenanceLayout) -> anyhow::Result<Vec<Utf8PathBuf>> {
+    let edges_dir = layout.edges_dir();
+    if !edges_dir.exists() {
+        return Ok(Vec::new());
+    }
+    let mut shard_paths = Vec::new();
+    for entry in std::fs::read_dir(&edges_dir)? {
+        let entry = entry?;
+        if entry.file_type()?.is_file() {
+            let path = Utf8PathBuf::from_path_buf(entry.path())
+                .map_err(|path| anyhow::anyhow!("non-UTF-8 edge shard path: {}", path.display()))?;
+            if path.extension() == Some("jsonl") {
+                shard_paths.push(path);
+            }
+        }
+    }
+    shard_paths.sort();
+    Ok(shard_paths)
 }
 
 fn read_closed_edges(paths: Vec<Utf8PathBuf>, scope: &ScopeId) -> anyhow::Result<Vec<Edge>> {
