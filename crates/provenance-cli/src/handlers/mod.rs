@@ -9,6 +9,8 @@ mod coverage;
 mod dictionary;
 mod dispositions;
 mod docs;
+#[cfg(feature = "dogfood")]
+mod dogfood;
 mod domains;
 mod edges;
 mod export;
@@ -274,6 +276,10 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
             format,
         } => {
             merge_jsonl::handle(&base, &ours, &theirs, output, path.as_deref(), format)?;
+        }
+        #[cfg(feature = "dogfood")]
+        Command::Dogfood { command } => {
+            dogfood::handle(command, quiet)?;
         }
     }
     Ok(())

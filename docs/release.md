@@ -66,7 +66,7 @@ The `Release` workflow creates the GitHub Release, attaches archives, and genera
 Build the local binary with:
 
 ```sh
-cargo build --release -p provenance-cli --all-features
+cargo build --release -p provenance-cli --features scanner
 ```
 
 Before a release, validate the Rust markers with
@@ -91,3 +91,12 @@ prefix.
 A tag with a SemVer prerelease component is published as a prerelease, so
 `v0.2.2-rc.1` is the way to rehearse a release without announcing one. npm
 publishes that version under the `next` tag; stable versions use `latest`.
+
+## Never `--all-features`
+
+Release and CI builds of `provenance-cli` must enumerate features explicitly
+(today: `--features scanner`). The `dogfood` feature is dev-only (internal
+agent feedback capture) and must never ship in a released binary;
+`--all-features` would compile it in. CI enforces this by building the
+release binary with the release feature set and asserting it contains no
+`dogfood` marker string.

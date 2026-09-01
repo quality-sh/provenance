@@ -254,7 +254,8 @@ fn skill_name(skill: &EmbeddedSkill) -> anyhow::Result<&'static str> {
     Ok(name)
 }
 
-fn home_dir() -> anyhow::Result<PathBuf> {
+#[allow(clippy::redundant_pub_crate)]
+pub(crate) fn home_dir() -> anyhow::Result<PathBuf> {
     home_dir_from_env(|key| std::env::var_os(key))
 }
 

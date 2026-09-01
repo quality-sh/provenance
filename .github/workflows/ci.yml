@@ -115,6 +115,16 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
       - run: cargo test --workspace --all-features --no-fail-fast
+      # Default-features lane: runs the dogfood absence tests, which assert the
+      # dev-only command does not exist in feature-less builds.
+      - run: cargo test -p provenance-cli --no-fail-fast
+        if: runner.os == 'Linux'
+      - name: Release build must not contain dogfood
+        if: runner.os == 'Linux'
+        run: |
+          cargo build --release -p provenance-cli --features scanner
+          test -x target/release/provenance
+          ! grep -qa dogfood target/release/provenance
 
   rule-coverage:
     name: Rule Coverage

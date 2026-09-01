@@ -18,6 +18,19 @@ use std::{
 #[allow(dead_code)]
 mod dictionary_support;
 
+/// These tests each spawn a debug-build `provenance` doing CPU-heavy PDF
+/// imports against a 10s-timeout HTTP client. Run concurrently on a small CI
+/// runner they starve each other into client timeouts and silent retries,
+/// which the request-count assertions then observe (this test file has failed
+/// exactly that way on main). Serialize them.
+static SERIAL: Mutex<()> = Mutex::new(());
+
+fn serial() -> std::sync::MutexGuard<'static, ()> {
+    SERIAL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 const REQUEST_FORM: &str = "https://www.asd-ste100.org/STE_downloads.html#article02-2l";
 const CHANGE_FORM: &str = "https://www.asd-ste100.org/STE_downloads.html#features038-31";
 
@@ -26,6 +39,7 @@ const CHANGE_FORM: &str = "https://www.asd-ste100.org/STE_downloads.html#feature
 #[verifies("rule_ste_dictionary_attribution", examples)]
 #[verifies("rule_ste_dictionary_claim_scope", examples)]
 fn interactive_onboarding_imports_the_selected_pdf() {
+    let _serial = serial();
     let fixture = Fixture::new();
     let pdf = fixture.temporary.path().join("issue-9.pdf");
     std::fs::write(&pdf, dictionary_support::dictionary_pdf()).unwrap();
@@ -46,6 +60,7 @@ fn interactive_onboarding_imports_the_selected_pdf() {
 #[test]
 #[verifies("rule_ste_dictionary_interactive_acquisition", examples)]
 fn interactive_onboarding_directs_the_user_to_the_official_form() {
+    let _serial = serial();
     let fixture = Fixture::new();
 
     fixture
@@ -62,18 +77,25 @@ fn interactive_onboarding_directs_the_user_to_the_official_form() {
 #[verifies("rule_ste_dictionary_agent_acquisition", examples)]
 #[verifies("rule_ste_dictionary_download_identity", examples)]
 fn agent_onboarding_downloads_and_imports_the_official_asset() {
+    let _serial = serial();
     let server = TestServer::new(200, dictionary_support::dictionary_pdf());
     let fixture = Fixture::new();
 
-    fixture
+    let output = fixture
         .init("agent")
         .env("PROVENANCE_TEST_STE100_ASSET_URL", server.url())
-        .assert()
-        .success();
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    assert!(output.status.success(), "init failed: {stderr}");
 
     assert!(dictionary_support::reference_path(&fixture.repo).is_file());
     let requests = server.requests();
-    assert_eq!(requests.len(), 1);
+    assert_eq!(
+        requests.len(),
+        1,
+        "recorded requests: {requests:#?}\ncli stderr: {stderr}"
+    );
     assert!(requests[0].to_ascii_lowercase().contains(&format!(
         "user-agent: provenance/{}",
         env!("CARGO_PKG_VERSION")
@@ -84,6 +106,7 @@ fn agent_onboarding_downloads_and_imports_the_official_asset() {
 #[verifies("rule_ste_dictionary_import_reuse", examples)]
 #[verifies("rule_ste_dictionary_no_operational_download", examples)]
 fn repeated_setup_and_normal_checks_use_local_data_without_network_access() {
+    let _serial = serial();
     let server = TestServer::new(200, dictionary_support::dictionary_pdf());
     let fixture = Fixture::new();
     fixture
@@ -110,6 +133,7 @@ fn repeated_setup_and_normal_checks_use_local_data_without_network_access() {
 #[test]
 #[verifies("rule_ste_dictionary_download_concurrency", examples)]
 fn concurrent_agent_onboarding_shares_one_download() {
+    let _serial = serial();
     let server = TestServer::new(200, dictionary_support::dictionary_pdf());
     let temporary = tempfile::tempdir().unwrap();
     let asset_dir = temporary.path().join("assets");
@@ -140,13 +164,19 @@ fn concurrent_agent_onboarding_shares_one_download() {
             String::from_utf8_lossy(&output.stderr)
         );
     }
-    assert_eq!(server.requests().len(), 1);
+    assert_eq!(
+        server.requests().len(),
+        1,
+        "recorded requests: {:#?}",
+        server.requests()
+    );
 }
 
 #[test]
 #[verifies("rule_ste_dictionary_download_retry_bound", examples)]
 #[verifies("rule_ste_dictionary_asset_fallback", examples)]
 fn exhausted_download_retries_fall_back_to_the_official_request_form() {
+    let _serial = serial();
     let server = TestServer::new(503, b"unavailable");
     let fixture = Fixture::new();
 
@@ -157,7 +187,12 @@ fn exhausted_download_retries_fall_back_to_the_official_request_form() {
         .success()
         .stdout(predicate::str::contains(REQUEST_FORM));
 
-    assert_eq!(server.requests().len(), 3);
+    assert_eq!(
+        server.requests().len(),
+        3,
+        "recorded requests: {:#?}",
+        server.requests()
+    );
     assert!(!dictionary_support::reference_path(&fixture.repo).exists());
 }
 
@@ -211,6 +246,16 @@ fn init_args(repo: &Path, mode: &str) -> Vec<String> {
     .collect()
 }
 
+#[test]
+fn server_ignores_connections_that_send_nothing() {
+    let _serial = serial();
+    let server = TestServer::new(200, b"body");
+    // Same shape as Drop's wake-up socket: connect, send nothing, hang up.
+    drop(TcpStream::connect(server.address).unwrap());
+    thread::sleep(Duration::from_millis(50));
+    assert_eq!(server.requests().len(), 0);
+}
+
 struct TestServer {
     address: std::net::SocketAddr,
     requests: Arc<Mutex<Vec<String>>>,
@@ -229,8 +274,11 @@ impl TestServer {
         let shared_stop = Arc::clone(&stop);
         let body = body.to_vec();
         let thread = thread::spawn(move || {
-            while !shared_stop.load(Ordering::Relaxed) {
+            while !shared_stop.load(Ordering::SeqCst) {
                 match listener.accept() {
+                    // Drop's wake-up socket can land here before the stop flag
+                    // is observed; never serve once shutdown has begun.
+                    Ok(_) if shared_stop.load(Ordering::SeqCst) => break,
                     Ok((stream, _)) => serve(stream, status, &body, &shared_requests),
                     Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                         thread::sleep(Duration::from_millis(5));
@@ -258,7 +306,7 @@ impl TestServer {
 
 impl Drop for TestServer {
     fn drop(&mut self) {
-        self.stop.store(true, Ordering::Relaxed);
+        self.stop.store(true, Ordering::SeqCst);
         let _ = TcpStream::connect(self.address);
         if let Some(thread) = self.thread.take() {
             thread.join().unwrap();
@@ -267,17 +315,32 @@ impl Drop for TestServer {
 }
 
 fn serve(mut stream: TcpStream, status: u16, body: &[u8], requests: &Mutex<Vec<String>>) {
+    // BSD-derived systems (macOS) make accepted sockets inherit the
+    // listener's O_NONBLOCK; a nonblocking stream turns write_all into
+    // silent truncation (or a panic, before the hardening) as soon as the
+    // client is slow to drain the body, which the client reports as
+    // "response body closed before all bytes were read" and retries.
+    stream.set_nonblocking(false).unwrap();
+    // Generous: on loaded CI runners the client can sit descheduled for
+    // seconds between connect and first byte; giving up early drops real
+    // requests from the recorded count. The timeout only guards against a
+    // connection that never progresses at all.
     stream
-        .set_read_timeout(Some(Duration::from_secs(2)))
+        .set_read_timeout(Some(Duration::from_secs(30)))
         .unwrap();
     let mut bytes = Vec::new();
     let mut buffer = [0_u8; 1024];
     while !bytes.ends_with(b"\r\n\r\n") {
-        let read = stream.read(&mut buffer).unwrap();
-        if read == 0 {
-            break;
-        }
+        // A torn or instantly-closed connection (Drop's wake-up socket shows
+        // up as a reset on Windows) must never panic the accept thread.
+        let read = match stream.read(&mut buffer) {
+            Ok(0) | Err(_) => break,
+            Ok(read) => read,
+        };
         bytes.extend_from_slice(&buffer[..read]);
+    }
+    if bytes.is_empty() {
+        return;
     }
     requests
         .lock()
@@ -288,11 +351,12 @@ fn serve(mut stream: TcpStream, status: u16, body: &[u8], requests: &Mutex<Vec<S
     } else {
         "Service Unavailable"
     };
-    write!(
+    // Response failures surface as a failed download in the test under
+    // observation; they must not panic the shared accept thread.
+    let _ = write!(
         stream,
         "HTTP/1.1 {status} {reason}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
         body.len()
-    )
-    .unwrap();
-    stream.write_all(body).unwrap();
+    );
+    let _ = stream.write_all(body);
 }

@@ -263,3 +263,23 @@ For more details, see README.md and docs/QUICKSTART.md.
 - If push fails, resolve and retry until it succeeds
 
 <!-- END BEADS INTEGRATION -->
+
+## Dogfood Notes (dev builds only)
+
+When you hit friction, confusion, a missing capability, or a bug in the
+`provenance` CLI itself, file a note before working around it — one command,
+local-only (notes append to `~/.provenance/dogfood/`; nothing leaves the
+machine):
+
+```sh
+provenance dogfood note \
+  --surface <subcommand|general> \
+  --category friction|confusion|missing|bug|idea \
+  --severity blocked|workaround|annoyance \
+  --detail "what you tried and what happened" \
+  "one-line summary"
+```
+
+`provenance dogfood report` aggregates the spool. The command exists only in
+dev builds (`--features dogfood`); if your binary lacks it, mention the pain
+point in your final message instead.
