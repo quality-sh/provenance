@@ -128,7 +128,13 @@ fn remove_superseded_edges(
                         edge.to_id.as_str().to_string(),
                     ))
             }
-            _ => false,
+            EdgeType::RefinesInto
+            | EdgeType::DependsOn
+            | EdgeType::Contradicts
+            | EdgeType::Supersedes
+            | EdgeType::Needs
+            | EdgeType::Resolves
+            | EdgeType::Spawns => false,
         })
         .map(|edge| edge.id)
         .collect::<Vec<_>>();

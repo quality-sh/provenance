@@ -6,6 +6,8 @@ include!("tests/graph.rs");
 include!("tests/ideation.rs");
 include!("tests/integrations.rs");
 include!("tests/proposal_lifecycle.rs");
+include!("tests/relation_traversal.rs");
+include!("tests/relations.rs");
 include!("tests/proposal_lifecycle_dispositions.rs");
 include!("tests/services.rs");
 include!("tests/shaping.rs");

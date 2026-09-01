@@ -179,7 +179,9 @@ export type NodeType =
   | "resolution"
   | "rule"
   | "topic"
-  | "question";
+  | "question"
+  | "domain"
+  | "boundary";
 
 export type EdgeType =
   | "references"

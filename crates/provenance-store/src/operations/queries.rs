@@ -23,6 +23,9 @@ mod stale;
 mod symbols;
 mod walk;
 
+#[cfg(test)]
+mod tests;
+
 fn open(repo: Option<Utf8PathBuf>) -> anyhow::Result<(Utf8PathBuf, StateStore)> {
     let repo = super::discover_repository(repo)?;
     let store = StateStore::new(ProvenanceLayout::new(repo.clone()));

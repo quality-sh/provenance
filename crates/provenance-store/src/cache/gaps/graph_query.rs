@@ -116,6 +116,10 @@ impl<'a, 'graph> GraphQuery<'a, 'graph> {
                 .questions
                 .iter()
                 .any(|question| question.id == *id),
+            // The endpoint table forbids edges that name a domain or a
+            // boundary, so these arms only classify illegal data: an edge
+            // that names one is dangling by definition.
+            NodeType::Domain | NodeType::Boundary => false,
         }
     }
 

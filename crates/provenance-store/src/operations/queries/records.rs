@@ -51,6 +51,18 @@ pub(super) fn load(
             .into_iter()
             .map(|record| GraphNode::Question(Box::new(record))),
     );
+    nodes.extend(
+        store
+            .list_domains(scope)?
+            .into_iter()
+            .map(|record| GraphNode::Domain(Box::new(record))),
+    );
+    nodes.extend(
+        store
+            .list_boundaries(scope)?
+            .into_iter()
+            .map(|record| GraphNode::Boundary(Box::new(record))),
+    );
     nodes.retain(|node| include_retired || !node.retired());
     nodes.sort_by(|left, right| {
         rank(left.node_type())
@@ -127,5 +139,7 @@ pub(super) const fn rank(node_type: NodeType) -> u8 {
         NodeType::Rule => 3,
         NodeType::Topic => 4,
         NodeType::Question => 5,
+        NodeType::Domain => 6,
+        NodeType::Boundary => 7,
     }
 }

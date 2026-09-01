@@ -151,6 +151,9 @@ impl RetiredNodes {
             NodeType::Resolution => self.resolutions.contains(id),
             NodeType::Topic => self.topics.contains(id),
             NodeType::Question => self.questions.contains(id),
+            // Domains and boundaries never retire; they have no status words
+            // and no retirement derivation.
+            NodeType::Domain | NodeType::Boundary => false,
         }
     }
 }

@@ -128,7 +128,10 @@ impl Assembler<'_> {
                 .iter()
                 .find(|record| record.id.as_str() == node_id)
                 .map(source_link),
-            NodeType::Topic | NodeType::Question => None,
+            // Domains and boundaries have no wiki page of their own yet, so
+            // a gap about one links nowhere, the same as topics and
+            // questions.
+            NodeType::Topic | NodeType::Question | NodeType::Domain | NodeType::Boundary => None,
         }
     }
 
@@ -259,5 +262,7 @@ const fn reader_node_word(node_type: NodeType) -> &'static str {
         NodeType::Rule => "rule",
         NodeType::Topic => "topic",
         NodeType::Question => "question",
+        NodeType::Domain => "domain",
+        NodeType::Boundary => "boundary",
     }
 }
