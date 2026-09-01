@@ -39,7 +39,7 @@ The TypeScript initializer detects npm, pnpm, Yarn, Bun, Deno, or Nub.
 To build the CLI from this source tree:
 
 ```sh
-cargo build --release -p provenance-cli --all-features
+cargo build --release -p provenance-cli --features scanner
 ```
 
 The binaries land at `target/release/provenance` and
