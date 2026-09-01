@@ -18,6 +18,19 @@ use std::{
 #[allow(dead_code)]
 mod dictionary_support;
 
+/// These tests each spawn a debug-build `provenance` doing CPU-heavy PDF
+/// imports against a 10s-timeout HTTP client. Run concurrently on a small CI
+/// runner they starve each other into client timeouts and silent retries,
+/// which the request-count assertions then observe (this test file has failed
+/// exactly that way on main). Serialize them.
+static SERIAL: Mutex<()> = Mutex::new(());
+
+fn serial() -> std::sync::MutexGuard<'static, ()> {
+    SERIAL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 const REQUEST_FORM: &str = "https://www.asd-ste100.org/STE_downloads.html#article02-2l";
 const CHANGE_FORM: &str = "https://www.asd-ste100.org/STE_downloads.html#features038-31";
 
@@ -26,6 +39,7 @@ const CHANGE_FORM: &str = "https://www.asd-ste100.org/STE_downloads.html#feature
 #[verifies("rule_ste_dictionary_attribution", examples)]
 #[verifies("rule_ste_dictionary_claim_scope", examples)]
 fn interactive_onboarding_imports_the_selected_pdf() {
+    let _serial = serial();
     let fixture = Fixture::new();
     let pdf = fixture.temporary.path().join("issue-9.pdf");
     std::fs::write(&pdf, dictionary_support::dictionary_pdf()).unwrap();
@@ -46,6 +60,7 @@ fn interactive_onboarding_imports_the_selected_pdf() {
 #[test]
 #[verifies("rule_ste_dictionary_interactive_acquisition", examples)]
 fn interactive_onboarding_directs_the_user_to_the_official_form() {
+    let _serial = serial();
     let fixture = Fixture::new();
 
     fixture
@@ -62,6 +77,7 @@ fn interactive_onboarding_directs_the_user_to_the_official_form() {
 #[verifies("rule_ste_dictionary_agent_acquisition", examples)]
 #[verifies("rule_ste_dictionary_download_identity", examples)]
 fn agent_onboarding_downloads_and_imports_the_official_asset() {
+    let _serial = serial();
     let server = TestServer::new(200, dictionary_support::dictionary_pdf());
     let fixture = Fixture::new();
 
@@ -84,6 +100,7 @@ fn agent_onboarding_downloads_and_imports_the_official_asset() {
 #[verifies("rule_ste_dictionary_import_reuse", examples)]
 #[verifies("rule_ste_dictionary_no_operational_download", examples)]
 fn repeated_setup_and_normal_checks_use_local_data_without_network_access() {
+    let _serial = serial();
     let server = TestServer::new(200, dictionary_support::dictionary_pdf());
     let fixture = Fixture::new();
     fixture
@@ -110,6 +127,7 @@ fn repeated_setup_and_normal_checks_use_local_data_without_network_access() {
 #[test]
 #[verifies("rule_ste_dictionary_download_concurrency", examples)]
 fn concurrent_agent_onboarding_shares_one_download() {
+    let _serial = serial();
     let server = TestServer::new(200, dictionary_support::dictionary_pdf());
     let temporary = tempfile::tempdir().unwrap();
     let asset_dir = temporary.path().join("assets");
@@ -147,6 +165,7 @@ fn concurrent_agent_onboarding_shares_one_download() {
 #[verifies("rule_ste_dictionary_download_retry_bound", examples)]
 #[verifies("rule_ste_dictionary_asset_fallback", examples)]
 fn exhausted_download_retries_fall_back_to_the_official_request_form() {
+    let _serial = serial();
     let server = TestServer::new(503, b"unavailable");
     let fixture = Fixture::new();
 
@@ -213,6 +232,7 @@ fn init_args(repo: &Path, mode: &str) -> Vec<String> {
 
 #[test]
 fn server_ignores_connections_that_send_nothing() {
+    let _serial = serial();
     let server = TestServer::new(200, b"body");
     // Same shape as Drop's wake-up socket: connect, send nothing, hang up.
     drop(TcpStream::connect(server.address).unwrap());
