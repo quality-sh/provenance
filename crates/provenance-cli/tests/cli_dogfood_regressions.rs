@@ -9,6 +9,7 @@ fn note_cmd(spool_dir: &Path) -> Command {
         .env_remove("PROVENANCE_SESSION_ID")
         .env_remove("WORKFLOWD_SESSION_ID")
         .env_remove("CLAUDE_SESSION_ID")
+        .env_remove("CLAUDE_CODE_SESSION_ID")
         .env_remove("OPENCODE_SESSION_ID");
     cmd
 }

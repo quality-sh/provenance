@@ -9,6 +9,7 @@ fn note_cmd(spool_dir: &Path) -> Command {
         .env_remove("PROVENANCE_SESSION_ID")
         .env_remove("WORKFLOWD_SESSION_ID")
         .env_remove("CLAUDE_SESSION_ID")
+        .env_remove("CLAUDE_CODE_SESSION_ID")
         .env_remove("OPENCODE_SESSION_ID");
     cmd
 }
@@ -64,6 +65,30 @@ fn note_appends_structured_jsonl_line() {
     assert!(note["repo"].is_null());
     assert!(note["branch"].is_null());
     assert!(note["commit"].is_null());
+}
+
+#[test]
+fn note_captures_claude_code_session_id() {
+    let temp = tempfile::tempdir().unwrap();
+
+    note_cmd(temp.path())
+        .env("CLAUDE_CODE_SESSION_ID", "cc-sess-9")
+        .args([
+            "dogfood",
+            "note",
+            "--surface",
+            "general",
+            "--category",
+            "friction",
+            "--severity",
+            "annoyance",
+            "from claude code",
+        ])
+        .assert()
+        .success();
+
+    let notes = read_spool(temp.path());
+    assert_eq!(notes[0]["session_id"], "cc-sess-9");
 }
 
 #[test]

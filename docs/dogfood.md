@@ -36,7 +36,8 @@ The agent supplies three low-cardinality dimensions plus text:
 Everything else is stamped by the CLI, never self-reported: `ts_ms`, `host`,
 repo/branch/commit (null outside a git repo), `provenance_version`, and
 `session_id` — read from the first non-empty of `PROVENANCE_SESSION_ID`,
-`WORKFLOWD_SESSION_ID`, `CLAUDE_SESSION_ID`, `OPENCODE_SESSION_ID`. Missing
+`WORKFLOWD_SESSION_ID`, `CLAUDE_SESSION_ID`, `CLAUDE_CODE_SESSION_ID`,
+`OPENCODE_SESSION_ID`. Missing
 context degrades rather than failing capture: session/git fields go null,
 `host` falls back to `"unknown"`, and with no resolvable home directory the
 spool degrades to `$TMPDIR/provenance-dogfood`.
