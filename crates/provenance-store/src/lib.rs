@@ -14,3 +14,4 @@ pub mod shards;
 pub mod stale;
 pub mod state_store;
 pub mod statement_analysis;
+mod test_probes;

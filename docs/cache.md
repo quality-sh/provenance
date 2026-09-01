@@ -17,6 +17,14 @@ entropy when the database first materializes; serials compare only within
 one instance. The database can be deleted and rebuilt with
 `provenance materialize`; loss degrades speed, never correctness.
 
+Catch-up is the steady-state refresh. Writers journal each committed shard
+write as a hint under `.provenance/cache/journal/`; a catch-up pass drains
+the hints, hashes the complete bytes of every stored family, and reparses
+only the families whose bytes moved. The journal is never proof: a lost,
+gapped, or absent journal changes only speed, because the hash sweep runs
+either way. Every projection write — rebuild and catch-up — runs under the
+repository publication lock from snapshot through commit.
+
 Migrations are applied transactionally and record applied versions in SQLite.
 Materialization runs the same lifecycle aggregate validator used by direct
 writes, swarm landing, import, and `check` before clearing or loading cache

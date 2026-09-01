@@ -1,7 +1,11 @@
+mod catch_up_behavior;
+mod catch_up_serial_crash;
 mod fixtures;
 mod frontier_behavior;
 mod gap_rule_behavior;
+mod journal_emission;
 mod materialization_behavior;
+mod materialize_guard_behavior;
 mod projection_digest_sensitivity;
 mod projection_stamp_behavior;
 mod reporting_behavior;

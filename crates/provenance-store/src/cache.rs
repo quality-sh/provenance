@@ -10,9 +10,12 @@ mod traceability;
 pub use gaps::*;
 pub use health::*;
 pub use impact::*;
-pub use materialize::{materialize_empty_state, materialize_state};
+pub use materialize::{catch_up_state, materialize_empty_state, materialize_state, CatchUpReport};
 pub use prime::*;
-pub use projection_digest::{family_content_digests, revision_digest, FamilyContentDigest};
+pub use projection_digest::{
+    family_content_digests, revision_digest, revision_digest_from_stored_rows, FamilyContentDigest,
+};
+pub(crate) use projection_families::family_for_shard_path;
 pub use projection_families::ProjectionFamily;
 pub use traceability::*;
 

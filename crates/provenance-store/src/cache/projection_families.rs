@@ -195,3 +195,28 @@ fn sorted_bytes<T: serde::Serialize>(
     let count = records.len() as u64;
     Ok((crate::canonical_digest::canonical_bytes(&records)?, count))
 }
+
+/// Maps a written shard path back to its declared family, by exact path
+/// equality against the family table — never by directory component, so
+/// sibling files like `requirements/req.jsonl` and `requirements/review.jsonl`
+/// land in their own families, and bindings and every ideation family are
+/// covered because the table covers them.
+pub fn family_for_shard_path(
+    layout: &ProvenanceLayout,
+    path: &camino::Utf8Path,
+) -> Option<(ProjectionFamily, Option<ScopeId>)> {
+    if path == shards::edges_path(layout) {
+        return Some((ProjectionFamily::Edges, None));
+    }
+    let relative = path.strip_prefix(layout.scopes_dir()).ok()?;
+    let scope = ScopeId::new(relative.components().next()?.as_str()).ok()?;
+    ProjectionFamily::ALL
+        .into_iter()
+        .filter(|family| family.is_scoped())
+        .find(|family| {
+            family
+                .shard_path(layout, Some(&scope))
+                .is_ok_and(|declared| declared == path)
+        })
+        .map(|family| (family, Some(scope)))
+}

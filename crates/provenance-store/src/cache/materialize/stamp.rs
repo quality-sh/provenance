@@ -14,6 +14,7 @@ pub(super) async fn write_stamp(
     store: &StateStore,
     layout: &ProvenanceLayout,
     scopes: &[ScopeId],
+    serial: i64,
 ) -> anyhow::Result<()> {
     let families = projection_digest::family_content_digests(store, scopes)?;
     let revision = projection_digest::revision_digest(&families)?;
@@ -23,27 +24,66 @@ pub(super) async fn write_stamp(
         .execute(&mut **tx)
         .await?;
 
-    let last_serial: i64 =
-        sqlx::query_scalar("SELECT COALESCE(MAX(serial), 0) FROM projection_revision")
-            .fetch_one(&mut **tx)
-            .await?;
-    sqlx::query("INSERT INTO projection_revision (serial, digest) VALUES (?, ?)")
-        .bind(last_serial + 1)
-        .bind(&revision)
-        .execute(&mut **tx)
-        .await?;
+    insert_revision(tx, serial, &revision).await?;
 
     sqlx::query("DELETE FROM projection_family_digests")
         .execute(&mut **tx)
         .await?;
     for family in &families {
         let (shard_digest, size_bytes, mtime_ns) = shard_baseline(layout, family)?;
-        sqlx::query("INSERT INTO projection_family_digests (scope_id, family, digest, record_count, size_bytes, mtime_ns) VALUES (?, ?, ?, ?, ?, ?)")
-            .bind(&family.scope_id).bind(family.family)
-            .bind(shard_digest).bind(i64::try_from(family.record_count)?)
-            .bind(size_bytes).bind(mtime_ns)
-            .execute(&mut **tx).await?;
+        insert_family_digest_row(
+            tx,
+            &family.scope_id,
+            family.family,
+            &shard_digest,
+            &family.digest,
+            i64::try_from(family.record_count)?,
+            size_bytes,
+            mtime_ns,
+        )
+        .await?;
     }
+    Ok(())
+}
+
+pub(super) async fn insert_revision(
+    tx: &mut Transaction<'_, Sqlite>,
+    serial: i64,
+    digest: &str,
+) -> anyhow::Result<()> {
+    sqlx::query("INSERT INTO projection_revision (serial, digest) VALUES (?, ?)")
+        .bind(serial)
+        .bind(digest)
+        .execute(&mut **tx)
+        .await?;
+    Ok(())
+}
+
+#[expect(clippy::too_many_arguments, reason = "one row, one column each")]
+pub(super) async fn insert_family_digest_row(
+    tx: &mut Transaction<'_, Sqlite>,
+    scope_id: &str,
+    family: &str,
+    shard_digest: &str,
+    content_digest: &str,
+    record_count: i64,
+    size_bytes: i64,
+    mtime_ns: i64,
+) -> anyhow::Result<()> {
+    sqlx::query(
+        "INSERT OR REPLACE INTO projection_family_digests \
+         (scope_id, family, digest, content_digest, record_count, size_bytes, mtime_ns) \
+         VALUES (?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(scope_id)
+    .bind(family)
+    .bind(shard_digest)
+    .bind(content_digest)
+    .bind(record_count)
+    .bind(size_bytes)
+    .bind(mtime_ns)
+    .execute(&mut **tx)
+    .await?;
     Ok(())
 }
 
