@@ -211,6 +211,15 @@ fn init_args(repo: &Path, mode: &str) -> Vec<String> {
     .collect()
 }
 
+#[test]
+fn server_ignores_connections_that_send_nothing() {
+    let server = TestServer::new(200, b"body");
+    // Same shape as Drop's wake-up socket: connect, send nothing, hang up.
+    drop(TcpStream::connect(server.address).unwrap());
+    thread::sleep(Duration::from_millis(50));
+    assert_eq!(server.requests().len(), 0);
+}
+
 struct TestServer {
     address: std::net::SocketAddr,
     requests: Arc<Mutex<Vec<String>>>,
@@ -229,8 +238,11 @@ impl TestServer {
         let shared_stop = Arc::clone(&stop);
         let body = body.to_vec();
         let thread = thread::spawn(move || {
-            while !shared_stop.load(Ordering::Relaxed) {
+            while !shared_stop.load(Ordering::SeqCst) {
                 match listener.accept() {
+                    // Drop's wake-up socket can land here before the stop flag
+                    // is observed; never serve once shutdown has begun.
+                    Ok(_) if shared_stop.load(Ordering::SeqCst) => break,
                     Ok((stream, _)) => serve(stream, status, &body, &shared_requests),
                     Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                         thread::sleep(Duration::from_millis(5));
@@ -258,7 +270,7 @@ impl TestServer {
 
 impl Drop for TestServer {
     fn drop(&mut self) {
-        self.stop.store(true, Ordering::Relaxed);
+        self.stop.store(true, Ordering::SeqCst);
         let _ = TcpStream::connect(self.address);
         if let Some(thread) = self.thread.take() {
             thread.join().unwrap();
@@ -273,11 +285,16 @@ fn serve(mut stream: TcpStream, status: u16, body: &[u8], requests: &Mutex<Vec<S
     let mut bytes = Vec::new();
     let mut buffer = [0_u8; 1024];
     while !bytes.ends_with(b"\r\n\r\n") {
-        let read = stream.read(&mut buffer).unwrap();
-        if read == 0 {
-            break;
-        }
+        // A torn or instantly-closed connection (Drop's wake-up socket shows
+        // up as a reset on Windows) must never panic the accept thread.
+        let read = match stream.read(&mut buffer) {
+            Ok(0) | Err(_) => break,
+            Ok(read) => read,
+        };
         bytes.extend_from_slice(&buffer[..read]);
+    }
+    if bytes.is_empty() {
+        return;
     }
     requests
         .lock()
@@ -288,11 +305,12 @@ fn serve(mut stream: TcpStream, status: u16, body: &[u8], requests: &Mutex<Vec<S
     } else {
         "Service Unavailable"
     };
-    write!(
+    // Response failures surface as a failed download in the test under
+    // observation; they must not panic the shared accept thread.
+    let _ = write!(
         stream,
         "HTTP/1.1 {status} {reason}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
         body.len()
-    )
-    .unwrap();
-    stream.write_all(body).unwrap();
+    );
+    let _ = stream.write_all(body);
 }
