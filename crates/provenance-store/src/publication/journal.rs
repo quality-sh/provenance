@@ -171,6 +171,7 @@ pub fn append_event(
     file.sync_all()?;
     crate::test_probes::at("journal_event_appended")?;
     write_head_record(layout, sequence + 1)?;
+    crate::test_probes::at("journal_head_advanced")?;
     Ok(event)
 }
 

@@ -36,7 +36,9 @@ pub use inputs::{
     UpdateQuestionInput,
 };
 pub use proposal_surfaces::{ProposalDemand, ProposalSurfaceReason, SurfacedProposal, TopicClaim};
-pub use requirement_reviews::{requirement_statement_changes, RequirementStatementChange};
+pub use requirement_reviews::{
+    requirement_statement_changes, RequirementReviewInput, RequirementStatementChange,
+};
 pub use typed_statement_policy::TypedSpecWriteError;
 
 use crate::{layout::ProvenanceLayout, shards};

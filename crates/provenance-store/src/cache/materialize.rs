@@ -18,6 +18,7 @@ pub async fn materialize_empty_state(
     let _held = &guard;
     crate::test_probes::at("materialize_empty_under_guard")?;
     let pool = open_cache(layout).await?;
+    crate::test_probes::at("run_migrations_under_guard")?;
     let migrations_applied = migrations::run_migrations(&pool, layout).await?;
     // Close, never just drop: a dropped pool releases its file handles
     // asynchronously, and on Windows a later delete of the database races
@@ -50,6 +51,7 @@ pub(super) async fn materialize_with_guard(
         store.validate_ideation_scope(&scope.id)?;
     }
     let pool = open_cache(layout).await?;
+    crate::test_probes::at("run_migrations_under_guard")?;
     let migrations_applied = migrations::run_migrations(&pool, layout).await?;
     let stored_serial: i64 =
         sqlx::query_scalar("SELECT COALESCE(MAX(serial), 0) FROM projection_revision")

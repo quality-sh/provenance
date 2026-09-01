@@ -105,6 +105,152 @@ fn an_unclaimed_canonical_path_broadcasts_as_suspect() {
     assert!(!mapped.contains(&ProjectionFamily::Edges));
 }
 
+/// The families a writer's events name after a marker sequence.
+fn families_after(layout: &crate::layout::ProvenanceLayout, mark: i64) -> Vec<String> {
+    let mut families: Vec<String> = events_in_window(layout, mark + 1, i64::MAX)
+        .unwrap()
+        .into_iter()
+        .map(|event| event.family)
+        .collect();
+    families.sort();
+    families.dedup();
+    families
+}
+
+fn tail_mark(layout: &crate::layout::ProvenanceLayout) -> i64 {
+    events_in_window(layout, 1, i64::MAX)
+        .unwrap()
+        .iter()
+        .map(|event| event.sequence)
+        .max()
+        .unwrap_or(0)
+}
+
+/// The mutation battery showed a directory-name derivation surviving: every
+/// family here lives in a directory whose name is NOT the family name, so
+/// an event derived from the path's parent would carry the wrong label.
+#[test]
+fn writer_events_carry_declared_families_not_directory_names() {
+    let (_dir, layout, scope) = seeded_layout();
+    let store = StateStore::new(layout.clone());
+
+    let mark = tail_mark(&layout);
+    store
+        .record_requirement_reviews(
+            &scope,
+            vec![crate::state_store::RequirementReviewInput {
+                rule_id: sid("rule_schads_pay_001"),
+                requirement_id: sid("req_schads_overtime"),
+                field: "statement".into(),
+                before: "Overtime".into(),
+                after: "Overtime pay".into(),
+                changed_at: 1,
+            }],
+        )
+        .unwrap();
+    assert_eq!(
+        families_after(&layout, mark),
+        vec!["requirement_reviews"],
+        "requirements/review.jsonl journals reviews, never `requirements`"
+    );
+
+    let mark = tail_mark(&layout);
+    store
+        .post_thread_message(crate::state_store::PostMessageInput {
+            scope_id: scope.clone(),
+            parent: provenance_core::ThreadParent {
+                node_type: provenance_core::NodeType::Requirement,
+                node_id: sid("req_schads_overtime"),
+            },
+            role: provenance_core::MessageRole::User,
+            body: "Hello".into(),
+        })
+        .unwrap();
+    let after_message = families_after(&layout, mark);
+    assert!(
+        after_message.contains(&"messages".to_string()),
+        "threads/<month>.jsonl journals messages, never `threads` alone: {after_message:?}"
+    );
+
+    std::fs::write(layout.root().join("pay.rs"), "fn pay() {}\n").unwrap();
+    let mark = tail_mark(&layout);
+    store
+        .materialize_implementation_binding(
+            crate::state_store::MaterializeImplementationBindingInput {
+                scope_id: scope.clone(),
+                rule_id: sid("rule_schads_pay_001"),
+                declared_by: "agent".into(),
+                file: "pay.rs".into(),
+                symbol: "pay".into(),
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        families_after(&layout, mark),
+        vec!["implementation_bindings"],
+        "implementations/binding.jsonl journals implementation_bindings"
+    );
+
+    let mark = tail_mark(&layout);
+    store
+        .materialize_verification_binding(crate::state_store::MaterializeVerificationBindingInput {
+            scope_id: scope,
+            rule_id: sid("rule_schads_pay_001"),
+            key: "pay_examples".into(),
+            method: provenance_core::VerificationMethod::Examples,
+            declared_by: "agent".into(),
+            file: "pay.rs".into(),
+            symbol: Some("pay".into()),
+        })
+        .unwrap();
+    assert_eq!(
+        families_after(&layout, mark),
+        vec!["verification_bindings"],
+        "verifications/binding.jsonl journals verification_bindings"
+    );
+}
+
+/// One landed batch feeds five families through one written file; every
+/// hint must carry a declared family name, never the directory's.
+#[test]
+fn a_landed_batch_hints_every_overlay_family() {
+    let (_dir, layout, scope) = seeded_layout();
+    let store = StateStore::new(layout.clone());
+    let mark = tail_mark(&layout);
+    let batch: crate::state_store::IdeationLandingBatch =
+        serde_json::from_value(serde_json::json!({
+            "contributions": [{
+                "schema_version": 1, "scope_id": scope.as_str(), "id": "contribution_landed",
+                "target": {"artifact_type": "requirement", "artifact_id": "req_schads_overtime"},
+                "participant_slot": "slot_a", "stance": "support",
+                "strongest_finding": "Landed", "evidence_references": [], "material_claims": [],
+                "risks": [], "objections": [], "challenges": [], "suggested_artifact_changes": [],
+                "unsupported_recommendations": [],
+                "uncertainty": {"level": "low", "rationale": "R"}, "open_questions": []
+            }],
+            "synthesis_packets": [], "proposals": [], "assertions": [], "dispositions": []
+        }))
+        .unwrap();
+    store.land_ideation_batch(&scope, batch, false).unwrap();
+    let after_landing = families_after(&layout, mark);
+    for family in [
+        "assertion_records",
+        "contributions",
+        "dispositions",
+        "proposal_cards",
+        "synthesis_packets",
+    ] {
+        assert!(
+            after_landing.contains(&family.to_string()),
+            "the landings overlay must hint `{family}`: {after_landing:?}"
+        );
+    }
+    assert!(
+        !after_landing.contains(&"ideation".to_string()),
+        "no event carries a directory name"
+    );
+}
+
 #[test]
 fn committed_writes_leave_journal_events_named_by_family() {
     let (_dir, layout, scope) = empty_layout();

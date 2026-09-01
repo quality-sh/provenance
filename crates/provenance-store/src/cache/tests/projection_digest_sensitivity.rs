@@ -10,7 +10,7 @@ use serde_json::json;
 ///
 /// References point at records the seeded fixture already holds; nothing
 /// here has to satisfy write-path validation, only the family's parse.
-fn fresh_record(family: ProjectionFamily, scope: &str) -> serde_json::Value {
+pub(super) fn fresh_record(family: ProjectionFamily, scope: &str) -> serde_json::Value {
     let target = json!({"artifact_type": "requirement", "artifact_id": "req_schads_overtime"});
     match family.family_name() {
         "sources" => json!({"schema_version": 1, "scope_id": scope, "id": "source_new",
@@ -156,7 +156,11 @@ pub(super) fn aggregate_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeI
 /// Most families take one appended record. An assertion admits no free
 /// text and no second assertion for the same proposal, so its id moves; a
 /// disposition's rationale moves for the same reason.
-fn change_one_record(layout: &ProvenanceLayout, family: ProjectionFamily, scope: &ScopeId) {
+pub(super) fn change_one_record(
+    layout: &ProvenanceLayout,
+    family: ProjectionFamily,
+    scope: &ScopeId,
+) {
     let shard_scope = family.is_scoped().then_some(scope);
     let path = family.shard_path(layout, shard_scope).unwrap();
     match family {

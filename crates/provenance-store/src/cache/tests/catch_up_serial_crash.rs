@@ -1,5 +1,5 @@
 use super::super::*;
-use super::catch_up_behavior::dump_family_tables;
+use super::catch_up_behavior::{assert_catch_up_equals_rebuild, dump_family_tables};
 use super::fixtures::*;
 use super::projection_stamp_behavior::seed_integration_shards;
 use crate::publication::events_in_window;
@@ -281,6 +281,88 @@ async fn a_writer_after_a_pre_head_fsync_crash_never_reuses_the_committed_serial
         report.events_drained >= 1,
         "the writer's event must be drained, not pruned undrained: {report:?}"
     );
+}
+
+#[tokio::test]
+async fn a_failed_commit_leaves_the_tail_unpruned() {
+    let (_dir, layout, scope) = seeded_layout();
+    materialize_state(&layout).await.unwrap();
+    let store = StateStore::new(layout.clone());
+    create_source(&store, &scope, "source_unpruned");
+
+    crate::test_probes::crash_at("catch_up_before_commit");
+    let error = catch_up_state(&layout).await.unwrap_err();
+    crate::test_probes::disarm("catch_up_before_commit");
+    assert!(error.to_string().contains("injected crash"), "{error}");
+
+    // Step 4's order is the invariant: prune only observes a committed
+    // revision. A pass that never committed must leave every event.
+    assert!(
+        !events_in_window(&layout, 1, i64::MAX).unwrap().is_empty(),
+        "an uncommitted pass must not prune the tail"
+    );
+    let report = catch_up_state(&layout).await.unwrap();
+    assert!(report.events_drained >= 1, "{report:?}");
+}
+
+#[tokio::test]
+async fn a_committed_pass_interrupted_before_prune_replays_with_zero_churn() {
+    let (_dir, layout, scope) = seeded_layout();
+    materialize_state(&layout).await.unwrap();
+    let store = StateStore::new(layout.clone());
+    create_source(&store, &scope, "source_redrained");
+
+    // Commit lands; the crash takes the pass before normalize and prune,
+    // so the drained events survive in the tail.
+    crate::test_probes::crash_at("db_committed_before_head_fsync");
+    let error = catch_up_state(&layout).await.unwrap_err();
+    crate::test_probes::disarm("db_committed_before_head_fsync");
+    assert!(error.to_string().contains("injected crash"), "{error}");
+    assert!(
+        !events_in_window(&layout, 1, i64::MAX).unwrap().is_empty(),
+        "the drained events must still sit in the tail"
+    );
+
+    // The second pass sees the same events. Their rows are already
+    // committed, so re-processing them converges with zero churn.
+    let report = catch_up_state(&layout).await.unwrap();
+    assert_eq!(report.rows_written, 0, "re-drain must not churn rows");
+    assert_eq!(report.families_rederived, 0, "{report:?}");
+    assert!(
+        events_in_window(&layout, 1, i64::MAX).unwrap().is_empty(),
+        "the recovered pass prunes what the crash left behind"
+    );
+    assert_catch_up_equals_rebuild(&layout).await;
+}
+
+#[tokio::test]
+async fn a_crash_after_the_head_advance_is_a_lost_hint_with_consistent_state() {
+    let (_dir, layout, scope) = seeded_layout();
+    materialize_state(&layout).await.unwrap();
+    let store = StateStore::new(layout.clone());
+
+    // The plan's fifth crash point: event appended, head advanced, caller
+    // interrupted. Both durable values agree; the writer's publication
+    // already committed, so the failure degrades to a dropped hint.
+    crate::test_probes::crash_at("journal_head_advanced");
+    create_source(&store, &scope, "source_head_advanced");
+    crate::test_probes::disarm("journal_head_advanced");
+
+    assert_eq!(store.list_sources(&scope).unwrap().len(), 2);
+    let newest = events_in_window(&layout, 1, i64::MAX)
+        .unwrap()
+        .iter()
+        .map(|event| event.sequence)
+        .max()
+        .unwrap();
+    assert_eq!(
+        crate::publication::read_head_record(&layout).unwrap(),
+        Some(newest + 1),
+        "append and advance are both durable at this crash point"
+    );
+    let report = catch_up_state(&layout).await.unwrap();
+    assert!(report.events_drained >= 1, "{report:?}");
+    assert_catch_up_equals_rebuild(&layout).await;
 }
 
 #[tokio::test]

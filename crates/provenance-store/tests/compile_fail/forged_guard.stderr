@@ -1,0 +1,11 @@
+error[E0451]: field `_lock` of struct `PublicationGuard` is private
+ --> tests/compile_fail/forged_guard.rs:6:37
+  |
+6 |     let forged = PublicationGuard { _lock: None };
+  |                                     ^^^^^ private field
+
+error: type `publication::guard::LockedPublicationFile` is private
+ --> tests/compile_fail/forged_guard.rs:6:44
+  |
+6 |     let forged = PublicationGuard { _lock: None };
+  |                                            ^^^^ private type

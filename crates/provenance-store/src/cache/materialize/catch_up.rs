@@ -40,6 +40,7 @@ async fn catch_up_with_guard(
     layout: &ProvenanceLayout,
 ) -> anyhow::Result<CatchUpReport> {
     let pool = open_cache(layout).await?;
+    crate::test_probes::at("run_migrations_under_guard")?;
     let migrations_applied = migrations::run_migrations(&pool, layout).await?;
     let stored: Option<(i64, String)> = sqlx::query_as(
         "SELECT serial, digest FROM projection_revision ORDER BY serial DESC LIMIT 1",
@@ -171,10 +172,7 @@ impl Sweep<'_> {
         let key = (family.family_name().to_string(), scope_name.clone());
 
         let domain = family.byte_domain(self.snapshot_layout, scope)?;
-        let bytes = crate::cache::domain_bytes(&domain)?;
-        report.families_hashed += 1;
-        crate::test_probes::at("catch_up_unit_hashed")?;
-        let shard_digest = canonical_digest::digest(&bytes);
+        let shard_digest = hash_unit(report, &crate::cache::domain_bytes(&domain)?)?;
 
         let stored_row = self.baseline.get(&key);
         let unchanged = stored_row
@@ -215,6 +213,17 @@ impl Sweep<'_> {
             record_count,
         ))
     }
+}
+
+/// The one way the sweep obtains a domain digest.
+///
+/// The counter and the observation probe live inside, so the report's
+/// `families_hashed` is derived from hashes that actually ran; a sweep
+/// that skips a family cannot claim its hash.
+fn hash_unit(report: &mut CatchUpReport, bytes: &[u8]) -> anyhow::Result<String> {
+    report.families_hashed += 1;
+    crate::test_probes::at("catch_up_unit_hashed")?;
+    Ok(canonical_digest::digest(bytes))
 }
 
 /// A (family, scope) with a baseline but no unit — a scope that left the

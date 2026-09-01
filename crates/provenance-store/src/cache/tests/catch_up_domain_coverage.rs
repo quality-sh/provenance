@@ -9,7 +9,69 @@
 use super::super::*;
 use super::catch_up_behavior::assert_catch_up_equals_rebuild;
 use super::fixtures::*;
+use super::projection_digest_sensitivity::{aggregate_layout, change_one_record};
 use crate::state_store::{IdeationLandingBatch, StateStore};
+
+/// The mutation battery's worst survivor was a sweep that silently skipped
+/// one family. Nothing samples its way to nineteen here: EVERY family gets
+/// its own invalidation between materialize and catch-up, and each must
+/// equal a fresh rebuild.
+#[tokio::test]
+async fn every_family_invalidation_reaches_the_projection() {
+    for family in ProjectionFamily::ALL {
+        println!("invalidating family `{}`", family.family_name());
+        let (_dir, layout, scope) = aggregate_layout();
+        materialize_state(&layout).await.unwrap();
+        change_one_record(&layout, family, &scope);
+        assert_catch_up_equals_rebuild(&layout).await;
+    }
+}
+
+#[tokio::test]
+async fn a_second_scope_is_swept_and_stays_equivalent() {
+    let (_dir, layout, first_scope) = seeded_layout();
+    let second_scope = provenance_core::ScopeId::new("second").unwrap();
+    let mut manifest: provenance_core::Manifest =
+        serde_json::from_slice(&std::fs::read(layout.manifest_path()).unwrap()).unwrap();
+    manifest.scopes.push(provenance_core::Scope {
+        id: second_scope.clone(),
+        path_prefix: provenance_core::RepoPathPrefix::new("second"),
+    });
+    std::fs::write(
+        layout.manifest_path(),
+        serde_json::to_vec(&manifest).unwrap(),
+    )
+    .unwrap();
+    let requirements = crate::shards::requirements_path(&layout, &second_scope);
+    std::fs::create_dir_all(requirements.parent().unwrap()).unwrap();
+    std::fs::write(
+        &requirements,
+        format!(
+            "{}\n",
+            serde_json::json!({"schema_version": 1, "scope_id": "second",
+                "id": "req_second", "statement": "Second", "status": "active"})
+        ),
+    )
+    .unwrap();
+    materialize_state(&layout).await.unwrap();
+
+    // Change one record in each scope; both must reach the projection.
+    let rules = crate::shards::rules_path(&layout, &first_scope);
+    let edited = std::fs::read_to_string(&rules)
+        .unwrap()
+        .replace("Pay overtime", "Pay double overtime");
+    std::fs::write(&rules, edited).unwrap();
+    std::fs::write(
+        &requirements,
+        format!(
+            "{}\n",
+            serde_json::json!({"schema_version": 1, "scope_id": "second",
+                "id": "req_second", "statement": "Second, restated", "status": "active"})
+        ),
+    )
+    .unwrap();
+    assert_catch_up_equals_rebuild(&layout).await;
+}
 
 #[tokio::test]
 async fn a_landed_ideation_batch_reaches_the_projection_through_catch_up() {

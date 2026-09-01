@@ -40,6 +40,45 @@ async fn materialization_holds_the_publication_lock_at_commit() {
 }
 
 #[tokio::test]
+async fn materialization_holds_the_publication_lock_while_migrations_run() {
+    let (_dir, layout, _scope) = seeded_layout();
+    let fired = std::rc::Rc::new(std::cell::Cell::new(false));
+    let probe_layout = layout.clone();
+    let probe_fired = fired.clone();
+    crate::test_probes::arm("run_migrations_under_guard", move || {
+        probe_fired.set(true);
+        anyhow::ensure!(
+            lock_is_held(&probe_layout),
+            "the publication lock must be held while migrations run"
+        );
+        Ok(())
+    });
+    materialize_state(&layout).await.unwrap();
+    crate::test_probes::disarm("run_migrations_under_guard");
+    assert!(fired.get(), "the migration probe must have run");
+}
+
+#[tokio::test]
+async fn catch_up_holds_the_publication_lock_while_migrations_run() {
+    let (_dir, layout, _scope) = seeded_layout();
+    materialize_state(&layout).await.unwrap();
+    let fired = std::rc::Rc::new(std::cell::Cell::new(false));
+    let probe_layout = layout.clone();
+    let probe_fired = fired.clone();
+    crate::test_probes::arm("run_migrations_under_guard", move || {
+        probe_fired.set(true);
+        anyhow::ensure!(
+            lock_is_held(&probe_layout),
+            "the publication lock must be held while migrations run"
+        );
+        Ok(())
+    });
+    catch_up_state(&layout).await.unwrap();
+    crate::test_probes::disarm("run_migrations_under_guard");
+    assert!(fired.get(), "the migration probe must have run");
+}
+
+#[tokio::test]
 async fn empty_materialization_holds_the_publication_lock() {
     let (_dir, layout, _scope) = empty_layout();
     let fired = std::rc::Rc::new(std::cell::Cell::new(false));
