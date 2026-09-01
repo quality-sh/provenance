@@ -279,8 +279,12 @@ impl Drop for TestServer {
 }
 
 fn serve(mut stream: TcpStream, status: u16, body: &[u8], requests: &Mutex<Vec<String>>) {
+    // Generous: on loaded CI runners the client can sit descheduled for
+    // seconds between connect and first byte; giving up early drops real
+    // requests from the recorded count. The timeout only guards against a
+    // connection that never progresses at all.
     stream
-        .set_read_timeout(Some(Duration::from_secs(2)))
+        .set_read_timeout(Some(Duration::from_secs(30)))
         .unwrap();
     let mut bytes = Vec::new();
     let mut buffer = [0_u8; 1024];
