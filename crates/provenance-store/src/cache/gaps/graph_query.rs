@@ -1,7 +1,7 @@
 use super::model::node_type_word;
 use provenance_core::{
-    Edge, EdgeType, NodeType, Question, Requirement, Resolution, Rule, ScopeId, Source, StableId,
-    Thread, Topic,
+    Boundary, Domain, Edge, EdgeType, NodeType, Question, Requirement, Resolution, Rule, ScopeId,
+    Source, StableId, Thread, Topic,
 };
 use std::collections::BTreeSet;
 
@@ -41,6 +41,8 @@ pub struct GapGraph<'a> {
     pub questions: &'a [Question],
     pub edges: &'a [Edge],
     pub threads: &'a [Thread],
+    pub domains: &'a [Domain],
+    pub boundaries: &'a [Boundary],
 }
 
 /// Read-only joins over a [`GapGraph`].
@@ -116,10 +118,12 @@ impl<'a, 'graph> GraphQuery<'a, 'graph> {
                 .questions
                 .iter()
                 .any(|question| question.id == *id),
-            // The endpoint table forbids edges that name a domain or a
-            // boundary, so these arms only classify illegal data: an edge
-            // that names one is dangling by definition.
-            NodeType::Domain | NodeType::Boundary => false,
+            NodeType::Domain => self.graph.domains.iter().any(|domain| domain.id == *id),
+            NodeType::Boundary => self
+                .graph
+                .boundaries
+                .iter()
+                .any(|boundary| boundary.id == *id),
         }
     }
 

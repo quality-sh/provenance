@@ -17,6 +17,16 @@ pub use front::{
 };
 
 use super::graph::{EdgeType, NodeType};
+use provenance_macros::rule;
+
+/// The declared relations, as one closed list.
+///
+/// This function is the rule's code anchor: the list it answers is the
+/// whole vocabulary, and the exhaustion proofs walk it.
+#[rule("rule_prov_relation_vocabulary_closed")]
+pub const fn declared_relations() -> &'static [RelationKind] {
+    &RelationKind::ALL
+}
 
 /// How a relation is stored in canonical state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,6 +65,9 @@ pub enum RelationKind {
     RequirementCitesSource,
     TopicLinks,
     QuestionLinks,
+    SourceSupersededBy,
+    ResolutionSupersededBy,
+    BoundaryCitesSource,
 }
 
 const LINKABLE: &[NodeType] = &[
@@ -65,7 +78,7 @@ const LINKABLE: &[NodeType] = &[
 ];
 
 impl RelationKind {
-    pub const ALL: [Self; 18] = [
+    pub const ALL: [Self; 21] = [
         Self::References,
         Self::RefinesInto,
         Self::DependsOn,
@@ -84,6 +97,9 @@ impl RelationKind {
         Self::RequirementCitesSource,
         Self::TopicLinks,
         Self::QuestionLinks,
+        Self::SourceSupersededBy,
+        Self::ResolutionSupersededBy,
+        Self::BoundaryCitesSource,
     ];
 
     /// The relation's one name on the wire and in labels.
@@ -107,6 +123,9 @@ impl RelationKind {
             Self::RequirementCitesSource => "requirement_cites_source",
             Self::TopicLinks => "topic_links",
             Self::QuestionLinks => "question_links",
+            Self::SourceSupersededBy => "source_superseded_by",
+            Self::ResolutionSupersededBy => "resolution_superseded_by",
+            Self::BoundaryCitesSource => "boundary_cites_source",
         }
     }
 
@@ -127,7 +146,10 @@ impl RelationKind {
             | Self::QuestionBelongsToTopic
             | Self::QuestionRefines
             | Self::QuestionSettledBy
-            | Self::RequirementInDomain => RelationDerivation::FkField,
+            | Self::RequirementInDomain
+            | Self::SourceSupersededBy
+            | Self::ResolutionSupersededBy
+            | Self::BoundaryCitesSource => RelationDerivation::FkField,
             Self::RequirementCitesSource | Self::TopicLinks | Self::QuestionLinks => {
                 RelationDerivation::EmbeddedCollection
             }
@@ -154,14 +176,17 @@ impl RelationKind {
             | Self::RequirementInDomain
             | Self::RequirementCitesSource
             | Self::TopicLinks
-            | Self::QuestionLinks => None,
+            | Self::QuestionLinks
+            | Self::SourceSupersededBy
+            | Self::ResolutionSupersededBy
+            | Self::BoundaryCitesSource => None,
         }
     }
 
     /// The record kinds a relation may leave from.
     pub const fn from_types(self) -> &'static [NodeType] {
         match self {
-            Self::References => &[NodeType::Source],
+            Self::References | Self::SourceSupersededBy => &[NodeType::Source],
             Self::RefinesInto
             | Self::DependsOn
             | Self::Contradicts
@@ -169,14 +194,47 @@ impl RelationKind {
             | Self::Needs
             | Self::RequirementInDomain
             | Self::RequirementCitesSource => &[NodeType::Requirement],
-            Self::Resolves | Self::Spawns => &[NodeType::Resolution],
+            Self::Resolves | Self::Spawns | Self::ResolutionSupersededBy => &[NodeType::Resolution],
             Self::Produces => &[NodeType::Requirement, NodeType::Resolution],
-            Self::BoundaryConstrains => &[NodeType::Boundary],
+            Self::BoundaryConstrains | Self::BoundaryCitesSource => &[NodeType::Boundary],
             Self::TopicShapes | Self::TopicLinks => &[NodeType::Topic],
             Self::QuestionBelongsToTopic
             | Self::QuestionRefines
             | Self::QuestionSettledBy
             | Self::QuestionLinks => &[NodeType::Question],
+        }
+    }
+
+    /// The relation that records the same fact through another connection
+    /// style, when one exists.
+    ///
+    /// The standard citation write path stores one fact twice: the embedded
+    /// `source_refs` entry and the `References` edge row. The duality is
+    /// declared here so a traversal can present the fact once; it is
+    /// symmetric, and the vocabulary-earlier relation speaks for the pair.
+    pub const fn same_fact_as(self) -> Option<Self> {
+        match self {
+            Self::References => Some(Self::RequirementCitesSource),
+            Self::RequirementCitesSource => Some(Self::References),
+            Self::RefinesInto
+            | Self::DependsOn
+            | Self::Contradicts
+            | Self::Supersedes
+            | Self::Needs
+            | Self::Resolves
+            | Self::Spawns
+            | Self::Produces
+            | Self::BoundaryConstrains
+            | Self::TopicShapes
+            | Self::QuestionBelongsToTopic
+            | Self::QuestionRefines
+            | Self::QuestionSettledBy
+            | Self::RequirementInDomain
+            | Self::TopicLinks
+            | Self::QuestionLinks
+            | Self::SourceSupersededBy
+            | Self::ResolutionSupersededBy
+            | Self::BoundaryCitesSource => None,
         }
     }
 
@@ -193,11 +251,15 @@ impl RelationKind {
             | Self::BoundaryConstrains
             | Self::TopicShapes
             | Self::QuestionRefines => &[NodeType::Requirement],
-            Self::Needs | Self::QuestionSettledBy => &[NodeType::Resolution],
+            Self::Needs | Self::QuestionSettledBy | Self::ResolutionSupersededBy => {
+                &[NodeType::Resolution]
+            }
             Self::Produces => &[NodeType::Rule],
             Self::QuestionBelongsToTopic => &[NodeType::Topic],
             Self::RequirementInDomain => &[NodeType::Domain],
-            Self::RequirementCitesSource => &[NodeType::Source],
+            Self::RequirementCitesSource | Self::SourceSupersededBy | Self::BoundaryCitesSource => {
+                &[NodeType::Source]
+            }
             Self::TopicLinks | Self::QuestionLinks => LINKABLE,
         }
     }

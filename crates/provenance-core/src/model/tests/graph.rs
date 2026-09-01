@@ -34,6 +34,25 @@ fn no_edge_may_touch_a_domain_or_boundary() {
 }
 
 #[test]
+fn a_domain_node_searches_by_name_and_description() {
+    let domain = crate::model::Domain {
+        schema_version: crate::model::SchemaVersion(1),
+        scope_id: crate::model::ScopeId::new("default").unwrap(),
+        id: crate::model::StableId::new("domain_payroll").unwrap(),
+        name: "Payroll".into(),
+        description: Some("Wages and awards".into()),
+        color: None,
+    };
+    let node = crate::protocol::GraphNode::Domain(Box::new(domain));
+    let text = node.searchable_text();
+    assert!(text.contains(&"Payroll"));
+    assert!(
+        text.contains(&"Wages and awards"),
+        "the description must be searchable: {text:?}"
+    );
+}
+
+#[test]
 fn topic_and_question_are_thread_parent_node_types_but_not_edge_endpoints() {
     assert_eq!(NodeType::parse("topic").unwrap(), NodeType::Topic);
     assert_eq!(NodeType::parse("question").unwrap(), NodeType::Question);

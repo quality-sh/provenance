@@ -278,7 +278,7 @@ impl StateStore {
         })
     }
 
-    fn ensure_edge_endpoint_exists(
+    pub(super) fn ensure_edge_endpoint_exists(
         &self,
         scope_id: &ScopeId,
         node_type: NodeType,
@@ -307,14 +307,13 @@ impl StateStore {
                 .list_questions(scope_id)?
                 .iter()
                 .any(|question| &question.id == id),
-            NodeType::Domain => self
-                .list_domains(scope_id)?
-                .iter()
-                .any(|domain| &domain.id == id),
-            NodeType::Boundary => self
-                .list_boundaries(scope_id)?
-                .iter()
-                .any(|boundary| &boundary.id == id),
+            // The endpoint table rejects edges that name these kinds before
+            // this lookup runs; the refusal here keeps the answer typed if
+            // a future caller arrives without that check.
+            NodeType::Domain | NodeType::Boundary => anyhow::bail!(
+                "edges never name a {}; the endpoint table rejects them",
+                super::serde_name(&node_type)?
+            ),
         };
         anyhow::ensure!(exists, "{side} endpoint does not exist");
         Ok(())

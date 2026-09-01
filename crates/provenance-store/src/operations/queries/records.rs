@@ -107,14 +107,22 @@ pub(super) fn search(
     let text = request.text;
     let needle = text.trim().to_lowercase();
     anyhow::ensure!(!needle.is_empty(), "search text must not be empty");
-    let wanted = request
-        .node_types
-        .iter()
-        .map(|kind| rank(*kind))
-        .collect::<Vec<_>>();
+    // Protocol version 5 compatibility: a request that names no kinds gets
+    // the six kinds version 5 always answered. Domains and boundaries are
+    // opt-in through an explicit node_types entry, so a strict old client
+    // never meets a kind it cannot read.
+    let wanted = if request.node_types.is_empty() {
+        PROTOCOL_FIVE_DEFAULT_KINDS.map(rank).to_vec()
+    } else {
+        request
+            .node_types
+            .iter()
+            .map(|kind| rank(*kind))
+            .collect::<Vec<_>>()
+    };
     let matched = load(store, scope, request.include_retired)?
         .into_iter()
-        .filter(|node| wanted.is_empty() || wanted.contains(&rank(node.node_type())))
+        .filter(|node| wanted.contains(&rank(node.node_type())))
         .filter(|node| {
             node.searchable_text()
                 .iter()
@@ -130,16 +138,18 @@ pub(super) fn search(
     })
 }
 
-/// Fixes the order node types are read in.
+/// The kinds a version-5 search answers when the request names none.
+const PROTOCOL_FIVE_DEFAULT_KINDS: [NodeType; 6] = [
+    NodeType::Source,
+    NodeType::Requirement,
+    NodeType::Resolution,
+    NodeType::Rule,
+    NodeType::Topic,
+    NodeType::Question,
+];
+
+/// Fixes the order node types are read in: the one contract rank on
+/// `NodeType`, so the served order and the traversal order cannot drift.
 pub(super) const fn rank(node_type: NodeType) -> u8 {
-    match node_type {
-        NodeType::Source => 0,
-        NodeType::Requirement => 1,
-        NodeType::Resolution => 2,
-        NodeType::Rule => 3,
-        NodeType::Topic => 4,
-        NodeType::Question => 5,
-        NodeType::Domain => 6,
-        NodeType::Boundary => 7,
-    }
+    node_type.rank()
 }

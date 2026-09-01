@@ -1,6 +1,8 @@
 use super::{serde_name, PostMessageInput, PostMessageResult, StateStore};
 use crate::shards;
-use provenance_core::{Message, StableId, Thread, ThreadStatus, SUPPORTED_SCHEMA_VERSION};
+use provenance_core::{
+    Message, NodeType, StableId, Thread, ThreadStatus, SUPPORTED_SCHEMA_VERSION,
+};
 
 impl StateStore {
     pub fn post_thread_message(
@@ -18,6 +20,19 @@ impl StateStore {
             body,
         } = input;
         anyhow::ensure!(!body.trim().is_empty(), "message body must not be empty");
+        match parent.node_type {
+            NodeType::Source
+            | NodeType::Requirement
+            | NodeType::Resolution
+            | NodeType::Rule
+            | NodeType::Topic
+            | NodeType::Question => {}
+            NodeType::Domain | NodeType::Boundary => anyhow::bail!(
+                "thread parent kind `{}` is not supported; threads attach to a source, \
+                 requirement, resolution, rule, topic, or question",
+                serde_name(&parent.node_type)?
+            ),
+        }
         let threads_path = shards::threads_path(&self.layout, &scope_id);
         let thread = self.mutate_jsonl_records(&threads_path, |threads: &mut Vec<Thread>| {
             let matching: Vec<_> = threads

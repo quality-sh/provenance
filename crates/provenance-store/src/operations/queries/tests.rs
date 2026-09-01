@@ -116,6 +116,30 @@ fn search_reaches_domains_and_boundaries_by_kind_and_text() {
 }
 
 #[test]
+fn default_search_keeps_the_six_settled_kinds_under_protocol_five() {
+    let (_dir, store, scope) = seeded_store();
+    let answer = records::search(
+        &store,
+        &scope,
+        SearchQuery {
+            protocol_version: Some(SDK_PROTOCOL_VERSION),
+            text: "pay".into(),
+            node_types: Vec::new(),
+            limit: 10,
+            include_retired: false,
+        },
+    )
+    .unwrap();
+    for node in &answer.nodes {
+        let kind = node.node_type();
+        assert!(
+            !matches!(kind, NodeType::Domain | NodeType::Boundary),
+            "a default search must not emit {kind:?} while the protocol stays at version 5"
+        );
+    }
+}
+
+#[test]
 fn rank_appends_the_new_kinds_after_the_six_settled_positions() {
     let pinned = [
         (NodeType::Source, 0),

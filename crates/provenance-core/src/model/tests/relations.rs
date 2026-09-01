@@ -23,7 +23,10 @@ fn all_relation_kinds() -> Vec<RelationKind> {
         RelationKind::RequirementInDomain => Some(RelationKind::RequirementCitesSource),
         RelationKind::RequirementCitesSource => Some(RelationKind::TopicLinks),
         RelationKind::TopicLinks => Some(RelationKind::QuestionLinks),
-        RelationKind::QuestionLinks => None,
+        RelationKind::QuestionLinks => Some(RelationKind::SourceSupersededBy),
+        RelationKind::SourceSupersededBy => Some(RelationKind::ResolutionSupersededBy),
+        RelationKind::ResolutionSupersededBy => Some(RelationKind::BoundaryCitesSource),
+        RelationKind::BoundaryCitesSource => None,
     } {
         all.push(next);
     }
@@ -50,14 +53,16 @@ fn every_node_type() -> Vec<NodeType> {
 }
 
 #[test]
-fn the_relation_vocabulary_is_closed_at_eighteen_declared_kinds() {
+#[verifies("rule_prov_relation_vocabulary_closed", exhaustion)]
+fn the_relation_vocabulary_is_closed_at_twenty_one_declared_kinds() {
     let all = all_relation_kinds();
-    assert_eq!(all.len(), 18);
+    assert_eq!(all.len(), 21);
     assert_eq!(RelationKind::ALL.to_vec(), all);
+    assert_eq!(super::relations::declared_relations(), all.as_slice());
     let mut names: Vec<&str> = all.iter().map(|kind| kind.name()).collect();
     names.sort_unstable();
     names.dedup();
-    assert_eq!(names.len(), 18, "relation names must be unique");
+    assert_eq!(names.len(), 21, "relation names must be unique");
 }
 
 #[test]
@@ -79,6 +84,7 @@ fn nine_edge_relations_cover_the_nine_edge_types_exactly_once() {
 }
 
 #[test]
+#[verifies("rule_prov_relation_vocabulary_closed", exhaustion)]
 fn edge_relation_endpoints_agree_with_the_edge_endpoint_table() {
     for kind in all_relation_kinds() {
         let Some(edge_type) = kind.edge_type() else {
@@ -99,6 +105,7 @@ fn edge_relation_endpoints_agree_with_the_edge_endpoint_table() {
 }
 
 #[test]
+#[verifies("rule_prov_relation_vocabulary_closed", exhaustion)]
 fn every_foreign_key_field_maps_to_one_declared_relation() {
     let declared: Vec<(RelationKind, NodeType, &[NodeType])> = all_relation_kinds()
         .into_iter()
@@ -107,8 +114,8 @@ fn every_foreign_key_field_maps_to_one_declared_relation() {
         .collect();
     assert_eq!(
         declared.len(),
-        6,
-        "six FK attachments exist in the data model"
+        9,
+        "nine single-target reference fields exist in the data model"
     );
     let expect = [
         (
@@ -140,6 +147,21 @@ fn every_foreign_key_field_maps_to_one_declared_relation() {
             RelationKind::RequirementInDomain,
             NodeType::Requirement,
             NodeType::Domain,
+        ),
+        (
+            RelationKind::SourceSupersededBy,
+            NodeType::Source,
+            NodeType::Source,
+        ),
+        (
+            RelationKind::ResolutionSupersededBy,
+            NodeType::Resolution,
+            NodeType::Resolution,
+        ),
+        (
+            RelationKind::BoundaryCitesSource,
+            NodeType::Boundary,
+            NodeType::Source,
         ),
     ];
     for (kind, from, to) in expect {
@@ -173,4 +195,31 @@ fn embedded_collections_declare_their_target_sets() {
             "artifact links reach the four linkable kinds"
         );
     }
+}
+
+#[test]
+fn the_citation_duality_is_declared_and_symmetric() {
+    assert_eq!(
+        RelationKind::References.same_fact_as(),
+        Some(RelationKind::RequirementCitesSource)
+    );
+    assert_eq!(
+        RelationKind::RequirementCitesSource.same_fact_as(),
+        Some(RelationKind::References)
+    );
+    for kind in all_relation_kinds() {
+        if let Some(partner) = kind.same_fact_as() {
+            assert_eq!(
+                partner.same_fact_as(),
+                Some(kind),
+                "{kind:?} duality must be symmetric"
+            );
+        }
+    }
+}
+
+#[test]
+fn node_type_rank_is_the_one_contract_ordering() {
+    let ranks: Vec<u8> = every_node_type().iter().map(|kind| kind.rank()).collect();
+    assert_eq!(ranks, [0, 1, 2, 3, 4, 5, 6, 7]);
 }

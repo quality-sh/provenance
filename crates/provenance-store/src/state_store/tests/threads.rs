@@ -396,3 +396,26 @@ fn thread(
         created_at,
     }
 }
+
+#[test]
+fn thread_parents_stay_within_the_six_original_kinds() {
+    let (_dir, store, scope) = initialized_store();
+    for kind in [NodeType::Domain, NodeType::Boundary] {
+        let error = store
+            .post_thread_message(PostMessageInput {
+                scope_id: scope.clone(),
+                parent: ThreadParent {
+                    node_type: kind,
+                    node_id: StableId::new("domain_x").unwrap(),
+                },
+                role: MessageRole::User,
+                body: "Hello".into(),
+            })
+            .unwrap_err()
+            .to_string();
+        assert!(
+            error.contains("thread parent"),
+            "kind {kind:?} must be refused with a thread-parent error, got: {error}"
+        );
+    }
+}

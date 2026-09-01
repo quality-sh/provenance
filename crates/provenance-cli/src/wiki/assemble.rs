@@ -66,6 +66,8 @@ fn build_corpus_with_coverage(
         questions: &state.questions,
         edges: &state.edges,
         threads: &state.threads,
+        domains: &state.domains,
+        boundaries: &state.boundaries,
     };
     let gaps = compute_gaps(&graph);
     let assembler = Assembler {

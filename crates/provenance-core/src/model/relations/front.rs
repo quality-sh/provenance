@@ -49,6 +49,10 @@ pub trait RelationSource {
     /// The endpoints `relation` connects to the named record, walking
     /// `direction`. A record kind outside the relation's declared endpoint
     /// set answers empty.
+    ///
+    /// Ordering contract: every implementation answers in node rank then
+    /// canonical id order, so two fronts over the same records answer the
+    /// same bytes.
     fn related(
         &self,
         relation: RelationKind,
@@ -84,7 +88,33 @@ pub fn related_nodes<S: RelationSource>(
             }
         }
     }
+    drop_duality_echoes(reached)
+}
+
+/// Drops the later half of a declared same-fact duality, so one fact is
+/// presented once. The vocabulary-earlier relation speaks for the pair.
+fn drop_duality_echoes(reached: Vec<RelatedNode>) -> Vec<RelatedNode> {
+    let position = |kind: RelationKind| {
+        RelationKind::ALL
+            .iter()
+            .position(|candidate| *candidate == kind)
+            .expect("every kind is in ALL")
+    };
+    let spoken_for: Vec<(RelationKind, StableId)> = reached
+        .iter()
+        .map(|node| (node.relation, node.endpoint.id.clone()))
+        .collect();
     reached
+        .into_iter()
+        .filter(|node| {
+            node.relation.same_fact_as().is_none_or(|partner| {
+                position(partner) > position(node.relation)
+                    || !spoken_for
+                        .iter()
+                        .any(|(kind, id)| *kind == partner && *id == node.endpoint.id)
+            })
+        })
+        .collect()
 }
 
 /// The in-memory front: record vectors, the shape the gap policy builds.
@@ -115,12 +145,34 @@ impl RelationSource for RecordFront<'_> {
         if !legal {
             return Vec::new();
         }
-        if relation.derivation() == RelationDerivation::EdgeRow {
-            let Some(edge_type) = relation.edge_type() else {
-                return Vec::new();
-            };
-            return self.edge_endpoints(edge_type, node_type, id, direction);
+        match relation.derivation() {
+            RelationDerivation::EdgeRow => {
+                let Some(edge_type) = relation.edge_type() else {
+                    return Vec::new();
+                };
+                in_contract_order(
+                    self.edge_endpoints(relation, edge_type, node_type, id, direction),
+                )
+            }
+            RelationDerivation::FkField => {
+                in_contract_order(self.fk_related(relation, id, direction))
+            }
+            RelationDerivation::EmbeddedCollection => {
+                in_contract_order(self.embedded_related(relation, node_type, id, direction))
+            }
         }
+    }
+}
+
+impl RecordFront<'_> {
+    /// The foreign-key half of the vocabulary. Edge and embedded kinds
+    /// answer empty here; their derivation routes them elsewhere.
+    fn fk_related(
+        &self,
+        relation: RelationKind,
+        id: &StableId,
+        direction: RelationDirection,
+    ) -> Vec<RelationEndpoint> {
         match relation {
             RelationKind::References
             | RelationKind::RefinesInto
@@ -130,7 +182,10 @@ impl RelationSource for RecordFront<'_> {
             | RelationKind::Needs
             | RelationKind::Resolves
             | RelationKind::Spawns
-            | RelationKind::Produces => Vec::new(),
+            | RelationKind::Produces
+            | RelationKind::RequirementCitesSource
+            | RelationKind::TopicLinks
+            | RelationKind::QuestionLinks => Vec::new(),
             RelationKind::BoundaryConstrains => fk(
                 self.boundaries,
                 |record| (&record.id, Some(&record.requirement_id)),
@@ -179,6 +234,67 @@ impl RelationSource for RecordFront<'_> {
                 id,
                 direction,
             ),
+            RelationKind::SourceSupersededBy => fk(
+                self.sources,
+                |record| (&record.id, record.superseded_by.as_ref()),
+                NodeType::Source,
+                NodeType::Source,
+                id,
+                direction,
+            ),
+            RelationKind::ResolutionSupersededBy => fk(
+                self.resolutions,
+                |record| (&record.id, record.superseded_by.as_ref()),
+                NodeType::Resolution,
+                NodeType::Resolution,
+                id,
+                direction,
+            ),
+            RelationKind::BoundaryCitesSource => fk(
+                self.boundaries,
+                |record| {
+                    (
+                        &record.id,
+                        record.source_ref.as_ref().map(|cite| &cite.source_id),
+                    )
+                },
+                NodeType::Boundary,
+                NodeType::Source,
+                id,
+                direction,
+            ),
+        }
+    }
+
+    /// The embedded-collection half of the vocabulary. Edge and
+    /// foreign-key kinds answer empty here; their derivation routes them
+    /// elsewhere.
+    fn embedded_related(
+        &self,
+        relation: RelationKind,
+        node_type: NodeType,
+        id: &StableId,
+        direction: RelationDirection,
+    ) -> Vec<RelationEndpoint> {
+        match relation {
+            RelationKind::References
+            | RelationKind::RefinesInto
+            | RelationKind::DependsOn
+            | RelationKind::Contradicts
+            | RelationKind::Supersedes
+            | RelationKind::Needs
+            | RelationKind::Resolves
+            | RelationKind::Spawns
+            | RelationKind::Produces
+            | RelationKind::BoundaryConstrains
+            | RelationKind::TopicShapes
+            | RelationKind::QuestionBelongsToTopic
+            | RelationKind::QuestionRefines
+            | RelationKind::QuestionSettledBy
+            | RelationKind::RequirementInDomain
+            | RelationKind::SourceSupersededBy
+            | RelationKind::ResolutionSupersededBy
+            | RelationKind::BoundaryCitesSource => Vec::new(),
             RelationKind::RequirementCitesSource => embedded(
                 self.requirements,
                 |record| (&record.id, source_ref_endpoints(record)),
@@ -207,17 +323,37 @@ impl RelationSource for RecordFront<'_> {
     }
 }
 
+/// Sorts endpoints into the contract order: node rank, then canonical id.
+fn in_contract_order(mut endpoints: Vec<RelationEndpoint>) -> Vec<RelationEndpoint> {
+    endpoints.sort_by(|left, right| {
+        left.node_type
+            .rank()
+            .cmp(&right.node_type.rank())
+            .then_with(|| left.id.as_str().cmp(right.id.as_str()))
+    });
+    endpoints
+}
+
 impl RecordFront<'_> {
     fn edge_endpoints(
         &self,
+        relation: RelationKind,
         edge_type: EdgeType,
         node_type: NodeType,
         id: &StableId,
         direction: RelationDirection,
     ) -> Vec<RelationEndpoint> {
+        // A stored row whose endpoint kinds fall outside the relation's
+        // declared sets does not traverse: presenting an illegal endpoint
+        // under a relation's name would launder corrupt data. The check
+        // surface owns reporting such rows.
         self.edges
             .iter()
             .filter(|edge| edge.edge_type == edge_type)
+            .filter(|edge| {
+                relation.from_types().contains(&edge.from_type)
+                    && relation.to_types().contains(&edge.to_type)
+            })
             .filter_map(|edge| match direction {
                 RelationDirection::Out => (edge.from_type == node_type && edge.from_id == *id)
                     .then(|| RelationEndpoint {

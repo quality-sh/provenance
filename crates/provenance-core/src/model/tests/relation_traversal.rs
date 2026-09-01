@@ -1,205 +1,9 @@
 mod relation_traversal {
-use crate::model::relations::{
-    related_nodes, RecordFront, RelationDirection, RelationKind, RelationSource,
-};
-use crate::model::{
-    ArtifactLink, ArtifactLinkTargetType, Boundary, Domain, Edge, EdgeType, NodeType, Requirement,
-    RequirementStatus, Rule, RuleSeverity, RuleStatus, ScopeId, SchemaVersion, Source,
-    SourceReference, SourceType, StableId, Topic, TopicStatus,
-};
+use crate::model::relations::{related_nodes, RelationDirection, RelationKind, RelationSource};
+use crate::model::{ArtifactLinkTargetType, EdgeType, NodeType, StableId};
 
-fn scope() -> ScopeId {
-    ScopeId::new("default").unwrap()
-}
+use super::relation_fixtures::*;
 
-fn sid(value: &str) -> StableId {
-    StableId::new(value).unwrap()
-}
-
-fn source(id: &str) -> Source {
-    Source {
-        schema_version: SchemaVersion(1),
-        scope_id: scope(),
-        id: sid(id),
-        declared_by: None,
-        declaration_address: None,
-        retired: false,
-        name: id.to_string(),
-        source_type: SourceType::Policy,
-        url: None,
-        reference: None,
-        commit_pin: None,
-        effective_date: None,
-        review_date: None,
-        superseded_by: None,
-        origin_thread: None,
-        origin_message: None,
-    }
-}
-
-fn requirement(id: &str, domain_id: Option<&str>, cites: &[&str]) -> Requirement {
-    Requirement {
-        schema_version: SchemaVersion(1),
-        scope_id: scope(),
-        id: sid(id),
-        declared_by: None,
-        declaration_address: None,
-        retired: false,
-        statement: format!("{id} statement"),
-        description: None,
-        fog: None,
-        status: RequirementStatus::Active,
-        domain_id: domain_id.map(sid),
-        source_refs: cites
-            .iter()
-            .map(|source_id| SourceReference {
-                source_id: sid(source_id),
-                clause: None,
-            })
-            .collect(),
-        origin_thread: None,
-        origin_message: None,
-    }
-}
-
-fn domain(id: &str) -> Domain {
-    Domain {
-        schema_version: SchemaVersion(1),
-        scope_id: scope(),
-        id: sid(id),
-        name: id.to_string(),
-        description: None,
-        color: None,
-    }
-}
-
-fn boundary(id: &str, requirement_id: &str) -> Boundary {
-    Boundary {
-        schema_version: SchemaVersion(1),
-        scope_id: scope(),
-        id: sid(id),
-        requirement_id: sid(requirement_id),
-        statement: format!("{id} statement"),
-        source_ref: None,
-    }
-}
-
-fn topic(id: &str, requirement_id: &str, links: &[(&str, ArtifactLinkTargetType)]) -> Topic {
-    Topic {
-        schema_version: SchemaVersion(1),
-        scope_id: scope(),
-        id: sid(id),
-        requirement_id: sid(requirement_id),
-        title: id.to_string(),
-        status: TopicStatus::Open,
-        claimed_by: None,
-        claimed_at: None,
-        links: links
-            .iter()
-            .map(|(target_id, target_type)| ArtifactLink {
-                target_type: *target_type,
-                target_id: sid(target_id),
-            })
-            .collect(),
-    }
-}
-
-fn rule(id: &str) -> Rule {
-    Rule {
-        schema_version: SchemaVersion(1),
-        scope_id: scope(),
-        id: sid(id),
-        declared_by: None,
-        declaration_address: None,
-        retired: false,
-        name: None,
-        description: None,
-        statement: format!("{id} statement"),
-        status: RuleStatus::Active,
-        severity: RuleSeverity::High,
-        source_document: None,
-        source_section: None,
-        origin_thread: None,
-        origin_message: None,
-    }
-}
-
-fn edge(id: &str, edge_type: EdgeType, from: (NodeType, &str), to: (NodeType, &str)) -> Edge {
-    Edge {
-        schema_version: SchemaVersion(1),
-        scope_id: scope(),
-        id: sid(id),
-        edge_type,
-        from_type: from.0,
-        from_id: sid(from.1),
-        to_type: to.0,
-        to_id: sid(to.1),
-        label: None,
-    }
-}
-
-struct Fixture {
-    sources: Vec<Source>,
-    requirements: Vec<Requirement>,
-    domains: Vec<Domain>,
-    boundaries: Vec<Boundary>,
-    topics: Vec<Topic>,
-    rules: Vec<Rule>,
-    edges: Vec<Edge>,
-}
-
-fn fixture() -> Fixture {
-    Fixture {
-        sources: vec![source("source_award")],
-        requirements: vec![requirement(
-            "req_overtime",
-            Some("domain_payroll"),
-            &["source_award"],
-        )],
-        domains: vec![domain("domain_payroll")],
-        boundaries: vec![boundary("boundary_no_backpay", "req_overtime")],
-        topics: vec![topic(
-            "topic_rates",
-            "req_overtime",
-            &[("rule_pay", ArtifactLinkTargetType::Rule)],
-        )],
-        rules: vec![rule("rule_pay")],
-        edges: vec![edge(
-            "edge_cite",
-            EdgeType::References,
-            (NodeType::Source, "source_award"),
-            (NodeType::Requirement, "req_overtime"),
-        )],
-    }
-}
-
-fn front(records: &Fixture) -> RecordFront<'_> {
-    RecordFront {
-        sources: &records.sources,
-        requirements: &records.requirements,
-        resolutions: &[],
-        rules: &records.rules,
-        topics: &records.topics,
-        questions: &[],
-        domains: &records.domains,
-        boundaries: &records.boundaries,
-        edges: &records.edges,
-    }
-}
-
-fn related(
-    records: &Fixture,
-    relation: RelationKind,
-    node_type: NodeType,
-    id: &str,
-    direction: RelationDirection,
-) -> Vec<(NodeType, String)> {
-    front(records)
-        .related(relation, node_type, &sid(id), direction)
-        .into_iter()
-        .map(|endpoint| (endpoint.node_type, endpoint.id.as_str().to_string()))
-        .collect()
-}
 
 #[test]
 fn an_edge_row_relation_walks_out_and_back() {
@@ -314,6 +118,8 @@ fn the_core_walks_every_declared_relation_around_one_node() {
             )
         })
         .collect();
+    // The citation appears once: the declared duality lets the References
+    // edge speak for the embedded source_refs entry.
     assert_eq!(
         labels,
         [
@@ -325,16 +131,205 @@ fn the_core_walks_every_declared_relation_around_one_node() {
             ),
             ("topic_shapes", RelationDirection::In, "topic_rates".into()),
             (
+                "question_refines",
+                RelationDirection::In,
+                "question_threshold".to_string()
+            ),
+            (
                 "requirement_in_domain",
                 RelationDirection::Out,
                 "domain_payroll".to_string()
             ),
-            (
-                "requirement_cites_source",
-                RelationDirection::Out,
-                "source_award".to_string()
-            ),
         ]
     );
+}
+
+#[test]
+fn every_question_relation_walks_its_own_field() {
+    let records = fixture();
+    assert_eq!(
+        related(
+            &records,
+            RelationKind::QuestionBelongsToTopic,
+            NodeType::Question,
+            "question_threshold",
+            RelationDirection::Out,
+        ),
+        [(NodeType::Topic, "topic_rates".to_string())]
+    );
+    assert_eq!(
+        related(
+            &records,
+            RelationKind::QuestionRefines,
+            NodeType::Question,
+            "question_threshold",
+            RelationDirection::Out,
+        ),
+        [(NodeType::Requirement, "req_overtime".to_string())]
+    );
+    assert_eq!(
+        related(
+            &records,
+            RelationKind::QuestionSettledBy,
+            NodeType::Question,
+            "question_threshold",
+            RelationDirection::Out,
+        ),
+        [(NodeType::Resolution, "res_threshold".to_string())]
+    );
+    assert_eq!(
+        related(
+            &records,
+            RelationKind::QuestionLinks,
+            NodeType::Question,
+            "question_threshold",
+            RelationDirection::Out,
+        ),
+        [(NodeType::Source, "source_award".to_string())]
+    );
+    assert_eq!(
+        related(
+            &records,
+            RelationKind::QuestionSettledBy,
+            NodeType::Resolution,
+            "res_threshold",
+            RelationDirection::In,
+        ),
+        [(NodeType::Question, "question_threshold".to_string())]
+    );
+}
+
+#[test]
+fn a_stored_edge_with_an_illegal_endpoint_does_not_traverse() {
+    let mut records = fixture();
+    records.edges.push(edge(
+        "edge_bad",
+        EdgeType::References,
+        (NodeType::Source, "source_award"),
+        (NodeType::Rule, "rule_pay"),
+    ));
+    let out = related(
+        &records,
+        RelationKind::References,
+        NodeType::Source,
+        "source_award",
+        RelationDirection::Out,
+    );
+    assert_eq!(
+        out,
+        [(NodeType::Requirement, "req_overtime".to_string())],
+        "an endpoint outside the declared set must not be presented as this relation"
+    );
+}
+
+#[test]
+fn one_standard_path_citation_yields_one_source_neighbor() {
+    // The standard write path records a citation twice: the embedded
+    // source_refs entry and the References edge. The fixture mirrors that.
+    let records = fixture();
+    let reached = related_nodes(
+        &front(&records),
+        NodeType::Requirement,
+        &sid("req_overtime"),
+    );
+    let citations = reached
+        .iter()
+        .filter(|related| related.endpoint.id.as_str() == "source_award")
+        .count();
+    assert_eq!(citations, 1, "one fact must not be presented twice: {reached:?}");
+}
+
+#[test]
+fn a_front_answers_in_rank_then_id_order_regardless_of_storage_order() {
+    let mut records = fixture();
+    records.boundaries = vec![
+        boundary("boundary_zz", "req_overtime"),
+        boundary("boundary_aa", "req_overtime"),
+    ];
+    assert_eq!(
+        related(
+            &records,
+            RelationKind::BoundaryConstrains,
+            NodeType::Requirement,
+            "req_overtime",
+            RelationDirection::In,
+        ),
+        [
+            (NodeType::Boundary, "boundary_aa".to_string()),
+            (NodeType::Boundary, "boundary_zz".to_string()),
+        ],
+        "reverse scans answer in canonical id order, not storage order"
+    );
+    records.topics = vec![topic(
+        "topic_mixed",
+        "req_overtime",
+        &[
+            ("rule_pay", ArtifactLinkTargetType::Rule),
+            ("source_award", ArtifactLinkTargetType::Source),
+        ],
+    )];
+    assert_eq!(
+        related(
+            &records,
+            RelationKind::TopicLinks,
+            NodeType::Topic,
+            "topic_mixed",
+            RelationDirection::Out,
+        ),
+        [
+            (NodeType::Source, "source_award".to_string()),
+            (NodeType::Rule, "rule_pay".to_string()),
+        ],
+        "mixed-kind link lists answer in rank then id order"
+    );
+}
+
+/// Records every ask so the executor's legality filter is visible.
+struct ProbeSource(std::cell::RefCell<Vec<(RelationKind, NodeType, RelationDirection)>>);
+
+impl RelationSource for ProbeSource {
+    fn related(
+        &self,
+        relation: RelationKind,
+        node_type: NodeType,
+        _id: &StableId,
+        direction: RelationDirection,
+    ) -> Vec<crate::model::relations::RelationEndpoint> {
+        self.0.borrow_mut().push((relation, node_type, direction));
+        Vec::new()
+    }
+}
+
+#[test]
+fn the_executor_owns_iteration_legality_and_asks_nothing_illegal() {
+    let probe = ProbeSource(std::cell::RefCell::new(Vec::new()));
+    related_nodes(&probe, NodeType::Rule, &sid("rule_pay"));
+    let asks = probe.0.into_inner();
+    assert!(!asks.is_empty(), "the executor must ask something for a rule");
+    for (relation, node_type, direction) in asks {
+        let legal = match direction {
+            RelationDirection::Out => relation.from_types().contains(&node_type),
+            RelationDirection::In => relation.to_types().contains(&node_type),
+        };
+        assert!(
+            legal,
+            "illegal ask reached the seam: {relation:?} {direction:?}"
+        );
+    }
+}
+
+#[test]
+fn a_front_answers_an_illegal_direct_ask_with_empty() {
+    // Direct callers can bypass the executor; the front stays a total
+    // function and answers empty rather than guessing.
+    let records = fixture();
+    assert!(front(&records)
+        .related(
+            RelationKind::References,
+            NodeType::Rule,
+            &sid("rule_pay"),
+            RelationDirection::Out,
+        )
+        .is_empty());
 }
 }

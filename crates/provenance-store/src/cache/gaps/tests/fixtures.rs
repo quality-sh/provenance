@@ -175,7 +175,34 @@ pub fn compute_for(
         questions,
         edges,
         threads: &[],
+        domains: &[],
+        boundaries: &[],
     })
+}
+
+pub fn domain(id: &str) -> provenance_core::Domain {
+    provenance_core::Domain {
+        schema_version: SchemaVersion(1),
+        scope_id: scope_id(),
+        id: sid(id),
+        name: id.to_string(),
+        description: None,
+        color: None,
+    }
+}
+
+pub fn thread(id: &str, parent_type: NodeType, parent_id: &str) -> provenance_core::Thread {
+    provenance_core::Thread {
+        schema_version: SchemaVersion(1),
+        scope_id: scope_id(),
+        id: sid(id),
+        parent: provenance_core::ThreadParent {
+            node_type: parent_type,
+            node_id: sid(parent_id),
+        },
+        status: provenance_core::ThreadStatus::Active,
+        created_at: 1,
+    }
 }
 
 pub fn count_kind(gaps: &[GapItem], kind: GapKind) -> usize {

@@ -28,6 +28,8 @@ pub(in crate::cache) struct GraphRecords {
     pub(in crate::cache) questions: Vec<Question>,
     pub(in crate::cache) edges: Vec<Edge>,
     pub(in crate::cache) threads: Vec<Thread>,
+    pub(in crate::cache) domains: Vec<provenance_core::Domain>,
+    pub(in crate::cache) boundaries: Vec<provenance_core::Boundary>,
 }
 
 impl GraphRecords {
@@ -102,6 +104,8 @@ impl GraphRecords {
             questions,
             edges,
             threads: store.list_threads(scope)?,
+            domains: store.list_domains(scope)?,
+            boundaries: store.list_boundaries(scope)?,
         })
     }
 
@@ -116,6 +120,8 @@ impl GraphRecords {
             questions: &self.questions,
             edges: &self.edges,
             threads: &self.threads,
+            domains: &self.domains,
+            boundaries: &self.boundaries,
         }
     }
 }
