@@ -107,7 +107,7 @@ pub fn wildcard_arms(source: &str) -> Vec<Offender> {
     offenders
 }
 
-fn matching_brace(source: &str, body_start: usize) -> usize {
+const fn matching_brace(source: &str, body_start: usize) -> usize {
     let bytes = source.as_bytes();
     let mut depth = 1i64;
     let mut cursor = body_start;
