@@ -315,6 +315,12 @@ impl Drop for TestServer {
 }
 
 fn serve(mut stream: TcpStream, status: u16, body: &[u8], requests: &Mutex<Vec<String>>) {
+    // BSD-derived systems (macOS) make accepted sockets inherit the
+    // listener's O_NONBLOCK; a nonblocking stream turns write_all into
+    // silent truncation (or a panic, before the hardening) as soon as the
+    // client is slow to drain the body, which the client reports as
+    // "response body closed before all bytes were read" and retries.
+    stream.set_nonblocking(false).unwrap();
     // Generous: on loaded CI runners the client can sit descheduled for
     // seconds between connect and first byte; giving up early drops real
     // requests from the recorded count. The timeout only guards against a
