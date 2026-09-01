@@ -81,15 +81,21 @@ fn agent_onboarding_downloads_and_imports_the_official_asset() {
     let server = TestServer::new(200, dictionary_support::dictionary_pdf());
     let fixture = Fixture::new();
 
-    fixture
+    let output = fixture
         .init("agent")
         .env("PROVENANCE_TEST_STE100_ASSET_URL", server.url())
-        .assert()
-        .success();
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    assert!(output.status.success(), "init failed: {stderr}");
 
     assert!(dictionary_support::reference_path(&fixture.repo).is_file());
     let requests = server.requests();
-    assert_eq!(requests.len(), 1);
+    assert_eq!(
+        requests.len(),
+        1,
+        "recorded requests: {requests:#?}\ncli stderr: {stderr}"
+    );
     assert!(requests[0].to_ascii_lowercase().contains(&format!(
         "user-agent: provenance/{}",
         env!("CARGO_PKG_VERSION")
@@ -158,7 +164,12 @@ fn concurrent_agent_onboarding_shares_one_download() {
             String::from_utf8_lossy(&output.stderr)
         );
     }
-    assert_eq!(server.requests().len(), 1);
+    assert_eq!(
+        server.requests().len(),
+        1,
+        "recorded requests: {:#?}",
+        server.requests()
+    );
 }
 
 #[test]
@@ -176,7 +187,12 @@ fn exhausted_download_retries_fall_back_to_the_official_request_form() {
         .success()
         .stdout(predicate::str::contains(REQUEST_FORM));
 
-    assert_eq!(server.requests().len(), 3);
+    assert_eq!(
+        server.requests().len(),
+        3,
+        "recorded requests: {:#?}",
+        server.requests()
+    );
     assert!(!dictionary_support::reference_path(&fixture.repo).exists());
 }
 

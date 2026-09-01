@@ -173,7 +173,13 @@ fn acquire_agent_dictionary_blocking() -> anyhow::Result<DictionaryImport> {
             Ok(import)
         }) {
             Ok(import) => return Ok(import),
-            Err(error) => last_error = Some(error),
+            Err(error) => {
+                eprintln!(
+                    "STE asset download attempt {} failed: {error:#}",
+                    attempt + 1
+                );
+                last_error = Some(error);
+            }
         }
         if attempt + 1 < DOWNLOAD_ATTEMPTS {
             std::thread::sleep(Duration::from_millis(100));
