@@ -123,10 +123,8 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cargo build --release -p provenance-cli --features scanner
-          if grep -q dogfood target/release/provenance; then
-            echo 'release binary contains dogfood marker' >&2
-            exit 1
-          fi
+          test -x target/release/provenance
+          ! grep -qa dogfood target/release/provenance
 
   rule-coverage:
     name: Rule Coverage

@@ -114,9 +114,9 @@ fn note(
         ts_ms: now_ms(),
         session_id: session_id_from_env(),
         host: hostname(),
-        repo: git_context("--show-toplevel"),
-        branch: git_context("--abbrev-ref=HEAD"),
-        commit: git_context("HEAD"),
+        repo: git_context(&["rev-parse", "--show-toplevel"]),
+        branch: git_context(&["branch", "--show-current"]),
+        commit: git_context(&["rev-parse", "HEAD"]),
         provenance_version: env!("CARGO_PKG_VERSION").to_string(),
         surface: surface.to_string(),
         category,
@@ -126,7 +126,7 @@ fn note(
         suggestion,
     };
 
-    let dir = spool_dir()?;
+    let dir = spool_dir();
     std::fs::create_dir_all(&dir)
         .with_context(|| format!("creating dogfood spool dir {}", dir.display()))?;
     let path = dir.join("notes.jsonl");
@@ -210,18 +210,29 @@ fn load_enrichment(path: &Utf8PathBuf) -> anyhow::Result<BTreeMap<String, serde_
 }
 
 fn read_spool() -> anyhow::Result<Vec<Note>> {
-    let path = spool_dir()?.join("notes.jsonl");
+    let path = spool_dir().join("notes.jsonl");
     if !path.exists() {
         return Ok(Vec::new());
     }
     let raw = std::fs::read_to_string(&path)
         .with_context(|| format!("reading dogfood spool {}", path.display()))?;
-    raw.lines()
-        .filter(|line| !line.trim().is_empty())
-        .map(|line| {
-            serde_json::from_str(line).with_context(|| format!("parsing dogfood note line: {line}"))
-        })
-        .collect()
+    // A torn write or stale line must not brick the review channel: skip
+    // unreadable lines with a warning instead of refusing to aggregate.
+    let mut notes = Vec::new();
+    for (index, line) in raw.lines().enumerate() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        match serde_json::from_str(line) {
+            Ok(note) => notes.push(note),
+            Err(err) => eprintln!(
+                "skipping malformed dogfood note at {}:{}: {err}",
+                path.display(),
+                index + 1
+            ),
+        }
+    }
+    Ok(notes)
 }
 
 /// Surfaces are the CLI's own top-level subcommand names plus "general",
@@ -236,13 +247,16 @@ fn valid_surfaces() -> Vec<String> {
     surfaces
 }
 
-fn spool_dir() -> anyhow::Result<PathBuf> {
-    if let Some(dir) = std::env::var_os("PROVENANCE_DOGFOOD_DIR") {
-        return Ok(PathBuf::from(dir));
+fn spool_dir() -> PathBuf {
+    if let Some(dir) = std::env::var_os("PROVENANCE_DOGFOOD_DIR").filter(|dir| !dir.is_empty()) {
+        return PathBuf::from(dir);
     }
-    Ok(crate::skills::home_dir()?
-        .join(".provenance")
-        .join("dogfood"))
+    // Capture must not fail for lack of context: no HOME means the spool
+    // degrades to the temp dir rather than erroring out.
+    crate::skills::home_dir().map_or_else(
+        |_| std::env::temp_dir().join("provenance-dogfood"),
+        |home| home.join(".provenance").join("dogfood"),
+    )
 }
 
 fn session_id_from_env() -> Option<String> {
@@ -275,11 +289,8 @@ fn hostname() -> String {
     "unknown".to_string()
 }
 
-fn git_context(arg: &str) -> Option<String> {
-    let output = ProcessCommand::new("git")
-        .args(["rev-parse", arg])
-        .output()
-        .ok()?;
+fn git_context(args: &[&str]) -> Option<String> {
+    let output = ProcessCommand::new("git").args(args).output().ok()?;
     if !output.status.success() {
         return None;
     }

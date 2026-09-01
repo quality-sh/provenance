@@ -37,10 +37,15 @@ Everything else is stamped by the CLI, never self-reported: `ts_ms`, `host`,
 repo/branch/commit (null outside a git repo), `provenance_version`, and
 `session_id` — read from the first non-empty of `PROVENANCE_SESSION_ID`,
 `WORKFLOWD_SESSION_ID`, `CLAUDE_SESSION_ID`, `OPENCODE_SESSION_ID`. Missing
-context degrades to null; capture never fails for lack of it.
+context degrades rather than failing capture: session/git fields go null,
+`host` falls back to `"unknown"`, and with no resolvable home directory the
+spool degrades to `$TMPDIR/provenance-dogfood`.
 
 Notes land in `~/.provenance/dogfood/notes.jsonl` (override the directory
-with `PROVENANCE_DOGFOOD_DIR`), one JSON object per line, append-only.
+with `PROVENANCE_DOGFOOD_DIR`; an empty value is treated as unset, and a
+relative value resolves against each invocation's working directory), one
+JSON object per line, append-only. Readers skip unparseable lines with a
+warning, so a torn write never blocks `list`/`report`.
 
 ## Review
 
