@@ -72,8 +72,9 @@ fn shard_baseline(
             let mtime = metadata
                 .modified()?
                 .duration_since(std::time::UNIX_EPOCH)
-                .map(|duration| i64::try_from(duration.as_nanos()).unwrap_or(i64::MAX))
-                .unwrap_or(0);
+                .map_or(0, |duration| {
+                    i64::try_from(duration.as_nanos()).unwrap_or(i64::MAX)
+                });
             (i64::try_from(metadata.len())?, mtime)
         }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => (0, 0),
