@@ -1,5 +1,7 @@
 mod collaboration_records;
 mod graph_records;
+mod integration_records;
+mod stamp;
 
 use super::{open_cache, MaterializeReport};
 use crate::{layout::ProvenanceLayout, migrations, publication, state_store::StateStore};
@@ -32,8 +34,15 @@ pub async fn materialize_state(layout: &ProvenanceLayout) -> anyhow::Result<Mate
     for scope in &manifest.scopes {
         records_loaded += graph_records::load_scope(&mut tx, &store, &scope.id).await?;
         records_loaded += collaboration_records::load_scope(&mut tx, &store, &scope.id).await?;
+        records_loaded += integration_records::load_scope(&mut tx, &store, &scope.id).await?;
     }
     records_loaded += graph_records::load_edges(&mut tx, &store).await?;
+    let scope_ids: Vec<_> = manifest
+        .scopes
+        .iter()
+        .map(|scope| scope.id.clone())
+        .collect();
+    stamp::write_stamp(&mut tx, &store, layout, &scope_ids).await?;
     tx.commit().await?;
 
     Ok(MaterializeReport {
@@ -43,25 +52,8 @@ pub async fn materialize_state(layout: &ProvenanceLayout) -> anyhow::Result<Mate
 }
 
 async fn clear_cache(tx: &mut Transaction<'_, Sqlite>) -> anyhow::Result<()> {
-    for table in [
-        "sources",
-        "domains",
-        "requirements",
-        "boundaries",
-        "topics",
-        "questions",
-        "edges",
-        "resolutions",
-        "rules",
-        "messages",
-        "threads",
-        "contributions",
-        "synthesis_packets",
-        "proposal_cards",
-        "assertion_records",
-        "dispositions",
-    ] {
-        sqlx::query(&format!("DELETE FROM {table}"))
+    for family in super::ProjectionFamily::ALL {
+        sqlx::query(&format!("DELETE FROM {}", family.family_name()))
             .execute(&mut **tx)
             .await?;
     }
