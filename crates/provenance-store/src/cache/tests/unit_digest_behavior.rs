@@ -128,3 +128,54 @@ async fn a_changed_scope_rewrites_only_the_families_whose_content_moved() {
     assert_eq!(report.rows_written, 1);
     assert_catch_up_equals_rebuild(&layout).await;
 }
+
+#[test]
+fn moving_a_shard_between_directories_moves_the_scope_digest() {
+    // One file, same bytes, same basename, different directory: a digest
+    // that framed only the basename would not see the move, but readers
+    // would derive a different family from it. The scope holds nothing
+    // else, so the moved file's position in the stream cannot give it away.
+    let (_dir, layout, scope) = empty_layout();
+    let implementations = crate::shards::implementation_bindings_path(&layout, &scope);
+    let verifications = crate::shards::verification_bindings_path(&layout, &scope);
+    std::fs::create_dir_all(implementations.parent().unwrap()).unwrap();
+    std::fs::write(&implementations, b"{\"moved\":true}\n").unwrap();
+    let before = scope_digest(&layout, &scope);
+
+    std::fs::remove_file(&implementations).unwrap();
+    std::fs::create_dir_all(verifications.parent().unwrap()).unwrap();
+    std::fs::write(&verifications, b"{\"moved\":true}\n").unwrap();
+
+    assert_ne!(scope_digest(&layout, &scope), before);
+}
+
+#[tokio::test]
+async fn a_scope_change_never_touches_edge_rows() {
+    let (_dir, layout, scope) = seeded_layout();
+    materialize_state(&layout).await.unwrap();
+    let pool = open_cache(&layout).await.unwrap();
+    let edges_before: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM edges")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    pool.close().await;
+
+    // Only the scope unit moves; the global unit, and so the edges table,
+    // must stand untouched through the pass.
+    let rules = crate::shards::rules_path(&layout, &scope);
+    let edited = std::fs::read_to_string(&rules)
+        .unwrap()
+        .replace("Pay overtime", "Pay triple overtime");
+    std::fs::write(&rules, edited).unwrap();
+    let report = catch_up_state(&layout).await.unwrap();
+    assert_eq!(report.families_rederived, 1, "{report:?}");
+
+    let pool = open_cache(&layout).await.unwrap();
+    let edges_after: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM edges")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(edges_after, edges_before);
+    pool.close().await;
+    assert_catch_up_equals_rebuild(&layout).await;
+}
