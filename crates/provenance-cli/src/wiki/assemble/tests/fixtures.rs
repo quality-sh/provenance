@@ -358,6 +358,8 @@ pub(super) fn compute_state_gaps(state: &ScopeExport) -> Vec<GapItem> {
         questions: &state.questions,
         edges: &state.edges,
         threads: &state.threads,
+        domains: &state.domains,
+        boundaries: &state.boundaries,
     })
 }
 

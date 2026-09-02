@@ -127,9 +127,13 @@ that can match more than one record accepts `limit`, 50 by default and 200 at
 most, and its answer carries `limit` and `has_more`.
 
 `get` takes `node_type` and `id` and answers `found` plus the canonical record
-under `node`, tagged with the same `node_type`. `search` takes `text`, an
-optional `node_types` filter, and answers `nodes`: records whose id, statement,
-name, description, title, or question contains the phrase.
+under `node`, tagged with the same `node_type`. The node kinds are `source`,
+`requirement`, `resolution`, `rule`, `topic`, `question`, `domain`, and
+`boundary`. `search` takes `text`, an optional `node_types` filter, and answers
+`nodes`: records whose id, statement, name, description, title, or question
+contains the phrase. A search that names no kinds answers the six original
+kinds; `domain` and `boundary` records are answered only when `node_types`
+names them, so protocol version 5 clients meet no kind they cannot read.
 
 `neighbors` takes `id`, an optional `node_type`, a `direction` of `out`, `in`,
 or `both`, and an optional `edge_types` filter. It reads exactly one edge and

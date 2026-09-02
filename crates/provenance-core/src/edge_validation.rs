@@ -77,7 +77,9 @@ mod tests {
             NodeType::Resolution => Some(NodeType::Rule),
             NodeType::Rule => Some(NodeType::Topic),
             NodeType::Topic => Some(NodeType::Question),
-            NodeType::Question => None,
+            NodeType::Question => Some(NodeType::Domain),
+            NodeType::Domain => Some(NodeType::Boundary),
+            NodeType::Boundary => None,
         } {
             all.push(next);
         }
