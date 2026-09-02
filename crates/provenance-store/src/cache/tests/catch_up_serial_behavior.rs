@@ -227,6 +227,13 @@ async fn a_lost_database_with_canonical_state_intact_rebuilds_at_one() {
     let store = StateStore::new(layout.clone());
     create_source(&store, &scope, "source_survives_db_loss");
     catch_up_state(&layout).await.unwrap();
+    let pool = open_cache(&layout).await.unwrap();
+    let (serial_before_loss, _) = latest_revision(&pool).await;
+    pool.close().await;
+    assert_eq!(
+        serial_before_loss, 2,
+        "the contrast the restart is measured against"
+    );
 
     remove_database_file(&layout);
 
