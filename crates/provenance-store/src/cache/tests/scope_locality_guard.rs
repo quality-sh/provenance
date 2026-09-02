@@ -22,15 +22,23 @@ enum Locality {
     Outside,
 }
 
+/// Classifies by path components, so a Windows path with backslashes lands
+/// exactly where the same POSIX path lands.
 fn locality(path: &str) -> Locality {
-    let Some((_, inside)) = path.split_once("/.provenance/state/") else {
+    let components: Vec<&str> = camino::Utf8Path::new(path)
+        .components()
+        .map(|component| component.as_str())
+        .collect();
+    let Some(index) = components
+        .windows(2)
+        .position(|pair| pair == [".provenance", "state"])
+    else {
         return Locality::Outside;
     };
-    inside
-        .strip_prefix("scopes/")
-        .map_or(Locality::Global, |rest| {
-            Locality::Scope(rest.split('/').next().unwrap_or("").to_string())
-        })
+    match &components[index + 2..] {
+        ["scopes", scope, ..] => Locality::Scope((*scope).to_string()),
+        _ => Locality::Global,
+    }
 }
 
 fn two_scope_layout() -> (

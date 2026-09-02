@@ -50,7 +50,7 @@ async fn a_hand_emptied_disposition_shard_moves_the_cards_effective_state() {
 }
 
 #[tokio::test]
-async fn a_journaled_disposition_moves_the_cards_effective_state() {
+async fn a_writer_path_disposition_moves_the_cards_effective_state() {
     let (_dir, layout, scope) = aggregate_layout();
     remove_shard(&layout, ProjectionFamily::Dispositions, &scope);
     materialize_state(&layout).await.unwrap();

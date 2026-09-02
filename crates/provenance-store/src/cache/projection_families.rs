@@ -65,8 +65,8 @@ impl ProjectionFamily {
         Self::RequirementReviews,
     ];
 
-    /// The family's one name: its cache table, its digest-row key, and its
-    /// journal label are all this one string.
+    /// The family's one name: its cache table and its digest-row key are
+    /// this one string.
     pub const fn family_name(self) -> &'static str {
         match self {
             Self::Sources => "sources",
