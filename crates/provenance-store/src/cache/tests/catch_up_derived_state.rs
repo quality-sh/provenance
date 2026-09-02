@@ -8,9 +8,7 @@
 
 use super::super::*;
 use super::catch_up_behavior::assert_catch_up_equals_rebuild;
-use super::journal_emission::tail_mark;
 use super::projection_digest_sensitivity::aggregate_layout;
-use crate::publication::events_in_window;
 use crate::state_store::StateStore;
 use provenance_core::ScopeId;
 
@@ -59,7 +57,6 @@ async fn a_journaled_disposition_moves_the_cards_effective_state() {
     assert_eq!(effective_state(&layout).await, "asserted");
 
     let store = StateStore::new(layout.clone());
-    let mark = tail_mark(&layout);
     store
         .create_disposition(crate::state_store::CreateDispositionInput {
             scope_id: scope.clone(),
@@ -76,15 +73,6 @@ async fn a_journaled_disposition_moves_the_cards_effective_state() {
             external_action: None,
         })
         .unwrap();
-    let hinted: Vec<String> = events_in_window(&layout, mark + 1, i64::MAX)
-        .unwrap()
-        .into_iter()
-        .map(|event| event.family)
-        .collect();
-    assert!(
-        hinted.contains(&"proposal_cards".to_string()),
-        "a disposition write must hint the cards whose state it derives: {hinted:?}"
-    );
 
     assert_catch_up_equals_rebuild(&layout).await;
     assert_eq!(effective_state(&layout).await, "rejected");
@@ -170,24 +158,4 @@ async fn a_legacy_promotion_decision_is_refused_by_catch_up_exactly_as_by_rebuil
         .unwrap();
     pool.close().await;
     assert_eq!(serial_after, serial_before);
-}
-
-#[test]
-fn derived_state_inputs_belong_to_the_proposal_cards_domain() {
-    let (_dir, layout, scope) = super::fixtures::empty_layout();
-    let domain = ProjectionFamily::ProposalCards
-        .byte_domain(&layout, Some(&scope))
-        .unwrap();
-    for expected in [
-        crate::shards::proposal_cards_path(&layout, &scope),
-        crate::shards::ideation_landings_path(&layout, &scope),
-        crate::shards::assertion_records_path(&layout, &scope),
-        crate::shards::dispositions_path(&layout, &scope),
-        crate::shards::legacy_promotion_decisions_path(&layout, &scope),
-    ] {
-        assert!(
-            domain.contains(&expected),
-            "missing {expected} in {domain:?}"
-        );
-    }
 }

@@ -1,13 +1,14 @@
 use super::super::*;
 use super::fixtures::*;
 
-const PROJECTION_TABLES: [&str; 6] = [
+const PROJECTION_TABLES: [&str; 7] = [
     "implementation_bindings",
     "verification_bindings",
     "requirement_reviews",
     "projection_instance",
     "projection_revision",
     "projection_family_digests",
+    "projection_unit_digests",
 ];
 
 async fn table_exists(pool: &sqlx::SqlitePool, table: &str) -> bool {
@@ -148,13 +149,9 @@ async fn materialization_stores_a_revision_stamp_with_instance_identity() {
     let pool = open_cache(&layout).await.unwrap();
 
     let (serial, digest, instance) = stamp(&pool).await;
-    // The committed serial and the fsynced head move together: after a
-    // pass, the head is exactly one past the serial it committed.
-    assert_eq!(
-        crate::publication::read_head_record(&layout).unwrap(),
-        Some(serial + 1),
-        "the head must sit one past the committed serial"
-    );
+    // The first materialization of a fresh instance is serial one: no
+    // journal consumes sequences ahead of it.
+    assert_eq!(serial, 1);
     assert!(
         digest.starts_with("sha256:") && digest.len() == 71,
         "{digest}"
@@ -166,7 +163,7 @@ async fn materialization_stores_a_revision_stamp_with_instance_identity() {
     );
 
     let rows: Vec<(String, String, String, i64)> = sqlx::query_as(
-        "SELECT scope_id, family, digest, record_count FROM projection_family_digests ORDER BY family, scope_id",
+        "SELECT scope_id, family, content_digest, record_count FROM projection_family_digests ORDER BY family, scope_id",
     )
     .fetch_all(&pool)
     .await

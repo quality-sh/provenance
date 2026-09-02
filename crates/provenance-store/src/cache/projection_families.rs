@@ -6,7 +6,10 @@
 //! invalidation together. A family without a row cannot be stored or
 //! stamped.
 
-use crate::{layout::ProvenanceLayout, shards, state_store::StateStore};
+use crate::state_store::StateStore;
+#[cfg(test)]
+use crate::{layout::ProvenanceLayout, shards};
+#[cfg(test)]
 use camino::Utf8PathBuf;
 use provenance_core::ScopeId;
 
@@ -93,7 +96,10 @@ impl ProjectionFamily {
         !matches!(self, Self::Edges)
     }
 
-    /// The canonical shard file the family's records live in.
+    /// The canonical shard file the family's records live in. Production
+    /// code hashes whole units and needs no per-family path; the tests use
+    /// it to reach a family's shard.
+    #[cfg(test)]
     pub(crate) fn shard_path(
         self,
         layout: &ProvenanceLayout,
@@ -124,55 +130,6 @@ impl ProjectionFamily {
             Self::RequirementReviews => shards::requirement_reviews_path(layout, scope),
             Self::Edges => unreachable!("edges answered above"),
         })
-    }
-
-    /// The complete set of files the family's reader derivation reads.
-    ///
-    /// This is the family's byte domain: the hash sweep, the stamp
-    /// baselines, and the journal mapping all consume it, so a change in
-    /// any contributing file — a month shard, a second edge shard, the
-    /// ideation landings overlay, a legacy promotion decision, or a record
-    /// a DERIVED field reads (a card's effective state reads assertions and
-    /// dispositions) — moves the family's digest. Fixed members are
-    /// declared whether or not the file exists; month and edge shards are
-    /// discovered exactly where the readers discover them. Files that only
-    /// gate validity (contributions and packets for a card's qualification,
-    /// the manifest's actor list) are not domain members: they cannot
-    /// change a derived row, and the validator runs on every pass.
-    pub(crate) fn byte_domain(
-        self,
-        layout: &ProvenanceLayout,
-        scope: Option<&ScopeId>,
-    ) -> anyhow::Result<Vec<Utf8PathBuf>> {
-        if self == Self::Edges {
-            return crate::state_store::readers::edge_shard_paths(layout);
-        }
-        let scope = required_scope(scope, self)?;
-        let mut domain = match self {
-            Self::Messages => crate::state_store::readers::message_shard_paths(layout, scope)?,
-            Self::Contributions | Self::SynthesisPackets | Self::AssertionRecords => vec![
-                self.shard_path(layout, Some(scope))?,
-                shards::ideation_landings_path(layout, scope),
-            ],
-            // A card's effective promotion state is derived from assertions,
-            // dispositions, and legacy promotion decisions, so those bytes
-            // are part of what the card rows were derived from.
-            Self::ProposalCards => vec![
-                self.shard_path(layout, Some(scope))?,
-                shards::ideation_landings_path(layout, scope),
-                shards::assertion_records_path(layout, scope),
-                shards::dispositions_path(layout, scope),
-                shards::legacy_promotion_decisions_path(layout, scope),
-            ],
-            Self::Dispositions => vec![
-                self.shard_path(layout, Some(scope))?,
-                shards::ideation_landings_path(layout, scope),
-                shards::legacy_promotion_decisions_path(layout, scope),
-            ],
-            other => vec![other.shard_path(layout, Some(scope))?],
-        };
-        domain.sort();
-        Ok(domain)
     }
 
     /// The family's records as canonical bytes, sorted by canonical id, with
@@ -243,101 +200,4 @@ fn sorted_bytes<T: serde::Serialize>(
     records.sort_by(|left, right| id(left).cmp(id(right)));
     let count = records.len() as u64;
     Ok((crate::canonical_digest::canonical_bytes(&records)?, count))
-}
-
-/// Maps a written shard path back to its declared family, by exact path
-/// equality against the family table — never by directory component, so
-/// sibling files like `requirements/req.jsonl` and `requirements/review.jsonl`
-/// land in their own families, and bindings and every ideation family are
-/// covered because the table covers them.
-pub fn families_for_shard_path(
-    layout: &ProvenanceLayout,
-    path: &camino::Utf8Path,
-) -> Vec<(ProjectionFamily, Option<ScopeId>)> {
-    if path
-        .parent()
-        .is_some_and(|parent| parent == layout.edges_dir())
-        && path.extension() == Some("jsonl")
-    {
-        return vec![(ProjectionFamily::Edges, None)];
-    }
-    let Some(scope) = path
-        .strip_prefix(layout.scopes_dir())
-        .ok()
-        .and_then(|relative| relative.components().next())
-        .and_then(|component| ScopeId::new(component.as_str()).ok())
-    else {
-        return Vec::new();
-    };
-    let matched: Vec<_> = ProjectionFamily::ALL
-        .into_iter()
-        .filter(|family| family.is_scoped())
-        .filter(|family| {
-            family
-                .byte_domain(layout, Some(&scope))
-                .is_ok_and(|domain| domain.iter().any(|member| member == path))
-        })
-        .map(|family| (family, Some(scope.clone())))
-        .collect();
-    if !matched.is_empty() {
-        return matched;
-    }
-    // A canonical write under a scope that no declared domain claims is
-    // suspect: a domain this table forgot would otherwise lose its hint
-    // silently. Broadcasting costs one wasted re-derivation; missing a real
-    // family would cost a false freshness hint.
-    ProjectionFamily::ALL
-        .into_iter()
-        .filter(|family| family.is_scoped())
-        .map(|family| (family, Some(scope.clone())))
-        .collect()
-}
-
-/// The byte domain's files as one framed byte stream.
-///
-/// Each present file contributes its name, a separator, its length, and its
-/// bytes, in sorted path order, so records moving between files of one
-/// domain still move the digest. An absent file contributes nothing.
-pub fn domain_bytes(paths: &[Utf8PathBuf]) -> anyhow::Result<Vec<u8>> {
-    let mut framed = Vec::new();
-    for path in paths {
-        let bytes = match std::fs::read(path) {
-            Ok(bytes) => bytes,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
-            Err(error) => return Err(error.into()),
-        };
-        let name = path
-            .file_name()
-            .ok_or_else(|| anyhow::anyhow!("domain member without a file name: {path}"))?;
-        framed.extend_from_slice(name.as_bytes());
-        framed.push(0);
-        framed.extend_from_slice(&(bytes.len() as u64).to_le_bytes());
-        framed.extend_from_slice(&bytes);
-    }
-    Ok(framed)
-}
-
-/// Summed size and newest mtime across the domain's present files.
-///
-/// Diagnostic metadata only; never a comparison input.
-pub fn domain_metadata(paths: &[Utf8PathBuf]) -> anyhow::Result<(i64, i64)> {
-    let mut size_bytes = 0i64;
-    let mut mtime_ns = 0i64;
-    for path in paths {
-        match std::fs::metadata(path) {
-            Ok(metadata) => {
-                size_bytes += i64::try_from(metadata.len())?;
-                let mtime = metadata
-                    .modified()?
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map_or(0, |duration| {
-                        i64::try_from(duration.as_nanos()).unwrap_or(i64::MAX)
-                    });
-                mtime_ns = mtime_ns.max(mtime);
-            }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => return Err(error.into()),
-        }
-    }
-    Ok((size_bytes, mtime_ns))
 }

@@ -17,6 +17,14 @@
 //! synchronous publication sections off the worker threads
 //! (`spawn_blocking`) or make those callers async before it serves
 //! concurrent requests.
+//!
+//! Two facts the catch-up design relies on. First, under a read-only
+//! bypass (`read_only::active`) the guard is lockless: it holds no file and
+//! excludes nothing, exactly as the synchronous entry does. Second, reader
+//! calls made under a held guard run against the SNAPSHOT layout, so their
+//! own `with_repository_publication` sections take the snapshot's lock
+//! path — a second, uncontended flock in the snapshot's temporary
+//! directory — and never request the repository lock the guard holds.
 
 use super::{
     prepare_import_transactions_dir, prepare_publication_lock, read_only,

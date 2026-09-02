@@ -3,11 +3,16 @@
 //! Production code calls [`at`] at a named point. Outside tests the call is
 //! a no-op. A test arms a closure for a label on its own thread; the closure
 //! may observe state (a lock probe) or return an error (an injected crash).
+//!
+//! Reader choke points call [`record_read`] with every canonical path they
+//! open. Outside tests that is a no-op too; a test that starts recording
+//! gets the set of paths one derivation touched, which is how the
+//! scope-locality invariant is checked against real reads.
 
 #[cfg(test)]
 use std::cell::RefCell;
 #[cfg(test)]
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 #[cfg(test)]
 type Probe = Box<dyn FnMut() -> anyhow::Result<()>>;
@@ -15,6 +20,7 @@ type Probe = Box<dyn FnMut() -> anyhow::Result<()>>;
 #[cfg(test)]
 thread_local! {
     static PROBES: RefCell<HashMap<&'static str, Probe>> = RefCell::new(HashMap::new());
+    static READS: RefCell<Option<BTreeSet<String>>> = const { RefCell::new(None) };
 }
 
 #[cfg(test)]
@@ -35,6 +41,28 @@ pub fn at(label: &str) -> anyhow::Result<()> {
 )]
 pub const fn at(_label: &str) -> anyhow::Result<()> {
     Ok(())
+}
+
+#[cfg(test)]
+pub fn record_read(path: &camino::Utf8Path) {
+    READS.with(|reads| {
+        if let Some(set) = reads.borrow_mut().as_mut() {
+            set.insert(path.to_string());
+        }
+    });
+}
+
+#[cfg(not(test))]
+pub const fn record_read(_path: &camino::Utf8Path) {}
+
+#[cfg(test)]
+pub fn start_recording_reads() {
+    READS.with(|reads| *reads.borrow_mut() = Some(BTreeSet::new()));
+}
+
+#[cfg(test)]
+pub fn take_recorded_reads() -> BTreeSet<String> {
+    READS.with(|reads| reads.borrow_mut().take().unwrap_or_default())
 }
 
 #[cfg(test)]

@@ -21,6 +21,7 @@ pub const DROP_RULE_CODE_AND_SERVICES_MIGRATION_ID: &str = "016";
 pub const REMOVE_SERVICES_SHARDS_MIGRATION_ID: &str = "017";
 pub const PROJECTION_STAMP_MIGRATION_ID: &str = "018";
 pub const FAMILY_CONTENT_DIGEST_MIGRATION_ID: &str = "019";
+pub const UNIT_DIGESTS_MIGRATION_ID: &str = "020";
 const INITIAL_SQL: &str = include_str!("../migrations/001_initial_cache.sql");
 const SOURCE_REQUIREMENT_SQL: &str =
     include_str!("../migrations/002_sources_requirements_edges.sql");
@@ -47,6 +48,7 @@ const REMOVE_SERVICES_SHARDS_SQL: &str =
     include_str!("../migrations/017_remove_services_shards.sql");
 const PROJECTION_STAMP_SQL: &str = include_str!("../migrations/018_projection_stamp.sql");
 const FAMILY_CONTENT_DIGEST_SQL: &str = include_str!("../migrations/019_family_content_digest.sql");
+const UNIT_DIGESTS_SQL: &str = include_str!("../migrations/020_unit_digests.sql");
 
 pub async fn run_migrations(
     pool: &SqlitePool,
@@ -99,6 +101,7 @@ pub async fn run_migrations(
             FAMILY_CONTENT_DIGEST_MIGRATION_ID,
             FAMILY_CONTENT_DIGEST_SQL,
         ),
+        (UNIT_DIGESTS_MIGRATION_ID, UNIT_DIGESTS_SQL),
     ] {
         let already_applied: Option<String> =
             sqlx::query_scalar("SELECT id FROM _schema_migrations WHERE id = ?")
@@ -187,7 +190,7 @@ mod tests {
             run_migrations(&pool, &layout).await.unwrap(),
             vec![
                 "001", "002", "003", "004", "005", "006", "007", "008", "009", "010", "011", "012",
-                "013", "014", "015", "016", "017", "018", "019"
+                "013", "014", "015", "016", "017", "018", "019", "020"
             ]
         );
         assert!(run_migrations(&pool, &layout).await.unwrap().is_empty());
@@ -195,7 +198,7 @@ mod tests {
             applied_migrations(&pool).await.unwrap(),
             vec![
                 "001", "002", "003", "004", "005", "006", "007", "008", "009", "010", "011", "012",
-                "013", "014", "015", "016", "017", "018", "019"
+                "013", "014", "015", "016", "017", "018", "019", "020"
             ]
         );
     }

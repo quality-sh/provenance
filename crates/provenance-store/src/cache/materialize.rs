@@ -4,8 +4,10 @@ mod family_rows;
 mod graph_records;
 mod integration_records;
 mod stamp;
+mod units;
 
 pub use catch_up::{catch_up_state, CatchUpReport};
+pub use units::{unit_digest, units_for, Unit};
 
 use super::{open_cache, MaterializeReport};
 use crate::{layout::ProvenanceLayout, migrations, publication, state_store::StateStore};
@@ -39,7 +41,8 @@ pub async fn materialize_state(layout: &ProvenanceLayout) -> anyhow::Result<Mate
 ///
 /// Snapshot, validation, migrations, the row transaction, and the commit
 /// all run inside the caller's guard scope, so no canonical publication can
-/// interleave with the projection write.
+/// interleave with the projection write. The serial is the stored serial
+/// plus one; a fresh database starts at one under a fresh instance id.
 pub(super) async fn materialize_with_guard(
     guard: &publication::PublicationGuard,
     layout: &ProvenanceLayout,
@@ -57,7 +60,6 @@ pub(super) async fn materialize_with_guard(
         sqlx::query_scalar("SELECT COALESCE(MAX(serial), 0) FROM projection_revision")
             .fetch_one(&pool)
             .await?;
-    let serial = publication::normalize_head(layout, stored_serial)?;
     let mut tx = pool.begin().await?;
     clear_cache(&mut tx).await?;
 
@@ -77,17 +79,13 @@ pub(super) async fn materialize_with_guard(
         &mut tx,
         &store,
         snapshot.layout(),
-        layout,
         &scope_ids,
-        serial,
+        stored_serial + 1,
     )
     .await?;
-    publication::reserve_committed_serial(layout, serial)?;
     crate::test_probes::at("materialize_before_commit")?;
     tx.commit().await?;
-    crate::test_probes::at("db_committed_before_head_fsync")?;
-    publication::normalize_head(layout, serial)?;
-    publication::prune_up_to(layout, serial)?;
+    crate::test_probes::at("materialize_after_commit")?;
     pool.close().await;
 
     Ok(MaterializeReport {

@@ -1,7 +1,6 @@
 use super::super::*;
 use super::fixtures::*;
 use super::projection_stamp_behavior::seed_integration_shards;
-use crate::publication::{events_in_window, read_head_record};
 use fs2::FileExt;
 
 fn lock_is_held(layout: &crate::layout::ProvenanceLayout) -> bool {
@@ -121,33 +120,4 @@ async fn stamp_rows_carry_content_digests_that_rebuild_the_revision_digest() {
         rebuilt, stored_digest,
         "stored content digests must reproduce the revision digest without parsing shards"
     );
-}
-
-#[tokio::test]
-async fn materialization_advances_the_serial_past_journaled_writes_and_prunes() {
-    let (_dir, layout, scope) = seeded_layout();
-    seed_integration_shards(&layout, scope.as_str());
-    let events_before = events_in_window(&layout, 1, i64::MAX).unwrap();
-    assert!(
-        !events_before.is_empty(),
-        "the seeded writers must have journaled"
-    );
-    let high_water = events_before
-        .iter()
-        .map(|event| event.sequence)
-        .max()
-        .unwrap();
-
-    materialize_state(&layout).await.unwrap();
-    let pool = open_cache(&layout).await.unwrap();
-    let serial: i64 = sqlx::query_scalar("SELECT MAX(serial) FROM projection_revision")
-        .fetch_one(&pool)
-        .await
-        .unwrap();
-    assert!(
-        serial > high_water,
-        "the serial covers every journaled write"
-    );
-    assert!(events_in_window(&layout, 1, serial).unwrap().is_empty());
-    assert_eq!(read_head_record(&layout).unwrap(), Some(serial + 1));
 }

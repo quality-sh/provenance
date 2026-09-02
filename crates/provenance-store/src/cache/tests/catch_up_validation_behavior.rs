@@ -80,13 +80,17 @@ async fn a_schema_move_routes_catch_up_to_a_full_rebuild() {
     let (_dir, layout, _scope) = seeded_layout();
     materialize_state(&layout).await.unwrap();
 
-    // Rewind the schema to its pre-019 shape, as every W1 database is.
+    // Rewind the schema to its pre-020 shape, as every earlier database is.
     let pool = open_cache(&layout).await.unwrap();
-    sqlx::query("ALTER TABLE projection_family_digests DROP COLUMN content_digest")
-        .execute(&pool)
-        .await
-        .unwrap();
-    sqlx::query("DELETE FROM _schema_migrations WHERE id = '019'")
+    for statement in [
+        "DROP TABLE projection_unit_digests",
+        "ALTER TABLE projection_family_digests ADD COLUMN digest TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE projection_family_digests ADD COLUMN size_bytes INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE projection_family_digests ADD COLUMN mtime_ns INTEGER NOT NULL DEFAULT 0",
+    ] {
+        sqlx::query(statement).execute(&pool).await.unwrap();
+    }
+    sqlx::query("DELETE FROM _schema_migrations WHERE id = '020'")
         .execute(&pool)
         .await
         .unwrap();
@@ -94,32 +98,8 @@ async fn a_schema_move_routes_catch_up_to_a_full_rebuild() {
 
     let report = catch_up_state(&layout).await.unwrap();
     assert!(report.rebuilt, "a migration must force a rebuild");
-    assert!(report.migrations_applied.contains(&"019".to_string()));
+    assert!(report.migrations_applied.contains(&"020".to_string()));
     assert_catch_up_equals_rebuild(&layout).await;
-}
-
-#[tokio::test]
-async fn a_lost_database_with_a_live_journal_reseeds_above_the_tail() {
-    let (_dir, layout, scope) = seeded_layout();
-    materialize_state(&layout).await.unwrap();
-    let store = crate::state_store::StateStore::new(layout.clone());
-    create_source(&store, &scope, "source_after_loss");
-    let tail_high = crate::publication::events_in_window(&layout, 1, i64::MAX)
-        .unwrap()
-        .iter()
-        .map(|event| event.sequence)
-        .max()
-        .unwrap();
-
-    std::fs::remove_file(layout.cache_db_path()).unwrap();
-
-    let report = catch_up_state(&layout).await.unwrap();
-    assert!(report.rebuilt);
-    assert!(
-        report.serial > tail_high,
-        "rebuild serial {} must exceed the surviving tail {tail_high}",
-        report.serial
-    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

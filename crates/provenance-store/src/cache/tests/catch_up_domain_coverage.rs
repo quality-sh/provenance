@@ -169,12 +169,12 @@ async fn a_live_edit_racing_the_rebuild_baseline_is_caught_by_the_next_catch_up(
     // After the rebuild snapshots canonical state, an out-of-band writer
     // rewrites the live shard. The stored baseline must describe the bytes
     // the rows were derived from, so the next pass sees the difference.
-    crate::test_probes::arm("stamp_before_baselines", move || {
+    crate::test_probes::arm("stamp_before_unit_digests", move || {
         std::fs::write(&live_path, &edited).unwrap();
         Ok(())
     });
     materialize_state(&layout).await.unwrap();
-    crate::test_probes::disarm("stamp_before_baselines");
+    crate::test_probes::disarm("stamp_before_unit_digests");
 
     assert_catch_up_equals_rebuild(&layout).await;
 }

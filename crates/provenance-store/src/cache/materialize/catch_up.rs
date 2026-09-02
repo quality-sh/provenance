@@ -1,10 +1,14 @@
-//! Truthful catch-up: hash everything, reparse only what changed.
+//! Catch-up: hash each scope and one global unit, re-derive by content
+//! digest, keep no journal.
 //!
-//! One pass, one guard scope, one transaction. The journal names what to
-//! re-derive cheaply; the hash sweep over complete shard bytes is what makes
-//! the freshness claim true, because a write journal cannot prove absence of
-//! writes that bypass it. Size and mtime never license a skip.
+//! One pass, one guard scope, one transaction. Every unit's complete
+//! canonical bytes are hashed from the snapshot; an unchanged unit costs
+//! nothing more. A changed scope unit parses its families again and rewrites
+//! only the families whose content digest moved. A changed global unit
+//! reloads the edges table whole. A pass that changes nothing commits no
+//! revision, so the serial and digest stand.
 
+use super::units::{self, Unit};
 use super::{family_rows, stamp};
 use crate::cache::{open_cache, revision_digest_from_stored_rows, ProjectionFamily};
 use crate::{
@@ -13,9 +17,8 @@ use crate::{
 use provenance_core::ScopeId;
 use std::collections::{BTreeMap, BTreeSet};
 
-type UnitKey = (String, String);
-type BaselineRow = (String, String, i64);
-type StampRow = (String, String, String, i64);
+type ContentKey = (String, String);
+type ContentValue = (String, i64);
 
 /// What one catch-up pass did, in counters a caller can trust.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -23,8 +26,8 @@ pub struct CatchUpReport {
     pub serial: i64,
     pub digest: String,
     pub rebuilt: bool,
-    pub events_drained: u64,
-    pub families_hashed: u64,
+    pub revision_committed: bool,
+    pub units_hashed: u64,
     pub families_rederived: u64,
     pub rows_written: u64,
     pub migrations_applied: Vec<String>,
@@ -48,22 +51,14 @@ async fn catch_up_with_guard(
     .fetch_optional(&pool)
     .await?;
 
-    // Step 1: a database with no revision, or one whose schema just moved,
-    // cannot be caught up; it is rebuilt under the same held guard.
-    let Some((stored_serial, _)) = stored else {
+    // A database with no revision, or one whose schema just moved, cannot be
+    // caught up; it is rebuilt under the same held guard.
+    let Some((stored_serial, stored_digest)) = stored else {
         return rebuild(guard, layout, &pool, migrations_applied).await;
     };
     if !migrations_applied.is_empty() {
         return rebuild(guard, layout, &pool, migrations_applied).await;
     }
-
-    // Step 0 continued: repair the head, then freeze the drain window.
-    let head = publication::normalize_head(layout, stored_serial)?;
-    let events = publication::events_in_window(layout, stored_serial + 1, head - 1)?;
-    let drained: BTreeSet<UnitKey> = events
-        .iter()
-        .map(|event| (event.family.clone(), event.scope.clone()))
-        .collect();
 
     let snapshot = publication::snapshot_state_under_guard(guard, layout)?;
     let store = StateStore::new(snapshot.layout().clone());
@@ -73,192 +68,180 @@ async fn catch_up_with_guard(
     for scope in &manifest.scopes {
         store.validate_ideation_scope(&scope.id)?;
     }
-    let mut scopes: Vec<ScopeId> = manifest
+    let scope_ids: Vec<ScopeId> = manifest
         .scopes
         .iter()
         .map(|scope| scope.id.clone())
         .collect();
-    scopes.sort_by(|left, right| left.as_str().cmp(right.as_str()));
 
-    let baseline: BTreeMap<UnitKey, BaselineRow> =
-        sqlx::query_as::<_, (String, String, String, String, i64)>(
-            "SELECT family, scope_id, digest, content_digest, record_count \
-             FROM projection_family_digests",
-        )
-        .fetch_all(&pool)
-        .await?
-        .into_iter()
-        .map(|(family, scope_id, digest, content, count)| {
-            ((family, scope_id), (digest, content, count))
-        })
-        .collect();
-
+    let (stored_units, mut content) = load_stored_digests(&pool).await?;
     let mut report = CatchUpReport {
-        serial: head,
-        digest: String::new(),
+        serial: stored_serial,
+        digest: stored_digest,
         rebuilt: false,
-        events_drained: events.len() as u64,
-        families_hashed: 0,
+        revision_committed: false,
+        units_hashed: 0,
         families_rederived: 0,
         rows_written: 0,
         migrations_applied,
     };
     let mut tx = pool.begin().await?;
-    let sweep = Sweep {
-        store: &store,
-        snapshot_layout: snapshot.layout(),
-        layout,
-        scopes: &scopes,
-        drained: &drained,
-        baseline: &baseline,
-    };
-    let stamp_rows = sweep.run(&mut tx, &mut report).await?;
-    remove_departed_units(&mut tx, &baseline, &stamp_rows).await?;
 
-    report.digest = revision_digest_from_stored_rows(&stamp_rows)?;
-    stamp::insert_revision(&mut tx, head, &report.digest).await?;
-    publication::reserve_committed_serial(layout, head)?;
+    let live = units::units_for(&scope_ids);
+    let mut changed = remove_departed_scopes(&mut tx, &stored_units, &live, &mut content).await?;
+    let state_dir = snapshot.layout().state_dir();
+    for unit in &live {
+        let digest = hash_unit(&mut report, &state_dir, unit)?;
+        if stored_units.get(&unit.name()) == Some(&digest) {
+            continue;
+        }
+        changed = true;
+        apply_unit_change(&mut tx, &store, unit, &mut content, &mut report).await?;
+        stamp::upsert_unit_row(&mut tx, &unit.name(), &digest).await?;
+    }
+
+    if !changed {
+        drop(tx);
+        pool.close().await;
+        return Ok(report);
+    }
+
+    for ((scope_id, family), (digest, count)) in &content {
+        stamp::upsert_content_row(&mut tx, scope_id, family, digest, *count).await?;
+    }
+    let rows: Vec<(String, String, String, i64)> = content
+        .iter()
+        .map(|((scope_id, family), (digest, count))| {
+            (scope_id.clone(), family.clone(), digest.clone(), *count)
+        })
+        .collect();
+    report.digest = revision_digest_from_stored_rows(&rows)?;
+    report.serial = stored_serial + 1;
+    stamp::insert_revision(&mut tx, report.serial, &report.digest).await?;
+    report.revision_committed = true;
     crate::test_probes::at("catch_up_before_commit")?;
     tx.commit().await?;
-    crate::test_probes::at("db_committed_before_head_fsync")?;
-    publication::normalize_head(layout, head)?;
-    publication::prune_up_to(layout, head)?;
+    crate::test_probes::at("catch_up_after_commit")?;
     pool.close().await;
     Ok(report)
 }
 
-/// One sweep over every stored (family, scope): steps 2 and 3 share it.
-///
-/// Every unit's complete shard bytes are read and hashed; a drained unit, a
-/// moved digest, or a missing baseline re-derives rows from those same
-/// bytes. An unchanged unit keeps its rows and its stored content digest.
-struct Sweep<'a> {
-    store: &'a StateStore,
-    snapshot_layout: &'a ProvenanceLayout,
-    layout: &'a ProvenanceLayout,
-    scopes: &'a [ScopeId],
-    drained: &'a BTreeSet<UnitKey>,
-    baseline: &'a BTreeMap<UnitKey, BaselineRow>,
-}
-
-impl Sweep<'_> {
-    async fn run(
-        &self,
-        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
-        report: &mut CatchUpReport,
-    ) -> anyhow::Result<Vec<StampRow>> {
-        let mut stamp_rows = Vec::new();
-        for family in ProjectionFamily::ALL {
-            let scope_keys: Vec<Option<&ScopeId>> = if family.is_scoped() {
-                self.scopes.iter().map(Some).collect()
-            } else {
-                vec![None]
-            };
-            for scope in scope_keys {
-                stamp_rows.push(self.sweep_unit(tx, report, family, scope).await?);
-            }
-        }
-        Ok(stamp_rows)
-    }
-
-    async fn sweep_unit(
-        &self,
-        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
-        report: &mut CatchUpReport,
-        family: ProjectionFamily,
-        scope: Option<&ScopeId>,
-    ) -> anyhow::Result<StampRow> {
-        let scope_name = scope.map_or("", ScopeId::as_str).to_string();
-        let key = (family.family_name().to_string(), scope_name.clone());
-
-        let domain = family.byte_domain(self.snapshot_layout, scope)?;
-        let shard_digest = hash_unit(report, &crate::cache::domain_bytes(&domain)?)?;
-
-        let stored_row = self.baseline.get(&key);
-        let unchanged = stored_row
-            .is_some_and(|(digest, content, _)| digest == &shard_digest && !content.is_empty())
-            && !self.drained.contains(&key);
-
-        let (content_digest, record_count) = if unchanged {
-            let (_, content, count) = stored_row.expect("checked above");
-            (content.clone(), *count)
-        } else {
-            family_rows::delete_rows(tx, family, scope).await?;
-            let rows = family_rows::load_rows(tx, self.store, family, scope).await?;
-            report.rows_written += rows;
-            report.families_rederived += 1;
-            let (content_bytes, count) = family.canonical_records(self.store, scope)?;
-            (
-                canonical_digest::digest(&content_bytes),
-                i64::try_from(count)?,
-            )
-        };
-
-        let (size_bytes, mtime_ns) = observed_metadata(self.layout, family, scope)?;
-        stamp::insert_family_digest_row(
-            tx,
-            &scope_name,
-            family.family_name(),
-            &shard_digest,
-            &content_digest,
-            record_count,
-            size_bytes,
-            mtime_ns,
+/// The stored unit digests and the stored per-(scope, family) content rows.
+async fn load_stored_digests(
+    pool: &sqlx::SqlitePool,
+) -> anyhow::Result<(BTreeMap<String, String>, BTreeMap<ContentKey, ContentValue>)> {
+    let units: BTreeMap<String, String> =
+        sqlx::query_as::<_, (String, String)>("SELECT unit, digest FROM projection_unit_digests")
+            .fetch_all(pool)
+            .await?
+            .into_iter()
+            .collect();
+    let content: BTreeMap<ContentKey, ContentValue> =
+        sqlx::query_as::<_, (String, String, String, i64)>(
+            "SELECT scope_id, family, content_digest, record_count FROM projection_family_digests",
         )
-        .await?;
-        Ok((
-            scope_name,
-            family.family_name().to_string(),
-            content_digest,
-            record_count,
-        ))
-    }
-}
-
-/// The one way the sweep obtains a domain digest.
-///
-/// The counter and the observation probe live inside, so the report's
-/// `families_hashed` is derived from hashes that actually ran; a sweep
-/// that skips a family cannot claim its hash.
-fn hash_unit(report: &mut CatchUpReport, bytes: &[u8]) -> anyhow::Result<String> {
-    report.families_hashed += 1;
-    crate::test_probes::at("catch_up_unit_hashed")?;
-    Ok(canonical_digest::digest(bytes))
-}
-
-/// A (family, scope) with a baseline but no unit — a scope that left the
-/// manifest — loses its rows and its digest row.
-async fn remove_departed_units(
-    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
-    baseline: &BTreeMap<UnitKey, BaselineRow>,
-    stamp_rows: &[StampRow],
-) -> anyhow::Result<()> {
-    let live: BTreeSet<UnitKey> = stamp_rows
-        .iter()
-        .map(|(scope_id, family, ..)| (family.clone(), scope_id.clone()))
+        .fetch_all(pool)
+        .await?
+        .into_iter()
+        .map(|(scope_id, family, digest, count)| ((scope_id, family), (digest, count)))
         .collect();
-    for (family_name, scope_id) in baseline.keys() {
-        if live.contains(&(family_name.clone(), scope_id.clone())) {
+    Ok((units, content))
+}
+
+/// A stored unit the manifest no longer names. A departed scope loses its
+/// rows in the scoped tables and its digest rows; edge rows belong to the
+/// global unit and stay. Returns whether anything departed.
+async fn remove_departed_scopes(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    stored_units: &BTreeMap<String, String>,
+    live: &[Unit],
+    content: &mut BTreeMap<ContentKey, ContentValue>,
+) -> anyhow::Result<bool> {
+    let live_names: BTreeSet<String> = live.iter().map(Unit::name).collect();
+    let mut departed = false;
+    for name in stored_units.keys() {
+        if live_names.contains(name) {
             continue;
         }
-        let family = ProjectionFamily::ALL
-            .into_iter()
-            .find(|family| family.family_name() == family_name);
-        if let Some(family) = family {
-            let scope = if scope_id.is_empty() {
-                None
-            } else {
-                Some(ScopeId::new(scope_id)?)
-            };
-            family_rows::delete_rows(tx, family, scope.as_ref()).await?;
+        if let Some(scope) = Unit::scope_of(name)? {
+            for family in ProjectionFamily::ALL.into_iter().filter(|f| f.is_scoped()) {
+                family_rows::delete_rows(tx, family, Some(&scope)).await?;
+            }
+            content.retain(|(scope_id, _), _| scope_id != scope.as_str());
+            sqlx::query("DELETE FROM projection_family_digests WHERE scope_id = ?")
+                .bind(scope.as_str())
+                .execute(&mut **tx)
+                .await?;
         }
-        sqlx::query("DELETE FROM projection_family_digests WHERE family = ? AND scope_id = ?")
-            .bind(family_name)
-            .bind(scope_id)
+        sqlx::query("DELETE FROM projection_unit_digests WHERE unit = ?")
+            .bind(name)
             .execute(&mut **tx)
             .await?;
+        departed = true;
+    }
+    Ok(departed)
+}
+
+/// What a changed unit re-derives: the global unit reloads the edges table
+/// whole; a scope unit re-derives the scope's families by content digest.
+async fn apply_unit_change(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    store: &StateStore,
+    unit: &Unit,
+    content: &mut BTreeMap<ContentKey, ContentValue>,
+    report: &mut CatchUpReport,
+) -> anyhow::Result<()> {
+    match unit {
+        Unit::Global => {
+            family_rows::delete_rows(tx, ProjectionFamily::Edges, None).await?;
+            report.rows_written +=
+                family_rows::load_rows(tx, store, ProjectionFamily::Edges, None).await?;
+            report.families_rederived += 1;
+            let (bytes, count) = ProjectionFamily::Edges.canonical_records(store, None)?;
+            let row = (canonical_digest::digest(&bytes), i64::try_from(count)?);
+            content.insert((String::new(), "edges".to_string()), row);
+        }
+        Unit::Scope(scope) => rederive_scope(tx, store, scope, content, report).await?,
     }
     Ok(())
+}
+
+/// A changed scope unit: parse every scoped family of that scope again,
+/// then delete and insert only the families whose content digest moved.
+async fn rederive_scope(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    store: &StateStore,
+    scope: &ScopeId,
+    content: &mut BTreeMap<ContentKey, ContentValue>,
+    report: &mut CatchUpReport,
+) -> anyhow::Result<()> {
+    for family in ProjectionFamily::ALL.into_iter().filter(|f| f.is_scoped()) {
+        let (bytes, count) = family.canonical_records(store, Some(scope))?;
+        let fresh = (canonical_digest::digest(&bytes), i64::try_from(count)?);
+        let key = (scope.as_str().to_string(), family.family_name().to_string());
+        if content.get(&key) == Some(&fresh) {
+            continue;
+        }
+        family_rows::delete_rows(tx, family, Some(scope)).await?;
+        report.rows_written += family_rows::load_rows(tx, store, family, Some(scope)).await?;
+        report.families_rederived += 1;
+        content.insert(key, fresh);
+    }
+    Ok(())
+}
+
+/// The one way the pass obtains a unit digest.
+///
+/// The counter and the observation probe live inside, so the report's
+/// `units_hashed` is derived from hashes that actually ran.
+fn hash_unit(
+    report: &mut CatchUpReport,
+    state_dir: &camino::Utf8Path,
+    unit: &Unit,
+) -> anyhow::Result<String> {
+    report.units_hashed += 1;
+    crate::test_probes::at("catch_up_unit_hashed")?;
+    units::unit_digest(state_dir, unit)
 }
 
 async fn rebuild(
@@ -278,20 +261,10 @@ async fn rebuild(
         serial,
         digest,
         rebuilt: true,
-        events_drained: 0,
-        families_hashed: 0,
+        revision_committed: true,
+        units_hashed: 0,
         families_rederived: 0,
         rows_written: report.records_loaded,
         migrations_applied,
     })
-}
-
-/// Size and mtime across the family's live byte domain: diagnostic only,
-/// never a comparison input.
-fn observed_metadata(
-    layout: &ProvenanceLayout,
-    family: ProjectionFamily,
-    scope: Option<&ScopeId>,
-) -> anyhow::Result<(i64, i64)> {
-    crate::cache::domain_metadata(&family.byte_domain(layout, scope)?)
 }

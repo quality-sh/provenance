@@ -117,6 +117,7 @@ impl StateStore {
         scope: &ScopeId,
     ) -> anyhow::Result<Vec<RequirementReview>> {
         let path = shards::requirement_reviews_path(&self.layout, scope);
+        crate::test_probes::record_read(&path);
         if !path.exists() {
             return Ok(Vec::new());
         }

@@ -276,6 +276,7 @@ fn read_jsonl_shards<T: DeserializeOwned>(
 ) -> anyhow::Result<Vec<T>> {
     let mut records = Vec::new();
     for path in shard_paths {
+        crate::test_probes::record_read(&path);
         let contents = std::fs::read_to_string(&path)
             .with_context(|| format!("failed to read {shard_kind} shard {}", path.as_str()))?;
         for (index, line) in contents.lines().enumerate() {
