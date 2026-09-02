@@ -1,8 +1,16 @@
+mod catch_up_behavior;
+mod catch_up_derived_state;
+mod catch_up_domain_coverage;
+mod catch_up_serial_behavior;
+mod catch_up_validation_behavior;
 mod fixtures;
 mod frontier_behavior;
 mod gap_rule_behavior;
 mod materialization_behavior;
+mod materialize_guard_behavior;
 mod projection_digest_sensitivity;
 mod projection_stamp_behavior;
 mod reporting_behavior;
+mod scope_locality_guard;
 mod traceability_behavior;
+mod unit_digest_behavior;

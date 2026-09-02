@@ -10,7 +10,7 @@ use serde_json::json;
 ///
 /// References point at records the seeded fixture already holds; nothing
 /// here has to satisfy write-path validation, only the family's parse.
-fn fresh_record(family: ProjectionFamily, scope: &str) -> serde_json::Value {
+pub(super) fn fresh_record(family: ProjectionFamily, scope: &str) -> serde_json::Value {
     let target = json!({"artifact_type": "requirement", "artifact_id": "req_schads_overtime"});
     match family.family_name() {
         "sources" => json!({"schema_version": 1, "scope_id": scope, "id": "source_new",
@@ -80,7 +80,7 @@ fn fresh_record(family: ProjectionFamily, scope: &str) -> serde_json::Value {
 /// the same validation materialization runs: one contribution with a claim,
 /// one qualifying synthesis packet, one proposal resting on the claim, one
 /// assertion, and one deferred disposition by an allowed actor.
-fn aggregate_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
+pub(super) fn aggregate_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
     let (dir, layout, scope) = seeded_layout();
     seed_integration_shards(&layout, scope.as_str());
 
@@ -156,7 +156,11 @@ fn aggregate_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
 /// Most families take one appended record. An assertion admits no free
 /// text and no second assertion for the same proposal, so its id moves; a
 /// disposition's rationale moves for the same reason.
-fn change_one_record(layout: &ProvenanceLayout, family: ProjectionFamily, scope: &ScopeId) {
+pub(super) fn change_one_record(
+    layout: &ProvenanceLayout,
+    family: ProjectionFamily,
+    scope: &ScopeId,
+) {
     let shard_scope = family.is_scoped().then_some(scope);
     let path = family.shard_path(layout, shard_scope).unwrap();
     match family {
@@ -167,6 +171,18 @@ fn change_one_record(layout: &ProvenanceLayout, family: ProjectionFamily, scope:
         ProjectionFamily::Dispositions => {
             let content = std::fs::read_to_string(&path).unwrap();
             std::fs::write(path, content.replace("Deferred for now", "Deferred again")).unwrap();
+        }
+        // Cards carry a derived field. Flip an existing card's state through
+        // its inputs and add a fresh card.
+        ProjectionFamily::ProposalCards => {
+            let dispositions = ProjectionFamily::Dispositions
+                .shard_path(layout, shard_scope)
+                .unwrap();
+            std::fs::write(dispositions, "").unwrap();
+            let mut existing = std::fs::read_to_string(&path).unwrap_or_default();
+            existing.push_str(&fresh_record(family, scope.as_str()).to_string());
+            existing.push('\n');
+            std::fs::write(path, existing).unwrap();
         }
         family => {
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();

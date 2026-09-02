@@ -7,12 +7,18 @@ pub(super) async fn load_scope(
     store: &StateStore,
     scope: &ScopeId,
 ) -> anyhow::Result<u64> {
-    let mut loaded = load_requirement_records(tx, store, scope).await?;
-    loaded += load_decision_records(tx, store, scope).await?;
+    let mut loaded = load_sources(tx, store, scope).await?;
+    loaded += load_requirements(tx, store, scope).await?;
+    loaded += load_domains(tx, store, scope).await?;
+    loaded += load_boundaries(tx, store, scope).await?;
+    loaded += load_topics(tx, store, scope).await?;
+    loaded += load_questions(tx, store, scope).await?;
+    loaded += load_resolutions(tx, store, scope).await?;
+    loaded += load_rules(tx, store, scope).await?;
     Ok(loaded)
 }
 
-async fn load_requirement_records(
+pub(super) async fn load_sources(
     tx: &mut Transaction<'_, Sqlite>,
     store: &StateStore,
     scope: &ScopeId,
@@ -27,6 +33,15 @@ async fn load_requirement_records(
             .execute(&mut **tx).await?;
         loaded += 1;
     }
+    Ok(loaded)
+}
+
+pub(super) async fn load_requirements(
+    tx: &mut Transaction<'_, Sqlite>,
+    store: &StateStore,
+    scope: &ScopeId,
+) -> anyhow::Result<u64> {
+    let mut loaded = 0;
     for requirement in store.list_requirements(scope)? {
         sqlx::query("INSERT INTO requirements (scope_id, id, statement, status, domain_id, fog) VALUES (?, ?, ?, ?, ?, ?)")
             .bind(requirement.scope_id.as_str()).bind(requirement.id.as_str())
@@ -35,6 +50,15 @@ async fn load_requirement_records(
             .bind(requirement.fog).execute(&mut **tx).await?;
         loaded += 1;
     }
+    Ok(loaded)
+}
+
+pub(super) async fn load_domains(
+    tx: &mut Transaction<'_, Sqlite>,
+    store: &StateStore,
+    scope: &ScopeId,
+) -> anyhow::Result<u64> {
+    let mut loaded = 0;
     for domain in store.list_domains(scope)? {
         sqlx::query(
             "INSERT INTO domains (scope_id, id, name, description, color) VALUES (?, ?, ?, ?, ?)",
@@ -48,6 +72,15 @@ async fn load_requirement_records(
         .await?;
         loaded += 1;
     }
+    Ok(loaded)
+}
+
+pub(super) async fn load_boundaries(
+    tx: &mut Transaction<'_, Sqlite>,
+    store: &StateStore,
+    scope: &ScopeId,
+) -> anyhow::Result<u64> {
+    let mut loaded = 0;
     for boundary in store.list_boundaries(scope)? {
         let source_id = boundary
             .source_ref
@@ -66,7 +99,7 @@ async fn load_requirement_records(
     Ok(loaded)
 }
 
-async fn load_decision_records(
+pub(super) async fn load_topics(
     tx: &mut Transaction<'_, Sqlite>,
     store: &StateStore,
     scope: &ScopeId,
@@ -80,6 +113,15 @@ async fn load_decision_records(
             .execute(&mut **tx).await?;
         loaded += 1;
     }
+    Ok(loaded)
+}
+
+pub(super) async fn load_questions(
+    tx: &mut Transaction<'_, Sqlite>,
+    store: &StateStore,
+    scope: &ScopeId,
+) -> anyhow::Result<u64> {
+    let mut loaded = 0;
     for question in store.list_questions(scope)? {
         sqlx::query("INSERT INTO questions (scope_id, id, topic_id, requirement_id, question, resolution_method, status, claimed_by, claimed_at, answer, links, resolution_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
             .bind(question.scope_id.as_str()).bind(question.id.as_str()).bind(question.topic_id.as_str())
@@ -91,6 +133,15 @@ async fn load_decision_records(
             .execute(&mut **tx).await?;
         loaded += 1;
     }
+    Ok(loaded)
+}
+
+pub(super) async fn load_resolutions(
+    tx: &mut Transaction<'_, Sqlite>,
+    store: &StateStore,
+    scope: &ScopeId,
+) -> anyhow::Result<u64> {
+    let mut loaded = 0;
     for resolution in store.list_resolutions(scope)? {
         sqlx::query("INSERT INTO resolutions (scope_id, id, title, position, rationale, status, review_on, context, enforcement, confidence, inputs, made_by, approved_by, approved_at, superseded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
             .bind(resolution.scope_id.as_str()).bind(resolution.id.as_str()).bind(resolution.title)
@@ -103,6 +154,15 @@ async fn load_decision_records(
             .execute(&mut **tx).await?;
         loaded += 1;
     }
+    Ok(loaded)
+}
+
+pub(super) async fn load_rules(
+    tx: &mut Transaction<'_, Sqlite>,
+    store: &StateStore,
+    scope: &ScopeId,
+) -> anyhow::Result<u64> {
+    let mut loaded = 0;
     for rule in store.list_rules(scope)? {
         sqlx::query(
             "INSERT INTO rules (scope_id, id, statement, status, severity) VALUES (?, ?, ?, ?, ?)",

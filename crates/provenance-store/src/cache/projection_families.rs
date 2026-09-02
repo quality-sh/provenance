@@ -6,7 +6,10 @@
 //! invalidation together. A family without a row cannot be stored or
 //! stamped.
 
-use crate::{layout::ProvenanceLayout, shards, state_store::StateStore};
+use crate::state_store::StateStore;
+#[cfg(test)]
+use crate::{layout::ProvenanceLayout, shards};
+#[cfg(test)]
 use camino::Utf8PathBuf;
 use provenance_core::ScopeId;
 
@@ -62,8 +65,7 @@ impl ProjectionFamily {
         Self::RequirementReviews,
     ];
 
-    /// The family's one name: its cache table, its digest-row key, and its
-    /// journal label are all this one string.
+    /// The family's cache table name and its digest-row key.
     pub const fn family_name(self) -> &'static str {
         match self {
             Self::Sources => "sources",
@@ -94,6 +96,7 @@ impl ProjectionFamily {
     }
 
     /// The canonical shard file the family's records live in.
+    #[cfg(test)]
     pub(crate) fn shard_path(
         self,
         layout: &ProvenanceLayout,

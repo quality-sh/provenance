@@ -1,19 +1,22 @@
-use crate::cache::{projection_digest, projection_digest::FamilyContentDigest};
+use super::units;
+use crate::cache::projection_digest;
 use crate::{layout::ProvenanceLayout, state_store::StateStore};
 use provenance_core::ScopeId;
 use sqlx::{Sqlite, Transaction};
 
 /// Writes the revision stamp the loaded rows answer under.
 ///
-/// Runs inside the materialization transaction, so rows, the revision, and
-/// the family baselines commit together or not at all. The instance id is
-/// written once from OS entropy and never replaced while the database file
-/// lives; it is what keeps serials from different database lifetimes apart.
+/// Runs inside the materialization transaction, so rows, revision, content
+/// digests, and unit digests commit together or not at all. The instance id
+/// is written once from OS entropy and kept while the database file lives.
+/// Unit digests hash the snapshot tree, the same bytes the rows came from,
+/// so the next pass sees a live edit made during the rebuild.
 pub(super) async fn write_stamp(
     tx: &mut Transaction<'_, Sqlite>,
     store: &StateStore,
-    layout: &ProvenanceLayout,
+    snapshot_layout: &ProvenanceLayout,
     scopes: &[ScopeId],
+    serial: i64,
 ) -> anyhow::Result<()> {
     let families = projection_digest::family_content_digests(store, scopes)?;
     let revision = projection_digest::revision_digest(&families)?;
@@ -22,67 +25,76 @@ pub(super) async fn write_stamp(
         .bind(uuid::Uuid::new_v4().to_string())
         .execute(&mut **tx)
         .await?;
-
-    let last_serial: i64 =
-        sqlx::query_scalar("SELECT COALESCE(MAX(serial), 0) FROM projection_revision")
-            .fetch_one(&mut **tx)
-            .await?;
-    sqlx::query("INSERT INTO projection_revision (serial, digest) VALUES (?, ?)")
-        .bind(last_serial + 1)
-        .bind(&revision)
-        .execute(&mut **tx)
-        .await?;
+    insert_revision(tx, serial, &revision).await?;
 
     sqlx::query("DELETE FROM projection_family_digests")
         .execute(&mut **tx)
         .await?;
     for family in &families {
-        let (shard_digest, size_bytes, mtime_ns) = shard_baseline(layout, family)?;
-        sqlx::query("INSERT INTO projection_family_digests (scope_id, family, digest, record_count, size_bytes, mtime_ns) VALUES (?, ?, ?, ?, ?, ?)")
-            .bind(&family.scope_id).bind(family.family)
-            .bind(shard_digest).bind(i64::try_from(family.record_count)?)
-            .bind(size_bytes).bind(mtime_ns)
-            .execute(&mut **tx).await?;
+        upsert_content_row(
+            tx,
+            &family.scope_id,
+            family.family,
+            &family.digest,
+            i64::try_from(family.record_count)?,
+        )
+        .await?;
+    }
+
+    sqlx::query("DELETE FROM projection_unit_digests")
+        .execute(&mut **tx)
+        .await?;
+    crate::test_probes::at("stamp_before_unit_digests")?;
+    let state_dir = snapshot_layout.state_dir();
+    for unit in units::units_for(scopes) {
+        let digest = units::unit_digest(&state_dir, &unit)?;
+        upsert_unit_row(tx, &unit.name(), &digest).await?;
     }
     Ok(())
 }
 
-/// Hashes the shard file the family's rows were derived from.
-///
-/// The byte hash is the catch-up comparison baseline; size and mtime are
-/// diagnostic metadata and never license a skip. An absent shard hashes as
-/// empty bytes, so a later pass that still finds no file sees a match.
-fn shard_baseline(
-    layout: &ProvenanceLayout,
-    family: &FamilyContentDigest,
-) -> anyhow::Result<(String, i64, i64)> {
-    let scope = if family.scope_id.is_empty() {
-        None
-    } else {
-        Some(ScopeId::new(&family.scope_id)?)
-    };
-    let path = family.kind.shard_path(layout, scope.as_ref())?;
-    let bytes = match std::fs::read(&path) {
-        Ok(bytes) => bytes,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
-        Err(error) => return Err(error.into()),
-    };
-    let (size_bytes, mtime_ns) = match std::fs::metadata(&path) {
-        Ok(metadata) => {
-            let mtime = metadata
-                .modified()?
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_or(0, |duration| {
-                    i64::try_from(duration.as_nanos()).unwrap_or(i64::MAX)
-                });
-            (i64::try_from(metadata.len())?, mtime)
-        }
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => (0, 0),
-        Err(error) => return Err(error.into()),
-    };
-    Ok((
-        crate::canonical_digest::digest(&bytes),
-        size_bytes,
-        mtime_ns,
-    ))
+pub(super) async fn insert_revision(
+    tx: &mut Transaction<'_, Sqlite>,
+    serial: i64,
+    digest: &str,
+) -> anyhow::Result<()> {
+    sqlx::query("INSERT INTO projection_revision (serial, digest) VALUES (?, ?)")
+        .bind(serial)
+        .bind(digest)
+        .execute(&mut **tx)
+        .await?;
+    Ok(())
+}
+
+pub(super) async fn upsert_content_row(
+    tx: &mut Transaction<'_, Sqlite>,
+    scope_id: &str,
+    family: &str,
+    content_digest: &str,
+    record_count: i64,
+) -> anyhow::Result<()> {
+    sqlx::query(
+        "INSERT OR REPLACE INTO projection_family_digests \
+         (scope_id, family, content_digest, record_count) VALUES (?, ?, ?, ?)",
+    )
+    .bind(scope_id)
+    .bind(family)
+    .bind(content_digest)
+    .bind(record_count)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+pub(super) async fn upsert_unit_row(
+    tx: &mut Transaction<'_, Sqlite>,
+    unit: &str,
+    digest: &str,
+) -> anyhow::Result<()> {
+    sqlx::query("INSERT OR REPLACE INTO projection_unit_digests (unit, digest) VALUES (?, ?)")
+        .bind(unit)
+        .bind(digest)
+        .execute(&mut **tx)
+        .await?;
+    Ok(())
 }

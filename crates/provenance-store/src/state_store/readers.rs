@@ -276,6 +276,7 @@ fn read_jsonl_shards<T: DeserializeOwned>(
 ) -> anyhow::Result<Vec<T>> {
     let mut records = Vec::new();
     for path in shard_paths {
+        crate::test_probes::record_read(&path);
         let contents = std::fs::read_to_string(&path)
             .with_context(|| format!("failed to read {shard_kind} shard {}", path.as_str()))?;
         for (index, line) in contents.lines().enumerate() {
@@ -308,28 +309,37 @@ pub(super) fn read_message_shards(
     scope: &ScopeId,
 ) -> anyhow::Result<Vec<Message>> {
     crate::publication::with_repository_publication(layout, || {
-        let threads_dir = shards::threads_path(layout, scope)
-            .parent()
-            .expect("threads path must have a parent")
-            .to_path_buf();
-        if !threads_dir.exists() {
-            return Ok(Vec::new());
-        }
-        let mut shard_paths = Vec::new();
-        for entry in std::fs::read_dir(&threads_dir)? {
-            let entry = entry?;
-            if entry.file_type()?.is_file() {
-                let path = Utf8PathBuf::from_path_buf(entry.path()).map_err(|path| {
-                    anyhow::anyhow!("non-UTF-8 message shard path: {}", path.display())
-                })?;
-                if is_message_month_shard(&path) {
-                    shard_paths.push(path);
-                }
+        read_jsonl_shards(message_shard_paths(layout, scope)?, "message")
+    })
+}
+
+/// Every month shard of the scope's messages, sorted. All message reads
+/// discover their shards here.
+pub fn message_shard_paths(
+    layout: &ProvenanceLayout,
+    scope: &ScopeId,
+) -> anyhow::Result<Vec<Utf8PathBuf>> {
+    let threads_dir = shards::threads_path(layout, scope)
+        .parent()
+        .expect("threads path must have a parent")
+        .to_path_buf();
+    if !threads_dir.exists() {
+        return Ok(Vec::new());
+    }
+    let mut shard_paths = Vec::new();
+    for entry in std::fs::read_dir(&threads_dir)? {
+        let entry = entry?;
+        if entry.file_type()?.is_file() {
+            let path = Utf8PathBuf::from_path_buf(entry.path()).map_err(|path| {
+                anyhow::anyhow!("non-UTF-8 message shard path: {}", path.display())
+            })?;
+            if is_message_month_shard(&path) {
+                shard_paths.push(path);
             }
         }
-        shard_paths.sort();
-        read_jsonl_shards(shard_paths, "message")
-    })
+    }
+    shard_paths.sort();
+    Ok(shard_paths)
 }
 
 fn is_message_month_shard(path: &Utf8Path) -> bool {
@@ -349,29 +359,34 @@ pub(super) fn read_edge_shards(
     closed_scope: Option<&ScopeId>,
 ) -> anyhow::Result<Vec<Edge>> {
     crate::publication::with_repository_publication(layout, || {
-        let edges_dir = layout.edges_dir();
-        if !edges_dir.exists() {
-            return Ok(Vec::new());
-        }
-        let mut shard_paths = Vec::new();
-        for entry in std::fs::read_dir(&edges_dir)? {
-            let entry = entry?;
-            if entry.file_type()?.is_file() {
-                let path = Utf8PathBuf::from_path_buf(entry.path()).map_err(|path| {
-                    anyhow::anyhow!("non-UTF-8 edge shard path: {}", path.display())
-                })?;
-                if path.extension() == Some("jsonl") {
-                    shard_paths.push(path);
-                }
-            }
-        }
-        shard_paths.sort();
+        let shard_paths = edge_shard_paths(layout)?;
         if let Some(scope) = closed_scope {
             read_closed_edges(shard_paths, scope)
         } else {
             read_jsonl_shards(shard_paths, "edge")
         }
     })
+}
+
+/// Every edge shard, sorted. All edge reads discover their shards here.
+pub fn edge_shard_paths(layout: &ProvenanceLayout) -> anyhow::Result<Vec<Utf8PathBuf>> {
+    let edges_dir = layout.edges_dir();
+    if !edges_dir.exists() {
+        return Ok(Vec::new());
+    }
+    let mut shard_paths = Vec::new();
+    for entry in std::fs::read_dir(&edges_dir)? {
+        let entry = entry?;
+        if entry.file_type()?.is_file() {
+            let path = Utf8PathBuf::from_path_buf(entry.path())
+                .map_err(|path| anyhow::anyhow!("non-UTF-8 edge shard path: {}", path.display()))?;
+            if path.extension() == Some("jsonl") {
+                shard_paths.push(path);
+            }
+        }
+    }
+    shard_paths.sort();
+    Ok(shard_paths)
 }
 
 fn read_closed_edges(paths: Vec<Utf8PathBuf>, scope: &ScopeId) -> anyhow::Result<Vec<Edge>> {

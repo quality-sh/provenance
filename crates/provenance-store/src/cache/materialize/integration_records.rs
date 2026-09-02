@@ -7,6 +7,17 @@ pub(super) async fn load_scope(
     store: &StateStore,
     scope: &ScopeId,
 ) -> anyhow::Result<u64> {
+    let mut loaded = load_implementation_bindings(tx, store, scope).await?;
+    loaded += load_verification_bindings(tx, store, scope).await?;
+    loaded += load_requirement_reviews(tx, store, scope).await?;
+    Ok(loaded)
+}
+
+pub(super) async fn load_implementation_bindings(
+    tx: &mut Transaction<'_, Sqlite>,
+    store: &StateStore,
+    scope: &ScopeId,
+) -> anyhow::Result<u64> {
     let mut loaded = 0;
     for binding in store.list_implementation_bindings(scope)? {
         sqlx::query("INSERT INTO implementation_bindings (scope_id, id, rule_id, declared_by, retired, file, symbol) VALUES (?, ?, ?, ?, ?, ?, ?)")
@@ -15,6 +26,15 @@ pub(super) async fn load_scope(
             .bind(binding.symbol).execute(&mut **tx).await?;
         loaded += 1;
     }
+    Ok(loaded)
+}
+
+pub(super) async fn load_verification_bindings(
+    tx: &mut Transaction<'_, Sqlite>,
+    store: &StateStore,
+    scope: &ScopeId,
+) -> anyhow::Result<u64> {
+    let mut loaded = 0;
     for binding in store.list_verification_bindings(scope)? {
         sqlx::query("INSERT INTO verification_bindings (scope_id, id, rule_id, key, method, declared_by, retired, file, symbol) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
             .bind(binding.scope_id.as_str()).bind(binding.id.as_str()).bind(binding.rule_id.as_str())
@@ -23,6 +43,15 @@ pub(super) async fn load_scope(
             .bind(binding.symbol).execute(&mut **tx).await?;
         loaded += 1;
     }
+    Ok(loaded)
+}
+
+pub(super) async fn load_requirement_reviews(
+    tx: &mut Transaction<'_, Sqlite>,
+    store: &StateStore,
+    scope: &ScopeId,
+) -> anyhow::Result<u64> {
+    let mut loaded = 0;
     for review in store.list_requirement_reviews(scope)? {
         sqlx::query("INSERT INTO requirement_reviews (scope_id, id, rule_id, requirement_id, field, before_text, after_text, changed_at, cleared_at, cleared_by_run) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
             .bind(review.scope_id.as_str()).bind(review.id.as_str()).bind(review.rule_id.as_str())

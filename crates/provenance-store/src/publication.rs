@@ -8,7 +8,10 @@ use std::cell::RefCell;
 use std::collections::BTreeSet;
 use std::io::Write;
 
+mod guard;
 mod read_only;
+pub use guard::{publication_guard, snapshot_state_under_guard, PublicationGuard};
+
 pub use read_only::with_read_only_validation;
 
 pub struct StateSnapshot {
@@ -57,11 +60,10 @@ pub fn with_repository_publication<R>(
     if HELD_LOCKS.with(|locks| locks.borrow().contains(&key)) {
         return operation();
     }
-    crate::jsonl::with_advisory_lock(&lock_path, || {
-        let _held_lock = HeldPublicationLock::new(key);
-        prepare_import_transactions_dir(layout)?;
-        recover_pending_publication(layout).and_then(|()| operation())
-    })
+    let _lock = guard::LockedPublicationFile::acquire(&lock_path)?;
+    let _held_lock = HeldPublicationLock::new(key);
+    prepare_import_transactions_dir(layout)?;
+    recover_pending_publication(layout).and_then(|()| operation())
 }
 
 fn prepare_publication_lock(layout: &ProvenanceLayout) -> anyhow::Result<()> {
@@ -398,16 +400,18 @@ pub fn sync_tree(path: &Utf8Path) -> anyhow::Result<()> {
 }
 
 pub fn snapshot_state(layout: &ProvenanceLayout) -> anyhow::Result<StateSnapshot> {
-    with_repository_publication(layout, || {
-        let directory = tempfile::tempdir()?;
-        let root = Utf8PathBuf::from_path_buf(directory.path().to_path_buf())
-            .map_err(|path| anyhow::anyhow!("snapshot path is not UTF-8: {}", path.display()))?;
-        let snapshot_layout = ProvenanceLayout::new(root);
-        copy_tree(&layout.state_dir(), &snapshot_layout.state_dir())?;
-        Ok(StateSnapshot {
-            _directory: directory,
-            layout: snapshot_layout,
-        })
+    with_repository_publication(layout, || snapshot_state_unlocked(layout))
+}
+
+fn snapshot_state_unlocked(layout: &ProvenanceLayout) -> anyhow::Result<StateSnapshot> {
+    let directory = tempfile::tempdir()?;
+    let root = Utf8PathBuf::from_path_buf(directory.path().to_path_buf())
+        .map_err(|path| anyhow::anyhow!("snapshot path is not UTF-8: {}", path.display()))?;
+    let snapshot_layout = ProvenanceLayout::new(root);
+    copy_tree(&layout.state_dir(), &snapshot_layout.state_dir())?;
+    Ok(StateSnapshot {
+        _directory: directory,
+        layout: snapshot_layout,
     })
 }
 
@@ -434,6 +438,7 @@ pub(crate) fn with_state_path_access<R>(
     path: &Utf8Path,
     operation: impl FnOnce() -> anyhow::Result<R>,
 ) -> anyhow::Result<R> {
+    crate::test_probes::record_read(path);
     let Some(state_dir) = path.ancestors().find(|ancestor| {
         ancestor.file_name() == Some("state")
             && ancestor.parent().and_then(Utf8Path::file_name) == Some(".provenance")

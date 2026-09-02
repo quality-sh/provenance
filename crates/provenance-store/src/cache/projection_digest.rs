@@ -63,3 +63,58 @@ pub fn revision_digest(families: &[FamilyContentDigest]) -> anyhow::Result<Strin
         &canonical_digest::canonical_bytes(&families)?,
     ))
 }
+
+/// Rebuilds the revision digest from stored family rows without parsing a
+/// shard.
+///
+/// Rows may arrive in any order. An empty content digest means the row
+/// predates the column. The caller must re-derive that family first.
+pub fn revision_digest_from_stored_rows(
+    rows: &[(String, String, String, i64)],
+) -> anyhow::Result<String> {
+    let mut by_key = std::collections::BTreeMap::new();
+    for (scope_id, family, content_digest, record_count) in rows {
+        anyhow::ensure!(
+            !content_digest.is_empty(),
+            "family `{family}` scope `{scope_id}` has no stored content digest"
+        );
+        by_key.insert(
+            (family.as_str(), scope_id.as_str()),
+            (content_digest, record_count),
+        );
+    }
+    let mut scopes: Vec<&str> = rows
+        .iter()
+        .filter(|(scope_id, ..)| !scope_id.is_empty())
+        .map(|(scope_id, ..)| scope_id.as_str())
+        .collect();
+    scopes.sort_unstable();
+    scopes.dedup();
+    let mut families = Vec::new();
+    for family in ProjectionFamily::ALL {
+        let scope_keys: Vec<&str> = if family.is_scoped() {
+            scopes.clone()
+        } else {
+            vec![""]
+        };
+        for scope_id in scope_keys {
+            let (digest, record_count) =
+                by_key
+                    .get(&(family.family_name(), scope_id))
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "no stored digest row for family `{}` scope `{scope_id}`",
+                            family.family_name()
+                        )
+                    })?;
+            families.push(FamilyContentDigest {
+                kind: family,
+                family: family.family_name(),
+                scope_id: scope_id.to_string(),
+                digest: (*digest).clone(),
+                record_count: u64::try_from(**record_count)?,
+            });
+        }
+    }
+    revision_digest(&families)
+}

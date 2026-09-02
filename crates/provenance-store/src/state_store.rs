@@ -36,7 +36,9 @@ pub use inputs::{
     UpdateQuestionInput,
 };
 pub use proposal_surfaces::{ProposalDemand, ProposalSurfaceReason, SurfacedProposal, TopicClaim};
-pub use requirement_reviews::{requirement_statement_changes, RequirementStatementChange};
+pub use requirement_reviews::{
+    requirement_statement_changes, RequirementReviewInput, RequirementStatementChange,
+};
 pub use typed_statement_policy::TypedSpecWriteError;
 
 use crate::{layout::ProvenanceLayout, shards};
@@ -93,6 +95,7 @@ impl StateStore {
     }
     pub fn manifest(&self) -> anyhow::Result<Manifest> {
         self.with_repository_publication(|| {
+            crate::test_probes::record_read(&self.layout.manifest_path());
             let manifest: Manifest =
                 serde_json::from_str(&std::fs::read_to_string(self.layout.manifest_path())?)?;
             ensure_supported_schema_version("manifest", manifest.schema_version)?;

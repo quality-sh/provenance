@@ -1,13 +1,14 @@
 use super::super::*;
 use super::fixtures::*;
 
-const PROJECTION_TABLES: [&str; 6] = [
+const PROJECTION_TABLES: [&str; 7] = [
     "implementation_bindings",
     "verification_bindings",
     "requirement_reviews",
     "projection_instance",
     "projection_revision",
     "projection_family_digests",
+    "projection_unit_digests",
 ];
 
 async fn table_exists(pool: &sqlx::SqlitePool, table: &str) -> bool {
@@ -160,7 +161,7 @@ async fn materialization_stores_a_revision_stamp_with_instance_identity() {
     );
 
     let rows: Vec<(String, String, String, i64)> = sqlx::query_as(
-        "SELECT scope_id, family, digest, record_count FROM projection_family_digests ORDER BY family, scope_id",
+        "SELECT scope_id, family, content_digest, record_count FROM projection_family_digests ORDER BY family, scope_id",
     )
     .fetch_all(&pool)
     .await
@@ -203,8 +204,7 @@ async fn rematerialization_of_unchanged_state_keeps_digest_and_instance_and_adva
     let pool = open_cache(&layout).await.unwrap();
     let (second_serial, second_digest, second_instance) = stamp(&pool).await;
 
-    assert_eq!(first_serial, 1);
-    assert_eq!(second_serial, 2);
+    assert!(second_serial > first_serial, "serials only move forward");
     assert_eq!(first_digest, second_digest);
     assert_eq!(first_instance, second_instance);
 }
