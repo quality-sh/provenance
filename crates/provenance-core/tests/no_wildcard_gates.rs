@@ -130,6 +130,12 @@ fn the_scanner_ignores_test_modules_with_either_brace_style() {
     assert!(offenses(&production_lines(next_line)).is_empty());
     let kept = production_lines(same_line);
     assert!(kept.contains("fn production()"), "production lines stay");
+    let one_liner = "#[cfg(test)]\nmod tests {}\nfn f(k: NodeType) -> u8 {\n    match k {\n        NodeType::Source => 0,\n        _ => 9,\n    }\n}\n";
+    assert_eq!(
+        offenses(&production_lines(one_liner)),
+        ["_"],
+        "a one-line test module must not swallow the production lines after it"
+    );
 }
 
 // --- The repository gate.

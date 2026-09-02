@@ -16,6 +16,10 @@ pub(super) fn sid(value: &str) -> StableId {
 }
 
 pub(super) fn source(id: &str) -> Source {
+    source_superseded_by(id, None)
+}
+
+pub(super) fn source_superseded_by(id: &str, successor: Option<&str>) -> Source {
     Source {
         schema_version: SchemaVersion(1),
         scope_id: scope(),
@@ -30,7 +34,7 @@ pub(super) fn source(id: &str) -> Source {
         commit_pin: None,
         effective_date: None,
         review_date: None,
-        superseded_by: None,
+        superseded_by: successor.map(sid),
         origin_thread: None,
         origin_message: None,
     }
@@ -73,13 +77,20 @@ pub(super) fn domain(id: &str) -> Domain {
 }
 
 pub(super) fn boundary(id: &str, requirement_id: &str) -> Boundary {
+    boundary_citing(id, requirement_id, None)
+}
+
+pub(super) fn boundary_citing(id: &str, requirement_id: &str, source: Option<&str>) -> Boundary {
     Boundary {
         schema_version: SchemaVersion(1),
         scope_id: scope(),
         id: sid(id),
         requirement_id: sid(requirement_id),
         statement: format!("{id} statement"),
-        source_ref: None,
+        source_ref: source.map(|source_id| SourceReference {
+            source_id: sid(source_id),
+            clause: None,
+        }),
     }
 }
 
@@ -150,6 +161,10 @@ pub(super) struct Fixture {
 }
 
 pub(super) fn resolution(id: &str) -> Resolution {
+    resolution_superseded_by(id, None)
+}
+
+pub(super) fn resolution_superseded_by(id: &str, successor: Option<&str>) -> Resolution {
     Resolution {
         schema_version: SchemaVersion(1),
         scope_id: scope(),
@@ -165,7 +180,7 @@ pub(super) fn resolution(id: &str) -> Resolution {
         made_by: None,
         approved_by: None,
         approved_at: None,
-        superseded_by: None,
+        superseded_by: successor.map(sid),
         review_on: None,
         origin_thread: None,
         origin_message: None,
@@ -203,15 +218,29 @@ pub(super) fn question(
 }
 
 pub(super) fn fixture() -> Fixture {
+    let req = |edge_type: EdgeType, to: (NodeType, &str)| {
+        edge(
+            &format!("edge_{}", RelationKindName(edge_type).name()),
+            edge_type,
+            (NodeType::Requirement, "req_overtime"),
+            to,
+        )
+    };
     Fixture {
-        sources: vec![source("source_award")],
-        requirements: vec![requirement(
-            "req_overtime",
-            Some("domain_payroll"),
-            &["source_award"],
-        )],
+        sources: vec![
+            source("source_award"),
+            source_superseded_by("source_award_2019", Some("source_award")),
+        ],
+        requirements: vec![
+            requirement("req_overtime", Some("domain_payroll"), &["source_award"]),
+            requirement("req_penalty", None, &[]),
+        ],
         domains: vec![domain("domain_payroll")],
-        boundaries: vec![boundary("boundary_no_backpay", "req_overtime")],
+        boundaries: vec![boundary_citing(
+            "boundary_no_backpay",
+            "req_overtime",
+            Some("source_award"),
+        )],
         topics: vec![topic(
             "topic_rates",
             "req_overtime",
@@ -224,14 +253,56 @@ pub(super) fn fixture() -> Fixture {
             Some("res_threshold"),
             &[("source_award", ArtifactLinkTargetType::Source)],
         )],
-        resolutions: vec![resolution("res_threshold")],
+        resolutions: vec![
+            resolution("res_threshold"),
+            resolution_superseded_by("res_threshold_draft", Some("res_threshold")),
+        ],
         rules: vec![rule("rule_pay")],
-        edges: vec![edge(
-            "edge_cite",
-            EdgeType::References,
-            (NodeType::Source, "source_award"),
-            (NodeType::Requirement, "req_overtime"),
-        )],
+        edges: vec![
+            edge(
+                "edge_cite",
+                EdgeType::References,
+                (NodeType::Source, "source_award"),
+                (NodeType::Requirement, "req_overtime"),
+            ),
+            req(EdgeType::RefinesInto, (NodeType::Requirement, "req_penalty")),
+            req(EdgeType::DependsOn, (NodeType::Requirement, "req_penalty")),
+            req(EdgeType::Contradicts, (NodeType::Requirement, "req_penalty")),
+            req(EdgeType::Supersedes, (NodeType::Requirement, "req_penalty")),
+            req(EdgeType::Needs, (NodeType::Resolution, "res_threshold")),
+            req(EdgeType::Produces, (NodeType::Rule, "rule_pay")),
+            edge(
+                "edge_resolves",
+                EdgeType::Resolves,
+                (NodeType::Resolution, "res_threshold"),
+                (NodeType::Requirement, "req_overtime"),
+            ),
+            edge(
+                "edge_spawns",
+                EdgeType::Spawns,
+                (NodeType::Resolution, "res_threshold"),
+                (NodeType::Requirement, "req_overtime"),
+            ),
+        ],
+    }
+}
+
+/// The edge type's wire name, for unique edge ids in the corpus.
+struct RelationKindName(EdgeType);
+
+impl RelationKindName {
+    fn name(&self) -> &'static str {
+        match self.0 {
+            EdgeType::References => "references",
+            EdgeType::RefinesInto => "refines_into",
+            EdgeType::DependsOn => "depends_on",
+            EdgeType::Contradicts => "contradicts",
+            EdgeType::Supersedes => "supersedes",
+            EdgeType::Needs => "needs",
+            EdgeType::Resolves => "resolves",
+            EdgeType::Spawns => "spawns",
+            EdgeType::Produces => "produces",
+        }
     }
 }
 

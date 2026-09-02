@@ -40,6 +40,10 @@ pub fn production_lines(source: &str) -> String {
         if declaration.trim_end().ends_with(';') {
             continue;
         }
+        // A one-line module, `mod tests {}`, opened and closed already.
+        if declaration.contains('{') && brace_delta(declaration) == 0 {
+            continue;
+        }
         let mut depth = brace_delta(declaration);
         while depth == 0 {
             let Some(line) = lines.next() else {

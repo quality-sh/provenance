@@ -119,29 +119,28 @@ fn the_core_walks_every_declared_relation_around_one_node() {
         })
         .collect();
     // The citation appears once: the declared duality lets the References
-    // edge speak for the embedded source_refs entry.
-    assert_eq!(
-        labels,
-        [
-            ("references", RelationDirection::In, "source_award".into()),
-            (
-                "boundary_constrains",
-                RelationDirection::In,
-                "boundary_no_backpay".to_string()
-            ),
-            ("topic_shapes", RelationDirection::In, "topic_rates".into()),
-            (
-                "question_refines",
-                RelationDirection::In,
-                "question_threshold".to_string()
-            ),
-            (
-                "requirement_in_domain",
-                RelationDirection::Out,
-                "domain_payroll".to_string()
-            ),
-        ]
-    );
+    // edge speak for the embedded source_refs entry. Every other declared
+    // relation that touches the requirement appears exactly once, in
+    // vocabulary order, out before in.
+    let expected: Vec<(&str, RelationDirection, String)> = [
+        ("references", RelationDirection::In, "source_award"),
+        ("refines_into", RelationDirection::Out, "req_penalty"),
+        ("depends_on", RelationDirection::Out, "req_penalty"),
+        ("contradicts", RelationDirection::Out, "req_penalty"),
+        ("supersedes", RelationDirection::Out, "req_penalty"),
+        ("needs", RelationDirection::Out, "res_threshold"),
+        ("resolves", RelationDirection::In, "res_threshold"),
+        ("spawns", RelationDirection::In, "res_threshold"),
+        ("produces", RelationDirection::Out, "rule_pay"),
+        ("boundary_constrains", RelationDirection::In, "boundary_no_backpay"),
+        ("topic_shapes", RelationDirection::In, "topic_rates"),
+        ("question_refines", RelationDirection::In, "question_threshold"),
+        ("requirement_in_domain", RelationDirection::Out, "domain_payroll"),
+    ]
+    .into_iter()
+    .map(|(name, direction, id)| (name, direction, id.to_string()))
+    .collect();
+    assert_eq!(labels, expected);
 }
 
 #[test]
@@ -331,5 +330,82 @@ fn a_front_answers_an_illegal_direct_ask_with_empty() {
             RelationDirection::Out,
         )
         .is_empty());
+}
+
+fn all_nodes(records: &Fixture) -> Vec<(NodeType, StableId)> {
+    let mut nodes = Vec::new();
+    nodes.extend(records.sources.iter().map(|r| (NodeType::Source, r.id.clone())));
+    nodes.extend(records.requirements.iter().map(|r| (NodeType::Requirement, r.id.clone())));
+    nodes.extend(records.resolutions.iter().map(|r| (NodeType::Resolution, r.id.clone())));
+    nodes.extend(records.rules.iter().map(|r| (NodeType::Rule, r.id.clone())));
+    nodes.extend(records.topics.iter().map(|r| (NodeType::Topic, r.id.clone())));
+    nodes.extend(records.questions.iter().map(|r| (NodeType::Question, r.id.clone())));
+    nodes.extend(records.domains.iter().map(|r| (NodeType::Domain, r.id.clone())));
+    nodes.extend(records.boundaries.iter().map(|r| (NodeType::Boundary, r.id.clone())));
+    nodes
+}
+
+#[test]
+fn every_declared_relation_traverses_somewhere_in_the_shared_corpus() {
+    // Structural obligation on the fixture: a relation nobody can walk
+    // here is a relation nobody has tested. Adding a kind without a
+    // corpus row fails this, in both directions.
+    let records = fixture();
+    let front = front(&records);
+    let nodes = all_nodes(&records);
+    let mut untraversed = Vec::new();
+    for relation in RelationKind::ALL {
+        for direction in [RelationDirection::Out, RelationDirection::In] {
+            let walked = nodes.iter().any(|(node_type, id)| {
+                !front.related(relation, *node_type, id, direction).is_empty()
+            });
+            if !walked {
+                untraversed.push((relation.name(), direction));
+            }
+        }
+    }
+    assert!(
+        untraversed.is_empty(),
+        "relations with no exercised traversal path: {untraversed:?}"
+    );
+}
+
+#[test]
+fn a_superseded_source_walks_to_its_successor_and_back() {
+    let records = fixture();
+    assert_eq!(
+        related(&records, RelationKind::SourceSupersededBy, NodeType::Source, "source_award_2019", RelationDirection::Out),
+        [(NodeType::Source, "source_award".to_string())]
+    );
+    assert_eq!(
+        related(&records, RelationKind::SourceSupersededBy, NodeType::Source, "source_award", RelationDirection::In),
+        [(NodeType::Source, "source_award_2019".to_string())]
+    );
+}
+
+#[test]
+fn a_superseded_resolution_walks_to_its_successor_and_back() {
+    let records = fixture();
+    assert_eq!(
+        related(&records, RelationKind::ResolutionSupersededBy, NodeType::Resolution, "res_threshold_draft", RelationDirection::Out),
+        [(NodeType::Resolution, "res_threshold".to_string())]
+    );
+    assert_eq!(
+        related(&records, RelationKind::ResolutionSupersededBy, NodeType::Resolution, "res_threshold", RelationDirection::In),
+        [(NodeType::Resolution, "res_threshold_draft".to_string())]
+    );
+}
+
+#[test]
+fn a_boundary_cites_its_source_and_the_source_scans_back() {
+    let records = fixture();
+    assert_eq!(
+        related(&records, RelationKind::BoundaryCitesSource, NodeType::Boundary, "boundary_no_backpay", RelationDirection::Out),
+        [(NodeType::Source, "source_award".to_string())]
+    );
+    assert_eq!(
+        related(&records, RelationKind::BoundaryCitesSource, NodeType::Source, "source_award", RelationDirection::In),
+        [(NodeType::Boundary, "boundary_no_backpay".to_string())]
+    );
 }
 }
