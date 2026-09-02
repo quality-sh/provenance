@@ -11,6 +11,28 @@ use super::catch_up_behavior::assert_catch_up_equals_rebuild;
 use super::fixtures::*;
 use crate::state_store::StateStore;
 
+/// Deletes the database file the way a user would, tolerating one
+/// Windows-specific delay: sqlx closes `SQLite` connections on a worker
+/// thread, and `Pool::close()` can return before the OS releases the file
+/// handle, so a delete that follows a pass immediately can meet a sharing
+/// violation for a few milliseconds. The wait is bounded and accepts only
+/// that error; any other failure is a real one.
+fn remove_database_file(layout: &crate::layout::ProvenanceLayout) {
+    let path = layout.cache_db_path();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        match std::fs::remove_file(&path) {
+            Ok(()) => return,
+            Err(error)
+                if error.raw_os_error() == Some(32) && std::time::Instant::now() < deadline =>
+            {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            Err(error) => panic!("remove {path}: {error}"),
+        }
+    }
+}
+
 pub(super) async fn latest_revision(pool: &sqlx::SqlitePool) -> (i64, String) {
     sqlx::query_as("SELECT serial, digest FROM projection_revision ORDER BY serial DESC LIMIT 1")
         .fetch_one(pool)
@@ -206,7 +228,7 @@ async fn a_lost_database_with_canonical_state_intact_rebuilds_at_one() {
     create_source(&store, &scope, "source_survives_db_loss");
     catch_up_state(&layout).await.unwrap();
 
-    std::fs::remove_file(layout.cache_db_path()).unwrap();
+    remove_database_file(&layout);
 
     let report = catch_up_state(&layout).await.unwrap();
     assert!(report.rebuilt);
