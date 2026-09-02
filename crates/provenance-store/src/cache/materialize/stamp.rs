@@ -6,13 +6,11 @@ use sqlx::{Sqlite, Transaction};
 
 /// Writes the revision stamp the loaded rows answer under.
 ///
-/// Runs inside the materialization transaction, so rows, the revision, the
-/// content digests, and the unit digests commit together or not at all.
-/// The instance id is written once from OS entropy and never replaced while
-/// the database file lives; it is what keeps serials from different
-/// database lifetimes apart. Unit digests hash the SNAPSHOT tree — the same
-/// bytes the rows came from — so a live edit racing the rebuild cannot
-/// poison them; the next pass sees the difference and re-derives.
+/// Runs inside the materialization transaction, so rows, revision, content
+/// digests, and unit digests commit together or not at all. The instance id
+/// is written once from OS entropy and kept while the database file lives.
+/// Unit digests hash the snapshot tree, the same bytes the rows came from,
+/// so the next pass sees a live edit made during the rebuild.
 pub(super) async fn write_stamp(
     tx: &mut Transaction<'_, Sqlite>,
     store: &StateStore,

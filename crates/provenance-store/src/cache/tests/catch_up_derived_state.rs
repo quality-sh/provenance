@@ -1,10 +1,9 @@
-//! A family's byte domain covers derived fields too.
+//! A family's byte domain covers derived fields.
 //!
 //! A proposal card's effective promotion state is computed from assertions,
-//! dispositions, and legacy promotion decisions. None of those bytes live in
-//! the proposal shard, so a domain that stops at the shard lets catch-up
-//! stamp a stale state as fresh. Each test flips an EXISTING card's
-//! effective state through one of those inputs and demands rebuild parity.
+//! dispositions, and legacy promotion decisions. Each test flips an existing
+//! card's effective state through one of those inputs and requires rebuild
+//! parity.
 
 use super::super::*;
 use super::catch_up_behavior::assert_catch_up_equals_rebuild;
@@ -89,8 +88,8 @@ async fn an_assertion_write_moves_the_cards_effective_state() {
         .shard_path(&layout, Some(&scope))
         .unwrap();
     let qualifying_packet = std::fs::read_to_string(&packets).unwrap();
-    // A packet that qualifies a card demands its assertion, so the
-    // pre-assertion state carries a packet that suggests nothing yet.
+    // A qualifying packet requires an assertion. Start with a packet that
+    // suggests nothing.
     let mut silent_packet: serde_json::Value =
         serde_json::from_str(qualifying_packet.trim()).unwrap();
     silent_packet["suggested_artifacts"] = serde_json::json!([]);
@@ -108,11 +107,10 @@ async fn an_assertion_write_moves_the_cards_effective_state() {
 }
 
 #[tokio::test]
-async fn a_legacy_promotion_decision_is_refused_by_catch_up_exactly_as_by_rebuild() {
-    // The deprecated promotion_decisions shard is frozen: the aggregate
-    // validator accepts only the shipped-v1 audit, so a new legacy decision
-    // is a state rebuild refuses. Catch-up reads the same bytes (the shard is
-    // in the cards' domain) and must refuse identically, committing nothing.
+async fn a_legacy_promotion_decision_is_refused_by_catch_up_and_by_rebuild() {
+    // The promotion_decisions shard is frozen at the shipped-v1 audit. A
+    // rebuild refuses a new legacy decision. Catch-up must refuse it the same
+    // way and commit nothing.
     let (_dir, layout, scope) = aggregate_layout();
     remove_shard(&layout, ProjectionFamily::Dispositions, &scope);
     materialize_state(&layout).await.unwrap();

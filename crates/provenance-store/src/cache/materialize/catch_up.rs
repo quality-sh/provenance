@@ -1,12 +1,8 @@
-//! Catch-up: hash each scope and one global unit, re-derive by content
-//! digest, keep no journal.
+//! Catch-up: hash each scope unit and the global unit, then re-derive the
+//! changed families by content digest.
 //!
-//! One pass, one guard scope, one transaction. Every unit's complete
-//! canonical bytes are hashed from the snapshot; an unchanged unit costs
-//! nothing more. A changed scope unit parses its families again and rewrites
-//! only the families whose content digest moved. A changed global unit
-//! reloads the edges table whole. A pass that changes nothing commits no
-//! revision, so the serial and digest stand.
+//! One pass runs under one guard in one transaction. A pass that changes
+//! nothing commits no revision.
 
 use super::units::{self, Unit};
 use super::{family_rows, stamp};
@@ -20,7 +16,7 @@ use std::collections::{BTreeMap, BTreeSet};
 type ContentKey = (String, String);
 type ContentValue = (String, i64);
 
-/// What one catch-up pass did, in counters a caller can trust.
+/// What one catch-up pass did.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct CatchUpReport {
     pub serial: i64,
@@ -51,8 +47,8 @@ async fn catch_up_with_guard(
     .fetch_optional(&pool)
     .await?;
 
-    // A database with no revision, or one whose schema just moved, cannot be
-    // caught up; it is rebuilt under the same held guard.
+    // A database with no revision, or one whose schema just moved, is
+    // rebuilt under the same guard.
     let Some((stored_serial, stored_digest)) = stored else {
         return rebuild(guard, layout, &pool, migrations_applied).await;
     };
@@ -63,8 +59,7 @@ async fn catch_up_with_guard(
     let snapshot = publication::snapshot_state_under_guard(guard, layout)?;
     let store = StateStore::new(snapshot.layout().clone());
     let manifest = store.manifest()?;
-    // Rebuild's gatekeeper holds for catch-up too: an aggregate the
-    // validator refuses commits nothing, whether or not its bytes moved.
+    // The same validation as a rebuild. A refusal commits nothing.
     for scope in &manifest.scopes {
         store.validate_ideation_scope(&scope.id)?;
     }
@@ -126,7 +121,6 @@ async fn catch_up_with_guard(
     Ok(report)
 }
 
-/// The stored unit digests and the stored per-(scope, family) content rows.
 async fn load_stored_digests(
     pool: &sqlx::SqlitePool,
 ) -> anyhow::Result<(BTreeMap<String, String>, BTreeMap<ContentKey, ContentValue>)> {
@@ -148,9 +142,9 @@ async fn load_stored_digests(
     Ok((units, content))
 }
 
-/// A stored unit the manifest no longer names. A departed scope loses its
-/// rows in the scoped tables and its digest rows; edge rows belong to the
-/// global unit and stay. Returns whether anything departed.
+/// Removes the rows and digest rows of every scope the manifest does not
+/// name. Edge rows belong to the global unit and stay. Returns whether
+/// anything departed.
 async fn remove_departed_scopes(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     stored_units: &BTreeMap<String, String>,
@@ -182,8 +176,8 @@ async fn remove_departed_scopes(
     Ok(departed)
 }
 
-/// What a changed unit re-derives: the global unit reloads the edges table
-/// whole; a scope unit re-derives the scope's families by content digest.
+/// The global unit reloads the edges table whole. A scope unit re-derives
+/// the scope's families by content digest.
 async fn apply_unit_change(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     store: &StateStore,
@@ -206,8 +200,8 @@ async fn apply_unit_change(
     Ok(())
 }
 
-/// A changed scope unit: parse every scoped family of that scope again,
-/// then delete and insert only the families whose content digest moved.
+/// Parses every scoped family of the scope again and rewrites only the
+/// families whose content digest moved.
 async fn rederive_scope(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     store: &StateStore,
@@ -230,10 +224,7 @@ async fn rederive_scope(
     Ok(())
 }
 
-/// The one way the pass obtains a unit digest.
-///
-/// The counter and the observation probe live inside, so the report's
-/// `units_hashed` is derived from hashes that actually ran.
+/// Every unit hash goes through here, so `units_hashed` counts real hashes.
 fn hash_unit(
     report: &mut CatchUpReport,
     state_dir: &camino::Utf8Path,

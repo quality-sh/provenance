@@ -65,8 +65,7 @@ impl ProjectionFamily {
         Self::RequirementReviews,
     ];
 
-    /// The family's one name: its cache table and its digest-row key are
-    /// this one string.
+    /// The family's cache table name and its digest-row key.
     pub const fn family_name(self) -> &'static str {
         match self {
             Self::Sources => "sources",
@@ -96,9 +95,7 @@ impl ProjectionFamily {
         !matches!(self, Self::Edges)
     }
 
-    /// The canonical shard file the family's records live in. Production
-    /// code hashes whole units and needs no per-family path; the tests use
-    /// it to reach a family's shard.
+    /// The canonical shard file the family's records live in.
     #[cfg(test)]
     pub(crate) fn shard_path(
         self,

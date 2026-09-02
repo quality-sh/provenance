@@ -2,8 +2,8 @@ use super::super::*;
 use super::fixtures::*;
 use super::projection_stamp_behavior::seed_integration_shards;
 
-/// One comparable line per family table: every column of every row, quoted
-/// by the database itself, in a settled order.
+/// One line per family table: every column of every row, quoted by the
+/// database, in a settled order.
 pub(super) async fn dump_family_tables(pool: &sqlx::SqlitePool) -> Vec<String> {
     let mut dump = Vec::new();
     for family in ProjectionFamily::ALL {
@@ -36,7 +36,7 @@ async fn stored_digest(pool: &sqlx::SqlitePool) -> String {
         .unwrap()
 }
 
-/// Catch-up output must equal a fresh total rebuild, rows and digest.
+/// Catch-up output must equal a fresh rebuild, rows and digest.
 pub(super) async fn assert_catch_up_equals_rebuild(layout: &crate::layout::ProvenanceLayout) {
     let report = catch_up_state(layout).await.unwrap();
     let pool = open_cache(layout).await.unwrap();
@@ -72,8 +72,7 @@ async fn a_hand_edited_shard_is_found_by_the_hash_sweep_alone() {
     seed_integration_shards(&layout, scope.as_str());
     materialize_state(&layout).await.unwrap();
 
-    // Out-of-band edit: append a rule line directly, bypassing every writer
-    // and therefore any hint; only the hash sweep can find it.
+    // Append a rule line directly, bypassing every writer.
     let path = crate::shards::rules_path(&layout, &scope);
     let mut content = std::fs::read_to_string(&path).unwrap();
     let line = format!(
@@ -115,8 +114,7 @@ async fn an_unchanged_pass_hashes_everything_and_rewrites_nothing() {
     let report = catch_up_state(&layout).await.unwrap();
     crate::test_probes::disarm("catch_up_unit_hashed");
     assert!(!report.rebuilt);
-    // The hasher itself is instrumented; the report's counter must agree
-    // with what actually ran.
+    // The probe counts real hash calls. The report must agree.
     assert_eq!(hashed.get(), 2, "every unit is hashed, always");
     assert_eq!(report.units_hashed, hashed.get());
     assert_eq!(report.families_rederived, 0, "no family is reparsed");
@@ -133,9 +131,8 @@ async fn a_same_size_edit_with_a_restored_mtime_is_still_caught() {
     seed_integration_shards(&layout, scope.as_str());
     materialize_state(&layout).await.unwrap();
 
-    // Same byte length, different content, mtime put back where it was:
-    // exactly the edit that metadata comparison cannot see. No journal exists;
-    // only the hash can find it.
+    // Same byte length, different content, mtime restored. Metadata
+    // comparison cannot see this edit.
     let path = crate::shards::rules_path(&layout, &scope);
     let original = std::fs::read_to_string(&path).unwrap();
     let edited = original.replace(

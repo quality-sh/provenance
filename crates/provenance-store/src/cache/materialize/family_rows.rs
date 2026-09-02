@@ -1,8 +1,8 @@
-//! Per-family row replacement, dispatched through the family table.
+//! Per-family row replacement.
 //!
-//! Catch-up replaces one (family, scope) at a time: delete the scope's rows,
-//! then load fresh rows from the same per-family loaders total rebuild uses,
-//! so the two paths cannot derive rows differently.
+//! Catch-up deletes one (family, scope) and reloads it through the same
+//! loaders a full rebuild uses, so the two paths cannot derive rows
+//! differently.
 
 use super::{collaboration_records, graph_records, integration_records};
 use crate::cache::ProjectionFamily;

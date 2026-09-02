@@ -22,9 +22,9 @@ pub async fn materialize_empty_state(
     let pool = open_cache(layout).await?;
     crate::test_probes::at("run_migrations_under_guard")?;
     let migrations_applied = migrations::run_migrations(&pool, layout).await?;
-    // Close, never just drop: a dropped pool releases its file handles
-    // asynchronously, and on Windows a later delete of the database races
-    // that release.
+    // Close rather than drop. A dropped pool releases its file handles
+    // asynchronously, and on Windows a later delete of the database file
+    // races that release.
     pool.close().await;
     Ok(MaterializeReport {
         records_loaded: 0,
@@ -37,12 +37,10 @@ pub async fn materialize_state(layout: &ProvenanceLayout) -> anyhow::Result<Mate
     materialize_with_guard(&guard, layout).await
 }
 
-/// The rebuild body, for a holder that already owns the guard.
+/// The rebuild body for a caller that holds the guard.
 ///
-/// Snapshot, validation, migrations, the row transaction, and the commit
-/// all run inside the caller's guard scope, so no canonical publication can
-/// interleave with the projection write. The serial is the stored serial
-/// plus one; a fresh database starts at one under a fresh instance id.
+/// Snapshot, validation, migrations, and the commit all run under the
+/// guard. The serial is the stored serial plus one.
 pub(super) async fn materialize_with_guard(
     guard: &publication::PublicationGuard,
     layout: &ProvenanceLayout,

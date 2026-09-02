@@ -1,4 +1,4 @@
-//! The hash units: what they cover, what they ignore, and what they own.
+//! What the hash units cover and ignore.
 
 use super::super::*;
 use super::catch_up_behavior::assert_catch_up_equals_rebuild;
@@ -84,8 +84,8 @@ async fn a_scope_departure_never_deletes_edge_rows() {
     pool.close().await;
     assert!(edges_before > 0);
 
-    // The scope leaves the manifest; the global edge shard keeps its rows,
-    // and rebuild loads the shard regardless of the manifest.
+    // The scope leaves the manifest. Rebuild loads the edge shard regardless
+    // of the manifest.
     let mut manifest: provenance_core::Manifest =
         serde_json::from_slice(&std::fs::read(layout.manifest_path()).unwrap()).unwrap();
     manifest.scopes.clear();
@@ -131,10 +131,9 @@ async fn a_changed_scope_rewrites_only_the_families_whose_content_moved() {
 
 #[test]
 fn moving_a_shard_between_directories_moves_the_scope_digest() {
-    // One file, same bytes, same basename, different directory: a digest
-    // that framed only the basename would not see the move, but readers
-    // would derive a different family from it. The scope holds nothing
-    // else, so the moved file's position in the stream cannot give it away.
+    // Same bytes, same basename, different directory. A digest that framed
+    // only the basename would not see the move. The scope holds nothing
+    // else, so the file's position in the stream cannot give it away.
     let (_dir, layout, scope) = empty_layout();
     let implementations = crate::shards::implementation_bindings_path(&layout, &scope);
     let verifications = crate::shards::verification_bindings_path(&layout, &scope);
@@ -160,8 +159,7 @@ async fn a_scope_change_never_touches_edge_rows() {
         .unwrap();
     pool.close().await;
 
-    // Only the scope unit moves; the global unit, and so the edges table,
-    // must stand untouched through the pass.
+    // Only the scope unit moves, so the edges table must stay untouched.
     let rules = crate::shards::rules_path(&layout, &scope);
     let edited = std::fs::read_to_string(&rules)
         .unwrap()

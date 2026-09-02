@@ -149,7 +149,6 @@ async fn materialization_stores_a_revision_stamp_with_instance_identity() {
     let pool = open_cache(&layout).await.unwrap();
 
     let (serial, digest, instance) = stamp(&pool).await;
-    // The first materialization of a fresh instance is serial one.
     assert_eq!(serial, 1);
     assert!(
         digest.starts_with("sha256:") && digest.len() == 71,

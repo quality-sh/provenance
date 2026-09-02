@@ -1,26 +1,22 @@
-//! Serial and revision behavior of the hash-based catch-up.
+//! Serial and revision behavior of catch-up.
 //!
-//! No journal, no head record, no shared sequence space: the serial is
-//! stored serial plus one whenever a pass changes something, and a pass
-//! that changes nothing commits no revision at all. Serials are scoped to
-//! the projection instance; a lost database restarts at one under a fresh
-//! instance id.
+//! The serial is the stored serial plus one when a pass changes something.
+//! A pass that changes nothing commits no revision. A lost database restarts
+//! at one under a fresh instance id.
 
 use super::super::*;
 use super::catch_up_behavior::assert_catch_up_equals_rebuild;
 use super::fixtures::*;
 use crate::state_store::StateStore;
 
-/// Deletes the database file the way a user would, tolerating one
-/// observed hazard whose cause is unidentified: on the windows-latest CI
-/// runner, and only there, a delete that follows a catch-up pass has met a
-/// sharing violation (os error 32) that outlived a ten-second wait. It is
-/// not an in-process release lag — `Pool::close()` awaits each connection's
-/// worker shutdown, which completes only after `sqlite3_close` has run, and
-/// a Linux descriptor probe shows no handle held after a pass — so the
-/// holder is plausibly an antivirus or indexer on a freshly written file.
-/// The wait is bounded and accepts only that error; any other failure is a
-/// real one, and the test may still flake on that runner.
+/// Deletes the database file.
+///
+/// On the windows-latest CI runner, and only there, a delete after a
+/// catch-up pass has met a sharing violation (os error 32) that outlived a
+/// ten-second wait. The cause is unknown. `Pool::close()` awaits each
+/// connection's shutdown, and a Linux descriptor probe shows no handle held
+/// after a pass, so the holder is outside the process. The wait is bounded
+/// and accepts only that error. The test may still flake on that runner.
 fn remove_database_file(layout: &crate::layout::ProvenanceLayout) {
     let path = layout.cache_db_path();
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
@@ -234,10 +230,7 @@ async fn a_lost_database_with_canonical_state_intact_rebuilds_at_one() {
     let pool = open_cache(&layout).await.unwrap();
     let (serial_before_loss, _) = latest_revision(&pool).await;
     pool.close().await;
-    assert_eq!(
-        serial_before_loss, 2,
-        "the contrast the restart is measured against"
-    );
+    assert_eq!(serial_before_loss, 2, "two revisions before the loss");
 
     remove_database_file(&layout);
 

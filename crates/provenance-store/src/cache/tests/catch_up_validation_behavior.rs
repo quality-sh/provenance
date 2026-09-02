@@ -1,6 +1,6 @@
-//! Catch-up keeps rebuild's gate: the aggregate validator runs before any
-//! commit, and structural events — a departed scope, a schema move, a lost
-//! database — route to the behavior rebuild would show.
+//! Catch-up keeps rebuild's gate. The aggregate validator runs before any
+//! commit. A departed scope, a schema move, and a lost database behave as
+//! they do in a rebuild.
 
 use super::super::*;
 use super::catch_up_behavior::{assert_catch_up_equals_rebuild, dump_family_tables};
@@ -23,8 +23,8 @@ async fn catch_up_refuses_state_the_aggregate_validator_refuses() {
     let rows_before = dump_family_tables(&pool).await;
     pool.close().await;
 
-    // Remove the allowed disposition actor. No family shard byte moves,
-    // but the aggregate rebuild would refuse is now on disk.
+    // Remove the allowed disposition actor. No shard byte moves, but the
+    // aggregate on disk is one a rebuild refuses.
     let mut manifest: provenance_core::Manifest =
         serde_json::from_slice(&std::fs::read(layout.manifest_path()).unwrap()).unwrap();
     manifest.disposition_actor_ids.clear();
@@ -47,7 +47,7 @@ async fn a_departed_scope_loses_its_rows_and_its_baselines() {
     let (_dir, layout, scope) = seeded_layout();
     materialize_state(&layout).await.unwrap();
 
-    // The scope leaves the manifest; its shard files remain on disk.
+    // The scope leaves the manifest. Its shard files remain on disk.
     let mut manifest: provenance_core::Manifest =
         serde_json::from_slice(&std::fs::read(layout.manifest_path()).unwrap()).unwrap();
     manifest.scopes.clear();
@@ -80,7 +80,7 @@ async fn a_schema_move_routes_catch_up_to_a_full_rebuild() {
     let (_dir, layout, _scope) = seeded_layout();
     materialize_state(&layout).await.unwrap();
 
-    // Rewind the schema to its pre-020 shape, as every earlier database is.
+    // Rewind the schema to its pre-020 shape.
     let pool = open_cache(&layout).await.unwrap();
     for statement in [
         "DROP TABLE projection_unit_digests",

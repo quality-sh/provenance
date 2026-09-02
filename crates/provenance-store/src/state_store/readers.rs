@@ -313,11 +313,8 @@ pub(super) fn read_message_shards(
     })
 }
 
-/// Every month shard the message reader reads, sorted.
-///
-/// The one discovery of message shards: every read of messages passes
-/// through it, so the files the scope-locality guard records are the files
-/// the reader actually opened.
+/// Every month shard of the scope's messages, sorted. All message reads
+/// discover their shards here.
 pub fn message_shard_paths(
     layout: &ProvenanceLayout,
     scope: &ScopeId,
@@ -371,10 +368,7 @@ pub(super) fn read_edge_shards(
     })
 }
 
-/// Every edge shard the edge reader reads, sorted.
-///
-/// Like [`message_shard_paths`], the one discovery of its shards; the edge
-/// shards live in the global hash unit, and this is how they are found.
+/// Every edge shard, sorted. All edge reads discover their shards here.
 pub fn edge_shard_paths(layout: &ProvenanceLayout) -> anyhow::Result<Vec<Utf8PathBuf>> {
     let edges_dir = layout.edges_dir();
     if !edges_dir.exists() {

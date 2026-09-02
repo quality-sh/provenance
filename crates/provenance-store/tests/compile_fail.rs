@@ -1,5 +1,4 @@
-//! Compile-fail fixtures for capability types. Each case pins its exact
-//! diagnostic, so an unrelated compile error cannot keep a fixture green.
+//! Compile-fail fixtures. Each case pins its exact diagnostic.
 
 #[test]
 fn capability_refusals_hold_at_compile_time() {

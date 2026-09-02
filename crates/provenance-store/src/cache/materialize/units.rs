@@ -1,23 +1,14 @@
-//! Hash units: one per manifest scope, one global.
+//! Hash units: one per manifest scope and one global unit.
 //!
-//! A unit digest covers the relative path and the complete bytes of every
-//! regular canonical file in the unit, in sorted path order. The path is
-//! framed, not the basename, so two shards that share a basename
-//! (`implementations/binding.jsonl`, `verifications/binding.jsonl`) cannot
-//! swap contents unnoticed. Temporary write residue — the `.tmp*` files an
-//! atomic write leaves beside a shard when it dies mid-flight — is ignored,
-//! because no reader reads it.
-//!
-//! The scope unit is the scope's directory. The global unit is every
-//! regular canonical file under `state/` outside `scopes/`: the manifest,
-//! the edge shards, the dictionary, and anything a later layout adds there.
-//! A per-scope hash therefore covers every byte a reader can use without a
-//! hand-written list of reader inputs.
+//! A scope unit is the scope's directory. The global unit is every regular
+//! file under `state/` outside `scopes/`. A unit digest frames each file's
+//! relative path and complete bytes in sorted path order, so two shards
+//! that share a basename cannot swap contents unnoticed.
 
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::ScopeId;
 
-/// One hash unit, named as its digest row stores it.
+/// One hash unit. `name` is the key of its digest row.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Unit {
     Global,
@@ -74,8 +65,8 @@ pub fn unit_digest(state_dir: &Utf8Path, unit: &Unit) -> anyhow::Result<String> 
     Ok(crate::canonical_digest::digest(&framed))
 }
 
-/// Atomic writes stage a `.tmp*` file beside the shard and rename it into
-/// place; a crash can leave the stage behind. No reader reads it.
+/// An atomic write stages a `.tmp*` file beside the shard. A crash can
+/// leave it behind. No reader reads it.
 fn is_write_residue(name: &str) -> bool {
     name.starts_with(".tmp")
 }

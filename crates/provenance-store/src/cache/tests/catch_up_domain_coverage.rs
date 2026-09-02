@@ -1,10 +1,8 @@
 //! The byte domain of a family is every file its readers read.
 //!
-//! Messages span month shards, edges span every shard in the edges
-//! directory, and five ideation families overlay records from the landings
-//! shard (dispositions also read legacy promotion decisions). A catch-up
-//! that hashes one file per family misses all of them; these tests pin the
-//! complete domains against a fresh rebuild.
+//! Messages span month shards. Edges span every shard in the edges
+//! directory. Five ideation families overlay records from the landings
+//! shard. These tests pin the complete domains against a fresh rebuild.
 
 use super::super::*;
 use super::catch_up_behavior::assert_catch_up_equals_rebuild;
@@ -12,10 +10,8 @@ use super::fixtures::*;
 use super::projection_digest_sensitivity::{aggregate_layout, change_one_record};
 use crate::state_store::{IdeationLandingBatch, StateStore};
 
-/// The mutation battery's worst survivor was a sweep that silently skipped
-/// one family. Nothing samples its way to nineteen here: EVERY family gets
-/// its own invalidation between materialize and catch-up, and each must
-/// equal a fresh rebuild.
+/// Every family gets its own invalidation between materialize and catch-up,
+/// and each must equal a fresh rebuild.
 #[tokio::test]
 async fn every_family_invalidation_reaches_the_projection() {
     for family in ProjectionFamily::ALL {
@@ -55,7 +51,7 @@ async fn a_second_scope_is_swept_and_stays_equivalent() {
     .unwrap();
     materialize_state(&layout).await.unwrap();
 
-    // Change one record in each scope; both must reach the projection.
+    // Change one record in each scope. Both must reach the projection.
     let rules = crate::shards::rules_path(&layout, &first_scope);
     let edited = std::fs::read_to_string(&rules)
         .unwrap()
@@ -166,9 +162,9 @@ async fn a_live_edit_racing_the_rebuild_baseline_is_caught_by_the_next_catch_up(
         .replace("Overtime", "Edited between snapshot and stamp");
     assert_ne!(edited, std::fs::read_to_string(&live_path).unwrap());
 
-    // After the rebuild snapshots canonical state, an out-of-band writer
-    // rewrites the live shard. The stored baseline must describe the bytes
-    // the rows were derived from, so the next pass sees the difference.
+    // After the rebuild snapshots canonical state, a writer rewrites the
+    // live shard. The stored digests must describe the bytes the rows came
+    // from, so the next pass sees the difference.
     crate::test_probes::arm("stamp_before_unit_digests", move || {
         std::fs::write(&live_path, &edited).unwrap();
         Ok(())

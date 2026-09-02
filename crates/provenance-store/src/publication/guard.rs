@@ -1,30 +1,18 @@
-//! The owned publication guard: the async-safe shape of the publication lock.
+//! The owned publication guard.
 //!
-//! A synchronous closure cannot hold the advisory lock across an `.await`,
-//! and the thread-local nesting check cannot follow a task that resumes on
-//! another worker thread. The guard solves both: it owns the open lock file,
-//! the lock belongs to that open file description and not to any thread, and
-//! it releases on `Drop`. Acquisition waits on the blocking pool, so no
-//! runtime worker blocks. Locked helpers take `&PublicationGuard`, so a call
-//! without a held guard does not compile.
+//! The guard owns the open lock file. The lock belongs to that file
+//! description and not to a thread, so a holder may await while it is held.
+//! Helpers that need the lock take `&PublicationGuard`.
 //!
-//! CONSTRAINT for future callers (W5 serving): while a guard is held across
-//! awaits, a synchronous `with_repository_publication` section entered ON a
-//! runtime worker thread blocks that worker in `flock` with no awareness of
-//! the guard. N such callers on N workers starve the runtime, and the
-//! guard-holder's continuation can never run to release the lock. Today's
-//! one-command CLI cannot reach this. A served process must route
-//! synchronous publication sections off the worker threads
-//! (`spawn_blocking`) or make those callers async before it serves
-//! concurrent requests.
+//! Constraint: a synchronous `with_repository_publication` section entered
+//! on a runtime worker thread blocks that worker in `flock` while a guard is
+//! held elsewhere. Enough such callers starve the runtime, and the guard
+//! holder can never run to release the lock. The one-command CLI cannot
+//! reach this. A served process must move synchronous publication sections
+//! to `spawn_blocking` or make them async first.
 //!
-//! Two facts the catch-up design relies on. First, under a read-only
-//! bypass (`read_only::active`) the guard is lockless: it holds no file and
-//! excludes nothing, exactly as the synchronous entry does. Second, reader
-//! calls made under a held guard run against the SNAPSHOT layout, so their
-//! own `with_repository_publication` sections take the snapshot's lock
-//! path — a second, uncontended flock in the snapshot's temporary
-//! directory — and never request the repository lock the guard holds.
+//! Readers called under a held guard use the snapshot layout. Their own
+//! lock sections take the snapshot's lock path, not the repository lock.
 
 use super::{
     prepare_import_transactions_dir, prepare_publication_lock, read_only,
@@ -35,10 +23,8 @@ use camino::Utf8Path;
 use fs2::FileExt;
 use std::fs::{File, OpenOptions};
 
-/// The one low-level lock primitive: an exclusive advisory lock on an open
-/// publication lock file, released when the value drops. Both publication
-/// entries — the synchronous closure and the owned guard — acquire through
-/// this type.
+/// An exclusive advisory lock on an open publication lock file. Released on
+/// drop.
 pub(super) struct LockedPublicationFile {
     file: File,
 }
@@ -67,21 +53,18 @@ impl Drop for LockedPublicationFile {
     }
 }
 
-/// An owned, held publication lock.
+/// A held publication lock.
 ///
-/// The lock belongs to the open file description inside, not to any thread,
-/// so the holder may await while it is held. Under read-only validation the
-/// guard holds no lock, mirroring the synchronous bypass. The private field
-/// is the capability boundary: only [`publication_guard`] builds one.
+/// Under read-only validation the guard holds no lock. The private field
+/// means only [`publication_guard`] can build one.
 pub struct PublicationGuard {
     _lock: Option<LockedPublicationFile>,
 }
 
 /// Acquires the publication lock for an async holder.
 ///
-/// The blocking wait runs on the runtime's blocking pool, so no worker
-/// thread blocks. Preparation and pending-publication recovery run exactly
-/// as the synchronous entry runs them, before the caller sees the guard.
+/// The blocking wait runs on the blocking pool. Pending-publication recovery
+/// runs before the caller sees the guard.
 pub async fn publication_guard(layout: &ProvenanceLayout) -> anyhow::Result<PublicationGuard> {
     let key = layout.publication_lock_path().to_string();
     if read_only::active(&key) {
@@ -99,10 +82,7 @@ pub async fn publication_guard(layout: &ProvenanceLayout) -> anyhow::Result<Publ
     .map_err(|error| anyhow::anyhow!("publication guard acquisition failed: {error}"))?
 }
 
-/// Copies the state tree while the caller already holds the guard.
-///
-/// The guard reference is the proof of exclusion; nothing here touches the
-/// lock, so a holder cannot deadlock against itself.
+/// Copies the state tree for a caller that holds the guard. Takes no lock.
 ///
 /// ```compile_fail
 /// use provenance_store::layout::ProvenanceLayout;
@@ -180,7 +160,7 @@ mod tests {
             .unwrap();
         with_read_only_validation(&layout, || {
             let _guard = runtime.block_on(publication_guard(&layout))?;
-            // The lock file was never created, so nothing was acquired.
+            // No lock file means no lock was taken.
             assert!(!layout.publication_lock_path().exists());
             Ok(())
         })

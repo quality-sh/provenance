@@ -64,13 +64,11 @@ pub fn revision_digest(families: &[FamilyContentDigest]) -> anyhow::Result<Strin
     ))
 }
 
-/// Rebuilds the revision digest from stored family rows, parsing no shard.
+/// Rebuilds the revision digest from stored family rows without parsing a
+/// shard.
 ///
-/// Rows arrive as `(scope_id, family, content_digest, record_count)` in any
-/// order; the digest input is reassembled in table order with scopes
-/// sorted, the same order [`family_content_digests`] emits. An empty stored
-/// content digest means the row predates the column and cannot vouch for
-/// its family; the caller must re-derive that family first.
+/// Rows may arrive in any order. An empty content digest means the row
+/// predates the column. The caller must re-derive that family first.
 pub fn revision_digest_from_stored_rows(
     rows: &[(String, String, String, i64)],
 ) -> anyhow::Result<String> {

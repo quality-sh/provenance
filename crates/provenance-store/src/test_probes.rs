@@ -1,13 +1,9 @@
-//! Labeled probe points for deterministic fault and observation tests.
+//! Labeled probe points for fault and observation tests.
 //!
-//! Production code calls [`at`] at a named point. Outside tests the call is
-//! a no-op. A test arms a closure for a label on its own thread; the closure
-//! may observe state (a lock probe) or return an error (an injected crash).
-//!
-//! Reader choke points call [`record_read`] with every canonical path they
-//! open. Outside tests that is a no-op too; a test that starts recording
-//! gets the set of paths one derivation touched, which is how the
-//! scope-locality invariant is checked against real reads.
+//! Production code calls [`at`] at a named point and [`record_read`] with
+//! every canonical path it opens. Outside tests both are no-ops. A test arms
+//! a closure for a label on its own thread, or records the set of paths one
+//! derivation reads.
 
 #[cfg(test)]
 use std::cell::RefCell;
@@ -67,8 +63,7 @@ pub fn take_recorded_reads() -> BTreeSet<String> {
 
 #[cfg(test)]
 fn leak_label(label: &str) -> &'static str {
-    // Labels are compile-time literals at every call site; re-arming after a
-    // fire only needs a 'static copy of the same text.
+    // Labels are literals at every call site. Re-arming needs a 'static copy.
     Box::leak(label.to_string().into_boxed_str())
 }
 

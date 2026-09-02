@@ -1,12 +1,9 @@
 //! The scope-locality invariant, checked against real reads.
 //!
-//! Catch-up hashes one unit per scope and one global unit, and trusts that
-//! a scope's rows derive only from files inside those units. That trust is
-//! not a comment: the reader choke points record every canonical path they
-//! open, and these tests assert the recorded set lies inside the hashed
-//! units — the scope directory of the scope being derived, or the global
-//! unit. A reader that reaches into another scope, or outside `state/`,
-//! goes red here before it can go stale in the projection.
+//! Catch-up trusts that a scope's rows derive only from files in that
+//! scope's directory or in the global unit. The reader choke points record
+//! every canonical path they open, and these tests assert the recorded set
+//! lies inside those units.
 
 use super::super::*;
 use super::fixtures::*;
@@ -22,8 +19,8 @@ enum Locality {
     Outside,
 }
 
-/// Classifies by path components, so a Windows path with backslashes lands
-/// exactly where the same POSIX path lands.
+/// Classifies by path components, so a Windows path lands where the same
+/// POSIX path lands.
 fn locality(path: &str) -> Locality {
     let components: Vec<&str> = camino::Utf8Path::new(path)
         .components()
@@ -108,8 +105,7 @@ fn each_scoped_family_derives_from_its_own_scope_and_the_global_unit_only() {
             crate::test_probes::start_recording_reads();
             family.canonical_records(&store, Some(scope)).unwrap();
             let reads = crate::test_probes::take_recorded_reads();
-            // A family whose directory does not exist yet reads nothing; the
-            // month-shard discovery, for one, opens no file then.
+            // A family whose directory does not exist reads nothing.
             recorded_any |= !reads.is_empty();
             for path in &reads {
                 match locality(path) {
