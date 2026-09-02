@@ -27,9 +27,15 @@ fn every_declared_shard_path_maps_back_to_its_own_family_alone() {
         let shard_scope = family.is_scoped().then_some(&scope);
         let path = family.shard_path(&layout, shard_scope).unwrap();
         touch(&path);
+        let expected = match family {
+            ProjectionFamily::AssertionRecords | ProjectionFamily::Dispositions => {
+                vec![ProjectionFamily::ProposalCards, family]
+            }
+            _ => vec![family],
+        };
         assert_eq!(
             mapped_families(&layout, &path),
-            vec![family],
+            expected,
             "mapping for {path}"
         );
     }
@@ -57,7 +63,10 @@ fn every_contributing_file_maps_to_the_families_it_feeds() {
     touch(&legacy);
     assert_eq!(
         mapped_families(&layout, &legacy),
-        vec![ProjectionFamily::Dispositions]
+        vec![
+            ProjectionFamily::ProposalCards,
+            ProjectionFamily::Dispositions
+        ]
     );
 
     let late_month = crate::shards::threads_path(&layout, &scope)
@@ -117,7 +126,7 @@ fn families_after(layout: &crate::layout::ProvenanceLayout, mark: i64) -> Vec<St
     families
 }
 
-fn tail_mark(layout: &crate::layout::ProvenanceLayout) -> i64 {
+pub(super) fn tail_mark(layout: &crate::layout::ProvenanceLayout) -> i64 {
     events_in_window(layout, 1, i64::MAX)
         .unwrap()
         .iter()

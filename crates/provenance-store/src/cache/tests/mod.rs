@@ -1,4 +1,5 @@
 mod catch_up_behavior;
+mod catch_up_derived_state;
 mod catch_up_domain_coverage;
 mod catch_up_serial_crash;
 mod catch_up_validation_behavior;

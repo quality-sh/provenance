@@ -172,6 +172,18 @@ pub(super) fn change_one_record(
             let content = std::fs::read_to_string(&path).unwrap();
             std::fs::write(path, content.replace("Deferred for now", "Deferred again")).unwrap();
         }
+        // Cards carry a derived field: flip an existing card's effective
+        // state through its inputs, and add a fresh card as well.
+        ProjectionFamily::ProposalCards => {
+            let dispositions = ProjectionFamily::Dispositions
+                .shard_path(layout, shard_scope)
+                .unwrap();
+            std::fs::write(dispositions, "").unwrap();
+            let mut existing = std::fs::read_to_string(&path).unwrap_or_default();
+            existing.push_str(&fresh_record(family, scope.as_str()).to_string());
+            existing.push('\n');
+            std::fs::write(path, existing).unwrap();
+        }
         family => {
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();
             let mut existing = std::fs::read_to_string(&path).unwrap_or_default();

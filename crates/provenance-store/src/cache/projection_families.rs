@@ -131,10 +131,14 @@ impl ProjectionFamily {
     /// This is the family's byte domain: the hash sweep, the stamp
     /// baselines, and the journal mapping all consume it, so a change in
     /// any contributing file — a month shard, a second edge shard, the
-    /// ideation landings overlay, a legacy promotion decision — moves the
-    /// family's digest. Fixed members are declared whether or not the file
-    /// exists; month and edge shards are discovered exactly where the
-    /// readers discover them.
+    /// ideation landings overlay, a legacy promotion decision, or a record
+    /// a DERIVED field reads (a card's effective state reads assertions and
+    /// dispositions) — moves the family's digest. Fixed members are
+    /// declared whether or not the file exists; month and edge shards are
+    /// discovered exactly where the readers discover them. Files that only
+    /// gate validity (contributions and packets for a card's qualification,
+    /// the manifest's actor list) are not domain members: they cannot
+    /// change a derived row, and the validator runs on every pass.
     pub(crate) fn byte_domain(
         self,
         layout: &ProvenanceLayout,
@@ -146,12 +150,19 @@ impl ProjectionFamily {
         let scope = required_scope(scope, self)?;
         let mut domain = match self {
             Self::Messages => crate::state_store::readers::message_shard_paths(layout, scope)?,
-            Self::Contributions
-            | Self::SynthesisPackets
-            | Self::ProposalCards
-            | Self::AssertionRecords => vec![
+            Self::Contributions | Self::SynthesisPackets | Self::AssertionRecords => vec![
                 self.shard_path(layout, Some(scope))?,
                 shards::ideation_landings_path(layout, scope),
+            ],
+            // A card's effective promotion state is derived from assertions,
+            // dispositions, and legacy promotion decisions, so those bytes
+            // are part of what the card rows were derived from.
+            Self::ProposalCards => vec![
+                self.shard_path(layout, Some(scope))?,
+                shards::ideation_landings_path(layout, scope),
+                shards::assertion_records_path(layout, scope),
+                shards::dispositions_path(layout, scope),
+                shards::legacy_promotion_decisions_path(layout, scope),
             ],
             Self::Dispositions => vec![
                 self.shard_path(layout, Some(scope))?,

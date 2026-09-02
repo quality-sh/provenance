@@ -22,8 +22,10 @@ shard-mutation seam journal a hint under `.provenance/cache/journal/`;
 writes that bypass that seam leave no hint and are found by the hash sweep
 instead. A catch-up pass validates the aggregate, drains the hints, hashes
 the complete byte domain of every stored family — every file that family's
-readers read, month shards, edge shards, and the ideation landings overlay
-included — and reparses only the families whose bytes moved. The journal
+derivation reads: month shards, edge shards, the ideation landings overlay,
+and the records a derived field reads, such as the assertions and
+dispositions behind a proposal card's effective state — and reparses only
+the families whose bytes moved. The journal
 is never proof: a lost, gapped, or absent journal changes only speed,
 because the hash sweep runs either way. Every projection write — rebuild
 and catch-up — runs under the repository publication lock from snapshot
