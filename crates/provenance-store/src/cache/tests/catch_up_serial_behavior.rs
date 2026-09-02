@@ -12,11 +12,15 @@ use super::fixtures::*;
 use crate::state_store::StateStore;
 
 /// Deletes the database file the way a user would, tolerating one
-/// Windows-specific delay: sqlx closes `SQLite` connections on a worker
-/// thread, and `Pool::close()` can return before the OS releases the file
-/// handle, so a delete that follows a pass immediately can meet a sharing
-/// violation for a few milliseconds. The wait is bounded and accepts only
-/// that error; any other failure is a real one.
+/// observed hazard whose cause is unidentified: on the windows-latest CI
+/// runner, and only there, a delete that follows a catch-up pass has met a
+/// sharing violation (os error 32) that outlived a ten-second wait. It is
+/// not an in-process release lag — `Pool::close()` awaits each connection's
+/// worker shutdown, which completes only after `sqlite3_close` has run, and
+/// a Linux descriptor probe shows no handle held after a pass — so the
+/// holder is plausibly an antivirus or indexer on a freshly written file.
+/// The wait is bounded and accepts only that error; any other failure is a
+/// real one, and the test may still flake on that runner.
 fn remove_database_file(layout: &crate::layout::ProvenanceLayout) {
     let path = layout.cache_db_path();
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
