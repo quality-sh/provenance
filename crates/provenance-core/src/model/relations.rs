@@ -10,8 +10,10 @@
 //! This is a closed parameterization of fixed operations. It carries no
 //! predicate language and no composition grammar, and it must not grow one.
 
+mod decl;
 mod front;
 
+pub use decl::{declaration_of, RelationDecl, RelationFlow, RelationOwner};
 pub use front::{
     related_nodes, RecordFront, RelatedNode, RelationDirection, RelationEndpoint, RelationSource,
 };

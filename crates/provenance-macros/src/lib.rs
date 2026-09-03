@@ -1,4 +1,7 @@
-//! Marker attributes binding code to provenance rules.
+//! Marker attributes binding code to provenance rules, and the derive that
+//! declares a record kind's reference fields.
+
+mod relations;
 
 use proc_macro::{TokenStream, TokenTree};
 
@@ -91,4 +94,18 @@ fn validate_rule_id(attr: &TokenStream) {
         }
         _ => panic!("rule takes exactly one rule id string literal"),
     }
+}
+
+/// Declares the reference fields of one record kind.
+///
+/// Every `StableId`-typed field carries `#[relation(target = Kind, flow =
+/// target_upstream | target_downstream | none [, required] [, name = "..."]
+/// [, via = field])]` or `#[relation(none)]`; the field named `id` is the
+/// owner key. The derive emits `Kind::RELATIONS` and `impl RelationOwner`.
+#[proc_macro_derive(Relations, attributes(relation))]
+pub fn relations(input: TokenStream) -> TokenStream {
+    let input = syn::parse_macro_input!(input as syn::DeriveInput);
+    relations::expand(&input)
+        .unwrap_or_else(syn::Error::into_compile_error)
+        .into()
 }

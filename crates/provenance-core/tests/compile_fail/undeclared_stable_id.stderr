@@ -1,0 +1,5 @@
+error: field `refines` holds a StableId but carries no #[relation]; every reference field declares one (use #[relation(none)] to exempt it)
+ --> tests/compile_fail/undeclared_stable_id.rs:7:5
+  |
+7 |     pub refines: Option<StableId>,
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

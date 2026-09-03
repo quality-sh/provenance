@@ -1,3 +1,6 @@
+// The `Relations` derive names this crate by its package name, inside it too.
+extern crate self as provenance_core;
+
 pub mod authoring;
 pub mod coverage;
 pub mod edge_validation;

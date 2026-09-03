@@ -2092,11 +2092,17 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "thiserror 1.0.69",
+ "trybuild",
 ]
 
 [[package]]
 name = "provenance-macros"
 version = "0.2.2"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.118",
+]
 
 [[package]]
 name = "provenance-scanner"

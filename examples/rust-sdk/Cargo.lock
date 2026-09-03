@@ -1431,6 +1431,11 @@ dependencies = [
 [[package]]
 name = "provenance-macros"
 version = "0.2.2"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
 
 [[package]]
 name = "provenance-scanner"
