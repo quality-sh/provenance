@@ -393,7 +393,7 @@ Branch `1wh-relation-shapes-cut`. Every commit passes the suite; how, per commit
    `graph_records.rs:28-32,146-153`, `dangling.rs:38-72`, `check/scope/core.rs:210-218,344-352`, `wiki/model.rs:273,351` (the
    `PageLink` stays, its source changes), `wiki/assemble/pages/source.rs:26-29,40`,
    `wiki/assemble/pages/resolution.rs:47-53,72`, `wiki/render/pages/source.rs:18,73-87`,
-   `wiki/render/pages/resolution.rs:20,136-137`, `schema/artifacts/graph_reference.rs:142,197`, and the fixtures
+   `wiki/render/pages/resolution.rs:20,136-137`, `schema/artifacts/graph_reference.rs:142,197`, `relations/front.rs:237-250` (the two superseded-by RecordFront arms, replaced by the generic walk at the same commit), `relations.rs:126-127`, and the fixtures `state_store/tests.rs:56` and `graph_reference/projection/tests.rs:87,182`, and the fixtures
    `wiki/render/tests/fixtures.rs`, `wiki/assemble/tests/fixtures.rs`. The harness runs the converter over the fixture and goes
    green. Green: no site names the field after this commit, and every reader reads fields the writers already fill.
 5. Writers stop writing edges; `add_edge` and callers go; edge tests become field tests. Green: nothing reads edges.

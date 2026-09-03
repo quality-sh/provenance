@@ -172,3 +172,35 @@ I have everything needed; no further reads.
 - L1 and L13 now name the graph validator consistently (plan:319-320, 364-365).
 - The harness fixture path is unaffected by the `superseded_by` timing: K.4 converts the ce891fe copy with the constant at 1 and carries the value.
 - No new term reaches a command, field, doc, or message; `relation(none)` is attribute-internal.
+
+
+---
+
+# Final confirmation of revision 5 (048fe95), same reviewer
+
+I have everything needed; no further reads.
+
+# Final confirmation: revision 5 @ 048fe95
+
+## VERDICT: APPROVE
+
+Nothing blocks. One completeness nit in the K.4 file list, recorded below for the PR body; it does not change the plan's design or sequencing.
+
+## Revision 3 → 4 (my two items), confirmed
+- `id` exemption: plan:33-37 — "The field named `id` is exempt with no attribute … (all seven: `artifacts.rs:227,287,358,407`, `shaping.rs:116,128,145`)"; the eight `#[relation(none)]` sites unchanged. Lines verified.
+- L14 (trace horizon drops per origin, 20 origins, named ids) and L15 (live `superseded_by` between the struct deletion and K.7, `readers.rs:72-77`) present at plan:444-450; L15 now reads K.4, matching the moved deletion.
+
+## Revision 4 → 5, each edit confirmed at file:line
+1. `superseded_by` deletion moved to K.4 with the site list (plan:390-398). Every production site in my grep appears in the list except two, see nit. The seven `wiki/*` sites, `handlers/sources.rs:22,38`, `handlers/resolutions.rs:30,51`, `reconcile.rs:66`, `schema/artifacts/graph_reference.rs:142,197` all verified at those lines.
+2. Wiki "Superseded by" line fed by the reverse scan over `supersedes` (plan:93-98): `wiki/model.rs:273,351`, `render/pages/source.rs:73-87`, `render/pages/resolution.rs:136-137`, `assemble/pages/source.rs:26-29`, `assemble/pages/resolution.rs:47-53` verified; the one live case (`res_convex…` page keeps its line, `res_state_is_jsonl_in_git` page gains none, wiki snapshot unchanged) is correct given G.9's direction.
+3. `normalize_rule_relationships` citation: `authoring/checks.rs:85-117`, message "must refine at least one requirement" at `checks.rs:97` (plan:229-230). Verified.
+4. Graph reference v2 schema field changes (plan:218-221): `source` 130-144 with `superseded_by` at 142, `requirement` 149, `question` 177, `resolution` 188 with `superseded_by` at 197, `rule` 200, `edge` 231-236. Verified.
+5. `docs/cache.md` sentence edits (plan:301-307): line 28 "the manifest, the edge shards, and the dictionary", lines 35-37 "A changed global unit reloads the edges table whole. Edge rows belong to the global unit…", line 37 "eighteen scoped tables", table row 66 `edges`. All four verified at those lines.
+6. Rev-1 GLM items: associated const `Kind::RELATIONS` with the table reached through the `RelationOwner` trait (plan:32-37) — matches the spike's shape; the 13-name vocabulary paragraph (plan:80-84) — recounted: 20 declarations (requirement 6, resolution 2, rule 2, source 1, topic 1+links, boundary 2, question 4+links), 13 distinct names, correct; relation-map exclusions by name (row 13 read-only, row 30 excluded with reason, plan:345-347); converter idempotence keyed by deterministic ids, shard deleted last, half-run recovery by `git checkout -- .provenance/state` (plan:252-255); dangling fixture per relation class (plan:338-340); full-table `relations` comparison in the catch-up suites, with the honest reason that no digest row can catch a skipped owner kind (plan:154-156, 356-357); `TypedSourceInput` gains `supersedes` (plan:226-228; `SourceDeclaration` is `protocol.ts:25-32`, `TypedSourceInput` `typed_spec.rs:50-56`, verified); per-kind serde-walking test that recurses into nested objects and fails on an empty fixture (plan:53-56).
+7. GLM rev-3 amendments 1-6: 1 (K.3 green) closed by the K.4 move; 2 (rendered line) closed as above; 3 (id) closed in rev 4; 4, 5, 6 closed as items 3-5 above. All six accounted for.
+
+## No regressions
+Spot-checked every closure I approved at rev 2 and rev 3: flow table and directed-walk rule (plan:63-79, 160-164, with GLM's reword "no out relation with rows"); nine-row normalization and the expected-diff counts (4, 1 boundary, 1 supersedes pair, 94/96) at plan:316-336; direction `both` for trace and neighbors (plan:313-314); converter below the guard with `--versions-only` (plan:249-255, 278-281); seven kinds and bare-key rule (plan:25-30); sibling `validate_graph_scope` at five sites plus `check` (plan:198-202); reconcile rule and split (plan:133-141); deslop exemptions (plan:409-411); J on the beads (plan:363-366). All intact.
+
+## Nit for the PR body (not a block)
+K.4's "every site" list omits two production sites that also read `superseded_by` and would not compile once the field goes: `relations/front.rs:237-250` (the `SourceSupersededBy`/`ResolutionSupersededBy` `RecordFront` arms) and `relations.rs:126-127` (their `name()` strings, harmless). Section B already replaces those arms with the generic walk, and E's `walk.rs` change requires that walk at K.4, so the arms must go at K.4 in any case; the list should say so. Two test fixtures also carry the field: `state_store/tests.rs:56` and `graph_reference/projection/tests.rs:87,182`.
