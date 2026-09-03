@@ -1,5 +1,6 @@
 use assert_cmd::Command;
 use predicates::str::contains;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 /// A stored record at an unreadable version stops `check`.
 ///
@@ -9,6 +10,8 @@ use predicates::str::contains;
 /// imported document is still held to, which the next test covers.
 #[test]
 fn check_rejects_unsupported_contribution_and_synthesis_versions() {
+    let future = SUPPORTED_SCHEMA_VERSION.0 + 1;
+    let supported = SUPPORTED_SCHEMA_VERSION.0;
     for (kind, file) in [
         ("contribution", "contributions.jsonl"),
         ("synthesis", "synthesis_packets.jsonl"),
@@ -29,14 +32,15 @@ fn check_rejects_unsupported_contribution_and_synthesis_versions() {
             .failure()
             .stderr(contains(format!("{file} line 1")))
             .stderr(contains(format!(
-                "record {kind}_future has schema_version 2, \
-                 but this build reads schema_version 1 only"
+                "record {kind}_future has schema_version {future}, \
+                 but this build reads schema_version {supported} only"
             )));
     }
 }
 
 #[test]
 fn import_rejects_unsupported_contribution_and_synthesis_versions() {
+    let supported = SUPPORTED_SCHEMA_VERSION.0;
     for kind in ["contribution", "synthesis"] {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("repo");
@@ -79,7 +83,9 @@ fn import_rejects_unsupported_contribution_and_synthesis_versions() {
             ])
             .assert()
             .failure()
-            .stderr(contains(format!("{kind} schema_version must be 1")));
+            .stderr(contains(format!(
+                "{kind} schema_version must be {supported}"
+            )));
     }
 }
 
@@ -121,14 +127,14 @@ fn write_unsupported_record(repo: &std::path::Path, kind: &str) {
 
 fn requirement() -> serde_json::Value {
     serde_json::json!({
-        "schema_version": 1, "scope_id": "default", "id": "req_future",
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "req_future",
         "statement": "Future target", "status": "active"
     })
 }
 
 fn contribution() -> serde_json::Value {
     serde_json::json!({
-        "schema_version": 2, "scope_id": "default", "id": "contribution_future",
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0 + 1, "scope_id": "default", "id": "contribution_future",
         "target": {"artifact_type": "requirement", "artifact_id": "req_future"},
         "participant_slot": "future", "stance": "support", "strongest_finding": "Future",
         "evidence_references": [], "material_claims": [], "risks": [], "objections": [],
@@ -139,7 +145,7 @@ fn contribution() -> serde_json::Value {
 
 fn synthesis() -> serde_json::Value {
     serde_json::json!({
-        "schema_version": 2, "scope_id": "default", "id": "synthesis_future",
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0 + 1, "scope_id": "default", "id": "synthesis_future",
         "target": {"artifact_type": "requirement", "artifact_id": "req_future"},
         "summary": "Future", "consensus": [], "contested_claims": [], "minority_objections": [],
         "evidence_gaps": [], "unsupported_speculation": [], "open_questions": [],

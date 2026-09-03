@@ -1,10 +1,11 @@
 use provenance_core::{
     QuestionStatus, RepoPathPrefix, RequirementStatus, ResolutionMethod, ResolutionStatus,
-    RuleSeverity, RuleStatus, SchemaVersion, SourceType, StableId, TopicStatus,
+    RuleSeverity, RuleStatus, SourceType, StableId, TopicStatus,
 };
 use provenance_macros::verifies;
 
 use super::*;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 mod collaboration;
 
@@ -68,7 +69,7 @@ fn stable_id(family: RecordFamily) -> StableId {
 
 fn source_record(scope: &ScopeId) -> Source {
     Source {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: stable_id(RecordFamily::Source),
         declared_by: None,
@@ -89,7 +90,7 @@ fn source_record(scope: &ScopeId) -> Source {
 
 fn domain_record(scope: &ScopeId) -> Domain {
     Domain {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: stable_id(RecordFamily::Domain),
         name: "Pinned domain".into(),
@@ -100,7 +101,7 @@ fn domain_record(scope: &ScopeId) -> Domain {
 
 fn requirement_record(scope: &ScopeId) -> Requirement {
     Requirement {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: stable_id(RecordFamily::Requirement),
         declared_by: None,
@@ -123,7 +124,7 @@ fn requirement_record(scope: &ScopeId) -> Requirement {
 
 fn boundary_record(scope: &ScopeId) -> Boundary {
     Boundary {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: stable_id(RecordFamily::Boundary),
         requirement_id: stable_id(RecordFamily::Requirement),
@@ -134,7 +135,7 @@ fn boundary_record(scope: &ScopeId) -> Boundary {
 
 fn topic_record(scope: &ScopeId) -> Topic {
     Topic {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: stable_id(RecordFamily::Topic),
         requirement_id: stable_id(RecordFamily::Requirement),
@@ -148,7 +149,7 @@ fn topic_record(scope: &ScopeId) -> Topic {
 
 fn question_record(scope: &ScopeId) -> Question {
     Question {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: stable_id(RecordFamily::Question),
         topic_id: stable_id(RecordFamily::Topic),
@@ -167,7 +168,7 @@ fn question_record(scope: &ScopeId) -> Question {
 
 fn resolution_record(scope: &ScopeId) -> Resolution {
     Resolution {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: stable_id(RecordFamily::Resolution),
         title: "Pinned resolution".into(),
@@ -191,7 +192,7 @@ fn resolution_record(scope: &ScopeId) -> Resolution {
 
 fn rule_record(scope: &ScopeId) -> Rule {
     Rule {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: stable_id(RecordFamily::Rule),
         declared_by: None,
@@ -213,7 +214,7 @@ fn rule_record(scope: &ScopeId) -> Rule {
 
 fn verification_binding_record(scope: &ScopeId) -> VerificationBinding {
     VerificationBinding {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: stable_id(RecordFamily::VerificationBinding),
         rule_id: stable_id(RecordFamily::Rule),
@@ -228,7 +229,7 @@ fn verification_binding_record(scope: &ScopeId) -> VerificationBinding {
 
 fn implementation_binding_record(scope: &ScopeId) -> ImplementationBinding {
     ImplementationBinding {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: stable_id(RecordFamily::ImplementationBinding),
         rule_id: stable_id(RecordFamily::Rule),

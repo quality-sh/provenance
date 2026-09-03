@@ -6,8 +6,9 @@ use camino::Utf8PathBuf;
 use provenance_core::coverage::{
     AnchorState, AnnotationResult, BindingResult, CoverageReport, CoverageScan, ScannedFile,
 };
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_core::{
-    ImplementationBinding as CanonicalImplementationBinding, SchemaVersion, ScopeId, StableId,
+    ImplementationBinding as CanonicalImplementationBinding, ScopeId, StableId,
     VerificationBinding, VerificationMethod,
 };
 use std::fmt::Write as _;
@@ -54,7 +55,7 @@ fn annotation(
 
 fn typed_binding() -> VerificationBinding {
     VerificationBinding {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: ScopeId::new("default").unwrap(),
         id: StableId::new("verification_binding_expiry_examples").unwrap(),
         rule_id: StableId::new("rule_001").unwrap(),
@@ -69,7 +70,7 @@ fn typed_binding() -> VerificationBinding {
 
 fn typed_implementation(file: &str, symbol: &str) -> CanonicalImplementationBinding {
     CanonicalImplementationBinding {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: ScopeId::new("default").unwrap(),
         id: StableId::new("implementation_binding_rule_001").unwrap(),
         rule_id: StableId::new("rule_001").unwrap(),

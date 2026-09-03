@@ -63,11 +63,12 @@ pub fn resolve_scope(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{RepoPathPrefix, SchemaVersion, Scope};
+    use crate::SUPPORTED_SCHEMA_VERSION;
+    use crate::{RepoPathPrefix, Scope};
 
     fn manifest_with_scopes(scopes: &[(&str, &str)]) -> Manifest {
         Manifest {
-            schema_version: SchemaVersion(1),
+            schema_version: SUPPORTED_SCHEMA_VERSION,
             scopes: scopes
                 .iter()
                 .map(|(id, prefix)| Scope {

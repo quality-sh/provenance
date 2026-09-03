@@ -1,3 +1,4 @@
+use crate::SUPPORTED_SCHEMA_VERSION;
 use provenance_macros::verifies;
 
 include!("tests/artifacts.rs");

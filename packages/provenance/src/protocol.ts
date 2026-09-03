@@ -68,8 +68,11 @@ export interface ImplementationDeclaration {
   symbol: string;
 }
 
+/** The state schema version every typed spec document names. */
+export const STATE_SCHEMA_VERSION = 2;
+
 export interface TypedSpecDocument {
-  schema_version: 1;
+  schema_version: typeof STATE_SCHEMA_VERSION;
   spec: string;
   declared_by: string;
   adopt_unowned?: AdoptionTarget[];

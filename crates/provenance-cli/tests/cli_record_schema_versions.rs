@@ -1,5 +1,6 @@
 use assert_cmd::Command;
 use predicates::str::contains;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_macros::verifies;
 
 const STORED_FAMILIES: [(&str, &str); 17] = [
@@ -64,9 +65,11 @@ fn wiki_and_check_refuse_v2_rows_in_every_stored_family() {
                     text.replace('\\', "/").contains(relative_path)
                 }))
                 .stderr(contains(format!("record {record_id}")))
-                .stderr(contains(
-                    "has schema_version 2, but this build reads schema_version 1 only",
-                ));
+                .stderr(contains(format!(
+                    "has schema_version {}, but this build reads schema_version {} only",
+                    SUPPORTED_SCHEMA_VERSION.0 + 1,
+                    SUPPORTED_SCHEMA_VERSION.0
+                )));
         }
     }
 }
@@ -102,9 +105,11 @@ fn coverage_rule_validation_refuses_a_v2_rule_row() {
                 .contains("scopes/default/rules/rule.jsonl line 1")
         }))
         .stderr(contains("record rule_future"))
-        .stderr(contains(
-            "has schema_version 2, but this build reads schema_version 1 only",
-        ));
+        .stderr(contains(format!(
+            "has schema_version {}, but this build reads schema_version {} only",
+            SUPPORTED_SCHEMA_VERSION.0 + 1,
+            SUPPORTED_SCHEMA_VERSION.0
+        )));
 }
 
 /// A hand-edited record does not load, and the refusal says where it is.
@@ -132,7 +137,10 @@ fn a_hand_edited_requirement_version_is_refused_by_every_reader() {
     let stored = std::fs::read_to_string(&path).unwrap();
     std::fs::write(
         &path,
-        stored.replace("\"schema_version\":1", "\"schema_version\":2"),
+        stored.replace(
+            &format!("\"schema_version\":{}", SUPPORTED_SCHEMA_VERSION.0),
+            &format!("\"schema_version\":{}", SUPPORTED_SCHEMA_VERSION.0 + 1),
+        ),
     )
     .unwrap();
 
@@ -158,9 +166,11 @@ fn a_hand_edited_requirement_version_is_refused_by_every_reader() {
             .failure()
             .stderr(contains("requirements/req.jsonl line 1"))
             .stderr(contains("record req_overtime"))
-            .stderr(contains(
-                "has schema_version 2, but this build reads schema_version 1 only",
-            ));
+            .stderr(contains(format!(
+                "has schema_version {}, but this build reads schema_version {} only",
+                SUPPORTED_SCHEMA_VERSION.0 + 1,
+                SUPPORTED_SCHEMA_VERSION.0
+            )));
     }
 }
 
@@ -189,7 +199,10 @@ fn a_write_beside_a_hand_edited_record_is_refused_and_changes_nothing() {
         .join(".provenance/state/scopes/default/requirements/req.jsonl");
     let planted = std::fs::read_to_string(&path)
         .unwrap()
-        .replace("\"schema_version\":1", "\"schema_version\":2 ")
+        .replace(
+            &format!("\"schema_version\":{}", SUPPORTED_SCHEMA_VERSION.0),
+            &format!("\"schema_version\":{} ", SUPPORTED_SCHEMA_VERSION.0 + 1),
+        )
         .replace(
             "\"statement\"",
             "\"unknown_to_this_build\":\"keep me\",\"statement\"",
@@ -216,9 +229,11 @@ fn a_write_beside_a_hand_edited_record_is_refused_and_changes_nothing() {
         .failure()
         .stderr(contains("requirements/req.jsonl line 1"))
         .stderr(contains("record req_overtime"))
-        .stderr(contains(
-            "has schema_version 2, but this build reads schema_version 1 only",
-        ));
+        .stderr(contains(format!(
+            "has schema_version {}, but this build reads schema_version {} only",
+            SUPPORTED_SCHEMA_VERSION.0 + 1,
+            SUPPORTED_SCHEMA_VERSION.0
+        )));
 
     assert_eq!(std::fs::read_to_string(&path).unwrap(), planted);
 }
@@ -257,7 +272,10 @@ fn plant_v2_row(repo: &std::path::Path, relative_path: &str, record_id: &str) {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(
         path,
-        format!("{{\"schema_version\":2,\"id\":\"{record_id}\"}}\n"),
+        format!(
+            "{{\"schema_version\":{},\"id\":\"{record_id}\"}}\n",
+            SUPPORTED_SCHEMA_VERSION.0 + 1
+        ),
     )
     .unwrap();
 }

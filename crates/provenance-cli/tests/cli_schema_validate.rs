@@ -1,18 +1,19 @@
 use assert_cmd::Command;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_macros::verifies;
 use provenance_store::graph_reference::{graph_digest, GraphExport};
 use serde_json::{json, Value};
 
-fn write_json(dir: &tempfile::TempDir, name: &str, json: &str) -> String {
+fn write_json(dir: &tempfile::TempDir, name: &str, json: impl AsRef<str>) -> String {
     let path = dir.path().join(name);
-    std::fs::write(&path, json).unwrap();
+    std::fs::write(&path, json.as_ref()).unwrap();
     path.to_string_lossy().to_string()
 }
 
 /// A pinned graph carrying one source and nothing else.
 fn graph_with_source(source: &Value) -> Value {
     json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope": {"id": "default", "path_prefix": "."},
         "sources": [source],
         "domains": [],
@@ -33,7 +34,7 @@ fn export_document(graph: &Value) -> Value {
     let parsed: GraphExport =
         serde_json::from_value(graph.clone()).expect("the fixture graph is a pinned graph");
     json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "operation": "exact-export",
         "reference_id": format!("grf1_{}", "0".repeat(64)),
         "graph_digest": graph_digest(&parsed).expect("a graph can be canonicalized"),
@@ -85,8 +86,8 @@ fn disposition_schema_closes_canonical_artifact_and_validation_rejects_unknown_f
     let invalid = write_json(
         &dir,
         "invalid-disposition.json",
-        r#"{
-          "schema_version": 1,
+        serde_json::json!({
+          "schema_version": SUPPORTED_SCHEMA_VERSION.0,
           "scope_id": "default",
           "id": "disposition_accept",
           "proposal_id": "proposal_candidate",
@@ -98,7 +99,8 @@ fn disposition_schema_closes_canonical_artifact_and_validation_rejects_unknown_f
             "artifact_id": "requirement_one",
             "unexpected": true
           }
-        }"#,
+        })
+        .to_string(),
     );
     Command::cargo_bin("provenance")
         .unwrap()
@@ -119,15 +121,16 @@ fn disposition_schema_closes_canonical_artifact_and_validation_rejects_unknown_f
     let empty = write_json(
         &dir,
         "empty-disposition.json",
-        r#"{
-          "schema_version": 1,
+        serde_json::json!({
+          "schema_version": SUPPORTED_SCHEMA_VERSION.0,
           "scope_id": "default",
           "id": "disposition_accept",
           "proposal_id": "proposal_candidate",
           "decision": "accepted",
           "rationale": "",
           "actor": {"identity_type": "human", "id": ""}
-        }"#,
+        })
+        .to_string(),
     );
     Command::cargo_bin("provenance")
         .unwrap()
@@ -150,12 +153,12 @@ fn assert_external_action_unknown_field_rejected(dir: &tempfile::TempDir) {
     let unknown_action = write_json(
         dir,
         "unknown-action-field.json",
-        r#"{
-          "schema_version": 1, "scope_id": "default", "id": "disposition_accept",
+        serde_json::json!({
+          "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "disposition_accept",
           "proposal_id": "proposal_candidate", "decision": "rejected", "rationale": "Rejected.",
           "actor": {"identity_type": "human", "id": "reviewer"},
           "external_action": {"system": "github", "scope": "acme/payroll", "kind": "issue", "key": "44", "workflow_state": "closed"}
-        }"#,
+        }).to_string(),
     );
     Command::cargo_bin("provenance")
         .unwrap()
@@ -169,7 +172,7 @@ fn assert_external_action_unknown_field_rejected(dir: &tempfile::TempDir) {
 fn assertion_validation_matches_closed_schema_invariants() {
     let dir = tempfile::tempdir().unwrap();
     let base = json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "assertion_candidate",
         "proposal_id": "proposal_candidate",
@@ -191,7 +194,7 @@ fn assertion_validation_matches_closed_schema_invariants() {
         let input = write_json(
             &dir,
             &format!("{name}-assertion.json"),
-            &serde_json::to_string(&value).unwrap(),
+            serde_json::to_string(&value).unwrap(),
         );
         Command::cargo_bin("provenance")
             .unwrap()
@@ -208,8 +211,8 @@ fn proposal_validation_rejects_unknown_nested_fields() {
     let input = write_json(
         &dir,
         "unknown-proposal.json",
-        r#"{
-          "schema_version": 1,
+        serde_json::json!({
+          "schema_version": SUPPORTED_SCHEMA_VERSION.0,
           "scope_id": "default",
           "id": "proposal_candidate",
           "proposal_key": "candidate",
@@ -223,7 +226,8 @@ fn proposal_validation_rejects_unknown_nested_fields() {
             "supporting_claim_ids": []
           },
           "promotion_state": "proposed"
-        }"#,
+        })
+        .to_string(),
     );
     Command::cargo_bin("provenance")
         .unwrap()
@@ -239,8 +243,8 @@ fn validate_accepts_good_ideation_artifacts() {
     let contribution = write_json(
         &dir,
         "contribution.json",
-        r#"{
-          "schema_version": 1,
+        serde_json::json!({
+          "schema_version": SUPPORTED_SCHEMA_VERSION.0,
           "scope_id": "default",
           "id": "contrib_extract_auth",
           "target": {"artifact_type": "source", "artifact_id": "source_codebase"},
@@ -256,13 +260,13 @@ fn validate_accepts_good_ideation_artifacts() {
           "unsupported_recommendations": [],
           "uncertainty": {"level":"low","rationale":"Direct guard evidence."},
           "open_questions": []
-        }"#,
+        }).to_string(),
     );
     let synthesis = write_json(
         &dir,
         "synthesis.json",
-        r#"{
-          "schema_version": 1,
+        serde_json::json!({
+          "schema_version": SUPPORTED_SCHEMA_VERSION.0,
           "scope_id": "default",
           "id": "synth_backtrace_auth",
           "target": {"artifact_type": "source", "artifact_id": "source_codebase"},
@@ -275,13 +279,13 @@ fn validate_accepts_good_ideation_artifacts() {
           "open_questions": [],
           "suggested_artifacts": [{"proposal_key":"backtrace/auth/publish_requires_worker","proposal_type":"requirement_candidate","summary":"Review the candidate requirement.","origin_participant_slots":["extract_auth"]}],
           "required_human_decisions": [{"decision_key":"decide_publish_guard","prompt":"Confirm this behavior is intentional.","blocks_promotion":true}]
-        }"#,
+        }).to_string(),
     );
     let proposal = write_json(
         &dir,
         "proposal.json",
-        r#"{
-          "schema_version": 1,
+        serde_json::json!({
+          "schema_version": SUPPORTED_SCHEMA_VERSION.0,
           "scope_id": "default",
           "id": "prop_req_publish_requires_worker",
           "proposal_key": "backtrace/auth/publish_requires_worker",
@@ -296,7 +300,7 @@ fn validate_accepts_good_ideation_artifacts() {
             "supporting_claim_ids": ["claim_auth_guard"]
           },
           "promotion_state": "proposed"
-        }"#,
+        }).to_string(),
     );
 
     for (artifact, path) in [
@@ -320,8 +324,8 @@ fn validate_rejects_nested_invalid_stable_ids() {
     let contribution = write_json(
         &dir,
         "bad-contribution.json",
-        r#"{
-          "schema_version": 1,
+        serde_json::json!({
+          "schema_version": SUPPORTED_SCHEMA_VERSION.0,
           "scope_id": "default",
           "id": "contrib_extract_auth",
           "target": {"artifact_type": "source", "artifact_id": "source_codebase"},
@@ -337,13 +341,13 @@ fn validate_rejects_nested_invalid_stable_ids() {
           "unsupported_recommendations": [],
           "uncertainty": {"level":"low","rationale":"Direct guard evidence."},
           "open_questions": []
-        }"#,
+        }).to_string(),
     );
     let synthesis = write_json(
         &dir,
         "bad-synthesis.json",
-        r#"{
-          "schema_version": 1,
+        serde_json::json!({
+          "schema_version": SUPPORTED_SCHEMA_VERSION.0,
           "scope_id": "default",
           "id": "synth_backtrace_auth",
           "target": {"artifact_type": "source", "artifact_id": "source_codebase"},
@@ -356,13 +360,13 @@ fn validate_rejects_nested_invalid_stable_ids() {
           "open_questions": [],
           "suggested_artifacts": [],
           "required_human_decisions": [{"decision_key":"decide/publish_guard","prompt":"Confirm this behavior is intentional.","blocks_promotion":true}]
-        }"#,
+        }).to_string(),
     );
     let proposal = write_json(
         &dir,
         "bad-proposal.json",
-        r#"{
-          "schema_version": 1,
+        serde_json::json!({
+          "schema_version": SUPPORTED_SCHEMA_VERSION.0,
           "scope_id": "default",
           "id": "prop_req_publish_requires_worker",
           "proposal_key": "backtrace/auth/publish_requires_worker",
@@ -376,7 +380,8 @@ fn validate_rejects_nested_invalid_stable_ids() {
             "supporting_claim_ids": []
           },
           "promotion_state": "proposed"
-        }"#,
+        })
+        .to_string(),
     );
 
     for (artifact, path) in [
@@ -397,7 +402,7 @@ fn validate_rejects_nested_invalid_stable_ids() {
 fn validate_rejects_forbidden_graph_reference_export_fields() {
     let dir = tempfile::tempdir().unwrap();
     let export = export_document(&graph_with_source(&json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "source_policy",
         "name": "Policy",
@@ -414,7 +419,7 @@ fn validate_rejects_forbidden_graph_reference_export_fields() {
         let path = write_json(
             &dir,
             &format!("{name}-export.json"),
-            &serde_json::to_string(&malformed).unwrap(),
+            serde_json::to_string(&malformed).unwrap(),
         );
 
         Command::cargo_bin("provenance")
@@ -437,7 +442,7 @@ fn validate_rejects_forbidden_graph_reference_export_fields() {
 fn validate_rejects_graph_reference_export_records_from_another_scope() {
     let dir = tempfile::tempdir().unwrap();
     let export = export_document(&graph_with_source(&json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "other",
         "id": "source_policy",
         "name": "Policy",
@@ -447,7 +452,7 @@ fn validate_rejects_graph_reference_export_records_from_another_scope() {
     let path = write_json(
         &dir,
         "cross-scope-export.json",
-        &serde_json::to_string(&export).unwrap(),
+        serde_json::to_string(&export).unwrap(),
     );
 
     Command::cargo_bin("provenance")

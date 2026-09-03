@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 #[test]
 fn cli_thread_prime_posts_message_and_renders_context() {
@@ -122,8 +123,7 @@ fn cli_thread_list_preserves_resolved_status() {
     std::fs::create_dir_all(&threads_dir).unwrap();
     std::fs::write(
         threads_dir.join("threads.jsonl"),
-        r#"{"schema_version":1,"scope_id":"default","id":"thread_rule_rule_sah_001","parent":{"node_type":"rule","node_id":"rule_sah_001"},"status":"resolved","created_at":1}
-"#,
+        serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"thread_rule_rule_sah_001","parent":{"node_type":"rule","node_id":"rule_sah_001"},"status":"resolved","created_at":1}).to_string(),
     )
     .unwrap();
 

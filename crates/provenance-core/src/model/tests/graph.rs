@@ -36,7 +36,7 @@ fn no_edge_may_touch_a_domain_or_boundary() {
 #[test]
 fn a_domain_node_searches_by_name_and_description() {
     let domain = crate::model::Domain {
-        schema_version: crate::model::SchemaVersion(1),
+        schema_version: crate::model::SUPPORTED_SCHEMA_VERSION,
         scope_id: crate::model::ScopeId::new("default").unwrap(),
         id: crate::model::StableId::new("domain_payroll").unwrap(),
         name: "Payroll".into(),

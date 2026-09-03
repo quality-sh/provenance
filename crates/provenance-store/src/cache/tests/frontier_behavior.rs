@@ -5,6 +5,7 @@ use crate::state_store::{
     AddSourceReferenceInput, CreateProposalCardInput, CreateQuestionInput, CreateResolutionInput,
     CreateTopicInput, StateStore,
 };
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_core::{
     IdeationTarget, IdeationTargetType, NodeType, PromotionState, ProposalTraceability,
     ProposalType, QuestionStatus, RequirementStatus, ResolutionMethod, ResolutionStatus,
@@ -135,7 +136,7 @@ fn find_gaps_reports_the_frontier_taxonomy() {
     // A reference the writers refuse arrives only by hand.
     append_record(
         &crate::shards::sources_path(&layout, &scope),
-        &serde_json::json!({"schema_version": 1, "scope_id": scope.as_str(),
+        &serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope.as_str(),
             "id": "source_dangling", "name": "source_dangling", "source_type": "policy",
             "supersedes": ["source_missing"]}),
     );

@@ -1,6 +1,7 @@
 use assert_cmd::Command;
 use predicates::prelude::PredicateBooleanExt;
 use predicates::str::contains;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use std::path::Path;
 
 #[test]
@@ -103,7 +104,8 @@ fn requirement(id: &str) -> String {
 
 fn requirement_in(scope_id: &str, id: &str) -> String {
     format!(
-        r#"{{"schema_version":1,"scope_id":"{scope_id}","id":"{id}","statement":"Parent","status":"active"}}"#
+        r#"{{"schema_version":{version},"scope_id":"{scope_id}","id":"{id}","statement":"Parent","status":"active"}}"#,
+        version = SUPPORTED_SCHEMA_VERSION.0
     )
 }
 
@@ -120,7 +122,8 @@ fn add_scope(repo: &Path, scope_id: &str, path_prefix: &str) {
 
 fn thread(id: &str, scope_id: &str, parent_id: &str, created_at: i64) -> String {
     format!(
-        r#"{{"schema_version":1,"scope_id":"{scope_id}","id":"{id}","parent":{{"node_type":"requirement","node_id":"{parent_id}"}},"status":"resolved","created_at":{created_at}}}"#
+        r#"{{"schema_version":{version},"scope_id":"{scope_id}","id":"{id}","parent":{{"node_type":"requirement","node_id":"{parent_id}"}},"status":"resolved","created_at":{created_at}}}"#,
+        version = SUPPORTED_SCHEMA_VERSION.0
     )
 }
 

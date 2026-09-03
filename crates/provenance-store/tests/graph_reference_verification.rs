@@ -19,6 +19,7 @@
 //! lands on it, checked by the error that branch alone returns, and each is
 //! built so the checks ahead of it pass.
 
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_core::{Manifest, RepoPathPrefix, ScopeId};
 use provenance_macros::verifies;
 use provenance_store::{
@@ -90,7 +91,7 @@ fn committed_store_with_a_record(name: &str) -> tempfile::TempDir {
     std::fs::write(
         sources.join("source.jsonl"),
         serde_json::to_vec(&json!({
-            "schema_version": 1,
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": "default",
             "id": "source_retention",
             "name": name,

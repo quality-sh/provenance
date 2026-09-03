@@ -8,6 +8,7 @@
 use assert_cmd::Command;
 use provenance_core::authoring::{requirement, rule, source, spec};
 use provenance_core::ScopeId;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_macros::verifies;
 use provenance_store::operations;
 use serde_json::{json, Value};
@@ -110,7 +111,7 @@ fn kernel_direct_and_both_wire_shapes_yield_one_outcome() {
 fn wire_ingestion_returns_resources_in_decoded_order() {
     let repo = init_repo();
     let input = json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "spec": "keys",
         "declared_by": "spec://parity",
         "requirements": [
@@ -136,7 +137,7 @@ fn wire_ingestion_returns_resources_in_decoded_order() {
 #[verifies("rule_rust_wire_first_error_is_stable", conformance)]
 fn a_multi_defect_document_keeps_its_first_error_on_both_routes() {
     let input = json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "spec": "share-links",
         "declared_by": "spec://parity",
         "sources": [
@@ -175,7 +176,7 @@ fn wire_ingestion_rejects_the_named_structural_defects() {
     let repo = repo.path().to_str().unwrap();
     let base = |requirements: Value, rules: Value| {
         json!({
-            "schema_version": 1,
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "spec": "share-links",
             "declared_by": "spec://parity",
             "requirements": requirements,
@@ -235,7 +236,7 @@ fn wire_ingestion_rejects_the_named_structural_defects() {
     }
 
     let unknown_field = json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "spec": "share-links",
         "declared_by": "spec://parity",
         "surprise": true
@@ -250,7 +251,7 @@ fn the_in_process_route_refuses_the_envelope_and_gate_classes_like_the_wire() {
     let scope = ScopeId::new("default").unwrap();
     let document = |declared_by: &str, statement: &str| {
         serde_json::from_value::<provenance_core::protocol::TypedSpecInput>(json!({
-            "schema_version": 1,
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "spec": "share-links",
             "declared_by": declared_by,
             "requirements": [{"key": "sharing", "statement": statement}]
@@ -260,9 +261,15 @@ fn the_in_process_route_refuses_the_envelope_and_gate_classes_like_the_wire() {
 
     let repo = init_repo();
     let mut wrong_version = document("spec://parity", "Users can share documentation");
-    wrong_version.schema_version = 2;
+    wrong_version.schema_version = SUPPORTED_SCHEMA_VERSION.0 + 1;
     let error = operations::apply(Some(repo_root(&repo)), &scope, wrong_version).unwrap_err();
-    assert_eq!(error.to_string(), "typed spec schema_version must be 1");
+    assert_eq!(
+        error.to_string(),
+        format!(
+            "typed spec schema_version must be {}",
+            SUPPORTED_SCHEMA_VERSION.0
+        )
+    );
 
     let first = operations::apply(
         Some(repo_root(&repo)),
@@ -303,7 +310,7 @@ fn a_legacy_singular_requirement_field_matches_the_normalized_list() {
     let list_repo = init_repo();
     let document = |rule: Value| {
         json!({
-            "schema_version": 1,
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "spec": "share-links",
             "declared_by": "spec://parity",
             "requirements": [{"key": "sharing", "statement": "Users can share documentation"}],

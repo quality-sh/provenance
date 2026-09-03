@@ -3,6 +3,7 @@
 
 use super::initialized_store;
 use crate::state_store::{CreateResolutionInput, TypedSpecInput};
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_core::{ResolutionStatus, StableId};
 use serde_json::json;
 
@@ -12,7 +13,7 @@ fn sid(value: &str) -> StableId {
 
 fn spec(requirements: &serde_json::Value, rules: &serde_json::Value) -> TypedSpecInput {
     serde_json::from_value(json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "spec": "payroll",
         "declared_by": "spec://payroll",
         "sources": [{"key": "award", "name": "Award", "kind": "policy"}],

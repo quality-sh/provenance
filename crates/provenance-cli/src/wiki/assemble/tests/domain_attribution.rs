@@ -11,7 +11,8 @@ use super::fixtures::{empty_state, requirement, resolution, rule, scope_id, sid}
 use crate::handlers::ScopeExport;
 use crate::wiki::links::LinkResolver;
 use crate::wiki::model::{DomainGroup, DomainState, WikiCorpus};
-use provenance_core::{Domain, RequirementStatus, SchemaVersion};
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
+use provenance_core::{Domain, RequirementStatus};
 use provenance_macros::verifies;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -57,7 +58,7 @@ struct GeneratedGraph {
 
 fn declared_domain() -> Domain {
     Domain {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id(),
         id: sid(DOMAIN_IDS[0]),
         name: "Declared domain".to_string(),

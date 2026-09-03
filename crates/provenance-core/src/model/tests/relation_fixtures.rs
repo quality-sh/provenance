@@ -3,9 +3,10 @@ use crate::model::relations::RecordFront;
 use crate::model::{
     ArtifactLink, ArtifactLinkTargetType, Boundary, Domain, Question, QuestionStatus,
     Requirement, RequirementStatus, Resolution, ResolutionMethod, ResolutionStatus, Rule,
-    RuleSeverity, RuleStatus, SchemaVersion, ScopeId, Source, SourceReference, SourceType,
+    RuleSeverity, RuleStatus, ScopeId, Source, SourceReference, SourceType,
     StableId, Topic, TopicStatus,
 };
+use crate::SUPPORTED_SCHEMA_VERSION;
 
 pub(super) fn scope() -> ScopeId {
     ScopeId::new("default").unwrap()
@@ -21,7 +22,7 @@ pub(super) fn ids(values: &[&str]) -> Vec<StableId> {
 
 pub(super) fn source(id: &str, supersedes: &[&str]) -> Source {
     Source {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid(id),
         declared_by: None,
@@ -42,7 +43,7 @@ pub(super) fn source(id: &str, supersedes: &[&str]) -> Source {
 
 pub(super) fn requirement(id: &str, domain_id: Option<&str>, cites: &[&str]) -> Requirement {
     Requirement {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid(id),
         declared_by: None,
@@ -71,7 +72,7 @@ pub(super) fn requirement(id: &str, domain_id: Option<&str>, cites: &[&str]) -> 
 
 pub(super) fn domain(id: &str) -> Domain {
     Domain {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid(id),
         name: id.to_string(),
@@ -82,7 +83,7 @@ pub(super) fn domain(id: &str) -> Domain {
 
 pub(super) fn boundary_citing(id: &str, requirement_id: &str, source: Option<&str>) -> Boundary {
     Boundary {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid(id),
         requirement_id: sid(requirement_id),
@@ -96,7 +97,7 @@ pub(super) fn boundary_citing(id: &str, requirement_id: &str, source: Option<&st
 
 pub(super) fn topic(id: &str, requirement_id: &str, links: &[(&str, ArtifactLinkTargetType)]) -> Topic {
     Topic {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid(id),
         requirement_id: sid(requirement_id),
@@ -116,7 +117,7 @@ pub(super) fn topic(id: &str, requirement_id: &str, links: &[(&str, ArtifactLink
 
 pub(super) fn rule(id: &str, requirements: &[&str], resolutions: &[&str]) -> Rule {
     Rule {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid(id),
         declared_by: None,
@@ -149,7 +150,7 @@ pub(super) struct Fixture {
 
 pub(super) fn resolution(id: &str, requirements: &[&str], supersedes: &[&str]) -> Resolution {
     Resolution {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid(id),
         title: id.to_string(),
@@ -180,7 +181,7 @@ pub(super) fn question(
     links: &[(&str, ArtifactLinkTargetType)],
 ) -> Question {
     Question {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid(id),
         topic_id: sid(topic_id),

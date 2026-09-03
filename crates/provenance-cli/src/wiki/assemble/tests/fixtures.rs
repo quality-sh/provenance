@@ -2,11 +2,12 @@ use super::super::build_corpus;
 use crate::handlers::ScopeExport;
 use crate::wiki::links::LinkResolver;
 use crate::wiki::model::GapKind;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_core::{
     Message, MessageRole, NodeType, Question, QuestionStatus, Requirement, RequirementStatus,
     Resolution, ResolutionInput, ResolutionInputType, ResolutionMethod, ResolutionStatus, Rule,
-    RuleSeverity, RuleStatus, SchemaVersion, ScopeId, Source, SourceReference, SourceType,
-    StableId, Thread, ThreadParent, ThreadStatus, Topic, TopicStatus,
+    RuleSeverity, RuleStatus, ScopeId, Source, SourceReference, SourceType, StableId, Thread,
+    ThreadParent, ThreadStatus, Topic, TopicStatus,
 };
 use provenance_store::cache::{compute_gaps, GapGraph, GapItem};
 
@@ -25,7 +26,7 @@ pub(super) fn requirement(
     source_refs: Vec<SourceReference>,
 ) -> Requirement {
     Requirement {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id(),
         id: sid(id),
         declared_by: None,
@@ -48,7 +49,7 @@ pub(super) fn requirement(
 
 pub(super) fn resolution(id: &str, title: &str, inputs: Vec<ResolutionInput>) -> Resolution {
     Resolution {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id(),
         id: sid(id),
         title: title.to_string(),
@@ -72,7 +73,7 @@ pub(super) fn resolution(id: &str, title: &str, inputs: Vec<ResolutionInput>) ->
 
 pub(super) fn rule(id: &str, name: Option<&str>) -> Rule {
     Rule {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id(),
         id: sid(id),
         declared_by: None,
@@ -94,7 +95,7 @@ pub(super) fn rule(id: &str, name: Option<&str>) -> Rule {
 
 pub(super) fn source(id: &str, name: &str) -> Source {
     Source {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id(),
         id: sid(id),
         declared_by: None,
@@ -115,7 +116,7 @@ pub(super) fn source(id: &str, name: &str) -> Source {
 
 pub(super) fn domain(id: &str, name: &str) -> provenance_core::Domain {
     provenance_core::Domain {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id(),
         id: sid(id),
         name: name.to_string(),
@@ -126,7 +127,7 @@ pub(super) fn domain(id: &str, name: &str) -> provenance_core::Domain {
 
 pub(super) fn topic(id: &str, requirement_id: &str, status: TopicStatus) -> Topic {
     Topic {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id(),
         id: sid(id),
         requirement_id: sid(requirement_id),
@@ -145,7 +146,7 @@ pub(super) fn question(
     status: QuestionStatus,
 ) -> Question {
     Question {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id(),
         id: sid(id),
         topic_id: sid(topic_id),
@@ -164,7 +165,7 @@ pub(super) fn question(
 
 pub(super) fn thread(id: &str, parent: (NodeType, &str), created_at: i64) -> Thread {
     Thread {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id(),
         id: sid(id),
         parent: ThreadParent {
@@ -178,7 +179,7 @@ pub(super) fn thread(id: &str, parent: (NodeType, &str), created_at: i64) -> Thr
 
 pub(super) fn message(id: &str, thread_id: &str, body: &str, created_at: i64) -> Message {
     Message {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id(),
         id: sid(id),
         thread_id: sid(thread_id),

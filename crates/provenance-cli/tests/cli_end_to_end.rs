@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 #[test]
 fn import_export_roundtrip_cli_exports_imports_checks_and_merges_local_state() {
@@ -104,58 +105,59 @@ fn import_export_roundtrip_preserves_enriched_v1_cloud_fields() {
     init(&repo);
     std::fs::write(
         &import_path,
-        r#"{
-  "scope": "default",
-  "sources": [{
-    "schema_version": 1,
-    "scope_id": "default",
-    "id": "source_sah",
-    "name": "Support at Home",
-    "source_type": "legislation",
-    "url": "https://example.test/sah",
-    "reference": "Department guidance"
-  }],
-  "requirements": [{
-    "schema_version": 1,
-    "scope_id": "default",
-    "id": "req_sah",
-    "statement": "Support at Home shall be traceable",
-    "description": "Cloud import description",
-    "status": "discovery",
-    "source_refs": [{"source_id": "source_sah", "clause": "Program overview"}]
-  }],
-  "resolutions": [{
-    "schema_version": 1,
-    "scope_id": "default",
-    "id": "res_sah",
-    "title": "SAH extraction",
-    "position": "Keep as draft extraction",
-    "rationale": "Needs human review",
-    "status": "draft",
-    "requirement_ids": ["req_sah"],
-    "review_on": null,
-    "context": "Codebase scan",
-    "enforcement": "specification",
-    "confidence": 0.91
-  }],
-  "rules": [{
-    "schema_version": 1,
-    "scope_id": "default",
-    "id": "rule_sah_001",
-    "name": "SAH rule",
-    "description": "Rule description",
-    "statement": "Draft rule shall stay draft",
-    "status": "draft",
-    "severity": "high",
-    "requirement_ids": ["req_sah"],
-    "resolution_ids": ["res_sah"],
-    "source_document": "Example-API-main/src/example.php",
-    "source_section": "lines 1-3"
-  }],
-  "edges": [],
-  "threads": [],
-  "messages": []
-}"#,
+        serde_json::json!({
+          "scope": "default",
+          "sources": [{
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+            "scope_id": "default",
+            "id": "source_sah",
+            "name": "Support at Home",
+            "source_type": "legislation",
+            "url": "https://example.test/sah",
+            "reference": "Department guidance"
+          }],
+          "requirements": [{
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+            "scope_id": "default",
+            "id": "req_sah",
+            "statement": "Support at Home shall be traceable",
+            "description": "Cloud import description",
+            "status": "discovery",
+            "source_refs": [{"source_id": "source_sah", "clause": "Program overview"}]
+          }],
+          "resolutions": [{
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+            "scope_id": "default",
+            "id": "res_sah",
+            "title": "SAH extraction",
+            "position": "Keep as draft extraction",
+            "rationale": "Needs human review",
+            "status": "draft",
+            "requirement_ids": ["req_sah"],
+            "review_on": null,
+            "context": "Codebase scan",
+            "enforcement": "specification",
+            "confidence": 0.91
+          }],
+          "rules": [{
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+            "scope_id": "default",
+            "id": "rule_sah_001",
+            "name": "SAH rule",
+            "description": "Rule description",
+            "statement": "Draft rule shall stay draft",
+            "status": "draft",
+            "severity": "high",
+            "requirement_ids": ["req_sah"],
+            "resolution_ids": ["res_sah"],
+            "source_document": "Example-API-main/src/example.php",
+            "source_section": "lines 1-3"
+          }],
+          "edges": [],
+          "threads": [],
+          "messages": []
+        })
+        .to_string(),
     )
     .unwrap();
 
@@ -191,7 +193,10 @@ fn import_export_roundtrip_preserves_enriched_v1_cloud_fields() {
         .success();
 
     let exported = std::fs::read_to_string(export_path).unwrap();
-    assert!(exported.contains(r#""schema_version": 1"#));
+    assert!(exported.contains(&format!(
+        r#""schema_version": {}"#,
+        SUPPORTED_SCHEMA_VERSION.0
+    )));
     assert!(exported.contains(r#""source_type": "legislation""#));
     assert!(exported.contains(r#""status": "discovery""#));
     assert!(exported.contains(r#""status": "draft""#));

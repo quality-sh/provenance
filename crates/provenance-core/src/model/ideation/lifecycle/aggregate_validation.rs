@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 /// the ideation guard below, `provenance-store`'s read guard, the pinned
 /// graph's per-record check, and the CLI's artifact validator. There is no
 /// second copy of the number to update.
-pub const SUPPORTED_SCHEMA_VERSION: SchemaVersion = SchemaVersion(1);
+pub const SUPPORTED_SCHEMA_VERSION: SchemaVersion = SchemaVersion(2);
 
 // The record kinds the guard names, single-homed so a call site and the
 // exhaustion proof below cannot drift apart.
@@ -302,6 +302,7 @@ fn ensure_immutable_ids<'a, T: Serialize + 'a>(
 
 #[cfg(test)]
 mod schema_version_tests {
+    use super::SUPPORTED_SCHEMA_VERSION;
     use provenance_macros::verifies;
 
     use super::{
@@ -323,16 +324,21 @@ mod schema_version_tests {
     // The version range the exhaustion below runs. The guard is an equality
     // test on the version and nothing else: it is monotone in nothing, so no
     // interpolation between tried values is being claimed, and every version
-    // that is not 1 takes the same branch. These four are the value below the
-    // accepted one, the accepted one, the value above, and the top of the u32
-    // domain, which is the whole of the behaviour there is to see.
-    const VERSION_RANGE: [u32; 4] = [0, 1, 2, u32::MAX];
+    // that is not the supported one takes the same branch. These four are the
+    // value below the accepted one, the accepted one, the value above, and the
+    // top of the u32 domain, which is the whole of the behaviour there is to see.
+    const VERSION_RANGE: [u32; 4] = [
+        SUPPORTED_SCHEMA_VERSION.0 - 1,
+        SUPPORTED_SCHEMA_VERSION.0,
+        SUPPORTED_SCHEMA_VERSION.0 + 1,
+        u32::MAX,
+    ];
 
     // Independent restatement of the decision, listed rather than compared so
     // the oracle does not repeat the primary implementation's shape: these are the
     // record layouts this codebase knows how to read. Must not be implemented
     // by calling the primary implementation.
-    const READABLE_LAYOUT_VERSIONS: [u32; 1] = [1];
+    const READABLE_LAYOUT_VERSIONS: [u32; 1] = [SUPPORTED_SCHEMA_VERSION.0];
 
     fn layout_is_readable_by_oracle(version: SchemaVersion) -> bool {
         READABLE_LAYOUT_VERSIONS.contains(&version.0)
@@ -341,13 +347,31 @@ mod schema_version_tests {
     // The messages the five sites shipped before they shared a function,
     // copied byte for byte. `provenance-cli/tests/cli_ideation_schema_versions.rs`
     // matches on these strings from outside the crate.
-    const SHIPPED_MESSAGES: [(&str, &str); 5] = [
-        (CONTRIBUTION_KIND, "contribution schema_version must be 1"),
-        (SYNTHESIS_KIND, "synthesis schema_version must be 1"),
-        (PROPOSAL_KIND, "proposal schema_version must be 1"),
-        (DISPOSITION_KIND, "disposition schema_version must be 1"),
-        (ASSERTION_KIND, "assertion schema_version must be 1"),
-    ];
+    fn shipped_messages() -> [(&'static str, String); 5] {
+        let version = SUPPORTED_SCHEMA_VERSION.0;
+        [
+            (
+                CONTRIBUTION_KIND,
+                format!("contribution schema_version must be {version}"),
+            ),
+            (
+                SYNTHESIS_KIND,
+                format!("synthesis schema_version must be {version}"),
+            ),
+            (
+                PROPOSAL_KIND,
+                format!("proposal schema_version must be {version}"),
+            ),
+            (
+                DISPOSITION_KIND,
+                format!("disposition schema_version must be {version}"),
+            ),
+            (
+                ASSERTION_KIND,
+                format!("assertion schema_version must be {version}"),
+            ),
+        ]
+    }
 
     #[test]
     #[verifies("rule_schema_version_one", exhaustion)]
@@ -366,8 +390,12 @@ mod schema_version_tests {
     #[test]
     #[verifies("rule_schema_version_one", examples)]
     fn rejection_names_the_record_kind_as_it_always_did() {
-        for (kind, message) in SHIPPED_MESSAGES {
-            let error = ensure_supported_schema_version(kind, SchemaVersion(2)).unwrap_err();
+        for (kind, message) in shipped_messages() {
+            let error = ensure_supported_schema_version(
+                kind,
+                SchemaVersion(SUPPORTED_SCHEMA_VERSION.0 + 1),
+            )
+            .unwrap_err();
             assert_eq!(error.to_string(), message);
         }
     }
@@ -379,13 +407,14 @@ mod disposition_actor_trigger_tests {
     use serde_json::json;
 
     use super::validate_actor_allowlist;
+    use super::SUPPORTED_SCHEMA_VERSION;
     use crate::model::{AssertionRecord, PromotionState, ProposalCard};
 
     #[test]
     #[verifies("rule_disposition_actor_allowlist", examples)]
     fn trigger_uses_the_proposals_derived_effective_state() {
         let mut proposal: ProposalCard = serde_json::from_value(json!({
-            "schema_version": 1, "scope_id": "default", "id": "proposal_a",
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "proposal_a",
             "proposal_key": "proposal_a", "proposal_type": "question",
             "title": "Proposal", "summary": "Proposal",
             "traceability": {
@@ -396,7 +425,7 @@ mod disposition_actor_trigger_tests {
         }))
         .unwrap();
         let assertion: AssertionRecord = serde_json::from_value(json!({
-            "schema_version": 1, "scope_id": "default", "id": "assertion_a",
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "assertion_a",
             "proposal_id": "proposal_a", "synthesis_packet_id": "synthesis_a",
             "supporting_claim_ids": ["claim_a"]
         }))

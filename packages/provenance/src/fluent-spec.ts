@@ -13,6 +13,7 @@ import {
 } from "./spec.js";
 import { appendByIdentity, requireText, uniqueByKey } from "./fluent-validation.js";
 import { FluentRule, FluentSource } from "./fluent-declarations.js";
+import { STATE_SCHEMA_VERSION } from "./protocol.js";
 
 export { FluentRule, FluentSource } from "./fluent-declarations.js";
 
@@ -482,7 +483,7 @@ function document(
       .map((rule) => ({ kind: "rule" as const, id: rule.explicitId! })),
   ];
   return {
-    schema_version: 1,
+    schema_version: STATE_SCHEMA_VERSION,
     spec: spec.key,
     ...(adoptUnowned.length === 0 ? {} : { adopt_unowned: adoptUnowned }),
     sources: sourceRecords,

@@ -3,6 +3,7 @@ use super::fixtures::*;
 use crate::state_store::{
     CreateQuestionInput, CreateResolutionInput, CreateSourceInput, CreateTopicInput, StateStore,
 };
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_core::{
     QuestionStatus, ResolutionInput, ResolutionInputType, ResolutionMethod, ResolutionStatus,
     SourceType, TopicStatus,
@@ -23,15 +24,13 @@ async fn materialize_rejects_missing_disposition_canonical_artifact_before_cache
     std::fs::create_dir_all(proposals.parent().unwrap()).unwrap();
     std::fs::write(
         proposals,
-        r#"{"schema_version":1,"scope_id":"default","id":"proposal_a","proposal_key":"a","proposal_type":"requirement_candidate","title":"A","summary":"A","traceability":{"target":{"artifact_type":"requirement","artifact_id":"req_missing"},"source_ids":[],"evidence_references":[],"supporting_claim_ids":[]},"promotion_state":"proposed"}
-"#,
+        serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"proposal_a","proposal_key":"a","proposal_type":"requirement_candidate","title":"A","summary":"A","traceability":{"target":{"artifact_type":"requirement","artifact_id":"req_missing"},"source_ids":[],"evidence_references":[],"supporting_claim_ids":[]},"promotion_state":"proposed"}).to_string(),
     )
     .unwrap();
     let dispositions = crate::shards::dispositions_path(&layout, &scope);
     std::fs::write(
         dispositions,
-        r#"{"schema_version":1,"scope_id":"default","id":"disposition_a","proposal_id":"proposal_a","decision":"rejected","rationale":"Reviewed","actor":{"identity_type":"human","id":"reviewer"},"canonical_artifact":{"artifact_type":"requirement","artifact_id":"req_missing"}}
-"#,
+        serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"disposition_a","proposal_id":"proposal_a","decision":"rejected","rationale":"Reviewed","actor":{"identity_type":"human","id":"reviewer"},"canonical_artifact":{"artifact_type":"requirement","artifact_id":"req_missing"}}).to_string(),
     )
     .unwrap();
 
@@ -59,22 +58,19 @@ async fn materialize_rejects_misfiled_disposition_target_before_cache_changes() 
     std::fs::create_dir_all(requirements.parent().unwrap()).unwrap();
     std::fs::write(
         requirements,
-        r#"{"schema_version":1,"scope_id":"other","id":"req_misfiled","statement":"Misfiled","status":"active"}
-"#,
+        serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"other","id":"req_misfiled","statement":"Misfiled","status":"active"}).to_string(),
     )
     .unwrap();
     let proposals = crate::shards::proposal_cards_path(&layout, &scope);
     std::fs::create_dir_all(proposals.parent().unwrap()).unwrap();
     std::fs::write(
         proposals,
-        r#"{"schema_version":1,"scope_id":"default","id":"proposal_a","proposal_key":"a","proposal_type":"requirement_candidate","title":"A","summary":"A","traceability":{"target":{"artifact_type":"requirement","artifact_id":"req_misfiled"},"source_ids":[],"evidence_references":[],"supporting_claim_ids":[]},"promotion_state":"proposed"}
-"#,
+        serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"proposal_a","proposal_key":"a","proposal_type":"requirement_candidate","title":"A","summary":"A","traceability":{"target":{"artifact_type":"requirement","artifact_id":"req_misfiled"},"source_ids":[],"evidence_references":[],"supporting_claim_ids":[]},"promotion_state":"proposed"}).to_string(),
     )
     .unwrap();
     std::fs::write(
         crate::shards::dispositions_path(&layout, &scope),
-        r#"{"schema_version":1,"scope_id":"default","id":"disposition_a","proposal_id":"proposal_a","decision":"rejected","rationale":"Reviewed","actor":{"identity_type":"human","id":"reviewer"},"canonical_artifact":{"artifact_type":"requirement","artifact_id":"req_misfiled"}}
-"#,
+        serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"disposition_a","proposal_id":"proposal_a","decision":"rejected","rationale":"Reviewed","actor":{"identity_type":"human","id":"reviewer"},"canonical_artifact":{"artifact_type":"requirement","artifact_id":"req_misfiled"}}).to_string(),
     )
     .unwrap();
 
@@ -102,14 +98,12 @@ async fn materialize_caches_generic_disposition_external_action() {
     std::fs::create_dir_all(proposals.parent().unwrap()).unwrap();
     std::fs::write(
         proposals,
-        r#"{"schema_version":1,"scope_id":"default","id":"proposal_a","proposal_key":"a","proposal_type":"requirement_candidate","title":"A","summary":"A","traceability":{"target":{"artifact_type":"requirement","artifact_id":"req_schads_overtime"},"source_ids":[],"evidence_references":[],"supporting_claim_ids":[]},"promotion_state":"proposed"}
-"#,
+        serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"proposal_a","proposal_key":"a","proposal_type":"requirement_candidate","title":"A","summary":"A","traceability":{"target":{"artifact_type":"requirement","artifact_id":"req_schads_overtime"},"source_ids":[],"evidence_references":[],"supporting_claim_ids":[]},"promotion_state":"proposed"}).to_string(),
     )
     .unwrap();
     std::fs::write(
         crate::shards::dispositions_path(&layout, &scope),
-        r#"{"schema_version":1,"scope_id":"default","id":"disposition_a","proposal_id":"proposal_a","decision":"rejected","rationale":"Reviewed","actor":{"identity_type":"human","id":"reviewer"},"canonical_artifact":{"artifact_type":"requirement","artifact_id":"req_schads_overtime"},"external_action":{"system":"github","scope":"acme/payroll","kind":"issue","key":"44"}}
-"#,
+        serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"disposition_a","proposal_id":"proposal_a","decision":"rejected","rationale":"Reviewed","actor":{"identity_type":"human","id":"reviewer"},"canonical_artifact":{"artifact_type":"requirement","artifact_id":"req_schads_overtime"},"external_action":{"system":"github","scope":"acme/payroll","kind":"issue","key":"44"}}).to_string(),
     )
     .unwrap();
 
@@ -298,16 +292,13 @@ async fn materialize_state_caches_commit_pin_and_confidence_scores() {
     let (_dir, layout, scope) = empty_layout();
     let sources_path = crate::shards::sources_path(&layout, &scope);
     std::fs::create_dir_all(sources_path.parent().unwrap()).unwrap();
-    std::fs::write(&sources_path, r#"{"schema_version":1,"scope_id":"default","id":"source_codebase","name":"Example API","source_type":"project_artifact","commit_pin":"5e1f2a9c4b6d8e0f1234567890abcdef12345678"}
-"#).unwrap();
+    std::fs::write(&sources_path, serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"source_codebase","name":"Example API","source_type":"project_artifact","commit_pin":"5e1f2a9c4b6d8e0f1234567890abcdef12345678"}).to_string()).unwrap();
     let contributions_path = crate::shards::contributions_path(&layout, &scope);
     std::fs::create_dir_all(contributions_path.parent().unwrap()).unwrap();
-    std::fs::write(&contributions_path, r#"{"schema_version":1,"scope_id":"default","id":"contrib_reviewer_001","target":{"artifact_type":"requirement","artifact_id":"req_overtime"},"participant_slot":"reviewer","stance":"support","strongest_finding":"Supported by code evidence.","evidence_references":[],"material_claims":[{"claim_id":"claim_overtime_threshold","statement":"Overtime starts after the award threshold.","evidence_type":"artifact","evidence_reference_ids":[],"confidence":0.87}],"risks":[],"objections":[],"challenges":[],"suggested_artifact_changes":[],"unsupported_recommendations":[],"uncertainty":{"level":"low","rationale":"Direct code evidence."},"open_questions":[]}
-"#).unwrap();
+    std::fs::write(&contributions_path, serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"contrib_reviewer_001","target":{"artifact_type":"requirement","artifact_id":"req_overtime"},"participant_slot":"reviewer","stance":"support","strongest_finding":"Supported by code evidence.","evidence_references":[],"material_claims":[{"claim_id":"claim_overtime_threshold","statement":"Overtime starts after the award threshold.","evidence_type":"artifact","evidence_reference_ids":[],"confidence":0.87}],"risks":[],"objections":[],"challenges":[],"suggested_artifact_changes":[],"unsupported_recommendations":[],"uncertainty":{"level":"low","rationale":"Direct code evidence."},"open_questions":[]}).to_string()).unwrap();
     let proposals_path = crate::shards::proposal_cards_path(&layout, &scope);
     std::fs::create_dir_all(proposals_path.parent().unwrap()).unwrap();
-    std::fs::write(&proposals_path, r#"{"schema_version":1,"scope_id":"default","id":"proposal_overtime_traceability","proposal_key":"req-overtime-traceability","proposal_type":"requirement_candidate","title":"Clarify overtime traceability","summary":"Add source-backed threshold language.","confidence":0.83,"traceability":{"target":{"artifact_type":"requirement","artifact_id":"req_overtime"},"source_ids":["source_codebase"],"evidence_references":[],"supporting_claim_ids":["claim_overtime_threshold"]},"promotion_state":"proposed"}
-"#).unwrap();
+    std::fs::write(&proposals_path, serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"proposal_overtime_traceability","proposal_key":"req-overtime-traceability","proposal_type":"requirement_candidate","title":"Clarify overtime traceability","summary":"Add source-backed threshold language.","confidence":0.83,"traceability":{"target":{"artifact_type":"requirement","artifact_id":"req_overtime"},"source_ids":["source_codebase"],"evidence_references":[],"supporting_claim_ids":["claim_overtime_threshold"]},"promotion_state":"proposed"}).to_string()).unwrap();
     materialize_state(&layout).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
     let commit_pin: Option<String> =
@@ -342,7 +333,7 @@ async fn materialize_state_caches_proposal_lineage() {
         (
             crate::shards::contributions_path(&layout, &scope),
             serde_json::json!({
-                "schema_version": 1, "scope_id": "default", "id": "contribution_a",
+                "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "contribution_a",
                 "target": {"artifact_type": "requirement", "artifact_id": "req_a"},
                 "participant_slot": "extractor", "stance": "support", "strongest_finding": "Observed",
                 "evidence_references": [{"reference_id": "evidence_a", "evidence_type": "source", "summary": "Pinned"}],
@@ -354,7 +345,7 @@ async fn materialize_state_caches_proposal_lineage() {
         (
             crate::shards::synthesis_packets_path(&layout, &scope),
             serde_json::json!({
-                "schema_version": 1, "scope_id": "default", "id": "synthesis_a",
+                "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "synthesis_a",
                 "target": {"artifact_type": "requirement", "artifact_id": "req_a"}, "summary": "Adjudicated",
                 "consensus": [], "contested_claims": [], "minority_objections": [], "evidence_gaps": [],
                 "unsupported_speculation": [], "open_questions": [],
@@ -366,13 +357,13 @@ async fn materialize_state_caches_proposal_lineage() {
             crate::shards::proposal_cards_path(&layout, &scope),
             serde_json::json!([
                 {
-                    "schema_version": 1, "scope_id": "default", "id": "proposal_a", "proposal_key": "proposal-a",
+                    "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "proposal_a", "proposal_key": "proposal-a",
                     "proposal_type": "requirement_candidate", "title": "Candidate", "summary": "Candidate",
                     "traceability": {"target": {"artifact_type": "requirement", "artifact_id": "req_a"}, "source_ids": [], "evidence_references": [], "supporting_claim_ids": ["claim_a"]},
                     "promotion_state": "proposed"
                 },
                 {
-                    "schema_version": 1, "scope_id": "default", "id": "proposal_b", "proposal_key": "proposal-b",
+                    "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "proposal_b", "proposal_key": "proposal-b",
                     "proposal_type": "requirement_candidate", "title": "Descendant", "summary": "Descendant",
                     "traceability": {"target": {"artifact_type": "requirement", "artifact_id": "req_a"}, "source_ids": [], "evidence_references": [], "supporting_claim_ids": []},
                     "promotion_state": "proposed", "builds_on": ["assertion_a"]
@@ -382,7 +373,7 @@ async fn materialize_state_caches_proposal_lineage() {
         (
             crate::shards::assertion_records_path(&layout, &scope),
             serde_json::json!({
-                "schema_version": 1, "scope_id": "default", "id": "assertion_a", "proposal_id": "proposal_a",
+                "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "assertion_a", "proposal_id": "proposal_a",
                 "synthesis_packet_id": "synthesis_a", "supporting_claim_ids": ["claim_a"]
             }),
         ),

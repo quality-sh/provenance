@@ -146,11 +146,12 @@ pub(super) fn handle(command: RulesCommand) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{statement_preview, RuleSummary, SourceBinding, STATEMENT_PREVIEW_CHARS};
-    use provenance_core::{Rule, RuleSeverity, RuleStatus, SchemaVersion, ScopeId, StableId};
+    use provenance_core::SUPPORTED_SCHEMA_VERSION;
+    use provenance_core::{Rule, RuleSeverity, RuleStatus, ScopeId, StableId};
 
     fn rule(statement: &str) -> Rule {
         Rule {
-            schema_version: SchemaVersion(1),
+            schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: ScopeId::new("default").unwrap(),
             id: StableId::new("rule_overtime").unwrap(),
             declared_by: None,

@@ -1,8 +1,8 @@
-{"schema_version":1,"scope_id":"default","id":"domain_cli","name":"CLI surface","description":"Command ergonomics: flag families, filtering, lookup, import and export, thread commands."}
-{"schema_version":1,"scope_id":"default","id":"domain_distribution","name":"Distribution","description":"Language SDKs, engine packaging, skills installation, and release publishing."}
-{"schema_version":1,"scope_id":"default","id":"domain_graph_model","name":"Graph model","description":"Canonical records, typed edges, identity, schema versions, state format, merge, pinning, and traceability semantics."}
-{"schema_version":1,"scope_id":"default","id":"domain_shaping","name":"Shaping and collaboration","description":"Requirement shaping, threads, topics, questions, claims, ideation, proposals, assertions, and dispositions."}
-{"schema_version":1,"scope_id":"default","id":"domain_statesman_migration","name":"Statesman migration","description":"Requirements carried over from the Statesman predecessor that name systems outside this repository."}
-{"schema_version":1,"scope_id":"default","id":"domain_ste","name":"ASD-STE100","description":"Simplified Technical English checking, dictionary acquisition, and statement gates."}
-{"schema_version":1,"scope_id":"default","id":"domain_verification","name":"Verification and coverage","description":"Scanner annotations, implementation and verification bindings, evidence anchors, runs, stale and review reporting."}
-{"schema_version":1,"scope_id":"default","id":"domain_wiki","name":"Wiki and docs","description":"Generated wiki output, homepage, links, badges, and served documentation."}
+{"schema_version":2,"scope_id":"default","id":"domain_cli","name":"CLI surface","description":"Command ergonomics: flag families, filtering, lookup, import and export, thread commands."}
+{"schema_version":2,"scope_id":"default","id":"domain_distribution","name":"Distribution","description":"Language SDKs, engine packaging, skills installation, and release publishing."}
+{"schema_version":2,"scope_id":"default","id":"domain_graph_model","name":"Graph model","description":"Canonical records, typed edges, identity, schema versions, state format, merge, pinning, and traceability semantics."}
+{"schema_version":2,"scope_id":"default","id":"domain_shaping","name":"Shaping and collaboration","description":"Requirement shaping, threads, topics, questions, claims, ideation, proposals, assertions, and dispositions."}
+{"schema_version":2,"scope_id":"default","id":"domain_statesman_migration","name":"Statesman migration","description":"Requirements carried over from the Statesman predecessor that name systems outside this repository."}
+{"schema_version":2,"scope_id":"default","id":"domain_ste","name":"ASD-STE100","description":"Simplified Technical English checking, dictionary acquisition, and statement gates."}
+{"schema_version":2,"scope_id":"default","id":"domain_verification","name":"Verification and coverage","description":"Scanner annotations, implementation and verification bindings, evidence anchors, runs, stale and review reporting."}
+{"schema_version":2,"scope_id":"default","id":"domain_wiki","name":"Wiki and docs","description":"Generated wiki output, homepage, links, badges, and served documentation."}

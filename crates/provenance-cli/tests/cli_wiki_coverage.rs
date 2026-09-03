@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::process::Command as StdCommand;
@@ -245,50 +246,51 @@ fn seed_rules(dir: &std::path::Path, repo: &std::path::Path) {
     let state = dir.join("state.json");
     std::fs::write(
         &state,
-        r#"{
-  "scope": "default",
-  "sources": [{
-    "schema_version": 1,
-    "scope_id": "default",
-    "id": "source_code",
-    "name": "Code reference",
-    "source_type": "project_artifact",
-    "reference": "src/rules.rs:7"
-  }],
-  "requirements": [{
-    "schema_version": 1,
-    "scope_id": "default",
-    "id": "req_code",
-    "statement": "The code reference shall be honoured.",
-    "status": "active",
-    "source_refs": [{"source_id": "source_code", "clause": null}]
-  }],
-  "resolutions": [],
-  "rules": [{
-    "schema_version": 1,
-    "scope_id": "default",
-    "id": "rule_bound",
-    "name": "Bound rule",
-    "statement": "The bound decision is canonical.",
-    "status": "active",
-    "severity": "high",
-    "requirement_ids": ["req_code"],
-    "source_document": "docs/obsolete.md",
-    "source_section": "old_description"
-  }, {
-    "schema_version": 1,
-    "scope_id": "default",
-    "id": "rule_unbound",
-    "name": "Unbound rule",
-    "statement": "An absent binding is shown honestly.",
-    "status": "active",
-    "severity": "medium",
-    "requirement_ids": ["req_code"]
-  }],
-  "edges": [],
-  "threads": [],
-  "messages": []
-}"#,
+        serde_json::json!({
+          "scope": "default",
+          "sources": [{
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+            "scope_id": "default",
+            "id": "source_code",
+            "name": "Code reference",
+            "source_type": "project_artifact",
+            "reference": "src/rules.rs:7"
+          }],
+          "requirements": [{
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+            "scope_id": "default",
+            "id": "req_code",
+            "statement": "The code reference shall be honoured.",
+            "status": "active",
+            "source_refs": [{"source_id": "source_code", "clause": null}]
+          }],
+          "resolutions": [],
+          "rules": [{
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+            "scope_id": "default",
+            "id": "rule_bound",
+            "name": "Bound rule",
+            "statement": "The bound decision is canonical.",
+            "status": "active",
+            "severity": "high",
+            "requirement_ids": ["req_code"],
+            "source_document": "docs/obsolete.md",
+            "source_section": "old_description"
+          }, {
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+            "scope_id": "default",
+            "id": "rule_unbound",
+            "name": "Unbound rule",
+            "statement": "An absent binding is shown honestly.",
+            "status": "active",
+            "severity": "medium",
+            "requirement_ids": ["req_code"]
+          }],
+          "edges": [],
+          "threads": [],
+          "messages": []
+        })
+        .to_string(),
     )
     .unwrap();
     Command::cargo_bin("provenance")
@@ -313,8 +315,7 @@ fn seed_implementation_binding(repo: &std::path::Path) {
     std::fs::create_dir_all(shard.parent().unwrap()).unwrap();
     std::fs::write(
         shard,
-        r#"{"schema_version":1,"scope_id":"default","id":"implementation_binding_rule_bound","rule_id":"rule_bound","declared_by":"spec://typescript/payroll","file":"src/typed-rules.ts","symbol":"decide_typed_rule"}
-"#,
+        serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"implementation_binding_rule_bound","rule_id":"rule_bound","declared_by":"spec://typescript/payroll","file":"src/typed-rules.ts","symbol":"decide_typed_rule"}).to_string(),
     )
     .unwrap();
 }

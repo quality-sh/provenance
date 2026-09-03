@@ -216,10 +216,11 @@ fn deserialize_records<T: serde::de::DeserializeOwned>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
     fn rule(id: &str, requirement_ids: &[&str]) -> Value {
         serde_json::json!({
-            "schema_version": 1,
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": "default",
             "id": id,
             "statement": "The merged rule shall hold.",
@@ -231,7 +232,7 @@ mod tests {
 
     fn resolution(id: &str, requirement_ids: &[&str]) -> Value {
         serde_json::json!({
-            "schema_version": 1,
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": "default",
             "id": id,
             "title": "Merged",
@@ -338,7 +339,7 @@ mod tests {
     fn rejects_an_unsupported_record_nested_in_a_merged_landing() {
         let shard = Utf8Path::new(".provenance/state/scopes/default/ideation/landings.jsonl");
         let landing = serde_json::json!({
-            "contributions": [{"schema_version": 2, "id": "contribution_future"}]
+            "contributions": [{"schema_version": SUPPORTED_SCHEMA_VERSION.0 + 1, "id": "contribution_future"}]
         });
 
         let error = validate_merged_records(shard, &[landing])
@@ -346,6 +347,12 @@ mod tests {
             .to_string();
 
         assert!(error.contains("record contribution_future"), "{error}");
-        assert!(error.contains("schema_version 2"), "{error}");
+        assert!(
+            error.contains(&format!(
+                "schema_version {}",
+                SUPPORTED_SCHEMA_VERSION.0 + 1
+            )),
+            "{error}"
+        );
     }
 }

@@ -1,6 +1,7 @@
 use super::super::*;
 use super::fixtures::*;
 use super::projection_stamp_behavior::seed_integration_shards;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 /// One line per family table: every column of every row, quoted by the
 /// database, in a settled order.
@@ -79,8 +80,9 @@ async fn a_hand_edited_shard_is_found_by_the_hash_sweep_alone() {
     let path = crate::shards::rules_path(&layout, &scope);
     let mut content = std::fs::read_to_string(&path).unwrap();
     let line = format!(
-        r#"{{"schema_version":1,"scope_id":"{}","id":"rule_out_of_band","statement":"Edited","status":"active","severity":"low","requirement_ids":["req_schads_overtime"]}}"#,
-        scope.as_str()
+        r#"{{"schema_version":{version},"scope_id":"{}","id":"rule_out_of_band","statement":"Edited","status":"active","severity":"low","requirement_ids":["req_schads_overtime"]}}"#,
+        scope.as_str(),
+        version = SUPPORTED_SCHEMA_VERSION.0
     );
     content += &line;
     content.push('\n');

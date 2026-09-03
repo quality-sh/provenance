@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use serde_json::{json, Value};
 use std::fs;
 
@@ -42,7 +43,7 @@ fn document(repo: &std::path::Path, implementation: Option<(&str, &str)>) -> Val
         })
     });
     json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "spec": "workflow-runtime",
         "declared_by": "spec://typescript/workflow-runtime",
         "requirements": [{
@@ -205,7 +206,7 @@ fn reconciling_one_spec_does_not_retire_another_specs_binding() {
     let first = document(directory.path(), Some(("src/runtime.ts", "startWorkflow")));
     sdk(directory.path(), "apply", &first).unwrap();
     let unrelated = json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "spec": "another-spec",
         "declared_by": "spec://typescript/workflow-runtime"
     });

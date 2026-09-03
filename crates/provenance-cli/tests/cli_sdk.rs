@@ -1,6 +1,7 @@
 use assert_cmd::Command;
 use predicates::prelude::PredicateBooleanExt;
 use predicates::str::contains;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use serde_json::{json, Value};
 
 fn provenance() -> Command {
@@ -26,7 +27,7 @@ fn init_repo() -> tempfile::TempDir {
 
 fn spec(statement: &str) -> Value {
     json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "spec": "share-links",
         "declared_by": "spec://typescript/share-links",
         "sources": [{
@@ -176,7 +177,7 @@ fn apply_scopes_repeated_rule_keys_to_their_parent_requirements() {
     let directory = init_repo();
     let repo = directory.path().to_str().unwrap();
     let input = json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "spec": "lifecycles",
         "declared_by": "spec://typescript/lifecycles",
         "requirements": [
@@ -224,7 +225,7 @@ fn apply_persists_structured_declaration_addresses() {
     let directory = init_repo();
     let repo = directory.path().to_str().unwrap();
     let input = json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "spec": "share-links",
         "declared_by": "spec://typescript",
         "requirements": [{
@@ -393,7 +394,7 @@ fn verification_resolves_an_applied_rule_by_declaration_address() {
     let directory = init_repo();
     let repo = directory.path().to_str().unwrap();
     let input = json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "spec": "share-links",
         "declared_by": "spec://typescript",
         "requirements": [{

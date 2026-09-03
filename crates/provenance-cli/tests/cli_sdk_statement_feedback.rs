@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 
@@ -25,7 +26,7 @@ fn init_repo() -> tempfile::TempDir {
 
 fn invalid_spec() -> Value {
     json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "spec": "feedback",
         "declared_by": "spec://typescript/feedback",
         "requirements": [{

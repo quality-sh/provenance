@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 #[test]
 fn import_replaces_only_target_scope_and_removes_all_stale_target_shards() {
@@ -304,12 +305,12 @@ fn seed_stale_target_shards(repo: &std::path::Path) {
     std::fs::create_dir_all(scope.join("threads")).unwrap();
     std::fs::write(
         scope.join("threads/2025-01.jsonl"),
-        "{\"schema_version\":1,\"scope_id\":\"default\",\"id\":\"message_stale\",\"thread_id\":\"thread_stale\",\"role\":\"user\",\"body\":\"stale\",\"created_at\":1}\n",
+        format!("{{\"schema_version\":{},\"scope_id\":\"default\",\"id\":\"message_stale\",\"thread_id\":\"thread_stale\",\"role\":\"user\",\"body\":\"stale\",\"created_at\":1}}\n", SUPPORTED_SCHEMA_VERSION.0),
     )
     .unwrap();
     std::fs::write(
         repo.join(".provenance/state/edges/edges-99.jsonl"),
-        "{\"schema_version\":1,\"scope_id\":\"default\",\"id\":\"references_source_source_target_to_requirement_requirement_target_stale\",\"edge_type\":\"references\",\"from_type\":\"source\",\"from_id\":\"source_target\",\"to_type\":\"requirement\",\"to_id\":\"requirement_target\"}\n",
+        format!("{{\"schema_version\":{},\"scope_id\":\"default\",\"id\":\"references_source_source_target_to_requirement_requirement_target_stale\",\"edge_type\":\"references\",\"from_type\":\"source\",\"from_id\":\"source_target\",\"to_type\":\"requirement\",\"to_id\":\"requirement_target\"}}\n", SUPPORTED_SCHEMA_VERSION.0),
     )
     .unwrap();
 }

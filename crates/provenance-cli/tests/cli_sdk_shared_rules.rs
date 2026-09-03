@@ -1,5 +1,6 @@
 use assert_cmd::Command;
 use predicates::str::contains;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use serde_json::{json, Value};
 use std::fs;
 
@@ -47,7 +48,7 @@ fn requirements() -> Value {
 
 fn document(rules: Value) -> Value {
     let mut document = json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "spec": "lifecycles",
         "declared_by": "spec://typescript/lifecycles",
         "requirements": requirements(),

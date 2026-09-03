@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use serde_json::{json, Value};
 
 fn provenance() -> Command {
@@ -38,7 +39,7 @@ fn sdk(repo: &str, command: &str, input: &Value) -> Result<Value, String> {
 
 fn document(owner: &str) -> Value {
     json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "spec": "share-links",
         "declared_by": owner,
         "sources": [{
@@ -61,7 +62,7 @@ fn document(owner: &str) -> Value {
 
 fn empty_document(owner: &str) -> Value {
     json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "spec": "share-links",
         "declared_by": owner,
         "sources": [],
@@ -189,7 +190,7 @@ fn plan_returns_an_ownership_conflict_while_apply_refuses_it() {
     let first = sdk(repo, "apply", &document("spec://typescript/first")).unwrap();
     let source_id = resource_id(&first, "source", "policy");
     let conflicting = json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "spec": "other",
         "declared_by": "spec://typescript/other",
         "sources": [{

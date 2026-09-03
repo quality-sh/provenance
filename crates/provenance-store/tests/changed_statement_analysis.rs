@@ -1,6 +1,6 @@
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_core::{
-    Requirement, RequirementStatus, Rule, RuleSeverity, RuleStatus, SchemaVersion, ScopeId,
-    StableId,
+    Requirement, RequirementStatus, Rule, RuleSeverity, RuleStatus, ScopeId, StableId,
 };
 use provenance_macros::verifies;
 use provenance_ste100::{FindingKind, RuleNumber, Span, Standard, StandardIssue, ANALYZER_VERSION};
@@ -8,7 +8,7 @@ use provenance_store::statement_analysis::{analyze_changed_statements, Statement
 
 fn requirement(id: &str, statement: &str) -> Requirement {
     Requirement {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: ScopeId::new("default").unwrap(),
         id: StableId::new(id).unwrap(),
         declared_by: None,
@@ -31,7 +31,7 @@ fn requirement(id: &str, statement: &str) -> Requirement {
 
 fn rule(id: &str, statement: &str) -> Rule {
     Rule {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: ScopeId::new("default").unwrap(),
         id: StableId::new(id).unwrap(),
         declared_by: None,

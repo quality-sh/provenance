@@ -1,5 +1,6 @@
 use super::initialized_store;
 use crate::state_store::IdeationLandingBatch;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 #[test]
 fn exact_duplicate_proposal_id_is_rejected_at_batch_ingress() {
@@ -60,7 +61,7 @@ fn exact_duplicate_disposition_id_is_rejected_at_batch_ingress() {
         "contributions": [], "synthesis_packets": [], "proposals": [proposal()],
         "assertions": [],
         "dispositions": [{
-            "schema_version": 1, "scope_id": "default", "id": "disposition_a",
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "disposition_a",
             "proposal_id": "proposal_a", "decision": "rejected", "rationale": "Rejected.",
             "actor": {"identity_type": "human", "id": "reviewer"},
             "canonical_artifact": null
@@ -90,7 +91,7 @@ fn exact_duplicate_disposition_id_is_rejected_at_batch_ingress() {
 fn asserted_batch() -> IdeationLandingBatch {
     serde_json::from_value(serde_json::json!({
         "contributions": [{
-            "schema_version": 1, "scope_id": "default", "id": "contribution_a",
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "contribution_a",
             "target": {"artifact_type": "requirement", "artifact_id": "req_a"},
             "participant_slot": "reviewer", "stance": "support", "strongest_finding": "Observed",
             "evidence_references": [{"reference_id": "evidence_a", "evidence_type": "source", "summary": "Pinned"}],
@@ -99,7 +100,7 @@ fn asserted_batch() -> IdeationLandingBatch {
             "unsupported_recommendations": [], "uncertainty": {"level": "low", "rationale": "Direct"}, "open_questions": []
         }],
         "synthesis_packets": [{
-            "schema_version": 1, "scope_id": "default", "id": "synthesis_a",
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "synthesis_a",
             "target": {"artifact_type": "requirement", "artifact_id": "req_a"}, "summary": "Adjudicated",
             "consensus": [], "contested_claims": [], "minority_objections": [], "evidence_gaps": [],
             "unsupported_speculation": [], "open_questions": [],
@@ -108,7 +109,7 @@ fn asserted_batch() -> IdeationLandingBatch {
         }],
         "proposals": [proposal()],
         "assertions": [{
-            "schema_version": 1, "scope_id": "default", "id": "assertion_a",
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "assertion_a",
             "proposal_id": "proposal_a", "synthesis_packet_id": "synthesis_a",
             "supporting_claim_ids": ["claim_a"]
         }],
@@ -119,7 +120,7 @@ fn asserted_batch() -> IdeationLandingBatch {
 
 fn proposal() -> serde_json::Value {
     serde_json::json!({
-        "schema_version": 1, "scope_id": "default", "id": "proposal_a",
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "proposal_a",
         "proposal_key": "proposal-a", "proposal_type": "requirement_candidate",
         "title": "Candidate", "summary": "Candidate",
         "traceability": {

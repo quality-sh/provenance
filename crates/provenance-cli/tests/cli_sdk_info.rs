@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 
@@ -51,7 +52,7 @@ fn info_reports_the_language_neutral_engine_contract() {
         info["protocol_version"],
         provenance_core::SDK_PROTOCOL_VERSION
     );
-    assert_eq!(info["state_schema_version"], 1);
+    assert_eq!(info["state_schema_version"], SUPPORTED_SCHEMA_VERSION.0);
     assert_eq!(info["repository"], root.to_str().unwrap());
 }
 
@@ -62,7 +63,7 @@ fn sdk_commands_discover_the_nearest_initialized_project() {
     let nested = directory.path().join("packages/app/src");
     std::fs::create_dir_all(&nested).unwrap();
     let spec = json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "spec": "nested",
         "declared_by": "spec://typescript/nested",
         "requirements": [{

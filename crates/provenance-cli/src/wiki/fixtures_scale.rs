@@ -1,4 +1,5 @@
 use crate::handlers::ScopeExport;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use serde::Deserialize;
 use serde_json::json;
 
@@ -52,7 +53,7 @@ pub fn pr_45_scale_state() -> ScopeExport {
     let sources = (0..fixture.counts.sources)
         .map(|number| {
             json!({
-                "schema_version": 1, "scope_id": scope,
+                "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope,
                 "id": format!("source_{number:02}"), "name": format!("Policy source {number:02}"),
                 "source_type": "policy", "url": format!("https://example.test/policy/{number:02}"),
                 "reference": format!("Policy volume {number:02}"),
@@ -60,7 +61,7 @@ pub fn pr_45_scale_state() -> ScopeExport {
         })
         .collect::<Vec<_>>();
     let domains = fixture.domains.iter().map(|domain| json!({
-        "schema_version": 1, "scope_id": scope, "id": domain.id, "name": domain.name,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope, "id": domain.id, "name": domain.name,
         "description": format!("Requirements and controls for {}.", domain.name.to_lowercase()),
     })).collect::<Vec<_>>();
     let requirements = (0..fixture.counts.requirements).map(|number| {
@@ -72,7 +73,7 @@ pub fn pr_45_scale_state() -> ScopeExport {
         let refines = (number >= domain_names.len())
             .then(|| json!(format!("req_{:03}", number % domain_names.len())));
         json!({
-            "schema_version": 1, "scope_id": scope, "id": format!("req_{number:03}"),
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope, "id": format!("req_{number:03}"),
             "statement": format!("{} capability {number:03} shall preserve traceable policy intent across implementation and review.", domain_names[domain]),
             "status": if number % 9 == 0 { "discovery" } else { "active" },
             "domain_id": format!("domain_{domain:02}"), "source_refs": source_refs,
@@ -82,7 +83,7 @@ pub fn pr_45_scale_state() -> ScopeExport {
     let resolutions = (0..fixture.counts.decisions)
         .map(|number| {
             json!({
-                "schema_version": 1, "scope_id": scope, "id": format!("res_{number:03}"),
+                "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope, "id": format!("res_{number:03}"),
                 "title": format!("Implementation decision {number:03}"),
                 "position": "Adopt the traceable implementation path.",
                 "rationale": "Representative decision evidence for homepage-scale evaluation.",
@@ -95,7 +96,7 @@ pub fn pr_45_scale_state() -> ScopeExport {
         .map(|number| {
             let severity = ["low", "medium", "high", "critical"][number % 4];
             json!({
-                "schema_version": 1, "scope_id": scope, "id": format!("rule_{number:03}"),
+                "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope, "id": format!("rule_{number:03}"),
                 "rule_code": format!("CTRL-{number:03}"), "name": format!("Control {number:03}"),
                 "statement": format!("Control {number:03} shall enforce traceable policy intent."),
                 "status": "active", "severity": severity,

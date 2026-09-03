@@ -1,5 +1,6 @@
 use super::seeded_requirement_store;
 use provenance_core::ScopeId;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 /// Appends one record the writers would refuse, the way a hand edit does.
 fn append(path: &camino::Utf8Path, record: &serde_json::Value) {
@@ -12,7 +13,7 @@ fn append(path: &camino::Utf8Path, record: &serde_json::Value) {
 
 fn requirement(scope: &ScopeId, id: &str, refines: &str) -> serde_json::Value {
     serde_json::json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": scope.as_str(),
         "id": id,
         "statement": format!("{id} statement"),
@@ -33,7 +34,7 @@ fn a_rule_with_no_requirement_is_refused_by_the_validator() {
     append(
         &crate::shards::rules_path(&store.layout, &scope),
         &serde_json::json!({
-            "schema_version": 1,
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": scope.as_str(),
             "id": "rule_bare",
             "statement": "A rule with no requirement",
@@ -56,7 +57,7 @@ fn a_resolution_with_no_requirement_is_refused_by_the_validator() {
     append(
         &crate::shards::resolutions_path(&store.layout, &scope),
         &serde_json::json!({
-            "schema_version": 1,
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": scope.as_str(),
             "id": "res_bare",
             "title": "Bare",

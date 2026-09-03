@@ -7,6 +7,7 @@ use super::{
     schema_for,
 };
 use crate::cli::IdeationArtifactKind;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_core::{
     ArtifactChangeType, ContributionStance, EvidenceQuality, IdeationEvidenceType,
     IdeationTargetType, PromotionState, ProposalType, SpeculationMarker, UncertaintyLevel,
@@ -306,31 +307,31 @@ fn minimal_exact_export() -> Value {
 
 fn minimal_exact_export_without_digest() -> Value {
     json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "operation": "exact-export",
         "reference_id": format!("grf1_{}", "0".repeat(64)),
         "graph": {
-            "schema_version": 1,
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope": {"id": "default", "path_prefix": "."},
             "sources": [{
-                "schema_version": 1, "scope_id": "default", "id": "source_policy",
+                "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "source_policy",
                 "name": "Policy", "source_type": "policy", "url": null
             }],
             "domains": [],
             "requirements": [{
-                "schema_version": 1, "scope_id": "default", "id": "req_policy",
+                "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "req_policy",
                 "statement": "Follow policy", "status": "active",
                 "source_refs": [{"source_id": "source_policy", "clause": "1.1"}]
             }],
             "boundaries": [],
             "topics": [{
-                "schema_version": 1, "scope_id": "default", "id": "topic_policy",
+                "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "topic_policy",
                 "requirement_id": "req_policy", "title": "Policy details", "status": "open",
                 "links": [{"target_type": "source", "target_id": "source_policy"}]
             }],
             "questions": [],
             "resolutions": [{
-                "schema_version": 1, "scope_id": "default", "id": "resolution_policy",
+                "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "resolution_policy",
                 "title": "Apply policy", "position": "Apply it", "rationale": "Required",
                 "status": "approved", "inputs": [{
                     "input_type": "source_material", "reference": "source_policy", "summary": "Policy"
@@ -351,12 +352,12 @@ fn graph_reference_export_schema_validates_record_structure() {
 
     let mut with_implementation = minimal_exact_export_without_digest();
     with_implementation["graph"]["rules"] = json!([{
-        "schema_version": 1, "scope_id": "default", "id": "rule_runtime",
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "rule_runtime",
         "statement": "Accepted workflows start", "status": "active", "severity": "medium",
         "requirement_ids": ["req_policy"]
     }]);
     with_implementation["graph"]["implementation_bindings"] = json!([{
-        "schema_version": 1, "scope_id": "default",
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default",
         "id": "implementation_binding_runtime", "rule_id": "rule_runtime",
         "declared_by": "spec://typescript/workflows",
         "retired": true,
@@ -383,7 +384,7 @@ fn graph_reference_export_schema_validates_record_structure() {
         {
             let mut value = minimal_exact_export();
             value["graph"]["sources"] = json!([{
-                "schema_version": 2, "scope_id": "default", "id": "source_policy",
+                "schema_version": SUPPORTED_SCHEMA_VERSION.0 + 1, "scope_id": "default", "id": "source_policy",
                 "name": "Policy", "source_type": "policy", "url": null
             }]);
             value
@@ -391,7 +392,7 @@ fn graph_reference_export_schema_validates_record_structure() {
         {
             let mut value = minimal_exact_export();
             value["graph"]["sources"] = json!([{
-                "schema_version": 1, "scope_id": "default", "id": "source_policy",
+                "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "source_policy",
                 "name": "Policy", "source_type": "policy", "url": null,
                 "origin_thread": "thread_private"
             }]);

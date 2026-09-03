@@ -2,6 +2,7 @@
 //! text citation.
 
 use super::model::{Act, Clear, Read, Row};
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use serde_json::{json, Value};
 
 fn spec(statement: &str, implemented: bool, with_requirement: bool) -> Value {
@@ -14,7 +15,7 @@ fn spec(statement: &str, implemented: bool, with_requirement: bool) -> Value {
         rule["implementation"] = json!({"file": "share-links.ts", "symbol": "createShareLink"});
     }
     let mut document = json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "spec": "map",
         "declared_by": "spec://map",
         "sources": [{"key": "retention", "name": "Retention policy", "kind": "policy"}],

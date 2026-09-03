@@ -1,9 +1,11 @@
 use assert_cmd::Command;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use std::path::{Path, PathBuf};
 
 fn rule(id: &str, requirement_ids: &str) -> String {
+    let version = SUPPORTED_SCHEMA_VERSION.0;
     format!(
-        "{{\"schema_version\":1,\"scope_id\":\"default\",\"id\":\"{id}\",\
+        "{{\"schema_version\":{version},\"scope_id\":\"default\",\"id\":\"{id}\",\
          \"statement\":\"The {id} rule shall hold.\",\"status\":\"active\",\
          \"severity\":\"high\",\"requirement_ids\":[{requirement_ids}]}}\n"
     )

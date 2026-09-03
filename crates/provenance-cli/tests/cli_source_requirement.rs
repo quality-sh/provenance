@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 #[test]
 fn cli_source_requirement_slice_materializes_and_reads_graph() {
@@ -124,20 +125,17 @@ fn cli_graph_preserves_enriched_v1_requirement_and_source_fields() {
     std::fs::create_dir_all(state.join("edges")).unwrap();
     std::fs::write(
         state.join("scopes/default/sources/source.jsonl"),
-        r#"{"schema_version":1,"scope_id":"default","id":"source_sah","name":"Support at Home","source_type":"legislation","url":"https://example.test/sah","reference":"Department guidance"}
-"#,
+        serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"source_sah","name":"Support at Home","source_type":"legislation","url":"https://example.test/sah","reference":"Department guidance"}).to_string(),
     )
     .unwrap();
     std::fs::write(
         state.join("scopes/default/requirements/req.jsonl"),
-        r#"{"schema_version":1,"scope_id":"default","id":"req_sah","statement":"Support at Home shall be traceable","description":"Cloud import description","status":"discovery","source_refs":[{"source_id":"source_sah","clause":"Program overview"}]}
-"#,
+        serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"req_sah","statement":"Support at Home shall be traceable","description":"Cloud import description","status":"discovery","source_refs":[{"source_id":"source_sah","clause":"Program overview"}]}).to_string(),
     )
     .unwrap();
     std::fs::write(
         state.join("edges/edges-00.jsonl"),
-        r#"{"schema_version":1,"scope_id":"default","id":"edge_source_sah_req_sah","edge_type":"references","from_type":"source","from_id":"source_sah","to_type":"requirement","to_id":"req_sah"}
-"#,
+        serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"edge_source_sah_req_sah","edge_type":"references","from_type":"source","from_id":"source_sah","to_type":"requirement","to_id":"req_sah"}).to_string(),
     )
     .unwrap();
 

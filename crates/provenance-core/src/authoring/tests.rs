@@ -1,6 +1,7 @@
 use provenance_macros::verifies;
 
 use super::{requirement, rule, source, spec};
+use crate::SUPPORTED_SCHEMA_VERSION;
 
 fn sample(order: bool) -> super::SpecBuilder {
     let first = requirement("sharing")
@@ -302,7 +303,7 @@ fn handles_carry_declaration_addresses() {
 #[verifies("rule_rust_typed_input_round_trip", examples)]
 fn materialize_emits_the_wire_document_with_addresses() {
     let input = sample(true).build().unwrap().materialize("spec://rust");
-    assert_eq!(input.schema_version, 1);
+    assert_eq!(input.schema_version, SUPPORTED_SCHEMA_VERSION.0);
     assert_eq!(input.declared_by, "spec://rust");
     assert!(input.rules.iter().all(|rule| rule.address.is_some()));
     let round_trip: crate::protocol::TypedSpecInput =

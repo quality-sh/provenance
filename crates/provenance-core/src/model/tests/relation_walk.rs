@@ -3,12 +3,13 @@ use crate::model::relations::RelationOwner;
 use crate::model::{
     ArtifactLink, ArtifactLinkTargetType, Boundary, DeclarationAddress, Question, QuestionStatus,
     Requirement, RequirementStatus, Resolution, ResolutionInput, ResolutionInputType,
-    ResolutionMethod, ResolutionStatus, Rule, RuleSeverity, RuleStatus, SchemaVersion, ScopeId,
+    ResolutionMethod, ResolutionStatus, Rule, RuleSeverity, RuleStatus, ScopeId,
     Source, SourceReference, SourceType, StableId, Topic, TopicStatus,
 };
 use provenance_macros::verifies;
 use serde_json::Value;
 use std::collections::BTreeSet;
+use crate::SUPPORTED_SCHEMA_VERSION;
 
 fn sid(value: &str) -> StableId {
     StableId::new(value).unwrap()
@@ -75,7 +76,7 @@ const LINK_TARGET: &str = "target_id";
 fn every_source_reference_key_is_declared_or_allowed() {
     assert_walk(
         &Source {
-            schema_version: SchemaVersion(1),
+            schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: ScopeId::new("default").unwrap(),
             id: sid("source_award"),
             declared_by: Some("spec".into()),
@@ -101,7 +102,7 @@ fn every_source_reference_key_is_declared_or_allowed() {
 fn every_requirement_reference_key_is_declared_or_allowed() {
     assert_walk(
         &Requirement {
-            schema_version: SchemaVersion(1),
+            schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: ScopeId::new("default").unwrap(),
             id: sid("req_overtime"),
             declared_by: Some("spec".into()),
@@ -129,7 +130,7 @@ fn every_requirement_reference_key_is_declared_or_allowed() {
 fn every_resolution_reference_key_is_declared_or_allowed() {
     assert_walk(
         &Resolution {
-            schema_version: SchemaVersion(1),
+            schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: ScopeId::new("default").unwrap(),
             id: sid("res_threshold"),
             title: "Threshold".into(),
@@ -162,7 +163,7 @@ fn every_resolution_reference_key_is_declared_or_allowed() {
 fn every_rule_reference_key_is_declared_or_allowed() {
     assert_walk(
         &Rule {
-            schema_version: SchemaVersion(1),
+            schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: ScopeId::new("default").unwrap(),
             id: sid("rule_pay"),
             declared_by: Some("spec".into()),
@@ -189,7 +190,7 @@ fn every_rule_reference_key_is_declared_or_allowed() {
 fn every_topic_reference_key_is_declared_or_allowed() {
     assert_walk(
         &Topic {
-            schema_version: SchemaVersion(1),
+            schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: ScopeId::new("default").unwrap(),
             id: sid("topic_rates"),
             requirement_id: sid("req_overtime"),
@@ -208,7 +209,7 @@ fn every_topic_reference_key_is_declared_or_allowed() {
 fn every_question_reference_key_is_declared_or_allowed() {
     assert_walk(
         &Question {
-            schema_version: SchemaVersion(1),
+            schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: ScopeId::new("default").unwrap(),
             id: sid("question_threshold"),
             topic_id: sid("topic_rates"),
@@ -232,7 +233,7 @@ fn every_question_reference_key_is_declared_or_allowed() {
 fn every_boundary_reference_key_is_declared_or_allowed() {
     assert_walk(
         &Boundary {
-            schema_version: SchemaVersion(1),
+            schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: ScopeId::new("default").unwrap(),
             id: sid("boundary_no_backpay"),
             requirement_id: sid("req_overtime"),

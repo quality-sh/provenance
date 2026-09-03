@@ -1,8 +1,9 @@
 use super::super::{compute_gaps, GapGraph, GapItem, GapKind};
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_core::{
     NodeType, Question, QuestionStatus, Requirement, RequirementStatus, Resolution,
-    ResolutionMethod, ResolutionStatus, Rule, RuleSeverity, RuleStatus, SchemaVersion, ScopeId,
-    Source, SourceType, StableId, Topic, TopicStatus,
+    ResolutionMethod, ResolutionStatus, Rule, RuleSeverity, RuleStatus, ScopeId, Source,
+    SourceType, StableId, Topic, TopicStatus,
 };
 
 pub fn sid(value: &str) -> StableId {
@@ -15,7 +16,7 @@ fn scope_id() -> ScopeId {
 
 pub fn requirement(id: &str) -> Requirement {
     Requirement {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id(),
         id: sid(id),
         declared_by: None,
@@ -38,7 +39,7 @@ pub fn requirement(id: &str) -> Requirement {
 
 pub fn resolution(id: &str) -> Resolution {
     Resolution {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id(),
         id: sid(id),
         title: id.to_string(),
@@ -62,7 +63,7 @@ pub fn resolution(id: &str) -> Resolution {
 
 pub fn rule(id: &str) -> Rule {
     Rule {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id(),
         id: sid(id),
         declared_by: None,
@@ -88,7 +89,7 @@ pub fn topic(id: &str, status: TopicStatus) -> Topic {
 
 pub fn topic_for(id: &str, requirement_id: &str, status: TopicStatus) -> Topic {
     Topic {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id(),
         id: sid(id),
         requirement_id: sid(requirement_id),
@@ -111,7 +112,7 @@ pub fn question_for(
     status: QuestionStatus,
 ) -> Question {
     Question {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id(),
         id: sid(id),
         topic_id: sid(topic_id),
@@ -130,7 +131,7 @@ pub fn question_for(
 
 pub fn source(id: &str) -> Source {
     Source {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id(),
         id: sid(id),
         declared_by: None,
@@ -175,7 +176,7 @@ pub fn compute_for(
 
 pub fn domain(id: &str) -> provenance_core::Domain {
     provenance_core::Domain {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id(),
         id: sid(id),
         name: id.to_string(),
@@ -186,7 +187,7 @@ pub fn domain(id: &str) -> provenance_core::Domain {
 
 pub fn thread(id: &str, parent_type: NodeType, parent_id: &str) -> provenance_core::Thread {
     provenance_core::Thread {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id(),
         id: sid(id),
         parent: provenance_core::ThreadParent {

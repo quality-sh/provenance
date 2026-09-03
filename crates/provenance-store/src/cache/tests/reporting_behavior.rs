@@ -3,6 +3,7 @@ use super::fixtures::*;
 use crate::state_store::{
     CreateRequirementInput, CreateResolutionInput, CreateRuleInput, StateStore,
 };
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_core::{
     NodeType, RequirementStatus, ResolutionStatus, RuleSeverity, RuleStatus, ScopeId,
 };
@@ -231,7 +232,7 @@ fn rule_without_a_producing_requirement_remains_orphaned() {
         .unwrap();
     append_record(
         &crate::shards::rules_path(&layout, &scope),
-        &serde_json::json!({"schema_version": 1, "scope_id": scope.as_str(), "id": "rule_unattached",
+        &serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope.as_str(), "id": "rule_unattached",
             "statement": "A rule with no producing requirement", "status": "active",
             "severity": "high", "resolution_ids": ["res_decided"]}),
     );
@@ -308,7 +309,7 @@ fn seed_rule_with_producers(
     if has_resolution {
         append_record(
             &crate::shards::resolutions_path(layout, scope),
-            &serde_json::json!({"schema_version": 1, "scope_id": scope.as_str(), "id": "res_rule",
+            &serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope.as_str(), "id": "res_rule",
                 "title": "Rule decision", "position": "Adopt", "rationale": "Decides the rule",
                 "status": "proposed", "inputs": [], "review_on": null}),
         );
@@ -316,7 +317,7 @@ fn seed_rule_with_producers(
     let resolution_ids: Vec<&str> = has_resolution.then_some("res_rule").into_iter().collect();
     append_record(
         &crate::shards::rules_path(layout, scope),
-        &serde_json::json!({"schema_version": 1, "scope_id": scope.as_str(), "id": "rule_under_test",
+        &serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope.as_str(), "id": "rule_under_test",
             "statement": "A rule under producer conformance test", "status": "active",
             "severity": "high", "resolution_ids": resolution_ids}),
     );

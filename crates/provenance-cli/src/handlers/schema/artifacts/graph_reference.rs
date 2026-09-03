@@ -1,3 +1,4 @@
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use serde_json::{json, Value};
 
 pub(in crate::handlers::schema) fn reference_schema() -> Value {
@@ -80,7 +81,7 @@ pub(in crate::handlers::schema) fn export_schema() -> Value {
 /// worth stating anyway: it says what the field is, and a stricter validator
 /// refuses `1.0` on it.
 fn schema_version() -> Value {
-    json!({"type": "integer", "const": 1})
+    json!({"type": "integer", "const": SUPPORTED_SCHEMA_VERSION.0})
 }
 
 fn record_array(name: &str) -> Value {

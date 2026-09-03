@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { STATE_SCHEMA_VERSION } from "./protocol.js";
 
 import {
   apply,
@@ -110,7 +111,7 @@ const source = readFileSync(0, "utf8");
 const input = source === "" ? undefined : JSON.parse(source);
 appendFileSync(${JSON.stringify(log)}, JSON.stringify({ command, input }) + "\\n");
 if (command === "info") process.stdout.write(JSON.stringify({
-  engine_version: "0.1.0", protocol_version: 6, state_schema_version: 1, repository: "/project"
+  engine_version: "0.1.0", protocol_version: 6, state_schema_version: ${STATE_SCHEMA_VERSION}, repository: "/project"
 }));
 else process.stdout.write(JSON.stringify({
   declared_by: "spec://typescript", created: 0, updated: 0, moved: 0,
@@ -216,7 +217,7 @@ test("top-level fluent declarations author source names and Requirement descript
 
   const request = recorder.requests().find(({ command }) => command === "apply");
   assert.deepEqual(request?.input, {
-    schema_version: 1,
+    schema_version: STATE_SCHEMA_VERSION,
     spec: "fluent-metadata",
     declared_by: "spec://typescript/fluent-metadata",
     sources: [

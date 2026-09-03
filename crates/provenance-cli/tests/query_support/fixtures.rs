@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use assert_cmd::Command;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use serde_json::{json, Value};
 
 pub fn provenance() -> Command {
@@ -64,7 +65,7 @@ pub fn sdk_error(repo: &str, command: &str, input: &Value) -> String {
 /// Two Requirements sharing one Rule, both grounded in one Source.
 pub fn shared_rule_spec() -> Value {
     json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "spec": "share-links",
         "declared_by": "spec://typescript/share-links",
         "sources": [{

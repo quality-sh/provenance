@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { STATE_SCHEMA_VERSION } from "./protocol.js";
 
 import {
   apply,
@@ -107,7 +108,7 @@ if (Object.hasOwn(responses, command)) {
   process.stdout.write(JSON.stringify({
     engine_version: "0.1.0",
     protocol_version: 6,
-    state_schema_version: 1,
+    state_schema_version: ${STATE_SCHEMA_VERSION},
     repository: "/project",
   }));
 } else if (command === "begin-verification") {
@@ -257,7 +258,7 @@ test("plan sends the finalized spec to the read-only engine command", async () =
     info: {
       engine_version: "0.1.0",
       protocol_version: 6,
-      state_schema_version: 1,
+      state_schema_version: STATE_SCHEMA_VERSION,
       repository: "/project",
     },
     plan: {

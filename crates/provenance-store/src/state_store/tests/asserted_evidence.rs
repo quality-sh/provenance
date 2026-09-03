@@ -9,10 +9,11 @@
 use crate::state_store::ideation_batches::{
     ensure_asserted_contribution_unchanged, ensure_asserted_synthesis_unchanged,
 };
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_core::{
     AssertionId, AssertionRecord, Contribution, ContributionStance, IdeationEvidenceType,
-    IdeationTarget, IdeationTargetType, MaterialClaim, SchemaVersion, ScopeId, StableId,
-    SynthesisPacket, UncertaintyLevel, UncertaintyRating,
+    IdeationTarget, IdeationTargetType, MaterialClaim, ScopeId, StableId, SynthesisPacket,
+    UncertaintyLevel, UncertaintyRating,
 };
 use provenance_macros::verifies;
 
@@ -182,7 +183,7 @@ fn target() -> IdeationTarget {
 
 fn contribution(scope: &ScopeId, index: u64, claims: &[StableId]) -> Contribution {
     Contribution {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: StableId::new(format!("contribution_{index}")).unwrap(),
         target: target(),
@@ -215,7 +216,7 @@ fn contribution(scope: &ScopeId, index: u64, claims: &[StableId]) -> Contributio
 
 fn packet(scope: &ScopeId, index: u64) -> SynthesisPacket {
     SynthesisPacket {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: packet_id(index),
         target: target(),
@@ -238,7 +239,7 @@ fn assertion(
     claims: Vec<StableId>,
 ) -> AssertionRecord {
     AssertionRecord {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: AssertionId::new(format!("assertion_{index}")).unwrap(),
         proposal_id: StableId::new(format!("proposal_{index}")).unwrap(),

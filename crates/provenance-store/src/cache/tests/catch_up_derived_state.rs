@@ -10,6 +10,7 @@ use super::catch_up_behavior::assert_catch_up_equals_rebuild;
 use super::projection_digest_sensitivity::aggregate_layout;
 use crate::state_store::StateStore;
 use provenance_core::ScopeId;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 fn remove_shard(
     layout: &crate::layout::ProvenanceLayout,
@@ -121,7 +122,7 @@ async fn a_legacy_promotion_decision_is_refused_by_catch_up_and_by_rebuild() {
         legacy,
         format!(
             "{}\n",
-            serde_json::json!({"schema_version": 1, "scope_id": scope.as_str(),
+            serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope.as_str(),
                 "promotionDecisionId": "decision_legacy", "proposalId": "proposal_base",
                 "decision": "accepted", "rationale": "Accepted.",
                 "decidedBy": {"identityType": "human", "userId": "reviewer"},

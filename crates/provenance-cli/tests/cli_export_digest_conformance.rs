@@ -26,6 +26,7 @@
 //! Marking it would claim verification this test does not do.
 
 use assert_cmd::Command;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_store::graph_reference::{
     graph_digest, ExactExport, GraphExport, GraphReferenceError,
 };
@@ -35,10 +36,10 @@ use serde_json::{json, Value};
 /// what makes two graphs hash differently.
 fn graph_with_source_named(name: &str) -> Value {
     json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope": {"id": "default", "path_prefix": "."},
         "sources": [{
-            "schema_version": 1,
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": "default",
             "id": "source_policy",
             "name": name,
@@ -65,7 +66,7 @@ fn digest_of(graph: &Value) -> String {
 /// hashes to, so the only claim any case below breaks is the one it names.
 fn export_document(graph: &Value) -> Value {
     json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "operation": "exact-export",
         "reference_id": format!("grf1_{}", "0".repeat(64)),
         "graph_digest": digest_of(graph),

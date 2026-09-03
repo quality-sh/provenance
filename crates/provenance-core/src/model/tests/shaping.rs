@@ -6,7 +6,7 @@ use super::shaping::{
 #[test]
 fn shaping_records_roundtrip_from_convex_style_json() {
     let boundary = serde_json::json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "boundary_no_manual_payroll",
         "requirementId": "req_payroll",
@@ -14,7 +14,7 @@ fn shaping_records_roundtrip_from_convex_style_json() {
         "sourceRef": {"sourceId": "source_schads", "clause": "28.1"}
     });
     let topic = serde_json::json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "topic_overtime",
         "requirementId": "req_payroll",
@@ -23,7 +23,7 @@ fn shaping_records_roundtrip_from_convex_style_json() {
         "links": [{"targetType": "source", "targetId": "source_schads"}]
     });
     let question = serde_json::json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "question_overtime_threshold",
         "topicId": "topic_overtime",
@@ -64,7 +64,7 @@ fn shaping_records_roundtrip_from_convex_style_json() {
     let topic = serde_json::to_value(topic).unwrap();
     let question = serde_json::to_value(question).unwrap();
 
-    assert_eq!(boundary["schema_version"], 1);
+    assert_eq!(boundary["schema_version"], SUPPORTED_SCHEMA_VERSION.0);
     assert_eq!(boundary["requirement_id"], "req_payroll");
     assert_eq!(boundary["source_ref"]["source_id"], "source_schads");
     assert_eq!(topic["status"], "explored");
@@ -81,7 +81,7 @@ fn shaping_records_roundtrip_from_convex_style_json() {
 #[test]
 fn question_blocked_on_human_status_accepts_hyphenated_state_and_roundtrips() {
     let question = serde_json::json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "question_fork",
         "topicId": "topic_overtime",
