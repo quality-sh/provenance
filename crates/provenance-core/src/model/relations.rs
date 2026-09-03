@@ -19,14 +19,29 @@ pub use front::{
 };
 
 use super::graph::{EdgeType, NodeType};
+use super::shaping::{Boundary, Question, Topic};
+use super::{Requirement, Resolution, Rule, Source};
 use provenance_macros::rule;
 
-/// The declared relations, as one closed list.
+/// The declaration tables of the seven owner kinds, in node rank order.
 ///
-/// This function is the rule's code anchor: the list it answers is the
-/// whole vocabulary, and the exhaustion proofs walk it.
+/// Each table is written by `#[derive(Relations)]` from the record's own
+/// fields; this list is the one hand-written concatenation.
 #[rule("rule_prov_relation_vocabulary_closed")]
-pub const fn declared_relations() -> &'static [RelationKind] {
+pub const fn declared_relations() -> &'static [&'static [RelationDecl]] {
+    &[
+        &Source::RELATIONS,
+        &Requirement::RELATIONS,
+        &Resolution::RELATIONS,
+        &Rule::RELATIONS,
+        &Topic::RELATIONS,
+        &Question::RELATIONS,
+        &Boundary::RELATIONS,
+    ]
+}
+
+/// The edge-era vocabulary, kept until the readers move off it.
+pub const fn relation_kinds() -> &'static [RelationKind] {
     &RelationKind::ALL
 }
 

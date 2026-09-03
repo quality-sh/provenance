@@ -27,6 +27,10 @@ pub fn requirement(id: &str) -> Requirement {
         status: RequirementStatus::Active,
         domain_id: None,
         source_refs: Vec::new(),
+        refines: None,
+        depends_on: Vec::new(),
+        supersedes: Vec::new(),
+        spawned_by: None,
         origin_thread: None,
         origin_message: None,
     }
@@ -50,6 +54,8 @@ pub fn resolution(id: &str) -> Resolution {
         approved_at: None,
         superseded_by: None,
         review_on: None,
+        requirement_ids: Vec::new(),
+        supersedes: Vec::new(),
         origin_thread: None,
         origin_message: None,
     }
@@ -70,6 +76,8 @@ pub fn rule(id: &str) -> Rule {
         severity: RuleSeverity::High,
         source_document: None,
         source_section: None,
+        requirement_ids: Vec::new(),
+        resolution_ids: Vec::new(),
         origin_thread: None,
         origin_message: None,
     }
@@ -116,6 +124,7 @@ pub fn question_for(
         claimed_at: None,
         answer: (status == QuestionStatus::Answered).then(|| "Done".to_string()),
         links: Vec::new(),
+        contradicts: None,
         resolution_id: None,
     }
 }
@@ -136,6 +145,7 @@ pub fn source(id: &str) -> Source {
         effective_date: None,
         review_date: None,
         superseded_by: None,
+        supersedes: Vec::new(),
         origin_thread: None,
         origin_message: None,
     }

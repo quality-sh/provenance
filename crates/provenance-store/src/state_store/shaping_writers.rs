@@ -152,6 +152,7 @@ impl StateStore {
                 claimed_at: None,
                 answer,
                 links,
+                contradicts: None,
                 resolution_id,
             };
             anyhow::ensure!(

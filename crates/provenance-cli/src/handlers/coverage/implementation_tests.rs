@@ -21,6 +21,8 @@ fn rule(id: &str, status: RuleStatus) -> Rule {
         severity: RuleSeverity::High,
         source_document: None,
         source_section: None,
+        requirement_ids: Vec::new(),
+        resolution_ids: Vec::new(),
         origin_thread: None,
         origin_message: None,
     }

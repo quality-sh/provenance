@@ -54,6 +54,8 @@ impl StateStore {
                 approved_at,
                 superseded_by,
                 review_on: None,
+                requirement_ids: Vec::new(),
+                supersedes: Vec::new(),
                 origin_thread,
                 origin_message,
             };
@@ -139,6 +141,8 @@ impl StateStore {
                 severity,
                 source_document,
                 source_section,
+                requirement_ids: Vec::new(),
+                resolution_ids: Vec::new(),
                 origin_thread,
                 origin_message,
             };

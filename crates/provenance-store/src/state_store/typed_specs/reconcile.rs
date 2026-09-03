@@ -64,6 +64,7 @@ pub(super) fn desired_source(
         effective_date: None,
         review_date: None,
         superseded_by: None,
+        supersedes: Vec::new(),
         origin_thread: None,
         origin_message: None,
     })
@@ -168,6 +169,10 @@ pub(super) fn desired_requirement(
         status: RequirementStatus::Active,
         domain_id: None,
         source_refs,
+        refines: None,
+        depends_on: Vec::new(),
+        supersedes: Vec::new(),
+        spawned_by: None,
         origin_thread: None,
         origin_message: None,
     }
@@ -268,6 +273,8 @@ pub(super) fn desired_rule(
         severity: RuleSeverity::Medium,
         source_document: None,
         source_section: None,
+        requirement_ids: Vec::new(),
+        resolution_ids: Vec::new(),
         origin_thread: None,
         origin_message: None,
     }

@@ -37,6 +37,10 @@ pub(super) fn requirement(
         status,
         domain_id: Some(sid("domain_default")),
         source_refs,
+        refines: None,
+        depends_on: Vec::new(),
+        supersedes: Vec::new(),
+        spawned_by: None,
         origin_thread: None,
         origin_message: None,
     }
@@ -60,6 +64,8 @@ pub(super) fn resolution(id: &str, title: &str, inputs: Vec<ResolutionInput>) ->
         approved_at: Some(1_745_000_000),
         superseded_by: None,
         review_on: None,
+        requirement_ids: Vec::new(),
+        supersedes: Vec::new(),
         origin_thread: None,
         origin_message: None,
     }
@@ -80,6 +86,8 @@ pub(super) fn rule(id: &str, name: Option<&str>) -> Rule {
         severity: RuleSeverity::High,
         source_document: Some("src/UseCase.php".to_string()),
         source_section: Some("59-69".to_string()),
+        requirement_ids: Vec::new(),
+        resolution_ids: Vec::new(),
         origin_thread: None,
         origin_message: None,
     }
@@ -101,6 +109,7 @@ pub(super) fn source(id: &str, name: &str) -> Source {
         effective_date: None,
         review_date: None,
         superseded_by: None,
+        supersedes: Vec::new(),
         origin_thread: None,
         origin_message: None,
     }
@@ -139,6 +148,7 @@ pub(super) fn question(
         claimed_at: None,
         answer: None,
         links: Vec::new(),
+        contradicts: None,
         resolution_id: None,
     }
 }

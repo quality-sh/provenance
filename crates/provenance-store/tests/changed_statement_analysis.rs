@@ -20,6 +20,10 @@ fn requirement(id: &str, statement: &str) -> Requirement {
         retired: false,
         domain_id: None,
         source_refs: Vec::new(),
+        refines: None,
+        depends_on: Vec::new(),
+        supersedes: Vec::new(),
+        spawned_by: None,
         origin_thread: None,
         origin_message: None,
     }
@@ -40,6 +44,8 @@ fn rule(id: &str, statement: &str) -> Rule {
         severity: RuleSeverity::High,
         source_document: None,
         source_section: None,
+        requirement_ids: Vec::new(),
+        resolution_ids: Vec::new(),
         origin_thread: None,
         origin_message: None,
     }

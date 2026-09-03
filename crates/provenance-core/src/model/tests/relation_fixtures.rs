@@ -35,6 +35,7 @@ pub(super) fn source_superseded_by(id: &str, successor: Option<&str>) -> Source 
         effective_date: None,
         review_date: None,
         superseded_by: successor.map(sid),
+        supersedes: Vec::new(),
         origin_thread: None,
         origin_message: None,
     }
@@ -60,6 +61,10 @@ pub(super) fn requirement(id: &str, domain_id: Option<&str>, cites: &[&str]) -> 
                 clause: None,
             })
             .collect(),
+        refines: None,
+        depends_on: Vec::new(),
+        supersedes: Vec::new(),
+        spawned_by: None,
         origin_thread: None,
         origin_message: None,
     }
@@ -129,6 +134,8 @@ pub(super) fn rule(id: &str) -> Rule {
         severity: RuleSeverity::High,
         source_document: None,
         source_section: None,
+        requirement_ids: Vec::new(),
+        resolution_ids: Vec::new(),
         origin_thread: None,
         origin_message: None,
     }
@@ -182,6 +189,8 @@ pub(super) fn resolution_superseded_by(id: &str, successor: Option<&str>) -> Res
         approved_at: None,
         superseded_by: successor.map(sid),
         review_on: None,
+        requirement_ids: Vec::new(),
+        supersedes: Vec::new(),
         origin_thread: None,
         origin_message: None,
     }
@@ -213,6 +222,7 @@ pub(super) fn question(
                 target_id: sid(target_id),
             })
             .collect(),
+        contradicts: None,
         resolution_id: resolution_id.map(sid),
     }
 }

@@ -58,7 +58,7 @@ fn the_relation_vocabulary_is_closed_at_twenty_one_declared_kinds() {
     let all = all_relation_kinds();
     assert_eq!(all.len(), 21);
     assert_eq!(RelationKind::ALL.to_vec(), all);
-    assert_eq!(super::relations::declared_relations(), all.as_slice());
+    assert_eq!(super::relations::relation_kinds(), all.as_slice());
     let mut names: Vec<&str> = all.iter().map(|kind| kind.name()).collect();
     names.sort_unstable();
     names.dedup();

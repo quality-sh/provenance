@@ -41,6 +41,7 @@ impl StateStore {
                 effective_date,
                 review_date,
                 superseded_by,
+                supersedes: Vec::new(),
                 origin_thread,
                 origin_message,
             };
@@ -93,6 +94,10 @@ impl StateStore {
                 status,
                 domain_id,
                 source_refs: Vec::new(),
+                refines: None,
+                depends_on: Vec::new(),
+                supersedes: Vec::new(),
+                spawned_by: None,
                 origin_thread,
                 origin_message,
             };

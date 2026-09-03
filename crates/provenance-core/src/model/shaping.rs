@@ -1,3 +1,4 @@
+use provenance_macros::Relations;
 use serde::{Deserialize, Serialize};
 
 use super::artifacts::SourceReference;
@@ -109,23 +110,26 @@ pub struct ArtifactLink {
     pub target_id: StableId,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Relations)]
 pub struct Boundary {
     pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
     pub id: StableId,
+    #[relation(target = Requirement, flow = none)]
     #[serde(alias = "requirementId")]
     pub requirement_id: StableId,
     pub statement: String,
+    #[relation(target = Source, flow = none, name = "cites", via = source_id)]
     #[serde(default, alias = "sourceRef", skip_serializing_if = "Option::is_none")]
     pub source_ref: Option<SourceReference>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Relations)]
 pub struct Topic {
     pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
     pub id: StableId,
+    #[relation(target = Requirement, flow = none)]
     #[serde(alias = "requirementId")]
     pub requirement_id: StableId,
     pub title: String,
@@ -138,13 +142,15 @@ pub struct Topic {
     pub links: Vec<ArtifactLink>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Relations)]
 pub struct Question {
     pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
     pub id: StableId,
+    #[relation(target = Topic, flow = none)]
     #[serde(alias = "topicId")]
     pub topic_id: StableId,
+    #[relation(target = Requirement, flow = none)]
     #[serde(alias = "requirementId")]
     pub requirement_id: StableId,
     pub question: String,
@@ -160,10 +166,14 @@ pub struct Question {
     pub answer: Option<String>,
     #[serde(default)]
     pub links: Vec<ArtifactLink>,
+    #[relation(target = Resolution, flow = none)]
     #[serde(
         default,
         alias = "resolutionId",
         skip_serializing_if = "Option::is_none"
     )]
     pub resolution_id: Option<StableId>,
+    #[relation(target = Requirement, flow = none)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub contradicts: Option<StableId>,
 }
