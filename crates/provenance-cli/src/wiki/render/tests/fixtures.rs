@@ -202,6 +202,9 @@ pub(super) fn requirement_fixture() -> RequirementPage {
             "Gap lines shall be suppressed when zero",
         )],
         siblings: vec![],
+        supersedes: vec![],
+        depends_on: vec![],
+        superseded_by: None,
         sources: vec![SourceCitation {
             link: link(PageKind::Source, "source_schads", "SCHADS Award mapping"),
             source_type: SourceType::Document,
@@ -236,6 +239,9 @@ pub(super) fn gappy_requirement_fixture() -> RequirementPage {
         produced_rules: vec![],
         children: vec![],
         siblings: vec![],
+        supersedes: vec![],
+        depends_on: vec![],
+        superseded_by: None,
         sources: vec![],
         gaps: vec![
             GapNotice {

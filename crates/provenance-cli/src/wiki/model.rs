@@ -238,6 +238,12 @@ pub struct RequirementPage {
     pub produced_rules: Vec<RuleCard>,
     pub children: Vec<PageLink>,
     pub siblings: Vec<PageLink>,
+    /// The requirements this one supersedes, and the ones it depends on.
+    pub supersedes: Vec<PageLink>,
+    pub depends_on: Vec<PageLink>,
+    /// The requirement whose `supersedes` names this one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub superseded_by: Option<PageLink>,
     pub sources: Vec<SourceCitation>,
     pub gaps: Vec<GapNotice>,
     pub threads: Vec<EvidenceThread>,

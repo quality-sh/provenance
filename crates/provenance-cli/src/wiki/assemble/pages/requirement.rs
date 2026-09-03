@@ -1,4 +1,6 @@
-use crate::wiki::model::{DecisionSection, PageId, RecordKind, RequirementPage, RuleCard};
+use crate::wiki::model::{
+    DecisionSection, PageId, PageLink, RecordKind, RequirementPage, RuleCard,
+};
 use provenance_core::{NodeType, Requirement};
 
 use super::super::context::Assembler;
@@ -25,6 +27,30 @@ impl<'a> Assembler<'a> {
         for resolution in &resolving {
             threads.extend(self.threads_for(NodeType::Resolution, &resolution.id));
         }
+        // The relation fields hold ids; only an existing record renders a
+        // link, so a dangling entry shows nowhere here. The gap pass
+        // reports it.
+        let supersedes: Vec<PageLink> = self
+            .state
+            .requirements
+            .iter()
+            .filter(|candidate| requirement.supersedes.contains(&candidate.id))
+            .map(requirement_link)
+            .collect();
+        let depends_on: Vec<PageLink> = self
+            .state
+            .requirements
+            .iter()
+            .filter(|candidate| requirement.depends_on.contains(&candidate.id))
+            .map(requirement_link)
+            .collect();
+        let superseded_by = self
+            .state
+            .requirements
+            .iter()
+            .filter(|candidate| candidate.supersedes.contains(&requirement.id))
+            .min_by_key(|candidate| candidate.id.as_str())
+            .map(requirement_link);
         RequirementPage {
             id: PageId::new(RecordKind::Requirement, requirement.id.as_str()),
             title: reader_title(&requirement.statement),
@@ -47,6 +73,9 @@ impl<'a> Assembler<'a> {
                 .map(requirement_link)
                 .collect(),
             siblings: self.sibling_requirements(&requirement.id),
+            supersedes,
+            depends_on,
+            superseded_by,
             sources,
             gaps,
             threads,

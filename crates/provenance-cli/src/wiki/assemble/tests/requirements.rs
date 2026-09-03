@@ -60,6 +60,59 @@ fn requirement_page_borrows_decision_threads_without_unscanned_links() {
     assert!(note.refs.is_empty());
 }
 
+/// The relation fields the requirement makes the claim about, and the
+/// reverse supersession, render beside the domain row.
+#[test]
+fn requirement_page_carries_supersedes_depends_on_and_the_reverse_superseded_by() {
+    let mut state = empty_state();
+    let mut successor = requirement(
+        "req_successor",
+        "Rostering shall follow the successor statement",
+        RequirementStatus::Active,
+        vec![],
+    );
+    successor.supersedes = vec![sid("req_old")];
+    successor.depends_on = vec![sid("req_foundation")];
+    state.requirements = vec![
+        successor,
+        requirement(
+            "req_old",
+            "The superseded statement",
+            RequirementStatus::Active,
+            vec![],
+        ),
+        requirement(
+            "req_foundation",
+            "The foundation statement",
+            RequirementStatus::Active,
+            vec![],
+        ),
+    ];
+    let resolver = LinkResolver::new(None);
+    let corpus = build_corpus(&state, &resolver);
+
+    let page = requirement_page(&corpus, "req_successor");
+    let supersedes: Vec<&str> = page
+        .supersedes
+        .iter()
+        .map(|link| link.target.record_id.as_str())
+        .collect();
+    assert_eq!(supersedes, vec!["req_old"]);
+    let depends_on: Vec<&str> = page
+        .depends_on
+        .iter()
+        .map(|link| link.target.record_id.as_str())
+        .collect();
+    assert_eq!(depends_on, vec!["req_foundation"]);
+    assert!(page.superseded_by.is_none());
+
+    let old_page = requirement_page(&corpus, "req_old");
+    let superseded_by = &old_page.superseded_by;
+    let superseded_by = superseded_by.as_ref().expect("the successor names it");
+    assert_eq!(superseded_by.target.record_id, "req_successor");
+    assert!(old_page.supersedes.is_empty());
+}
+
 #[test]
 fn requirement_page_flags_missing_sources() {
     let corpus = fixture_corpus();
