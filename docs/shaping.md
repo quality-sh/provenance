@@ -260,7 +260,7 @@ Tests bind evidence to a Rule and say how it was shown:
 ```rust
 #[test]
 #[verifies("rule_prov_relation_vocabulary_closed", exhaustion)]
-fn every_owner_kind_declares_the_rows_of_the_hand_list() {
+fn every_owner_kind_appears_once_in_the_declared_tables() {
     // every derived table against the hand-written list
 }
 ```

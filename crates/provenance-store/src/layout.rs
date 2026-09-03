@@ -24,9 +24,6 @@ impl ProvenanceLayout {
     pub fn scopes_dir(&self) -> Utf8PathBuf {
         self.state_dir().join("scopes")
     }
-    pub fn edges_dir(&self) -> Utf8PathBuf {
-        self.state_dir().join("edges")
-    }
     pub fn cache_dir(&self) -> Utf8PathBuf {
         self.provenance_dir().join("cache")
     }

@@ -153,7 +153,6 @@ fn import_export_roundtrip_preserves_enriched_v1_cloud_fields() {
             "source_document": "Example-API-main/src/example.php",
             "source_section": "lines 1-3"
           }],
-          "edges": [],
           "threads": [],
           "messages": []
         })

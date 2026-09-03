@@ -1,11 +1,11 @@
 use provenance_core::{
     ArtifactLink, CanonicalArtifact, ClaimChallenge, ConsensusFinding, ContestedClaim,
-    ContributionStance, DeclarationAddress, DispositionActor, DispositionDecision, EdgeType,
-    EvidenceGap, IdeationEvidenceReference, IdeationTarget, MaterialClaim, MessageRole,
-    MinorityObjection, NodeType, PromotionState, ProposalTraceability, ProposalType,
-    QuestionStatus, RequiredHumanDecision, RequirementStatus, ResolutionInput, ResolutionMethod,
-    ResolutionStatus, RuleSeverity, RuleStatus, ScopeId, SourceReference, SourceType, StableId,
-    SuggestedArtifact, SuggestedArtifactChange, ThreadParent, TopicStatus, UncertaintyRating,
+    ContributionStance, DeclarationAddress, DispositionActor, DispositionDecision, EvidenceGap,
+    IdeationEvidenceReference, IdeationTarget, MaterialClaim, MessageRole, MinorityObjection,
+    PromotionState, ProposalTraceability, ProposalType, QuestionStatus, RequiredHumanDecision,
+    RequirementStatus, ResolutionInput, ResolutionMethod, ResolutionStatus, RuleSeverity,
+    RuleStatus, ScopeId, SourceReference, SourceType, StableId, SuggestedArtifact,
+    SuggestedArtifactChange, ThreadParent, TopicStatus, UncertaintyRating,
     UnsupportedRecommendation, UnsupportedSpeculation, VerificationMethod,
 };
 use serde::{Deserialize, Serialize};
@@ -53,15 +53,6 @@ pub struct AddSourceReferenceInput {
     pub source_id: StableId,
     pub requirement_id: StableId,
     pub clause: Option<String>,
-}
-
-pub struct CreateEdgeInput {
-    pub scope_id: ScopeId,
-    pub edge_type: EdgeType,
-    pub from_type: NodeType,
-    pub from_id: StableId,
-    pub to_type: NodeType,
-    pub to_id: StableId,
 }
 
 pub struct CreateBoundaryInput {

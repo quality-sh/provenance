@@ -37,7 +37,7 @@ const fn row(
     }
 }
 
-/// Rows 1 to 9: the relations that were edges.
+/// Rows 1 to 9: the relations between the four record kinds.
 #[rustfmt::skip]
 pub fn graph_rows() -> Vec<Row> {
     vec![

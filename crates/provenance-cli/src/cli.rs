@@ -121,10 +121,6 @@ pub enum Command {
         #[command(subcommand)]
         command: knowledge::RequirementsCommand,
     },
-    Edges {
-        #[command(subcommand)]
-        command: graph::EdgesCommand,
-    },
     GraphReference {
         #[command(subcommand)]
         command: graph::GraphReferenceCommand,

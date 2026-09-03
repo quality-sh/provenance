@@ -12,7 +12,7 @@ use super::Direction;
 ///
 /// Each variant carries the record the store already writes, so a primitive
 /// never invents a second vocabulary for a Requirement or a Rule. The
-/// `node_type` tag is the same word `Edge` uses for its endpoints.
+/// `node_type` tag is the same word a relation row uses for its endpoints.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "node_type", rename_all = "snake_case")]
 pub enum GraphNode {

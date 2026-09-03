@@ -321,7 +321,6 @@ fn planned_validation_failure_preserves_the_original_repository() {
 
     assert!(original_scope.is_dir());
     assert!(!repo.join(".provenance/manifest.json").exists());
-    assert!(!repo.join(".provenance/state/edges").exists());
     assert!(repo
         .join(".provenance/cache/locks/repository.publication.lock")
         .is_file());

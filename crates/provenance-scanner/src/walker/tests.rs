@@ -32,22 +32,22 @@ fn typescript_comment_annotation_uses_the_exported_function_name() {
 #[test]
 fn scans_rule_attribute_with_item_name() {
     let scan = scan_file(
-        Utf8Path::new("edge_validation.rs"),
+        Utf8Path::new("relations.rs"),
         Language::Rust,
-        "#[rule(\"rule_prov_edge_endpoint_table\")]\npub fn validate_edge_endpoint() {}",
+        "#[rule(\"rule_prov_relation_vocabulary_closed\")]\npub fn declared_relations() {}",
     );
 
     assert_eq!(
         scan.bindings,
         vec![AttributeBinding {
-            file_path: Utf8Path::new("edge_validation.rs").to_path_buf(),
+            file_path: Utf8Path::new("relations.rs").to_path_buf(),
             line: 1,
-            item_name: Some("validate_edge_endpoint".to_string()),
-            rule_id: "rule_prov_edge_endpoint_table".to_string(),
+            item_name: Some("declared_relations".to_string()),
+            rule_id: "rule_prov_relation_vocabulary_closed".to_string(),
             verification: None,
             anchor: EvidenceAnchor::new(
-                Some("validate_edge_endpoint".to_string()),
-                "#[rule(\"rule_prov_edge_endpoint_table\")]",
+                Some("declared_relations".to_string()),
+                "#[rule(\"rule_prov_relation_vocabulary_closed\")]",
             ),
         }]
     );
@@ -65,9 +65,9 @@ fn scans_rule_attribute_on_a_type_as_an_implementation() {
 #[test]
 fn scans_verifies_attribute_past_test_attribute() {
     let scan = scan_file(
-        Utf8Path::new("edge_validation.rs"),
+        Utf8Path::new("relations.rs"),
         Language::Rust,
-        "#[test]\n#[verifies(\"rule_prov_edge_endpoint_table\", exhaustion)]\nfn endpoint_table_conforms_to_rule_leaf() {}",
+        "#[test]\n#[verifies(\"rule_prov_relation_vocabulary_closed\", exhaustion)]\nfn every_owner_kind_appears_once_in_the_declared_tables() {}",
     );
 
     assert_eq!(scan.bindings.len(), 1);
@@ -77,7 +77,7 @@ fn scans_verifies_attribute_past_test_attribute() {
     );
     assert_eq!(
         scan.bindings[0].item_name.as_deref(),
-        Some("endpoint_table_conforms_to_rule_leaf")
+        Some("every_owner_kind_appears_once_in_the_declared_tables")
     );
 }
 

@@ -111,7 +111,7 @@ pub fn pr_45_scale_state() -> ScopeExport {
     serde_json::from_value(json!({
         "scope": fixture.scope, "sources": sources, "domains": domains,
         "requirements": requirements, "boundaries": [], "topics": [], "questions": [],
-        "resolutions": resolutions, "rules": rules, "edges": [], "threads": [],
+        "resolutions": resolutions, "rules": rules, "threads": [],
         "messages": [], "contributions": [], "synthesis_packets": [], "proposal_cards": [],
         "assertion_records": [], "dispositions": [],
     }))

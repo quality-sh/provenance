@@ -1,10 +1,8 @@
-use super::{
-    AddSourceReferenceInput, CreateEdgeInput, CreateRequirementInput, CreateSourceInput, StateStore,
-};
+use super::{AddSourceReferenceInput, CreateRequirementInput, CreateSourceInput, StateStore};
 use crate::shards;
 use provenance_core::{
-    edge_validation::validate_edge_endpoint, validate_optional_commit_pin, Edge, NodeType,
-    Requirement, ScopeId, Source, SourceReference, StableId, SUPPORTED_SCHEMA_VERSION,
+    validate_optional_commit_pin, NodeType, Requirement, ScopeId, Source, SourceReference,
+    StableId, SUPPORTED_SCHEMA_VERSION,
 };
 
 impl StateStore {
@@ -191,96 +189,6 @@ impl StateStore {
             },
         )?;
         Ok(requirement)
-    }
-
-    pub fn create_edge(&self, input: CreateEdgeInput) -> anyhow::Result<Edge> {
-        self.create_edge_after_validation(input, || Ok(()))
-    }
-
-    pub(super) fn create_edge_after_validation(
-        &self,
-        input: CreateEdgeInput,
-        after_validation: impl FnOnce() -> anyhow::Result<()>,
-    ) -> anyhow::Result<Edge> {
-        self.with_repository_publication(|| self.write_edge(input, after_validation))
-    }
-
-    fn write_edge(
-        &self,
-        input: CreateEdgeInput,
-        after_validation: impl FnOnce() -> anyhow::Result<()>,
-    ) -> anyhow::Result<Edge> {
-        let CreateEdgeInput {
-            scope_id,
-            edge_type,
-            from_type,
-            from_id,
-            to_type,
-            to_id,
-        } = input;
-        validate_edge_endpoint(edge_type, from_type, to_type)?;
-        self.ensure_edge_endpoint_exists(&scope_id, from_type, &from_id, "from")?;
-        self.ensure_edge_endpoint_exists(&scope_id, to_type, &to_id, "to")?;
-        after_validation()?;
-        let edge = Edge {
-            schema_version: SUPPORTED_SCHEMA_VERSION,
-            scope_id,
-            id: Edge::stable_id(edge_type, from_type, &from_id, to_type, &to_id)?,
-            edge_type,
-            from_type,
-            from_id,
-            to_type,
-            to_id,
-            label: None,
-        };
-        let path = shards::edges_path(&self.layout);
-        self.mutate_jsonl_records(&path, |records: &mut Vec<Edge>| {
-            if let Some(existing) = records.iter().find(|record| {
-                record.scope_id == edge.scope_id
-                    && record.edge_type == edge.edge_type
-                    && record.from_type == edge.from_type
-                    && record.from_id == edge.from_id
-                    && record.to_type == edge.to_type
-                    && record.to_id == edge.to_id
-            }) {
-                return Ok(existing.clone());
-            }
-            if !records
-                .iter()
-                .any(|record| record.id == edge.id && record.scope_id == edge.scope_id)
-            {
-                records.push(edge.clone());
-            }
-            records.sort_by(|a, b| {
-                a.scope_id
-                    .as_str()
-                    .cmp(b.scope_id.as_str())
-                    .then(a.id.as_str().cmp(b.id.as_str()))
-            });
-            Ok(edge)
-        })
-    }
-
-    pub fn delete_edge(&self, scope_id: &ScopeId, id: &StableId) -> anyhow::Result<Edge> {
-        let path = shards::edges_path(&self.layout);
-        self.mutate_jsonl_records(&path, |records: &mut Vec<Edge>| {
-            let index = records
-                .iter()
-                .position(|record| &record.scope_id == scope_id && &record.id == id)
-                .ok_or_else(|| anyhow::anyhow!("edge does not exist"))?;
-            Ok(records.remove(index))
-        })
-    }
-
-    pub(super) fn ensure_edge_endpoint_exists(
-        &self,
-        scope_id: &ScopeId,
-        node_type: NodeType,
-        id: &StableId,
-        side: &str,
-    ) -> anyhow::Result<()> {
-        self.ensure_node_exists(scope_id, node_type, id)
-            .map_err(|_| anyhow::anyhow!("{side} endpoint does not exist"))
     }
 }
 

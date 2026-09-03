@@ -67,7 +67,6 @@ fn seeded_source_requirement_store() -> (tempfile::TempDir, StateStore, ScopeId)
 
 mod asserted_evidence;
 mod direct_statement_write_gate;
-mod edges;
 mod graph_validation;
 mod ideation;
 mod ideation_duplicates;

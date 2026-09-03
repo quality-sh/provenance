@@ -131,7 +131,7 @@ fn cli_traceability_chain_reports_rule_upstream_nodes_and_gaps() {
         ])
         .assert()
         .success();
-    // A second chain in the same scope, touching the rule nowhere. Its edges
+    // A second chain in the same scope, touching the rule nowhere. Its relations
     // are what `traceability` used to hand back alongside the real chain.
     Command::cargo_bin("provenance")
         .unwrap()

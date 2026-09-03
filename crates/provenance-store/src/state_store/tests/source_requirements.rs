@@ -55,7 +55,6 @@ fn source_requirement_records_are_written_deterministically() {
             .as_str(),
         "source_schads"
     );
-    assert!(store.list_edges().unwrap().is_empty());
 }
 
 #[test]

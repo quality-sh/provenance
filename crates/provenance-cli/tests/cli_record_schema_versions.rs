@@ -3,7 +3,7 @@ use predicates::str::contains;
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_macros::verifies;
 
-const STORED_FAMILIES: [(&str, &str); 17] = [
+const STORED_FAMILIES: [(&str, &str); 16] = [
     ("source", "scopes/default/sources/source.jsonl"),
     ("domain", "scopes/default/domains/domain.jsonl"),
     ("requirement", "scopes/default/requirements/req.jsonl"),
@@ -12,7 +12,6 @@ const STORED_FAMILIES: [(&str, &str); 17] = [
     ("question", "scopes/default/questions/question.jsonl"),
     ("resolution", "scopes/default/resolutions/res.jsonl"),
     ("rule", "scopes/default/rules/rule.jsonl"),
-    ("edge", "edges/edges-00.jsonl"),
     ("thread", "scopes/default/threads/threads.jsonl"),
     ("message", "scopes/default/threads/2026-07.jsonl"),
     (

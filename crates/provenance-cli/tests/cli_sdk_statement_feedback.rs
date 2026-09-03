@@ -109,5 +109,4 @@ fn sdk_apply_exits_nonzero_with_the_same_structured_diagnostics() {
     let graph: Value = serde_json::from_slice(&export.stdout).unwrap();
     assert!(graph["requirements"].as_array().unwrap().is_empty());
     assert!(graph["rules"].as_array().unwrap().is_empty());
-    assert!(graph["edges"].as_array().unwrap().is_empty());
 }

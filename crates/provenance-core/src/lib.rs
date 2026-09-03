@@ -3,7 +3,6 @@ extern crate self as provenance_core;
 
 pub mod authoring;
 pub mod coverage;
-pub mod edge_validation;
 pub mod model;
 pub mod protocol;
 pub mod scope;
@@ -19,18 +18,17 @@ pub use model::{
     ArtifactLink, ArtifactLinkTargetType, Assertion, AssertionId, AssertionRecord, Boundary,
     CanonicalArtifact, CanonicalArtifactType, ClaimChallenge, ConsensusFinding, ContestedClaim,
     Contribution, ContributionStance, DeclarationAddress, DispositionActor, DispositionDecision,
-    DispositionRecord, Domain, Edge, EdgeType, EvidenceGap, EvidenceQuality,
-    ExternalActionCorrelation, IdeationAggregate, IdeationEvidenceReference, IdeationEvidenceType,
-    IdeationTarget, IdeationTargetType, IdentityType, ImplementationBinding, LegacyProposalPolicy,
-    Manifest, MaterialClaim, Message, MessageRole, MinorityObjection, NodeType, PromotionState,
-    Proposal, ProposalCard, ProposalTraceability, ProposalType, Question, QuestionStatus,
-    RelationDerivation, RelationKind, RepoPathPrefix, RequiredHumanDecision, Requirement,
-    RequirementReview, RequirementStatus, Resolution, ResolutionInput, ResolutionInputType,
-    ResolutionMethod, ResolutionStatus, Rule, RuleSeverity, RuleStatus, SchemaVersion, Scope,
-    ScopeId, Source, SourceReference, SourceType, SpeculationMarker, StableId, SuggestedArtifact,
-    SuggestedArtifactChange, SynthesisPacket, Thread, ThreadParent, ThreadStatus, Topic,
-    TopicStatus, UncertaintyLevel, UncertaintyRating, UnsupportedRecommendation,
-    UnsupportedSpeculation, VerificationBinding, VerificationMethod, VerificationRun,
-    VerificationRunStatus, SUPPORTED_SCHEMA_VERSION,
+    DispositionRecord, Domain, EvidenceGap, EvidenceQuality, ExternalActionCorrelation,
+    IdeationAggregate, IdeationEvidenceReference, IdeationEvidenceType, IdeationTarget,
+    IdeationTargetType, IdentityType, ImplementationBinding, LegacyProposalPolicy, Manifest,
+    MaterialClaim, Message, MessageRole, MinorityObjection, NodeType, PromotionState, Proposal,
+    ProposalCard, ProposalTraceability, ProposalType, Question, QuestionStatus, RepoPathPrefix,
+    RequiredHumanDecision, Requirement, RequirementReview, RequirementStatus, Resolution,
+    ResolutionInput, ResolutionInputType, ResolutionMethod, ResolutionStatus, Rule, RuleSeverity,
+    RuleStatus, SchemaVersion, Scope, ScopeId, Source, SourceReference, SourceType,
+    SpeculationMarker, StableId, SuggestedArtifact, SuggestedArtifactChange, SynthesisPacket,
+    Thread, ThreadParent, ThreadStatus, Topic, TopicStatus, UncertaintyLevel, UncertaintyRating,
+    UnsupportedRecommendation, UnsupportedSpeculation, VerificationBinding, VerificationMethod,
+    VerificationRun, VerificationRunStatus, SUPPORTED_SCHEMA_VERSION,
 };
 pub use protocol::{EngineInfo, SDK_PROTOCOL_VERSION};

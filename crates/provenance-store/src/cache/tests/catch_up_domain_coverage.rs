@@ -1,6 +1,6 @@
 //! The byte domain of a family is every file its readers read.
 //!
-//! Messages span month shards. Edges span every shard in the edges
+//! Messages span month shards.
 //! directory. Five ideation families overlay records from the landings
 //! shard. These tests pin the complete domains against a fresh rebuild.
 

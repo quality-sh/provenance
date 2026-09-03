@@ -1,4 +1,4 @@
-use super::{DispositionRecord, Edge, Message, ProvenanceLayout, ScopeId};
+use super::{DispositionRecord, Message, ProvenanceLayout, ScopeId};
 use crate::shards;
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
@@ -28,14 +28,12 @@ const IDEATION_LANDING_RECORD_FIELDS: &[&str] = &[
 ///
 /// Every reader in this module lands here: [`read_records`] carries the open
 /// families, the closed families and the aliased legacy dispositions;
-/// [`read_jsonl_shards`] carries messages and edges; [`read_closed_edges`]
-/// carries the edges a pinned graph keeps. A family that does not pass
+/// [`read_jsonl_shards`] carries messages. A family that does not pass
 /// through this function is not read at all, which is what makes the version
 /// guard below cover every record rather than the ones somebody remembered.
 ///
 /// The caller has already turned the line into a [`serde_json::Value`],
-/// because some of them look at it first: the closed edge reader drops
-/// another scope's rows before anything here judges them.
+/// because some of them look at it first.
 fn record_from_line<T: DeserializeOwned>(
     path: &Utf8Path,
     line_number: usize,
@@ -64,7 +62,7 @@ fn record_from_line<T: DeserializeOwned>(
 /// quietly wrong.
 ///
 /// The store therefore refuses it at the door, for every family it reads and
-/// not only the ideation ones: requirements, rules, sources, edges, messages
+/// not only the ideation ones: requirements, rules, sources, messages
 /// and the rest all pass [`record_from_line`]. The refusal names the file, the
 /// record if the line carries an id, and both versions, because the fix is to
 /// find that line and decide what it should say.
@@ -352,76 +350,6 @@ fn is_message_month_shard(path: &Utf8Path) -> bool {
         && bytes[4] == b'-'
         && bytes[5..7].iter().all(u8::is_ascii_digit)
         && &bytes[7..] == b".jsonl"
-}
-
-pub(super) fn read_edge_shards(
-    layout: &ProvenanceLayout,
-    closed_scope: Option<&ScopeId>,
-) -> anyhow::Result<Vec<Edge>> {
-    crate::publication::with_repository_publication(layout, || {
-        let shard_paths = edge_shard_paths(layout)?;
-        if let Some(scope) = closed_scope {
-            read_closed_edges(shard_paths, scope)
-        } else {
-            read_jsonl_shards(shard_paths, "edge")
-        }
-    })
-}
-
-/// Every edge shard, sorted. All edge reads discover their shards here.
-pub fn edge_shard_paths(layout: &ProvenanceLayout) -> anyhow::Result<Vec<Utf8PathBuf>> {
-    let edges_dir = layout.edges_dir();
-    if !edges_dir.exists() {
-        return Ok(Vec::new());
-    }
-    let mut shard_paths = Vec::new();
-    for entry in std::fs::read_dir(&edges_dir)? {
-        let entry = entry?;
-        if entry.file_type()?.is_file() {
-            let path = Utf8PathBuf::from_path_buf(entry.path())
-                .map_err(|path| anyhow::anyhow!("non-UTF-8 edge shard path: {}", path.display()))?;
-            if path.extension() == Some("jsonl") {
-                shard_paths.push(path);
-            }
-        }
-    }
-    shard_paths.sort();
-    Ok(shard_paths)
-}
-
-fn read_closed_edges(paths: Vec<Utf8PathBuf>, scope: &ScopeId) -> anyhow::Result<Vec<Edge>> {
-    let mut records = Vec::new();
-    for path in paths {
-        let contents = std::fs::read_to_string(&path)
-            .with_context(|| format!("failed to read edge shard {}", path.as_str()))?;
-        for (index, line) in contents.lines().enumerate() {
-            let context = || {
-                format!(
-                    "failed to parse edge shard {} line {}",
-                    path.as_str(),
-                    index + 1
-                )
-            };
-            let value: serde_json::Value = serde_json::from_str(line).with_context(context)?;
-            // Another scope's rows are dropped before they are judged: a
-            // pinned graph is answerable for the scope it names and for
-            // nothing else, whatever version the neighbours were written in.
-            if value.get("scope_id").and_then(serde_json::Value::as_str) == Some(scope.as_str()) {
-                records.push(
-                    record_from_line(
-                        &path,
-                        index + 1,
-                        line,
-                        value,
-                        Fields::Closed,
-                        NO_NESTED_RECORDS,
-                    )
-                    .with_context(context)?,
-                );
-            }
-        }
-    }
-    Ok(records)
 }
 
 #[cfg(test)]

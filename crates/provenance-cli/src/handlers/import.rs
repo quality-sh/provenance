@@ -36,10 +36,6 @@ pub(super) fn import_scope(
         "import scope does not match --scope"
     );
     let scope_id = ScopeId::new(scope)?;
-    anyhow::ensure!(
-        exported.edges.iter().all(|edge| edge.scope_id == scope_id),
-        "edge scope_id must match import scope"
-    );
     let records = exported.sources.len()
         + exported.domains.len()
         + exported.requirements.len()
@@ -49,7 +45,6 @@ pub(super) fn import_scope(
         + exported.resolutions.len()
         + exported.rules.len()
         + exported.implementation_bindings.len()
-        + exported.edges.len()
         + exported.threads.len()
         + exported.messages.len()
         + exported.contributions.len()

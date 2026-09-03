@@ -24,7 +24,6 @@ pub struct ScopeExport {
     pub verification_bindings: Vec<provenance_core::VerificationBinding>,
     #[serde(default)]
     pub implementation_bindings: Vec<provenance_core::ImplementationBinding>,
-    pub edges: Vec<provenance_core::Edge>,
     pub threads: Vec<provenance_core::Thread>,
     pub messages: Vec<provenance_core::Message>,
     #[serde(default)]
@@ -57,11 +56,6 @@ pub fn export_scope(repo: Utf8PathBuf, scope: String) -> anyhow::Result<ScopeExp
             rules: store.list_rules(&scope_id)?,
             verification_bindings: store.list_verification_bindings(&scope_id)?,
             implementation_bindings: store.list_implementation_bindings(&scope_id)?,
-            edges: store
-                .list_edges()?
-                .into_iter()
-                .filter(|edge| edge.scope_id == scope_id)
-                .collect(),
             threads: store.list_threads(&scope_id)?,
             messages: store.list_messages(&scope_id)?,
             contributions: store.list_contributions(&scope_id)?,
@@ -92,7 +86,7 @@ pub(super) fn render_export(
             Ok(out)
         }
         OutputFormat::Markdown => Ok(format!(
-            "# Provenance Export\n\n- Scope: {}\n- Sources: {}\n- Domains: {}\n- Requirements: {}\n- Boundaries: {}\n- Topics: {}\n- Questions: {}\n- Resolutions: {}\n- Rules: {}\n- Edges: {}\n- Proposals: {}\n",
+            "# Provenance Export\n\n- Scope: {}\n- Sources: {}\n- Domains: {}\n- Requirements: {}\n- Boundaries: {}\n- Topics: {}\n- Questions: {}\n- Resolutions: {}\n- Rules: {}\n- Proposals: {}\n",
             exported.scope,
             exported.sources.len(),
             exported.domains.len(),
@@ -102,11 +96,10 @@ pub(super) fn render_export(
             exported.questions.len(),
             exported.resolutions.len(),
             exported.rules.len(),
-            exported.edges.len(),
             exported.proposal_cards.len()
         )),
         OutputFormat::Toon => Ok(format!(
-            "scope: {}\nsources: {}\ndomains: {}\nrequirements: {}\nboundaries: {}\ntopics: {}\nquestions: {}\nresolutions: {}\nrules: {}\nedges: {}\nproposals: {}\n",
+            "scope: {}\nsources: {}\ndomains: {}\nrequirements: {}\nboundaries: {}\ntopics: {}\nquestions: {}\nresolutions: {}\nrules: {}\nproposals: {}\n",
             exported.scope,
             exported.sources.len(),
             exported.domains.len(),
@@ -116,11 +109,10 @@ pub(super) fn render_export(
             exported.questions.len(),
             exported.resolutions.len(),
             exported.rules.len(),
-            exported.edges.len(),
             exported.proposal_cards.len()
         )),
         OutputFormat::Table => Ok(format!(
-            "scope\tsources\tdomains\trequirements\tboundaries\ttopics\tquestions\tresolutions\trules\tedges\tproposals\n{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+            "scope\tsources\tdomains\trequirements\tboundaries\ttopics\tquestions\tresolutions\trules\tproposals\n{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
             exported.scope,
             exported.sources.len(),
             exported.domains.len(),
@@ -130,7 +122,6 @@ pub(super) fn render_export(
             exported.questions.len(),
             exported.resolutions.len(),
             exported.rules.len(),
-            exported.edges.len(),
             exported.proposal_cards.len()
         )),
     }

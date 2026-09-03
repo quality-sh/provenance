@@ -286,7 +286,6 @@ fn seed_rules(dir: &std::path::Path, repo: &std::path::Path) {
             "severity": "medium",
             "requirement_ids": ["req_code"]
           }],
-          "edges": [],
           "threads": [],
           "messages": []
         })

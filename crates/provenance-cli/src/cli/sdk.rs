@@ -84,7 +84,7 @@ pub enum SdkCommand {
         #[command(flatten)]
         query: QueryArgs,
     },
-    /// Read the canonical records one edge away from a record.
+    /// Read the canonical records one relation away from a record.
     Neighbors {
         #[command(flatten)]
         query: QueryArgs,

@@ -50,7 +50,7 @@ fn semicolon_requirement_returns_rule_8_1_details_without_changing_canonical_sta
 
 #[test]
 #[verifies("rule_ste_direct_statement_write_gate", examples)]
-fn semicolon_rule_returns_rule_8_1_details_without_changing_canonical_state_or_edges() {
+fn semicolon_rule_returns_rule_8_1_details_without_changing_canonical_state() {
     let (_dir, store, scope) = seeded_requirement_store();
     store
         .create_rule(rule_input(

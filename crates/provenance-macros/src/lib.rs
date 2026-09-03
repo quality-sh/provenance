@@ -10,8 +10,8 @@ use proc_macro::{TokenStream, TokenTree};
 /// Takes the rule's id as a single string literal:
 ///
 /// ```ignore
-/// #[rule("rule_prov_edge_endpoint_table")]
-/// pub fn validate_edge_endpoint(...) { ... }
+/// #[rule("rule_prov_relation_vocabulary_closed")]
+/// pub const fn declared_relations() -> ... { ... }
 /// ```
 ///
 /// The attribute binds the item to an independent Rule record. It does
@@ -39,8 +39,8 @@ const VERIFICATION_METHODS: [&str; 6] = [
 ///
 /// ```ignore
 /// #[test]
-/// #[verifies("rule_prov_edge_endpoint_table", exhaustion)]
-/// fn endpoint_table_conforms_to_rule_leaf() { ... }
+/// #[verifies("rule_prov_relation_vocabulary_closed", exhaustion)]
+/// fn every_owner_kind_appears_once_in_the_declared_tables() { ... }
 /// ```
 ///
 /// Methods: `exhaustion` (every input in a finite domain is tried),

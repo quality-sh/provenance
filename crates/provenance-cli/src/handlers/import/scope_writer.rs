@@ -1,6 +1,5 @@
 use super::ScopeExport;
-use camino::Utf8PathBuf;
-use provenance_core::{Edge, ScopeId, Thread, ThreadStatus};
+use provenance_core::{ScopeId, Thread, ThreadStatus};
 use provenance_store::layout::ProvenanceLayout;
 
 pub(super) fn write_scope(
@@ -49,7 +48,6 @@ pub(super) fn write_scope(
         &provenance_store::shards::implementation_bindings_path(layout, scope_id),
         &exported.implementation_bindings,
     )?;
-    write_edges(layout, scope_id, exported)?;
     provenance_store::jsonl::write_jsonl_atomic(
         &provenance_store::shards::threads_path(layout, scope_id),
         &exported.threads,
@@ -103,86 +101,6 @@ fn validate_threads(threads: &[Thread]) -> anyhow::Result<()> {
                 earlier.id.as_str(),
                 thread.id.as_str()
             );
-        }
-    }
-    Ok(())
-}
-
-fn write_edges(
-    layout: &ProvenanceLayout,
-    scope_id: &ScopeId,
-    exported: &ScopeExport,
-) -> anyhow::Result<()> {
-    let edge_path = provenance_store::shards::edges_path(layout);
-    let mut edges = read_edge_values(layout)?;
-    edges.retain(|(edge, _)| edge.scope_id != *scope_id);
-    edges.extend(
-        exported
-            .edges
-            .iter()
-            .map(|edge| Ok((edge.clone(), serde_json::to_value(edge)?)))
-            .collect::<anyhow::Result<Vec<_>>>()?,
-    );
-    edges.sort_by(|(left, _), (right, _)| left.id.as_str().cmp(right.id.as_str()));
-    let edges = edges
-        .into_iter()
-        .map(|(_, value)| value)
-        .collect::<Vec<_>>();
-    remove_edge_shards(layout)?;
-    provenance_store::jsonl::write_jsonl_atomic(&edge_path, &edges)
-}
-
-fn read_edge_values(layout: &ProvenanceLayout) -> anyhow::Result<Vec<(Edge, serde_json::Value)>> {
-    if !layout.edges_dir().exists() {
-        return Ok(Vec::new());
-    }
-    let mut paths = Vec::new();
-    for entry in std::fs::read_dir(layout.edges_dir())? {
-        let entry = entry?;
-        if entry.file_type()?.is_file() {
-            let path = Utf8PathBuf::from_path_buf(entry.path()).map_err(|path| {
-                anyhow::anyhow!("edge shard path is not UTF-8: {}", path.display())
-            })?;
-            if path.extension() == Some("jsonl") {
-                paths.push(path);
-            }
-        }
-    }
-    paths.sort();
-
-    let mut records = Vec::new();
-    for path in paths {
-        for (line_index, line) in std::fs::read_to_string(&path)?.lines().enumerate() {
-            let value: serde_json::Value = serde_json::from_str(line).map_err(|error| {
-                anyhow::anyhow!(
-                    "failed to parse edge shard {} line {}: {error}",
-                    path,
-                    line_index + 1
-                )
-            })?;
-            let edge = serde_json::from_value(value.clone()).map_err(|error| {
-                anyhow::anyhow!(
-                    "failed to parse edge shard {} line {}: {error}",
-                    path,
-                    line_index + 1
-                )
-            })?;
-            records.push((edge, value));
-        }
-    }
-    Ok(records)
-}
-
-fn remove_edge_shards(layout: &ProvenanceLayout) -> anyhow::Result<()> {
-    if !layout.edges_dir().exists() {
-        return Ok(());
-    }
-    for entry in std::fs::read_dir(layout.edges_dir())? {
-        let entry = entry?;
-        if entry.file_type()?.is_file()
-            && entry.path().extension().and_then(std::ffi::OsStr::to_str) == Some("jsonl")
-        {
-            std::fs::remove_file(entry.path())?;
         }
     }
     Ok(())

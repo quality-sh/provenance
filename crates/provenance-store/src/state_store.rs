@@ -29,14 +29,13 @@ pub use ideation_batches::{
 pub use inputs::{
     AddSourceReferenceInput, BeginVerificationInput, CompleteVerificationInput,
     CreateAssertionInput, CreateBoundaryInput, CreateContributionInput, CreateDispositionInput,
-    CreateDomainInput, CreateEdgeInput, CreateProposalCardInput, CreateQuestionInput,
-    CreateRequirementInput, CreateResolutionInput, CreateRuleInput, CreateSourceInput,
-    CreateSynthesisPacketInput, CreateTopicInput, DeclarationReferenceInput,
-    MaterializeImplementationBindingInput, MaterializeVerificationBindingInput, PostMessageInput,
-    ReconcileState, ReconciledResource, TypedAdoptionTarget, TypedDeclarationKind,
-    TypedFieldChange, TypedImplementationInput, TypedRequirementInput, TypedResourceKind,
-    TypedRuleInput, TypedSourceInput, TypedSpecDiagnostic, TypedSpecInput, TypedSpecResult,
-    UpdateQuestionInput,
+    CreateDomainInput, CreateProposalCardInput, CreateQuestionInput, CreateRequirementInput,
+    CreateResolutionInput, CreateRuleInput, CreateSourceInput, CreateSynthesisPacketInput,
+    CreateTopicInput, DeclarationReferenceInput, MaterializeImplementationBindingInput,
+    MaterializeVerificationBindingInput, PostMessageInput, ReconcileState, ReconciledResource,
+    TypedAdoptionTarget, TypedDeclarationKind, TypedFieldChange, TypedImplementationInput,
+    TypedRequirementInput, TypedResourceKind, TypedRuleInput, TypedSourceInput,
+    TypedSpecDiagnostic, TypedSpecInput, TypedSpecResult, UpdateQuestionInput,
 };
 pub use proposal_surfaces::{ProposalDemand, ProposalSurfaceReason, SurfacedProposal, TopicClaim};
 pub use requirement_reviews::{
@@ -48,12 +47,12 @@ use crate::{layout::ProvenanceLayout, shards};
 use ideation_batches::overlay_records;
 use provenance_core::{
     ensure_supported_schema_version, AssertionRecord, Boundary, Contribution, DispositionRecord,
-    Domain, Edge, ImplementationBinding, Manifest, Message, ProposalCard, Question, Requirement,
+    Domain, ImplementationBinding, Manifest, Message, ProposalCard, Question, Requirement,
     Resolution, Rule, SchemaVersion, Scope, ScopeId, Source, SynthesisPacket, Thread, Topic,
     VerificationBinding,
 };
 use readers::{
-    deserialize_closed, read_edge_shards, read_ideation_landings, read_jsonl, read_jsonl_closed,
+    deserialize_closed, read_ideation_landings, read_jsonl, read_jsonl_closed,
     read_legacy_dispositions, read_message_shards,
 };
 use serde::{Deserialize, Serialize};
@@ -166,9 +165,6 @@ impl StateStore {
     }
     pub fn list_questions(&self, scope: &ScopeId) -> anyhow::Result<Vec<Question>> {
         read_jsonl(&shards::questions_path(&self.layout, scope))
-    }
-    pub fn list_edges(&self) -> anyhow::Result<Vec<Edge>> {
-        read_edge_shards(&self.layout, None)
     }
     pub fn list_resolutions(&self, scope: &ScopeId) -> anyhow::Result<Vec<Resolution>> {
         read_jsonl(&shards::resolutions_path(&self.layout, scope))

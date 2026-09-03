@@ -41,10 +41,10 @@ fn late_scope_validation_failure_is_atomic() {
     export_scope(&repo, &baseline).success();
     let before = std::fs::read(&baseline).unwrap();
     let mut invalid: serde_json::Value = serde_json::from_slice(&before).unwrap();
-    invalid["edges"] = serde_json::json!([{
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "edge_invalid",
-        "edge_type": "depends_on", "from_type": "requirement", "from_id": "req_missing_a",
-        "to_type": "requirement", "to_id": "req_missing_b"
+    invalid["rules"] = serde_json::json!([{
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "rule_invalid",
+        "statement": "A rule naming a requirement that is not there.", "status": "active",
+        "severity": "high", "requirement_ids": ["req_missing"]
     }]);
     let input = dir.path().join("invalid.json");
     write_json(&input, &invalid);

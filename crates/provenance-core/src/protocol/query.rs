@@ -13,10 +13,11 @@ const fn default_max_depth() -> usize {
     TRACE_DEFAULT_MAX_DEPTH
 }
 
-/// Which way a query follows an edge.
+/// Which way a query follows a relation.
 ///
-/// `out` leaves the named record along the edge it starts, `in` arrives at
-/// it, and `both` reads the edge from either end.
+/// `out` reads the relations the named record holds in its own fields, `in`
+/// reads the relations other records hold toward it, and `both` reads every
+/// relation from either end.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Direction {

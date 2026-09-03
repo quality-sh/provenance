@@ -395,7 +395,6 @@ fn seed_state(dir: &std::path::Path, repo: &str) {
             "source_document": "Example-API-main/src/example.php",
             "source_section": "lines 1-3"
           }],
-          "edges": [],
           "threads": [],
           "messages": []
         })

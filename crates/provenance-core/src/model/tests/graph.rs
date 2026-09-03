@@ -1,4 +1,4 @@
-use super::graph::{EdgeType, NodeType};
+use super::graph::NodeType;
 
 #[test]
 fn domain_and_boundary_are_node_types_with_stable_wire_names() {
@@ -12,24 +12,6 @@ fn domain_and_boundary_are_node_types_with_stable_wire_names() {
             serde_json::from_value::<NodeType>(serde_json::Value::String(name.into())).unwrap(),
             expected
         );
-    }
-}
-
-#[test]
-fn no_edge_may_touch_a_domain_or_boundary() {
-    for kind in [NodeType::Domain, NodeType::Boundary] {
-        assert!(crate::edge_validation::validate_edge_endpoint(
-            EdgeType::References,
-            NodeType::Source,
-            kind,
-        )
-        .is_err());
-        assert!(crate::edge_validation::validate_edge_endpoint(
-            EdgeType::RefinesInto,
-            kind,
-            NodeType::Requirement,
-        )
-        .is_err());
     }
 }
 
@@ -53,13 +35,7 @@ fn a_domain_node_searches_by_name_and_description() {
 }
 
 #[test]
-fn topic_and_question_are_thread_parent_node_types_but_not_edge_endpoints() {
+fn topic_and_question_are_thread_parent_node_types() {
     assert_eq!(NodeType::parse("topic").unwrap(), NodeType::Topic);
     assert_eq!(NodeType::parse("question").unwrap(), NodeType::Question);
-    assert!(crate::edge_validation::validate_edge_endpoint(
-        EdgeType::DependsOn,
-        NodeType::Topic,
-        NodeType::Topic,
-    )
-    .is_err());
 }

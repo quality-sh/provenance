@@ -272,7 +272,7 @@ mod tests {
         for path in [
             "rules/rule.jsonl",
             "notes.jsonl",
-            ".provenance/state/edges/edges-00.jsonl",
+            ".provenance/state/notes/notes.jsonl",
         ] {
             assert_eq!(
                 ShardFamily::for_shard_path(Utf8Path::new(path)),
