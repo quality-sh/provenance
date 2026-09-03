@@ -4,7 +4,39 @@
 
 Scopes live in `manifest.json`; shard paths derive from scope IDs. Cache files and volatile fields are forbidden in state shards.
 
-Schema version `1` includes the local graph fields plus imported/cloud review metadata. Optional fields are omitted when absent, but preserved when present: domain grouping for root requirements, requirement descriptions and source references, source references/clauses/effective/review/supersession dates/commit pins, draft/review statuses, resolution context/enforcement/confidence/input references/actor approval/supersession metadata, resolved thread status, rule name/severity/status and source-document citations, proposal confidence, and material-claim confidence.
+Schema version `2` includes the local graph fields plus imported/cloud review metadata. Optional fields are omitted when absent, but preserved when present: domain grouping for root requirements, requirement descriptions and source references, source references/clauses/effective/review dates/commit pins/supersession lists, draft/review statuses, resolution context/enforcement/confidence/input references/actor approval/supersession lists, resolved thread status, rule name/severity/status and source-document citations, proposal confidence, and material-claim confidence.
+
+Relations between records are fields on the record that makes the claim. No
+shard stores a relation row; every reverse lookup, gap, walk, and projection
+row derives from the field. Lists are sorted by id on write and hold no
+duplicates; `refines`, `depends_on`, and `supersedes` refuse a cycle at write.
+
+| Kind | Field | Target | Required | Shape |
+|---|---|---|---|---|
+| requirement | `domain_id` | domain | optional | single |
+| requirement | `source_refs[].source_id` (+`clause`), named `cites` | source | optional | list |
+| requirement | `refines` | requirement | optional | single |
+| requirement | `depends_on` | requirement | optional | list |
+| requirement | `supersedes` | requirement | optional | list |
+| requirement | `spawned_by` | resolution | optional | single |
+| resolution | `requirement_ids` | requirement | required, non-empty | list |
+| resolution | `supersedes` | resolution | optional | list |
+| rule | `requirement_ids` | requirement | required, non-empty | list |
+| rule | `resolution_ids` | resolution | optional | list |
+| source | `supersedes` | source | optional | list |
+| topic | `requirement_id` | requirement | required | single |
+| boundary | `requirement_id` | requirement | required | single |
+| boundary | `source_ref.source_id`, named `cites` | source | optional | single |
+| question | `topic_id`, `requirement_id` | topic, requirement | required | single |
+| question | `resolution_id` | resolution | optional | single |
+| question | `contradicts` | requirement | optional | single |
+
+A contradiction is a question: `topic_id` and `requirement_id` name one side,
+`contradicts` the other. It is settled when the question carries a
+`resolution_id` or either requirement lists the other in `supersedes`. A
+requirement with no `refines` is a root. The newer of two sources or two
+resolutions lists the older in `supersedes`; nothing is written on the older
+record.
 
 Sources, Requirements, and Rules may also carry `declared_by`. It names the
 integration allowed to reconcile that record; it does not grant ownership of
@@ -15,12 +47,12 @@ target must name one declaration with the same explicit Stable ID. The fields
 supplied by that declaration and its relevant relationships must already match.
 Richer canonical metadata outside the typed surface remains unchanged and does
 not block adoption. Adoption changes only `declared_by` and
-`declaration_address`, so state schema version `1` needs no migration.
+`declaration_address`; it never rewrites a relation field.
 
 Typed-owned Sources, Requirements, and Rules may carry `retired: true`.
 Omitting the field means active. A complete typed declaration document retires
 owned records from the same spec when they disappear, but keeps their canonical
-IDs, addresses, and historical edges. Reintroducing the declaration clears the
+IDs, addresses, and relation fields. Reintroducing the declaration clears the
 field and reuses the same record. Active graph, gap, health, implementation, and
 verification checks exclude retired declarations. Hard deletion is a separate,
 unsupported operation.
@@ -62,10 +94,9 @@ change sets `cleared_at` and `cleared_by_run` while keeping the reason; nothing
 is deleted. Plan reads these rows to report review-required evidence, and
 previews the reviews an unapplied diff would raise without writing them.
 
-A Rule with no active implementation binding is a valid unimplemented Rule. This
-semantic change does not alter the version `1` record shape: existing source
-fields remain citations and do not count as implementation, so existing
-records need no migration.
+A Rule with no active implementation binding is a valid unimplemented Rule.
+A rule's source document and section are citations and do not count as
+implementation.
 
 Callback-backed SDK runs are distinct volatile evidence. They are stored in
 `.provenance/cache/scopes/<scope>/verification-runs.jsonl`, linked to a
@@ -112,9 +143,10 @@ finished. Files and containing directories are synced where the platform support
 not overstated as crash-atomic: cooperating access never sees missing live state, interruption is
 recoverable on next access, and any import command that returns failure leaves the old live state.
 
-Graph reference v1 canonicalizes a selected scope into a JSON object with fixed graph
+A graph reference canonicalizes a selected scope into a JSON object with fixed graph
 families and records sorted by stable ID. JSON object keys are lexicographically ordered
 before SHA-256 hashing. The projection contains the selected manifest scope and its
-sources, domains, requirements, boundaries, topics, questions, resolutions, rules, and
-edges. Threads, messages, contributions, synthesis packets, proposals, assertions,
-dispositions, cache data, and wiki output are excluded.
+sources, domains, requirements, boundaries, topics, questions, resolutions, and rules;
+relations travel as the fields on those records. Threads, messages, contributions,
+synthesis packets, proposals, assertions, dispositions, cache data, and wiki output are
+excluded.

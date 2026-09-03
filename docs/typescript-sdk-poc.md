@@ -5,8 +5,8 @@
 The typed surface works with a small façade and a one-shot child-process
 protocol. TypeScript owns pure declaration construction, immutable handles,
 callback execution, and error serialization. The Rust engine assigns IDs,
-validates and reconciles records, writes canonical state and graph edges, and
-stores verification outcomes.
+validates and reconciles records, writes canonical state with the relation
+fields each record carries, and stores verification outcomes.
 
 The package interface is:
 
