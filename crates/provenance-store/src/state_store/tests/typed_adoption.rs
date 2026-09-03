@@ -428,13 +428,5 @@ fn an_exact_unowned_rule_can_be_adopted_without_changing_its_relationship() {
         .find(|rule| rule.id.as_str() == "rule_existing")
         .unwrap();
     assert_eq!(rule.declared_by.as_deref(), Some(OWNER));
-    assert_eq!(
-        store
-            .list_edges()
-            .unwrap()
-            .iter()
-            .filter(|edge| edge.to_id.as_str() == "rule_existing")
-            .count(),
-        1
-    );
+    assert_eq!(rule.requirement_ids.len(), 1);
 }

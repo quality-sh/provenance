@@ -127,21 +127,3 @@ fn each_scoped_family_derives_from_its_own_scope_and_the_global_unit_only() {
     }
     assert!(recorded_any, "the derivations must record their reads");
 }
-
-#[test]
-fn the_edges_family_derives_from_the_global_unit_only() {
-    let (_dir, layout, _first, _second) = two_scope_layout();
-    let store = StateStore::new(layout);
-    crate::test_probes::start_recording_reads();
-    ProjectionFamily::Edges
-        .canonical_records(&store, None)
-        .unwrap();
-    let reads = crate::test_probes::take_recorded_reads();
-    assert!(!reads.is_empty());
-    for path in &reads {
-        assert!(
-            matches!(locality(path), Locality::Global),
-            "edges read outside the global unit: {path}"
-        );
-    }
-}

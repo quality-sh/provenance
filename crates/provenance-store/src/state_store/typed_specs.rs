@@ -2,7 +2,6 @@ mod adoption;
 mod identity;
 mod lifecycle;
 mod reconcile;
-mod relationships;
 mod rule_addresses;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -16,7 +15,7 @@ use provenance_macros::rule;
 use super::requirement_reviews;
 use super::{
     ReconcileState, ReconciledResource, StateStore, TypedDeclarationKind, TypedFieldChange,
-    TypedRequirementInput, TypedRuleInput, TypedSpecInput, TypedSpecResult,
+    TypedRuleInput, TypedSpecInput, TypedSpecResult,
 };
 use crate::shards;
 use identity::{
@@ -49,10 +48,7 @@ struct DesiredTypedIds {
 pub(super) struct DesiredTypedGraph<'a> {
     pub(super) spec: &'a str,
     pub(super) owner: &'a str,
-    pub(super) requirements: &'a [TypedRequirementInput],
     pub(super) rules: &'a [TypedRuleInput],
-    pub(super) source_ids: &'a BTreeMap<String, StableId>,
-    pub(super) requirement_ids: &'a BTreeMap<String, StableId>,
     pub(super) rule_ids: &'a BTreeMap<DeclarationAddress, StableId>,
 }
 
@@ -156,7 +152,6 @@ impl StateStore {
         }
         let adopted_rule_ids = adopted_rule_ids(&input);
 
-        let requirement_relationships = input.requirements.clone();
         let rule_relationships = input.rules.clone();
         let spec = input.spec;
         let (sources, source_resources) = reconcile_sources(
@@ -190,10 +185,7 @@ impl StateStore {
         let graph = DesiredTypedGraph {
             spec: &spec,
             owner: &input.declared_by,
-            requirements: &requirement_relationships,
             rules: &rule_relationships,
-            source_ids: &ids.sources,
-            requirement_ids: &ids.requirements,
             rule_ids: &ids.rules,
         };
         let implementation_reconciliation = super::implementation_bindings::reconcile(
@@ -233,7 +225,6 @@ impl StateStore {
                 &shards::implementation_bindings_path(&self.layout, scope_id),
                 implementation_reconciliation.records,
             )?;
-            relationships::reconcile(self, scope_id, graph)?;
             self.raise_requirement_reviews(scope_id, &requirement_resources, &rule_resources)?;
         }
 

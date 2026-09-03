@@ -177,12 +177,9 @@ fn moving_a_rule_between_requirements_preserves_id_and_reparents_the_edge() {
     assert_eq!(rule["parent"], "sessions");
 
     sdk(repo, "apply", &moved).unwrap();
-    let produces = read_edges(directory.path())
-        .into_iter()
-        .filter(|edge| edge["edge_type"] == "produces" && edge["to_id"] == rule_id)
-        .collect::<Vec<_>>();
-    assert_eq!(produces.len(), 1);
-    assert_eq!(produces[0]["from_id"], sessions_id);
+    let rules = read_records(directory.path(), "rules/rule.jsonl");
+    let moved = rules.iter().find(|rule| rule["id"] == rule_id).unwrap();
+    assert_eq!(moved["requirement_ids"], json!([sessions_id]));
 }
 
 #[test]
@@ -217,14 +214,6 @@ fn plan_returns_an_ownership_conflict_while_apply_refuses_it() {
 
 fn read_records(root: &std::path::Path, relative: &str) -> Vec<Value> {
     std::fs::read_to_string(root.join(".provenance/state/scopes/default").join(relative))
-        .unwrap()
-        .lines()
-        .map(|line| serde_json::from_str(line).unwrap())
-        .collect()
-}
-
-fn read_edges(root: &std::path::Path) -> Vec<Value> {
-    std::fs::read_to_string(root.join(".provenance/state/edges/edges-00.jsonl"))
         .unwrap()
         .lines()
         .map(|line| serde_json::from_str(line).unwrap())

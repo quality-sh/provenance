@@ -1,7 +1,7 @@
 use super::writers::sorted_ids;
 use super::{CreateResolutionInput, CreateRuleInput, StateStore};
 use crate::shards;
-use provenance_core::{EdgeType, NodeType, Resolution, Rule, SUPPORTED_SCHEMA_VERSION};
+use provenance_core::{NodeType, Resolution, Rule, SUPPORTED_SCHEMA_VERSION};
 
 impl StateStore {
     pub fn create_resolution(&self, input: CreateResolutionInput) -> anyhow::Result<Resolution> {
@@ -71,24 +71,6 @@ impl StateStore {
             records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
             Ok(resolution)
         })?;
-        for requirement_id in requirement_ids {
-            self.add_edge(
-                scope_id.clone(),
-                EdgeType::Needs,
-                NodeType::Requirement,
-                requirement_id.clone(),
-                NodeType::Resolution,
-                id.clone(),
-            )?;
-            self.add_edge(
-                scope_id.clone(),
-                EdgeType::Resolves,
-                NodeType::Resolution,
-                id.clone(),
-                NodeType::Requirement,
-                requirement_id,
-            )?;
-        }
         Ok(resolution)
     }
 
@@ -151,26 +133,6 @@ impl StateStore {
             records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
             Ok(rule)
         })?;
-        for requirement_id in requirement_ids {
-            self.add_edge(
-                scope_id.clone(),
-                EdgeType::Produces,
-                NodeType::Requirement,
-                requirement_id,
-                NodeType::Rule,
-                id.clone(),
-            )?;
-        }
-        for resolution_id in resolution_ids {
-            self.add_edge(
-                scope_id.clone(),
-                EdgeType::Produces,
-                NodeType::Resolution,
-                resolution_id,
-                NodeType::Rule,
-                id.clone(),
-            )?;
-        }
         Ok(rule)
     }
 }

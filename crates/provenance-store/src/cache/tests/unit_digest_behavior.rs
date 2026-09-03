@@ -42,6 +42,7 @@ fn temporary_write_residue_does_not_move_a_unit_digest() {
         .unwrap()
         .to_path_buf();
     std::fs::write(requirements_dir.join(".tmpAbC123"), b"half-written").unwrap();
+    std::fs::create_dir_all(layout.edges_dir()).unwrap();
     std::fs::write(layout.edges_dir().join(".tmpXyZ789"), b"half-written").unwrap();
 
     assert_eq!(scope_digest(&layout, &scope), before);
@@ -70,44 +71,6 @@ fn the_global_unit_covers_every_canonical_file_outside_scopes() {
         "the manifest is global"
     );
     assert_eq!(scope_digest(&layout, &scope), scope_before, "scopes stand");
-}
-
-#[tokio::test]
-async fn a_scope_departure_never_deletes_edge_rows() {
-    let (_dir, layout, _scope) = seeded_layout();
-    materialize_state(&layout).await.unwrap();
-    let pool = open_cache(&layout).await.unwrap();
-    let edges_before: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM edges")
-        .fetch_one(&pool)
-        .await
-        .unwrap();
-    pool.close().await;
-    assert!(edges_before > 0);
-
-    // The scope leaves the manifest. Rebuild loads the edge shard regardless
-    // of the manifest.
-    let mut manifest: provenance_core::Manifest =
-        serde_json::from_slice(&std::fs::read(layout.manifest_path()).unwrap()).unwrap();
-    manifest.scopes.clear();
-    std::fs::write(
-        layout.manifest_path(),
-        serde_json::to_vec(&manifest).unwrap(),
-    )
-    .unwrap();
-
-    let report = catch_up_state(&layout).await.unwrap();
-    assert!(!report.rebuilt);
-    let pool = open_cache(&layout).await.unwrap();
-    let edges_after: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM edges")
-        .fetch_one(&pool)
-        .await
-        .unwrap();
-    assert_eq!(
-        edges_after, edges_before,
-        "edge rows belong to the global unit"
-    );
-    pool.close().await;
-    assert_catch_up_equals_rebuild(&layout).await;
 }
 
 #[tokio::test]

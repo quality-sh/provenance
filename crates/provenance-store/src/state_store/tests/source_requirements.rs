@@ -1,6 +1,6 @@
 use super::{initialized_store, seeded_requirement_store, seeded_source_requirement_store};
 use crate::state_store::{AddSourceReferenceInput, CreateRequirementInput, CreateSourceInput};
-use provenance_core::{EdgeType, RequirementStatus, SourceType, StableId};
+use provenance_core::{RequirementStatus, SourceType, StableId};
 
 #[test]
 fn source_requirement_records_are_written_deterministically() {
@@ -50,9 +50,12 @@ fn source_requirement_records_are_written_deterministically() {
         "source_schads"
     );
     assert_eq!(
-        store.list_edges().unwrap()[0].edge_type,
-        EdgeType::References
+        store.list_requirements(&scope).unwrap()[0].source_refs[0]
+            .source_id
+            .as_str(),
+        "source_schads"
     );
+    assert!(store.list_edges().unwrap().is_empty());
 }
 
 #[test]
@@ -241,7 +244,6 @@ fn repository_publication_excludes_an_entire_multi_shard_write() {
     publisher.join().unwrap();
     writer.join().unwrap();
 
-    assert_eq!(store.list_edges().unwrap().len(), 1);
     assert_eq!(
         store.list_requirements(&scope).unwrap()[0].source_refs,
         vec![provenance_core::SourceReference {

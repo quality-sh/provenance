@@ -93,7 +93,7 @@ fn rule_adoption_rejects_a_definition_change() {
 #[test]
 fn rule_adoption_rejects_a_requirement_relationship_change() {
     let (_dir, store, scope) = store_with_unowned_rule();
-    let before = store.list_edges().unwrap();
+    let before = store.list_rules(&scope).unwrap();
     let input = rule_input("second", "The canonical Rule keeps its identity");
 
     let plan = store.plan_typed_spec(&scope, input.clone()).unwrap();
@@ -103,10 +103,11 @@ fn rule_adoption_rejects_a_requirement_relationship_change() {
         .iter()
         .any(|change| change.field == "relationships")));
     assert!(store.apply_typed_spec(&scope, input).is_err());
-    assert_eq!(store.list_edges().unwrap(), before);
+    assert_eq!(store.list_rules(&scope).unwrap(), before);
 }
 
 #[test]
+#[allow(clippy::too_many_lines)]
 fn rule_adoption_preserves_a_resolution_relationship_outside_the_typed_surface() {
     let (_dir, store, scope) = initialized_store();
     store
@@ -168,7 +169,7 @@ fn rule_adoption_preserves_a_resolution_relationship_outside_the_typed_surface()
             origin_message: None,
         })
         .unwrap();
-    let before = store.list_edges().unwrap();
+    let before = store.list_rules(&scope).unwrap();
     let mut input = document(
         OWNER,
         vec![
@@ -202,10 +203,14 @@ fn rule_adoption_preserves_a_resolution_relationship_outside_the_typed_surface()
     let plan = store.plan_typed_spec(&scope, input.clone()).unwrap();
     assert_eq!(plan.conflicts, 0);
     store.apply_typed_spec(&scope, input).unwrap();
-    assert_eq!(store.list_edges().unwrap().len(), before.len());
-    assert!(store.list_edges().unwrap().iter().any(|edge| {
-        edge.from_type == provenance_core::NodeType::Resolution
-            && edge.from_id.as_str() == "req_first"
-            && edge.to_id.as_str() == "rule_existing"
-    }));
+    let rules = store.list_rules(&scope).unwrap();
+    assert_eq!(rules.len(), before.len());
+    let existing = rules
+        .iter()
+        .find(|rule| rule.id.as_str() == "rule_existing")
+        .unwrap();
+    assert!(existing
+        .resolution_ids
+        .iter()
+        .any(|id| id.as_str() == "req_first"));
 }

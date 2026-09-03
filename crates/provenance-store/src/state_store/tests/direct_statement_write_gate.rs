@@ -25,9 +25,9 @@ fn semicolon_free_requirement_and_rule_are_written() {
         ))
         .unwrap();
 
+    assert_eq!(rule.requirement_ids, vec![requirement.id.clone()]);
     assert_eq!(store.list_requirements(&scope).unwrap(), vec![requirement]);
     assert_eq!(store.list_rules(&scope).unwrap(), vec![rule]);
-    assert_eq!(store.list_edges().unwrap().len(), 1);
 }
 
 #[test]

@@ -358,16 +358,11 @@ fn merging_multiple_local_candidates_requires_an_explicit_existing_id() {
     assert!(records
         .iter()
         .any(|record| record["id"] == sessions_id && record["retired"] == true));
-    let edges = read_jsonl(
-        &directory
-            .path()
-            .join(".provenance/state/edges/edges-00.jsonl"),
-    );
     assert_eq!(
-        edges
+        records
             .iter()
-            .filter(|edge| edge["edge_type"] == "produces")
-            .count(),
+            .map(|record| record["requirement_ids"].as_array().map_or(0, Vec::len))
+            .sum::<usize>(),
         3
     );
 }
