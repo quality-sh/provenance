@@ -197,10 +197,12 @@ pub(super) fn trace(
 /// Refuses a filter naming a relation no declaration carries.
 fn ensure_relations(relations: &[String]) -> anyhow::Result<()> {
     for name in relations {
-        anyhow::ensure!(
-            provenance_core::model::relations::is_relation_name(name),
-            "unknown relation `{name}`"
-        );
+        if !provenance_core::model::relations::is_relation_name(name) {
+            anyhow::bail!(
+                "{}",
+                provenance_core::model::relations::unknown_relation_refusal(name)
+            );
+        }
     }
     Ok(())
 }

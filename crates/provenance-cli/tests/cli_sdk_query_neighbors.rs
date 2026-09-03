@@ -95,6 +95,69 @@ fn neighbors_refuses_a_relation_no_declaration_carries() {
     assert!(error.contains("unknown relation `produces`"), "{error}");
 }
 
+/// A retired edge name says what holds the fact now, and every refusal
+/// lists the closed vocabulary.
+#[test]
+fn a_retired_relation_names_its_replacement_and_the_refusal_lists_the_vocabulary() {
+    let directory = init_repo();
+    let repo = directory.path().to_str().unwrap();
+    let ids = apply_shared_rule(&directory);
+
+    let error = sdk_error(
+        repo,
+        "neighbors",
+        &json!({"id": ids.rule.as_str(), "relations": ["refines_into"]}),
+    );
+
+    assert!(error.contains("unknown relation `refines_into`"), "{error}");
+    assert!(error.contains("it is now refines"), "{error}");
+    for name in [
+        "cites",
+        "contradicts",
+        "depends_on",
+        "domain_id",
+        "links",
+        "refines",
+        "requirement_id",
+        "requirement_ids",
+        "resolution_id",
+        "resolution_ids",
+        "spawned_by",
+        "supersedes",
+        "topic_id",
+    ] {
+        assert!(error.contains(&format!("`{name}`")), "{error}");
+    }
+}
+
+#[test]
+fn every_retired_edge_name_names_what_holds_the_fact_now() {
+    let directory = init_repo();
+    let repo = directory.path().to_str().unwrap();
+    let ids = apply_shared_rule(&directory);
+    let replacements = [
+        ("references", "it is now cites"),
+        ("refines_into", "it is now refines"),
+        (
+            "produces",
+            "it is now requirement_ids/resolution_ids on the rule",
+        ),
+        ("resolves", "it is now requirement_ids on the resolution"),
+        ("spawns", "it is now spawned_by on the requirement"),
+        ("superseded_by", "it is now supersedes on the newer record"),
+        ("needs", "it is removed"),
+    ];
+
+    for (retired, clause) in replacements {
+        let error = sdk_error(
+            repo,
+            "neighbors",
+            &json!({"id": ids.rule.as_str(), "relations": [retired]}),
+        );
+        assert!(error.contains(clause), "{retired}: {error}");
+    }
+}
+
 #[test]
 fn neighbors_bounds_its_page_and_says_when_more_remain() {
     let directory = init_repo();

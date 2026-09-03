@@ -53,3 +53,47 @@ pub fn is_relation_name(name: &str) -> bool {
             .flat_map(|table| table.iter())
             .any(|decl| decl.name == name)
 }
+
+/// The clause a retired edge name carries in a refusal: the field or
+/// record that holds the fact now, or that the fact is gone.
+fn retired_clause(name: &str) -> Option<&'static str> {
+    match name {
+        "references" => Some("it is now cites"),
+        "refines_into" => Some("it is now refines"),
+        "produces" => Some("it is now requirement_ids/resolution_ids on the rule"),
+        "resolves" => Some("it is now requirement_ids on the resolution"),
+        "spawns" => Some("it is now spawned_by on the requirement"),
+        "superseded_by" => Some("it is now supersedes on the newer record"),
+        "needs" => Some("it is removed"),
+        _ => None,
+    }
+}
+
+/// The valid relation names in alphabetical order.
+pub fn relation_names() -> Vec<&'static str> {
+    let mut names: Vec<&'static str> = declared_relations()
+        .iter()
+        .flat_map(|table| table.iter())
+        .map(|decl| decl.name)
+        .collect();
+    names.push(LINKS);
+    names.sort_unstable();
+    names.dedup();
+    names
+}
+
+/// How a filter naming an unknown relation is refused: the replacement
+/// for a retired name, then the closed vocabulary.
+pub fn unknown_relation_refusal(name: &str) -> String {
+    let retired = retired_clause(name)
+        .map(|clause| format!("; {clause}"))
+        .unwrap_or_default();
+    format!(
+        "unknown relation `{name}`{retired}. valid relations: {}",
+        relation_names()
+            .iter()
+            .map(|relation| format!("`{relation}`"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
+}
