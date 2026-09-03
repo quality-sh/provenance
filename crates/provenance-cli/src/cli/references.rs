@@ -122,7 +122,7 @@ pub enum RequirementListCommand {
 pub enum RuleListCommand {
     /// Add one record to the list.
     Add(RuleTarget),
-    /// Remove one record from the list; a rule keeps its last requirement.
+    /// Remove one record from the list.
     Clear(RuleTarget),
 }
 
@@ -131,7 +131,7 @@ pub enum RuleListCommand {
 pub enum ResolutionListCommand {
     /// Add one record to the list.
     Add(ResolutionTarget),
-    /// Remove one record from the list; a resolution keeps its last requirement.
+    /// Remove one record from the list.
     Clear(ResolutionTarget),
 }
 

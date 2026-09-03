@@ -29,3 +29,20 @@ fn nested_help_parses_commands_from_each_cli_domain() {
         provenance().args(command).assert().success();
     }
 }
+
+/// Neither list is required: emptying one is allowed, so the help text
+/// must not claim a last entry is kept.
+#[test]
+fn optional_list_clear_help_does_not_claim_a_required_last_entry() {
+    for command in [
+        &["resolutions", "supersedes", "clear", "--help"][..],
+        &["rules", "resolution", "clear", "--help"][..],
+    ] {
+        provenance()
+            .args(command)
+            .assert()
+            .success()
+            .stdout(contains("Remove one record from the list"))
+            .stdout(contains("keeps its last requirement").not());
+    }
+}
