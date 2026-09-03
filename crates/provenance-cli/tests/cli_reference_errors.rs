@@ -243,3 +243,73 @@ fn every_relation_family_names_its_owner_flag() {
             .stderr(contains(*expected));
     }
 }
+
+#[test]
+fn a_clear_refusal_names_the_relation_it_searched() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = dir.path();
+    init(repo);
+    requirement(repo, "req_refund_amount");
+    requirement(repo, "req_refund_window");
+    provenance(
+        repo,
+        &[
+            "requirements",
+            "depends-on",
+            "add",
+            "--requirement-id",
+            "req_refund_amount",
+            "--target-id",
+            "req_refund_window",
+        ],
+    )
+    .assert()
+    .success();
+
+    provenance(
+        repo,
+        &[
+            "requirements",
+            "supersedes",
+            "clear",
+            "--requirement-id",
+            "req_refund_amount",
+            "--target-id",
+            "req_refund_window",
+        ],
+    )
+    .assert()
+    .failure()
+    .stderr(contains(
+        "requirement req_refund_amount does not name requirement req_refund_window under supersedes",
+    ));
+
+    provenance(
+        repo,
+        &[
+            "requirements",
+            "supersedes",
+            "add",
+            "--requirement-id",
+            "req_refund_amount",
+            "--target-id",
+            "req_refund_window",
+        ],
+    )
+    .assert()
+    .success();
+    provenance(
+        repo,
+        &[
+            "requirements",
+            "supersedes",
+            "clear",
+            "--requirement-id",
+            "req_refund_amount",
+            "--target-id",
+            "req_refund_window",
+        ],
+    )
+    .assert()
+    .success();
+}

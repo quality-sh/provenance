@@ -166,6 +166,31 @@ fn a_missing_owner_is_refused_by_its_own_id_and_flag() {
 }
 
 #[test]
+fn a_clear_refusal_names_the_relation_it_searched() {
+    let (_dir, store, scope) = seeded_requirement_store();
+    requirement(&store, &scope, "req_rates");
+    requirement(&store, &scope, "req_leave");
+    store
+        .add_requirement_depends_on(&scope, &sid("req_overtime"), sid("req_rates"))
+        .unwrap();
+
+    let error = store
+        .clear_requirement_supersedes(&scope, &sid("req_overtime"), &sid("req_rates"))
+        .unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "requirement req_overtime does not name requirement req_rates under supersedes"
+    );
+    let error = store
+        .clear_requirement_depends_on(&scope, &sid("req_overtime"), &sid("req_leave"))
+        .unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "requirement req_overtime does not name requirement req_leave under depends_on"
+    );
+}
+
+#[test]
 fn a_required_list_keeps_its_last_entry() {
     let (_dir, store, scope) = seeded_requirement_store();
     store
@@ -265,6 +290,6 @@ fn a_citation_clears_by_source() {
         .unwrap_err();
     assert_eq!(
         error.to_string(),
-        "requirement req_overtime does not cite source source_schads"
+        "requirement req_overtime does not name source source_schads under cites"
     );
 }

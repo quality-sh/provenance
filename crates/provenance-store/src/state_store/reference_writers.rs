@@ -217,11 +217,12 @@ impl StateStore {
                     .position(|entry| entry == target)
                     .ok_or_else(|| {
                         anyhow::anyhow!(
-                            "{} {} does not name {} {}",
+                            "{} {} does not name {} {} under {}",
                             kind_word(T::OWNER),
                             owner.as_str(),
                             kind_word(decl.target),
-                            target.as_str()
+                            target.as_str(),
+                            decl.name
                         )
                     })?;
                 anyhow::ensure!(

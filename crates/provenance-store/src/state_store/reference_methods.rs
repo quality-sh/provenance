@@ -164,7 +164,7 @@ impl StateStore {
                         .source_refs
                         .iter()
                         .any(|entry| &entry.source_id == source),
-                    "requirement {} does not cite source {}",
+                    "requirement {} does not name source {} under cites",
                     requirement.as_str(),
                     source.as_str()
                 );
