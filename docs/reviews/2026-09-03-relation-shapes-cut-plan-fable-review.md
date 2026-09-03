@@ -81,3 +81,56 @@ The plan is faithful to the resolution on shape and scope and its counts reprodu
 - `syn`, `quote`, `proc-macro2`, `trybuild` are already in `Cargo.lock` at the versions the plan needs; `provenance-macros/Cargo.toml` has no dependencies today.
 - `OrphanResolution` deletion is safe: 0 resolutions lack a `resolves` row.
 - The two needs-only pairs, three field-only citations, one `superseded_by`, and `res_rule_is_the_function` (status `superseded`, no successor) are exactly as G reports them.
+
+
+---
+
+# Re-review of revision 2 (ce495d5), same reviewer
+
+# Re-review: revision 2 @ ce495d5
+
+## VERDICT: APPROVE WITH AMENDMENTS (five, all local to I, E, B; none reopens a design point)
+
+All fourteen findings are closed with file:line that checks out at this head. The revision introduces no design defect; it introduces three specification gaps in the harness and one unstated cost in the validator that an implementer would otherwise guess at.
+
+## Findings 1-14: status
+
+| # | Status | Evidence at ce495d5 |
+|---|---|---|
+| 1 flow orientation | Closed | `flow` on every C row (plan:63-79); directed-walk rule (plan:186-191); `queries/impact.rs` "uses the downstream walk" (plan:221); mutation target "invert one flow" (plan:341). Table checked row by row against today's `impact.rs:81-83` semantics: `cites`, `refines`, `spawned_by`, both rule lists, `resolution.requirement_ids` reproduce today's requirement/source answers. |
+| 2 harness normalization | Closed, with residuals (A, B below) | Nine-row table (plan:306-318), owner flips, direction flip for neighbors, enumerated deltas (plan:320-327). |
+| 3 commit order | Closed | K.3 double-writes, K.4 readers + adoption + merge gate, K.5 stops edge writes (plan:387-395). |
+| 4 converter vs guard | Closed | Reads raw below the guard, writes the constant, `--versions-only`, K.3/K.4 at 1, K.7 at 2 (plan:245-249, 397-400). |
+| 5 bare `StableId` / seven kinds | Closed | B: bare = required single (plan:25-26); seven kinds (plan:33); trybuild "required single" removed (plan:346-347). |
+| 6 `links` | Closed | Hand-written `links` contribution; `validate_artifact_links` is at `shaping_writers/artifact_links.rs:9`, `check_artifact_links` at `references.rs:39` (plan:38-42). |
+| 7 version literals | Closed | Four production sites named (plan:229-230); grep gate with the one exemption, `cli_record_schema_versions.rs` exists. "83 test files" is approximate (93 by my grep including `SchemaVersion(1)` in unit tests); the gate makes the number moot. |
+| 8 W3/W5 text location | Closed | File and branch named; edits land on beads 1wh.2/1wh.3 (plan:356-358). |
+| 9 dead `convert-edges` message | Closed | `deny_unknown_fields` at `export.rs:8`, serde message, no converter name (plan:216-217). |
+| 10 citation name | Closed | `cites` (plan:65, 205). |
+| 11 hand-list test | Closed | plan:35-36, 340. |
+| 12 reconcile semantics/split | Closed | Present = authoritative, absent = untouched; `desired_requirement` is `reconcile.rs:142-174`; split into `reconcile/{sources,requirements,rules,changes,references}.rs` matches the function groups at `reconcile.rs:16-422` (plan:135-142). |
+| 13 deslop exemptions, doc sites | Closed | plan:409-411; `shaping.md:233-256`, `typescript-sdk-poc.md:8` (plan:279-280). |
+| 14 omissions | Closed | `CreateEdgeInput` (`inputs.rs:54-61`), `list_edges`/`closed_edges`, `load_edges`, `projection_digest_sensitivity.rs:29`, aggregate validator (plan:174-184, 233-236). |
+
+## Amendments (precise)
+
+**A. Harness (I): trace must be snapshotted with `direction: both`, and the contradiction depth shift listed.** Trace rows are `(node, depth)` (`walk.rs:98-147`), not edge-shaped, so the nine-row table cannot normalize them, and under `out` or `in` every flipped relation changes the reachable set (today `out` from a resolution reaches rules at depth 2 via `produces`; after the cut rules sit in the `in` direction of `requirement_ids`). Under `both`, undirected reachability is preserved (`needs` mirrors `resolves` modulo the 2 union pairs, which the union restores) except that the contradiction pair goes from depth 1 to depth 2 through the minted question. Say: trace and neighbors snapshots use `both`; the expected-diff file lists the pair's depth change and any node whose shortest path ran through that pair.
+
+**B. Expected-diff counts (plan:321-327): three corrections.** (1) Questions with `resolution_id` are 4, not 3, at ce891fe (`git show ce891fe:…/question.jsonl`). (2) Missing: the one boundary with `source_ref` (1 of 3) gains a source neighbor and the source the reverse row. (3) Missing: G.9 writes `res_state_is_jsonl_in_git.supersedes = [res_convex…]`, which today's edge-only walk never showed, so 1 row each way is new. The other counts verify: 67 requirements / 8 domains (all 8 referenced), 9 questions, 5 topics, 3 boundaries, 3 field-only citations.
+
+**C. Aggregate validator (E, plan:233-236; L1): name the added reads.** `validate_ideation_scope_snapshot` (`ideation_batches.rs:143-185`) reads contributions, synthesis packets, proposal cards, assertions, dispositions, legacy dispositions, and landings only; it never loads rules, resolutions, or requirements. "Refuses an empty required list and a cycle" therefore means adding three family reads to that validator (same scope directory, so the locality guard still holds) or adding a sibling graph validator at the same four call sites. State which; it is also where the cycle check for the state-level case (L13) lives.
+
+**D. Compile-time guard (B, plan:31-32): state the exemption for X-class pointers.** `origin_thread` and `origin_message` are `Option<StableId>` on all four graph kinds (`artifacts.rs:266,272,311,317,394,400,438,444`) and point at threads and messages, which the table deliberately leaves out (L12). As written the derive refuses them. Choose a form: a fixed name list inside the derive, or `#[relation(none)]` on the field; the spike used the name list.
+
+**E. Harness scope (I): impact from a resolution changes and is not snapshotted.** With `resolution.requirement_ids` as `target_upstream`, downstream from a resolution no longer contains its requirements (today `resolves` put them downstream). The harness runs impact "per requirement and source" only. Either add resolutions to the impact set and list the delta, or state that resolution-origin impact is out of the parity contract.
+
+## Checked, clean
+
+- Legacy digests: `frozen_digest` serializes the whole record (`legacy_audit.rs:50-60`), so the version rewrite moves both constants (`legacy_audit.rs:19-21`); callers `legacy_validation.rs:23,42` and `ideation_batches.rs:458`; `read_legacy_dispositions` goes through `read_records` and the guard (`readers.rs:206-217`). F's recomputation is required and correctly placed in K.7.
+- Converter idempotence: set-union steps plus field deletion in G.9 make a crash rerun a no-op; the version write through the constant closes the K.3/K.7 contradiction.
+- K per-commit green claims hold as stated: K.3 adoption still compares edges that writers still write; K.4 moves readers, adoption, and the merge gate together; K.5 stops writes after no reader needs them. K.2's "additive" holds if `superseded_by` stays on the structs until K.3 (its flag is removed there) — implied, not stated; harmless.
+- Flow table: `depends_on`/`supersedes` `target_downstream` reproduce today's `from→to` direction (0 rows either way); `domain_id` and the question/topic/boundary keys `none` match today's edge-only impact, which never walked them.
+- `links` rows carry a per-entry target kind; the `relations` table's `target_type` column holds it; dangling and check keep the hand-written link checks.
+- `check/scope/core.rs:274-332` covers the boundary/topic/question key checks named; the `source_refs` check at :237 folds into the same generic pass and the `superseded_by` checks at :210-218, :344-352 go with the field (not stated; no ambiguity).
+- Trybuild set (bad type, unknown key, missing target, undeclared `StableId`) matches what the spike's derive refuses.
+- No new invented term reaches a command, field, doc, or message; `flow` values (`target_upstream`, `target_downstream`, `none`) are attribute-internal.
