@@ -21,7 +21,7 @@ pub use front::{
     RelationRow, RelationSource, LINKS,
 };
 pub use integrity::{
-    cycle_in, cycle_refusal, kind_word, missing_required, reaches, required_refusal,
+    cycle_in, cycle_refusal, kind_word, missing_required, reaches, required_refusal, RelationCycle,
 };
 
 use super::shaping::{Boundary, Question, Topic};

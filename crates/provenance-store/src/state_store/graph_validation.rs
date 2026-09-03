@@ -48,8 +48,8 @@ fn ensure_required<T: RelationOwner>(records: &[T]) -> anyhow::Result<()> {
 
 fn ensure_acyclic(requirements: &[Requirement]) -> anyhow::Result<()> {
     for name in REQUIREMENT_CHAINS {
-        if let Some((from, through)) = cycle_in(requirements, name) {
-            anyhow::bail!("{}", cycle_refusal(name, &from, &through));
+        if let Some(cycle) = cycle_in(requirements, name) {
+            anyhow::bail!("{}", cycle_refusal(name, &cycle));
         }
     }
     Ok(())

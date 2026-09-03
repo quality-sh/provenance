@@ -86,6 +86,6 @@ fn a_refines_cycle_in_state_is_refused_by_the_validator() {
 
     assert_eq!(
         error.to_string(),
-        "refines from req_leave to req_rates would form a cycle"
+        "refines forms a cycle: req_leave -> req_rates -> req_leave"
     );
 }
