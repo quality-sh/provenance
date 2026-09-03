@@ -17,10 +17,7 @@ impl Assembler<'_> {
             .filter(|gap| {
                 !matches!(
                     gap.kind,
-                    GapKind::OrphanRule
-                        | GapKind::OrphanResolution
-                        | GapKind::UnreferencedSource
-                        | GapKind::OpenQuestion
+                    GapKind::UnreferencedSource | GapKind::OpenQuestion
                 )
             })
             .map(|gap| self.gap_notice(gap, None))
@@ -54,36 +51,6 @@ impl Assembler<'_> {
 
     fn orphan_report(&self) -> OrphanReport {
         OrphanReport {
-            rules: self
-                .gaps
-                .iter()
-                .filter(|gap| gap.kind == GapKind::OrphanRule)
-                .filter_map(|gap| {
-                    self.state
-                        .rules
-                        .iter()
-                        .find(|rule| rule.id.as_str() == gap.node_id)
-                        .map(|rule| OrphanRecord {
-                            link: rule_link(rule),
-                            reason: gap.reason.clone(),
-                        })
-                })
-                .collect(),
-            resolutions: self
-                .gaps
-                .iter()
-                .filter(|gap| gap.kind == GapKind::OrphanResolution)
-                .filter_map(|gap| {
-                    self.state
-                        .resolutions
-                        .iter()
-                        .find(|resolution| resolution.id.as_str() == gap.node_id)
-                        .map(|resolution| OrphanRecord {
-                            link: resolution_link(resolution),
-                            reason: gap.reason.clone(),
-                        })
-                })
-                .collect(),
             sources: self
                 .gaps
                 .iter()
@@ -170,7 +137,7 @@ impl Assembler<'_> {
         } else {
             format!("A {}", reader_node_word(subject_type))
         };
-        let detail = gap_detail(gap, &subject_text, related.is_some(), owns_subject);
+        let detail = gap_detail(gap, &subject_text, related.is_some());
 
         GapNotice {
             kind: gap.kind,
@@ -194,7 +161,7 @@ impl Assembler<'_> {
     }
 }
 
-fn gap_detail(gap: &GapItem, subject: &str, has_related: bool, owns_subject: bool) -> String {
+fn gap_detail(gap: &GapItem, subject: &str, has_related: bool) -> String {
     match gap.kind {
         GapKind::MissingDomainId => format!("{subject} has no domain."),
         GapKind::MissingSourceRefs => format!("{subject} has no source references."),
@@ -202,9 +169,6 @@ fn gap_detail(gap: &GapItem, subject: &str, has_related: bool, owns_subject: boo
             format!("{subject} is marked resolved but has no resolving decision.")
         }
         GapKind::NoProducedRules => format!("{subject} has no produced rules."),
-        GapKind::OrphanRule if owns_subject => orphan_rule_page_copy(&gap.reason).to_string(),
-        GapKind::OrphanRule => format!("{subject} {}.", orphan_rule_predicate(&gap.reason)),
-        GapKind::OrphanResolution => format!("{subject} does not resolve a requirement."),
         GapKind::UnreferencedSource => {
             format!("{subject} is not referenced by a requirement.")
         }
@@ -227,30 +191,6 @@ fn gap_detail(gap: &GapItem, subject: &str, has_related: bool, owns_subject: boo
         }
         GapKind::OpenQuestion => format!("{subject} has an open question."),
         GapKind::UnexploredTopic => format!("{subject} has an unexplored topic."),
-    }
-}
-
-fn orphan_rule_predicate(reason: &str) -> &'static str {
-    if reason.contains("requirement or resolution") {
-        "has no producing requirement or decision"
-    } else if reason.starts_with("no requirement ") {
-        "has no producing requirement"
-    } else if reason.starts_with("no resolution ") {
-        "has no producing decision"
-    } else {
-        "has no producing requirement or decision"
-    }
-}
-
-fn orphan_rule_page_copy(reason: &str) -> &'static str {
-    if reason.contains("requirement or resolution") {
-        "No requirement or decision is recorded as producing this rule."
-    } else if reason.starts_with("no requirement ") {
-        "No requirement is recorded as producing this rule."
-    } else if reason.starts_with("no resolution ") {
-        "No decision is recorded as producing this rule."
-    } else {
-        "No requirement or decision is recorded as producing this rule."
     }
 }
 

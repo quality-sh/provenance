@@ -77,7 +77,6 @@ pub fn seeded_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
             made_by: None,
             approved_by: None,
             approved_at: None,
-            superseded_by: None,
             origin_thread: None,
             origin_message: None,
         })
@@ -124,7 +123,6 @@ pub fn create_source(store: &StateStore, scope: &ScopeId, id: &str) {
             commit_pin: None,
             effective_date: None,
             review_date: None,
-            superseded_by: None,
             supersedes: Vec::new(),
             origin_thread: None,
             origin_message: None,
@@ -150,6 +148,31 @@ pub fn create_requirement(
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,
+            origin_thread: None,
+            origin_message: None,
+        })
+        .unwrap();
+}
+
+/// A proposed resolution naming one requirement.
+pub fn create_resolution(store: &StateStore, scope: &ScopeId, id: &str, requirement_id: &str) {
+    store
+        .create_resolution(CreateResolutionInput {
+            scope_id: scope.clone(),
+            id: sid(id),
+            title: id.to_string(),
+            requirement_ids: vec![sid(requirement_id)],
+            supersedes: Vec::new(),
+            position: "Adopt".into(),
+            rationale: format!("{id} rationale"),
+            status: ResolutionStatus::Proposed,
+            context: None,
+            enforcement: None,
+            confidence: None,
+            inputs: Vec::new(),
+            made_by: None,
+            approved_by: None,
+            approved_at: None,
             origin_thread: None,
             origin_message: None,
         })

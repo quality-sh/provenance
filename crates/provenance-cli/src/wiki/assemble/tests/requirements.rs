@@ -2,7 +2,7 @@ use super::super::build_corpus;
 use super::fixtures::*;
 use crate::wiki::links::LinkResolver;
 use crate::wiki::model::{GapKind, RecordKind};
-use provenance_core::{EdgeType, NodeType, RequirementStatus};
+use provenance_core::{NodeType, RequirementStatus};
 
 #[test]
 fn requirement_page_assembles_lineage_decision_rules_and_sources() {
@@ -73,8 +73,14 @@ fn requirement_page_flags_missing_sources() {
     assert_eq!(children, vec!["req_child"]);
 }
 
+fn refining(id: &str, statement: &str, parent: &str) -> provenance_core::Requirement {
+    let mut record = requirement(id, statement, RequirementStatus::Active, vec![]);
+    record.refines = Some(sid(parent));
+    record
+}
+
 #[test]
-fn requirement_page_lists_siblings_from_all_parents_without_self_or_duplicates() {
+fn requirement_page_lists_siblings_under_the_same_parent_without_self_in_record_order() {
     let mut state = empty_state();
     state.requirements = vec![
         requirement(
@@ -89,57 +95,10 @@ fn requirement_page_lists_siblings_from_all_parents_without_self_or_duplicates()
             RequirementStatus::Active,
             vec![],
         ),
-        requirement(
-            "req_sibling_beta",
-            "Sibling Beta",
-            RequirementStatus::Active,
-            vec![],
-        ),
-        requirement("req_child", "Child", RequirementStatus::Active, vec![]),
-        requirement(
-            "req_sibling_alpha",
-            "Sibling Alpha",
-            RequirementStatus::Active,
-            vec![],
-        ),
-        requirement(
-            "req_sibling_only_b",
-            "Sibling Only B",
-            RequirementStatus::Active,
-            vec![],
-        ),
-    ];
-    state.edges = vec![
-        edge(
-            EdgeType::RefinesInto,
-            (NodeType::Requirement, "req_parent_a"),
-            (NodeType::Requirement, "req_child"),
-        ),
-        edge(
-            EdgeType::RefinesInto,
-            (NodeType::Requirement, "req_parent_a"),
-            (NodeType::Requirement, "req_sibling_beta"),
-        ),
-        edge(
-            EdgeType::RefinesInto,
-            (NodeType::Requirement, "req_parent_a"),
-            (NodeType::Requirement, "req_sibling_alpha"),
-        ),
-        edge(
-            EdgeType::RefinesInto,
-            (NodeType::Requirement, "req_parent_b"),
-            (NodeType::Requirement, "req_child"),
-        ),
-        edge(
-            EdgeType::RefinesInto,
-            (NodeType::Requirement, "req_parent_b"),
-            (NodeType::Requirement, "req_sibling_alpha"),
-        ),
-        edge(
-            EdgeType::RefinesInto,
-            (NodeType::Requirement, "req_parent_b"),
-            (NodeType::Requirement, "req_sibling_only_b"),
-        ),
+        refining("req_sibling_beta", "Sibling Beta", "req_parent_a"),
+        refining("req_child", "Child", "req_parent_a"),
+        refining("req_sibling_alpha", "Sibling Alpha", "req_parent_a"),
+        refining("req_cousin", "Cousin", "req_parent_b"),
     ];
     let resolver = LinkResolver::new(None);
     let corpus = build_corpus(&state, &resolver);
@@ -150,14 +109,10 @@ fn requirement_page_lists_siblings_from_all_parents_without_self_or_duplicates()
         .iter()
         .map(|link| link.target.record_id.as_str())
         .collect();
-    assert_eq!(
-        sibling_ids,
-        vec![
-            "req_sibling_beta",
-            "req_sibling_alpha",
-            "req_sibling_only_b"
-        ]
-    );
+    assert_eq!(sibling_ids, vec!["req_sibling_beta", "req_sibling_alpha"]);
+    assert!(requirement_page(&corpus, "req_parent_a")
+        .siblings
+        .is_empty());
 }
 
 #[test]
@@ -231,26 +186,18 @@ fn requirement_page_flags_dangling_refs_and_frontier_gaps() {
 }
 
 #[test]
-fn requirement_and_unfinished_pages_anchor_dangling_edges_in_both_directions() {
+fn requirement_and_unfinished_pages_anchor_a_dangling_refinement_at_its_owner() {
     let mut state = empty_state();
-    state.requirements = vec![requirement(
+    let mut surviving = requirement(
         "req_surviving",
         "Surviving requirement endpoint",
         RequirementStatus::Active,
         vec![],
-    )];
-    state.edges = vec![
-        edge(
-            EdgeType::RefinesInto,
-            (NodeType::Requirement, "req_missing_from"),
-            (NodeType::Requirement, "req_surviving"),
-        ),
-        edge(
-            EdgeType::RefinesInto,
-            (NodeType::Requirement, "req_surviving"),
-            (NodeType::Requirement, "req_missing_to"),
-        ),
-    ];
+    );
+    surviving.refines = Some(sid("req_missing_parent"));
+    surviving.depends_on = vec![sid("req_missing_dependency")];
+    state.domains = vec![domain("domain_default", "Invoicing")];
+    state.requirements = vec![surviving];
 
     let resolver = LinkResolver::new(None);
     let corpus = build_corpus(&state, &resolver);
@@ -266,6 +213,7 @@ fn requirement_and_unfinished_pages_anchor_dangling_edges_in_both_directions() {
     assert!(dangling_details
         .iter()
         .all(|detail| detail.contains("requirement that is missing")));
+    assert!(page.back_link.is_none());
     assert_eq!(
         corpus
             .unfinished
@@ -285,31 +233,30 @@ fn requirement_and_unfinished_pages_anchor_dangling_edges_in_both_directions() {
 
 #[test]
 fn requirement_page_does_not_treat_a_same_id_record_of_another_kind_as_a_resolving_decision() {
-    // A Resolution and a Source share the stable id "dup_id". The only
-    // Resolves edge on file is authored for the source (not the
-    // resolution), so it must not be mistaken for a real resolving
-    // decision just because the ids match.
+    // A Resolution and a Source share the stable id "dup_id". The
+    // requirement cites the source; only a resolution's own
+    // `requirement_ids` makes a decision, so the citation must not be
+    // mistaken for one just because the ids match.
     let mut state = empty_state();
     state.requirements = vec![requirement(
         "req_child",
         "SaveInvoice shall split claim items",
         RequirementStatus::Active,
-        vec![],
+        vec![provenance_core::SourceReference {
+            source_id: sid("dup_id"),
+            clause: None,
+        }],
     )];
     state.resolutions = vec![resolution("dup_id", "Decoy resolution", vec![])];
     state.sources = vec![source("dup_id", "Decoy source")];
-    state.edges = vec![edge(
-        EdgeType::Resolves,
-        (NodeType::Source, "dup_id"),
-        (NodeType::Requirement, "req_child"),
-    )];
     let resolver = LinkResolver::new(None);
     let corpus = build_corpus(&state, &resolver);
     let page = requirement_page(&corpus, "req_child");
     assert!(
         page.decisions.is_empty(),
-        "resolution 'dup_id' has no real Resolves edge and must not appear as a decision"
+        "resolution 'dup_id' names no requirement and must not appear as a decision"
     );
+    assert_eq!(page.sources.len(), 1);
 }
 
 #[test]
@@ -329,11 +276,19 @@ fn contradiction_gap_surfaces_on_both_requirement_pages_without_duplicate_fronti
             vec![],
         ),
     ];
-    state.edges = vec![edge(
-        EdgeType::Contradicts,
-        (NodeType::Requirement, "req_left"),
-        (NodeType::Requirement, "req_right"),
+    state.topics = vec![topic(
+        "topic_branch",
+        "req_left",
+        provenance_core::TopicStatus::Explored,
     )];
+    let mut contradiction = question(
+        "question_branch",
+        "topic_branch",
+        "req_left",
+        provenance_core::QuestionStatus::Open,
+    );
+    contradiction.contradicts = Some(sid("req_right"));
+    state.questions = vec![contradiction];
     let resolver = LinkResolver::new(None);
     let corpus = build_corpus(&state, &resolver);
 

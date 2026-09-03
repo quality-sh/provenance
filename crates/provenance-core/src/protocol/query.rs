@@ -1,7 +1,7 @@
 use camino::Utf8PathBuf;
 use serde::{Deserialize, Serialize};
 
-use crate::model::{EdgeType, NodeType};
+use crate::model::NodeType;
 
 use super::{QUERY_DEFAULT_LIMIT, TRACE_DEFAULT_MAX_DEPTH};
 
@@ -75,7 +75,7 @@ pub struct NeighborsQuery {
     #[serde(default)]
     pub direction: Direction,
     #[serde(default)]
-    pub edge_types: Vec<EdgeType>,
+    pub relations: Vec<String>,
     #[serde(default)]
     pub include_retired: bool,
     #[serde(default = "default_limit")]
@@ -94,7 +94,7 @@ pub struct TraceQuery {
     #[serde(default)]
     pub direction: Direction,
     #[serde(default)]
-    pub edge_types: Vec<EdgeType>,
+    pub relations: Vec<String>,
     #[serde(default = "default_max_depth")]
     pub max_depth: usize,
     #[serde(default)]

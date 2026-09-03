@@ -39,14 +39,16 @@ fn candidate(repo: &Path, path: &Path, statement: &str) {
         "id": "rule_changed",
         "statement": statement,
         "status": "active",
-        "severity": "high"
+        "severity": "high",
+        "requirement_ids": ["req_changed"]
     }, {
         "schema_version": 1,
         "scope_id": "default",
         "id": "rule_added",
         "statement": statement,
         "status": "active",
-        "severity": "high"
+        "severity": "high",
+        "requirement_ids": ["req_changed"]
     }]);
     write_json(path, &value);
 }
@@ -105,7 +107,8 @@ fn import_allows_clean_changes_and_unchanged_legacy_invalid_statements() {
         "id": "rule_clean",
         "statement": "A clean rule",
         "status": "active",
-        "severity": "high"
+        "severity": "high",
+        "requirement_ids": [value["requirements"][0]["id"].clone()]
     }]);
     write_json(&input, &value);
 

@@ -44,6 +44,7 @@ pub fn export_scope(repo: Utf8PathBuf, scope: String) -> anyhow::Result<ScopeExp
     let store = StateStore::new(ProvenanceLayout::new(repo));
     store.with_repository_publication(|| {
         store.validate_ideation_scope(&scope_id)?;
+        store.validate_graph_scope(&scope_id)?;
         Ok(ScopeExport {
             scope,
             sources: store.list_sources(&scope_id)?,

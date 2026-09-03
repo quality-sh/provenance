@@ -54,7 +54,7 @@ fn enriched_source_and_requirement_records_roundtrip_without_schema_bump() {
         "commitPin": "5e1f2a9c4b6d8e0f1234567890abcdef12345678",
         "effectiveDate": 1_714_521_600_000_i64,
         "reviewDate": 1_717_200_000_000_i64,
-        "supersededBy": "source_sah_2025",
+        "supersedes": ["source_sah_2025"],
         "originThread": "thread_req_origin",
         "originMessage": "msg_000001"
     });
@@ -85,7 +85,7 @@ fn enriched_source_and_requirement_records_roundtrip_without_schema_bump() {
     );
     assert_eq!(source["effective_date"], 1_714_521_600_000_i64);
     assert_eq!(source["review_date"], 1_717_200_000_000_i64);
-    assert_eq!(source["superseded_by"], "source_sah_2025");
+    assert_eq!(source["supersedes"][0], "source_sah_2025");
     assert_eq!(source["origin_thread"], "thread_req_origin");
     assert_eq!(source["origin_message"], "msg_000001");
     assert_eq!(requirement["schema_version"], 1);
@@ -136,7 +136,7 @@ fn enriched_resolution_and_rule_records_roundtrip_without_schema_bump() {
         "madeBy": "Analyst One",
         "approvedBy": "Approver Two",
         "approvedAt": 1_714_780_800_000_i64,
-        "supersededBy": "res_sah_2025",
+        "supersedes": ["res_sah_2025"],
         "originThread": "thread_req_origin",
         "originMessage": "msg_000001"
     });
@@ -170,7 +170,7 @@ fn enriched_resolution_and_rule_records_roundtrip_without_schema_bump() {
     assert_eq!(resolution["made_by"], "Analyst One");
     assert_eq!(resolution["approved_by"], "Approver Two");
     assert_eq!(resolution["approved_at"], 1_714_780_800_000_i64);
-    assert_eq!(resolution["superseded_by"], "res_sah_2025");
+    assert_eq!(resolution["supersedes"][0], "res_sah_2025");
     assert_eq!(resolution["origin_thread"], "thread_req_origin");
     assert_eq!(resolution["origin_message"], "msg_000001");
     assert_eq!(rule["schema_version"], 1);

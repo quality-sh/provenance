@@ -62,6 +62,7 @@ async fn catch_up_with_guard(
     // The same validation as a rebuild. A refusal commits nothing.
     for scope in &manifest.scopes {
         store.validate_ideation_scope(&scope.id)?;
+        store.validate_graph_scope(&scope.id)?;
     }
     let scope_ids: Vec<ScopeId> = manifest
         .scopes

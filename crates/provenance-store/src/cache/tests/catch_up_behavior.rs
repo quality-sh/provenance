@@ -76,7 +76,7 @@ async fn a_hand_edited_shard_is_found_by_the_hash_sweep_alone() {
     let path = crate::shards::rules_path(&layout, &scope);
     let mut content = std::fs::read_to_string(&path).unwrap();
     let line = format!(
-        r#"{{"schema_version":1,"scope_id":"{}","id":"rule_out_of_band","statement":"Edited","status":"active","severity":"low"}}"#,
+        r#"{{"schema_version":1,"scope_id":"{}","id":"rule_out_of_band","statement":"Edited","status":"active","severity":"low","requirement_ids":["req_schads_overtime"]}}"#,
         scope.as_str()
     );
     content += &line;

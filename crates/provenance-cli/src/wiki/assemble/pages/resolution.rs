@@ -1,5 +1,5 @@
 use crate::wiki::model::{PageId, PageLink, RecordKind, ResolutionPage, RuleCard};
-use provenance_core::{EdgeType, NodeType, Resolution};
+use provenance_core::{NodeType, Resolution};
 
 use super::super::context::Assembler;
 use super::super::page_links::{requirement_link, resolution_link};
@@ -13,30 +13,14 @@ impl<'a> Assembler<'a> {
             .state
             .requirements
             .iter()
-            .filter(|requirement| {
-                self.edge_exists(
-                    EdgeType::Resolves,
-                    NodeType::Resolution,
-                    &resolution.id,
-                    NodeType::Requirement,
-                    &requirement.id,
-                )
-            })
+            .filter(|requirement| resolution.requirement_ids.contains(&requirement.id))
             .map(requirement_link)
             .collect();
         let spawned: Vec<PageLink> = self
             .state
             .requirements
             .iter()
-            .filter(|requirement| {
-                self.edge_exists(
-                    EdgeType::Spawns,
-                    NodeType::Resolution,
-                    &resolution.id,
-                    NodeType::Requirement,
-                    &requirement.id,
-                )
-            })
+            .filter(|requirement| requirement.spawned_by.as_ref() == Some(&resolution.id))
             .map(requirement_link)
             .collect();
         let produced_rules: Vec<RuleCard> = self
@@ -44,13 +28,13 @@ impl<'a> Assembler<'a> {
             .into_iter()
             .map(|rule| self.rule_card(rule))
             .collect();
-        let superseded_by = resolution.superseded_by.as_ref().and_then(|id| {
-            self.state
-                .resolutions
-                .iter()
-                .find(|candidate| candidate.id == *id)
-                .map(resolution_link)
-        });
+        let superseded_by = self
+            .state
+            .resolutions
+            .iter()
+            .filter(|candidate| candidate.supersedes.contains(&resolution.id))
+            .min_by_key(|candidate| candidate.id.as_str())
+            .map(resolution_link);
         ResolutionPage {
             id: PageId::new(RecordKind::Resolution, resolution.id.as_str()),
             title: resolution.title.clone(),

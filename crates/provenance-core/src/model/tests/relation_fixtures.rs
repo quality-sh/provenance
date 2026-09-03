@@ -1,10 +1,10 @@
 mod relation_fixtures {
-use crate::model::relations::{RecordFront, RelationDirection, RelationKind, RelationSource};
+use crate::model::relations::RecordFront;
 use crate::model::{
-    ArtifactLink, ArtifactLinkTargetType, Boundary, Domain, Edge, EdgeType, NodeType, Question,
-    QuestionStatus, Requirement, RequirementStatus, Resolution, ResolutionMethod,
-    ResolutionStatus, Rule, RuleSeverity, RuleStatus, ScopeId, SchemaVersion, Source,
-    SourceReference, SourceType, StableId, Topic, TopicStatus,
+    ArtifactLink, ArtifactLinkTargetType, Boundary, Domain, Question, QuestionStatus,
+    Requirement, RequirementStatus, Resolution, ResolutionMethod, ResolutionStatus, Rule,
+    RuleSeverity, RuleStatus, SchemaVersion, ScopeId, Source, SourceReference, SourceType,
+    StableId, Topic, TopicStatus,
 };
 
 pub(super) fn scope() -> ScopeId {
@@ -15,11 +15,11 @@ pub(super) fn sid(value: &str) -> StableId {
     StableId::new(value).unwrap()
 }
 
-pub(super) fn source(id: &str) -> Source {
-    source_superseded_by(id, None)
+pub(super) fn ids(values: &[&str]) -> Vec<StableId> {
+    values.iter().map(|value| sid(value)).collect()
 }
 
-pub(super) fn source_superseded_by(id: &str, successor: Option<&str>) -> Source {
+pub(super) fn source(id: &str, supersedes: &[&str]) -> Source {
     Source {
         schema_version: SchemaVersion(1),
         scope_id: scope(),
@@ -34,8 +34,7 @@ pub(super) fn source_superseded_by(id: &str, successor: Option<&str>) -> Source 
         commit_pin: None,
         effective_date: None,
         review_date: None,
-        superseded_by: successor.map(sid),
-        supersedes: Vec::new(),
+        supersedes: ids(supersedes),
         origin_thread: None,
         origin_message: None,
     }
@@ -81,10 +80,6 @@ pub(super) fn domain(id: &str) -> Domain {
     }
 }
 
-pub(super) fn boundary(id: &str, requirement_id: &str) -> Boundary {
-    boundary_citing(id, requirement_id, None)
-}
-
 pub(super) fn boundary_citing(id: &str, requirement_id: &str, source: Option<&str>) -> Boundary {
     Boundary {
         schema_version: SchemaVersion(1),
@@ -119,7 +114,7 @@ pub(super) fn topic(id: &str, requirement_id: &str, links: &[(&str, ArtifactLink
     }
 }
 
-pub(super) fn rule(id: &str) -> Rule {
+pub(super) fn rule(id: &str, requirements: &[&str], resolutions: &[&str]) -> Rule {
     Rule {
         schema_version: SchemaVersion(1),
         scope_id: scope(),
@@ -132,26 +127,12 @@ pub(super) fn rule(id: &str) -> Rule {
         statement: format!("{id} statement"),
         status: RuleStatus::Active,
         severity: RuleSeverity::High,
+        requirement_ids: ids(requirements),
+        resolution_ids: ids(resolutions),
         source_document: None,
         source_section: None,
-        requirement_ids: Vec::new(),
-        resolution_ids: Vec::new(),
         origin_thread: None,
         origin_message: None,
-    }
-}
-
-pub(super) fn edge(id: &str, edge_type: EdgeType, from: (NodeType, &str), to: (NodeType, &str)) -> Edge {
-    Edge {
-        schema_version: SchemaVersion(1),
-        scope_id: scope(),
-        id: sid(id),
-        edge_type,
-        from_type: from.0,
-        from_id: sid(from.1),
-        to_type: to.0,
-        to_id: sid(to.1),
-        label: None,
     }
 }
 
@@ -164,14 +145,9 @@ pub(super) struct Fixture {
     pub(super) questions: Vec<Question>,
     pub(super) resolutions: Vec<Resolution>,
     pub(super) rules: Vec<Rule>,
-    pub(super) edges: Vec<Edge>,
 }
 
-pub(super) fn resolution(id: &str) -> Resolution {
-    resolution_superseded_by(id, None)
-}
-
-pub(super) fn resolution_superseded_by(id: &str, successor: Option<&str>) -> Resolution {
+pub(super) fn resolution(id: &str, requirements: &[&str], supersedes: &[&str]) -> Resolution {
     Resolution {
         schema_version: SchemaVersion(1),
         scope_id: scope(),
@@ -187,10 +163,9 @@ pub(super) fn resolution_superseded_by(id: &str, successor: Option<&str>) -> Res
         made_by: None,
         approved_by: None,
         approved_at: None,
-        superseded_by: successor.map(sid),
+        requirement_ids: ids(requirements),
+        supersedes: ids(supersedes),
         review_on: None,
-        requirement_ids: Vec::new(),
-        supersedes: Vec::new(),
         origin_thread: None,
         origin_message: None,
     }
@@ -201,6 +176,7 @@ pub(super) fn question(
     topic_id: &str,
     requirement_id: &str,
     resolution_id: Option<&str>,
+    contradicts: Option<&str>,
     links: &[(&str, ArtifactLinkTargetType)],
 ) -> Question {
     Question {
@@ -222,29 +198,26 @@ pub(super) fn question(
                 target_id: sid(target_id),
             })
             .collect(),
-        contradicts: None,
         resolution_id: resolution_id.map(sid),
+        contradicts: contradicts.map(sid),
     }
 }
 
+/// One record of every kind, touching every declared relation at least
+/// once: `req_overtime` is the hub, `req_penalty` refines and depends on it.
 pub(super) fn fixture() -> Fixture {
-    let req = |edge_type: EdgeType, to: (NodeType, &str)| {
-        edge(
-            &format!("edge_{}", RelationKindName(edge_type).name()),
-            edge_type,
-            (NodeType::Requirement, "req_overtime"),
-            to,
-        )
-    };
+    let mut penalty = requirement("req_penalty", None, &[]);
+    penalty.refines = Some(sid("req_overtime"));
+    penalty.depends_on = ids(&["req_overtime"]);
+    let mut overtime = requirement("req_overtime", Some("domain_payroll"), &["source_award"]);
+    overtime.spawned_by = Some(sid("res_threshold"));
+    overtime.supersedes = ids(&["req_penalty"]);
     Fixture {
         sources: vec![
-            source("source_award"),
-            source_superseded_by("source_award_2019", Some("source_award")),
+            source("source_award", &["source_award_2019"]),
+            source("source_award_2019", &[]),
         ],
-        requirements: vec![
-            requirement("req_overtime", Some("domain_payroll"), &["source_award"]),
-            requirement("req_penalty", None, &[]),
-        ],
+        requirements: vec![overtime, penalty],
         domains: vec![domain("domain_payroll")],
         boundaries: vec![boundary_citing(
             "boundary_no_backpay",
@@ -261,58 +234,14 @@ pub(super) fn fixture() -> Fixture {
             "topic_rates",
             "req_overtime",
             Some("res_threshold"),
+            Some("req_penalty"),
             &[("source_award", ArtifactLinkTargetType::Source)],
         )],
         resolutions: vec![
-            resolution("res_threshold"),
-            resolution_superseded_by("res_threshold_draft", Some("res_threshold")),
+            resolution("res_threshold", &["req_overtime"], &["res_threshold_draft"]),
+            resolution("res_threshold_draft", &["req_overtime"], &[]),
         ],
-        rules: vec![rule("rule_pay")],
-        edges: vec![
-            edge(
-                "edge_cite",
-                EdgeType::References,
-                (NodeType::Source, "source_award"),
-                (NodeType::Requirement, "req_overtime"),
-            ),
-            req(EdgeType::RefinesInto, (NodeType::Requirement, "req_penalty")),
-            req(EdgeType::DependsOn, (NodeType::Requirement, "req_penalty")),
-            req(EdgeType::Contradicts, (NodeType::Requirement, "req_penalty")),
-            req(EdgeType::Supersedes, (NodeType::Requirement, "req_penalty")),
-            req(EdgeType::Needs, (NodeType::Resolution, "res_threshold")),
-            req(EdgeType::Produces, (NodeType::Rule, "rule_pay")),
-            edge(
-                "edge_resolves",
-                EdgeType::Resolves,
-                (NodeType::Resolution, "res_threshold"),
-                (NodeType::Requirement, "req_overtime"),
-            ),
-            edge(
-                "edge_spawns",
-                EdgeType::Spawns,
-                (NodeType::Resolution, "res_threshold"),
-                (NodeType::Requirement, "req_overtime"),
-            ),
-        ],
-    }
-}
-
-/// The edge type's wire name, for unique edge ids in the corpus.
-struct RelationKindName(EdgeType);
-
-impl RelationKindName {
-    fn name(&self) -> &'static str {
-        match self.0 {
-            EdgeType::References => "references",
-            EdgeType::RefinesInto => "refines_into",
-            EdgeType::DependsOn => "depends_on",
-            EdgeType::Contradicts => "contradicts",
-            EdgeType::Supersedes => "supersedes",
-            EdgeType::Needs => "needs",
-            EdgeType::Resolves => "resolves",
-            EdgeType::Spawns => "spawns",
-            EdgeType::Produces => "produces",
-        }
+        rules: vec![rule("rule_pay", &["req_overtime"], &["res_threshold"])],
     }
 }
 
@@ -326,21 +255,6 @@ pub(super) fn front(records: &Fixture) -> RecordFront<'_> {
         questions: &records.questions,
         domains: &records.domains,
         boundaries: &records.boundaries,
-        edges: &records.edges,
     }
-}
-
-pub(super) fn related(
-    records: &Fixture,
-    relation: RelationKind,
-    node_type: NodeType,
-    id: &str,
-    direction: RelationDirection,
-) -> Vec<(NodeType, String)> {
-    front(records)
-        .related(relation, node_type, &sid(id), direction)
-        .into_iter()
-        .map(|endpoint| (endpoint.node_type, endpoint.id.as_str().to_string()))
-        .collect()
 }
 }

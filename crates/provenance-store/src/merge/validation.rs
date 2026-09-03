@@ -4,8 +4,8 @@
 //! opaque JSON, so a merge writes records that were never checked here: they
 //! come from another branch, an older writer, or a hand edit, and the merge is
 //! the moment they enter this repository's shard. A per-record check like the
-//! edge endpoint table can only fail on a record some side already held, but
-//! holding it is exactly what a merge would launder into canonical state.
+//! required relation list can only fail on a record some side already held,
+//! but holding it is exactly what a merge would launder into canonical state.
 //! A check spanning the whole file can fail on the merge's own doing; the one
 //! such check that exists today, the duplicate id, is refused by `index_by_id`
 //! inside the merge itself.
@@ -16,7 +16,8 @@
 
 use anyhow::Context;
 use camino::Utf8Path;
-use provenance_core::{edge_validation::validate_edge_endpoint, Edge, Requirement, Rule};
+use provenance_core::model::relations::{missing_required, required_refusal, RelationOwner};
+use provenance_core::{Boundary, Question, Requirement, Resolution, Rule, Source, Topic};
 use serde_json::Value;
 
 use super::CanonicalRecord;
@@ -32,19 +33,37 @@ use crate::statement_analysis::{analyze_changed_statements, StatementDiagnostic}
 /// family, which is what the recognizers below match on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ShardFamily {
-    /// `.provenance/state/edges/*.jsonl`
-    Edges,
     /// `.provenance/state/scopes/<scope>/ideation/landings.jsonl`
     IdeationLandings,
+    /// `.provenance/state/scopes/<scope>/sources/*.jsonl`
+    Sources,
     /// `.provenance/state/scopes/<scope>/requirements/*.jsonl`
     Requirements,
+    /// `.provenance/state/scopes/<scope>/resolutions/*.jsonl`
+    Resolutions,
     /// `.provenance/state/scopes/<scope>/rules/*.jsonl`
     Rules,
-    /// Any other path, including unrecognized per-scope record families such
-    /// as `sources` and `resolutions`, and files outside the state directory.
-    /// Merged records pass unchecked.
+    /// `.provenance/state/scopes/<scope>/topics/*.jsonl`
+    Topics,
+    /// `.provenance/state/scopes/<scope>/questions/*.jsonl`
+    Questions,
+    /// `.provenance/state/scopes/<scope>/boundaries/*.jsonl`
+    Boundaries,
+    /// Any other path, including per-scope families without declared
+    /// relations and files outside the state directory. Merged records pass
+    /// unchecked.
     Unrecognized,
 }
+
+const SCOPED_FAMILIES: [(&str, ShardFamily); 7] = [
+    ("sources", ShardFamily::Sources),
+    ("requirements", ShardFamily::Requirements),
+    ("resolutions", ShardFamily::Resolutions),
+    ("rules", ShardFamily::Rules),
+    ("topics", ShardFamily::Topics),
+    ("questions", ShardFamily::Questions),
+    ("boundaries", ShardFamily::Boundaries),
+];
 
 impl ShardFamily {
     /// Recognizes the family from the path the merged result will be stored at.
@@ -58,14 +77,13 @@ impl ShardFamily {
         let Some(directory) = path.parent() else {
             return Self::Unrecognized;
         };
-        let in_state = directory.parent().and_then(Utf8Path::file_name) == Some("state");
-        if in_state && directory.file_name() == Some("edges") {
-            Self::Edges
-        } else if is_scoped_family(path, "requirements") {
-            Self::Requirements
-        } else if is_scoped_family(path, "rules") {
-            Self::Rules
-        } else if path.file_name() == Some("landings.jsonl")
+        if let Some((_, family)) = SCOPED_FAMILIES
+            .iter()
+            .find(|(name, _)| is_scoped_family(path, name))
+        {
+            return *family;
+        }
+        if path.file_name() == Some("landings.jsonl")
             && directory.file_name() == Some("ideation")
             && directory
                 .parent()
@@ -87,28 +105,32 @@ impl ShardFamily {
 /// Re-checks merged records against the type their shard holds, naming the
 /// first record that fails.
 ///
-/// Edges are checked against the endpoint table, and ideation landings are
-/// checked for supported nested schema versions. Requirement and Rule shards
-/// are recognized and deserialized here; the merge handler also passes their
-/// ancestor and selected records to [`changed_statement_diagnostics`] before it
-/// writes the result. Other per-scope families remain unrecognized and merge
-/// unchecked. Cross-record checks that need the whole graph - dangling
-/// endpoints, scope membership - belong to `provenance check`, not here: a
-/// merge driver sees one file.
+/// Each recognized family is deserialized as its record type and its
+/// required relations must be present; ideation landings are checked for
+/// supported nested schema versions. The merge handler also passes the
+/// ancestor and selected records of requirement and rule shards to
+/// [`changed_statement_diagnostics`] before it writes the result. Cross-record
+/// checks that need the whole graph - dangling references, cycles, scope
+/// membership - belong to `provenance check` and the graph validator, not
+/// here: a merge driver sees one file.
 pub fn validate_merged_records(
     shard_path: &Utf8Path,
     records: &[CanonicalRecord],
 ) -> anyhow::Result<()> {
     match ShardFamily::for_shard_path(shard_path) {
-        ShardFamily::Edges => validate_merged_edges(records),
         ShardFamily::IdeationLandings => {
             for (index, record) in records.iter().enumerate() {
                 ensure_supported_ideation_landing_versions(shard_path, index + 1, record)?;
             }
             Ok(())
         }
+        ShardFamily::Sources => validate_typed_records::<Source>(records, "source"),
         ShardFamily::Requirements => validate_typed_records::<Requirement>(records, "requirement"),
+        ShardFamily::Resolutions => validate_typed_records::<Resolution>(records, "resolution"),
         ShardFamily::Rules => validate_typed_records::<Rule>(records, "rule"),
+        ShardFamily::Topics => validate_typed_records::<Topic>(records, "topic"),
+        ShardFamily::Questions => validate_typed_records::<Question>(records, "question"),
+        ShardFamily::Boundaries => validate_typed_records::<Boundary>(records, "boundary"),
         ShardFamily::Unrecognized => Ok(()),
     }
 }
@@ -155,11 +177,23 @@ fn is_scoped_family(path: &Utf8Path, family: &str) -> bool {
             .is_some_and(|path| path.file_name() == Some("state"))
 }
 
-fn validate_typed_records<T: serde::de::DeserializeOwned>(
+/// Every record deserializes as the family's type and carries each required
+/// relation: serde builds an empty list without complaint, so the check
+/// runs here.
+fn validate_typed_records<T: serde::de::DeserializeOwned + RelationOwner>(
     records: &[CanonicalRecord],
     kind: &str,
 ) -> anyhow::Result<()> {
-    deserialize_records::<T>(records, kind).map(|_| ())
+    for record in deserialize_records::<T>(records, kind)? {
+        if let Some(decl) = missing_required(&record) {
+            anyhow::bail!(
+                "merged {kind} {} is refused: {}",
+                record.id().as_str(),
+                required_refusal(decl)
+            );
+        }
+    }
+    Ok(())
 }
 
 fn deserialize_records<T: serde::de::DeserializeOwned>(
@@ -179,136 +213,125 @@ fn deserialize_records<T: serde::de::DeserializeOwned>(
         .collect()
 }
 
-fn validate_merged_edges(records: &[CanonicalRecord]) -> anyhow::Result<()> {
-    for record in records {
-        let named = record
-            .get("id")
-            .and_then(Value::as_str)
-            .unwrap_or("<record with no id>");
-        let edge: Edge = serde_json::from_value(record.clone())
-            .with_context(|| format!("merged record {named} is not an edge record"))?;
-        validate_edge_endpoint(edge.edge_type, edge.from_type, edge.to_type)
-            .with_context(|| format!("merged edge {} is invalid", edge.id.as_str()))?;
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn edge(id: &str, edge_type: &str, from_type: &str, to_type: &str) -> Value {
+    fn rule(id: &str, requirement_ids: &[&str]) -> Value {
         serde_json::json!({
             "schema_version": 1,
             "scope_id": "default",
             "id": id,
-            "edge_type": edge_type,
-            "from_type": from_type,
-            "from_id": "node_from",
-            "to_type": to_type,
-            "to_id": "node_to",
+            "statement": "The merged rule shall hold.",
+            "status": "active",
+            "severity": "high",
+            "requirement_ids": requirement_ids,
         })
     }
 
-    fn edges_path() -> &'static Utf8Path {
-        Utf8Path::new(".provenance/state/edges/edges-00.jsonl")
+    fn resolution(id: &str, requirement_ids: &[&str]) -> Value {
+        serde_json::json!({
+            "schema_version": 1,
+            "scope_id": "default",
+            "id": id,
+            "title": "Merged",
+            "position": "Position",
+            "rationale": "Rationale",
+            "status": "proposed",
+            "requirement_ids": requirement_ids,
+        })
+    }
+
+    fn rules_path() -> &'static Utf8Path {
+        Utf8Path::new(".provenance/state/scopes/default/rules/rule.jsonl")
+    }
+
+    fn resolutions_path() -> &'static Utf8Path {
+        Utf8Path::new(".provenance/state/scopes/default/resolutions/resolution.jsonl")
     }
 
     #[test]
-    fn recognizes_the_edges_shard_by_its_directory() {
-        assert_eq!(
-            ShardFamily::for_shard_path(edges_path()),
-            ShardFamily::Edges
-        );
-        assert_eq!(
-            ShardFamily::for_shard_path(Utf8Path::new(
-                "/repo/.provenance/state/edges/edges-01.jsonl"
-            )),
-            ShardFamily::Edges
-        );
+    fn recognizes_every_relation_family_by_its_scoped_path() {
+        for (name, family) in SCOPED_FAMILIES {
+            let relative = format!(".provenance/state/scopes/default/{name}/shard.jsonl");
+            assert_eq!(
+                ShardFamily::for_shard_path(Utf8Path::new(&relative)),
+                family
+            );
+            let absolute = format!("/repo/.provenance/state/scopes/default/{name}/shard.jsonl");
+            assert_eq!(
+                ShardFamily::for_shard_path(Utf8Path::new(&absolute)),
+                family
+            );
+        }
     }
 
     #[test]
     fn leaves_unrecognized_paths_unchecked() {
-        for path in ["edges/edges-00.jsonl", "notes.jsonl"] {
+        for path in [
+            "rules/rule.jsonl",
+            "notes.jsonl",
+            ".provenance/state/edges/edges-00.jsonl",
+        ] {
             assert_eq!(
                 ShardFamily::for_shard_path(Utf8Path::new(path)),
                 ShardFamily::Unrecognized,
                 "{path} should not be recognized as a typed shard"
             );
         }
-        // A record that would fail edge validation passes when the path does
-        // not say the file holds edges.
+        // A record that would fail the rule check passes when the path does
+        // not say the file holds rules.
+        validate_merged_records(Utf8Path::new("notes.jsonl"), &[rule("rule_bare", &[])]).unwrap();
+    }
+
+    #[test]
+    fn accepts_merged_records_that_carry_their_required_relations() {
+        validate_merged_records(rules_path(), &[rule("rule_ok", &["req_one"])]).unwrap();
         validate_merged_records(
-            Utf8Path::new("notes.jsonl"),
-            &[edge("edge_bad", "references", "rule", "requirement")],
+            resolutions_path(),
+            &[resolution("res_ok", &["req_one", "req_two"])],
         )
         .unwrap();
     }
 
     #[test]
-    fn recognizes_statement_shards_by_their_scoped_logical_paths() {
-        assert_eq!(
-            ShardFamily::for_shard_path(Utf8Path::new(
-                ".provenance/state/scopes/default/requirements/req.jsonl"
-            )),
-            ShardFamily::Requirements
-        );
-        assert_eq!(
-            ShardFamily::for_shard_path(Utf8Path::new(
-                "/repo/.provenance/state/scopes/default/rules/rule.jsonl"
-            )),
-            ShardFamily::Rules
-        );
-    }
-
-    #[test]
-    fn accepts_merged_edges_the_endpoint_table_allows() {
-        validate_merged_records(
-            edges_path(),
-            &[
-                edge("edge_ok", "references", "source", "requirement"),
-                edge("edge_also_ok", "produces", "resolution", "rule"),
-            ],
-        )
-        .unwrap();
-    }
-
-    #[test]
-    fn rejects_a_merged_edge_the_endpoint_table_forbids() {
+    fn rejects_a_merged_rule_with_no_requirement() {
         let error = validate_merged_records(
-            edges_path(),
-            &[
-                edge("edge_ok", "references", "source", "requirement"),
-                edge("edge_leaves_a_rule", "references", "rule", "requirement"),
-            ],
+            rules_path(),
+            &[rule("rule_ok", &["req_one"]), rule("rule_bare", &[])],
         )
         .unwrap_err();
 
         let report = format!("{error:#}");
+        assert!(report.contains("rule_bare"), "{report}");
+        assert!(report.contains("a rule needs one requirement"), "{report}");
+        assert!(!report.contains("rule_ok"), "{report}");
+    }
+
+    #[test]
+    fn rejects_a_merged_resolution_with_no_requirement() {
+        let error = validate_merged_records(resolutions_path(), &[resolution("res_bare", &[])])
+            .unwrap_err();
+
+        let report = format!("{error:#}");
+        assert!(report.contains("res_bare"), "{report}");
         assert!(
-            report.contains("edge_leaves_a_rule"),
-            "error should name the offending edge: {report}"
-        );
-        assert!(
-            !report.contains("edge_ok"),
-            "error should name only the offending edge: {report}"
+            report.contains("a resolution needs one requirement"),
+            "{report}"
         );
     }
 
     #[test]
-    fn rejects_a_merged_record_that_is_not_an_edge() {
+    fn rejects_a_merged_record_that_is_not_its_family() {
         let error = validate_merged_records(
-            edges_path(),
-            &[serde_json::json!({ "id": "edge_truncated", "edge_type": "references" })],
+            rules_path(),
+            &[serde_json::json!({ "id": "rule_truncated", "statement": "half" })],
         )
         .unwrap_err();
 
         let report = format!("{error:#}");
-        assert!(
-            report.contains("edge_truncated"),
-            "error should name the offending record: {report}"
-        );
+        assert!(report.contains("rule_truncated"), "{report}");
+        assert!(report.contains("is not a rule record"), "{report}");
     }
 
     #[test]

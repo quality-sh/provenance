@@ -2,7 +2,7 @@ use crate::cache::find_gaps;
 use crate::cache::gaps::{GraphQuery, GraphRecords};
 use crate::layout::ProvenanceLayout;
 use crate::state_store::StateStore;
-use provenance_core::{EdgeType, NodeType, RequirementStatus};
+use provenance_core::RequirementStatus;
 use std::collections::BTreeSet;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -50,9 +50,9 @@ pub struct OrphanRuleItem {
 /// Loads every canonical graph reference that names a repository path.
 ///
 /// Rule source documents are direct citations. A Source becomes a citation
-/// only when a Requirement names it through an embedded source reference or a
-/// typed `references` edge; unreferenced catalog entries are not evidence for
-/// anything in the graph. Path syntax is interpreted by the command layer.
+/// only when a Requirement cites it; unreferenced catalog entries are not
+/// evidence for anything in the graph. Path syntax is interpreted by the
+/// command layer.
 ///
 /// Active views leave retired records and retired bindings out. A caller
 /// that asks for retired ones gets the history alongside what stands today.
@@ -70,33 +70,16 @@ fn graph_evidence_locked(
     store: &StateStore,
     include_retired: bool,
 ) -> anyhow::Result<GraphEvidence> {
-    let edges = store.list_edges()?;
     let requirements = store
         .list_requirements(scope)?
         .into_iter()
         .filter(|requirement| include_retired || !requirement.retired)
         .collect::<Vec<_>>();
-    let mut cited_sources = requirements
+    let cited_sources = requirements
         .iter()
         .flat_map(|requirement| &requirement.source_refs)
         .map(|reference| reference.source_id.as_str().to_string())
         .collect::<BTreeSet<_>>();
-    let active_requirements = requirements
-        .iter()
-        .map(|requirement| requirement.id.as_str().to_string())
-        .collect::<BTreeSet<_>>();
-    cited_sources.extend(
-        edges
-            .iter()
-            .filter(|edge| {
-                edge.scope_id == *scope
-                    && edge.edge_type == EdgeType::References
-                    && edge.from_type == NodeType::Source
-                    && edge.to_type == NodeType::Requirement
-                    && active_requirements.contains(edge.to_id.as_str())
-            })
-            .map(|edge| edge.from_id.as_str().to_string()),
-    );
     let rules = store
         .list_rules(scope)?
         .into_iter()
@@ -178,36 +161,26 @@ fn coverage_health_locked(
         .into_iter()
         .filter(|rule| !rule.retired)
         .collect::<Vec<_>>();
-    let edges: Vec<_> = store
-        .list_edges()?
-        .into_iter()
-        .filter(|edge| edge.scope_id == *scope)
-        .collect();
+    let resolutions = store.list_resolutions(scope)?;
     let source_linked_requirements = requirements
         .iter()
-        .filter(|req| {
-            edges
-                .iter()
-                .any(|edge| edge.edge_type == EdgeType::References && edge.to_id == req.id)
-        })
+        .filter(|req| !req.source_refs.is_empty())
         .count();
     let resolved_requirements = requirements
         .iter()
         .filter(|req| {
             req.status == RequirementStatus::Resolved
-                || edges
+                || resolutions
                     .iter()
-                    .any(|edge| edge.edge_type == EdgeType::Resolves && edge.to_id == req.id)
+                    .any(|resolution| resolution.requirement_ids.contains(&req.id))
         })
         .count();
     let requirements_with_rules = requirements
         .iter()
         .filter(|req| {
-            edges.iter().any(|edge| {
-                edge.edge_type == EdgeType::Produces
-                    && edge.from_type == NodeType::Requirement
-                    && edge.from_id == req.id
-            })
+            rules
+                .iter()
+                .any(|rule| rule.requirement_ids.contains(&req.id))
         })
         .count();
     let orphan_count = orphan_rules(layout, scope)?.len();
@@ -230,12 +203,9 @@ fn coverage_health_locked(
 
 /// Rules whose trace back to a source is incomplete.
 ///
-/// A rule is complete only when a requirement produces it and a source
-/// reaches that requirement. A resolution may also produce the rule, but is
-/// not required. The producer test is the same join the `OrphanRule` gap
-/// runs, so `orphans` and `gaps` name the same rules; `orphans` additionally
-/// reports the rules whose producing requirement has no live source behind
-/// it.
+/// No source reaches the rule through a requirement it names. The
+/// requirement itself is required by the record type, so `missing` only
+/// ever names the source.
 pub fn orphan_rules(
     layout: &ProvenanceLayout,
     scope: &provenance_core::ScopeId,
@@ -254,19 +224,10 @@ fn orphan_rules_locked(
     Ok(records
         .rules
         .iter()
-        .filter_map(|rule| {
-            let mut missing: Vec<String> = query
-                .missing_rule_producers(&rule.id)
-                .into_iter()
-                .map(|producer| producer.word().to_string())
-                .collect();
-            if !query.rule_trace_reaches_source(&rule.id) {
-                missing.push("source".to_string());
-            }
-            (!missing.is_empty()).then(|| OrphanRuleItem {
-                rule_id: rule.id.as_str().to_string(),
-                missing,
-            })
+        .filter(|rule| !query.rule_trace_reaches_source(&rule.id))
+        .map(|rule| OrphanRuleItem {
+            rule_id: rule.id.as_str().to_string(),
+            missing: vec!["source".to_string()],
         })
         .collect())
 }

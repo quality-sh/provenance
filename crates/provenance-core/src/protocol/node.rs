@@ -3,8 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Write as _;
 
 use crate::model::{
-    Boundary, Domain, EdgeType, NodeType, Question, Requirement, Resolution, Rule, Source,
-    StableId, Topic,
+    Boundary, Domain, NodeType, Question, Requirement, Resolution, Rule, Source, StableId, Topic,
 };
 
 use super::Direction;
@@ -104,10 +103,10 @@ impl GraphNode {
     }
 }
 
-/// One record reached in a single hop, with the edge that reached it.
+/// One record reached in a single hop, with the relation that reached it.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Neighbor {
-    pub edge_type: EdgeType,
+    pub relation: String,
     pub direction: Direction,
     pub node: GraphNode,
 }

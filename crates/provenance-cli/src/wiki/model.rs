@@ -95,8 +95,7 @@ pub struct GapNotice {
     pub detail: String,
 }
 
-/// A rule whose trace back to a requirement and a resolution is incomplete,
-/// carrying the gap's own words for which end is missing.
+/// A source no requirement cites, carrying the gap's own words.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct OrphanRecord {
     pub link: PageLink,
@@ -106,8 +105,6 @@ pub struct OrphanRecord {
 /// Records that exist but are attached to nothing, listed on the unfinished page.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct OrphanReport {
-    pub rules: Vec<OrphanRecord>,
-    pub resolutions: Vec<OrphanRecord>,
     pub sources: Vec<OrphanRecord>,
 }
 
@@ -321,7 +318,7 @@ pub struct RulePage {
     pub code_scan: Option<CodeScan>,
     pub implementations: Vec<ImplementationBinding>,
     pub verifications: Vec<VerificationSite>,
-    /// Resolutions or requirements with a `produces` edge into this rule.
+    /// The resolutions and requirements the rule names as producing it.
     pub produced_by: Vec<PageLink>,
     /// Upstream requirements reached through the producing records.
     pub requirements: Vec<PageLink>,

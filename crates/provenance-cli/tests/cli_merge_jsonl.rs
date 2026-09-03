@@ -1,35 +1,21 @@
 use assert_cmd::Command;
 use std::path::{Path, PathBuf};
 
-fn edge(id: &str, edge_type: &str, from_type: &str, from: &str, to_type: &str, to: &str) -> String {
+fn rule(id: &str, requirement_ids: &str) -> String {
     format!(
         "{{\"schema_version\":1,\"scope_id\":\"default\",\"id\":\"{id}\",\
-         \"edge_type\":\"{edge_type}\",\"from_type\":\"{from_type}\",\"from_id\":\"{from}\",\
-         \"to_type\":\"{to_type}\",\"to_id\":\"{to}\"}}\n"
+         \"statement\":\"The {id} rule shall hold.\",\"status\":\"active\",\
+         \"severity\":\"high\",\"requirement_ids\":[{requirement_ids}]}}\n"
     )
 }
 
-fn valid_edge(id: &str, to: &str) -> String {
-    edge(
-        id,
-        "references",
-        "source",
-        "source_policy",
-        "requirement",
-        to,
-    )
+fn valid_rule(id: &str, requirement: &str) -> String {
+    rule(id, &format!("\"{requirement}\""))
 }
 
-/// An edge no writer would accept: nothing may leave a rule.
-fn invalid_edge(id: &str) -> String {
-    edge(
-        id,
-        "references",
-        "rule",
-        "rule_policy",
-        "requirement",
-        "req_policy",
-    )
+/// A rule no writer would accept: a rule needs one requirement.
+fn bare_rule(id: &str) -> String {
+    rule(id, "")
 }
 
 struct Sides {
@@ -71,41 +57,41 @@ impl Sides {
     }
 }
 
-const EDGES_SHARD: &str = ".provenance/state/edges/edges-00.jsonl";
+const RULES_SHARD: &str = ".provenance/state/scopes/default/rules/rule.jsonl";
 
 #[test]
-fn merge_writes_a_shard_whose_edges_all_pass_the_endpoint_table() {
+fn merge_writes_a_shard_whose_rules_all_carry_a_requirement() {
     let directory = tempfile::tempdir().unwrap();
     let sides = Sides::write(
         directory.path(),
         "",
-        &valid_edge("edge_ours", "req_ours"),
-        &valid_edge("edge_theirs", "req_theirs"),
+        &valid_rule("rule_ours", "req_ours"),
+        &valid_rule("rule_theirs", "req_theirs"),
     );
 
-    sides.merge(EDGES_SHARD).assert().success();
+    sides.merge(RULES_SHARD).assert().success();
 
     let merged = std::fs::read_to_string(&sides.output).unwrap();
-    assert!(merged.contains("edge_ours"), "{merged}");
-    assert!(merged.contains("edge_theirs"), "{merged}");
+    assert!(merged.contains("rule_ours"), "{merged}");
+    assert!(merged.contains("rule_theirs"), "{merged}");
 }
 
 #[test]
-fn merge_refuses_to_write_an_edge_that_violates_the_endpoint_table() {
+fn merge_refuses_to_write_a_rule_with_no_requirement() {
     let directory = tempfile::tempdir().unwrap();
     let sides = Sides::write(
         directory.path(),
         "",
-        &invalid_edge("edge_leaves_a_rule"),
-        &valid_edge("edge_theirs", "req_theirs"),
+        &bare_rule("rule_bare"),
+        &valid_rule("rule_theirs", "req_theirs"),
     );
 
-    let failure = sides.merge(EDGES_SHARD).assert().failure();
+    let failure = sides.merge(RULES_SHARD).assert().failure();
     let stderr = String::from_utf8(failure.get_output().stderr.clone()).unwrap();
 
     assert!(
-        stderr.contains("edge_leaves_a_rule"),
-        "the failure must name the offending edge: {stderr}"
+        stderr.contains("rule_bare") && stderr.contains("a rule needs one requirement"),
+        "the failure must name the offending rule: {stderr}"
     );
     assert!(
         !sides.output.exists(),
@@ -118,15 +104,10 @@ fn merge_leaves_families_without_typed_validation_alone() {
     // Records under a path that names no recognized family merge through
     // unchecked.
     let directory = tempfile::tempdir().unwrap();
-    let sides = Sides::write(
-        directory.path(),
-        "",
-        &invalid_edge("edge_leaves_a_rule"),
-        "",
-    );
+    let sides = Sides::write(directory.path(), "", &bare_rule("rule_bare"), "");
 
     sides
-        .merge(".provenance/state/scopes/default/sources/source.jsonl")
+        .merge(".provenance/state/notes/notes.jsonl")
         .assert()
         .success();
     assert!(sides.output.exists());
@@ -137,18 +118,18 @@ fn a_conflicting_merge_fails_so_git_falls_back_to_a_conflict() {
     let directory = tempfile::tempdir().unwrap();
     let sides = Sides::write(
         directory.path(),
-        &valid_edge("edge_shared", "req_base"),
-        &valid_edge("edge_shared", "req_ours"),
-        &valid_edge("edge_shared", "req_theirs"),
+        &valid_rule("rule_shared", "req_base"),
+        &valid_rule("rule_shared", "req_ours"),
+        &valid_rule("rule_shared", "req_theirs"),
     );
 
-    let failure = sides.merge(EDGES_SHARD).assert().failure();
+    let failure = sides.merge(RULES_SHARD).assert().failure();
     let output = failure.get_output();
     let stdout = String::from_utf8(output.stdout.clone()).unwrap();
     let stderr = String::from_utf8(output.stderr.clone()).unwrap();
 
     assert!(stdout.contains("divergent_edit"), "{stdout}");
-    assert!(stderr.contains("edge_shared"), "{stderr}");
+    assert!(stderr.contains("rule_shared"), "{stderr}");
 }
 
 fn git(repository: &Path, arguments: &[&str]) -> std::process::Output {
@@ -166,7 +147,7 @@ fn git(repository: &Path, arguments: &[&str]) -> std::process::Output {
 }
 
 fn commit_shard(repository: &Path, contents: &str, message: &str) {
-    let shard = repository.join(EDGES_SHARD);
+    let shard = repository.join(RULES_SHARD);
     std::fs::create_dir_all(shard.parent().unwrap()).unwrap();
     std::fs::write(&shard, contents).unwrap();
     git(repository, &["add", "."]);
@@ -175,7 +156,7 @@ fn commit_shard(repository: &Path, contents: &str, message: &str) {
 
 /// The documented one-time setup, run for real: the driver command from
 /// `docs/cli.md` with an absolute binary path, and the repository
-/// `.gitattributes` line that points the edges shard at it.
+/// `.gitattributes` line that points the state shards at it.
 #[test]
 fn the_documented_driver_configuration_merges_two_branches() {
     let directory = tempfile::tempdir().unwrap();
@@ -211,29 +192,29 @@ fn the_documented_driver_configuration_merges_two_branches() {
     )
     .unwrap();
 
-    commit_shard(repository, &valid_edge("edge_base", "req_base"), "base");
+    commit_shard(repository, &valid_rule("rule_base", "req_base"), "base");
     git(repository, &["checkout", "-b", "theirs"]);
     commit_shard(
         repository,
-        &(valid_edge("edge_base", "req_base") + &valid_edge("edge_theirs", "req_theirs")),
+        &(valid_rule("rule_base", "req_base") + &valid_rule("rule_theirs", "req_theirs")),
         "theirs",
     );
     git(repository, &["checkout", "main"]);
     commit_shard(
         repository,
-        &(valid_edge("edge_base", "req_base") + &valid_edge("edge_ours", "req_ours")),
+        &(valid_rule("rule_base", "req_base") + &valid_rule("rule_ours", "req_ours")),
         "ours",
     );
 
     git(repository, &["merge", "theirs", "-m", "merge"]);
 
-    let merged = std::fs::read_to_string(repository.join(EDGES_SHARD)).unwrap();
-    assert!(merged.contains("edge_ours"), "{merged}");
-    assert!(merged.contains("edge_theirs"), "{merged}");
+    let merged = std::fs::read_to_string(repository.join(RULES_SHARD)).unwrap();
+    assert!(merged.contains("rule_ours"), "{merged}");
+    assert!(merged.contains("rule_theirs"), "{merged}");
     assert_eq!(merged.lines().count(), 3, "{merged}");
 }
 
-/// The same setup, but one branch carries an edge the endpoint table forbids:
+/// The same setup, but one branch carries a rule with no requirement:
 /// git must be told the merge failed rather than committing the invalid shard.
 #[test]
 fn the_documented_driver_configuration_refuses_an_invalid_merge() {
@@ -262,17 +243,17 @@ fn the_documented_driver_configuration_refuses_an_invalid_merge() {
     )
     .unwrap();
 
-    commit_shard(repository, &valid_edge("edge_base", "req_base"), "base");
+    commit_shard(repository, &valid_rule("rule_base", "req_base"), "base");
     git(repository, &["checkout", "-b", "theirs"]);
     commit_shard(
         repository,
-        &(valid_edge("edge_base", "req_base") + &invalid_edge("edge_leaves_a_rule")),
+        &(valid_rule("rule_base", "req_base") + &bare_rule("rule_bare")),
         "theirs",
     );
     git(repository, &["checkout", "main"]);
     commit_shard(
         repository,
-        &(valid_edge("edge_base", "req_base") + &valid_edge("edge_ours", "req_ours")),
+        &(valid_rule("rule_base", "req_base") + &valid_rule("rule_ours", "req_ours")),
         "ours",
     );
 
@@ -289,7 +270,7 @@ fn the_documented_driver_configuration_refuses_an_invalid_merge() {
     let status = git(repository, &["status", "--porcelain"]);
     let status = String::from_utf8(status.stdout).unwrap();
     assert!(
-        status.contains(EDGES_SHARD),
+        status.contains(RULES_SHARD),
         "the shard must be left unmerged: {status}"
     );
 }

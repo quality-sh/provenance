@@ -59,8 +59,6 @@ pub(super) fn unfinished_fixture() -> UnfinishedPage {
             },
         ],
         orphans: OrphanReport {
-            rules: vec![],
-            resolutions: vec![],
             sources: vec![OrphanRecord {
                 link: link(PageKind::Source, "source_unused", "Unused API spec"),
                 reason: "referenced by nothing".to_string(),

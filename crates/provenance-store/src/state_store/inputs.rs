@@ -20,7 +20,6 @@ pub struct CreateSourceInput {
     pub commit_pin: Option<String>,
     pub effective_date: Option<i64>,
     pub review_date: Option<i64>,
-    pub superseded_by: Option<StableId>,
     pub supersedes: Vec<StableId>,
     pub origin_thread: Option<StableId>,
     pub origin_message: Option<StableId>,
@@ -120,7 +119,6 @@ pub struct CreateResolutionInput {
     pub made_by: Option<String>,
     pub approved_by: Option<String>,
     pub approved_at: Option<i64>,
-    pub superseded_by: Option<StableId>,
     pub origin_thread: Option<StableId>,
     pub origin_message: Option<StableId>,
 }

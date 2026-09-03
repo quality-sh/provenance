@@ -3,10 +3,10 @@ use crate::handlers::ScopeExport;
 use crate::wiki::links::LinkResolver;
 use crate::wiki::model::GapKind;
 use provenance_core::{
-    Edge, EdgeType, Message, MessageRole, NodeType, Question, QuestionStatus, Requirement,
-    RequirementStatus, Resolution, ResolutionInput, ResolutionInputType, ResolutionMethod,
-    ResolutionStatus, Rule, RuleSeverity, RuleStatus, SchemaVersion, ScopeId, Source,
-    SourceReference, SourceType, StableId, Thread, ThreadParent, ThreadStatus, Topic, TopicStatus,
+    Message, MessageRole, NodeType, Question, QuestionStatus, Requirement, RequirementStatus,
+    Resolution, ResolutionInput, ResolutionInputType, ResolutionMethod, ResolutionStatus, Rule,
+    RuleSeverity, RuleStatus, SchemaVersion, ScopeId, Source, SourceReference, SourceType,
+    StableId, Thread, ThreadParent, ThreadStatus, Topic, TopicStatus,
 };
 use provenance_store::cache::{compute_gaps, GapGraph, GapItem};
 
@@ -62,7 +62,6 @@ pub(super) fn resolution(id: &str, title: &str, inputs: Vec<ResolutionInput>) ->
         made_by: Some("Ben Nasraoui".to_string()),
         approved_by: Some("Ben Nasraoui".to_string()),
         approved_at: Some(1_745_000_000),
-        superseded_by: None,
         review_on: None,
         requirement_ids: Vec::new(),
         supersedes: Vec::new(),
@@ -108,10 +107,20 @@ pub(super) fn source(id: &str, name: &str) -> Source {
         commit_pin: None,
         effective_date: None,
         review_date: None,
-        superseded_by: None,
         supersedes: Vec::new(),
         origin_thread: None,
         origin_message: None,
+    }
+}
+
+pub(super) fn domain(id: &str, name: &str) -> provenance_core::Domain {
+    provenance_core::Domain {
+        schema_version: SchemaVersion(1),
+        scope_id: scope_id(),
+        id: sid(id),
+        name: name.to_string(),
+        description: Some(format!("About {name}")),
+        color: None,
     }
 }
 
@@ -150,20 +159,6 @@ pub(super) fn question(
         links: Vec::new(),
         contradicts: None,
         resolution_id: None,
-    }
-}
-
-pub(super) fn edge(edge_type: EdgeType, from: (NodeType, &str), to: (NodeType, &str)) -> Edge {
-    Edge {
-        schema_version: SchemaVersion(1),
-        scope_id: scope_id(),
-        id: Edge::stable_id(edge_type, from.0, &sid(from.1), to.0, &sid(to.1)).unwrap(),
-        edge_type,
-        from_type: from.0,
-        from_id: sid(from.1),
-        to_type: to.0,
-        to_id: sid(to.1),
-        label: None,
     }
 }
 
@@ -230,7 +225,30 @@ fn fixture_sources() -> Vec<Source> {
     ]
 }
 
+/// `req_child` refines `req_root`, cites `source_schads`, and is resolved
+/// by `res_split`, which spawned `req_stuck`; `rule_001` names both the
+/// requirement and the resolution.
 fn fixture_requirements() -> Vec<Requirement> {
+    let mut child = requirement(
+        "req_child",
+        "SaveInvoice shall split claim items",
+        RequirementStatus::Resolved,
+        vec![SourceReference {
+            source_id: sid("source_schads"),
+            clause: Some("clause 10.3".to_string()),
+        }],
+    );
+    child.refines = Some(sid("req_root"));
+    let mut stuck = requirement(
+        "req_stuck",
+        "Rostering shall respect awards",
+        RequirementStatus::Resolved,
+        vec![SourceReference {
+            source_id: sid("source_missing"),
+            clause: None,
+        }],
+    );
+    stuck.spawned_by = Some(sid("res_split"));
     vec![
         requirement(
             "req_root",
@@ -238,82 +256,30 @@ fn fixture_requirements() -> Vec<Requirement> {
             RequirementStatus::Active,
             vec![],
         ),
-        requirement(
-            "req_child",
-            "SaveInvoice shall split claim items",
-            RequirementStatus::Resolved,
-            vec![SourceReference {
-                source_id: sid("source_schads"),
-                clause: Some("clause 10.3".to_string()),
-            }],
-        ),
-        requirement(
-            "req_stuck",
-            "Rostering shall respect awards",
-            RequirementStatus::Resolved,
-            vec![SourceReference {
-                source_id: sid("source_missing"),
-                clause: None,
-            }],
-        ),
+        child,
+        stuck,
     ]
 }
 
 fn fixture_resolutions() -> Vec<Resolution> {
-    vec![
-        resolution(
-            "res_split",
-            "Per-portion split",
-            vec![ResolutionInput {
-                input_type: ResolutionInputType::Technical,
-                reference: "src/UseCase.php:59-69".to_string(),
-                summary: "Codebase scan".to_string(),
-            }],
-        ),
-        resolution("res_orphan", "Detached decision", vec![]),
-    ]
+    let mut split = resolution(
+        "res_split",
+        "Per-portion split",
+        vec![ResolutionInput {
+            input_type: ResolutionInputType::Technical,
+            reference: "src/UseCase.php:59-69".to_string(),
+            summary: "Codebase scan".to_string(),
+        }],
+    );
+    split.requirement_ids = vec![sid("req_child")];
+    vec![split, resolution("res_orphan", "Detached decision", vec![])]
 }
 
 fn fixture_rules() -> Vec<Rule> {
-    vec![
-        rule("rule_001", Some("Invoices grouped by participant")),
-        rule("rule_orphan", None),
-    ]
-}
-
-fn fixture_edges() -> Vec<Edge> {
-    vec![
-        edge(
-            EdgeType::RefinesInto,
-            (NodeType::Requirement, "req_root"),
-            (NodeType::Requirement, "req_child"),
-        ),
-        edge(
-            EdgeType::Resolves,
-            (NodeType::Resolution, "res_split"),
-            (NodeType::Requirement, "req_child"),
-        ),
-        edge(
-            EdgeType::Produces,
-            (NodeType::Resolution, "res_split"),
-            (NodeType::Rule, "rule_001"),
-        ),
-        edge(
-            EdgeType::Produces,
-            (NodeType::Requirement, "req_child"),
-            (NodeType::Rule, "rule_001"),
-        ),
-        edge(
-            EdgeType::References,
-            (NodeType::Source, "source_schads"),
-            (NodeType::Requirement, "req_child"),
-        ),
-        edge(
-            EdgeType::Spawns,
-            (NodeType::Resolution, "res_split"),
-            (NodeType::Requirement, "req_stuck"),
-        ),
-    ]
+    let mut grouped = rule("rule_001", Some("Invoices grouped by participant"));
+    grouped.requirement_ids = vec![sid("req_child")];
+    grouped.resolution_ids = vec![sid("res_split")];
+    vec![grouped, rule("rule_orphan", None)]
 }
 
 fn fixture_threads() -> Vec<Thread> {
@@ -337,11 +303,11 @@ fn fixture_messages() -> Vec<Message> {
 
 pub(super) fn fixture_state() -> ScopeExport {
     let mut state = empty_state();
+    state.domains = vec![domain("domain_default", "Invoicing")];
     state.sources = fixture_sources();
     state.requirements = fixture_requirements();
     state.resolutions = fixture_resolutions();
     state.rules = fixture_rules();
-    state.edges = fixture_edges();
     state.threads = fixture_threads();
     state.messages = fixture_messages();
     state
@@ -366,7 +332,6 @@ pub(super) fn compute_state_gaps(state: &ScopeExport) -> Vec<GapItem> {
         rules: &state.rules,
         topics: &state.topics,
         questions: &state.questions,
-        edges: &state.edges,
         threads: &state.threads,
         domains: &state.domains,
         boundaries: &state.boundaries,

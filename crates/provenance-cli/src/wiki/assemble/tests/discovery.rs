@@ -1,21 +1,10 @@
 use super::super::build_corpus;
-use super::fixtures::{edge, empty_state, requirement, resolution, rule, sid, source};
+use super::fixtures::{domain, empty_state, requirement, resolution, rule, sid, source};
 use crate::wiki::links::LinkResolver;
 use crate::wiki::model::DomainState;
 use crate::wiki::render::render_corpus;
-use provenance_core::{Domain, EdgeType, NodeType, RequirementStatus, SchemaVersion};
+use provenance_core::RequirementStatus;
 use provenance_macros::verifies;
-
-fn domain(id: &str, name: &str) -> Domain {
-    Domain {
-        schema_version: SchemaVersion(1),
-        scope_id: super::fixtures::scope_id(),
-        id: sid(id),
-        name: name.to_string(),
-        description: Some(format!("About {name}")),
-        color: None,
-    }
-}
 
 #[test]
 #[verifies("rule_wiki_homepage_search_coverage", examples)]
@@ -162,12 +151,9 @@ fn domains_group_rules_through_canonical_requirement_relationships() {
         RequirementStatus::Active,
         vec![],
     )];
-    state.rules = vec![rule("rule_invoice", Some("Group invoices"))];
-    state.edges = vec![edge(
-        EdgeType::Produces,
-        (NodeType::Requirement, "req_invoice"),
-        (NodeType::Rule, "rule_invoice"),
-    )];
+    let mut invoice_rule = rule("rule_invoice", Some("Group invoices"));
+    invoice_rule.requirement_ids = vec![sid("req_invoice")];
+    state.rules = vec![invoice_rule];
 
     let corpus = build_corpus(&state, &LinkResolver::new(None));
     let group = &corpus.domains.groups[0];
@@ -195,20 +181,11 @@ fn domains_group_children_and_rules_by_their_root_requirement_domain() {
         vec![],
     );
     child.domain_id = None;
+    child.refines = Some(sid("req_root"));
     state.requirements = vec![root, child];
-    state.rules = vec![rule("rule_invoice", Some("Group invoices"))];
-    state.edges = vec![
-        edge(
-            EdgeType::RefinesInto,
-            (NodeType::Requirement, "req_root"),
-            (NodeType::Requirement, "req_child"),
-        ),
-        edge(
-            EdgeType::Produces,
-            (NodeType::Requirement, "req_child"),
-            (NodeType::Rule, "rule_invoice"),
-        ),
-    ];
+    let mut invoice_rule = rule("rule_invoice", Some("Group invoices"));
+    invoice_rule.requirement_ids = vec![sid("req_child")];
+    state.rules = vec![invoice_rule];
 
     let corpus = build_corpus(&state, &LinkResolver::new(None));
     let group = &corpus.domains.groups[0];
@@ -241,22 +218,11 @@ fn domains_surface_defined_missing_and_unassigned_without_dropping_rules() {
     );
     unassigned.domain_id = None;
     state.requirements = vec![defined, missing, unassigned];
-    state.rules = vec![
-        rule("rule_missing", Some("Missing rule")),
-        rule("rule_unassigned", Some("Unassigned rule")),
-    ];
-    state.edges = vec![
-        edge(
-            EdgeType::Produces,
-            (NodeType::Requirement, "req_missing"),
-            (NodeType::Rule, "rule_missing"),
-        ),
-        edge(
-            EdgeType::Produces,
-            (NodeType::Requirement, "req_unassigned"),
-            (NodeType::Rule, "rule_unassigned"),
-        ),
-    ];
+    let mut missing_rule = rule("rule_missing", Some("Missing rule"));
+    missing_rule.requirement_ids = vec![sid("req_missing")];
+    let mut unassigned_rule = rule("rule_unassigned", Some("Unassigned rule"));
+    unassigned_rule.requirement_ids = vec![sid("req_unassigned")];
+    state.rules = vec![missing_rule, unassigned_rule];
 
     let corpus = build_corpus(&state, &LinkResolver::new(None));
 

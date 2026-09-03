@@ -1,6 +1,6 @@
 use super::super::{compute_gaps, GapGraph, GapItem, GapKind};
 use provenance_core::{
-    Edge, EdgeType, NodeType, Question, QuestionStatus, Requirement, RequirementStatus, Resolution,
+    NodeType, Question, QuestionStatus, Requirement, RequirementStatus, Resolution,
     ResolutionMethod, ResolutionStatus, Rule, RuleSeverity, RuleStatus, SchemaVersion, ScopeId,
     Source, SourceType, StableId, Topic, TopicStatus,
 };
@@ -52,7 +52,6 @@ pub fn resolution(id: &str) -> Resolution {
         made_by: None,
         approved_by: None,
         approved_at: None,
-        superseded_by: None,
         review_on: None,
         requirement_ids: Vec::new(),
         supersedes: Vec::new(),
@@ -144,24 +143,9 @@ pub fn source(id: &str) -> Source {
         commit_pin: None,
         effective_date: None,
         review_date: None,
-        superseded_by: None,
         supersedes: Vec::new(),
         origin_thread: None,
         origin_message: None,
-    }
-}
-
-pub fn edge(edge_type: EdgeType, from: (NodeType, &str), to: (NodeType, &str)) -> Edge {
-    Edge {
-        schema_version: SchemaVersion(1),
-        scope_id: scope_id(),
-        id: Edge::stable_id(edge_type, from.0, &sid(from.1), to.0, &sid(to.1)).unwrap(),
-        edge_type,
-        from_type: from.0,
-        from_id: sid(from.1),
-        to_type: to.0,
-        to_id: sid(to.1),
-        label: None,
     }
 }
 
@@ -172,7 +156,7 @@ pub fn compute_for(
     rules: &[Rule],
     topics: &[Topic],
     questions: &[Question],
-    edges: &[Edge],
+    domains: &[provenance_core::Domain],
 ) -> Vec<GapItem> {
     let scope = scope_id();
     compute_gaps(&GapGraph {
@@ -183,9 +167,8 @@ pub fn compute_for(
         rules,
         topics,
         questions,
-        edges,
         threads: &[],
-        domains: &[],
+        domains,
         boundaries: &[],
     })
 }

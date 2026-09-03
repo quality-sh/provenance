@@ -47,37 +47,6 @@ pub(super) fn add_requirement_gaps(query: &GraphQuery<'_, '_>, gaps: &mut Vec<Ga
     }
 }
 
-pub(super) fn add_resolution_gaps(query: &GraphQuery<'_, '_>, gaps: &mut Vec<GapItem>) {
-    for resolution in query.graph.resolutions {
-        if !query.resolution_resolves_any_requirement(&resolution.id) {
-            gaps.push(GapItem::new(
-                GapKind::OrphanResolution,
-                NodeType::Resolution,
-                &resolution.id,
-                "resolution does not resolve any requirement",
-            ));
-        }
-    }
-}
-
-/// A rule is traced when its requirement is recorded as producing it. A
-/// resolution may also produce the rule, but only when a decision was needed.
-pub(super) fn add_rule_gaps(query: &GraphQuery<'_, '_>, gaps: &mut Vec<GapItem>) {
-    for rule in query.graph.rules {
-        let missing = query.missing_rule_producers(&rule.id);
-        if missing.is_empty() {
-            continue;
-        }
-        let reason = format!("no {} produces this rule", missing[0].word());
-        gaps.push(GapItem::new(
-            GapKind::OrphanRule,
-            NodeType::Rule,
-            &rule.id,
-            reason,
-        ));
-    }
-}
-
 pub(super) fn add_source_gaps(query: &GraphQuery<'_, '_>, gaps: &mut Vec<GapItem>) {
     for source in query.graph.sources {
         if !query.source_is_referenced(&source.id) {
@@ -91,12 +60,15 @@ pub(super) fn add_source_gaps(query: &GraphQuery<'_, '_>, gaps: &mut Vec<GapItem
     }
 }
 
+/// A question that names a contradiction is reported as the pair gap, not
+/// as an open question as well.
 pub(super) fn add_question_gaps(query: &GraphQuery<'_, '_>, gaps: &mut Vec<GapItem>) {
     for question in query.graph.questions.iter().filter(|question| {
-        matches!(
-            question.status,
-            QuestionStatus::Open | QuestionStatus::BlockedOnHuman
-        )
+        question.contradicts.is_none()
+            && matches!(
+                question.status,
+                QuestionStatus::Open | QuestionStatus::BlockedOnHuman
+            )
     }) {
         let reason = match question.status {
             QuestionStatus::Open => "open question",

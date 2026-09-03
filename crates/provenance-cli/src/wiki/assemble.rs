@@ -1,8 +1,8 @@
 //! Assembles the wiki page model from Provenance state.
 //!
-//! Pure joins over the scope export: edges are matched against record
-//! vectors by stable id, in record order, so output is deterministic for a
-//! given state. Every hole found on the way becomes a gap notice or an
+//! Pure joins over the scope export: relation fields are matched against
+//! record vectors by stable id, in record order, so output is deterministic
+//! for a given state. Every hole found on the way becomes a gap notice or an
 //! orphan entry instead of being dropped.
 
 mod context;
@@ -64,7 +64,6 @@ fn build_corpus_with_coverage(
         rules: &state.rules,
         topics: &state.topics,
         questions: &state.questions,
-        edges: &state.edges,
         threads: &state.threads,
         domains: &state.domains,
         boundaries: &state.boundaries,

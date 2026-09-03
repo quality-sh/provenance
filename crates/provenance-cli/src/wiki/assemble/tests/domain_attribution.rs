@@ -7,11 +7,11 @@
 //! generator's own record of the graph, never by calling the assembler again.
 
 use super::super::build_corpus;
-use super::fixtures::{edge, empty_state, requirement, resolution, rule, scope_id, sid};
+use super::fixtures::{empty_state, requirement, resolution, rule, scope_id, sid};
 use crate::handlers::ScopeExport;
 use crate::wiki::links::LinkResolver;
 use crate::wiki::model::{DomainGroup, DomainState, WikiCorpus};
-use provenance_core::{Domain, EdgeType, NodeType, RequirementStatus, SchemaVersion};
+use provenance_core::{Domain, RequirementStatus, SchemaVersion};
 use provenance_macros::verifies;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -66,8 +66,8 @@ fn declared_domain() -> Domain {
     }
 }
 
-/// Builds a requirement tree (each requirement refines from an earlier one,
-/// so the generated shape is acyclic), assigns a domain to roughly a third of
+/// Builds a requirement tree (each requirement refines an earlier one, so
+/// the generated shape is acyclic), assigns a domain to roughly a third of
 /// the requirements, and hangs rules off requirements at random depths:
 /// directly, through a resolution, or not at all.
 fn generate(seed: u64) -> GeneratedGraph {
@@ -93,16 +93,12 @@ fn generate(seed: u64) -> GeneratedGraph {
             vec![],
         );
         record.domain_id = domain.as_deref().map(sid);
-        state.requirements.push(record);
         if index > 0 {
             let parent = format!("req_{:02}", rng.below(index));
-            state.edges.push(edge(
-                EdgeType::RefinesInto,
-                (NodeType::Requirement, &parent),
-                (NodeType::Requirement, &id),
-            ));
+            record.refines = Some(sid(&parent));
             parents.entry(id.clone()).or_default().push(parent);
         }
+        state.requirements.push(record);
         own_domain.insert(id.clone(), domain);
         requirement_ids.push(id);
     }
@@ -112,38 +108,26 @@ fn generate(seed: u64) -> GeneratedGraph {
     let mut rule_ids = Vec::new();
     for index in 0..rule_count {
         let rule_id = format!("rule_{index:02}");
-        state.rules.push(rule(&rule_id, None));
+        let mut generated = rule(&rule_id, None);
         let target = requirement_ids[rng.below(requirement_ids.len())].clone();
         match rng.below(3) {
             0 => {
-                state.edges.push(edge(
-                    EdgeType::Produces,
-                    (NodeType::Requirement, &target),
-                    (NodeType::Rule, &rule_id),
-                ));
+                generated.requirement_ids = vec![sid(&target)];
                 attachments.entry(rule_id.clone()).or_default().push(target);
             }
             1 => {
                 let resolution_id = format!("res_{index:02}");
-                state
-                    .resolutions
-                    .push(resolution(&resolution_id, "Generated decision", vec![]));
-                state.edges.push(edge(
-                    EdgeType::Resolves,
-                    (NodeType::Resolution, &resolution_id),
-                    (NodeType::Requirement, &target),
-                ));
-                state.edges.push(edge(
-                    EdgeType::Produces,
-                    (NodeType::Resolution, &resolution_id),
-                    (NodeType::Rule, &rule_id),
-                ));
+                let mut decision = resolution(&resolution_id, "Generated decision", vec![]);
+                decision.requirement_ids = vec![sid(&target)];
+                state.resolutions.push(decision);
+                generated.resolution_ids = vec![sid(&resolution_id)];
                 attachments.entry(rule_id.clone()).or_default().push(target);
             }
             _ => {
                 attachments.insert(rule_id.clone(), Vec::new());
             }
         }
+        state.rules.push(generated);
         rule_ids.push(rule_id);
     }
 
@@ -288,12 +272,12 @@ fn every_requirement_and_rule_lands_in_some_group() {
     }
 }
 
-/// A cycle in `refines_into` is not a shape the CLI writes, but an imported
-/// or hand-edited graph can hold one. Reaching the assertions at all is the
+/// A cycle in `refines` is not a shape the CLI writes, but an imported or
+/// hand-edited graph can hold one. Reaching the assertions at all is the
 /// evidence that the walk terminates.
 #[test]
 #[verifies("rule_domain_attribution", property)]
-fn a_refines_into_cycle_neither_hangs_nor_drops_records() {
+fn a_refines_cycle_neither_hangs_nor_drops_records() {
     for seed in 0..128_u64 {
         let mut graph = generate(seed);
         if graph.requirement_ids.len() < 2 {
@@ -303,16 +287,14 @@ fn a_refines_into_cycle_neither_hangs_nor_drops_records() {
         let child_index = 1 + rng.below(graph.requirement_ids.len() - 1);
         let child = graph.requirement_ids[child_index].clone();
         let parent = graph.parents[&child][0].clone();
-        graph.state.edges.push(edge(
-            EdgeType::RefinesInto,
-            (NodeType::Requirement, &child),
-            (NodeType::Requirement, &parent),
-        ));
-        graph
-            .parents
-            .entry(parent.clone())
-            .or_default()
-            .push(child.clone());
+        let parent_record = graph
+            .state
+            .requirements
+            .iter_mut()
+            .find(|record| record.id.as_str() == parent)
+            .expect("the parent is a generated requirement");
+        parent_record.refines = Some(sid(&child));
+        graph.parents.insert(parent.clone(), vec![child.clone()]);
 
         let corpus = graph.corpus();
         assert_nothing_vanished(&graph, &corpus, seed);

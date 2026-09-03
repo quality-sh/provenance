@@ -108,7 +108,6 @@ fn seed_unsourced_chain(layout: &ProvenanceLayout, scope: &ScopeId) {
             made_by: None,
             approved_by: None,
             approved_at: None,
-            superseded_by: None,
             origin_thread: None,
             origin_message: None,
         })
@@ -148,12 +147,10 @@ fn orphan_report_wants_a_source_behind_the_producing_requirement() {
     assert_eq!(orphan_ids, vec!["rule_unsourced"]);
     assert_eq!(orphans[0].missing, vec!["source".to_string()]);
 
-    // Both producers are recorded, so the gap report leaves the rule alone;
-    // the two readers differ only over the source leg.
+    // The gap report names the requirement's missing source, never the
+    // rule; the two readers differ only over the source leg.
     let gaps = find_gaps(&layout, &scope).unwrap();
-    assert!(!gaps
-        .iter()
-        .any(|gap| gap.kind == GapKind::OrphanRule && gap.node_id == "rule_unsourced"));
+    assert!(!gaps.iter().any(|gap| gap.node_id == "rule_unsourced"));
     assert_eq!(
         coverage_health(&layout, &scope)
             .unwrap()
@@ -194,7 +191,7 @@ fn requirement_produced_rule_does_not_need_a_resolution() {
     assert!(!find_gaps(&layout, &scope)
         .unwrap()
         .iter()
-        .any(|gap| gap.kind == GapKind::OrphanRule && gap.node_id == "rule_half"));
+        .any(|gap| gap.node_id == "rule_half"));
     assert_eq!(
         coverage_health(&layout, &scope)
             .unwrap()
@@ -228,7 +225,6 @@ fn rule_without_a_producing_requirement_remains_orphaned() {
             made_by: None,
             approved_by: None,
             approved_at: None,
-            superseded_by: None,
             origin_thread: None,
             origin_message: None,
         })
@@ -243,15 +239,11 @@ fn rule_without_a_producing_requirement_remains_orphaned() {
     let orphans = orphan_rules(&layout, &scope).unwrap();
     assert_eq!(orphans.len(), 1);
     assert_eq!(orphans[0].rule_id, "rule_unattached");
-    assert_eq!(
-        orphans[0].missing,
-        vec!["requirement".to_string(), "source".to_string()]
-    );
-    assert!(find_gaps(&layout, &scope).unwrap().iter().any(|gap| {
-        gap.kind == GapKind::OrphanRule
-            && gap.node_id == "rule_unattached"
-            && gap.reason == "no requirement produces this rule"
-    }));
+    assert_eq!(orphans[0].missing, vec!["source".to_string()]);
+    assert!(!find_gaps(&layout, &scope)
+        .unwrap()
+        .iter()
+        .any(|gap| gap.node_id == "rule_unattached"));
 }
 
 fn seed_rule_with_producers(
@@ -285,7 +277,6 @@ fn seed_rule_with_producers(
                     made_by: None,
                     approved_by: None,
                     approved_at: None,
-                    superseded_by: None,
                     origin_thread: None,
                     origin_message: None,
                 })
@@ -331,56 +322,41 @@ fn seed_rule_with_producers(
     );
 }
 
-/// `orphans` and `gaps` are two consumers of one producer test, so they must
-/// name the same rules for every shape of producer edge. The expectation is
-/// derived from `RuleProducer::REQUIRED` rather than restated here: which
-/// producers a rule owes is the graph's ruling to change, and this test holds
-/// the two consumers together through any such change.
+/// `orphans` and health read one source test: a rule is complete when a
+/// source reaches it through a requirement it names. The gap report never
+/// names a rule for its lists; a rule with no requirement is the
+/// validator's refusal, not a gap.
 #[test]
 #[verifies("rule_graph_gaps", conformance)]
-fn orphan_health_and_gaps_name_the_same_rules() {
-    use crate::cache::gaps::graph_query::RuleProducer;
-
+fn orphan_health_and_gaps_agree_on_the_source_leg() {
     for has_requirement in [false, true] {
         for has_resolution in [false, true] {
             let (_dir, layout, scope) = empty_layout();
             seed_rule_with_producers(&layout, &scope, has_requirement, has_resolution);
 
-            let expected_missing = RuleProducer::REQUIRED
-                .into_iter()
-                .filter(|producer| match producer {
-                    RuleProducer::Requirement => !has_requirement,
-                    RuleProducer::Resolution => !has_resolution,
-                })
-                .map(|producer: RuleProducer| producer.word().to_string())
-                .collect::<Vec<_>>();
-
-            let health_missing = orphan_rules(&layout, &scope)
-                .unwrap()
-                .into_iter()
-                .find(|orphan| orphan.rule_id == "rule_under_test")
-                .map(|orphan| {
-                    orphan
-                        .missing
-                        .into_iter()
-                        .filter(|missing| missing != "source")
-                        .collect::<Vec<_>>()
-                })
-                .unwrap_or_default();
-            let gap = find_gaps(&layout, &scope)
-                .unwrap()
-                .into_iter()
-                .find(|gap| gap.kind == GapKind::OrphanRule && gap.node_id == "rule_under_test");
-
+            let orphans = orphan_rules(&layout, &scope).unwrap();
+            let orphan = orphans
+                .iter()
+                .find(|orphan| orphan.rule_id == "rule_under_test");
             assert_eq!(
-                health_missing, expected_missing,
-                "health disagreed with the required-producer list for \
+                orphan.map(|orphan| orphan.missing.clone()),
+                (!has_requirement).then(|| vec!["source".to_string()]),
+                "orphans disagreed with the source leg for \
                  requirement={has_requirement}, resolution={has_resolution}"
             );
+            let health = coverage_health(&layout, &scope).unwrap();
             assert_eq!(
-                gap.is_some(),
-                !expected_missing.is_empty(),
-                "gaps disagreed with health for requirement={has_requirement}, \
+                health.rules.with_complete_traceability,
+                usize::from(has_requirement),
+                "health disagreed with orphans for requirement={has_requirement}, \
+                 resolution={has_resolution}"
+            );
+            assert!(
+                !find_gaps(&layout, &scope)
+                    .unwrap()
+                    .iter()
+                    .any(|gap| gap.node_id == "rule_under_test"),
+                "gaps named the rule for requirement={has_requirement}, \
                  resolution={has_resolution}"
             );
         }

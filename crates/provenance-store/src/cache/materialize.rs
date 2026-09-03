@@ -50,6 +50,7 @@ pub(super) async fn materialize_with_guard(
     let manifest = store.manifest()?;
     for scope in &manifest.scopes {
         store.validate_ideation_scope(&scope.id)?;
+        store.validate_graph_scope(&scope.id)?;
     }
     let pool = open_cache(layout).await?;
     crate::test_probes::at("run_migrations_under_guard")?;

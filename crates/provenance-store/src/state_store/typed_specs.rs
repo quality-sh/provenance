@@ -8,7 +8,7 @@ mod rule_addresses;
 use std::collections::{BTreeMap, BTreeSet};
 
 use provenance_core::{
-    DeclarationAddress, Edge, ImplementationBinding, Requirement, Rule, ScopeId, Source, StableId,
+    DeclarationAddress, ImplementationBinding, Requirement, Rule, ScopeId, Source, StableId,
     SUPPORTED_SCHEMA_VERSION,
 };
 use provenance_macros::rule;
@@ -33,7 +33,6 @@ struct CurrentTypedState {
     sources: Vec<Source>,
     requirements: Vec<Requirement>,
     rules: Vec<Rule>,
-    edges: Vec<Edge>,
     implementation_bindings: Vec<ImplementationBinding>,
     source_addresses: BTreeMap<DeclarationAddress, StableId>,
     requirement_addresses: BTreeMap<DeclarationAddress, StableId>,
@@ -287,11 +286,6 @@ impl StateStore {
         let requirements = self.list_requirements(scope_id)?;
         let rules = self.list_rules(scope_id)?;
         let implementation_bindings = self.list_implementation_bindings(scope_id)?;
-        let edges = self
-            .list_edges()?
-            .into_iter()
-            .filter(|edge| edge.scope_id == *scope_id)
-            .collect();
         let source_addresses = owned_declaration_ids(owner, &sources, |record| {
             (
                 &record.id,
@@ -317,7 +311,6 @@ impl StateStore {
             sources,
             requirements,
             rules,
-            edges,
             implementation_bindings,
             source_addresses,
             requirement_addresses,

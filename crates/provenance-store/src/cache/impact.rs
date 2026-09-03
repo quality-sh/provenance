@@ -1,7 +1,9 @@
+use crate::cache::gaps::GraphRecords;
 use crate::cache::serde_name;
 use crate::layout::ProvenanceLayout;
 use crate::state_store::StateStore;
-use provenance_core::{Edge, EdgeType, NodeType, StableId};
+use provenance_core::model::relations::{flow_neighbors, RecordFront};
+use provenance_core::{NodeType, StableId};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
@@ -33,6 +35,17 @@ pub struct ImpactOptions {
     pub follow_indirect: bool,
 }
 
+/// The relations impact follows only when asked to: a refinement, a
+/// dependency, a supersession, or a spawn changes the reading of a record
+/// without changing what it produces.
+const INDIRECT: [&str; 5] = [
+    "refines",
+    "depends_on",
+    "contradicts",
+    "supersedes",
+    "spawned_by",
+];
+
 pub fn analyze_impact(
     layout: &ProvenanceLayout,
     scope: &provenance_core::ScopeId,
@@ -41,22 +54,9 @@ pub fn analyze_impact(
     options: ImpactOptions,
 ) -> anyhow::Result<ImpactView> {
     let store = StateStore::new(layout.clone());
-    let edges: Vec<_> = store
-        .list_edges()?
-        .into_iter()
-        .filter(|edge| edge.scope_id == *scope)
-        .filter(|edge| {
-            options.follow_indirect
-                || !matches!(
-                    edge.edge_type,
-                    EdgeType::DependsOn
-                        | EdgeType::RefinesInto
-                        | EdgeType::Contradicts
-                        | EdgeType::Supersedes
-                        | EdgeType::Spawns
-                )
-        })
-        .collect();
+    let records = store.with_repository_publication(|| GraphRecords::load(scope, &store))?;
+    let graph = records.graph(scope);
+    let front = graph.front();
     let mut nodes = BTreeMap::<(String, String, &'static str), ImpactNode>::new();
     let mut truncated = false;
     for direction in [ImpactDirection::Downstream, ImpactDirection::Upstream] {
@@ -64,23 +64,18 @@ pub fn analyze_impact(
             BTreeSet::from([(serde_name(&origin_type)?, origin_id.as_str().to_string())]);
         let mut queue = VecDeque::from([(origin_type, origin_id.clone(), 0_u32)]);
         while let Some((node_type, node_id, hops)) = queue.pop_front() {
+            let steps = next_hop(
+                &front,
+                node_type,
+                &node_id,
+                direction,
+                options.follow_indirect,
+            );
             if hops >= options.max_hops {
-                if edges
-                    .iter()
-                    .any(|edge| touches(edge, direction, node_type, &node_id))
-                {
-                    truncated = true;
-                }
+                truncated |= !steps.is_empty();
                 continue;
             }
-            for edge in edges
-                .iter()
-                .filter(|edge| touches(edge, direction, node_type, &node_id))
-            {
-                let (next_type, next_id) = match direction {
-                    ImpactDirection::Downstream => (edge.to_type, edge.to_id.clone()),
-                    ImpactDirection::Upstream => (edge.from_type, edge.from_id.clone()),
-                };
+            for (next_type, next_id) in steps {
                 let key = (serde_name(&next_type)?, next_id.as_str().to_string());
                 if seen.insert(key.clone()) {
                     let hop_distance = hops + 1;
@@ -106,16 +101,23 @@ pub fn analyze_impact(
     })
 }
 
-fn touches(
-    edge: &Edge,
-    direction: ImpactDirection,
+fn next_hop(
+    front: &RecordFront<'_>,
     node_type: NodeType,
     node_id: &StableId,
-) -> bool {
-    match direction {
-        ImpactDirection::Downstream => edge.from_type == node_type && edge.from_id == *node_id,
-        ImpactDirection::Upstream => edge.to_type == node_type && edge.to_id == *node_id,
-    }
+    direction: ImpactDirection,
+    follow_indirect: bool,
+) -> Vec<(NodeType, StableId)> {
+    flow_neighbors(
+        front,
+        node_type,
+        node_id,
+        direction == ImpactDirection::Downstream,
+    )
+    .into_iter()
+    .filter(|node| follow_indirect || !INDIRECT.contains(&node.relation))
+    .map(|node| (node.endpoint.node_type, node.endpoint.id))
+    .collect()
 }
 
 const fn direction_key(direction: ImpactDirection) -> &'static str {

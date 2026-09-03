@@ -27,7 +27,6 @@ fn create_unowned_brief(store: &StateStore, scope: &ScopeId) {
             commit_pin: None,
             effective_date: None,
             review_date: None,
-            superseded_by: None,
             supersedes: Vec::new(),
             origin_thread: None,
             origin_message: None,

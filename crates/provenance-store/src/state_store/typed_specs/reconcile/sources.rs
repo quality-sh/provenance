@@ -64,7 +64,6 @@ pub(in crate::state_store::typed_specs) fn desired_source(
         effective_date: None,
         review_date: None,
         supersedes: Vec::new(),
-        superseded_by: None,
         origin_thread: None,
         origin_message: None,
     };

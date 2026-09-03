@@ -12,7 +12,6 @@ fn seed_external_metadata(store: &StateStore, scope: &ScopeId) {
             commit_pin: Some("0123456789abcdef0123456789abcdef01234567".to_string()),
             effective_date: Some(1_700_000_000_000),
             review_date: None,
-            superseded_by: None,
             supersedes: Vec::new(),
             origin_thread: None,
             origin_message: None,

@@ -132,6 +132,7 @@ fn import_export_roundtrip_preserves_enriched_v1_cloud_fields() {
     "position": "Keep as draft extraction",
     "rationale": "Needs human review",
     "status": "draft",
+    "requirement_ids": ["req_sah"],
     "review_on": null,
     "context": "Codebase scan",
     "enforcement": "specification",
@@ -146,6 +147,8 @@ fn import_export_roundtrip_preserves_enriched_v1_cloud_fields() {
     "statement": "Draft rule shall stay draft",
     "status": "draft",
     "severity": "high",
+    "requirement_ids": ["req_sah"],
+    "resolution_ids": ["res_sah"],
     "source_document": "Example-API-main/src/example.php",
     "source_section": "lines 1-3"
   }],

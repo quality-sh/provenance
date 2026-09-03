@@ -87,7 +87,6 @@ fn a_required_list_keeps_its_last_entry() {
             made_by: None,
             approved_by: None,
             approved_at: None,
-            superseded_by: None,
             origin_thread: None,
             origin_message: None,
         })

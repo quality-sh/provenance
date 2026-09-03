@@ -29,7 +29,7 @@ pub(super) async fn load_sources(
             .bind(source.scope_id.as_str()).bind(source.id.as_str()).bind(source.name)
             .bind(serde_name(&source.source_type)?).bind(source.url).bind(source.reference)
             .bind(source.commit_pin).bind(source.effective_date).bind(source.review_date)
-            .bind(source.superseded_by.as_ref().map(provenance_core::StableId::as_str))
+            .bind(Option::<&str>::None)
             .execute(&mut **tx).await?;
         loaded += 1;
     }
@@ -150,7 +150,7 @@ pub(super) async fn load_resolutions(
             .bind(resolution.context).bind(resolution.enforcement).bind(resolution.confidence)
             .bind(serde_json::to_string(&resolution.inputs)?).bind(resolution.made_by)
             .bind(resolution.approved_by).bind(resolution.approved_at)
-            .bind(resolution.superseded_by.as_ref().map(provenance_core::StableId::as_str))
+            .bind(Option::<&str>::None)
             .execute(&mut **tx).await?;
         loaded += 1;
     }

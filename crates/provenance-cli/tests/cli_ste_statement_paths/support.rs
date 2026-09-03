@@ -161,7 +161,8 @@ pub fn record(id: &str, statement: &str, kind: &str) -> String {
             "id": id,
             "statement": statement,
             "status": "active",
-            "severity": "high"
+            "severity": "high",
+            "requirement_ids": ["req_anchor"]
         })
     };
     format!("{}\n", serde_json::to_string(&value).unwrap())

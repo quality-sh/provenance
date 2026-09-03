@@ -1,20 +1,20 @@
 use crate::layout::ProvenanceLayout;
 use crate::state_store::StateStore;
-use provenance_core::{Edge, EdgeType, NodeType, Requirement, Resolution, Rule, Source};
+use provenance_core::model::relations::RelationRow;
+use provenance_core::{NodeType, Requirement, Resolution, Rule, Source, StableId};
 
 /// One rule and the chain behind it.
 ///
-/// `edges` holds only the edges the walk actually crossed — the produces edge
-/// into the rule, the resolves edge from its resolution, and the source
-/// references on the requirements reached. A reader asked about one rule, so
-/// handing back every edge in the scope answers a question nobody asked.
+/// `relations` holds only the rows the walk crossed: the rule's
+/// `requirement_ids` and `resolution_ids`, its resolutions'
+/// `requirement_ids`, and the citations of every requirement reached.
 #[derive(Debug, serde::Serialize)]
 pub struct TraceabilityView {
     pub rule: Rule,
     pub resolutions: Vec<Resolution>,
     pub requirements: Vec<Requirement>,
     pub sources: Vec<Source>,
-    pub edges: Vec<Edge>,
+    pub relations: Vec<RelationRow>,
 }
 
 pub fn trace_rule(
@@ -24,6 +24,16 @@ pub fn trace_rule(
 ) -> anyhow::Result<TraceabilityView> {
     let store = StateStore::new(layout.clone());
     store.with_repository_publication(|| trace_rule_locked(scope, rule_id, &store))
+}
+
+fn row(owner: (NodeType, &StableId), relation: &str, target: (NodeType, &StableId)) -> RelationRow {
+    RelationRow {
+        owner_type: owner.0,
+        owner_id: owner.1.clone(),
+        relation: relation.to_string(),
+        target_type: target.0,
+        target_id: target.1.clone(),
+    }
 }
 
 fn trace_rule_locked(
@@ -36,80 +46,67 @@ fn trace_rule_locked(
         .into_iter()
         .find(|rule| rule.id == *rule_id)
         .ok_or_else(|| anyhow::anyhow!("rule not found"))?;
-    let scope_edges: Vec<Edge> = store
-        .list_edges()?
-        .into_iter()
-        .filter(|edge| edge.scope_id == *scope)
-        .collect();
-    let produces_rule = |edge: &Edge| {
-        edge.edge_type == EdgeType::Produces
-            && edge.to_type == NodeType::Rule
-            && edge.to_id == *rule_id
-            && matches!(edge.from_type, NodeType::Resolution | NodeType::Requirement)
-    };
-    let resolution_ids: Vec<_> = scope_edges
-        .iter()
-        .filter(|edge| produces_rule(edge) && edge.from_type == NodeType::Resolution)
-        .map(|edge| edge.from_id.clone())
-        .collect();
-    let resolves_requirement = |edge: &Edge| {
-        edge.edge_type == EdgeType::Resolves
-            && edge.from_type == NodeType::Resolution
-            && resolution_ids.iter().any(|id| id == &edge.from_id)
-    };
-    // A produces edge points at the rule, so the producer is its `from` end: a
-    // requirement recorded as producing the rule directly, or a resolution
-    // whose own requirement is one hop further back along its resolves edge.
-    // Reading `to_id` off both kinds collected the rule's own id and dropped
-    // every direct requirement producer.
-    let requirement_ids: Vec<_> = scope_edges
-        .iter()
-        .filter(|edge| produces_rule(edge) && edge.from_type == NodeType::Requirement)
-        .map(|edge| edge.from_id.clone())
-        .chain(
-            scope_edges
-                .iter()
-                .filter(|edge| resolves_requirement(edge))
-                .map(|edge| edge.to_id.clone()),
-        )
-        .collect();
-    let references_requirement = |edge: &Edge| {
-        edge.edge_type == EdgeType::References
-            && edge.from_type == NodeType::Source
-            && requirement_ids.iter().any(|id| id == &edge.to_id)
-    };
-    let source_ids: Vec<_> = scope_edges
-        .iter()
-        .filter(|edge| references_requirement(edge))
-        .map(|edge| edge.from_id.clone())
-        .collect();
-    let edges: Vec<Edge> = scope_edges
-        .iter()
-        .filter(|edge| {
-            produces_rule(edge) || resolves_requirement(edge) || references_requirement(edge)
-        })
-        .cloned()
-        .collect();
-    let resolutions = store
+    let mut relations = Vec::new();
+    let resolutions: Vec<Resolution> = store
         .list_resolutions(scope)?
         .into_iter()
-        .filter(|resolution| resolution_ids.iter().any(|id| id == &resolution.id))
+        .filter(|resolution| rule.resolution_ids.contains(&resolution.id))
         .collect();
-    let requirements = store
+    for id in &rule.resolution_ids {
+        relations.push(row(
+            (NodeType::Rule, &rule.id),
+            "resolution_ids",
+            (NodeType::Resolution, id),
+        ));
+    }
+    let mut requirement_ids = rule.requirement_ids.clone();
+    for id in &rule.requirement_ids {
+        relations.push(row(
+            (NodeType::Rule, &rule.id),
+            "requirement_ids",
+            (NodeType::Requirement, id),
+        ));
+    }
+    for resolution in &resolutions {
+        for id in &resolution.requirement_ids {
+            relations.push(row(
+                (NodeType::Resolution, &resolution.id),
+                "requirement_ids",
+                (NodeType::Requirement, id),
+            ));
+            if !requirement_ids.contains(id) {
+                requirement_ids.push(id.clone());
+            }
+        }
+    }
+    let requirements: Vec<Requirement> = store
         .list_requirements(scope)?
         .into_iter()
-        .filter(|requirement| requirement_ids.iter().any(|id| id == &requirement.id))
+        .filter(|requirement| requirement_ids.contains(&requirement.id))
         .collect();
+    let mut source_ids = Vec::new();
+    for requirement in &requirements {
+        for reference in &requirement.source_refs {
+            relations.push(row(
+                (NodeType::Requirement, &requirement.id),
+                "cites",
+                (NodeType::Source, &reference.source_id),
+            ));
+            if !source_ids.contains(&reference.source_id) {
+                source_ids.push(reference.source_id.clone());
+            }
+        }
+    }
     let sources = store
         .list_sources(scope)?
         .into_iter()
-        .filter(|source| source_ids.iter().any(|id| id == &source.id))
+        .filter(|source| source_ids.contains(&source.id))
         .collect();
     Ok(TraceabilityView {
         rule,
         resolutions,
         requirements,
         sources,
-        edges,
+        relations,
     })
 }

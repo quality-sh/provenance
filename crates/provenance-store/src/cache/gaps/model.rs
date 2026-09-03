@@ -6,21 +6,17 @@ use provenance_core::{NodeType, StableId};
 pub enum GapKind {
     /// A requirement has no domain assignment.
     MissingDomainId,
-    /// A requirement has no source refs and no `references` edge.
+    /// A requirement cites no source that exists.
     MissingSourceRefs,
-    /// A resolved requirement has no `resolves` edge pointing at it.
+    /// A resolved requirement is named by no resolution.
     NoResolvingDecision,
     /// A resolved or decision-backed requirement has no downstream rule.
     NoProducedRules,
-    /// No requirement records the rule it refines.
-    OrphanRule,
-    /// A resolution resolves no requirement.
-    OrphanResolution,
     /// A source nothing references.
     UnreferencedSource,
     /// A reference to a record that does not exist in the scope.
     DanglingReference,
-    /// A `contradicts` pair has no resolving decision.
+    /// A question names a contradiction nothing has settled.
     UnresolvedContradictsPair,
     /// A question is still open.
     OpenQuestion,

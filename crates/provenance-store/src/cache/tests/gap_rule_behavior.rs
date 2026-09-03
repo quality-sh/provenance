@@ -6,8 +6,8 @@ use super::super::*;
 use super::fixtures::*;
 use crate::cache::gaps::tests::fixtures as records;
 use provenance_core::{
-    Edge, EdgeType, NodeType, Question, QuestionStatus, Requirement, RequirementStatus, Resolution,
-    ResolutionStatus, Rule, Source, SourceReference, Topic, TopicStatus,
+    Domain, Question, QuestionStatus, Requirement, RequirementStatus, Resolution, ResolutionStatus,
+    Rule, Source, SourceReference, Topic, TopicStatus,
 };
 use provenance_macros::verifies;
 
@@ -23,9 +23,7 @@ pub(super) fn all_gap_kinds() -> Vec<GapKind> {
         GapKind::MissingDomainId => Some(GapKind::MissingSourceRefs),
         GapKind::MissingSourceRefs => Some(GapKind::NoResolvingDecision),
         GapKind::NoResolvingDecision => Some(GapKind::NoProducedRules),
-        GapKind::NoProducedRules => Some(GapKind::OrphanRule),
-        GapKind::OrphanRule => Some(GapKind::OrphanResolution),
-        GapKind::OrphanResolution => Some(GapKind::UnreferencedSource),
+        GapKind::NoProducedRules => Some(GapKind::UnreferencedSource),
         GapKind::UnreferencedSource => Some(GapKind::DanglingReference),
         GapKind::DanglingReference => Some(GapKind::UnresolvedContradictsPair),
         GapKind::UnresolvedContradictsPair => Some(GapKind::OpenQuestion),
@@ -47,7 +45,7 @@ struct HandBuiltGraph {
     rules: Vec<Rule>,
     topics: Vec<Topic>,
     questions: Vec<Question>,
-    edges: Vec<Edge>,
+    domains: Vec<Domain>,
 }
 
 impl HandBuiltGraph {
@@ -59,8 +57,14 @@ impl HandBuiltGraph {
             &self.rules,
             &self.topics,
             &self.questions,
-            &self.edges,
+            &self.domains,
         )
+    }
+
+    /// The shaping domain every settled requirement names.
+    fn with_domain(mut self) -> Self {
+        self.domains.push(records::domain(ANCHOR_DOMAIN));
+        self
     }
 }
 
@@ -85,11 +89,27 @@ fn settled_requirement(id: &str, source_id: &str, status: RequirementStatus) -> 
     }
 }
 
+fn resolution_of(id: &str, requirement: &str, status: ResolutionStatus) -> Resolution {
+    Resolution {
+        status,
+        requirement_ids: vec![sid(requirement)],
+        ..records::resolution(id)
+    }
+}
+
+fn rule_of(id: &str, requirements: &[&str], resolutions: &[&str]) -> Rule {
+    Rule {
+        requirement_ids: requirements.iter().map(|id| sid(id)).collect(),
+        resolution_ids: resolutions.iter().map(|id| sid(id)).collect(),
+        ..records::rule(id)
+    }
+}
+
 /// One minimal graph per gap kind. The match is exhaustive, so a new
 /// `GapKind` cannot be added without stating the smallest graph that opens it.
 #[allow(clippy::too_many_lines)]
 fn minimal_graph_for(kind: GapKind) -> HandBuiltGraph {
-    match kind {
+    let graph = match kind {
         GapKind::MissingDomainId => HandBuiltGraph {
             sources: vec![records::source(ANCHOR_SOURCE)],
             requirements: vec![sourced_requirement(
@@ -115,16 +135,10 @@ fn minimal_graph_for(kind: GapKind) -> HandBuiltGraph {
                 ANCHOR_SOURCE,
                 RequirementStatus::Resolved,
             )],
-            rules: vec![records::rule("rule_direct")],
-            edges: vec![records::edge(
-                EdgeType::Produces,
-                (NodeType::Requirement, "req_resolved"),
-                (NodeType::Rule, "rule_direct"),
-            )],
+            rules: vec![rule_of("rule_direct", &["req_resolved"], &[])],
             ..HandBuiltGraph::default()
         },
-        // Decided, but the decision produced nothing. The decision itself is
-        // still a draft, so it is not separately on the hook for a rule.
+        // Decided, but the decision produced nothing.
         GapKind::NoProducedRules => HandBuiltGraph {
             sources: vec![records::source(ANCHOR_SOURCE)],
             requirements: vec![settled_requirement(
@@ -132,42 +146,11 @@ fn minimal_graph_for(kind: GapKind) -> HandBuiltGraph {
                 ANCHOR_SOURCE,
                 RequirementStatus::Active,
             )],
-            resolutions: vec![records::resolution("res_decided")],
-            edges: vec![records::edge(
-                EdgeType::Resolves,
-                (NodeType::Resolution, "res_decided"),
-                (NodeType::Requirement, "req_decided"),
+            resolutions: vec![resolution_of(
+                "res_decided",
+                "req_decided",
+                ResolutionStatus::Draft,
             )],
-            ..HandBuiltGraph::default()
-        },
-        // The resolution produces the rule, but no requirement records the
-        // behavioural obligation it refines. The resolution is still a
-        // draft, so it is not separately on the hook for another rule.
-        GapKind::OrphanRule => HandBuiltGraph {
-            sources: vec![records::source(ANCHOR_SOURCE)],
-            requirements: vec![settled_requirement(
-                "req_half_traced",
-                ANCHOR_SOURCE,
-                RequirementStatus::Active,
-            )],
-            resolutions: vec![records::resolution("res_half_traced")],
-            rules: vec![records::rule("rule_half_traced")],
-            edges: vec![
-                records::edge(
-                    EdgeType::Resolves,
-                    (NodeType::Resolution, "res_half_traced"),
-                    (NodeType::Requirement, "req_half_traced"),
-                ),
-                records::edge(
-                    EdgeType::Produces,
-                    (NodeType::Resolution, "res_half_traced"),
-                    (NodeType::Rule, "rule_half_traced"),
-                ),
-            ],
-            ..HandBuiltGraph::default()
-        },
-        GapKind::OrphanResolution => HandBuiltGraph {
-            resolutions: vec![records::resolution("res_orphan")],
             ..HandBuiltGraph::default()
         },
         GapKind::UnreferencedSource => HandBuiltGraph {
@@ -183,17 +166,27 @@ fn minimal_graph_for(kind: GapKind) -> HandBuiltGraph {
             )],
             ..HandBuiltGraph::default()
         },
+        // A question names the pair and nothing has settled it.
         GapKind::UnresolvedContradictsPair => HandBuiltGraph {
             sources: vec![records::source(ANCHOR_SOURCE)],
             requirements: vec![
                 settled_requirement("req_left", ANCHOR_SOURCE, RequirementStatus::Active),
                 settled_requirement("req_right", ANCHOR_SOURCE, RequirementStatus::Active),
             ],
-            edges: vec![records::edge(
-                EdgeType::Contradicts,
-                (NodeType::Requirement, "req_left"),
-                (NodeType::Requirement, "req_right"),
+            topics: vec![records::topic_for(
+                "topic_pair",
+                "req_left",
+                TopicStatus::Explored,
             )],
+            questions: vec![Question {
+                contradicts: Some(sid("req_right")),
+                ..records::question_for(
+                    "question_pair",
+                    "topic_pair",
+                    "req_left",
+                    QuestionStatus::Open,
+                )
+            }],
             ..HandBuiltGraph::default()
         },
         GapKind::OpenQuestion => HandBuiltGraph {
@@ -230,15 +223,15 @@ fn minimal_graph_for(kind: GapKind) -> HandBuiltGraph {
             )],
             ..HandBuiltGraph::default()
         },
-    }
+    };
+    graph.with_domain()
 }
 
 /// A graph with nothing left unfinished: every requirement has a domain and
-/// live source, its approved decision resolves it and produces a rule, and
-/// the requirement records the rule it refines. Every topic is explored and
-/// every question answered.
+/// live source, its approved decision names it and its rule names both.
+/// Every topic is explored and every question answered.
 fn complete_graph(chains: usize) -> HandBuiltGraph {
-    let mut graph = HandBuiltGraph::default();
+    let mut graph = HandBuiltGraph::default().with_domain();
     for index in 0..chains {
         let source = format!("source_{index}");
         let requirement = format!("req_{index}");
@@ -252,11 +245,14 @@ fn complete_graph(chains: usize) -> HandBuiltGraph {
             &source,
             RequirementStatus::Resolved,
         ));
-        graph.resolutions.push(Resolution {
-            status: ResolutionStatus::Approved,
-            ..records::resolution(&resolution)
-        });
-        graph.rules.push(records::rule(&rule));
+        graph.resolutions.push(resolution_of(
+            &resolution,
+            &requirement,
+            ResolutionStatus::Approved,
+        ));
+        graph
+            .rules
+            .push(rule_of(&rule, &[&requirement], &[&resolution]));
         graph.topics.push(records::topic_for(
             &topic,
             &requirement,
@@ -268,32 +264,8 @@ fn complete_graph(chains: usize) -> HandBuiltGraph {
             &requirement,
             QuestionStatus::Answered,
         ));
-        graph.edges.push(records::edge(
-            EdgeType::Resolves,
-            (NodeType::Resolution, &resolution),
-            (NodeType::Requirement, &requirement),
-        ));
-        graph.edges.push(records::edge(
-            EdgeType::Produces,
-            (NodeType::Resolution, &resolution),
-            (NodeType::Rule, &rule),
-        ));
-        graph.edges.push(records::edge(
-            EdgeType::Produces,
-            (NodeType::Requirement, &requirement),
-            (NodeType::Rule, &rule),
-        ));
     }
     graph
-}
-
-/// The reason recorded against a rule's orphan gap, if it has one.
-fn orphan_rule_reason(graph: &HandBuiltGraph, rule_id: &str) -> Option<String> {
-    graph
-        .gaps()
-        .into_iter()
-        .find(|gap| gap.kind == GapKind::OrphanRule && gap.node_id == rule_id)
-        .map(|gap| gap.reason)
 }
 
 #[test]
@@ -322,72 +294,56 @@ fn a_complete_graph_has_no_gaps() {
     }
 }
 
+/// The links a complete chain needs: the resolution naming its requirement
+/// and the requirement citing its source. The rule's own lists are the
+/// validator's subject, not the gap policy's.
 #[test]
 #[verifies("rule_graph_gaps", property)]
 fn removing_any_single_required_link_from_a_complete_graph_opens_a_gap() {
     for chains in 1..=4 {
-        let complete = complete_graph(chains);
-        for dropped in 0..complete.edges.len() {
+        for index in 0..chains {
             let mut graph = complete_graph(chains);
-            let removed = graph.edges.remove(dropped);
-            if removed.edge_type == EdgeType::Produces && removed.from_type == NodeType::Resolution
-            {
-                assert!(
-                    graph.gaps().is_empty(),
-                    "dropping optional resolution-to-rule edge {} opened a gap",
-                    removed.id.as_str()
-                );
-                continue;
-            }
+            graph.resolutions[index].requirement_ids.clear();
             let gaps = graph.gaps();
             assert!(
                 !gaps.is_empty(),
-                "dropping {:?} edge {} from a complete graph of {chains} chains left no gap",
-                removed.edge_type,
-                removed.id.as_str()
+                "clearing the requirement of resolution {index} from a complete graph \
+                 of {chains} chains left no gap"
             );
-        }
-        for orphaned in 0..chains {
             let mut graph = complete_graph(chains);
-            graph.requirements[orphaned].source_refs.clear();
+            graph.requirements[index].source_refs.clear();
             let gaps = graph.gaps();
             assert!(
                 !gaps.is_empty(),
-                "dropping the source ref of requirement {orphaned} from a complete graph \
+                "dropping the source ref of requirement {index} from a complete graph \
                  of {chains} chains left no gap"
             );
         }
     }
 }
 
-/// A requirement is the required parent of a rule. A resolution is an
-/// optional second producer when a decision removed ambiguity.
+/// A rule names its requirement; naming a resolution as well is optional,
+/// and a rule reached only through a resolution still counts as produced.
 #[test]
 #[verifies("rule_graph_gaps", examples)]
-fn a_rule_requires_a_requirement_but_not_a_resolution() {
+fn a_rule_reaches_its_requirement_directly_or_through_a_resolution() {
     let mut requirement_only = complete_graph(1);
-    requirement_only.edges.retain(|edge| {
-        !(edge.edge_type == EdgeType::Produces && edge.from_type == NodeType::Resolution)
-    });
-    assert_eq!(orphan_rule_reason(&requirement_only, "rule_0"), None);
+    requirement_only.rules[0].resolution_ids.clear();
+    assert!(requirement_only.gaps().is_empty());
 
-    let mut resolution_only = complete_graph(1);
-    resolution_only.edges.retain(|edge| {
-        !(edge.edge_type == EdgeType::Produces && edge.from_type == NodeType::Requirement)
-    });
+    let mut through_resolution = complete_graph(1);
+    through_resolution.rules[0].requirement_ids.clear();
+    assert!(through_resolution.gaps().is_empty());
+
+    let mut unattached = complete_graph(1);
+    unattached.rules[0].requirement_ids.clear();
+    unattached.rules[0].resolution_ids.clear();
     assert_eq!(
-        orphan_rule_reason(&resolution_only, "rule_0").as_deref(),
-        Some("no requirement produces this rule")
+        unattached
+            .gaps()
+            .iter()
+            .map(|gap| gap.kind)
+            .collect::<Vec<_>>(),
+        vec![GapKind::NoProducedRules]
     );
-
-    let unattached = HandBuiltGraph {
-        rules: vec![records::rule("rule_unattached")],
-        ..HandBuiltGraph::default()
-    };
-    assert_eq!(
-        orphan_rule_reason(&unattached, "rule_unattached").as_deref(),
-        Some("no requirement produces this rule")
-    );
-
-    assert_eq!(orphan_rule_reason(&complete_graph(1), "rule_0"), None);
 }

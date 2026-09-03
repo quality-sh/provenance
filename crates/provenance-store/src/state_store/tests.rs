@@ -57,7 +57,6 @@ fn seeded_source_requirement_store() -> (tempfile::TempDir, StateStore, ScopeId)
             commit_pin: None,
             effective_date: None,
             review_date: None,
-            superseded_by: None,
             supersedes: Vec::new(),
             origin_thread: None,
             origin_message: None,
@@ -69,6 +68,7 @@ fn seeded_source_requirement_store() -> (tempfile::TempDir, StateStore, ScopeId)
 mod asserted_evidence;
 mod direct_statement_write_gate;
 mod edges;
+mod graph_validation;
 mod ideation;
 mod ideation_duplicates;
 mod implementation_bindings;

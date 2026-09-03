@@ -2,13 +2,13 @@ use super::super::*;
 use super::fixtures::*;
 use super::gap_rule_behavior::all_gap_kinds;
 use crate::state_store::{
-    AddSourceReferenceInput, CreateEdgeInput, CreateProposalCardInput, CreateQuestionInput,
-    CreateResolutionInput, CreateSourceInput, CreateTopicInput, StateStore,
+    AddSourceReferenceInput, CreateProposalCardInput, CreateQuestionInput, CreateResolutionInput,
+    CreateTopicInput, StateStore,
 };
 use provenance_core::{
-    EdgeType, IdeationTarget, IdeationTargetType, NodeType, PromotionState, ProposalTraceability,
+    IdeationTarget, IdeationTargetType, NodeType, PromotionState, ProposalTraceability,
     ProposalType, QuestionStatus, RequirementStatus, ResolutionMethod, ResolutionStatus,
-    SourceType, TopicStatus,
+    TopicStatus,
 };
 use provenance_macros::verifies;
 
@@ -41,6 +41,39 @@ fn add_topic_question(
             answer: None,
             links: Vec::new(),
             contradicts: None,
+            resolution_id: None,
+        })
+        .unwrap();
+}
+
+/// A question on the first requirement naming the second as contradicted.
+fn add_contradiction(
+    store: &StateStore,
+    scope: &provenance_core::ScopeId,
+    requirement: &str,
+    other: &str,
+) {
+    store
+        .create_topic(CreateTopicInput {
+            scope_id: scope.clone(),
+            id: sid("topic_contradiction"),
+            requirement_id: sid(requirement),
+            title: "Contradiction".to_string(),
+            status: TopicStatus::Explored,
+            links: Vec::new(),
+        })
+        .unwrap();
+    store
+        .create_question(CreateQuestionInput {
+            scope_id: scope.clone(),
+            id: sid("question_contradiction"),
+            topic_id: sid("topic_contradiction"),
+            question: "Which requirement stands?".into(),
+            resolution_method: ResolutionMethod::Grill,
+            status: QuestionStatus::Open,
+            answer: None,
+            links: Vec::new(),
+            contradicts: Some(sid(other)),
             resolution_id: None,
         })
         .unwrap();
@@ -99,23 +132,13 @@ fn find_gaps_reports_the_frontier_taxonomy() {
     let store = StateStore::new(layout.clone());
     create_source(&store, &scope, "source_anchor");
     create_source(&store, &scope, "source_unused");
-    store
-        .create_source(CreateSourceInput {
-            scope_id: scope.clone(),
-            id: sid("source_dangling"),
-            name: "source_dangling".into(),
-            source_type: SourceType::Policy,
-            url: None,
-            reference: None,
-            commit_pin: None,
-            effective_date: None,
-            review_date: None,
-            superseded_by: Some(sid("source_missing")),
-            supersedes: Vec::new(),
-            origin_thread: None,
-            origin_message: None,
-        })
-        .unwrap();
+    // A reference the writers refuse arrives only by hand.
+    append_record(
+        &crate::shards::sources_path(&layout, &scope),
+        &serde_json::json!({"schema_version": 1, "scope_id": scope.as_str(),
+            "id": "source_dangling", "name": "source_dangling", "source_type": "policy",
+            "supersedes": ["source_missing"]}),
+    );
     for (id, status) in [
         ("req_missing_source", RequirementStatus::Active),
         ("req_resolved_no_decision", RequirementStatus::Resolved),
@@ -154,32 +177,11 @@ fn find_gaps_reports_the_frontier_taxonomy() {
             made_by: None,
             approved_by: None,
             approved_at: None,
-            superseded_by: None,
             origin_thread: None,
             origin_message: None,
         })
         .unwrap();
-    append_record(
-        &crate::shards::resolutions_path(&layout, &scope),
-        &serde_json::json!({"schema_version": 1, "scope_id": scope.as_str(), "id": "res_orphan",
-            "title": "res_orphan", "position": "Adopt", "rationale": "Resolves frontier",
-            "status": "approved", "inputs": [], "review_on": null}),
-    );
-    append_record(
-        &crate::shards::rules_path(&layout, &scope),
-        &serde_json::json!({"schema_version": 1, "scope_id": scope.as_str(), "id": "rule_orphan",
-            "statement": "An unattached rule exists", "status": "active", "severity": "high"}),
-    );
-    store
-        .create_edge(CreateEdgeInput {
-            scope_id: scope.clone(),
-            edge_type: EdgeType::Contradicts,
-            from_type: NodeType::Requirement,
-            from_id: sid("req_contradicts_a"),
-            to_type: NodeType::Requirement,
-            to_id: sid("req_contradicts_b"),
-        })
-        .unwrap();
+    add_contradiction(&store, &scope, "req_contradicts_a", "req_contradicts_b");
     add_topic_question(
         &store,
         &scope,
@@ -206,12 +208,6 @@ fn find_gaps_reports_the_frontier_taxonomy() {
             NodeType::Requirement,
             "req_decided_no_rule",
         ),
-        (
-            GapKind::OrphanResolution,
-            NodeType::Resolution,
-            "res_orphan",
-        ),
-        (GapKind::OrphanRule, NodeType::Rule, "rule_orphan"),
         (
             GapKind::UnreferencedSource,
             NodeType::Source,
@@ -269,16 +265,7 @@ fn prime_renders_frontier_gap_subjects() {
         create_requirement(&store, &scope, id, RequirementStatus::Active);
         attach_source(&store, &scope, id, "source_anchor");
     }
-    store
-        .create_edge(CreateEdgeInput {
-            scope_id: scope.clone(),
-            edge_type: EdgeType::Contradicts,
-            from_type: NodeType::Requirement,
-            from_id: sid("req_contradicts_a"),
-            to_type: NodeType::Requirement,
-            to_id: sid("req_contradicts_b"),
-        })
-        .unwrap();
+    add_contradiction(&store, &scope, "req_contradicts_a", "req_contradicts_b");
     add_topic_question(
         &store,
         &scope,

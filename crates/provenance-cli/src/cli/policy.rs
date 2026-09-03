@@ -47,8 +47,6 @@ pub enum ResolutionsCommand {
         #[arg(long)]
         approved_at: Option<i64>,
         #[arg(long)]
-        superseded_by: Option<String>,
-        #[arg(long)]
         origin_thread: Option<String>,
         #[arg(long)]
         origin_message: Option<String>,

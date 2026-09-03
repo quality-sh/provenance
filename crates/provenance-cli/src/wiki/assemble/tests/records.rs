@@ -17,10 +17,12 @@ fn resolution_page_links_requirements_rules_and_spawned_work() {
 }
 
 #[test]
-fn resolution_page_flags_orphaned_decisions() {
+fn a_detached_decision_page_lists_nothing_and_raises_no_gap() {
     let corpus = fixture_corpus();
     let page = resolution_page(&corpus, "res_orphan");
-    assert_eq!(gap_kinds(&page.gaps), vec![GapKind::OrphanResolution]);
+    assert!(page.resolves.is_empty());
+    assert!(page.produced_rules.is_empty());
+    assert!(page.gaps.is_empty());
 }
 
 #[test]
@@ -44,11 +46,11 @@ fn rule_page_traces_back_to_requirements_and_sources() {
 }
 
 #[test]
-fn rule_page_flags_orphan_rules_and_titles_a_nameless_rule_by_its_statement() {
+fn rule_page_titles_a_nameless_rule_by_its_statement() {
     let corpus = fixture_corpus();
     let page = rule_page(&corpus, "rule_orphan");
     assert_eq!(page.title, "Claim items shall be grouped by participant");
-    assert_eq!(gap_kinds(&page.gaps), vec![GapKind::OrphanRule]);
+    assert!(page.gaps.is_empty());
     assert!(page.produced_by.is_empty());
 }
 

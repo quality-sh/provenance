@@ -34,6 +34,7 @@ fn unfinished_reports_a_gap_for_a_thread_whose_parent_record_is_gone() {
     // without a trace instead of becoming a gap notice like every
     // other kind of dangling reference.
     let mut state = empty_state();
+    state.domains = vec![domain("domain_default", "Invoicing")];
     state.requirements = vec![requirement(
         "req_child",
         "SaveInvoice shall split claim items",
@@ -96,16 +97,8 @@ fn unfinished_page_renders_gaps_orphans_and_open_questions() {
         );
     }
     assert!(unfinished.html.contains("citation gap"));
-    assert!(unfinished
-        .html
-        .contains("Claim items shall be grouped by participant"));
-    assert!(unfinished.html.contains("Detached decision"));
     assert!(unfinished.html.contains("Unused API spec"));
     assert!(unfinished.html.contains("What remains unresolved?"));
-    assert_eq!(
-        corpus.unfinished.orphans.resolutions[0].reason,
-        "resolution does not resolve any requirement"
-    );
     assert_eq!(
         corpus.unfinished.orphans.sources[0].reason,
         "no requirement references this source"

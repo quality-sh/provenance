@@ -204,6 +204,14 @@ async fn materialize_state_caches_fog_resolution_method_and_claim_state() {
 async fn materialize_state_caches_enriched_source_and_resolution_fields() {
     let (_dir, layout, scope) = empty_layout();
     let store = StateStore::new(layout.clone());
+    create_source(&store, &scope, "source_sah_2025");
+    create_requirement(
+        &store,
+        &scope,
+        "req_sah_2025",
+        provenance_core::RequirementStatus::Active,
+    );
+    create_resolution(&store, &scope, "res_sah_2025", "req_sah_2025");
     store
         .create_source(CreateSourceInput {
             scope_id: scope.clone(),
@@ -215,8 +223,7 @@ async fn materialize_state_caches_enriched_source_and_resolution_fields() {
             commit_pin: None,
             effective_date: Some(1_714_521_600_000),
             review_date: Some(1_717_200_000_000),
-            superseded_by: Some(sid("source_sah_2025")),
-            supersedes: Vec::new(),
+            supersedes: vec![sid("source_sah_2025")],
             origin_thread: None,
             origin_message: None,
         })
@@ -243,7 +250,7 @@ async fn materialize_state_caches_enriched_source_and_resolution_fields() {
             id: sid("res_sah"),
             title: "SAH extraction".into(),
             requirement_ids: vec![sid("req_sah")],
-            supersedes: Vec::new(),
+            supersedes: vec![sid("res_sah_2025")],
             position: "Keep as draft extraction".into(),
             rationale: "Needs human review".into(),
             status: ResolutionStatus::Draft,
@@ -258,30 +265,32 @@ async fn materialize_state_caches_enriched_source_and_resolution_fields() {
             made_by: Some("Analyst One".into()),
             approved_by: Some("Approver Two".into()),
             approved_at: Some(1_714_780_800_000),
-            superseded_by: Some(sid("res_sah_2025")),
             origin_thread: None,
             origin_message: None,
         })
         .unwrap();
     materialize_state(&layout).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
-    let source: (Option<String>, Option<i64>, Option<i64>, Option<String>) = sqlx::query_as(
-        "SELECT reference, effective_date, review_date, superseded_by FROM sources WHERE id = ?",
+    let source: (Option<String>, Option<i64>, Option<i64>) =
+        sqlx::query_as("SELECT reference, effective_date, review_date FROM sources WHERE id = ?")
+            .bind("source_sah")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let resolution: (String, Option<String>, Option<String>, Option<i64>) = sqlx::query_as(
+        "SELECT inputs, made_by, approved_by, approved_at FROM resolutions WHERE id = ?",
     )
-    .bind("source_sah")
+    .bind("res_sah")
     .fetch_one(&pool)
     .await
     .unwrap();
-    let resolution: (String, Option<String>, Option<String>, Option<i64>, Option<String>) = sqlx::query_as("SELECT inputs, made_by, approved_by, approved_at, superseded_by FROM resolutions WHERE id = ?").bind("res_sah").fetch_one(&pool).await.unwrap();
     assert_eq!(source.0.as_deref(), Some("Department guidance"));
     assert_eq!(source.1, Some(1_714_521_600_000));
     assert_eq!(source.2, Some(1_717_200_000_000));
-    assert_eq!(source.3.as_deref(), Some("source_sah_2025"));
     assert!(resolution.0.contains(r#""input_type":"regulatory""#));
     assert_eq!(resolution.1.as_deref(), Some("Analyst One"));
     assert_eq!(resolution.2.as_deref(), Some("Approver Two"));
     assert_eq!(resolution.3, Some(1_714_780_800_000));
-    assert_eq!(resolution.4.as_deref(), Some("res_sah_2025"));
 }
 
 #[tokio::test]

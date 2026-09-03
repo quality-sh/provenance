@@ -28,8 +28,6 @@ pub enum SourcesCommand {
         effective_date: Option<i64>,
         #[arg(long)]
         review_date: Option<i64>,
-        #[arg(long)]
-        superseded_by: Option<String>,
         /// An older source this one replaces. Repeat for several.
         #[arg(long)]
         supersedes: Vec<String>,

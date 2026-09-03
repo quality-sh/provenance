@@ -140,8 +140,7 @@ fn export_definitions() -> Value {
                     "pattern": "^[0-9A-Fa-f]+$"
                 },
                 "effective_date": {"type": "integer"},
-                "review_date": {"type": "integer"}, "superseded_by": id.clone(),
-                "supersedes": id_list.clone()
+                "review_date": {"type": "integer"}, "supersedes": id_list.clone()
             })
         ),
         "domain": closed_record(&["schema_version", "scope_id", "id", "name"], json!({
@@ -199,7 +198,7 @@ fn export_definitions() -> Value {
                 "inputs": {"type": "array", "items": {"$ref": "#/$defs/resolutionInput"}},
                 "made_by": string.clone(), "approved_by": string.clone(), "approved_at": {"type": "integer"},
                 "requirement_ids": id_list.clone(), "supersedes": id_list.clone(),
-                "superseded_by": id.clone(), "review_on": {"type": ["string", "null"]}
+                "review_on": {"type": ["string", "null"]}
             })
         ),
         "rule": closed_record(

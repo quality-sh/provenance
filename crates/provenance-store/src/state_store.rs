@@ -1,5 +1,6 @@
 mod canonical_artifacts;
 mod domain_writers;
+mod graph_validation;
 mod ideation_batches;
 mod ideation_writers;
 mod implementation_bindings;
@@ -7,6 +8,7 @@ mod inputs;
 mod proposal_surfaces;
 mod proposal_writers;
 pub(crate) mod readers;
+mod reference_methods;
 mod reference_writers;
 mod requirement_reviews;
 mod rule_writers;
@@ -303,6 +305,7 @@ impl StateStore {
             } else {
                 self.validate_ideation_scope(scope)?;
             }
+            self.validate_graph_scope(scope)?;
             after_validation()?;
             let assertions = self.list_assertion_records(scope)?;
             let dispositions = self.list_dispositions(scope)?;

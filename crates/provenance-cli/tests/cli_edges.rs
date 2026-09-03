@@ -14,7 +14,6 @@ fn cli_edges_create_list_delete_and_validate_endpoints() {
 
     create_refines_edge(&repo);
     list_edges_includes_created_edge(&repo);
-    graph_includes_created_edge(&repo);
     rejects_invalid_endpoint_shape(&repo);
     rejects_missing_endpoint_record(&repo);
     delete_created_edge(&repo);
@@ -55,21 +54,6 @@ fn list_edges_includes_created_edge(repo: &str) {
     ])
     .success()
     .stdout(contains(EDGE_ID));
-}
-
-fn graph_includes_created_edge(repo: &str) {
-    provenance(&[
-        "graph",
-        "req_parent",
-        "--repo",
-        repo,
-        "--scope",
-        "default",
-        "--format",
-        "json",
-    ])
-    .success()
-    .stdout(contains(r#""edge_type": "refines_into""#));
 }
 
 fn rejects_invalid_endpoint_shape(repo: &str) {

@@ -1,5 +1,5 @@
 use crate::wiki::model::{PageId, PageLink, RecordKind, RulePage};
-use provenance_core::{EdgeType, NodeType, Requirement, Resolution, Rule};
+use provenance_core::{NodeType, Requirement, Resolution, Rule};
 
 use super::super::context::Assembler;
 use super::super::page_links::{requirement_link, resolution_link, rule_title, source_link};
@@ -10,29 +10,13 @@ impl<'a> Assembler<'a> {
             .state
             .resolutions
             .iter()
-            .filter(|resolution| {
-                self.edge_exists(
-                    EdgeType::Produces,
-                    NodeType::Resolution,
-                    &resolution.id,
-                    NodeType::Rule,
-                    &rule.id,
-                )
-            })
+            .filter(|resolution| rule.resolution_ids.contains(&resolution.id))
             .collect();
         let producing_requirements: Vec<&Requirement> = self
             .state
             .requirements
             .iter()
-            .filter(|requirement| {
-                self.edge_exists(
-                    EdgeType::Produces,
-                    NodeType::Requirement,
-                    &requirement.id,
-                    NodeType::Rule,
-                    &rule.id,
-                )
-            })
+            .filter(|requirement| rule.requirement_ids.contains(&requirement.id))
             .collect();
         let produced_by: Vec<PageLink> = producing_resolutions
             .iter()
@@ -42,7 +26,7 @@ impl<'a> Assembler<'a> {
             .collect();
         // Which requirements a rule answers to is decided once, by the
         // forward traversal; this page reads that decision inverted rather
-        // than walking Produces and Resolves backwards itself.
+        // than walking the lists backwards itself.
         let upstream_requirements: &[&Requirement] = self.requirements_behind_rule(&rule.id);
         let sources: Vec<PageLink> = self
             .state
@@ -50,13 +34,7 @@ impl<'a> Assembler<'a> {
             .iter()
             .filter(|source| {
                 upstream_requirements.iter().any(|requirement| {
-                    self.edge_exists(
-                        EdgeType::References,
-                        NodeType::Source,
-                        &source.id,
-                        NodeType::Requirement,
-                        &requirement.id,
-                    ) || requirement
+                    requirement
                         .source_refs
                         .iter()
                         .any(|reference| reference.source_id == source.id)

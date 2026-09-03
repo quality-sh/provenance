@@ -1,8 +1,8 @@
 use std::collections::BTreeSet;
 
-use provenance_core::{Edge, EdgeType, NodeType, StableId};
+use provenance_core::{NodeType, Requirement, Rule, StableId};
 
-use super::super::{rule_address, DesiredTypedIds};
+use super::super::{rule_address, CurrentTypedState, DesiredTypedIds};
 use crate::state_store::{TypedFieldChange, TypedSpecInput};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
@@ -18,11 +18,33 @@ enum RelationshipNode {
     Boundary,
 }
 
+/// One relation as the adoption report spells it: the source end first,
+/// the requirement or rule it reaches second.
 type Relationship = (RelationshipNode, String, RelationshipNode, String);
 
+/// The citations and rule lists a declaration asks for, beside the ones the
+/// records hold today. A declaration is exact only when both agree.
 pub(super) struct DesiredRelationships {
     references: BTreeSet<Relationship>,
     produces: BTreeSet<Relationship>,
+}
+
+/// The records the comparison reads: a requirement's `cites` and a rule's
+/// `requirement_ids`.
+#[derive(Clone, Copy)]
+pub(super) struct CurrentRelationships<'a> {
+    pub(super) requirements: &'a [Requirement],
+    pub(super) rules: &'a [Rule],
+}
+
+impl CurrentTypedState {
+    /// The records the relationship comparison reads.
+    pub(super) fn relationships(&self) -> CurrentRelationships<'_> {
+        CurrentRelationships {
+            requirements: &self.requirements,
+            rules: &self.rules,
+        }
+    }
 }
 
 impl DesiredRelationships {
@@ -56,52 +78,32 @@ impl DesiredRelationships {
         })
     }
 
-    pub(super) fn source_matches(&self, id: &StableId, edges: &[Edge]) -> bool {
-        current_relationships(edges, EdgeType::References, |edge| {
-            edge.from_type == NodeType::Source
-                && edge.from_id == *id
-                && edge.to_type == NodeType::Requirement
-        }) == selected(&self.references, |relation| relation.1 == id.as_str())
+    pub(super) fn source_matches(&self, id: &StableId, current: CurrentRelationships<'_>) -> bool {
+        cited_by(current, |_, source| source == id)
+            == selected(&self.references, |relation| relation.1 == id.as_str())
     }
 
-    pub(super) fn requirement_matches(&self, id: &StableId, edges: &[Edge]) -> bool {
-        let mut current = current_relationships(edges, EdgeType::References, |edge| {
-            edge.from_type == NodeType::Source
-                && edge.to_type == NodeType::Requirement
-                && edge.to_id == *id
-        });
-        current.extend(current_relationships(edges, EdgeType::Produces, |edge| {
-            edge.from_type == NodeType::Requirement
-                && edge.from_id == *id
-                && edge.to_type == NodeType::Rule
-        }));
-        let mut desired = selected(&self.references, |relation| relation.3 == id.as_str());
-        desired.extend(selected(&self.produces, |relation| {
-            relation.1 == id.as_str()
-        }));
-        current == desired
+    pub(super) fn requirement_matches(
+        &self,
+        id: &StableId,
+        current: CurrentRelationships<'_>,
+    ) -> bool {
+        Self::requirement_current(id, current) == self.requirement_desired(id)
     }
 
-    pub(super) fn rule_matches(&self, id: &StableId, edges: &[Edge]) -> bool {
-        current_relationships(edges, EdgeType::Produces, |edge| {
-            edge.from_type == NodeType::Requirement
-                && edge.to_type == NodeType::Rule
-                && edge.to_id == *id
-        }) == selected(&self.produces, |relation| relation.3 == id.as_str())
+    pub(super) fn rule_matches(&self, id: &StableId, current: CurrentRelationships<'_>) -> bool {
+        produced(current, |_, rule| rule == id)
+            == selected(&self.produces, |relation| relation.3 == id.as_str())
     }
 
     pub(super) fn add_source_change(
         &self,
         id: &StableId,
-        edges: &[Edge],
+        current: CurrentRelationships<'_>,
         changes: &mut Vec<TypedFieldChange>,
     ) {
         Self::add_change(
-            current_relationships(edges, EdgeType::References, |edge| {
-                edge.from_type == NodeType::Source
-                    && edge.from_id == *id
-                    && edge.to_type == NodeType::Requirement
-            }),
+            cited_by(current, |_, source| source == id),
             selected(&self.references, |relation| relation.1 == id.as_str()),
             changes,
         );
@@ -110,41 +112,44 @@ impl DesiredRelationships {
     pub(super) fn add_requirement_change(
         &self,
         id: &StableId,
-        edges: &[Edge],
+        current: CurrentRelationships<'_>,
         changes: &mut Vec<TypedFieldChange>,
     ) {
-        let mut current = current_relationships(edges, EdgeType::References, |edge| {
-            edge.from_type == NodeType::Source
-                && edge.to_type == NodeType::Requirement
-                && edge.to_id == *id
-        });
-        current.extend(current_relationships(edges, EdgeType::Produces, |edge| {
-            edge.from_type == NodeType::Requirement
-                && edge.from_id == *id
-                && edge.to_type == NodeType::Rule
-        }));
-        let mut desired = selected(&self.references, |relation| relation.3 == id.as_str());
-        desired.extend(selected(&self.produces, |relation| {
-            relation.1 == id.as_str()
-        }));
-        Self::add_change(current, desired, changes);
+        Self::add_change(
+            Self::requirement_current(id, current),
+            self.requirement_desired(id),
+            changes,
+        );
     }
 
     pub(super) fn add_rule_change(
         &self,
         id: &StableId,
-        edges: &[Edge],
+        current: CurrentRelationships<'_>,
         changes: &mut Vec<TypedFieldChange>,
     ) {
         Self::add_change(
-            current_relationships(edges, EdgeType::Produces, |edge| {
-                edge.from_type == NodeType::Requirement
-                    && edge.to_type == NodeType::Rule
-                    && edge.to_id == *id
-            }),
+            produced(current, |_, rule| rule == id),
             selected(&self.produces, |relation| relation.3 == id.as_str()),
             changes,
         );
+    }
+
+    fn requirement_current(
+        id: &StableId,
+        current: CurrentRelationships<'_>,
+    ) -> BTreeSet<Relationship> {
+        let mut rows = cited_by(current, |requirement, _| requirement == id);
+        rows.extend(produced(current, |requirement, _| requirement == id));
+        rows
+    }
+
+    fn requirement_desired(&self, id: &StableId) -> BTreeSet<Relationship> {
+        let mut rows = selected(&self.references, |relation| relation.3 == id.as_str());
+        rows.extend(selected(&self.produces, |relation| {
+            relation.1 == id.as_str()
+        }));
+        rows
     }
 
     fn add_change(
@@ -162,15 +167,47 @@ impl DesiredRelationships {
     }
 }
 
-fn current_relationships(
-    edges: &[Edge],
-    edge_type: EdgeType,
-    relevant: impl Fn(&Edge) -> bool,
+/// The citations held today, as (source, requirement) rows the filter admits.
+fn cited_by(
+    current: CurrentRelationships<'_>,
+    relevant: impl Fn(&StableId, &StableId) -> bool,
 ) -> BTreeSet<Relationship> {
-    edges
+    current
+        .requirements
         .iter()
-        .filter(|edge| edge.edge_type == edge_type && relevant(edge))
-        .map(|edge| relation(edge.from_type, &edge.from_id, edge.to_type, &edge.to_id))
+        .flat_map(|requirement| {
+            requirement
+                .source_refs
+                .iter()
+                .filter(|reference| relevant(&requirement.id, &reference.source_id))
+                .map(|reference| {
+                    relation(
+                        NodeType::Source,
+                        &reference.source_id,
+                        NodeType::Requirement,
+                        &requirement.id,
+                    )
+                })
+        })
+        .collect()
+}
+
+/// The rule lists held today, as (requirement, rule) rows the filter admits.
+fn produced(
+    current: CurrentRelationships<'_>,
+    relevant: impl Fn(&StableId, &StableId) -> bool,
+) -> BTreeSet<Relationship> {
+    current
+        .rules
+        .iter()
+        .flat_map(|rule| {
+            rule.requirement_ids
+                .iter()
+                .filter(|requirement| relevant(requirement, &rule.id))
+                .map(|requirement| {
+                    relation(NodeType::Requirement, requirement, NodeType::Rule, &rule.id)
+                })
+        })
         .collect()
 }
 

@@ -147,7 +147,6 @@ fn rule_adoption_preserves_a_resolution_relationship_outside_the_typed_surface()
             made_by: None,
             approved_by: None,
             approved_at: None,
-            superseded_by: None,
             origin_thread: None,
             origin_message: None,
         })

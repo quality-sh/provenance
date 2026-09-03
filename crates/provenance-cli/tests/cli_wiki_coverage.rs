@@ -255,7 +255,14 @@ fn seed_rules(dir: &std::path::Path, repo: &std::path::Path) {
     "source_type": "project_artifact",
     "reference": "src/rules.rs:7"
   }],
-  "requirements": [],
+  "requirements": [{
+    "schema_version": 1,
+    "scope_id": "default",
+    "id": "req_code",
+    "statement": "The code reference shall be honoured.",
+    "status": "active",
+    "source_refs": [{"source_id": "source_code", "clause": null}]
+  }],
   "resolutions": [],
   "rules": [{
     "schema_version": 1,
@@ -265,6 +272,7 @@ fn seed_rules(dir: &std::path::Path, repo: &std::path::Path) {
     "statement": "The bound decision is canonical.",
     "status": "active",
     "severity": "high",
+    "requirement_ids": ["req_code"],
     "source_document": "docs/obsolete.md",
     "source_section": "old_description"
   }, {
@@ -274,7 +282,8 @@ fn seed_rules(dir: &std::path::Path, repo: &std::path::Path) {
     "name": "Unbound rule",
     "statement": "An absent binding is shown honestly.",
     "status": "active",
-    "severity": "medium"
+    "severity": "medium",
+    "requirement_ids": ["req_code"]
   }],
   "edges": [],
   "threads": [],

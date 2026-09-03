@@ -1,4 +1,4 @@
-use crate::wiki::model::{GapKind, GapNotice, PageKind};
+use crate::wiki::model::PageKind;
 
 use super::super::{
     render_not_found, render_requirement, render_resolution, render_rule, render_source,
@@ -166,30 +166,16 @@ fn rule_page_merges_and_deduplicates_producers_and_upstream_requirements() {
 }
 
 #[test]
-fn rule_pages_use_shields_and_explain_orphaned_provenance_without_raw_ids() {
+fn rule_pages_use_shields_and_stay_quiet_without_provenance_or_gaps() {
     let mut page = rule_fixture();
-    page.id.record_id = "rule_orphan".to_string();
+    page.id.record_id = "rule_detached".to_string();
     page.produced_by.clear();
     page.requirements.clear();
-    page.gaps = vec![GapNotice {
-        kind: GapKind::OrphanRule,
-        subject: None,
-        related: None,
-        detail: "No requirement is recorded as producing this rule.".to_string(),
-    }];
+    page.gaps.clear();
     let html = render_rule("default", &page);
 
     assert!(html.contains("href=\"#i-shield\""), "{html}");
-    assert!(
-        html.contains("No requirement is recorded as producing this rule."),
-        "{html}"
-    );
-    assert_eq!(
-        html.matches("No requirement is recorded as producing this rule.")
-            .count(),
-        1,
-        "{html}"
-    );
+    assert!(!html.contains("Provenance</h2>"), "{html}");
     assert!(
         !html.contains("<h3 class=\"margin-head\">Gaps</h3>"),
         "{html}"

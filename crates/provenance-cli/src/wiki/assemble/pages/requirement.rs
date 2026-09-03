@@ -1,5 +1,5 @@
 use crate::wiki::model::{DecisionSection, PageId, RecordKind, RequirementPage, RuleCard};
-use provenance_core::{EdgeType, NodeType, Requirement};
+use provenance_core::{NodeType, Requirement};
 
 use super::super::context::Assembler;
 use super::super::page_links::{reader_title, requirement_link};
@@ -42,18 +42,8 @@ impl<'a> Assembler<'a> {
             decisions,
             produced_rules,
             children: self
-                .state
-                .requirements
-                .iter()
-                .filter(|child| {
-                    self.edge_exists(
-                        EdgeType::RefinesInto,
-                        NodeType::Requirement,
-                        &requirement.id,
-                        NodeType::Requirement,
-                        &child.id,
-                    )
-                })
+                .children_of(&requirement.id)
+                .into_iter()
                 .map(requirement_link)
                 .collect(),
             siblings: self.sibling_requirements(&requirement.id),

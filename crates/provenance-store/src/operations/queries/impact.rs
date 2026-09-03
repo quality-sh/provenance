@@ -1,5 +1,6 @@
 use crate::state_store::StateStore;
 use camino::Utf8Path;
+use provenance_core::model::relations::flow_neighbors;
 use provenance_core::protocol::{
     ensure_limit, ensure_protocol_version, take_page, ImpactQuery, ImpactResult, TRACE_MAX_DEPTH,
 };
@@ -7,7 +8,7 @@ use provenance_core::{NodeType, ScopeId, StableId};
 use std::collections::BTreeSet;
 
 use super::super::sites;
-use super::{bindings::Bindings, records, walk};
+use super::{bindings::Bindings, walk};
 
 /// Names every Rule a record reaches, with the code standing behind it.
 ///
@@ -23,32 +24,33 @@ pub(super) fn impact(
     ensure_protocol_version(request.protocol_version)?;
     ensure_limit(request.limit)?;
     let id = StableId::new(request.id.clone())?;
-    let nodes = records::load(store, scope, request.include_retired)?;
-    let edges = walk::scoped_edges(store, scope)?;
+    let graph = walk::ScopeGraph::load(store, scope, request.include_retired)?;
     let mut seen = BTreeSet::from([id.as_str().to_string()]);
     let mut rules = BTreeSet::new();
-    if records::find(&nodes, Some(NodeType::Rule), &id).is_some() {
+    if graph.find(NodeType::Rule, &id).is_some() {
         rules.insert(id.as_str().to_string());
     }
-    let mut frontier = vec![id];
+    let mut frontier: Vec<(NodeType, StableId)> = graph
+        .kind_of(&id)
+        .map(|node_type| vec![(node_type, id)])
+        .unwrap_or_default();
     for _ in 0..TRACE_MAX_DEPTH {
         let mut next = Vec::new();
-        for origin in &frontier {
-            for edge in &edges {
-                let reached = edge.from_id == *origin;
-                if !reached {
+        for (origin_type, origin) in &frontier {
+            for step in flow_neighbors(&graph.front(), *origin_type, origin, true) {
+                if !seen.insert(step.endpoint.id.as_str().to_string()) {
                     continue;
                 }
-                if !seen.insert(edge.to_id.as_str().to_string()) {
+                if graph
+                    .find(step.endpoint.node_type, &step.endpoint.id)
+                    .is_none()
+                {
                     continue;
                 }
-                if records::find(&nodes, Some(edge.to_type), &edge.to_id).is_none() {
-                    continue;
+                if step.endpoint.node_type == NodeType::Rule {
+                    rules.insert(step.endpoint.id.as_str().to_string());
                 }
-                if edge.to_type == NodeType::Rule {
-                    rules.insert(edge.to_id.as_str().to_string());
-                }
-                next.push(edge.to_id.clone());
+                next.push((step.endpoint.node_type, step.endpoint.id));
             }
         }
         if next.is_empty() {

@@ -19,7 +19,6 @@ impl StateStore {
             commit_pin,
             effective_date,
             review_date,
-            superseded_by,
             supersedes,
             origin_thread,
             origin_message,
@@ -46,7 +45,6 @@ impl StateStore {
                 effective_date,
                 review_date,
                 supersedes,
-                superseded_by,
                 origin_thread,
                 origin_message,
             };

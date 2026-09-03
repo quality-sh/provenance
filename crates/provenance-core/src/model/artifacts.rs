@@ -56,13 +56,6 @@ pub struct Source {
     #[relation(none)]
     #[serde(
         default,
-        alias = "supersededBy",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub superseded_by: Option<StableId>,
-    #[relation(none)]
-    #[serde(
-        default,
         alias = "originThread",
         skip_serializing_if = "Option::is_none"
     )]
@@ -208,13 +201,6 @@ pub struct Resolution {
     #[relation(target = Resolution, flow = target_downstream)]
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub supersedes: Vec<StableId>,
-    #[relation(none)]
-    #[serde(
-        default,
-        alias = "supersededBy",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub superseded_by: Option<StableId>,
     #[serde(alias = "reviewOn")]
     pub review_on: Option<String>,
     #[relation(none)]

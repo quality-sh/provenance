@@ -11,6 +11,7 @@ include!("tests/relation_tables.rs");
 include!("tests/relation_walk.rs");
 include!("tests/relation_fixtures.rs");
 include!("tests/relation_traversal.rs");
+include!("tests/relation_integrity.rs");
 include!("tests/relations.rs");
 include!("tests/proposal_lifecycle_dispositions.rs");
 include!("tests/services.rs");

@@ -378,6 +378,7 @@ fn seed_state(dir: &std::path::Path, repo: &str) {
     "position": "Keep as draft extraction",
     "rationale": "Needs human review",
     "status": "approved",
+    "requirement_ids": ["req_sah"],
     "review_on": null
   }],
   "rules": [{
@@ -388,6 +389,8 @@ fn seed_state(dir: &std::path::Path, repo: &str) {
     "statement": "Draft rule shall stay draft",
     "status": "active",
     "severity": "high",
+    "requirement_ids": ["req_sah"],
+    "resolution_ids": ["res_sah"],
     "source_document": "Example-API-main/src/example.php",
     "source_section": "lines 1-3"
   }],
@@ -411,40 +414,6 @@ fn seed_state(dir: &std::path::Path, repo: &str) {
             "--format",
             "json",
         ])
-        .assert()
-        .success();
-
-    create_edge(
-        repo,
-        "resolves",
-        "resolution",
-        "res_sah",
-        "requirement",
-        "req_sah",
-    );
-    create_edge(
-        repo,
-        "produces",
-        "resolution",
-        "res_sah",
-        "rule",
-        "rule_sah_001",
-    );
-}
-
-fn create_edge(
-    repo: &str,
-    edge_type: &str,
-    from_type: &str,
-    from_id: &str,
-    to_type: &str,
-    to_id: &str,
-) {
-    Command::cargo_bin("provenance")
-        .unwrap()
-        .args(["edges", "create", "--repo", repo, "--scope", "default"])
-        .args(["--type", edge_type, "--from-type", from_type])
-        .args(["--from-id", from_id, "--to-type", to_type, "--to-id", to_id])
         .assert()
         .success();
 }

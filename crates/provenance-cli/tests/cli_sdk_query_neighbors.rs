@@ -1,7 +1,7 @@
 #[path = "query_support/fixtures.rs"]
 mod fixtures;
 
-use fixtures::{apply_shared_rule, init_repo, sdk};
+use fixtures::{apply_shared_rule, init_repo, sdk, sdk_error};
 use serde_json::{json, Value};
 
 fn neighbor_ids(answer: &Value, node_type: &str) -> Vec<String> {
@@ -35,7 +35,9 @@ fn neighbors_of_a_rule_are_the_requirements_that_produce_it() {
         .as_array()
         .unwrap()
         .iter()
-        .all(|neighbor| neighbor["edge_type"] == "produces" && neighbor["direction"] == "in"));
+        .all(
+            |neighbor| neighbor["relation"] == "requirement_ids" && neighbor["direction"] == "out"
+        ));
 }
 
 #[test]
@@ -50,6 +52,8 @@ fn neighbors_of_a_requirement_are_its_rule_and_its_source() {
     assert_eq!(neighbor_ids(&answer, "source"), vec![ids.source]);
 }
 
+/// `out` reads the requirement's own fields: its citation names the
+/// source. `in` reads the records whose fields name it: the rule's list.
 #[test]
 fn neighbors_reads_only_the_direction_the_caller_names() {
     let directory = init_repo();
@@ -61,16 +65,31 @@ fn neighbors_reads_only_the_direction_the_caller_names() {
         "neighbors",
         &json!({"id": ids.sharing.as_str(), "direction": "out"}),
     );
-    assert_eq!(neighbor_ids(&outgoing, "rule"), vec![ids.rule.clone()]);
-    assert!(neighbor_ids(&outgoing, "source").is_empty());
+    assert_eq!(neighbor_ids(&outgoing, "source"), vec![ids.source.clone()]);
+    assert!(neighbor_ids(&outgoing, "rule").is_empty());
 
     let incoming = sdk(
         repo,
         "neighbors",
         &json!({"id": ids.sharing.as_str(), "direction": "in"}),
     );
-    assert_eq!(neighbor_ids(&incoming, "source"), vec![ids.source]);
-    assert!(neighbor_ids(&incoming, "rule").is_empty());
+    assert_eq!(neighbor_ids(&incoming, "rule"), vec![ids.rule]);
+    assert!(neighbor_ids(&incoming, "source").is_empty());
+}
+
+#[test]
+fn neighbors_refuses_a_relation_no_declaration_carries() {
+    let directory = init_repo();
+    let repo = directory.path().to_str().unwrap();
+    let ids = apply_shared_rule(&directory);
+
+    let error = sdk_error(
+        repo,
+        "neighbors",
+        &json!({"id": ids.rule.as_str(), "relations": ["produces"]}),
+    );
+
+    assert!(error.contains("unknown relation `produces`"), "{error}");
 }
 
 #[test]

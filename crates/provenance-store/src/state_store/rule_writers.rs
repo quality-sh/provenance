@@ -25,7 +25,6 @@ impl StateStore {
             made_by,
             approved_by,
             approved_at,
-            superseded_by,
             origin_thread,
             origin_message,
         } = input;
@@ -60,7 +59,6 @@ impl StateStore {
                 approved_at,
                 requirement_ids: requirement_ids.clone(),
                 supersedes,
-                superseded_by,
                 review_on: None,
                 origin_thread,
                 origin_message,

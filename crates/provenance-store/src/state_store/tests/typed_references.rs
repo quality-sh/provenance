@@ -144,7 +144,6 @@ fn a_rule_carries_its_requirements_and_a_named_resolution() {
             made_by: None,
             approved_by: None,
             approved_at: None,
-            superseded_by: None,
             origin_thread: None,
             origin_message: None,
         })

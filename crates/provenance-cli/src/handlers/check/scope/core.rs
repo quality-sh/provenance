@@ -2,6 +2,7 @@ use crate::handlers::check::index::CheckIndex;
 use crate::handlers::check::references::{
     check_artifact_links, check_origin_references, check_scoped_reference,
 };
+use provenance_core::model::relations::{declaration_of, kind_word, RelationOwner};
 use provenance_core::{
     Boundary, Domain, ImplementationBinding, Question, Requirement, Resolution, Rule, ScopeId,
     Source, Topic, VerificationBinding,
@@ -101,9 +102,8 @@ impl Records {
         scope_id: &ScopeId,
         dangling: &mut Vec<String>,
     ) {
-        validate_sources_and_requirements(self, index, scope_id, dangling);
-        validate_shaping(self, index, scope_id, dangling);
-        validate_decisions(self, index, scope_id, dangling);
+        validate_declared_relations(self, index, scope_id, dangling);
+        validate_links_and_origins(self, index, scope_id, dangling);
         validate_verification_bindings(self, index, scope_id, dangling);
         validate_implementation_bindings(self, index, scope_id, dangling);
     }
@@ -199,164 +199,89 @@ fn is_portable_repository_path(path: &camino::Utf8Path) -> bool {
         })
 }
 
-fn validate_sources_and_requirements(
+/// One pass over every declared relation of every owner kind: each
+/// reference must name a record of the declared kind in this scope.
+fn validate_declared_relations(
+    records: &Records,
+    index: &CheckIndex,
+    scope_id: &ScopeId,
+    dangling: &mut Vec<String>,
+) {
+    check_declared(index, dangling, scope_id, &records.sources);
+    check_declared(index, dangling, scope_id, &records.requirements);
+    check_declared(index, dangling, scope_id, &records.resolutions);
+    check_declared(index, dangling, scope_id, &records.rules);
+    check_declared(index, dangling, scope_id, &records.topics);
+    check_declared(index, dangling, scope_id, &records.questions);
+    check_declared(index, dangling, scope_id, &records.boundaries);
+}
+
+fn check_declared<T: RelationOwner>(
+    index: &CheckIndex,
+    dangling: &mut Vec<String>,
+    scope_id: &ScopeId,
+    records: &[T],
+) {
+    for record in records {
+        let owner = format!("{} {}", kind_word(T::OWNER), record.id().as_str());
+        for (name, target) in record.references() {
+            let decl =
+                declaration_of(T::relations(), name).expect("references name declared fields");
+            check_scoped_reference(
+                index,
+                dangling,
+                scope_id,
+                &owner,
+                name,
+                kind_word(decl.target),
+                target,
+            );
+        }
+    }
+}
+
+/// The links topics and questions carry, and the thread origins on the
+/// four authored kinds: neither is a declared relation.
+fn validate_links_and_origins(
     records: &Records,
     index: &CheckIndex,
     scope_id: &ScopeId,
     dangling: &mut Vec<String>,
 ) {
     for source in &records.sources {
-        let owner = format!("source {}", source.id.as_str());
-        if let Some(superseded_by) = &source.superseded_by {
-            check_scoped_reference(
-                index,
-                dangling,
-                scope_id,
-                &owner,
-                "superseded_by",
-                "source",
-                superseded_by,
-            );
-        }
         check_origin_references(
             index,
             dangling,
             scope_id,
-            &owner,
+            &format!("source {}", source.id.as_str()),
             source.origin_thread.as_ref(),
             source.origin_message.as_ref(),
         );
     }
     for requirement in &records.requirements {
-        let owner = format!("requirement {}", requirement.id.as_str());
-        if let Some(domain_id) = &requirement.domain_id {
-            check_scoped_reference(
-                index, dangling, scope_id, &owner, "domain", "domain", domain_id,
-            );
-        }
-        for source_ref in &requirement.source_refs {
-            check_scoped_reference(
-                index,
-                dangling,
-                scope_id,
-                &owner,
-                "source_ref",
-                "source",
-                &source_ref.source_id,
-            );
-        }
         check_origin_references(
             index,
             dangling,
             scope_id,
-            &owner,
+            &format!("requirement {}", requirement.id.as_str()),
             requirement.origin_thread.as_ref(),
             requirement.origin_message.as_ref(),
         );
     }
-}
-
-fn validate_shaping(
-    records: &Records,
-    index: &CheckIndex,
-    scope_id: &ScopeId,
-    dangling: &mut Vec<String>,
-) {
-    for boundary in &records.boundaries {
-        let owner = format!("boundary {}", boundary.id.as_str());
-        check_scoped_reference(
-            index,
-            dangling,
-            scope_id,
-            &owner,
-            "requirement",
-            "requirement",
-            &boundary.requirement_id,
-        );
-        if let Some(source_ref) = &boundary.source_ref {
-            check_scoped_reference(
-                index,
-                dangling,
-                scope_id,
-                &owner,
-                "source_ref",
-                "source",
-                &source_ref.source_id,
-            );
-        }
-    }
     for topic in &records.topics {
         let owner = format!("topic {}", topic.id.as_str());
-        check_scoped_reference(
-            index,
-            dangling,
-            scope_id,
-            &owner,
-            "requirement",
-            "requirement",
-            &topic.requirement_id,
-        );
         check_artifact_links(index, dangling, scope_id, &owner, &topic.links);
     }
     for question in &records.questions {
         let owner = format!("question {}", question.id.as_str());
-        check_scoped_reference(
-            index,
-            dangling,
-            scope_id,
-            &owner,
-            "topic",
-            "topic",
-            &question.topic_id,
-        );
-        check_scoped_reference(
-            index,
-            dangling,
-            scope_id,
-            &owner,
-            "requirement",
-            "requirement",
-            &question.requirement_id,
-        );
-        if let Some(resolution_id) = &question.resolution_id {
-            check_scoped_reference(
-                index,
-                dangling,
-                scope_id,
-                &owner,
-                "resolution",
-                "resolution",
-                resolution_id,
-            );
-        }
         check_artifact_links(index, dangling, scope_id, &owner, &question.links);
     }
-}
-
-fn validate_decisions(
-    records: &Records,
-    index: &CheckIndex,
-    scope_id: &ScopeId,
-    dangling: &mut Vec<String>,
-) {
     for resolution in &records.resolutions {
-        let owner = format!("resolution {}", resolution.id.as_str());
-        if let Some(superseded_by) = &resolution.superseded_by {
-            check_scoped_reference(
-                index,
-                dangling,
-                scope_id,
-                &owner,
-                "superseded_by",
-                "resolution",
-                superseded_by,
-            );
-        }
         check_origin_references(
             index,
             dangling,
             scope_id,
-            &owner,
+            &format!("resolution {}", resolution.id.as_str()),
             resolution.origin_thread.as_ref(),
             resolution.origin_message.as_ref(),
         );

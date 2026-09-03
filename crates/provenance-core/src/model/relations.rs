@@ -12,10 +12,16 @@
 
 mod decl;
 mod front;
+mod integrity;
 
 pub use decl::{declaration_of, RelationDecl, RelationFlow, RelationOwner};
 pub use front::{
-    related_nodes, RecordFront, RelatedNode, RelationDirection, RelationEndpoint, RelationSource,
+    declaration_for, flow_neighbors, incoming_of, link_rows_of, link_target, outgoing_of,
+    related_nodes, rows_of, RecordFront, RelatedNode, RelationDirection, RelationEndpoint,
+    RelationRow, RelationSource, LINKS,
+};
+pub use integrity::{
+    cycle_in, cycle_refusal, kind_word, missing_required, reaches, required_refusal,
 };
 
 use super::graph::{EdgeType, NodeType};
@@ -38,6 +44,15 @@ pub const fn declared_relations() -> &'static [&'static [RelationDecl]] {
         &Question::RELATIONS,
         &Boundary::RELATIONS,
     ]
+}
+
+/// True when some declaration, or `links`, carries the name.
+pub fn is_relation_name(name: &str) -> bool {
+    name == LINKS
+        || declared_relations()
+            .iter()
+            .flat_map(|table| table.iter())
+            .any(|decl| decl.name == name)
 }
 
 /// The edge-era vocabulary, kept until the readers move off it.
