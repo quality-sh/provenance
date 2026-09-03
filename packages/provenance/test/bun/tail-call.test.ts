@@ -6,6 +6,8 @@ import { join } from "node:path";
 
 import { expect, test } from "bun:test";
 
+import { STATE_SCHEMA_VERSION } from "../../src/protocol.js";
+
 // Answers the protocol handshake and reports every other request on stderr.
 function reportingEngine(): string {
   const executable = join(mkdtempSync(join(tmpdir(), "provenance-bun-engine-")), "engine.mjs");
@@ -13,13 +15,12 @@ function reportingEngine(): string {
     executable,
     `#!/usr/bin/env node
 import { readFileSync } from "node:fs";
-import { STATE_SCHEMA_VERSION } from "../../src/protocol.js";
 const command = process.argv[3];
 if (command === "info") {
   process.stdout.write(JSON.stringify({
     engine_version: "0.1.0",
     protocol_version: 6,
-    state_schema_version: STATE_SCHEMA_VERSION,
+    state_schema_version: ${STATE_SCHEMA_VERSION},
     repository: "/project",
   }));
 } else {
