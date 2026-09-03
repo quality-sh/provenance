@@ -249,6 +249,7 @@ fn check_reports_scope_directory_absent_from_manifest() {
 }
 
 #[test]
+#[cfg(unix)]
 fn check_rejects_symlinked_cache_without_writing_to_target() {
     let dir = tempfile::tempdir().unwrap();
     init(dir.path());
