@@ -23,6 +23,7 @@
 {"schema_version":1,"scope_id":"default","id":"thr_rule_rule_prov_annot_012_0","parent":{"node_type":"rule","node_id":"rule_prov_annot_012"},"status":"active","created_at":1773227470121}
 {"schema_version":1,"scope_id":"default","id":"thr_rule_rule_prov_annot_013_0","parent":{"node_type":"rule","node_id":"rule_prov_annot_013"},"status":"active","created_at":1773227470465}
 {"schema_version":1,"scope_id":"default","id":"thr_rule_rule_prov_scan_011_0","parent":{"node_type":"rule","node_id":"rule_prov_scan_011"},"status":"active","created_at":1773227473542}
+{"schema_version":1,"scope_id":"default","id":"thread_question_q_relations_first_class_or_properties","parent":{"node_type":"question","node_id":"q_relations_first_class_or_properties"},"status":"active","created_at":1}
 {"schema_version":1,"scope_id":"default","id":"thread_question_question_wiki_homepage_direction","parent":{"node_type":"question","node_id":"question_wiki_homepage_direction"},"status":"active","created_at":1}
 {"schema_version":1,"scope_id":"default","id":"thread_requirement_req_ste_local_dictionary_acquisition","parent":{"node_type":"requirement","node_id":"req_ste_local_dictionary_acquisition"},"status":"active","created_at":1}
 {"schema_version":1,"scope_id":"default","id":"thread_requirement_req_ste_syntax_checked_before_graph_write","parent":{"node_type":"requirement","node_id":"req_ste_syntax_checked_before_graph_write"},"status":"active","created_at":1}
