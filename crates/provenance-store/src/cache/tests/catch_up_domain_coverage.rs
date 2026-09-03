@@ -129,31 +129,6 @@ async fn a_second_month_message_shard_is_covered_by_the_sweep() {
 }
 
 #[tokio::test]
-async fn a_second_edge_shard_is_covered_by_the_sweep() {
-    let (_dir, layout, scope) = seeded_layout();
-    materialize_state(&layout).await.unwrap();
-
-    let edges_dir = crate::shards::edges_path(&layout)
-        .parent()
-        .unwrap()
-        .to_path_buf();
-    std::fs::create_dir_all(&edges_dir).unwrap();
-    std::fs::write(
-        edges_dir.join("edges-01.jsonl"),
-        format!(
-            "{}\n",
-            serde_json::json!({"schema_version": 1, "scope_id": scope.as_str(),
-                "id": "edge_second_shard", "edge_type": "references",
-                "from_type": "requirement", "from_id": "req_schads_overtime",
-                "to_type": "source", "to_id": "source_schads"})
-        ),
-    )
-    .unwrap();
-
-    assert_catch_up_equals_rebuild(&layout).await;
-}
-
-#[tokio::test]
 async fn a_live_edit_racing_the_rebuild_baseline_is_caught_by_the_next_catch_up() {
     let (_dir, layout, scope) = seeded_layout();
     let live_path = crate::shards::requirements_path(&layout, &scope);

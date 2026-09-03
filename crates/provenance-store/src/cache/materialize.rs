@@ -3,6 +3,7 @@ mod collaboration_records;
 mod family_rows;
 mod graph_records;
 mod integration_records;
+mod relation_rows;
 mod stamp;
 mod units;
 
@@ -67,8 +68,8 @@ pub(super) async fn materialize_with_guard(
         records_loaded += graph_records::load_scope(&mut tx, &store, &scope.id).await?;
         records_loaded += collaboration_records::load_scope(&mut tx, &store, &scope.id).await?;
         records_loaded += integration_records::load_scope(&mut tx, &store, &scope.id).await?;
+        relation_rows::load_rows(&mut tx, &store, &scope.id).await?;
     }
-    records_loaded += graph_records::load_edges(&mut tx, &store).await?;
     let scope_ids: Vec<_> = manifest
         .scopes
         .iter()
@@ -94,6 +95,9 @@ pub(super) async fn materialize_with_guard(
 }
 
 async fn clear_cache(tx: &mut Transaction<'_, Sqlite>) -> anyhow::Result<()> {
+    sqlx::query("DELETE FROM relations")
+        .execute(&mut **tx)
+        .await?;
     for family in super::ProjectionFamily::ALL {
         sqlx::query(&format!("DELETE FROM {}", family.family_name()))
             .execute(&mut **tx)

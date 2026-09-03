@@ -5,7 +5,7 @@
 //! nothing commits no revision.
 
 use super::units::{self, Unit};
-use super::{family_rows, stamp};
+use super::{family_rows, relation_rows, stamp};
 use crate::cache::{open_cache, revision_digest_from_stored_rows, ProjectionFamily};
 use crate::{
     canonical_digest, layout::ProvenanceLayout, migrations, publication, state_store::StateStore,
@@ -143,9 +143,8 @@ async fn load_stored_digests(
     Ok((units, content))
 }
 
-/// Removes the rows and digest rows of every scope the manifest does not
-/// name. Edge rows belong to the global unit and stay. Returns whether
-/// anything departed.
+/// Removes the rows, relation rows, and digest rows of every scope the
+/// manifest does not name. Returns whether anything departed.
 async fn remove_departed_scopes(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     stored_units: &BTreeMap<String, String>,
@@ -159,9 +158,10 @@ async fn remove_departed_scopes(
             continue;
         }
         if let Some(scope) = Unit::scope_of(name)? {
-            for family in ProjectionFamily::ALL.into_iter().filter(|f| f.is_scoped()) {
-                family_rows::delete_rows(tx, family, Some(&scope)).await?;
+            for family in ProjectionFamily::ALL {
+                family_rows::delete_rows(tx, family, &scope).await?;
             }
+            relation_rows::delete_rows(tx, &scope).await?;
             content.retain(|(scope_id, _), _| scope_id != scope.as_str());
             sqlx::query("DELETE FROM projection_family_digests WHERE scope_id = ?")
                 .bind(scope.as_str())
@@ -177,8 +177,9 @@ async fn remove_departed_scopes(
     Ok(departed)
 }
 
-/// The global unit reloads the edges table whole. A scope unit re-derives
-/// the scope's families by content digest.
+/// No family derives from the global unit, so its change only moves the
+/// unit digest. A scope unit re-derives the scope's families by content
+/// digest.
 async fn apply_unit_change(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     store: &StateStore,
@@ -187,22 +188,26 @@ async fn apply_unit_change(
     report: &mut CatchUpReport,
 ) -> anyhow::Result<()> {
     match unit {
-        Unit::Global => {
-            family_rows::delete_rows(tx, ProjectionFamily::Edges, None).await?;
-            report.rows_written +=
-                family_rows::load_rows(tx, store, ProjectionFamily::Edges, None).await?;
-            report.families_rederived += 1;
-            let (bytes, count) = ProjectionFamily::Edges.canonical_records(store, None)?;
-            let row = (canonical_digest::digest(&bytes), i64::try_from(count)?);
-            content.insert((String::new(), "edges".to_string()), row);
-        }
+        Unit::Global => {}
         Unit::Scope(scope) => rederive_scope(tx, store, scope, content, report).await?,
     }
     Ok(())
 }
 
-/// Parses every scoped family of the scope again and rewrites only the
-/// families whose content digest moved.
+/// The families whose records declare relations.
+const RELATION_OWNERS: [ProjectionFamily; 7] = [
+    ProjectionFamily::Sources,
+    ProjectionFamily::Requirements,
+    ProjectionFamily::Resolutions,
+    ProjectionFamily::Rules,
+    ProjectionFamily::Topics,
+    ProjectionFamily::Questions,
+    ProjectionFamily::Boundaries,
+];
+
+/// Parses every family of the scope again and rewrites only the families
+/// whose content digest moved; the scope's relation rows follow whenever
+/// an owner family did.
 async fn rederive_scope(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     store: &StateStore,
@@ -210,17 +215,23 @@ async fn rederive_scope(
     content: &mut BTreeMap<ContentKey, ContentValue>,
     report: &mut CatchUpReport,
 ) -> anyhow::Result<()> {
-    for family in ProjectionFamily::ALL.into_iter().filter(|f| f.is_scoped()) {
-        let (bytes, count) = family.canonical_records(store, Some(scope))?;
+    let mut owner_moved = false;
+    for family in ProjectionFamily::ALL {
+        let (bytes, count) = family.canonical_records(store, scope)?;
         let fresh = (canonical_digest::digest(&bytes), i64::try_from(count)?);
         let key = (scope.as_str().to_string(), family.family_name().to_string());
         if content.get(&key) == Some(&fresh) {
             continue;
         }
-        family_rows::delete_rows(tx, family, Some(scope)).await?;
-        report.rows_written += family_rows::load_rows(tx, store, family, Some(scope)).await?;
+        family_rows::delete_rows(tx, family, scope).await?;
+        report.rows_written += family_rows::load_rows(tx, store, family, scope).await?;
         report.families_rederived += 1;
+        owner_moved |= RELATION_OWNERS.contains(&family);
         content.insert(key, fresh);
+    }
+    if owner_moved {
+        relation_rows::delete_rows(tx, scope).await?;
+        relation_rows::load_rows(tx, store, scope).await?;
     }
     Ok(())
 }

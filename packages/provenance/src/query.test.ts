@@ -61,7 +61,7 @@ async function readsTheEnginesBoundedAnswers(): Promise<void> {
   await apply();
 
   const fetched = await get({ node_type: "rule", id: expiry.id });
-  assert.equal(fetched.protocol_version, 5);
+  assert.equal(fetched.protocol_version, 6);
   assert.equal(fetched.operation, "get");
   assert.equal(fetched.found, true);
   assert.equal(fetched.node?.id, expiry.id);
@@ -76,7 +76,9 @@ async function readsTheEnginesBoundedAnswers(): Promise<void> {
     [sharing.id],
   );
 
-  const walked = await trace({ id: retention.id, direction: "out" });
+  // The source is named by the requirement's citation and the requirement
+  // by the rule's list, so the walk to the rule reads `in` at every hop.
+  const walked = await trace({ id: retention.id, direction: "in" });
   assert.ok(
     walked.nodes.some((reached) => reached.node.id === expiry.id && reached.depth === 2),
   );

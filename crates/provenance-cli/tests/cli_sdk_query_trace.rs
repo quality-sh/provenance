@@ -30,7 +30,10 @@ fn trace_walks_from_a_source_to_the_rules_it_grounds() {
         &json!({"id": ids.source.as_str(), "direction": "in"}),
     );
 
-    assert_eq!(answer["protocol_version"], 5);
+    assert_eq!(
+        answer["protocol_version"],
+        provenance_core::SDK_PROTOCOL_VERSION
+    );
     assert_eq!(answer["operation"], "trace");
     assert_eq!(answer["id"], ids.source);
     assert_eq!(answer["max_depth"], 3);

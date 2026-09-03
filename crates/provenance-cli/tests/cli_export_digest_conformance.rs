@@ -51,8 +51,7 @@ fn graph_with_source_named(name: &str) -> Value {
         "topics": [],
         "questions": [],
         "resolutions": [],
-        "rules": [],
-        "edges": []
+        "rules": []
     })
 }
 

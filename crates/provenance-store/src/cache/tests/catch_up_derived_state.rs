@@ -16,7 +16,7 @@ fn remove_shard(
     family: ProjectionFamily,
     scope: &ScopeId,
 ) {
-    let path = family.shard_path(layout, Some(scope)).unwrap();
+    let path = family.shard_path(layout, scope);
     if path.exists() {
         std::fs::remove_file(path).unwrap();
     }
@@ -39,9 +39,7 @@ async fn a_hand_emptied_disposition_shard_moves_the_cards_effective_state() {
     materialize_state(&layout).await.unwrap();
     assert_eq!(effective_state(&layout).await, "deferred");
 
-    let dispositions = ProjectionFamily::Dispositions
-        .shard_path(&layout, Some(&scope))
-        .unwrap();
+    let dispositions = ProjectionFamily::Dispositions.shard_path(&layout, &scope);
     std::fs::write(dispositions, "").unwrap();
 
     assert_catch_up_equals_rebuild(&layout).await;
@@ -80,13 +78,9 @@ async fn a_writer_path_disposition_moves_the_cards_effective_state() {
 #[tokio::test]
 async fn an_assertion_write_moves_the_cards_effective_state() {
     let (_dir, layout, scope) = aggregate_layout();
-    let assertions = ProjectionFamily::AssertionRecords
-        .shard_path(&layout, Some(&scope))
-        .unwrap();
+    let assertions = ProjectionFamily::AssertionRecords.shard_path(&layout, &scope);
     let assertion_line = std::fs::read_to_string(&assertions).unwrap();
-    let packets = ProjectionFamily::SynthesisPackets
-        .shard_path(&layout, Some(&scope))
-        .unwrap();
+    let packets = ProjectionFamily::SynthesisPackets.shard_path(&layout, &scope);
     let qualifying_packet = std::fs::read_to_string(&packets).unwrap();
     // A qualifying packet requires an assertion. Start with a packet that
     // suggests nothing.

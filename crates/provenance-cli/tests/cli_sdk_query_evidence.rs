@@ -13,7 +13,10 @@ fn evidence_separates_bindings_runs_review_and_stale_for_one_rule() {
 
     let answer = sdk(repo, "evidence", &json!({"rule": ids.rule.as_str()}));
 
-    assert_eq!(answer["protocol_version"], 5);
+    assert_eq!(
+        answer["protocol_version"],
+        provenance_core::SDK_PROTOCOL_VERSION
+    );
     assert_eq!(answer["operation"], "evidence");
     assert_eq!(answer["rule_id"], ids.rule);
     assert_eq!(

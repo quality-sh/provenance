@@ -226,7 +226,8 @@ execFileSync(process.execPath, [
   "-p", join(application, "tsconfig.json"),
 ], { cwd: application, stdio: "pipe" });
 execFileSync(process.execPath, [join(application, ".compiled", "rule-bindings.js")], { cwd: application, stdio: "pipe" });
-provenance(["rules", "create", "--scope", "default", "--id", "rule_packed_consumer_overtime", "--statement", "Hours above 38 receive overtime pay.", "--format", "json"], application);
+provenance(["requirements", "create", "--scope", "default", "--id", "req_packed_consumer_overtime", "--statement", "Hours above 38 are paid as overtime.", "--format", "json"], application);
+provenance(["rules", "create", "--scope", "default", "--id", "rule_packed_consumer_overtime", "--requirement-id", "req_packed_consumer_overtime", "--statement", "Hours above 38 receive overtime pay.", "--format", "json"], application);
 assertPackedConsumerScan(provenance(["coverage", "scan", "--path", "rule-bindings.ts", "--scope", "default", "--validate-rules", "--strict", "--format", "json"], application));
 writeFileSync(join(application, "verify.mjs"), `
 import { apply, defineSpec, plan, requirement, rule, source } from "@quality-sh/provenance";

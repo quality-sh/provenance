@@ -356,8 +356,7 @@ fn empty_graph() -> serde_json::Value {
         "topics": [],
         "questions": [],
         "resolutions": [],
-        "rules": [],
-        "edges": []
+        "rules": []
     })
 }
 

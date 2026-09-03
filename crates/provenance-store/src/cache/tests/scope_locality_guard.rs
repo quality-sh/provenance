@@ -101,9 +101,9 @@ fn each_scoped_family_derives_from_its_own_scope_and_the_global_unit_only() {
     let store = StateStore::new(layout);
     let mut recorded_any = false;
     for scope in [&first, &second] {
-        for family in ProjectionFamily::ALL.into_iter().filter(|f| f.is_scoped()) {
+        for family in ProjectionFamily::ALL {
             crate::test_probes::start_recording_reads();
-            family.canonical_records(&store, Some(scope)).unwrap();
+            family.canonical_records(&store, scope).unwrap();
             let reads = crate::test_probes::take_recorded_reads();
             // A family whose directory does not exist reads nothing.
             recorded_any |= !reads.is_empty();

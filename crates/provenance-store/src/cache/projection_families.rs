@@ -15,10 +15,12 @@ use provenance_core::ScopeId;
 
 /// One family of records the projection stores.
 ///
-/// The variant list is the rule: nineteen stored families, no more. Sixteen
-/// come from the original cache tables; implementation bindings,
-/// verification bindings, and requirement reviews joined when the canonical
-/// halves of impact, evidence, and resolve-symbol became projection-attested.
+/// The variant list is the rule: eighteen stored families, no more, each
+/// sharded per scope. Fifteen come from the original cache tables;
+/// implementation bindings, verification bindings, and requirement reviews
+/// joined when the canonical halves of impact, evidence, and resolve-symbol
+/// became projection-attested. The relation table is not a family: every
+/// row of it derives from one owner record, so it carries no digest row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProjectionFamily {
     Sources,
@@ -27,7 +29,6 @@ pub enum ProjectionFamily {
     Boundaries,
     Topics,
     Questions,
-    Edges,
     Resolutions,
     Rules,
     Threads,
@@ -43,14 +44,13 @@ pub enum ProjectionFamily {
 }
 
 impl ProjectionFamily {
-    pub const ALL: [Self; 19] = [
+    pub const ALL: [Self; 18] = [
         Self::Sources,
         Self::Domains,
         Self::Requirements,
         Self::Boundaries,
         Self::Topics,
         Self::Questions,
-        Self::Edges,
         Self::Resolutions,
         Self::Rules,
         Self::Threads,
@@ -74,7 +74,6 @@ impl ProjectionFamily {
             Self::Boundaries => "boundaries",
             Self::Topics => "topics",
             Self::Questions => "questions",
-            Self::Edges => "edges",
             Self::Resolutions => "resolutions",
             Self::Rules => "rules",
             Self::Threads => "threads",
@@ -90,23 +89,10 @@ impl ProjectionFamily {
         }
     }
 
-    /// Whether the family shards per scope. Edges live in one global shard.
-    pub const fn is_scoped(self) -> bool {
-        !matches!(self, Self::Edges)
-    }
-
     /// The canonical shard file the family's records live in.
     #[cfg(test)]
-    pub(crate) fn shard_path(
-        self,
-        layout: &ProvenanceLayout,
-        scope: Option<&ScopeId>,
-    ) -> anyhow::Result<Utf8PathBuf> {
-        if self == Self::Edges {
-            return Ok(shards::edges_path(layout));
-        }
-        let scope = required_scope(scope, self)?;
-        Ok(match self {
+    pub(crate) fn shard_path(self, layout: &ProvenanceLayout, scope: &ScopeId) -> Utf8PathBuf {
+        match self {
             Self::Sources => shards::sources_path(layout, scope),
             Self::Domains => shards::domains_path(layout, scope),
             Self::Requirements => shards::requirements_path(layout, scope),
@@ -125,8 +111,7 @@ impl ProjectionFamily {
             Self::ImplementationBindings => shards::implementation_bindings_path(layout, scope),
             Self::VerificationBindings => shards::verification_bindings_path(layout, scope),
             Self::RequirementReviews => shards::requirement_reviews_path(layout, scope),
-            Self::Edges => unreachable!("edges answered above"),
-        })
+        }
     }
 
     /// The family's records as canonical bytes, sorted by canonical id, with
@@ -135,12 +120,8 @@ impl ProjectionFamily {
     pub(crate) fn canonical_records(
         self,
         store: &StateStore,
-        scope: Option<&ScopeId>,
+        scope: &ScopeId,
     ) -> anyhow::Result<(Vec<u8>, u64)> {
-        if self == Self::Edges {
-            return sorted_bytes(store.list_edges()?, |record| record.id.as_str());
-        }
-        let scope = required_scope(scope, self)?;
         match self {
             Self::Sources => sorted_bytes(store.list_sources(scope)?, |r| r.id.as_str()),
             Self::Domains => sorted_bytes(store.list_domains(scope)?, |r| r.id.as_str()),
@@ -176,18 +157,8 @@ impl ProjectionFamily {
             Self::RequirementReviews => {
                 sorted_bytes(store.list_requirement_reviews(scope)?, |r| r.id.as_str())
             }
-            Self::Edges => unreachable!("edges answered above"),
         }
     }
-}
-
-fn required_scope(scope: Option<&ScopeId>, family: ProjectionFamily) -> anyhow::Result<&ScopeId> {
-    scope.ok_or_else(|| {
-        anyhow::anyhow!(
-            "family `{}` shards per scope and needs one",
-            family.family_name()
-        )
-    })
 }
 
 fn sorted_bytes<T: serde::Serialize>(

@@ -1,6 +1,6 @@
 use provenance_core::{
-    EdgeType, NodeType, QuestionStatus, RepoPathPrefix, RequirementStatus, ResolutionMethod,
-    ResolutionStatus, RuleSeverity, RuleStatus, SchemaVersion, SourceType, StableId, TopicStatus,
+    QuestionStatus, RepoPathPrefix, RequirementStatus, ResolutionMethod, ResolutionStatus,
+    RuleSeverity, RuleStatus, SchemaVersion, SourceType, StableId, TopicStatus,
 };
 use provenance_macros::verifies;
 
@@ -23,7 +23,6 @@ enum RecordFamily {
     Rule,
     VerificationBinding,
     ImplementationBinding,
-    Edge,
 }
 
 // Built from an exhaustive match so that adding a RecordFamily variant
@@ -41,8 +40,7 @@ fn all_families() -> Vec<RecordFamily> {
         RecordFamily::Resolution => Some(RecordFamily::Rule),
         RecordFamily::Rule => Some(RecordFamily::VerificationBinding),
         RecordFamily::VerificationBinding => Some(RecordFamily::ImplementationBinding),
-        RecordFamily::ImplementationBinding => Some(RecordFamily::Edge),
-        RecordFamily::Edge => None,
+        RecordFamily::ImplementationBinding => None,
     } {
         all.push(next);
     }
@@ -61,7 +59,6 @@ const fn record_id(family: RecordFamily) -> &'static str {
         RecordFamily::Rule => "rule_pinned",
         RecordFamily::VerificationBinding => "verification_binding_pinned",
         RecordFamily::ImplementationBinding => "implementation_binding_pinned",
-        RecordFamily::Edge => "edge_pinned",
     }
 }
 
@@ -242,20 +239,6 @@ fn implementation_binding_record(scope: &ScopeId) -> ImplementationBinding {
     }
 }
 
-fn edge_record(scope: &ScopeId) -> Edge {
-    Edge {
-        schema_version: SchemaVersion(1),
-        scope_id: scope.clone(),
-        id: stable_id(RecordFamily::Edge),
-        edge_type: EdgeType::References,
-        from_type: NodeType::Source,
-        from_id: stable_id(RecordFamily::Source),
-        to_type: NodeType::Requirement,
-        to_id: stable_id(RecordFamily::Requirement),
-        label: None,
-    }
-}
-
 /// A graph claiming `scope`, holding exactly one record of each named
 /// family and nothing else. Every record sits in the claimed scope.
 fn graph_in_scope(scope: &ScopeId, populated: &[RecordFamily]) -> GraphExport {
@@ -304,10 +287,6 @@ fn graph_in_scope(scope: &ScopeId, populated: &[RecordFamily]) -> GraphExport {
             .collect(),
         implementation_bindings: holds(RecordFamily::ImplementationBinding)
             .then(|| implementation_binding_record(scope))
-            .into_iter()
-            .collect(),
-        edges: holds(RecordFamily::Edge)
-            .then(|| edge_record(scope))
             .into_iter()
             .collect(),
     }
@@ -367,11 +346,6 @@ fn move_family_to_scope(graph: &mut GraphExport, family: RecordFamily, scope: &S
                 record.scope_id = scope.clone();
             }
         }
-        RecordFamily::Edge => {
-            for record in &mut graph.edges {
-                record.scope_id = scope.clone();
-            }
-        }
     }
 }
 
@@ -395,7 +369,6 @@ fn family_count_of(graph: &GraphExport) -> usize {
         rules,
         verification_bindings,
         implementation_bindings,
-        edges,
     } = graph;
     let counts = [
         sources.len(),
@@ -408,7 +381,6 @@ fn family_count_of(graph: &GraphExport) -> usize {
         rules.len(),
         verification_bindings.len(),
         implementation_bindings.len(),
-        edges.len(),
     ];
     assert!(
         counts.iter().all(|count| *count == 1),

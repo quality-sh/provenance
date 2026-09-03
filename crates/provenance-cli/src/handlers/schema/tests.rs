@@ -334,10 +334,9 @@ fn minimal_exact_export_without_digest() -> Value {
                 "title": "Apply policy", "position": "Apply it", "rationale": "Required",
                 "status": "approved", "inputs": [{
                     "input_type": "source_material", "reference": "source_policy", "summary": "Policy"
-                }], "review_on": null
+                }], "review_on": null, "requirement_ids": ["req_policy"]
             }],
-            "rules": [],
-            "edges": []
+            "rules": []
         }
     })
 }
@@ -353,7 +352,8 @@ fn graph_reference_export_schema_validates_record_structure() {
     let mut with_implementation = minimal_exact_export_without_digest();
     with_implementation["graph"]["rules"] = json!([{
         "schema_version": 1, "scope_id": "default", "id": "rule_runtime",
-        "statement": "Accepted workflows start", "status": "active", "severity": "medium"
+        "statement": "Accepted workflows start", "status": "active", "severity": "medium",
+        "requirement_ids": ["req_policy"]
     }]);
     with_implementation["graph"]["implementation_bindings"] = json!([{
         "schema_version": 1, "scope_id": "default",

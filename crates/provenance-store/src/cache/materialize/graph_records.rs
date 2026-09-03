@@ -25,11 +25,10 @@ pub(super) async fn load_sources(
 ) -> anyhow::Result<u64> {
     let mut loaded = 0;
     for source in store.list_sources(scope)? {
-        sqlx::query("INSERT INTO sources (scope_id, id, name, source_type, url, reference, commit_pin, effective_date, review_date, superseded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        sqlx::query("INSERT INTO sources (scope_id, id, name, source_type, url, reference, commit_pin, effective_date, review_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
             .bind(source.scope_id.as_str()).bind(source.id.as_str()).bind(source.name)
             .bind(serde_name(&source.source_type)?).bind(source.url).bind(source.reference)
             .bind(source.commit_pin).bind(source.effective_date).bind(source.review_date)
-            .bind(Option::<&str>::None)
             .execute(&mut **tx).await?;
         loaded += 1;
     }
@@ -143,14 +142,13 @@ pub(super) async fn load_resolutions(
 ) -> anyhow::Result<u64> {
     let mut loaded = 0;
     for resolution in store.list_resolutions(scope)? {
-        sqlx::query("INSERT INTO resolutions (scope_id, id, title, position, rationale, status, review_on, context, enforcement, confidence, inputs, made_by, approved_by, approved_at, superseded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        sqlx::query("INSERT INTO resolutions (scope_id, id, title, position, rationale, status, review_on, context, enforcement, confidence, inputs, made_by, approved_by, approved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
             .bind(resolution.scope_id.as_str()).bind(resolution.id.as_str()).bind(resolution.title)
             .bind(resolution.position).bind(resolution.rationale).bind(serde_name(&resolution.status)?)
             .bind(resolution.review_on)
             .bind(resolution.context).bind(resolution.enforcement).bind(resolution.confidence)
             .bind(serde_json::to_string(&resolution.inputs)?).bind(resolution.made_by)
             .bind(resolution.approved_by).bind(resolution.approved_at)
-            .bind(Option::<&str>::None)
             .execute(&mut **tx).await?;
         loaded += 1;
     }
@@ -174,22 +172,6 @@ pub(super) async fn load_rules(
         .bind(serde_name(&rule.severity)?)
         .execute(&mut **tx)
         .await?;
-        loaded += 1;
-    }
-    Ok(loaded)
-}
-
-pub(super) async fn load_edges(
-    tx: &mut Transaction<'_, Sqlite>,
-    store: &StateStore,
-) -> anyhow::Result<u64> {
-    let mut loaded = 0;
-    for edge in store.list_edges()? {
-        sqlx::query("INSERT INTO edges (scope_id, id, edge_type, from_type, from_id, to_type, to_id) VALUES (?, ?, ?, ?, ?, ?, ?)")
-            .bind(edge.scope_id.as_str()).bind(edge.id.as_str()).bind(serde_name(&edge.edge_type)?)
-            .bind(serde_name(&edge.from_type)?).bind(edge.from_id.as_str())
-            .bind(serde_name(&edge.to_type)?).bind(edge.to_id.as_str())
-            .execute(&mut **tx).await?;
         loaded += 1;
     }
     Ok(loaded)

@@ -46,7 +46,7 @@ pub(in crate::handlers::schema) fn export_schema() -> Value {
                 "additionalProperties": false,
                 "required": [
                     "schema_version", "scope", "sources", "domains", "requirements",
-                    "boundaries", "topics", "questions", "resolutions", "rules", "edges"
+                    "boundaries", "topics", "questions", "resolutions", "rules"
                 ],
                 "properties": {
                     "schema_version": schema_version(),
@@ -60,8 +60,7 @@ pub(in crate::handlers::schema) fn export_schema() -> Value {
                     "resolutions": record_array("resolution"),
                     "rules": record_array("rule"),
                     "verification_bindings": record_array("verificationBinding"),
-                    "implementation_bindings": record_array("implementationBinding"),
-                    "edges": record_array("edge")
+                    "implementation_bindings": record_array("implementationBinding")
                 }
             }
         },
@@ -189,7 +188,7 @@ fn export_definitions() -> Value {
             })
         ),
         "resolution": closed_record(
-            &["schema_version", "scope_id", "id", "title", "position", "rationale", "status", "inputs", "review_on"],
+            &["schema_version", "scope_id", "id", "title", "position", "rationale", "status", "inputs", "review_on", "requirement_ids"],
             json!({
                 "schema_version": version.clone(), "scope_id": id.clone(), "id": id.clone(),
                 "title": string.clone(), "position": string.clone(), "rationale": string.clone(),
@@ -202,7 +201,7 @@ fn export_definitions() -> Value {
             })
         ),
         "rule": closed_record(
-            &["schema_version", "scope_id", "id", "statement", "status", "severity"],
+            &["schema_version", "scope_id", "id", "statement", "status", "severity", "requirement_ids"],
             json!({
                 "schema_version": version.clone(), "scope_id": id.clone(), "id": id.clone(),
                 "declared_by": string.clone(), "declaration_address": declaration_address(), "retired": {"type": "boolean"}, "name": string.clone(),
@@ -231,17 +230,6 @@ fn export_definitions() -> Value {
                 "retired": {"type": "boolean"},
                 "file": {"type": "string", "minLength": 1},
                 "symbol": {"type": "string", "minLength": 1}
-            })
-        ),
-        "edge": closed_record(
-            &["schema_version", "scope_id", "id", "edge_type", "from_type", "from_id", "to_type", "to_id"],
-            json!({
-                "schema_version": version, "scope_id": id.clone(), "id": id.clone(),
-                "edge_type": {"enum": ["references", "refines_into", "depends_on", "contradicts", "supersedes", "needs", "resolves", "spawns", "produces"]},
-                "from_type": {"enum": ["source", "requirement", "resolution", "rule", "topic", "question"]},
-                "from_id": id.clone(),
-                "to_type": {"enum": ["source", "requirement", "resolution", "rule", "topic", "question"]},
-                "to_id": id, "label": string
             })
         )
     })

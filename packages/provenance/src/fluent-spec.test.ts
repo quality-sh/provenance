@@ -38,6 +38,62 @@ function repository(): string {
   return repo;
 }
 
+/** One canonical record as the state shard holds it. */
+interface WrittenRecord {
+  id: string;
+  requirement_ids?: string[];
+  resolution_ids?: string[];
+  refines?: string;
+  depends_on?: string[];
+  supersedes?: string[];
+  spawned_by?: string;
+}
+
+function readRecords(repo: string, relative: string): WrittenRecord[] {
+  return readFileSync(join(repo, ".provenance/state/scopes/default", relative), "utf8")
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as WrittenRecord);
+}
+
+/** A requirement and a resolution the writers already hold, for the
+ *  declarations that name a resolution by canonical id. */
+function seedResolution(repo: string): void {
+  execFileSync(engine, [
+    "requirements",
+    "create",
+    "--repo",
+    repo,
+    "--scope",
+    "default",
+    "--id",
+    "req_seed",
+    "--statement",
+    "The seed requirement stands",
+  ]);
+  execFileSync(engine, [
+    "resolutions",
+    "create",
+    "--repo",
+    repo,
+    "--scope",
+    "default",
+    "--id",
+    "res_seed",
+    "--title",
+    "Seed decision",
+    "--requirement-id",
+    "req_seed",
+    "--position",
+    "Adopt",
+    "--rationale",
+    "Seeds the relations",
+    "--status",
+    "proposed",
+  ]);
+}
+
 function recordingEngine(): {
   engine: string;
   requests: () => Array<{ command: string; input: unknown }>;
@@ -54,7 +110,7 @@ const source = readFileSync(0, "utf8");
 const input = source === "" ? undefined : JSON.parse(source);
 appendFileSync(${JSON.stringify(log)}, JSON.stringify({ command, input }) + "\\n");
 if (command === "info") process.stdout.write(JSON.stringify({
-  engine_version: "0.1.0", protocol_version: 5, state_schema_version: 1, repository: "/project"
+  engine_version: "0.1.0", protocol_version: 6, state_schema_version: 1, repository: "/project"
 }));
 else process.stdout.write(JSON.stringify({
   declared_by: "spec://typescript", created: 0, updated: 0, moved: 0,
@@ -448,15 +504,8 @@ test("one shared Rule materializes once and refines both Requirements", async ()
     spec.handles.requirements.sharing.rules.expiry,
     spec.handles.requirements.sessions.rules.expiry,
   );
-  const edges = readFileSync(join(repo, ".provenance/state/edges/edges-00.jsonl"), "utf8")
-    .trim()
-    .split("\n")
-    .map((line) => JSON.parse(line) as { edge_type: string; to_id: string });
-  assert.equal(
-    edges.filter(({ edge_type, to_id }) => edge_type === "produces" && to_id === rules[0]?.id)
-      .length,
-    2,
-  );
+  const written = readRecords(repo, "rules/rule.jsonl").find(({ id }) => id === rules[0]?.id);
+  assert.equal(written?.requirement_ids?.length, 2);
 });
 
 test("distinct local Rules may reuse a key under unrelated Requirements", async () => {
@@ -540,4 +589,58 @@ test("the callback defineSpec form remains compatible", () => {
     "rule",
     "expiry",
   ]);
+});
+
+test("relation fields on fluent declarations reach the written records", async () => {
+  const repo = repository();
+  configure({ engine, repository: repo, owner: "spec://typescript/fluent-relations" });
+  seedResolution(repo);
+  const older = source("policy-2024").document("docs/policy-2024.md");
+  const policy = source("policy").document("docs/policy.md").supersedes(older);
+  const parent = requirement("parent").statement("Access is governed").from(policy);
+  const retired = requirement("retired").statement("Access was governed loosely").from(older);
+  const decision = rule("decision")
+    .statement("Access follows the seed decision")
+    .resolutions("res_seed");
+  const refined = requirement("child")
+    .statement("Share links are governed")
+    .from(policy)
+    .refines(parent)
+    .dependsOn(parent)
+    .supersedes(retired)
+    .spawnedBy("res_seed")
+    .rules(decision);
+  const spec = defineSpec("relations")
+    .sources(older, policy)
+    .requirements(parent, retired, refined)
+    .build();
+
+  const result = await apply(spec);
+
+  const idOf = (kind: string, key: string): string =>
+    result.resources.find((resource) => resource.kind === kind && resource.key === key)!.id;
+  const child = readRecords(repo, "requirements/req.jsonl").find(
+    ({ id }) => id === idOf("requirement", "child"),
+  );
+  assert.equal(child?.refines, idOf("requirement", "parent"));
+  assert.deepEqual(child?.depends_on, [idOf("requirement", "parent")]);
+  assert.deepEqual(child?.supersedes, [idOf("requirement", "retired")]);
+  assert.equal(child?.spawned_by, "res_seed");
+  const writtenPolicy = readRecords(repo, "sources/source.jsonl").find(
+    ({ id }) => id === idOf("source", "policy"),
+  );
+  assert.deepEqual(writtenPolicy?.supersedes, [idOf("source", "policy-2024")]);
+  const writtenDecision = readRecords(repo, "rules/rule.jsonl").find(
+    ({ id }) => id === idOf("rule", "decision"),
+  );
+  assert.deepEqual(writtenDecision?.resolution_ids, ["res_seed"]);
+});
+
+test("a fluent relation to a requirement outside the build is refused", () => {
+  const parent = requirement("parent").statement("Access is governed");
+  const child = requirement("child").statement("Shares are governed").refines(parent);
+  assert.throws(
+    () => defineSpec("relations").requirements(child).build(),
+    /Requirement `child` names Requirement `parent` not included in the spec/,
+  );
 });

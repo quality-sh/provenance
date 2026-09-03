@@ -82,7 +82,6 @@ pub struct GraphCounts {
     pub questions: usize,
     pub resolutions: usize,
     pub rules: usize,
-    pub edges: usize,
 }
 
 pub struct GraphReferences {
@@ -334,7 +333,6 @@ impl From<&GraphExport> for GraphCounts {
             questions: graph.questions.len(),
             resolutions: graph.resolutions.len(),
             rules: graph.rules.len(),
-            edges: graph.edges.len(),
         }
     }
 }

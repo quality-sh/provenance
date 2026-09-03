@@ -6,8 +6,11 @@ use super::projection_stamp_behavior::seed_integration_shards;
 /// database, in a settled order.
 pub(super) async fn dump_family_tables(pool: &sqlx::SqlitePool) -> Vec<String> {
     let mut dump = Vec::new();
-    for family in ProjectionFamily::ALL {
-        let name = family.family_name();
+    let names = ProjectionFamily::ALL
+        .into_iter()
+        .map(ProjectionFamily::family_name)
+        .chain(["relations"]);
+    for name in names {
         let columns: Vec<String> =
             sqlx::query_scalar("SELECT name FROM pragma_table_info(?) ORDER BY cid")
                 .bind(name)

@@ -244,9 +244,6 @@ impl StateStore {
     ) -> anyhow::Result<Vec<ImplementationBinding>> {
         read_jsonl_closed(&shards::implementation_bindings_path(&self.layout, scope))
     }
-    pub(crate) fn closed_edges(&self, scope: &ScopeId) -> anyhow::Result<Vec<Edge>> {
-        read_edge_shards(&self.layout, Some(scope))
-    }
     pub fn list_threads(&self, scope: &ScopeId) -> anyhow::Result<Vec<Thread>> {
         read_jsonl(&shards::threads_path(&self.layout, scope))
     }

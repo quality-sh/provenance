@@ -26,9 +26,6 @@ pub(super) fn fresh_record(family: ProjectionFamily, scope: &str) -> serde_json:
         "questions" => json!({"schema_version": 1, "scope_id": scope, "id": "question_new",
             "topic_id": "topic_new", "requirement_id": "req_schads_overtime",
             "question": "New?", "resolution_method": "grill", "status": "open"}),
-        "edges" => json!({"schema_version": 1, "scope_id": scope, "id": "edge_new",
-            "edge_type": "references", "from_type": "requirement",
-            "from_id": "req_schads_overtime", "to_type": "source", "to_id": "source_schads"}),
         "resolutions" => json!({"schema_version": 1, "scope_id": scope, "id": "res_new",
             "title": "New", "position": "P", "rationale": "R", "status": "proposed",
             "requirement_ids": ["req_schads_overtime"]}),
@@ -97,7 +94,7 @@ pub(super) fn aggregate_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeI
 
     let scope_name = scope.as_str();
     let seed = |family: ProjectionFamily, record: serde_json::Value| {
-        let path = family.shard_path(&layout, Some(&scope)).unwrap();
+        let path = family.shard_path(&layout, &scope);
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, format!("{record}\n")).unwrap();
     };
@@ -163,8 +160,7 @@ pub(super) fn change_one_record(
     family: ProjectionFamily,
     scope: &ScopeId,
 ) {
-    let shard_scope = family.is_scoped().then_some(scope);
-    let path = family.shard_path(layout, shard_scope).unwrap();
+    let path = family.shard_path(layout, scope);
     match family {
         ProjectionFamily::AssertionRecords => {
             let content = std::fs::read_to_string(&path).unwrap();
@@ -177,9 +173,7 @@ pub(super) fn change_one_record(
         // Cards carry a derived field. Flip an existing card's state through
         // its inputs and add a fresh card.
         ProjectionFamily::ProposalCards => {
-            let dispositions = ProjectionFamily::Dispositions
-                .shard_path(layout, shard_scope)
-                .unwrap();
+            let dispositions = ProjectionFamily::Dispositions.shard_path(layout, scope);
             std::fs::write(dispositions, "").unwrap();
             let mut existing = std::fs::read_to_string(&path).unwrap_or_default();
             existing.push_str(&fresh_record(family, scope.as_str()).to_string());

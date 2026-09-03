@@ -114,7 +114,7 @@ async fn stamp_rows_carry_content_digests_that_rebuild_the_revision_digest() {
     .fetch_all(&pool)
     .await
     .unwrap();
-    assert_eq!(rows.len(), 19);
+    assert_eq!(rows.len(), 18);
     let rebuilt = revision_digest_from_stored_rows(&rows).unwrap();
     assert_eq!(
         rebuilt, stored_digest,

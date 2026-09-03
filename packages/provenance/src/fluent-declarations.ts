@@ -5,7 +5,7 @@ import {
   type ImplementationTarget,
 } from "./implementation-reference.js";
 import type { ImplementationDeclaration, SourceDeclaration, SourceKind } from "./protocol.js";
-import { requireText } from "./fluent-validation.js";
+import { appendByIdentity, requireText } from "./fluent-validation.js";
 
 const moduleFile = fileURLToPath(import.meta.url);
 const sourceNames = new WeakMap<object, string>();
@@ -15,6 +15,8 @@ export class FluentSource<Key extends string = string> {
   readonly declaration?: SourceDeclaration;
   readonly explicitId?: string;
   readonly adoptsUnowned: boolean;
+  /** Keys of the older sources this one replaces. */
+  readonly supersededKeys: readonly string[];
 
   constructor(
     key: Key,
@@ -22,12 +24,14 @@ export class FluentSource<Key extends string = string> {
     displayName?: string,
     explicitId?: string,
     adoptsUnowned = false,
+    supersededKeys: readonly string[] = [],
   ) {
     requireText("source key", key);
     this.key = key;
     this.declaration = declaration === undefined ? undefined : Object.freeze({ ...declaration });
     this.explicitId = explicitId;
     this.adoptsUnowned = adoptsUnowned;
+    this.supersededKeys = Object.freeze([...supersededKeys]);
     if (displayName !== undefined) sourceNames.set(this, displayName);
     Object.freeze(this);
   }
@@ -68,6 +72,7 @@ export class FluentSource<Key extends string = string> {
       displayName,
       this.explicitId,
       this.adoptsUnowned,
+      this.supersededKeys,
     );
   }
 
@@ -79,6 +84,22 @@ export class FluentSource<Key extends string = string> {
       name,
       this.explicitId,
       this.adoptsUnowned,
+      this.supersededKeys,
+    );
+  }
+
+  // Names the older sources of the same spec this one replaces.
+  supersedes(...sources: readonly FluentSource[]): FluentSource<Key> {
+    return new FluentSource(
+      this.key,
+      this.declaration,
+      sourceNames.get(this),
+      this.explicitId,
+      this.adoptsUnowned,
+      appendByIdentity(
+        this.supersededKeys,
+        sources.map(({ key }) => key),
+      ),
     );
   }
 
@@ -89,6 +110,7 @@ export class FluentSource<Key extends string = string> {
       sourceNames.get(this),
       explicitId,
       adoptsUnowned,
+      this.supersededKeys,
     );
   }
 }
@@ -99,6 +121,8 @@ export class FluentRule<Key extends string = string> {
   readonly explicitId?: string;
   readonly implementation?: ImplementationDeclaration;
   readonly adoptsUnowned: boolean;
+  /** Canonical ids of the resolutions this rule follows from. */
+  readonly resolutionIds: readonly string[];
 
   constructor(
     key: Key,
@@ -106,6 +130,7 @@ export class FluentRule<Key extends string = string> {
     explicitId?: string,
     implementation?: ImplementationDeclaration,
     adoptsUnowned = false,
+    resolutionIds: readonly string[] = [],
   ) {
     requireText("rule key", key);
     this.key = key;
@@ -113,6 +138,7 @@ export class FluentRule<Key extends string = string> {
     this.explicitId = explicitId;
     this.implementation = implementation;
     this.adoptsUnowned = adoptsUnowned;
+    this.resolutionIds = Object.freeze([...resolutionIds]);
     Object.freeze(this);
   }
 
@@ -124,17 +150,32 @@ export class FluentRule<Key extends string = string> {
       this.explicitId,
       this.implementation,
       this.adoptsUnowned,
+      this.resolutionIds,
     );
   }
 
   id(existingId: string): FluentRule<Key> {
     requireText("rule id", existingId);
-    return new FluentRule(this.key, this.text, existingId, this.implementation);
+    return new FluentRule(
+      this.key,
+      this.text,
+      existingId,
+      this.implementation,
+      false,
+      this.resolutionIds,
+    );
   }
 
   adoptUnowned(existingId: string): FluentRule<Key> {
     requireText("rule id", existingId);
-    return new FluentRule(this.key, this.text, existingId, this.implementation, true);
+    return new FluentRule(
+      this.key,
+      this.text,
+      existingId,
+      this.implementation,
+      true,
+      this.resolutionIds,
+    );
   }
 
   implementedBy(_target: ImplementationTarget): FluentRule<Key> {
@@ -145,6 +186,20 @@ export class FluentRule<Key extends string = string> {
       this.explicitId,
       implementation,
       this.adoptsUnowned,
+      this.resolutionIds,
+    );
+  }
+
+  // Names the resolutions, by canonical id, this rule follows from.
+  resolutions(...resolutionIds: readonly string[]): FluentRule<Key> {
+    for (const resolutionId of resolutionIds) requireText("resolution id", resolutionId);
+    return new FluentRule(
+      this.key,
+      this.text,
+      this.explicitId,
+      this.implementation,
+      this.adoptsUnowned,
+      appendByIdentity(this.resolutionIds, resolutionIds),
     );
   }
 }
