@@ -134,3 +134,41 @@ All fourteen findings are closed with file:line that checks out at this head. Th
 - `check/scope/core.rs:274-332` covers the boundary/topic/question key checks named; the `source_refs` check at :237 folds into the same generic pass and the `superseded_by` checks at :210-218, :344-352 go with the field (not stated; no ambiguity).
 - Trybuild set (bad type, unknown key, missing target, undeclared `StableId`) matches what the spike's derive refuses.
 - No new invented term reaches a command, field, doc, or message; `flow` values (`target_upstream`, `target_downstream`, `none`) are attribute-internal.
+
+
+---
+
+# Re-review of revision 3 (f2fea1e), same reviewer
+
+I have everything needed; no further reads.
+
+# Re-review: revision 3 @ f2fea1e
+
+## VERDICT: APPROVE WITH ONE AMENDMENT (a one-sentence fix in B; no design change)
+
+## Amendments A-E: confirmed
+
+| | Status | Evidence at f2fea1e |
+|---|---|---|
+| A trace under `both`, (node, depth) sets, depth deltas | Closed | plan:325-327 (direction `both`, reason stated), plan:335-341 (trace rows as (node, depth) sets; pair at depth 2; "every node whose shortest path ran through that pair (listed by id)"). |
+| B counts | Closed | plan:332-336: 4 questions with `resolution_id` (verified 4 at ce891fe), 1 boundary with `source_ref` (verified), `res_state_is_jsonl_in_git` ↔ `res_convex…` 1 row each way (verified the sole `superseded_by`). |
+| C graph validator | Closed | plan:204-209: sibling `validate_graph_scope` in `state_store/graph_validation.rs`, seven kinds, empty required list + cycle, five call sites plus `check`. All five sites verified as today's `validate_ideation_scope` calls: `state_store.rs:303`, `materialize.rs:52`, `catch_up.rs:64`, `handlers/export.rs:46`, `handlers/dispositions.rs:80`; `check` reaches it via `check/scope/ideation.rs:19`. Rejection of mixing subjects into the ideation validator is sound. |
+| D `#[relation(none)]` | Closed, with the amendment below | plan:32-34; the eight sites `artifacts.rs:266,272,311,317,394,400,438,444` verified. |
+| E impact per resolution | Closed | plan:325, 341-343: 94 resolutions lose their requirements at depth 1, 96 rows (verified: 94 resolutions, 96 `resolves` rows, none without), "and whatever was reached only through them (listed per resolution)". |
+| `superseded_by` timing | Closed | plan:106-108: fields and flags leave at K.3; the one live value carried by the converter at K.7 reading raw JSON. |
+
+## The amendment
+
+**B, plan:32-34: "No fixed name list" makes `id` itself a compile error.** Every one of the seven structs has `pub id: StableId` (`artifacts.rs:227,287,358,407`; `shaping.rs:116,128,145`), bare `StableId` is "a required single" (plan:25), and the derive refuses any `StableId`-typed field without `#[relation]`. Either the derive exempts the field named `id` (it is the owner key `RelationOwner::id()` returns, so the derive already knows it) or `id` carries `#[relation(none)]` on seven structs. One sentence; recommend the former since the derive must locate `id` anyway.
+
+## Cautions (no plan text needed; for the PR body)
+
+1. Trace deltas are larger than the two pair members. BFS over today's edges versus the converted graph at the default `max_depth` 3: 20 origins change their trace output, and for `req_state_merges_without_humans` 11 nodes drop past the depth-3 horizon (e.g. `req_sources_ground_requirements`, `rule_prov_relation_vocabulary_closed`, `res_relations_are_fields_or_action_records` go from depth 3 to unreached) while 4 shift 2→3; for `req_edge_writes_validated`, `res_state_is_jsonl_in_git`, `rule_record_merge`, `source_opencode_session_jsonl_storage` shift 2→3. The plan's wording ("every node whose shortest path ran through that pair, listed by id") covers this; the expected-diff file must list horizon drops, not only shifts.
+2. Between K.3 (struct field gone) and K.7 (live conversion), a branch binary writing to the live repository's `res.jsonl` would strip the one `superseded_by` value before the converter reads it (`readers.rs:72-77` rewrites whole shards, dropping unknown fields). Convert from the state as committed on `main`; do not dogfood the branch binary against the live repository before K.7.
+
+## Checked, clean
+
+- Rev 2 → rev 3 diff touches only the sections named; no earlier closure regressed (spot-checked findings 1, 4, 5, 12: flow table, converter below the guard with `--versions-only`, seven kinds and bare-key rule, reconcile split all intact at plan:25-33, 63-79, 135-142, 245-249).
+- L1 and L13 now name the graph validator consistently (plan:319-320, 364-365).
+- The harness fixture path is unaffected by the `superseded_by` timing: K.4 converts the ce891fe copy with the constant at 1 and carries the value.
+- No new term reaches a command, field, doc, or message; `relation(none)` is attribute-internal.

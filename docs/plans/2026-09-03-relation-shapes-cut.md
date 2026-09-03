@@ -1,19 +1,18 @@
-# Relation shapes cut: implementation plan (revision 3)
+# Relation shapes cut: implementation plan (revision 4)
 
 Bead `provenance-1wh.1`. Decision: `res_relations_are_fields_or_action_records` (binding). Read at `ce891fe`; every
-file:line below was counted there. Revision 3 answers findings 1-14 and amendments A-E of the review at
+file:line below was counted there. Revision 4 answers every finding and amendment of the review at
 `docs/reviews/2026-09-03-relation-shapes-cut-plan-fable-review.md` (branch `1wh-cut-plan`). Owner rulings: one cut, no
 older-binary compatibility, product words only, `depends_on` stays an optional list on the dependent requirement.
 
 ## A. Scope and non-goals
 
 The cut removes the canonical edge. Each of the nine edge types becomes a field on the record that makes the claim, or
-a question. One declaration per record kind names its reference fields, their target kind, requiredness, and flow; the
-writers, the validator, the gap policy, the check, the merge gate, the traversals, and the projection derive from it.
-Reverse lookups are derived: in memory from record fields for canonical readers, from a derived `relations` table in
-`provenance.db` for served reads. Existing state is converted once by a throwaway subcommand. The schema version and
-the SDK protocol version move. The edges shard, the edge commands, the endpoint table, the same-fact dedupe, and
-`EdgeType` go in the same PR.
+a question. One declaration per record kind names its reference fields, their target kind, requiredness, and flow;
+writers, validator, gap policy, check, merge gate, traversals, and projection derive from it. Reverse lookups are
+derived: in memory from fields for canonical readers, from a derived `relations` table in `provenance.db` for served
+reads. Existing state is converted once by a throwaway subcommand. The schema and SDK protocol versions move. The
+edges shard, the edge commands, the endpoint table, the same-fact dedupe, and `EdgeType` go in the same PR.
 
 Non-goals: serving neighbors, trace, or impact from SQLite (W3, bead 1wh.2); freshness policy knobs and rollout order
 (W5, bead 1wh.3); any SaaS storage shape; the rendered graph-change view; restating other requirements.
@@ -24,14 +23,16 @@ Spiked (scratchpad `spike/relmacro`, reproduced by the reviewer): `#[derive(Rela
 `#[relation(target = Kind, flow = ..., required, name = "...", via = field)]` per reference field. `syn` 2 reads the
 field type: bare `StableId` is a required single, `Option<StableId>` an optional single, `Vec<StableId>` a list
 (required only with the flag), `Vec<T>`/`Option<T>` with `via = field` a reference through a struct. `flow` is
-`target_upstream` (the target is upstream of the owner), `target_downstream`, or `none`. The derive emits per struct a
+`target_upstream` (the target is upstream of the owner), `target_downstream`, or `none`. The derive emits per struct
 `const RELATIONS: [RelationDecl; N]` (owner kind, name, target kind, list, required, flow) and `impl RelationOwner`
 with `fn references(&self) -> Vec<(&'static str, &StableId)>`. One generic function each then gives the reverse scan,
-the derived-table rows, the existence check, the dangling gap, the empty-required-list refusal, and the directed walk
-(section E). The derive refuses at compile time a `StableId`-typed field (bare, `Option`, or `Vec`) with no
-`#[relation]`: the primary guard. A field that points outside the table carries `#[relation(none)]` so the exemption
-is visible at the field: `origin_thread` and `origin_message` on the four graph kinds
-(`artifacts.rs:266,272,311,317,394,400,438,444`), which name threads and messages (L12). No fixed name list.
+derived-table rows, existence check, dangling gap, empty-required-list refusal, and directed walk (section E). The
+derive refuses at compile time a `StableId`-typed field (bare, `Option`, or `Vec`) with no `#[relation]`: the primary
+guard. The field named `id` is exempt with no attribute: it is the owner key the derive already locates for
+`RelationOwner::id()` (all seven: `artifacts.rs:227,287,358,407`, `shaping.rs:116,128,145`). A field that points
+outside the table carries `#[relation(none)]` so the exemption is visible at the field: `origin_thread` and
+`origin_message` on the four graph kinds (`artifacts.rs:266,272,311,317,394,400,438,444`), (threads and messages,
+L12); no other name list.
 
 Seven kinds carry the derive: source, requirement, resolution, rule, topic, question, boundary. The derive cannot:
 - See another struct. `declared_relations()` (`relations.rs:26-29`, keeps its `#[rule]` anchor) is a hand-written
@@ -45,10 +46,10 @@ Seven kinds carry the derive: source, requirement, resolution, rule, topic, ques
   compile check cannot see (`ArtifactLink.target_id`, `ThreadParent`).
 - Write the TypeScript types, the JSON schema artifact, or the docs table.
 
-The const-table alternative keeps five hand mirrors per field (struct field, table row, `RecordFront` arm, SQL column
-list, check arm); `graph_records.rs:39-54` already forgot `source_refs`. Cost of the derive: `syn`, `quote`,
-`proc-macro2` in `provenance-macros` (in `Cargo.lock` through `serde_derive`; the crate has no dependencies today) and
-a `trybuild` suite (pattern: `crates/provenance-sdk/tests/compile_fail.rs`).
+The const-table alternative keeps five hand mirrors per field (struct, table row, `RecordFront` arm, SQL column list,
+check arm); `graph_records.rs:39-54` already forgot `source_refs`. Cost of the derive: `syn`, `quote`, `proc-macro2`
+in `provenance-macros` (in `Cargo.lock` through `serde_derive`; the crate has no dependencies today) and a `trybuild`
+suite (pattern: `crates/provenance-sdk/tests/compile_fail.rs`).
 
 Recommendation: the derive. `RelationKind` (`relations.rs:49-71`), `RelationDerivation` (33-40), `same_fact_as`
 (215-239), and `drop_duality_echoes` (`front.rs:94-118`) are deleted. `RelationSource`, `related_nodes`,
@@ -78,24 +79,23 @@ Lists are sorted by id on write and deduplicated. `refines`, `depends_on`, and `
 | question | `topic_id`, `requirement_id`; `resolution_id` | topic, requirement; resolution | required; optional | single | none | unchanged (`shaping.rs:146-168`) |
 | question | `contradicts` | requirement | optional | single | none | `contradicts` edge, other side in `requirement_id` |
 
-Lists were forced by the data: 14 rules have two or more requirement producers, 4 have two or more resolution
-producers, `res_dispositions_sole_authority` resolves 3 requirements. Singles were allowed by it: 19 `refines_into`
-rows with 19 distinct children; 1 `spawns` row.
+Data forced the lists: 14 rules have 2+ requirement producers, 4 have 2+ resolution producers, one resolution resolves
+3 requirements. It allowed the singles: 19 `refines_into` rows, 19 distinct children; 1 `spawns` row.
 
 `superseded_by` today (Source `artifacts.rs:255-260`, Resolution 381-386) sits on the older record but is set on the
 record being created (`--superseded-by` at `knowledge.rs:28-29`, `policy.rs:42-43`). Its direction inverts: the newer
 record holds `supersedes: [older]`; `superseded_by` is deleted from both structs, both inputs (`inputs.rs:23,116`),
 both commands, `graph_records.rs:28-32,146-153`, `dangling.rs:38-72`, and the wiki pages (`pages/source.rs:26-29`,
 `pages/resolution.rs:47-53`, which derive it by reverse scan). The struct fields and both flags stay until K.3 and go
-together there; the one live value is carried to `supersedes` by the converter at K.7, which reads raw JSON, not the
-struct. `CreateProposalCardInput.superseded_by` (`inputs.rs:317`) is untouched.
+together there; the converter carries the one live value to `supersedes` at K.7 from raw JSON, not the struct (L15).
+`CreateProposalCardInput.superseded_by` (`inputs.rs:317`) is untouched.
 
 A root requirement is a requirement whose `refines` is absent; 49 of 68 are roots today.
 
 A contradiction is a question: `topic_id` and `requirement_id` name one side, `contradicts` the other. It is settled
 when `resolution_id` is set or either requirement lists the other in `supersedes`. Today's shared-resolution settle
-path (`contradiction.rs:49-57`) is dropped on purpose: the question's `resolution_id` is the record of that
-settlement. The unordered pair (`requirement_id`, `contradicts`) is the gap identity.
+path (`contradiction.rs:49-57`) is dropped on purpose: the question's `resolution_id` records that settlement. The
+unordered pair (`requirement_id`, `contradicts`) is the gap identity.
 
 ## D. Commands and SDK calls that change
 
@@ -123,9 +123,8 @@ Changed:
   `handlers/resolutions.rs:40`, `inputs.rs:105`); `write_resolution` (`rule_writers.rs:10-87`) writes
   `requirement_ids`, no `needs`/`resolves` edge.
 - `sources create --supersedes`, `resolutions create --supersedes`, repeatable, existence checked (`create_source`,
-  `writers.rs:11-55`, checks nothing today).
-- `requirements source-ref add` returns the requirement, not an `Edge` (`writers.rs:131-187`,
-  `handlers/requirements.rs:52-60`).
+  `writers.rs:11-55`, checks nothing today); `requirements source-ref add` returns the requirement, not an `Edge`
+  (`writers.rs:131-187`, `handlers/requirements.rs:52-60`).
 - `sdk apply`: `desired_rule` (`reconcile.rs:250-274`) writes `requirement_ids` and `resolution_ids`;
   `desired_requirement` (142-174) writes `refines`, `spawned_by`, `depends_on`, `supersedes`. A declaration field is
   authoritative when present and untouched when absent, so a CLI-set `refines` survives a spec that does not name one;
@@ -148,8 +147,8 @@ idx_relations_in  (scope_id, target_type, target_id, relation)
 ```
 
 `ProjectionFamily::Edges` (`projection_families.rs:30,53,77,93-96,105-106,140-142`) is deleted; `ALL` becomes 18 rows;
-`is_scoped` goes. `relations` is not a family and has no digest row: every row derives from one owner record's fields
-with no join. The loader is one generic function over `RelationOwner` plus the `links` function, run per scope after
+`is_scoped` goes. `relations` is not a family and has no digest row: every row derives from one owner record with no
+join. The loader is one generic function over `RelationOwner` plus the `links` function, run per scope after
 `load_scope` for the seven owner kinds. Catch-up: `rederive_scope` (`catch_up.rs:205-225`) deletes and reloads the
 scope's `relations` rows for each owner kind whose family digest moved; `remove_departed_scopes` (148-177) deletes the
 scope's rows explicitly; the `Unit::Global` arm of `apply_unit_change` (181-201) only updates the unit digest row,
@@ -158,12 +157,11 @@ since no family derives from the manifest or the dictionary (`docs/cache.md` tab
 `projection_digest.rs:17-18` lose their edge branches; `scope_locality_guard.rs:132-147` becomes a scope-only
 assertion; the `edges` fixture at `projection_digest_sensitivity.rs:29` becomes a record with relation fields.
 
-Directed walks derive from `flow`. Downstream from a record is out over `target_downstream` relations and in over
-`target_upstream` ones; upstream is the mirror; `none` relations are never followed by impact or traceability and by
-trace and neighbors only under `direction`. Today `queries/impact.rs:34-58` follows `from_id` only and
-`cache/impact.rs:81-83` defines downstream as `to_id`; after the cut a source has no out field, so an "out only" walk
-answers nothing. A source reaches its requirements through `cites` (in), a requirement its rules through
-`requirement_ids` (in) and its resolutions likewise.
+Directed walks derive from `flow`. Downstream is out over `target_downstream` and in over `target_upstream`; upstream
+is the mirror; `none` relations are never followed by impact or traceability and by trace and neighbors only under
+`direction`. Today `queries/impact.rs:34-58` follows `from_id` only and `cache/impact.rs:81-83` reads downstream as
+`to_id`; after the cut a source has no out field, so "out only" answers nothing. A source reaches requirements through
+`cites` (in), a requirement its rules and resolutions through `requirement_ids` (in).
 
 Readers that move (edge rows to in-memory field scans unless noted):
 - gaps `graph_query.rs` (285 lines): `edge_exists` (70-85), `resolution_resolves_any_requirement` (146-156),
@@ -196,8 +194,7 @@ Readers that move (edge rows to in-memory field scans unless noted):
 - `operations/queries/walk.rs` (185): `scoped_edges` (11-19), `steps` (30-58), `edge_rank` (173-185) go; `neighbors`
   (64-96) and `trace` (98-147) walk `related_nodes` over a `RecordFront` from `records::load`. Order: node rank, id,
   declaration order, direction. `queries/impact.rs:27,34-58` uses the downstream walk.
-- `operations/plan.rs:131-139` and `requirement_reviews.rs:132-149` (called at `typed_specs.rs:252`) scan the rule
-  lists.
+- `operations/plan.rs:131-139`, `requirement_reviews.rs:132-149` (`typed_specs.rs:252`) scan the rule lists.
 - merge gate `merge/validation.rs` (328): `ShardFamily::Edges` (36, 62-63, 103) and `validate_merged_edges` (182-194)
   go; `ShardFamily` gains `Sources`, `Resolutions`, `Questions`, `Topics`, `Boundaries`, each deserialized as its
   type, and every recognized family runs the required-list check from the table.
@@ -237,7 +234,7 @@ Readers that move (edge rows to in-memory field scans unless noted):
   `edges-00.jsonl` (`bound-spec.test.ts:395-400`, `fluent-spec.test.ts:451-456`) read `rule.jsonl` instead.
 - State schema version: `SUPPORTED_SCHEMA_VERSION` (`aggregate_validation.rs:19`) becomes `SchemaVersion(2)`. The
   guard is global and exact (`readers.rs:85-100,143-155`; `state_store.rs:100` for the manifest), so the conversion
-  rewrites every record in every family, the manifest, and the nested landing records. Production literals become the
+  rewrites every record in every family, the manifest, and nested landing records. Production literals become the
   constant: `manifest.rs:36` (the `init` default), `scope.rs:70`, `threads.rs:60`, `handlers/rules.rs:145`; the TS
   literals (`protocol.ts:60`, `spec.ts:326`, `fluent-spec.ts:392`, `bound-materialize.ts:166`, `registry.ts:49`)
   collapse into one `STATE_SCHEMA_VERSION = 2`. 83 test files carry a literal 1 (`merge/validation.rs:202`,
@@ -255,17 +252,16 @@ Readers that move (edge rows to in-memory field scans unless noted):
 publication lock. It reads raw JSON lines below the version guard (its own line reader; `jsonl.rs` atomic writer for
 output) and writes `SUPPORTED_SCHEMA_VERSION` into every record (never a literal), so it runs at K.3/K.4 with the
 constant at 1 and at K.7 with it at 2. Every list step is a set union and step 9 deletes the field, so a rerun after a
-crash changes nothing more; a rerun on converted state finds no edges directory and no `superseded_by` and is a no-op.
-Counted at `ce891fe`: 614 rows (76 `references`, 19 `refines_into`, 0 `depends_on`, 1 `contradicts`, 0 `supersedes`,
-98 `needs`, 96 `resolves`, 1 `spawns`, 323 `produces`); the decision's 612 predates
-`res_relations_are_fields_or_action_records` and its pair. All rows are scope `default`, unlabeled, none dangling.
+crash changes nothing more, and a rerun on converted state is a no-op. Counted at `ce891fe`: 614 rows (76
+`references`, 19 `refines_into`, 0 `depends_on`, 1 `contradicts`, 0 `supersedes`, 98 `needs`, 96 `resolves`, 1
+`spawns`, 323 `produces`); the decision's 612 predates `res_relations_are_fields_or_action_records` and its pair. All
+rows are scope `default`, unlabeled, none dangling.
 
 Per type:
 1. `references` (source -> requirement): assert the pair is in `requirement.source_refs`; add with `clause: None` when
    absent (0 today). Report the 3 field-only pairs (all `src_annotation_format_spec`).
 2. `refines_into` (parent -> child): `child.refines = parent`; refuse a second parent.
-3. `depends_on`, `supersedes` (requirement): `from.depends_on += to`, `from.supersedes += to` (0 rows; written and
-   tested on a fixture).
+3. `depends_on`, `supersedes`: `from.depends_on += to`, `from.supersedes += to` (0 rows; fixture-tested).
 4. `resolves` (resolution -> requirement): `resolution.requirement_ids += requirement`.
 5. `needs` (requirement -> resolution): assert the mirrored `resolves` exists; report each pair without one and add it
    to `requirement_ids` anyway (the union). 2 today, both `req_rust_requirements_as_code_authoring` ->
@@ -296,16 +292,16 @@ after it as separate commands. The subcommand is deleted in K.9.
   declaration." The description names the derive, the compile-time guard, the anchor, and the two tests.
 - Anchor `req_implement_a_normalized_knowledge_graph_d` (its statement names "nine typed edges checked at write
   time"): new requirement `req_relations_are_record_fields` with `supersedes` naming it, same domain and
-  `source_refs`, statement drafted with the provenance-grounded-writing skill and the checker: "The graph is four
-  canonical record kinds, Source, Requirement, Resolution, and Rule, and a relation between records is a reference
-  field on the record that makes the claim or the record of the action that asserted it." The old requirement and its
-  topic stay. First use of `requirements create --supersedes`.
+  `source_refs`, statement drafted with the grounded-writing skill and the checker: "The graph is four canonical
+  record kinds, Source, Requirement, Resolution, and Rule, and a relation between records is a reference field on the
+  record that makes the claim or the record of the action that asserted it." The old requirement and its topic stay.
+  First use of `requirements create --supersedes`.
 - `docs/state-format.md` (120 lines): lines 7, 15, 23, 115-120 rewritten; version 2 stated; the section C table added.
   `docs/cli.md` (471): lines 22, 138-146, 336-341, 384, 462, 466-467, 471 rewritten; the section D commands listed.
   `docs/cache.md`: the catch-up section loses "the edges shard" and "A changed global unit reloads the edges table
   whole"; the derivation table loses `edges` and gains `relations (derived, no digest row)`.
-- `docs/shaping.md:63,71` reworded; the `validate_edge_endpoint` example block (233-256) is replaced by a
-  `#[relation]` example. `docs/typescript-sdk-poc.md:8` reworded.
+- `docs/shaping.md:63,71` and `docs/typescript-sdk-poc.md:8` reworded; the `validate_edge_endpoint` example block
+  (`shaping.md:233-256`) becomes a `#[relation]` example.
 
 ## I. Test strategy
 
@@ -344,8 +340,8 @@ downstream (listed per resolution); gaps are unchanged (the pair gap stays, the 
 normalization and the listed deltas every output is byte-identical; any other difference fails the test.
 
 Relation map: `crates/provenance-cli/tests/relation_map.rs` carries the gist's 39 rows as data (relation, owner kind,
-authoring command, clear command or "immutable"). Per row it runs the authoring command on a fresh repository, reads
-the record back, asserts the reference, runs the clear command where named, asserts it gone.
+authoring command, clear command or "immutable"); per row it authors on a fresh repository, reads back, asserts the
+reference, clears where named, asserts it gone.
 
 Named tests: `clear` on the last entry of a required list refuses (rule and resolution); `add`/`set` of a `refines`,
 `depends_on`, or `supersedes` cycle refuses; the merge gate refuses an empty `requirement_ids` on a resolutions shard
@@ -364,8 +360,8 @@ TS test files mention edges today; each is rewritten to the field it now means.
 ## J. Revised W3 and W5 text
 
 The W3/W5 text is `docs/research/2026-08-27-qrspi-1wh-query-uniformity-plan.md` on branch
-`opencode/provenance-20260827T223718Z-87cc1ac4`, not in the tree on `main`. The edits below land as text on the beads
-(`provenance-1wh.2` for W3, `provenance-1wh.3` for W5), not as a PR against that branch.
+`opencode/provenance-20260827T223718Z-87cc1ac4`, not on `main`. The edits land as text on the beads
+(`provenance-1wh.2` for W3, `provenance-1wh.3` for W5), not as a PR to that branch.
 
 W3, per-operation mapping, item 2: "`neighbors`, `trace` walk the derived `relations` table (`idx_relations_out`,
 `idx_relations_in`). Filters name relations, not edge types (protocol 6, inherited from the relation shapes cut).
@@ -376,29 +372,25 @@ filter names `refines`, `depends_on`, `contradicts`, `supersedes`, `spawned_by`.
 the cut; W3 adds no further bump." `SqlFront`: "reads `relations` per scope; a global edges family no longer exists."
 
 W5 landing order, item 2: "W2 equivalence suite green; catch-up is the default freshness step. No journal." Item 3:
-"Relation shapes cut (bead 1wh.1) merges; the vocabulary is the declaration table." Delete every journal sentence
-(plan lines 21, 39, 47-48, 107, 273-440). Knobs: delete `cache.catchup_journal`; keep the three `read.*` knobs.
-File-growth gates: drop `publication/journal.rs` and `materialize/sweep.rs`. q82f handoff item 6: "Protocol version
-confirmed at 6."
+"Relation shapes cut (bead 1wh.1) merges; the vocabulary is the declaration table." Delete the journal sentences (plan
+lines 21, 39, 47-48, 107, 273-440). Knobs: delete `cache.catchup_journal`; keep the `read.*` knobs. Gates: drop
+`publication/journal.rs` and `materialize/sweep.rs`. q82f item 6: "Protocol version confirmed at 6."
 
 ## K. Sequencing inside the one PR
 
-Branch `1wh-relation-shapes-cut`. Each commit builds and passes the workspace suite; how it stays green is stated per
-commit. The version constant stays 1 until commit 7.
+Branch `1wh-relation-shapes-cut`. Each commit builds and passes the workspace suite; how is stated per commit. The
+version constant stays 1 until commit 7.
 1. Harness "before" snapshots from the `main` binary, committed as files. `provenance-macros`: `syn`, `quote`,
    `proc-macro2`; the `Relations` derive; trybuild. Green: additive.
 2. Fields on the seven structs with the derive, `declared_relations()` as the concatenation, the hand-list and
    serde-walking tests. New fields are empty and skipped on serialize, so every fixture round-trips and the old
    readers still read edges. Green: additive.
-3. Writers and commands (section D) write the fields and still write the edges; the conversion subcommand (writing
-   version 1 through the constant); the relation-map test. Green: readers and adoption still see the edges; writers
-   double-write.
+3. Writers and commands (section D) write the fields and still write the edges; the converter (writing version 1 via
+   the constant); the relation-map test. Green: readers and adoption still see edges; writers double-write.
 4. Readers move (section E) with adoption equality and the merge gate in the same commit; the harness runs the
    converter over the fixture and goes green. Green: every reader reads fields the writers already fill.
-5. Writers stop writing edges; `add_edge` and its callers go; edge-write tests become field tests. Green: nothing
-   reads edges.
-6. Projection: migration 021, the derived-table loader, catch-up changes, family table at 18. Wire: protocol 6, graph
-   reference v2, TS types and tests.
+5. Writers stop writing edges; `add_edge` and callers go; edge tests become field tests. Green: nothing reads edges.
+6. Projection: migration 021, derived-table loader, catch-up, 18 families. Wire: protocol 6, graph reference v2, TS.
 7. `SUPPORTED_SCHEMA_VERSION` to 2, the four production literals, the TS constant, the two frozen audit digests; run
    the converter on the live state, then `--versions-only` as a no-op check, then `check` and `materialize`; commit
    `.provenance/state` (no edges directory, every record at 2, G.8's topic and question, G.9's `supersedes`).
@@ -408,14 +400,14 @@ commit. The version constant stays 1 until commit 7.
 
 500-line cap (`AGENTS.md:20`), split by responsibility before growth: the `add`/`clear` writers go in a new
 `state_store/reference_writers.rs`, not `writers.rs` (321); the new subcommands in a new `cli/references.rs`, not
-`cli/knowledge.rs` (188); `reconcile.rs` (476) splits as in section D before any field lands; field comparison lands
-in `adoption/relationships.rs` (213), so `typed_specs/adoption.rs` (483) does not grow; `graph_reference.rs` (422)
+`cli/knowledge.rs` (188); `reconcile.rs` (476) splits per section D before any field lands; field comparison lands in
+`adoption/relationships.rs` (213), so `typed_specs/adoption.rs` (483) does not grow; `graph_reference.rs` (422)
 shrinks. New test files stay under 300 lines.
 
 Before ready: the deslop pass (no `edge` in the relation sense left in production code, comments, or docs; ADRs, the
-graph-theory use in `lineage_validation.rs`, and `PARITY.md` are exempt; the version-literal grep gate from section
-F), the six mutation runs from section I recorded in the PR body, `cargo clippy --all-targets --all-features`, `cargo
-test --workspace`, the TS suite, `provenance check` clean on the converted state, then the three reviews.
+graph-theory use in `lineage_validation.rs`, and `PARITY.md` exempt; the version-literal grep gate from F), the six
+mutation runs from I in the PR body, `cargo clippy --all-targets --all-features`, `cargo test --workspace`, the TS
+suite, `provenance check` clean on the converted state, then the three reviews.
 
 ## L. Risks and open points
 
@@ -428,8 +420,7 @@ test --workspace`, the TS suite, `provenance check` clean on the converted state
 4. `depends_on`: ruled optional list on the dependent requirement, 0 rows, no gap reads it. Default:
    `target_downstream`, treated as indirect by impact, like today's edge.
 5. Neighbors order. Today: edge rank then direction (`walk.rs:149-156,173-185`). Default: declaration order (struct
-   field order within the owner kind, kinds in node rank) then direction; sets in the harness; the W3 cursor freezes
-   it.
+   field order within the owner kind, kinds in node rank) then direction; sets in the harness; W3's cursor freezes it.
 6. Adoption equality and the fields a declaration can also set (`refines`, `supersedes`, `spawned_by`, `depends_on`).
    Default: adoption compares only `source_refs`, `requirement_ids`, `resolution_ids`; the rest is "richer canonical
    metadata" (`docs/state-format.md:16-17`) under the section D reconcile rule.
@@ -439,12 +430,20 @@ test --workspace`, the TS suite, `provenance check` clean on the converted state
    step 7, reviewed by count (records in equals records out per family) and by the digest pair.
 9. The conversion subcommand. Default: `handlers/convert_edges.rs` behind `--features dogfood`, its logic a
    test-visible function the harness calls, deleted in step 9.
-10. Reverse scan cost. In-memory scans are O(records) per lookup, as `fk`/`embedded` are today (`front.rs:376-446`).
-    Default: one `BTreeMap<(kind, id), Vec<(owner, relation)>>` index per `RecordFront`, built on first use; W3 serves
-    reads from SQL.
+10. Reverse scan cost. In-memory scans are O(records) per lookup, as `fk`/`embedded` today (`front.rs:376-446`).
+    Default: one `BTreeMap<(kind, id), Vec<(owner, relation)>>` index per `RecordFront`, built lazily; W3 uses SQL.
 11. `source-ref clear` of a citation the typed reconciler manages. Default: allowed; the next `sdk apply` restores it,
     as today's reconciler appends (`reconcile.rs:202-208`).
 12. Threads and ideation records reference requirements too (map rows 22-34). Default: out of `relations` in this cut,
     in after the W3 dangling-target prerequisite; the table lists them as `X`-class rows, no loader.
 13. Cycle refusal on `refines`, `depends_on`, `supersedes`. Default: the writer walks the field chain and refuses a
     path back to the owner; the graph validator (section E) and `check` refuse one found in state; edges had no guard.
+14. Trace deltas reach past the pair. BFS at the default `max_depth` 3 changes 20 origins: from
+    `req_state_merges_without_humans` 11 nodes drop past the horizon (`req_sources_ground_requirements`,
+    `rule_prov_relation_vocabulary_closed`, `res_relations_are_fields_or_action_records` among them) and 4 shift 2 to
+    3; from `req_edge_writes_validated`, `res_state_is_jsonl_in_git`, `rule_record_merge`, and
+    `source_opencode_session_jsonl_storage` shift 2 to 3. The expected-diff file lists horizon drops per origin, not
+    just shifts.
+15. The live `superseded_by` value between K.3 and K.7. Once the struct field is gone, a branch binary that writes the
+    live `res.jsonl` rewrites the whole shard and drops the unknown field (`readers.rs:72-77`) before the converter
+    reads it. Convert from the state committed on `main`; never run the branch binary there before K.7.
