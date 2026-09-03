@@ -60,11 +60,109 @@ fn a_missing_target_is_refused_by_kind() {
     let error = store
         .set_requirement_spawned_by(&scope, &sid("req_overtime"), sid("res_missing"))
         .unwrap_err();
-    assert_eq!(error.to_string(), "resolution does not exist");
+    assert_eq!(
+        error.to_string(),
+        "resolution res_missing does not exist (--target-id)"
+    );
     let error = store
         .add_requirement_supersedes(&scope, &sid("req_overtime"), sid("req_missing"))
         .unwrap_err();
-    assert_eq!(error.to_string(), "requirement does not exist");
+    assert_eq!(
+        error.to_string(),
+        "requirement req_missing does not exist (--target-id)"
+    );
+}
+
+#[test]
+fn a_missing_owner_is_refused_by_its_own_id_and_flag() {
+    let (_dir, store, scope) = seeded_source_requirement_store();
+    let error = store
+        .set_requirement_refines(&scope, &sid("req_ghost"), sid("req_overtime"))
+        .unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "requirement req_ghost does not exist (--requirement-id)"
+    );
+    let error = store
+        .clear_requirement_refines(&scope, &sid("req_ghost"))
+        .unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "requirement req_ghost does not exist (--requirement-id)"
+    );
+    let error = store
+        .clear_requirement_depends_on(&scope, &sid("req_ghost"), &sid("req_overtime"))
+        .unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "requirement req_ghost does not exist (--requirement-id)"
+    );
+    let error = store
+        .add_rule_requirement(&scope, &sid("rule_ghost"), sid("req_overtime"))
+        .unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "rule rule_ghost does not exist (--rule-id)"
+    );
+    let error = store
+        .clear_rule_requirement(&scope, &sid("rule_ghost"), &sid("req_overtime"))
+        .unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "rule rule_ghost does not exist (--rule-id)"
+    );
+    let error = store
+        .add_resolution_requirement(&scope, &sid("res_ghost"), sid("req_overtime"))
+        .unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "resolution res_ghost does not exist (--resolution-id)"
+    );
+    let error = store
+        .add_source_supersedes(&scope, &sid("source_ghost"), sid("source_schads"))
+        .unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "source source_ghost does not exist (--source-id)"
+    );
+    let error = store
+        .set_question_contradicts(&scope, &sid("question_ghost"), sid("req_overtime"))
+        .unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "question question_ghost does not exist (--id)"
+    );
+    let error = store
+        .clear_source_reference(&scope, &sid("req_ghost"), &sid("source_schads"))
+        .unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "requirement req_ghost does not exist (--requirement-id)"
+    );
+    let error = store
+        .add_source_reference(crate::state_store::AddSourceReferenceInput {
+            scope_id: scope.clone(),
+            source_id: sid("source_schads"),
+            requirement_id: sid("req_ghost"),
+            clause: None,
+        })
+        .unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "requirement req_ghost does not exist (--requirement-id)"
+    );
+    let error = store
+        .add_source_reference(crate::state_store::AddSourceReferenceInput {
+            scope_id: scope,
+            source_id: sid("source_ghost"),
+            requirement_id: sid("req_overtime"),
+            clause: None,
+        })
+        .unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "source source_ghost does not exist (--target-id)"
+    );
 }
 
 #[test]

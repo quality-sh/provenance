@@ -79,12 +79,14 @@ pub(in crate::state_store::typed_specs) fn ensure_resolutions_exist(
     requirements: &[Requirement],
     rules: &[Rule],
 ) -> anyhow::Result<()> {
-    let named = requirements
+    for resolution in requirements
         .iter()
         .filter_map(|requirement| requirement.spawned_by.as_ref())
-        .chain(rules.iter().flat_map(|rule| rule.resolution_ids.iter()));
-    for resolution in named {
-        store.ensure_node_exists(scope_id, NodeType::Resolution, resolution)?;
+    {
+        store.ensure_node_exists(scope_id, NodeType::Resolution, resolution, "spawned_by")?;
+    }
+    for resolution in rules.iter().flat_map(|rule| &rule.resolution_ids) {
+        store.ensure_node_exists(scope_id, NodeType::Resolution, resolution, "resolution_ids")?;
     }
     Ok(())
 }

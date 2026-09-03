@@ -153,7 +153,12 @@ impl StateStore {
                 let record = records
                     .iter_mut()
                     .find(|record| &record.id == requirement)
-                    .ok_or_else(|| anyhow::anyhow!("requirement does not exist"))?;
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "requirement {} does not exist (--requirement-id)",
+                            requirement.as_str()
+                        )
+                    })?;
                 anyhow::ensure!(
                     record
                         .source_refs

@@ -33,10 +33,15 @@ impl StateStore {
             "a resolution needs one requirement"
         );
         for requirement_id in &requirement_ids {
-            self.ensure_node_exists(&scope_id, NodeType::Requirement, requirement_id)?;
+            self.ensure_node_exists(
+                &scope_id,
+                NodeType::Requirement,
+                requirement_id,
+                "--requirement-id",
+            )?;
         }
         for older in &supersedes {
-            self.ensure_node_exists(&scope_id, NodeType::Resolution, older)?;
+            self.ensure_node_exists(&scope_id, NodeType::Resolution, older, "--supersedes")?;
         }
         let requirement_ids = sorted_ids(requirement_ids);
         let supersedes = sorted_ids(supersedes);
@@ -97,10 +102,20 @@ impl StateStore {
         super::statement_policy::ensure_statement_is_writable(&self.layout, &statement)?;
         anyhow::ensure!(!requirement_ids.is_empty(), "a rule needs one requirement");
         for requirement_id in &requirement_ids {
-            self.ensure_node_exists(&scope_id, NodeType::Requirement, requirement_id)?;
+            self.ensure_node_exists(
+                &scope_id,
+                NodeType::Requirement,
+                requirement_id,
+                "--requirement-id",
+            )?;
         }
         for resolution_id in &resolution_ids {
-            self.ensure_node_exists(&scope_id, NodeType::Resolution, resolution_id)?;
+            self.ensure_node_exists(
+                &scope_id,
+                NodeType::Resolution,
+                resolution_id,
+                "--resolution-id",
+            )?;
         }
         let requirement_ids = sorted_ids(requirement_ids);
         let resolution_ids = sorted_ids(resolution_ids);

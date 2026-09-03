@@ -23,7 +23,7 @@ impl StateStore {
         } = input;
         let commit_pin = validate_optional_commit_pin(commit_pin)?;
         for older in &supersedes {
-            self.ensure_node_exists(&scope_id, NodeType::Source, older)?;
+            self.ensure_node_exists(&scope_id, NodeType::Source, older, "--supersedes")?;
         }
         let supersedes = sorted_ids(supersedes);
         let path = shards::sources_path(&self.layout, &scope_id);
@@ -77,13 +77,19 @@ impl StateStore {
         } = input;
         super::statement_policy::ensure_statement_is_writable(&self.layout, &statement)?;
         if let Some(domain_id) = &domain_id {
-            self.ensure_node_exists(&scope_id, NodeType::Domain, domain_id)?;
+            self.ensure_node_exists(&scope_id, NodeType::Domain, domain_id, "--domain-id")?;
         }
-        for parent in refines.iter().chain(&depends_on).chain(&supersedes) {
-            self.ensure_node_exists(&scope_id, NodeType::Requirement, parent)?;
+        if let Some(parent) = &refines {
+            self.ensure_node_exists(&scope_id, NodeType::Requirement, parent, "--refines")?;
+        }
+        for dependency in &depends_on {
+            self.ensure_node_exists(&scope_id, NodeType::Requirement, dependency, "--depends-on")?;
+        }
+        for older in &supersedes {
+            self.ensure_node_exists(&scope_id, NodeType::Requirement, older, "--supersedes")?;
         }
         if let Some(resolution) = &spawned_by {
-            self.ensure_node_exists(&scope_id, NodeType::Resolution, resolution)?;
+            self.ensure_node_exists(&scope_id, NodeType::Resolution, resolution, "--spawned-by")?;
         }
         let (depends_on, supersedes) = (sorted_ids(depends_on), sorted_ids(supersedes));
         let path = shards::requirements_path(&self.layout, &scope_id);
@@ -161,7 +167,8 @@ impl StateStore {
             self.list_sources(&scope_id)?
                 .iter()
                 .any(|source| source.id == source_id),
-            "source does not exist"
+            "source {} does not exist (--target-id)",
+            source_id.as_str()
         );
         let source_ref = SourceReference { source_id, clause };
         let requirements_path = shards::requirements_path(&self.layout, &scope_id);
@@ -171,7 +178,12 @@ impl StateStore {
                 let requirement = requirements
                     .iter_mut()
                     .find(|requirement| requirement.id == requirement_id)
-                    .ok_or_else(|| anyhow::anyhow!("requirement does not exist"))?;
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "requirement {} does not exist (--requirement-id)",
+                            requirement_id.as_str()
+                        )
+                    })?;
                 if !requirement
                     .source_refs
                     .iter()

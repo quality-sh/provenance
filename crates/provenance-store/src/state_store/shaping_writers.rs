@@ -129,10 +129,20 @@ impl StateStore {
             .find(|topic| topic.id == topic_id)
             .ok_or_else(|| anyhow::anyhow!("topic does not exist"))?;
         if let Some(resolution_id) = &resolution_id {
-            self.ensure_node_exists(&scope_id, NodeType::Resolution, resolution_id)?;
+            self.ensure_node_exists(
+                &scope_id,
+                NodeType::Resolution,
+                resolution_id,
+                "--resolution-id",
+            )?;
         }
         if let Some(contradicted) = &contradicts {
-            self.ensure_node_exists(&scope_id, NodeType::Requirement, contradicted)?;
+            self.ensure_node_exists(
+                &scope_id,
+                NodeType::Requirement,
+                contradicted,
+                "--contradicts",
+            )?;
         }
         self.validate_artifact_links(&scope_id, &links)?;
         sort_artifact_links(&mut links);

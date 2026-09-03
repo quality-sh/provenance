@@ -14,6 +14,21 @@ fn declared<T: RelationOwner>(name: &str) -> &'static RelationDecl {
     declaration_of(T::relations(), name).expect("every writer names a declared relation")
 }
 
+/// The flag a relation command names its owner with. Questions name their
+/// owner `--id`; every other kind takes the kind word.
+const fn owner_flag(kind: NodeType) -> &'static str {
+    match kind {
+        NodeType::Source => "--source-id",
+        NodeType::Requirement => "--requirement-id",
+        NodeType::Resolution => "--resolution-id",
+        NodeType::Rule => "--rule-id",
+        NodeType::Topic => "--topic-id",
+        NodeType::Question => "--id",
+        NodeType::Domain => "--domain-id",
+        NodeType::Boundary => "--boundary-id",
+    }
+}
+
 /// A `refines`, `depends_on`, or `supersedes` chain that leads back to the owner.
 fn forms_cycle<T: RelationOwner>(
     records: &[T],
@@ -45,11 +60,15 @@ fn forms_cycle<T: RelationOwner>(
 }
 
 impl StateStore {
+    /// Refuses an id no record of the kind holds. `named_by` is the
+    /// user-facing slot the id came from: the flag on a command, the
+    /// field on a declaration.
     pub(super) fn ensure_node_exists(
         &self,
         scope_id: &ScopeId,
         kind: NodeType,
         id: &StableId,
+        named_by: &str,
     ) -> anyhow::Result<()> {
         let exists = match kind {
             NodeType::Source => self.list_sources(scope_id)?.iter().any(|r| &r.id == id),
@@ -64,7 +83,13 @@ impl StateStore {
             NodeType::Domain => self.list_domains(scope_id)?.iter().any(|r| &r.id == id),
             NodeType::Boundary => self.list_boundaries(scope_id)?.iter().any(|r| &r.id == id),
         };
-        anyhow::ensure!(exists, "{} does not exist", kind_word(kind));
+        anyhow::ensure!(
+            exists,
+            "{} {} does not exist ({})",
+            kind_word(kind),
+            id.as_str(),
+            named_by
+        );
         Ok(())
     }
 
@@ -84,7 +109,7 @@ impl StateStore {
         let decl = declared::<T>(name);
         self.with_repository_publication(|| {
             if let Some(target) = &target {
-                self.ensure_node_exists(scope_id, decl.target, target)?;
+                self.ensure_node_exists(scope_id, decl.target, target, "--target-id")?;
             }
             self.mutate_jsonl_records(path, |records: &mut Vec<T>| {
                 if let Some(target) = &target {
@@ -100,7 +125,14 @@ impl StateStore {
                 let record = records
                     .iter_mut()
                     .find(|record| record.id() == owner)
-                    .ok_or_else(|| anyhow::anyhow!("{} does not exist", kind_word(T::OWNER)))?;
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "{} {} does not exist ({})",
+                            kind_word(T::OWNER),
+                            owner.as_str(),
+                            owner_flag(T::OWNER)
+                        )
+                    })?;
                 *field(record) = target;
                 Ok(record.clone())
             })
@@ -122,7 +154,7 @@ impl StateStore {
     {
         let decl = declared::<T>(name);
         self.with_repository_publication(|| {
-            self.ensure_node_exists(scope_id, decl.target, &target)?;
+            self.ensure_node_exists(scope_id, decl.target, &target, "--target-id")?;
             self.mutate_jsonl_records(path, |records: &mut Vec<T>| {
                 if decl.target == T::OWNER {
                     anyhow::ensure!(
@@ -135,7 +167,14 @@ impl StateStore {
                 let record = records
                     .iter_mut()
                     .find(|record| record.id() == owner)
-                    .ok_or_else(|| anyhow::anyhow!("{} does not exist", kind_word(T::OWNER)))?;
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "{} {} does not exist ({})",
+                            kind_word(T::OWNER),
+                            owner.as_str(),
+                            owner_flag(T::OWNER)
+                        )
+                    })?;
                 let list = field(record);
                 if !list.contains(&target) {
                     list.push(target);
@@ -164,7 +203,14 @@ impl StateStore {
                 let record = records
                     .iter_mut()
                     .find(|record| record.id() == owner)
-                    .ok_or_else(|| anyhow::anyhow!("{} does not exist", kind_word(T::OWNER)))?;
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "{} {} does not exist ({})",
+                            kind_word(T::OWNER),
+                            owner.as_str(),
+                            owner_flag(T::OWNER)
+                        )
+                    })?;
                 let list = field(record);
                 let position = list
                     .iter()

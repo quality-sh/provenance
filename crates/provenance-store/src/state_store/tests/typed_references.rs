@@ -115,7 +115,10 @@ fn a_refines_cycle_and_a_missing_resolution_are_refused() {
         .apply_typed_spec(&scope, missing)
         .unwrap_err()
         .to_string();
-    assert_eq!(error, "resolution does not exist");
+    assert_eq!(
+        error,
+        "resolution res_missing does not exist (resolution_ids)"
+    );
 }
 
 #[test]
