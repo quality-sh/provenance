@@ -67,6 +67,7 @@ fn shaping_records_are_written_deterministically_and_validate_relationships() {
             status: QuestionStatus::Open,
             answer: None,
             links: Vec::new(),
+            contradicts: None,
             resolution_id: None,
         })
         .unwrap();
@@ -96,6 +97,7 @@ fn shaping_records_are_written_deterministically_and_validate_relationships() {
             status: QuestionStatus::Open,
             answer: None,
             links: Vec::new(),
+            contradicts: None,
             resolution_id: None,
         })
         .unwrap_err()
@@ -181,6 +183,7 @@ fn question_claims_clear_when_answered() {
             status: QuestionStatus::Open,
             answer: None,
             links: Vec::new(),
+            contradicts: None,
             resolution_id: None,
         })
         .unwrap();
@@ -247,6 +250,7 @@ fn question_claims_clear_when_an_update_blocks_them_on_a_human() {
             status: QuestionStatus::Open,
             answer: None,
             links: Vec::new(),
+            contradicts: None,
             resolution_id: None,
         })
         .unwrap();

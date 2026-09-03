@@ -3,12 +3,12 @@ use super::fixtures::*;
 use super::gap_rule_behavior::all_gap_kinds;
 use crate::state_store::{
     AddSourceReferenceInput, CreateEdgeInput, CreateProposalCardInput, CreateQuestionInput,
-    CreateResolutionInput, CreateRuleInput, CreateSourceInput, CreateTopicInput, StateStore,
+    CreateResolutionInput, CreateSourceInput, CreateTopicInput, StateStore,
 };
 use provenance_core::{
     EdgeType, IdeationTarget, IdeationTargetType, NodeType, PromotionState, ProposalTraceability,
     ProposalType, QuestionStatus, RequirementStatus, ResolutionMethod, ResolutionStatus,
-    RuleSeverity, RuleStatus, SourceType, TopicStatus,
+    SourceType, TopicStatus,
 };
 use provenance_macros::verifies;
 
@@ -40,6 +40,7 @@ fn add_topic_question(
             status,
             answer: None,
             links: Vec::new(),
+            contradicts: None,
             resolution_id: None,
         })
         .unwrap();
@@ -110,6 +111,7 @@ fn find_gaps_reports_the_frontier_taxonomy() {
             effective_date: None,
             review_date: None,
             superseded_by: Some(sid("source_missing")),
+            supersedes: Vec::new(),
             origin_thread: None,
             origin_message: None,
         })
@@ -140,7 +142,8 @@ fn find_gaps_reports_the_frontier_taxonomy() {
             scope_id: scope.clone(),
             id: sid("res_decision_without_rule"),
             title: "res_decision_without_rule".into(),
-            requirement_id: Some(sid("req_decided_no_rule")),
+            requirement_ids: vec![sid("req_decided_no_rule")],
+            supersedes: Vec::new(),
             position: "Adopt".into(),
             rationale: "Resolves frontier".into(),
             status: ResolutionStatus::Approved,
@@ -156,44 +159,17 @@ fn find_gaps_reports_the_frontier_taxonomy() {
             origin_message: None,
         })
         .unwrap();
-    store
-        .create_resolution(CreateResolutionInput {
-            scope_id: scope.clone(),
-            id: sid("res_orphan"),
-            title: "res_orphan".into(),
-            requirement_id: None,
-            position: "Adopt".into(),
-            rationale: "Resolves frontier".into(),
-            status: ResolutionStatus::Approved,
-            context: None,
-            enforcement: None,
-            confidence: None,
-            inputs: Vec::new(),
-            made_by: None,
-            approved_by: None,
-            approved_at: None,
-            superseded_by: None,
-            origin_thread: None,
-            origin_message: None,
-        })
-        .unwrap();
-    store
-        .create_rule(CreateRuleInput {
-            scope_id: scope.clone(),
-            id: sid("rule_orphan"),
-            name: None,
-            description: None,
-            requirement_id: None,
-            resolution_id: None,
-            statement: "An unattached rule exists".into(),
-            status: RuleStatus::Active,
-            severity: RuleSeverity::High,
-            source_document: None,
-            source_section: None,
-            origin_thread: None,
-            origin_message: None,
-        })
-        .unwrap();
+    append_record(
+        &crate::shards::resolutions_path(&layout, &scope),
+        &serde_json::json!({"schema_version": 1, "scope_id": scope.as_str(), "id": "res_orphan",
+            "title": "res_orphan", "position": "Adopt", "rationale": "Resolves frontier",
+            "status": "approved", "inputs": [], "review_on": null}),
+    );
+    append_record(
+        &crate::shards::rules_path(&layout, &scope),
+        &serde_json::json!({"schema_version": 1, "scope_id": scope.as_str(), "id": "rule_orphan",
+            "statement": "An unattached rule exists", "status": "active", "severity": "high"}),
+    );
     store
         .create_edge(CreateEdgeInput {
             scope_id: scope.clone(),

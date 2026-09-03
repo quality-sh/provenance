@@ -33,6 +33,10 @@ fn seeded_requirement_store() -> (tempfile::TempDir, StateStore, ScopeId) {
             description: None,
             status: RequirementStatus::Active,
             domain_id: None,
+            refines: None,
+            depends_on: Vec::new(),
+            supersedes: Vec::new(),
+            spawned_by: None,
             origin_thread: None,
             origin_message: None,
         })
@@ -54,6 +58,7 @@ fn seeded_source_requirement_store() -> (tempfile::TempDir, StateStore, ScopeId)
             effective_date: None,
             review_date: None,
             superseded_by: None,
+            supersedes: Vec::new(),
             origin_thread: None,
             origin_message: None,
         })
@@ -71,9 +76,11 @@ mod legacy_coexistence;
 mod manifest;
 mod proposal_surfaces;
 mod proposals;
+mod references;
 mod shaping;
 mod source_requirements;
 mod threads;
 mod typed_adoption;
+mod typed_references;
 mod typed_statement_feedback;
 mod verification_bindings;

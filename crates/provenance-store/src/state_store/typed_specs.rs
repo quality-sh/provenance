@@ -23,7 +23,10 @@ use identity::{
     declaration_ids, normalize_rule_relationships, owned_declaration_ids, requirement_identity,
     rule_declaration_ids, source_identity, validate_references,
 };
-use reconcile::{reconcile_requirements, reconcile_rules, reconcile_sources};
+use reconcile::{
+    ensure_acyclic, ensure_resolutions_exist, reconcile_requirements, reconcile_rules,
+    reconcile_sources,
+};
 pub(in crate::state_store) use rule_addresses::rule_address;
 
 struct CurrentTypedState {
@@ -181,7 +184,10 @@ impl StateStore {
             &input.declared_by,
             input.rules,
             &ids.rules,
+            &ids.requirements,
         )?;
+        ensure_resolutions_exist(self, scope_id, &requirements, &rules)?;
+        ensure_acyclic(&requirements)?;
         let graph = DesiredTypedGraph {
             spec: &spec,
             owner: &input.declared_by,

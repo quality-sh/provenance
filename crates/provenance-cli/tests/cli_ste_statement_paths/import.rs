@@ -28,13 +28,11 @@ fn import_output(repo: &Path, input: &Path, dry_run: bool) -> std::process::Outp
 fn candidate(repo: &Path, path: &Path, statement: &str) {
     let exported_path = path.with_extension("base.json");
     let mut value = export(repo, &exported_path);
-    value["requirements"] = json!([{
-        "schema_version": 1,
-        "scope_id": "default",
-        "id": "req_changed",
-        "statement": statement,
-        "status": "active"
-    }]);
+    for requirement in value["requirements"].as_array_mut().unwrap() {
+        if requirement["id"] == "req_changed" {
+            requirement["statement"] = json!(statement);
+        }
+    }
     value["rules"] = json!([{
         "schema_version": 1,
         "scope_id": "default",

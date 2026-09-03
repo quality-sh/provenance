@@ -22,6 +22,7 @@ pub fn init(repo: &Path) {
         ])
         .assert()
         .success();
+    create_requirement(repo, "req_rule_anchor", "The anchor requirement holds");
 }
 
 pub fn create_requirement(repo: &Path, id: &str, statement: &str) {
@@ -53,6 +54,8 @@ pub fn create_rule(repo: &Path, id: &str, statement: &str) {
             "default",
             "--id",
             id,
+            "--requirement-id",
+            "req_rule_anchor",
             "--statement",
             statement,
         ])

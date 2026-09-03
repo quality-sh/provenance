@@ -30,6 +30,10 @@ fn target(kind: TypedDeclarationKind, id: &str) -> TypedAdoptionTarget {
 
 fn requirement(key: &str, id: Option<&str>, statement: &str) -> TypedRequirementInput {
     TypedRequirementInput {
+        refines: None,
+        depends_on: None,
+        supersedes: None,
+        spawned_by: None,
         key: key.to_string(),
         id: id.map(str::to_string),
         statement: statement.to_string(),
@@ -63,6 +67,10 @@ fn create_unowned_requirement(store: &StateStore, scope: &ScopeId, id: &str, sta
             description: None,
             status: RequirementStatus::Active,
             domain_id: None,
+            refines: None,
+            depends_on: Vec::new(),
+            supersedes: Vec::new(),
+            spawned_by: None,
             origin_thread: None,
             origin_message: None,
         })
@@ -82,6 +90,7 @@ fn create_unowned_source(store: &StateStore, scope: &ScopeId, name: &str) {
             effective_date: None,
             review_date: None,
             superseded_by: None,
+            supersedes: Vec::new(),
             origin_thread: None,
             origin_message: None,
         })
@@ -264,6 +273,8 @@ fn adoption_conflicts_when_definition_or_source_relationship_differs() {
 
     let mut relationship = exact;
     relationship.sources.push(TypedSourceInput {
+        supersedes: None,
+
         key: "policy".to_string(),
         id: Some("source_existing".to_string()),
         name: "Policy".to_string(),
@@ -293,6 +304,8 @@ fn adoption_conflicts_when_source_metadata_differs() {
         vec![target(TypedDeclarationKind::Source, "source_policy")],
     );
     input.sources.push(TypedSourceInput {
+        supersedes: None,
+
         key: "policy".to_string(),
         id: Some("source_policy".to_string()),
         name: "Changed policy".to_string(),
@@ -376,8 +389,8 @@ fn an_exact_unowned_rule_can_be_adopted_without_changing_its_relationship() {
             id: StableId::new("rule_existing").unwrap(),
             name: None,
             description: None,
-            requirement_id: Some(StableId::new("req_owned").unwrap()),
-            resolution_id: None,
+            requirement_ids: vec![StableId::new("req_owned").unwrap()],
+            resolution_ids: Vec::new(),
             statement: "The canonical Rule keeps its identity".to_string(),
             status: RuleStatus::Active,
             severity: RuleSeverity::Medium,
@@ -393,6 +406,8 @@ fn an_exact_unowned_rule_can_be_adopted_without_changing_its_relationship() {
         vec![target(TypedDeclarationKind::Rule, "rule_existing")],
     );
     input.rules.push(TypedRuleInput {
+        resolution_ids: None,
+
         key: "enforcement".to_string(),
         id: Some("rule_existing".to_string()),
         address: None,

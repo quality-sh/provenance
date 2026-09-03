@@ -263,6 +263,21 @@ fn implementation_binding_travels_in_the_exact_graph_and_changes_its_digest() {
     let temp = committed_store();
     provenance(temp.path())
         .args([
+            "requirements",
+            "create",
+            "--repo",
+            ".",
+            "--scope",
+            "default",
+            "--id",
+            "req_runtime",
+            "--statement",
+            "Accepted workflows start",
+        ])
+        .assert()
+        .success();
+    provenance(temp.path())
+        .args([
             "rules",
             "create",
             "--repo",
@@ -271,6 +286,8 @@ fn implementation_binding_travels_in_the_exact_graph_and_changes_its_digest() {
             "default",
             "--id",
             "rule_runtime",
+            "--requirement-id",
+            "req_runtime",
             "--statement",
             "Accepted workflows start",
         ])

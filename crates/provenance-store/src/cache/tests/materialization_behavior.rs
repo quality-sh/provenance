@@ -158,6 +158,7 @@ async fn materialize_state_caches_fog_resolution_method_and_claim_state() {
             status: QuestionStatus::Open,
             answer: None,
             links: Vec::new(),
+            contradicts: None,
             resolution_id: None,
         })
         .unwrap();
@@ -215,6 +216,23 @@ async fn materialize_state_caches_enriched_source_and_resolution_fields() {
             effective_date: Some(1_714_521_600_000),
             review_date: Some(1_717_200_000_000),
             superseded_by: Some(sid("source_sah_2025")),
+            supersedes: Vec::new(),
+            origin_thread: None,
+            origin_message: None,
+        })
+        .unwrap();
+    store
+        .create_requirement(crate::state_store::CreateRequirementInput {
+            scope_id: scope.clone(),
+            id: sid("req_sah"),
+            statement: "SAH applies".into(),
+            description: None,
+            status: provenance_core::RequirementStatus::Active,
+            domain_id: None,
+            refines: None,
+            depends_on: Vec::new(),
+            supersedes: Vec::new(),
+            spawned_by: None,
             origin_thread: None,
             origin_message: None,
         })
@@ -224,7 +242,8 @@ async fn materialize_state_caches_enriched_source_and_resolution_fields() {
             scope_id: scope,
             id: sid("res_sah"),
             title: "SAH extraction".into(),
-            requirement_id: None,
+            requirement_ids: vec![sid("req_sah")],
+            supersedes: Vec::new(),
             position: "Keep as draft extraction".into(),
             rationale: "Needs human review".into(),
             status: ResolutionStatus::Draft,

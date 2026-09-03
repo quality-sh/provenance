@@ -26,6 +26,7 @@ mod orphans;
 mod prime;
 mod proposals;
 mod questions;
+mod references;
 mod repo;
 mod requirements;
 mod resolutions;

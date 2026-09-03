@@ -18,6 +18,8 @@ fn rule_input(requirement_key: &str, statement: &str) -> TypedSpecInput {
         vec![target(TypedDeclarationKind::Rule, "rule_existing")],
     );
     input.rules.push(TypedRuleInput {
+        resolution_ids: None,
+
         key: "enforcement".to_string(),
         id: Some("rule_existing".to_string()),
         address: None,
@@ -60,8 +62,8 @@ fn store_with_unowned_rule() -> (tempfile::TempDir, StateStore, ScopeId) {
             id: StableId::new("rule_existing").unwrap(),
             name: None,
             description: None,
-            requirement_id: Some(StableId::new("req_first").unwrap()),
-            resolution_id: None,
+            requirement_ids: vec![StableId::new("req_first").unwrap()],
+            resolution_ids: Vec::new(),
             statement: "The canonical Rule keeps its identity".to_string(),
             status: RuleStatus::Active,
             severity: RuleSeverity::Medium,
@@ -133,7 +135,8 @@ fn rule_adoption_preserves_a_resolution_relationship_outside_the_typed_surface()
             scope_id: scope.clone(),
             id: StableId::new("req_first").unwrap(),
             title: "Existing decision".to_string(),
-            requirement_id: Some(StableId::new("req_second").unwrap()),
+            requirement_ids: vec![StableId::new("req_second").unwrap()],
+            supersedes: Vec::new(),
             position: "Keep the canonical Rule".to_string(),
             rationale: "The existing decision remains canonical".to_string(),
             status: ResolutionStatus::Proposed,
@@ -155,8 +158,8 @@ fn rule_adoption_preserves_a_resolution_relationship_outside_the_typed_surface()
             id: StableId::new("rule_existing").unwrap(),
             name: None,
             description: None,
-            requirement_id: Some(StableId::new("req_second").unwrap()),
-            resolution_id: Some(StableId::new("req_first").unwrap()),
+            requirement_ids: vec![StableId::new("req_second").unwrap()],
+            resolution_ids: vec![StableId::new("req_first").unwrap()],
             statement: "The canonical Rule keeps its identity".to_string(),
             status: RuleStatus::Active,
             severity: RuleSeverity::Medium,
@@ -184,6 +187,8 @@ fn rule_adoption_preserves_a_resolution_relationship_outside_the_typed_surface()
         vec![target(TypedDeclarationKind::Rule, "rule_existing")],
     );
     input.rules.push(TypedRuleInput {
+        resolution_ids: None,
+
         key: "enforcement".to_string(),
         id: Some("rule_existing".to_string()),
         address: None,

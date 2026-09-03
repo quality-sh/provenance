@@ -4,7 +4,7 @@ use super::{
 };
 use crate::shards;
 use provenance_core::{
-    Boundary, Question, QuestionStatus, ScopeId, StableId, Topic, TopicStatus,
+    Boundary, NodeType, Question, QuestionStatus, ScopeId, StableId, Topic, TopicStatus,
     SUPPORTED_SCHEMA_VERSION,
 };
 use provenance_macros::rule;
@@ -121,6 +121,7 @@ impl StateStore {
             answer,
             mut links,
             resolution_id,
+            contradicts,
         } = input;
         let topic = self
             .list_topics(&scope_id)?
@@ -128,12 +129,10 @@ impl StateStore {
             .find(|topic| topic.id == topic_id)
             .ok_or_else(|| anyhow::anyhow!("topic does not exist"))?;
         if let Some(resolution_id) = &resolution_id {
-            anyhow::ensure!(
-                self.list_resolutions(&scope_id)?
-                    .iter()
-                    .any(|resolution| &resolution.id == resolution_id),
-                "resolution does not exist"
-            );
+            self.ensure_node_exists(&scope_id, NodeType::Resolution, resolution_id)?;
+        }
+        if let Some(contradicted) = &contradicts {
+            self.ensure_node_exists(&scope_id, NodeType::Requirement, contradicted)?;
         }
         self.validate_artifact_links(&scope_id, &links)?;
         sort_artifact_links(&mut links);
@@ -152,8 +151,8 @@ impl StateStore {
                 claimed_at: None,
                 answer,
                 links,
-                contradicts: None,
                 resolution_id,
+                contradicts,
             };
             anyhow::ensure!(
                 !records.iter().any(|record| record.id == question.id),

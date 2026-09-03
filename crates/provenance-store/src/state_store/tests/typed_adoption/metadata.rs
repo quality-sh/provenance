@@ -13,6 +13,7 @@ fn seed_external_metadata(store: &StateStore, scope: &ScopeId) {
             effective_date: Some(1_700_000_000_000),
             review_date: None,
             superseded_by: None,
+            supersedes: Vec::new(),
             origin_thread: None,
             origin_message: None,
         })
@@ -25,6 +26,10 @@ fn seed_external_metadata(store: &StateStore, scope: &ScopeId) {
             description: Some("Metadata authored outside the typed spec".to_string()),
             status: RequirementStatus::Active,
             domain_id: None,
+            refines: None,
+            depends_on: Vec::new(),
+            supersedes: Vec::new(),
+            spawned_by: None,
             origin_thread: None,
             origin_message: None,
         })
@@ -43,8 +48,8 @@ fn seed_external_metadata(store: &StateStore, scope: &ScopeId) {
             id: StableId::new("rule_metadata").unwrap(),
             name: None,
             description: None,
-            requirement_id: Some(StableId::new("req_metadata").unwrap()),
-            resolution_id: None,
+            requirement_ids: vec![StableId::new("req_metadata").unwrap()],
+            resolution_ids: Vec::new(),
             statement: "The canonical Rule keeps its identity".to_string(),
             status: RuleStatus::Active,
             severity: RuleSeverity::High,
@@ -67,6 +72,8 @@ fn adoption_input() -> TypedSpecInput {
             target(TypedDeclarationKind::Rule, "rule_metadata"),
         ],
         sources: vec![TypedSourceInput {
+            supersedes: None,
+
             key: "policy".to_string(),
             id: Some("source_metadata".to_string()),
             name: "Policy".to_string(),
@@ -75,6 +82,11 @@ fn adoption_input() -> TypedSpecInput {
             reference: Some("docs/policy.md".to_string()),
         }],
         requirements: vec![TypedRequirementInput {
+            refines: None,
+            depends_on: None,
+            supersedes: None,
+            spawned_by: None,
+
             key: "canonical".to_string(),
             id: Some("req_metadata".to_string()),
             statement: STATEMENT.to_string(),
@@ -82,6 +94,8 @@ fn adoption_input() -> TypedSpecInput {
             sources: vec!["policy".to_string()],
         }],
         rules: vec![TypedRuleInput {
+            resolution_ids: None,
+
             key: "enforcement".to_string(),
             id: Some("rule_metadata".to_string()),
             address: None,

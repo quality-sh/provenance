@@ -1,3 +1,5 @@
+use super::common::stable_ids;
+use super::references::{self, RuleList};
 use crate::cli::policy::RulesCommand;
 use crate::output;
 use provenance_core::{Rule, RuleSeverity, RuleStatus, ScopeId, StableId};
@@ -93,8 +95,8 @@ pub(super) fn handle(command: RulesCommand) -> anyhow::Result<()> {
                     id: StableId::new(id)?,
                     name,
                     description,
-                    requirement_id: requirement_id.map(StableId::new).transpose()?,
-                    resolution_id: resolution_id.map(StableId::new).transpose()?,
+                    requirement_ids: stable_ids(requirement_id)?,
+                    resolution_ids: stable_ids(resolution_id)?,
                     statement,
                     status: RuleStatus::parse(&status)?,
                     severity: RuleSeverity::parse(&severity)?,
@@ -104,6 +106,12 @@ pub(super) fn handle(command: RulesCommand) -> anyhow::Result<()> {
                     origin_message: origin_message.map(StableId::new).transpose()?,
                 })?;
             output::print(format, &rule)?;
+        }
+        RulesCommand::Requirement { command } => {
+            references::rule_list(RuleList::Requirement, command)?;
+        }
+        RulesCommand::Resolution { command } => {
+            references::rule_list(RuleList::Resolution, command)?;
         }
         RulesCommand::List {
             repo,

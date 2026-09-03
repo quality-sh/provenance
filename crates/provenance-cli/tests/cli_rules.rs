@@ -28,6 +28,21 @@ fn repo_with_rules() -> tempfile::TempDir {
         .success();
     provenance()
         .args([
+            "requirements",
+            "create",
+            "--repo",
+            &repo,
+            "--scope",
+            "default",
+            "--id",
+            "req_overtime",
+            "--statement",
+            "Overtime is paid",
+        ])
+        .assert()
+        .success();
+    provenance()
+        .args([
             "rules",
             "create",
             "--repo",
@@ -36,6 +51,8 @@ fn repo_with_rules() -> tempfile::TempDir {
             "default",
             "--id",
             "rule_overtime",
+            "--requirement-id",
+            "req_overtime",
             "--statement",
             "Pay overtime after the threshold",
             "--severity",
@@ -57,6 +74,8 @@ fn repo_with_rules() -> tempfile::TempDir {
             "default",
             "--id",
             "rule_long_statement",
+            "--requirement-id",
+            "req_overtime",
             "--statement",
             &"w".repeat(140),
             "--status",

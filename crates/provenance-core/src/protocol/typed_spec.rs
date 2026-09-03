@@ -59,6 +59,9 @@ pub struct TypedSourceInput {
     pub url: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reference: Option<String>,
+    /// Keys of older sources in the same document this one replaces.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub supersedes: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -72,6 +75,18 @@ pub struct TypedRequirementInput {
     pub description: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sources: Vec<String>,
+    /// The key of the requirement in the same document this one refines.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refines: Option<String>,
+    /// Keys of requirements in the same document this one depends on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub depends_on: Option<Vec<String>>,
+    /// Keys of older requirements in the same document this one replaces.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub supersedes: Option<Vec<String>>,
+    /// The canonical id of the resolution this requirement came out of.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spawned_by: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -93,6 +108,9 @@ pub struct TypedRuleInput {
     pub description: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub implementation: Option<TypedImplementationInput>,
+    /// Canonical ids of the resolutions that produced this rule.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resolution_ids: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

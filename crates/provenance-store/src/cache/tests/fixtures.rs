@@ -51,6 +51,10 @@ pub fn seeded_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
             description: None,
             status: RequirementStatus::Active,
             domain_id: Some(sid("domain_payroll")),
+            refines: None,
+            depends_on: Vec::new(),
+            supersedes: Vec::new(),
+            spawned_by: None,
             origin_thread: None,
             origin_message: None,
         })
@@ -61,7 +65,8 @@ pub fn seeded_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
             scope_id: scope.clone(),
             id: sid("res_schads_overtime"),
             title: "Overtime interpretation".into(),
-            requirement_id: Some(sid("req_schads_overtime")),
+            requirement_ids: vec![sid("req_schads_overtime")],
+            supersedes: Vec::new(),
             position: "Use award threshold".into(),
             rationale: "Matches source clause".into(),
             status: ResolutionStatus::Proposed,
@@ -83,8 +88,8 @@ pub fn seeded_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
             id: sid("rule_schads_pay_001"),
             name: None,
             description: None,
-            requirement_id: Some(sid("req_schads_overtime")),
-            resolution_id: Some(sid("res_schads_overtime")),
+            requirement_ids: vec![sid("req_schads_overtime")],
+            resolution_ids: vec![sid("res_schads_overtime")],
             statement: "Pay overtime after the threshold".into(),
             status: RuleStatus::Active,
             severity: RuleSeverity::High,
@@ -95,6 +100,16 @@ pub fn seeded_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
         })
         .unwrap();
     (dir, layout, scope)
+}
+
+/// Appends one raw record to a shard, past the writers' checks: the gap
+/// policy reads state a hand edit can leave behind.
+pub fn append_record(path: &camino::Utf8Path, record: &serde_json::Value) {
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let mut contents = std::fs::read_to_string(path).unwrap_or_default();
+    contents.push_str(&record.to_string());
+    contents.push('\n');
+    std::fs::write(path, contents).unwrap();
 }
 
 pub fn create_source(store: &StateStore, scope: &ScopeId, id: &str) {
@@ -110,6 +125,7 @@ pub fn create_source(store: &StateStore, scope: &ScopeId, id: &str) {
             effective_date: None,
             review_date: None,
             superseded_by: None,
+            supersedes: Vec::new(),
             origin_thread: None,
             origin_message: None,
         })
@@ -130,6 +146,10 @@ pub fn create_requirement(
             description: None,
             status,
             domain_id: None,
+            refines: None,
+            depends_on: Vec::new(),
+            supersedes: Vec::new(),
+            spawned_by: None,
             origin_thread: None,
             origin_message: None,
         })

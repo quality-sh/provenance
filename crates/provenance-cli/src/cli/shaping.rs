@@ -1,3 +1,4 @@
+use crate::cli::references::QuestionSingleCommand;
 use crate::output::OutputFormat;
 use camino::Utf8PathBuf;
 use clap::Subcommand;
@@ -122,6 +123,9 @@ pub enum QuestionsCommand {
         links_json: String,
         #[arg(long)]
         resolution_id: Option<String>,
+        /// The requirement that the topic's requirement contradicts.
+        #[arg(long)]
+        contradicts: Option<String>,
         #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
         format: OutputFormat,
     },
@@ -132,6 +136,11 @@ pub enum QuestionsCommand {
         scope: String,
         #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
         format: OutputFormat,
+    },
+    /// Set or clear the requirement this question's requirement contradicts.
+    Contradicts {
+        #[command(subcommand)]
+        command: QuestionSingleCommand,
     },
     /// Update mutable question state after creation.
     Update {

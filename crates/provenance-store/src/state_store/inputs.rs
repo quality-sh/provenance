@@ -21,6 +21,7 @@ pub struct CreateSourceInput {
     pub effective_date: Option<i64>,
     pub review_date: Option<i64>,
     pub superseded_by: Option<StableId>,
+    pub supersedes: Vec<StableId>,
     pub origin_thread: Option<StableId>,
     pub origin_message: Option<StableId>,
 }
@@ -32,6 +33,10 @@ pub struct CreateRequirementInput {
     pub description: Option<String>,
     pub status: RequirementStatus,
     pub domain_id: Option<StableId>,
+    pub refines: Option<StableId>,
+    pub depends_on: Vec<StableId>,
+    pub supersedes: Vec<StableId>,
+    pub spawned_by: Option<StableId>,
     pub origin_thread: Option<StableId>,
     pub origin_message: Option<StableId>,
 }
@@ -87,6 +92,7 @@ pub struct CreateQuestionInput {
     pub answer: Option<String>,
     pub links: Vec<ArtifactLink>,
     pub resolution_id: Option<StableId>,
+    pub contradicts: Option<StableId>,
 }
 
 pub struct UpdateQuestionInput {
@@ -102,7 +108,8 @@ pub struct CreateResolutionInput {
     pub scope_id: ScopeId,
     pub id: StableId,
     pub title: String,
-    pub requirement_id: Option<StableId>,
+    pub requirement_ids: Vec<StableId>,
+    pub supersedes: Vec<StableId>,
     pub position: String,
     pub rationale: String,
     pub status: ResolutionStatus,
@@ -123,8 +130,8 @@ pub struct CreateRuleInput {
     pub id: StableId,
     pub name: Option<String>,
     pub description: Option<String>,
-    pub requirement_id: Option<StableId>,
-    pub resolution_id: Option<StableId>,
+    pub requirement_ids: Vec<StableId>,
+    pub resolution_ids: Vec<StableId>,
     pub statement: String,
     pub status: RuleStatus,
     pub severity: RuleSeverity,

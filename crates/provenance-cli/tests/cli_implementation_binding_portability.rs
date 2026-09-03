@@ -20,6 +20,21 @@ fn init(repo: &Path) {
         ])
         .assert()
         .success();
+    provenance()
+        .args([
+            "requirements",
+            "create",
+            "--repo",
+            repo.to_str().unwrap(),
+            "--scope",
+            "default",
+            "--id",
+            "req_workflows",
+            "--statement",
+            "Accepted workflows start",
+        ])
+        .assert()
+        .success();
 }
 
 fn create_rule(repo: &Path, id: &str) {
@@ -33,6 +48,8 @@ fn create_rule(repo: &Path, id: &str) {
             "default",
             "--id",
             id,
+            "--requirement-id",
+            "req_workflows",
             "--statement",
             "Accepted workflows start",
         ])

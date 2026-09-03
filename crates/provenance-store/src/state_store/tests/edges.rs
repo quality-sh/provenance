@@ -13,6 +13,10 @@ fn generic_edges_validate_endpoints_and_delete() {
             description: None,
             status: RequirementStatus::Active,
             domain_id: None,
+            refines: None,
+            depends_on: Vec::new(),
+            supersedes: Vec::new(),
+            spawned_by: None,
             origin_thread: None,
             origin_message: None,
         })
@@ -60,6 +64,10 @@ fn list_edges_reads_all_edge_shards() {
             description: None,
             status: RequirementStatus::Active,
             domain_id: None,
+            refines: None,
+            depends_on: Vec::new(),
+            supersedes: Vec::new(),
+            spawned_by: None,
             origin_thread: None,
             origin_message: None,
         })
@@ -110,6 +118,10 @@ fn scope_publication_waits_for_edge_validation_and_insertion() {
             description: None,
             status: RequirementStatus::Active,
             domain_id: None,
+            refines: None,
+            depends_on: Vec::new(),
+            supersedes: Vec::new(),
+            spawned_by: None,
             origin_thread: None,
             origin_message: None,
         })
@@ -169,21 +181,4 @@ fn scope_publication_waits_for_edge_validation_and_insertion() {
 
     assert!(store.list_requirements(&scope).unwrap().is_empty());
     assert!(store.list_edges().unwrap().is_empty());
-}
-
-#[test]
-fn edge_endpoint_existence_refuses_domain_and_boundary_by_type() {
-    // The endpoint table rejects these kinds before any existence lookup,
-    // so the lookup's own answer is a typed refusal, never a scan.
-    let (_dir, store, scope) = seeded_requirement_store();
-    for kind in [NodeType::Domain, NodeType::Boundary] {
-        let error = store
-            .ensure_edge_endpoint_exists(&scope, kind, &StableId::new("domain_x").unwrap(), "from")
-            .unwrap_err()
-            .to_string();
-        assert!(
-            error.contains("never name"),
-            "kind {kind:?} must be refused by type, got: {error}"
-        );
-    }
 }

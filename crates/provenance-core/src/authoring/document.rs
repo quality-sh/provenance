@@ -147,6 +147,11 @@ fn collect_requirement(
         collect_rule(rule, &requirement.key, violations, rules, adopt_unowned);
     }
     requirements.push(TypedRequirementInput {
+        refines: None,
+        depends_on: None,
+        supersedes: None,
+        spawned_by: None,
+
         key: requirement.key,
         id: requirement.explicit_id,
         statement: requirement.statement.unwrap_or_default(),
@@ -198,6 +203,7 @@ fn collect_source(
     });
     let declaration = TypedSourceInput {
         name: source.name.unwrap_or_else(|| source.key.clone()),
+        supersedes: None,
         key: source.key,
         id: source.explicit_id,
         kind: source_type.as_str().to_string(),
@@ -235,6 +241,8 @@ fn collect_rule(
     owners.sort();
     owners.dedup();
     let declaration = TypedRuleInput {
+        resolution_ids: None,
+
         key: rule.key,
         id: rule.explicit_id,
         address: None,

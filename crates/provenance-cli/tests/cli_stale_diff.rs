@@ -50,6 +50,22 @@ fn init_repo() -> tempfile::TempDir {
         ])
         .assert()
         .success();
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .args([
+            "requirements",
+            "create",
+            "--repo",
+            dir.path().to_str().unwrap(),
+            "--scope",
+            "default",
+            "--id",
+            "req_anchor",
+            "--statement",
+            "The anchor requirement holds",
+        ])
+        .assert()
+        .success();
     dir
 }
 
@@ -65,6 +81,8 @@ fn create_rule(repo: &Path, id: &str) {
             "default",
             "--id",
             id,
+            "--requirement-id",
+            "req_anchor",
             "--statement",
             "Test rule",
         ])

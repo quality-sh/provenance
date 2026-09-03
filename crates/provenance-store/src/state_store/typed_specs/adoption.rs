@@ -101,8 +101,15 @@ fn decide_sources(
         };
         let address = source_address(&input.spec, &declaration.key)?;
         let target = target(TypedDeclarationKind::Source, id);
-        let desired = desired_source(scope_id, &input.declared_by, &address, id, declaration)?;
-        let reconciled = reconciled_source(existing, desired);
+        let desired = desired_source(
+            scope_id,
+            &input.declared_by,
+            &address,
+            id,
+            declaration,
+            &ids.sources,
+        )?;
+        let reconciled = reconciled_source(existing, desired, declaration, &ids.sources);
         let exact = same_source_definition(existing, &reconciled)
             && relationships.source_matches(id, &current.edges);
         let requested = adopted.contains(&target);
@@ -161,8 +168,9 @@ fn decide_requirements(
             id,
             declaration,
             &ids.sources,
-        );
-        let reconciled = reconciled_requirement(existing, desired);
+            &ids.requirements,
+        )?;
+        let reconciled = reconciled_requirement(existing, desired, declaration, &ids.requirements)?;
         let exact = same_requirement_definition(existing, &reconciled)
             && relationships.requirement_matches(id, &current.edges);
         let requested = adopted.contains(&target);
@@ -214,8 +222,15 @@ fn decide_rules(
             continue;
         };
         let target = target(TypedDeclarationKind::Rule, id);
-        let desired = desired_rule(scope_id, &input.declared_by, &address, id, declaration);
-        let reconciled = reconciled_rule(existing, desired);
+        let desired = desired_rule(
+            scope_id,
+            &input.declared_by,
+            &address,
+            id,
+            declaration,
+            &ids.requirements,
+        )?;
+        let reconciled = reconciled_rule(existing, desired, declaration, &ids.requirements)?;
         let implementation_exact = implementation_matches(
             id,
             declaration.implementation.as_ref(),

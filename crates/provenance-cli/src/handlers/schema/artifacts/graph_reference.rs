@@ -109,6 +109,7 @@ fn closed_record(required: &[&str], properties: Value) -> Value {
 #[allow(clippy::redundant_clone, clippy::too_many_lines)]
 fn export_definitions() -> Value {
     let id = json!({"type": "string", "pattern": "^[a-z0-9_-]+$"});
+    let id_list = json!({"type": "array", "items": id.clone()});
     let version = schema_version();
     let string = json!({"type": "string"});
     let confidence = json!({"type": "number", "minimum": 0, "maximum": 1});
@@ -139,7 +140,8 @@ fn export_definitions() -> Value {
                     "pattern": "^[0-9A-Fa-f]+$"
                 },
                 "effective_date": {"type": "integer"},
-                "review_date": {"type": "integer"}, "superseded_by": id.clone()
+                "review_date": {"type": "integer"}, "superseded_by": id.clone(),
+                "supersedes": id_list.clone()
             })
         ),
         "domain": closed_record(&["schema_version", "scope_id", "id", "name"], json!({
@@ -154,7 +156,9 @@ fn export_definitions() -> Value {
                 "description": string.clone(), "fog": string.clone(),
                 "status": {"enum": ["active", "discovery", "refinement", "resolved"]},
                 "domain_id": id.clone(),
-                "source_refs": {"type": "array", "items": {"$ref": "#/$defs/sourceReference"}}
+                "source_refs": {"type": "array", "items": {"$ref": "#/$defs/sourceReference"}},
+                "refines": id.clone(), "depends_on": id_list.clone(),
+                "supersedes": id_list.clone(), "spawned_by": id.clone()
             })
         ),
         "boundary": closed_record(
@@ -181,7 +185,7 @@ fn export_definitions() -> Value {
                 "topic_id": id.clone(), "requirement_id": id.clone(), "question": string.clone(),
                 "resolution_method": {"enum": ["grill", "prototype", "research", "verify", "task"]},
                 "status": {"enum": ["open", "blocked_on_human", "answered"]},
-                "answer": string.clone(), "resolution_id": id.clone(),
+                "answer": string.clone(), "resolution_id": id.clone(), "contradicts": id.clone(),
                 "links": {"type": "array", "items": {"$ref": "#/$defs/artifactLink"}}
             })
         ),
@@ -194,6 +198,7 @@ fn export_definitions() -> Value {
                 "context": string.clone(), "enforcement": string.clone(), "confidence": confidence,
                 "inputs": {"type": "array", "items": {"$ref": "#/$defs/resolutionInput"}},
                 "made_by": string.clone(), "approved_by": string.clone(), "approved_at": {"type": "integer"},
+                "requirement_ids": id_list.clone(), "supersedes": id_list.clone(),
                 "superseded_by": id.clone(), "review_on": {"type": ["string", "null"]}
             })
         ),
@@ -205,6 +210,7 @@ fn export_definitions() -> Value {
                 "description": string.clone(),
                 "statement": string.clone(), "status": {"enum": ["draft", "review", "active", "deprecated", "archived"]},
                 "severity": {"enum": ["low", "medium", "high", "critical"]},
+                "requirement_ids": id_list.clone(), "resolution_ids": id_list.clone(),
                 "source_document": string.clone(), "source_section": string.clone()
             })
         ),

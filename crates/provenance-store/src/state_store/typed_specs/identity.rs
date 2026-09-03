@@ -237,6 +237,8 @@ mod tests {
         assert_ne!(first["sharing"], second["sharing"]);
 
         let declaration = TypedRuleInput {
+            resolution_ids: None,
+
             key: "expiry".to_string(),
             id: None,
             address: None,

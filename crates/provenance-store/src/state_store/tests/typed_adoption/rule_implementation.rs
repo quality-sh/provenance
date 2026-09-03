@@ -22,8 +22,8 @@ fn seeded_rule_with_implementation() -> (tempfile::TempDir, StateStore, ScopeId)
             id: StableId::new("rule_existing").unwrap(),
             name: None,
             description: None,
-            requirement_id: Some(StableId::new("req_owned").unwrap()),
-            resolution_id: None,
+            requirement_ids: vec![StableId::new("req_owned").unwrap()],
+            resolution_ids: Vec::new(),
             statement: "The canonical Rule keeps its identity".to_string(),
             status: RuleStatus::Active,
             severity: RuleSeverity::Medium,
@@ -69,6 +69,8 @@ fn adoption_input(implementation: Option<TypedImplementationInput>) -> TypedSpec
         vec![target(TypedDeclarationKind::Rule, "rule_existing")],
     );
     input.rules.push(TypedRuleInput {
+        resolution_ids: None,
+
         key: "enforcement".to_string(),
         id: Some("rule_existing".to_string()),
         address: None,

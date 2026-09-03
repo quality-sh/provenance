@@ -1,4 +1,5 @@
-use super::common::resolution_inputs;
+use super::common::{resolution_inputs, stable_ids};
+use super::references::{self, ResolutionList};
 use crate::cli::policy::ResolutionsCommand;
 use crate::output;
 use provenance_core::{ResolutionStatus, ScopeId, StableId};
@@ -15,6 +16,7 @@ pub(super) fn handle(command: ResolutionsCommand) -> anyhow::Result<()> {
             id,
             title,
             requirement_id,
+            supersedes,
             position,
             rationale,
             status,
@@ -37,7 +39,8 @@ pub(super) fn handle(command: ResolutionsCommand) -> anyhow::Result<()> {
                     scope_id: ScopeId::new(scope)?,
                     id: StableId::new(id)?,
                     title,
-                    requirement_id: requirement_id.map(StableId::new).transpose()?,
+                    requirement_ids: stable_ids(requirement_id)?,
+                    supersedes: stable_ids(supersedes)?,
                     position,
                     rationale,
                     status: ResolutionStatus::parse(&status)?,
@@ -54,6 +57,12 @@ pub(super) fn handle(command: ResolutionsCommand) -> anyhow::Result<()> {
                 },
             )?;
             output::print(format, &resolution)?;
+        }
+        ResolutionsCommand::Requirement { command } => {
+            references::resolution_list(ResolutionList::Requirement, command)?;
+        }
+        ResolutionsCommand::Supersedes { command } => {
+            references::resolution_list(ResolutionList::Supersedes, command)?;
         }
     }
     Ok(())

@@ -46,6 +46,10 @@ fn seeded_store() -> (tempfile::TempDir, StateStore, ScopeId) {
             description: None,
             status: RequirementStatus::Active,
             domain_id: Some(sid("domain_payroll")),
+            refines: None,
+            depends_on: Vec::new(),
+            supersedes: Vec::new(),
+            spawned_by: None,
             origin_thread: None,
             origin_message: None,
         })

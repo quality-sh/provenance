@@ -150,6 +150,19 @@ pub fn reference_violations(
                 ));
             }
         }
+        let named = requirement
+            .refines
+            .iter()
+            .chain(requirement.depends_on.iter().flatten())
+            .chain(requirement.supersedes.iter().flatten());
+        for other in named {
+            if !requirement_declared(other) {
+                violations.push(format!(
+                    "requirement `{}` references undeclared requirement `{other}`",
+                    requirement.key
+                ));
+            }
+        }
     }
     for rule in rules {
         for requirement in &rule.requirements {

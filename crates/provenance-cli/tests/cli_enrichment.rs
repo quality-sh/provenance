@@ -211,6 +211,22 @@ fn cli_rejects_a_resolution_input_with_a_blank_reference() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
+            "requirements",
+            "create",
+            "--repo",
+            &repo,
+            "--scope",
+            "default",
+            "--id",
+            "req_sah",
+            "--statement",
+            "SAH applies",
+        ])
+        .assert()
+        .success();
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .args([
             "resolutions",
             "create",
             "--repo",
@@ -219,6 +235,8 @@ fn cli_rejects_a_resolution_input_with_a_blank_reference() {
             "default",
             "--id",
             "res_sah",
+            "--requirement-id",
+            "req_sah",
             "--title",
             "SAH extraction",
             "--position",
@@ -257,6 +275,22 @@ fn cli_rejects_an_imported_resolution_input_with_a_blank_summary() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
+            "requirements",
+            "create",
+            "--repo",
+            &repo,
+            "--scope",
+            "default",
+            "--id",
+            "req_sah",
+            "--statement",
+            "SAH applies",
+        ])
+        .assert()
+        .success();
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .args([
             "resolutions",
             "create",
             "--repo",
@@ -265,6 +299,8 @@ fn cli_rejects_an_imported_resolution_input_with_a_blank_summary() {
             "default",
             "--id",
             "res_sah",
+            "--requirement-id",
+            "req_sah",
             "--title",
             "SAH extraction",
             "--position",

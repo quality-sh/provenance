@@ -96,7 +96,8 @@ fn seed_unsourced_chain(layout: &ProvenanceLayout, scope: &ScopeId) {
             scope_id: scope.clone(),
             id: sid("res_unsourced"),
             title: "Unsourced decision".into(),
-            requirement_id: Some(sid("req_unsourced")),
+            requirement_ids: vec![sid("req_unsourced")],
+            supersedes: Vec::new(),
             position: "Adopt".into(),
             rationale: "Settles the requirement".into(),
             status: ResolutionStatus::Proposed,
@@ -118,8 +119,8 @@ fn seed_unsourced_chain(layout: &ProvenanceLayout, scope: &ScopeId) {
             id: sid("rule_unsourced"),
             name: None,
             description: None,
-            requirement_id: Some(sid("req_unsourced")),
-            resolution_id: Some(sid("res_unsourced")),
+            requirement_ids: vec![sid("req_unsourced")],
+            resolution_ids: vec![sid("res_unsourced")],
             statement: "A rule with no source behind it".into(),
             status: RuleStatus::Active,
             severity: RuleSeverity::High,
@@ -177,8 +178,8 @@ fn requirement_produced_rule_does_not_need_a_resolution() {
             id: sid("rule_half"),
             name: None,
             description: None,
-            requirement_id: Some(sid("req_half")),
-            resolution_id: None,
+            requirement_ids: vec![sid("req_half")],
+            resolution_ids: Vec::new(),
             statement: "A rule that needs no ambiguity resolved".into(),
             status: RuleStatus::Active,
             severity: RuleSeverity::High,
@@ -215,7 +216,8 @@ fn rule_without_a_producing_requirement_remains_orphaned() {
             scope_id: scope.clone(),
             id: sid("res_decided"),
             title: "Decision that does not bind the rule to its requirement".into(),
-            requirement_id: Some(sid("req_decided")),
+            requirement_ids: vec![sid("req_decided")],
+            supersedes: Vec::new(),
             position: "Adopt".into(),
             rationale: "Settles the requirement".into(),
             status: ResolutionStatus::Proposed,
@@ -231,23 +233,12 @@ fn rule_without_a_producing_requirement_remains_orphaned() {
             origin_message: None,
         })
         .unwrap();
-    store
-        .create_rule(CreateRuleInput {
-            scope_id: scope.clone(),
-            id: sid("rule_unattached"),
-            name: None,
-            description: None,
-            requirement_id: None,
-            resolution_id: Some(sid("res_decided")),
-            statement: "A rule with no producing requirement".into(),
-            status: RuleStatus::Active,
-            severity: RuleSeverity::High,
-            source_document: None,
-            source_section: None,
-            origin_thread: None,
-            origin_message: None,
-        })
-        .unwrap();
+    append_record(
+        &crate::shards::rules_path(&layout, &scope),
+        &serde_json::json!({"schema_version": 1, "scope_id": scope.as_str(), "id": "rule_unattached",
+            "statement": "A rule with no producing requirement", "status": "active",
+            "severity": "high", "resolution_ids": ["res_decided"]}),
+    );
 
     let orphans = orphan_rules(&layout, &scope).unwrap();
     assert_eq!(orphans.len(), 1);
@@ -275,46 +266,69 @@ fn seed_rule_with_producers(
         create_requirement(&store, scope, "req_rule", RequirementStatus::Active);
         attach_source(&store, scope, "req_rule", "source_anchor");
     }
-    if has_resolution {
+    if has_requirement {
+        if has_resolution {
+            store
+                .create_resolution(CreateResolutionInput {
+                    scope_id: scope.clone(),
+                    id: sid("res_rule"),
+                    title: "Rule decision".into(),
+                    requirement_ids: vec![sid("req_rule")],
+                    supersedes: Vec::new(),
+                    position: "Adopt".into(),
+                    rationale: "Decides the rule".into(),
+                    status: ResolutionStatus::Proposed,
+                    context: None,
+                    enforcement: None,
+                    confidence: None,
+                    inputs: Vec::new(),
+                    made_by: None,
+                    approved_by: None,
+                    approved_at: None,
+                    superseded_by: None,
+                    origin_thread: None,
+                    origin_message: None,
+                })
+                .unwrap();
+        }
         store
-            .create_resolution(CreateResolutionInput {
+            .create_rule(CreateRuleInput {
                 scope_id: scope.clone(),
-                id: sid("res_rule"),
-                title: "Rule decision".into(),
-                requirement_id: has_requirement.then(|| sid("req_rule")),
-                position: "Adopt".into(),
-                rationale: "Decides the rule".into(),
-                status: ResolutionStatus::Proposed,
-                context: None,
-                enforcement: None,
-                confidence: None,
-                inputs: Vec::new(),
-                made_by: None,
-                approved_by: None,
-                approved_at: None,
-                superseded_by: None,
+                id: sid("rule_under_test"),
+                name: None,
+                description: None,
+                requirement_ids: vec![sid("req_rule")],
+                resolution_ids: has_resolution
+                    .then(|| sid("res_rule"))
+                    .into_iter()
+                    .collect(),
+                statement: "A rule under producer conformance test".into(),
+                status: RuleStatus::Active,
+                severity: RuleSeverity::High,
+                source_document: None,
+                source_section: None,
                 origin_thread: None,
                 origin_message: None,
             })
             .unwrap();
+        return;
     }
-    store
-        .create_rule(CreateRuleInput {
-            scope_id: scope.clone(),
-            id: sid("rule_under_test"),
-            name: None,
-            description: None,
-            requirement_id: has_requirement.then(|| sid("req_rule")),
-            resolution_id: has_resolution.then(|| sid("res_rule")),
-            statement: "A rule under producer conformance test".into(),
-            status: RuleStatus::Active,
-            severity: RuleSeverity::High,
-            source_document: None,
-            source_section: None,
-            origin_thread: None,
-            origin_message: None,
-        })
-        .unwrap();
+    // A rule with no requirement is a hand edit the writers refuse.
+    if has_resolution {
+        append_record(
+            &crate::shards::resolutions_path(layout, scope),
+            &serde_json::json!({"schema_version": 1, "scope_id": scope.as_str(), "id": "res_rule",
+                "title": "Rule decision", "position": "Adopt", "rationale": "Decides the rule",
+                "status": "proposed", "inputs": [], "review_on": null}),
+        );
+    }
+    let resolution_ids: Vec<&str> = has_resolution.then_some("res_rule").into_iter().collect();
+    append_record(
+        &crate::shards::rules_path(layout, scope),
+        &serde_json::json!({"schema_version": 1, "scope_id": scope.as_str(), "id": "rule_under_test",
+            "statement": "A rule under producer conformance test", "status": "active",
+            "severity": "high", "resolution_ids": resolution_ids}),
+    );
 }
 
 /// `orphans` and `gaps` are two consumers of one producer test, so they must
@@ -385,6 +399,10 @@ fn gaps_flag_requirements_without_domain_id_but_not_requirements_with_one() {
             description: None,
             status: RequirementStatus::Active,
             domain_id: None,
+            refines: None,
+            depends_on: Vec::new(),
+            supersedes: Vec::new(),
+            spawned_by: None,
             origin_thread: None,
             origin_message: None,
         })

@@ -17,6 +17,7 @@ fn source_requirement_records_are_written_deterministically() {
             effective_date: None,
             review_date: None,
             superseded_by: None,
+            supersedes: Vec::new(),
             origin_thread: None,
             origin_message: None,
         })
@@ -29,6 +30,10 @@ fn source_requirement_records_are_written_deterministically() {
             description: None,
             status: RequirementStatus::Active,
             domain_id: None,
+            refines: None,
+            depends_on: Vec::new(),
+            supersedes: Vec::new(),
+            spawned_by: None,
             origin_thread: None,
             origin_message: None,
         })
@@ -89,6 +94,7 @@ fn concurrent_source_creates_preserve_all_records() {
                 effective_date: None,
                 review_date: None,
                 superseded_by: None,
+                supersedes: Vec::new(),
                 origin_thread: None,
                 origin_message: None,
             })
@@ -116,6 +122,7 @@ fn concurrent_source_creates_preserve_all_records() {
                     effective_date: None,
                     review_date: None,
                     superseded_by: None,
+                    supersedes: Vec::new(),
                     origin_thread: None,
                     origin_message: None,
                 })
@@ -175,6 +182,7 @@ fn repository_publication_cannot_overwrite_a_concurrent_writer() {
                     effective_date: None,
                     review_date: None,
                     superseded_by: None,
+                    supersedes: Vec::new(),
                     origin_thread: None,
                     origin_message: None,
                 })

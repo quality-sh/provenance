@@ -20,10 +20,15 @@ impl StateStore {
             effective_date,
             review_date,
             superseded_by,
+            supersedes,
             origin_thread,
             origin_message,
         } = input;
         let commit_pin = validate_optional_commit_pin(commit_pin)?;
+        for older in &supersedes {
+            self.ensure_node_exists(&scope_id, NodeType::Source, older)?;
+        }
+        let supersedes = sorted_ids(supersedes);
         let path = shards::sources_path(&self.layout, &scope_id);
         self.mutate_jsonl_records(&path, |records: &mut Vec<Source>| {
             let source = Source {
@@ -40,8 +45,8 @@ impl StateStore {
                 commit_pin,
                 effective_date,
                 review_date,
+                supersedes,
                 superseded_by,
-                supersedes: Vec::new(),
                 origin_thread,
                 origin_message,
             };
@@ -67,18 +72,24 @@ impl StateStore {
             description,
             status,
             domain_id,
+            refines,
+            depends_on,
+            supersedes,
+            spawned_by,
             origin_thread,
             origin_message,
         } = input;
         super::statement_policy::ensure_statement_is_writable(&self.layout, &statement)?;
         if let Some(domain_id) = &domain_id {
-            anyhow::ensure!(
-                self.list_domains(&scope_id)?
-                    .iter()
-                    .any(|domain| &domain.id == domain_id),
-                "domain does not exist"
-            );
+            self.ensure_node_exists(&scope_id, NodeType::Domain, domain_id)?;
         }
+        for parent in refines.iter().chain(&depends_on).chain(&supersedes) {
+            self.ensure_node_exists(&scope_id, NodeType::Requirement, parent)?;
+        }
+        if let Some(resolution) = &spawned_by {
+            self.ensure_node_exists(&scope_id, NodeType::Resolution, resolution)?;
+        }
+        let (depends_on, supersedes) = (sorted_ids(depends_on), sorted_ids(supersedes));
         let path = shards::requirements_path(&self.layout, &scope_id);
         self.mutate_jsonl_records(&path, |records: &mut Vec<Requirement>| {
             let requirement = Requirement {
@@ -94,10 +105,10 @@ impl StateStore {
                 status,
                 domain_id,
                 source_refs: Vec::new(),
-                refines: None,
-                depends_on: Vec::new(),
-                supersedes: Vec::new(),
-                spawned_by: None,
+                refines,
+                depends_on,
+                supersedes,
+                spawned_by,
                 origin_thread,
                 origin_message,
             };
@@ -133,11 +144,17 @@ impl StateStore {
         })
     }
 
-    pub fn add_source_reference(&self, input: AddSourceReferenceInput) -> anyhow::Result<Edge> {
+    pub fn add_source_reference(
+        &self,
+        input: AddSourceReferenceInput,
+    ) -> anyhow::Result<Requirement> {
         self.with_repository_publication(|| self.write_source_reference(input))
     }
 
-    fn write_source_reference(&self, input: AddSourceReferenceInput) -> anyhow::Result<Edge> {
+    fn write_source_reference(
+        &self,
+        input: AddSourceReferenceInput,
+    ) -> anyhow::Result<Requirement> {
         let AddSourceReferenceInput {
             scope_id,
             source_id,
@@ -160,27 +177,29 @@ impl StateStore {
             clause,
         };
         let requirements_path = shards::requirements_path(&self.layout, &scope_id);
-        self.mutate_jsonl_records(&requirements_path, |requirements: &mut Vec<Requirement>| {
-            let requirement = requirements
-                .iter_mut()
-                .find(|requirement| requirement.id == requirement_id)
-                .ok_or_else(|| anyhow::anyhow!("requirement does not exist"))?;
-            if !requirement
-                .source_refs
-                .iter()
-                .any(|existing| existing == &source_ref)
-            {
-                requirement.source_refs.push(source_ref);
-                requirement.source_refs.sort_by(|a, b| {
-                    a.source_id
-                        .as_str()
-                        .cmp(b.source_id.as_str())
-                        .then(a.clause.cmp(&b.clause))
-                });
-                requirements.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
-            }
-            Ok(())
-        })?;
+        let requirement = self.mutate_jsonl_records(
+            &requirements_path,
+            |requirements: &mut Vec<Requirement>| {
+                let requirement = requirements
+                    .iter_mut()
+                    .find(|requirement| requirement.id == requirement_id)
+                    .ok_or_else(|| anyhow::anyhow!("requirement does not exist"))?;
+                if !requirement
+                    .source_refs
+                    .iter()
+                    .any(|existing| existing == &source_ref)
+                {
+                    requirement.source_refs.push(source_ref);
+                    requirement.source_refs.sort_by(|a, b| {
+                        a.source_id
+                            .as_str()
+                            .cmp(b.source_id.as_str())
+                            .then(a.clause.cmp(&b.clause))
+                    });
+                }
+                Ok(requirement.clone())
+            },
+        )?;
         self.add_edge(
             scope_id,
             EdgeType::References,
@@ -188,7 +207,8 @@ impl StateStore {
             source_id,
             NodeType::Requirement,
             requirement_id,
-        )
+        )?;
+        Ok(requirement)
     }
 
     pub fn create_edge(&self, input: CreateEdgeInput) -> anyhow::Result<Edge> {
@@ -290,37 +310,14 @@ impl StateStore {
         id: &StableId,
         side: &str,
     ) -> anyhow::Result<()> {
-        let exists = match node_type {
-            NodeType::Source => self
-                .list_sources(scope_id)?
-                .iter()
-                .any(|source| &source.id == id),
-            NodeType::Requirement => self
-                .list_requirements(scope_id)?
-                .iter()
-                .any(|requirement| &requirement.id == id),
-            NodeType::Resolution => self
-                .list_resolutions(scope_id)?
-                .iter()
-                .any(|resolution| &resolution.id == id),
-            NodeType::Rule => self.list_rules(scope_id)?.iter().any(|rule| &rule.id == id),
-            NodeType::Topic => self
-                .list_topics(scope_id)?
-                .iter()
-                .any(|topic| &topic.id == id),
-            NodeType::Question => self
-                .list_questions(scope_id)?
-                .iter()
-                .any(|question| &question.id == id),
-            // The endpoint table rejects edges that name these kinds before
-            // this lookup runs; the refusal here keeps the answer typed if
-            // a future caller arrives without that check.
-            NodeType::Domain | NodeType::Boundary => anyhow::bail!(
-                "edges never name a {}; the endpoint table rejects them",
-                super::serde_name(&node_type)?
-            ),
-        };
-        anyhow::ensure!(exists, "{side} endpoint does not exist");
-        Ok(())
+        self.ensure_node_exists(scope_id, node_type, id)
+            .map_err(|_| anyhow::anyhow!("{side} endpoint does not exist"))
     }
+}
+
+/// Lists are sets on write: sorted by id, without duplicates.
+pub(super) fn sorted_ids(mut ids: Vec<StableId>) -> Vec<StableId> {
+    ids.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+    ids.dedup();
+    ids
 }

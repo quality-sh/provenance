@@ -212,6 +212,22 @@ fn strict_scan_reports_unverified_and_unimplemented_as_independent_findings() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
+            "requirements",
+            "create",
+            "--repo",
+            repo.to_str().unwrap(),
+            "--scope",
+            "default",
+            "--id",
+            "req_anchor",
+            "--statement",
+            "The anchor requirement holds",
+        ])
+        .assert()
+        .success();
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .args([
             "rules",
             "create",
             "--repo",
@@ -220,6 +236,8 @@ fn strict_scan_reports_unverified_and_unimplemented_as_independent_findings() {
             "default",
             "--id",
             "rule_pays_overtime",
+            "--requirement-id",
+            "req_anchor",
             "--statement",
             "Pay overtime after the threshold",
             "--severity",
@@ -284,6 +302,22 @@ fn partial_scan_does_not_claim_scope_wide_binding_absence() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
+            "requirements",
+            "create",
+            "--repo",
+            repo.to_str().unwrap(),
+            "--scope",
+            "default",
+            "--id",
+            "req_anchor",
+            "--statement",
+            "The anchor requirement holds",
+        ])
+        .assert()
+        .success();
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .args([
             "rules",
             "create",
             "--repo",
@@ -292,6 +326,8 @@ fn partial_scan_does_not_claim_scope_wide_binding_absence() {
             "default",
             "--id",
             "rule_outside_selected_path",
+            "--requirement-id",
+            "req_anchor",
             "--statement",
             "A Rule outside the selected scan territory",
         ])
@@ -417,6 +453,22 @@ fn init_repo(repo: &Path) {
         ])
         .assert()
         .success();
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .args([
+            "requirements",
+            "create",
+            "--repo",
+            repo.to_str().unwrap(),
+            "--scope",
+            "default",
+            "--id",
+            "req_anchor",
+            "--statement",
+            "The anchor requirement holds",
+        ])
+        .assert()
+        .success();
 }
 
 fn create_rule(repo: &Path, id: &str, status: &str) {
@@ -431,6 +483,8 @@ fn create_rule(repo: &Path, id: &str, status: &str) {
             "default",
             "--id",
             id,
+            "--requirement-id",
+            "req_anchor",
             "--statement",
             "Payroll follows the current policy",
             "--status",
