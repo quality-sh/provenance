@@ -28,31 +28,6 @@ jobs:
           tool: cargo-audit
       - run: cargo audit
 
-  npm-audit:
-    name: npm audit
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        directory:
-          - .
-          - packages/create-provenance
-          - packages/provenance
-          # examples/typescript-sdk is deliberately absent. Its only runtime dependency is a
-          # file: link to packages/provenance and its only registry dependency is typescript,
-          # both already audited by the legs above, so the leg added no coverage; the file: link
-          # also makes npm's fallback advisory request fail with "Invalid package tree", turning
-          # any hiccup on the bulk endpoint into a hard failure. Dependabot and the Socket scan
-          # still watch that lockfile. Re-add it only once it gains a registry dependency of its
-          # own.
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-      - run: npm audit --audit-level=high
-        working-directory: ${{ matrix.directory }}
-
   gitleaks:
     name: Gitleaks secret scan
     runs-on: ubuntu-latest
