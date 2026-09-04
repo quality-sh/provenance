@@ -106,7 +106,7 @@ jobs:
   build-cli-platforms:
     name: Build provenance-cli (${{ matrix.target }})
     needs: changes
-    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true'
+    if: github.event_name == 'push'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -115,9 +115,6 @@ jobs:
           - os: blacksmith-4vcpu-windows-2025
             target: x86_64-pc-windows-msvc
             binary: provenance.exe
-          - os: macos-15-intel
-            target: x86_64-apple-darwin
-            binary: provenance
           - os: blacksmith-6vcpu-macos-15
             target: aarch64-apple-darwin
             binary: provenance
@@ -379,7 +376,7 @@ jobs:
   typescript-sdk-packed-install:
     name: Packaged SDK install (${{ matrix.target }})
     needs: [changes, build-cli-linux, build-cli-platforms]
-    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true'
+    if: github.event_name == 'push'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -390,9 +387,6 @@ jobs:
             yarn-pnp: true
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            yarn-pnp: false
-          - os: macos-15-intel
-            target: x86_64-apple-darwin
             yarn-pnp: false
           - os: macos-15
             target: aarch64-apple-darwin
@@ -475,20 +469,20 @@ jobs:
             "$archive" "$temporary/extracted"
           cmp "$temporary/source/file.txt" "$temporary/extracted/file.txt"
       - name: Run ShellCheck
-        if: matrix.os == 'ubuntu-latest'
+        if: runner.os == 'Linux'
         run: shellcheck .github/scripts/*.sh .github/scripts/release-smoke/*.sh
       - name: Install workflow validator
-        if: matrix.os == 'ubuntu-latest'
+        if: runner.os == 'Linux'
         env:
           GOBIN: ${{ runner.temp }}/release-tools
         run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
       - name: Validate workflows
-        if: matrix.os == 'ubuntu-latest'
+        if: runner.os == 'Linux'
         env:
           GOBIN: ${{ runner.temp }}/release-tools
         run: '"$GOBIN/actionlint"'
       - name: Test release smoke helpers
-        if: matrix.os == 'ubuntu-latest'
+        if: runner.os == 'Linux'
         shell: bash
         run: bash .github/scripts/release-smoke/test.sh
 

@@ -7,9 +7,15 @@
     "executable_suffix": "",
     "npm": {
       "name": "@quality-sh/provenance-linux-x64-gnu",
-      "os": ["linux"],
-      "cpu": ["x64"],
-      "libc": ["glibc"]
+      "os": [
+        "linux"
+      ],
+      "cpu": [
+        "x64"
+      ],
+      "libc": [
+        "glibc"
+      ]
     }
   },
   {
@@ -20,20 +26,12 @@
     "executable_suffix": ".exe",
     "npm": {
       "name": "@quality-sh/provenance-win32-x64-msvc",
-      "os": ["win32"],
-      "cpu": ["x64"]
-    }
-  },
-  {
-    "build_os": "macos-latest",
-    "smoke_os": "macos-15-intel",
-    "target": "x86_64-apple-darwin",
-    "archive": "tar.gz",
-    "executable_suffix": "",
-    "npm": {
-      "name": "@quality-sh/provenance-darwin-x64",
-      "os": ["darwin"],
-      "cpu": ["x64"]
+      "os": [
+        "win32"
+      ],
+      "cpu": [
+        "x64"
+      ]
     }
   },
   {
@@ -44,8 +42,12 @@
     "executable_suffix": "",
     "npm": {
       "name": "@quality-sh/provenance-darwin-arm64",
-      "os": ["darwin"],
-      "cpu": ["arm64"]
+      "os": [
+        "darwin"
+      ],
+      "cpu": [
+        "arm64"
+      ]
     }
   }
 ]
