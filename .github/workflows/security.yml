@@ -31,6 +31,11 @@ jobs:
   npm-audit:
     name: npm audit
     runs-on: ubuntu-latest
+    # Hard ceiling for the job, dominated by the audit step below: its worst
+    # case is ~3.5 minutes (3 attempts x 60s fetch timeout + 10s + 20s of
+    # backoff), so 6 minutes is that worst case plus headroom. No registry
+    # behavior can turn this job into a twelve-minute sit again.
+    timeout-minutes: 6
     strategy:
       fail-fast: false
       matrix:
@@ -69,21 +74,19 @@ jobs:
       #     removed from the matrix for unrelated structural reasons; see the
       #     note above).
       #
-      # The NPM_CONFIG_* variables give npm more room before it gives up on a
-      # request and falls back to the retiring endpoint. Defaults are
-      # fetch-retries 2, backoff 10s-60s, fetch-timeout 300s (the root failure
-      # above consumed exactly that 300s window on the bulk request):
-      #   - fetch-timeout doubled to 600s: a slow-but-alive registry gets room
-      #     to answer instead of being abandoned at 5 minutes, while a truly
-      #     hung request still gives up in bounded time and lets the loop
-      #     below start a fresh attempt.
-      #   - fetch-retries raised 2 -> 5 and the backoff bounds pinned at 15s /
-      #     60s: more in-request chances for non-POST fetches with a worst-case
-      #     backoff of ~4 minutes per request. npm's fetch layer never retries
-      #     POST requests (make-fetch-happen), and both audit endpoints are
-      #     POSTs, so for the audit calls themselves these knobs mainly widen
-      #     the per-request window — the loop below is what actually re-runs
-      #     the audit after a transport failure.
+      # The timeout settings are fail-fast, not "give npm more room". npm's
+      # fetch layer never retries POST requests (make-fetch-happen), and both
+      # audit endpoints are POSTs, so fetch-retries and its backoff bounds
+      # cannot help the audit call at all — they are deliberately omitted,
+      # because setting them would only add confusion. The only knob that
+      # matters is fetch-timeout, tightened from the 300s default to 60s: a
+      # healthy registry answers the audit in under a minute (the passing legs
+      # took 8s and 52s), while the failing legs show a hung bulk request
+      # burns the entire window before npm falls back — so a longer timeout
+      # does not make a hung request more likely to answer, it only makes the
+      # wait slower. 60s is generous for a live registry and abandons a hung
+      # request quickly, handing control to the loop below, which is what
+      # actually re-runs the audit after a transport failure.
       #
       # This retry is NOT a bypass. `npm audit` exits non-zero both on registry
       # transport errors and when it finds a vulnerability at or above
@@ -93,18 +96,19 @@ jobs:
       - name: npm audit (up to 3 attempts; retries absorb registry transport errors, not findings)
         working-directory: ${{ matrix.directory }}
         env:
-          NPM_CONFIG_FETCH_RETRIES: "5"
-          NPM_CONFIG_FETCH_RETRY_MINTIMEOUT: "15000"
-          NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT: "60000"
-          NPM_CONFIG_FETCH_TIMEOUT: "600000"
+          # fetch-retries / fetch-retry-mintimeout / fetch-retry-maxtimeout are
+          # deliberately not set: npm never retries POST requests and both
+          # audit endpoints are POSTs, so those knobs cannot help the audit
+          # call and only add confusion (see the longer comment above).
+          NPM_CONFIG_FETCH_TIMEOUT: "60000"
         run: |
-          # Bounded retry: at most 3 attempts with doubling backoff (15s, 30s).
+          # Bounded retry: at most 3 attempts with doubling backoff (10s, 20s).
           # The job fails if the last attempt fails. npm audit also exits
           # non-zero when it finds a real vulnerability, so a genuine finding
           # still fails the build after the attempts — this loop changes when
           # we give up, never what counts as a failure.
           max_attempts=3
-          backoff_seconds=15
+          backoff_seconds=10
           attempt=1
           until npm audit --audit-level=high; do
             audit_status=$?
