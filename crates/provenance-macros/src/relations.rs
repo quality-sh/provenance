@@ -202,6 +202,15 @@ fn flow_variant(flow: &Ident) -> String {
     }
 }
 
+/// The type a field holds decides which references the derive sees.
+///
+/// The compile-time guard recognizes only the literal `StableId`
+/// spelling: a field typed through a type alias or a wrapper, or a
+/// via-struct list with no attribute, falls through here silently and is
+/// not walked. The source-scanning gate
+/// (`provenance-core` `tests/relation_completeness.rs`) catches those by
+/// spelling; it cannot see behind a newtype wrapper either, which its own
+/// comment states.
 fn shape_of(ty: &Type) -> Shape {
     if is_stable_id(ty) {
         return Shape::Single;
