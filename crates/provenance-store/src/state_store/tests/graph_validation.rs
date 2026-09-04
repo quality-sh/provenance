@@ -89,3 +89,58 @@ fn a_refines_cycle_in_state_is_refused_by_the_validator() {
         "refines forms a cycle: req_leave -> req_rates -> req_leave"
     );
 }
+
+fn resolution(scope: &ScopeId, id: &str, supersedes: &str) -> serde_json::Value {
+    serde_json::json!({
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+        "scope_id": scope.as_str(),
+        "id": id,
+        "title": id,
+        "position": "Adopt",
+        "rationale": "A hand-written supersession",
+        "status": "proposed",
+        "requirement_ids": ["req_overtime"],
+        "supersedes": [supersedes],
+    })
+}
+
+#[test]
+fn a_mutual_supersession_between_two_resolutions_is_refused_by_the_validator() {
+    let (_dir, store, scope) = seeded_requirement_store();
+    let path = crate::shards::resolutions_path(&store.layout, &scope);
+    append(&path, &resolution(&scope, "res_a", "res_b"));
+    append(&path, &resolution(&scope, "res_b", "res_a"));
+
+    let error = store.validate_graph_scope(&scope).unwrap_err();
+
+    assert_eq!(
+        error.to_string(),
+        "supersedes forms a cycle: res_a -> res_b -> res_a"
+    );
+}
+
+fn source(scope: &ScopeId, id: &str, supersedes: &str) -> serde_json::Value {
+    serde_json::json!({
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+        "scope_id": scope.as_str(),
+        "id": id,
+        "name": id,
+        "source_type": "policy",
+        "supersedes": [supersedes],
+    })
+}
+
+#[test]
+fn a_mutual_supersession_between_two_sources_is_refused_by_the_validator() {
+    let (_dir, store, scope) = seeded_requirement_store();
+    let path = crate::shards::sources_path(&store.layout, &scope);
+    append(&path, &source(&scope, "source_a", "source_b"));
+    append(&path, &source(&scope, "source_b", "source_a"));
+
+    let error = store.validate_graph_scope(&scope).unwrap_err();
+
+    assert_eq!(
+        error.to_string(),
+        "supersedes forms a cycle: source_a -> source_b -> source_a"
+    );
+}
