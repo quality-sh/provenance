@@ -50,8 +50,74 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-      - run: npm audit --audit-level=high
+      # Why this step wraps the audit in a retry: `npm audit` first POSTs the
+      # lockfile tree to /-/npm/v1/security/advisories/bulk and only falls back
+      # to /-/npm/v1/security/audits/quick when that request fails at the
+      # transport level. The bulk endpoint intermittently hangs or 5xx-s, and
+      # the fallback is an endpoint npm's own notice says is being retired
+      # which also rejects some lockfiles with 400 "Invalid package tree", so
+      # a transient registry hiccup becomes a hard red build with no advisory
+      # involved. Four such failures were observed on 2026-09-04, all registry
+      # transport errors and none reporting a vulnerability:
+      #   - root: 7m7s — bulk request hung out the full 300s fetch timeout,
+      #     then the legacy fallback returned 503 Service Unavailable.
+      #   - root, later the same day: legacy fallback returned 400 Bad Request.
+      #   - root: the same leg passed on a plain re-run in between, with no
+      #     change — the failures are transient, not deterministic.
+      #   - examples/typescript-sdk: bulk request hung for 300s, fallback
+      #     returned 400 "Invalid package tree" (that leg has since been
+      #     removed from the matrix for unrelated structural reasons; see the
+      #     note above).
+      #
+      # The NPM_CONFIG_* variables give npm more room before it gives up on a
+      # request and falls back to the retiring endpoint. Defaults are
+      # fetch-retries 2, backoff 10s-60s, fetch-timeout 300s (the root failure
+      # above consumed exactly that 300s window on the bulk request):
+      #   - fetch-timeout doubled to 600s: a slow-but-alive registry gets room
+      #     to answer instead of being abandoned at 5 minutes, while a truly
+      #     hung request still gives up in bounded time and lets the loop
+      #     below start a fresh attempt.
+      #   - fetch-retries raised 2 -> 5 and the backoff bounds pinned at 15s /
+      #     60s: more in-request chances for non-POST fetches with a worst-case
+      #     backoff of ~4 minutes per request. npm's fetch layer never retries
+      #     POST requests (make-fetch-happen), and both audit endpoints are
+      #     POSTs, so for the audit calls themselves these knobs mainly widen
+      #     the per-request window — the loop below is what actually re-runs
+      #     the audit after a transport failure.
+      #
+      # This retry is NOT a bypass. `npm audit` exits non-zero both on registry
+      # transport errors and when it finds a vulnerability at or above
+      # --audit-level=high (which is unchanged), so a genuine high/critical
+      # finding still fails the job after the three attempts — it just fails a
+      # couple of minutes later. Only transient transport errors are absorbed.
+      - name: npm audit (up to 3 attempts; retries absorb registry transport errors, not findings)
         working-directory: ${{ matrix.directory }}
+        env:
+          NPM_CONFIG_FETCH_RETRIES: "5"
+          NPM_CONFIG_FETCH_RETRY_MINTIMEOUT: "15000"
+          NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT: "60000"
+          NPM_CONFIG_FETCH_TIMEOUT: "600000"
+        run: |
+          # Bounded retry: at most 3 attempts with doubling backoff (15s, 30s).
+          # The job fails if the last attempt fails. npm audit also exits
+          # non-zero when it finds a real vulnerability, so a genuine finding
+          # still fails the build after the attempts — this loop changes when
+          # we give up, never what counts as a failure.
+          max_attempts=3
+          backoff_seconds=15
+          attempt=1
+          until npm audit --audit-level=high; do
+            audit_status=$?
+            if [ "$attempt" -ge "$max_attempts" ]; then
+              echo "::error::npm audit still failing after ${attempt}/${max_attempts} attempts (last exit ${audit_status}). A vulnerability at or above --audit-level=high exits non-zero exactly like a transport error, so fix the finding if one is reported; only re-run if this is registry flakiness (bulk hang, or 4xx/5xx from the retiring quick-audit fallback)."
+              exit "$audit_status"
+            fi
+            echo "npm audit attempt ${attempt}/${max_attempts} exited ${audit_status}; retrying in ${backoff_seconds}s."
+            sleep "$backoff_seconds"
+            attempt=$((attempt + 1))
+            backoff_seconds=$((backoff_seconds * 2))
+          done
+          echo "npm audit passed on attempt ${attempt}/${max_attempts}."
 
   gitleaks:
     name: Gitleaks secret scan
