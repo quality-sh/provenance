@@ -45,7 +45,6 @@
   },
   "optionalDependencies": {
     "@quality-sh/provenance-darwin-arm64": "0.2.2",
-    "@quality-sh/provenance-darwin-x64": "0.2.2",
     "@quality-sh/provenance-linux-x64-gnu": "0.2.2",
     "@quality-sh/provenance-win32-x64-msvc": "0.2.2"
   },

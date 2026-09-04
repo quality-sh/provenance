@@ -70,8 +70,8 @@ class ReleaseContractTests(unittest.TestCase):
         self.assertEqual(outputs["version"], "0.2.2")
         self.assertEqual(outputs["npm-channel"], "latest")
         self.assertEqual(outputs["prerelease"], "false")
-        self.assertEqual(len(build_entries), 4)
-        self.assertEqual(len(smoke_entries), 4)
+        self.assertEqual(len(build_entries), len(TARGETS))
+        self.assertEqual(len(smoke_entries), len(TARGETS))
         self.assertEqual(build["binary"], "provenance")
         self.assertEqual(
             build["archive_name"],

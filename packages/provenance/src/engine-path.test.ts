@@ -9,7 +9,6 @@ import {
 
 const supported: ReadonlyArray<[EngineHost, string]> = [
   [{ platform: "darwin", arch: "arm64" }, "@quality-sh/provenance-darwin-arm64"],
-  [{ platform: "darwin", arch: "x64" }, "@quality-sh/provenance-darwin-x64"],
   [{ platform: "win32", arch: "x64" }, "@quality-sh/provenance-win32-x64-msvc"],
   [{ platform: "linux", arch: "x64", libc: "glibc" }, "@quality-sh/provenance-linux-x64-gnu"],
 ];
