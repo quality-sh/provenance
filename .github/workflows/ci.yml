@@ -469,20 +469,20 @@ jobs:
             "$archive" "$temporary/extracted"
           cmp "$temporary/source/file.txt" "$temporary/extracted/file.txt"
       - name: Run ShellCheck
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'blacksmith-4vcpu-ubuntu-2404'
         run: shellcheck .github/scripts/*.sh .github/scripts/release-smoke/*.sh
       - name: Install workflow validator
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'blacksmith-4vcpu-ubuntu-2404'
         env:
           GOBIN: ${{ runner.temp }}/release-tools
         run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
       - name: Validate workflows
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'blacksmith-4vcpu-ubuntu-2404'
         env:
           GOBIN: ${{ runner.temp }}/release-tools
         run: '"$GOBIN/actionlint"'
       - name: Test release smoke helpers
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'blacksmith-4vcpu-ubuntu-2404'
         shell: bash
         run: bash .github/scripts/release-smoke/test.sh
 
