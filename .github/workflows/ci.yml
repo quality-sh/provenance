@@ -69,12 +69,9 @@ jobs:
               - "package.json"
               - "package-lock.json"
               - "crates/provenance-cli/src/wiki/**"
-      # Pull requests validate the Linux test lane only. Pushes to main add
-      # the platform legs, which nobody waits on but which catch Windows- and
-      # macOS-only breakage before the next release. The packed-install job
-      # keeps its full matrix on every event: its shape is pinned by
-      # release_onboarding_structure.rs to mirror release-targets.json, and
-      # its legs run concurrently, so they set no PR wall-clock cost.
+      # Pull requests run the Test job on Linux only; pushes to main add the
+      # windows/macos legs. The packed-install matrix stays static on every
+      # event: release_onboarding_structure.rs pins it to release-targets.json.
       - name: Select platform matrices for the event
         id: matrices
         run: |
@@ -108,16 +105,14 @@ jobs:
         with:
           toolchain: stable
           components: clippy
-      # One cache per OS, shared by every job that builds the same workspace.
-      # The default per-job keys made eight jobs write eight full target
-      # archives per run, which overflowed the 10 GB repo cache store and
-      # evicted the caches the next run needed, so expensive legs started
-      # cold and rebuilt everything.
+      # Own cache key: clippy saves check-profile artifacts, and the first
+      # saver owns a key, so sharing would hand build jobs a useless cache.
       - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
         with:
           prefix-key: v1
-          shared-key: rust
+          shared-key: clippy
           add-job-id-key: "false"
+          cache-on-failure: true
       - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
   test:
@@ -138,6 +133,7 @@ jobs:
           prefix-key: v1
           shared-key: rust
           add-job-id-key: "false"
+          cache-on-failure: true
       - run: cargo test --workspace --all-features --no-fail-fast
       # Default-features lane: runs the dogfood absence tests, which assert the
       # dev-only command does not exist in feature-less builds.
@@ -165,6 +161,7 @@ jobs:
           prefix-key: v1
           shared-key: rust
           add-job-id-key: "false"
+          cache-on-failure: true
       - run: cargo run -p provenance-cli -- coverage scan --repo . --path crates --scope default --validate-rules --strict
       - name: Validate initializer Rule bindings
         run: cargo run -p provenance-cli -- coverage scan --repo . --path packages/create-provenance --scope default --validate-rules --strict
@@ -198,6 +195,7 @@ jobs:
           prefix-key: v1
           shared-key: rust
           add-job-id-key: "false"
+          cache-on-failure: true
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -255,6 +253,7 @@ jobs:
           prefix-key: v1
           shared-key: rust
           add-job-id-key: "false"
+          cache-on-failure: true
       - run: cargo build -p provenance-cli
       - name: Run Rust fixture
         shell: bash
@@ -358,6 +357,7 @@ jobs:
           prefix-key: v1
           shared-key: rust
           add-job-id-key: "false"
+          cache-on-failure: true
       - uses: actions/setup-node@v7
         with:
           node-version: 22
