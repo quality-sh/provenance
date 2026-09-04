@@ -111,6 +111,7 @@ pub(super) fn validate(aggregate: IdeationAggregate<'_>) -> anyhow::Result<()> {
         aggregate.proposals,
         aggregate.synthesis_packets,
         aggregate.assertions,
+        aggregate.dispositions,
     )
 }
 

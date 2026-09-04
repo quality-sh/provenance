@@ -325,3 +325,49 @@ fn allowlist_gates_disposition_actors_over_every_manifest() {
         }
     }
 }
+
+/// A packet that qualifies its proposal for assertion, disposed of by a person
+/// who names the artifact they ratified. Nothing in the packet blocks
+/// promotion, so the qualification gate does demand an assertion - unless the
+/// acceptance already stands on a ratified artifact, the one case
+/// `disposition_requires_prior_assertion` exempts.
+fn validate_qualified_proposal(carries_ratified_acceptance: bool) -> anyhow::Result<()> {
+    let (contribution, synthesis, proposal, _) = lifecycle_fixture();
+    let contributions = vec![serde_json::from_value(contribution).unwrap()];
+    let synthesis_packets = vec![serde_json::from_value(synthesis).unwrap()];
+    let proposals = vec![serde_json::from_value(proposal).unwrap()];
+    let dispositions = if carries_ratified_acceptance {
+        vec![serde_json::from_value(serde_json::json!({
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "disposition_a",
+            "proposal_id": "proposal_a", "decision": "accepted", "rationale": "Ratified the winner",
+            "actor": {"identity_type": "human", "id": "reviewer"},
+            "canonical_artifact": {"artifact_type": "resolution", "artifact_id": "res_a"}
+        }))
+        .unwrap()]
+    } else {
+        Vec::new()
+    };
+
+    crate::validate_ideation_aggregate(crate::IdeationAggregate {
+        legacy_policy: crate::LegacyProposalPolicy::ModernOnly,
+        disposition_actor_ids: &["reviewer".into()],
+        contributions: &contributions,
+        synthesis_packets: &synthesis_packets,
+        proposals: &proposals,
+        assertions: &[],
+        dispositions: &dispositions,
+    })
+}
+
+#[test]
+#[verifies("rule_qualified_proposal_assertion", examples)]
+fn ratified_acceptance_answers_the_assertion_a_qualifying_packet_demands() {
+    validate_qualified_proposal(true).unwrap();
+}
+
+#[test]
+#[verifies("rule_qualified_proposal_assertion", examples)]
+fn qualifying_packet_still_demands_an_assertion_without_that_acceptance() {
+    let error = validate_qualified_proposal(false).unwrap_err().to_string();
+    assert_eq!(error, "qualifying proposal proposal_a requires an assertion");
+}
