@@ -12,6 +12,9 @@ node_modules/
 # Dolt database files (added by bd init)
 .dolt/
 
+# Copied into packages at pack time from the root LICENSE (single source of truth)
+packages/*/LICENSE
+
 # Riptide artifacts (cloud-synced)
 .humanlayer/tasks/
 
