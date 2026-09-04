@@ -89,6 +89,159 @@ fn a_named_field_is_authoritative_and_an_omitted_field_stays() {
     assert_eq!(emptied.refines, written.refines);
 }
 
+// One test per reference field a typed declaration can carry: a key the
+// document does not declare is a typed refusal, never a lookup panic.
+// `spawned_by` and `resolution_ids` name canonical resolutions and are
+// refused by the resolution check; the rest name declaration keys and are
+// refused by the document check.
+fn spec_with_sources(
+    sources: &serde_json::Value,
+    requirements: &serde_json::Value,
+    rules: &serde_json::Value,
+) -> TypedSpecInput {
+    serde_json::from_value(json!({
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+        "spec": "payroll",
+        "declared_by": "spec://payroll",
+        "sources": sources,
+        "requirements": requirements,
+        "rules": rules,
+    }))
+    .unwrap()
+}
+
+#[test]
+fn an_undeclared_citation_key_is_refused() {
+    let (_dir, store, scope) = initialized_store();
+    let input = spec(
+        &json!([requirement("pay", &json!({"sources": ["ghost"]}))]),
+        &json!([]),
+    );
+    let error = store
+        .apply_typed_spec(&scope, input)
+        .unwrap_err()
+        .to_string();
+    assert_eq!(
+        error,
+        "requirement `pay` references undeclared source `ghost`"
+    );
+}
+
+#[test]
+fn an_undeclared_refines_key_is_refused() {
+    let (_dir, store, scope) = initialized_store();
+    let input = spec(
+        &json!([requirement("pay", &json!({"refines": "ghost"}))]),
+        &json!([]),
+    );
+    let error = store
+        .apply_typed_spec(&scope, input)
+        .unwrap_err()
+        .to_string();
+    assert_eq!(
+        error,
+        "requirement `pay` references undeclared requirement `ghost`"
+    );
+}
+
+#[test]
+fn an_undeclared_depends_on_key_is_refused() {
+    let (_dir, store, scope) = initialized_store();
+    let input = spec(
+        &json!([requirement("pay", &json!({"depends_on": ["ghost"]}))]),
+        &json!([]),
+    );
+    let error = store
+        .apply_typed_spec(&scope, input)
+        .unwrap_err()
+        .to_string();
+    assert_eq!(
+        error,
+        "requirement `pay` references undeclared requirement `ghost`"
+    );
+}
+
+#[test]
+fn an_undeclared_supersedes_key_is_refused() {
+    let (_dir, store, scope) = initialized_store();
+    let input = spec(
+        &json!([requirement("pay", &json!({"supersedes": ["ghost"]}))]),
+        &json!([]),
+    );
+    let error = store
+        .apply_typed_spec(&scope, input)
+        .unwrap_err()
+        .to_string();
+    assert_eq!(
+        error,
+        "requirement `pay` references undeclared requirement `ghost`"
+    );
+}
+
+#[test]
+fn an_undeclared_spawned_by_resolution_is_refused() {
+    let (_dir, store, scope) = initialized_store();
+    let input = spec(
+        &json!([requirement("pay", &json!({"spawned_by": "res_ghost"}))]),
+        &json!([]),
+    );
+    let error = store
+        .apply_typed_spec(&scope, input)
+        .unwrap_err()
+        .to_string();
+    assert_eq!(error, "resolution res_ghost does not exist (spawned_by)");
+}
+
+#[test]
+fn a_source_superseding_an_undeclared_key_is_refused() {
+    let (_dir, store, scope) = initialized_store();
+    let input = spec_with_sources(
+        &json!([{"key": "award", "name": "Award", "kind": "policy", "supersedes": ["ghost"]}]),
+        &json!([requirement("pay", &json!({}))]),
+        &json!([]),
+    );
+    let error = store
+        .apply_typed_spec(&scope, input)
+        .unwrap_err()
+        .to_string();
+    assert_eq!(error, "source `award` references undeclared source `ghost`");
+}
+
+#[test]
+fn a_rule_naming_an_undeclared_requirement_is_refused() {
+    let (_dir, store, scope) = initialized_store();
+    let input = spec(
+        &json!([requirement("pay", &json!({}))]),
+        &json!([{"key": "expiry", "requirements": ["ghost"], "statement": "Pay expires"}]),
+    );
+    let error = store
+        .apply_typed_spec(&scope, input)
+        .unwrap_err()
+        .to_string();
+    assert_eq!(
+        error,
+        "rule `expiry` references undeclared requirement `ghost`"
+    );
+}
+
+#[test]
+fn a_rule_naming_an_undeclared_resolution_is_refused() {
+    let (_dir, store, scope) = initialized_store();
+    let input = spec(
+        &json!([requirement("pay", &json!({}))]),
+        &json!([{"key": "expiry", "requirements": ["pay"], "statement": "Pay expires",
+            "resolution_ids": ["res_ghost"]}]),
+    );
+    let error = store
+        .apply_typed_spec(&scope, input)
+        .unwrap_err()
+        .to_string();
+    assert_eq!(
+        error,
+        "resolution res_ghost does not exist (resolution_ids)"
+    );
+}
+
 #[test]
 fn a_refines_cycle_and_a_missing_resolution_are_refused() {
     let (_dir, store, scope) = initialized_store();

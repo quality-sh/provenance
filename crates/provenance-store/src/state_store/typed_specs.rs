@@ -88,6 +88,7 @@ fn desired_typed_ids(
         &current.rule_addresses,
     )?;
     validate_references(
+        &input.sources,
         &input.requirements,
         &input.rules,
         |key| sources.contains_key(key),

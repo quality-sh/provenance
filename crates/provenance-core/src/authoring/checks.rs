@@ -9,7 +9,7 @@ use std::collections::BTreeSet;
 
 use super::addresses::rule_address;
 use crate::model::DeclarationAddress;
-use crate::protocol::{TypedRequirementInput, TypedRuleInput};
+use crate::protocol::{TypedRequirementInput, TypedRuleInput, TypedSourceInput};
 
 /// Admits source or requirement declarations one at a time, in document
 /// order: a non-empty key, no duplicate key, then the declaration address.
@@ -121,26 +121,49 @@ pub fn normalize_rule_relationships(declarations: &mut [TypedRuleInput]) -> anyh
 /// The wire stops at the first defect; `build()` collects the full list
 /// from [`reference_violations`], the single statement of the check.
 pub fn validate_references(
+    sources: &[TypedSourceInput],
     requirements: &[TypedRequirementInput],
     rules: &[TypedRuleInput],
     source_declared: impl Fn(&str) -> bool,
     requirement_declared: impl Fn(&str) -> bool,
 ) -> anyhow::Result<()> {
-    reference_violations(requirements, rules, source_declared, requirement_declared)
-        .into_iter()
-        .next()
-        .map_or(Ok(()), |first| Err(anyhow::anyhow!(first)))
+    reference_violations(
+        sources,
+        requirements,
+        rules,
+        source_declared,
+        requirement_declared,
+    )
+    .into_iter()
+    .next()
+    .map_or(Ok(()), |first| Err(anyhow::anyhow!(first)))
 }
 
-/// Every undeclared reference in the document, in document order. This
-/// reads only the document's own declared key sets.
+/// Every undeclared reference in the document, in document order.
+///
+/// This reads only the document's own declared key sets. The reference
+/// fields are a source's `supersedes`, a requirement's `sources`,
+/// `refines`, `depends_on`, `supersedes`, and a rule's `requirements`;
+/// `spawned_by` and `resolution_ids` name canonical resolutions and are
+/// checked against state, not the document.
 pub fn reference_violations(
+    sources: &[TypedSourceInput],
     requirements: &[TypedRequirementInput],
     rules: &[TypedRuleInput],
     source_declared: impl Fn(&str) -> bool,
     requirement_declared: impl Fn(&str) -> bool,
 ) -> Vec<String> {
     let mut violations = Vec::new();
+    for source in sources {
+        for older in source.supersedes.iter().flatten() {
+            if !source_declared(older) {
+                violations.push(format!(
+                    "source `{}` references undeclared source `{older}`",
+                    source.key
+                ));
+            }
+        }
+    }
     for requirement in requirements {
         for source in &requirement.sources {
             if !source_declared(source) {

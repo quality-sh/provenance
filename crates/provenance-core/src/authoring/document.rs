@@ -313,6 +313,7 @@ fn check_structure(
         }
     }
     violations.extend(reference_violations(
+        sources,
         requirements,
         rules,
         |key| source_keys.contains(key),

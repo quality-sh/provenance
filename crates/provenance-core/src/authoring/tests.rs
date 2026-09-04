@@ -433,3 +433,43 @@ fn a_source_without_a_source_type_is_rejected() {
         ["source `brief` must declare a source type"]
     );
 }
+
+#[test]
+fn a_source_superseding_an_undeclared_key_is_a_reference_violation() {
+    use crate::authoring::reference_violations;
+    use crate::protocol::{TypedRequirementInput, TypedSourceInput};
+
+    let sources = [TypedSourceInput {
+        key: "award".into(),
+        id: None,
+        name: "Award".into(),
+        kind: "policy".into(),
+        url: None,
+        reference: None,
+        supersedes: Some(vec!["ghost".into()]),
+    }];
+    let requirements = [TypedRequirementInput {
+        key: "pay".into(),
+        id: None,
+        statement: "Overtime is paid".into(),
+        description: None,
+        sources: vec!["award".into()],
+        refines: None,
+        depends_on: None,
+        supersedes: None,
+        spawned_by: None,
+    }];
+
+    let violations = reference_violations(
+        &sources,
+        &requirements,
+        &[],
+        |key| key == "award",
+        |key| key == "pay",
+    );
+
+    assert_eq!(
+        violations,
+        ["source `award` references undeclared source `ghost`"]
+    );
+}
