@@ -6,11 +6,13 @@
 
 use super::StateStore;
 use camino::Utf8Path;
-use provenance_core::model::relations::{declaration_of, kind_word, RelationDecl, RelationOwner};
+use provenance_core::model::relations::{
+    declaration_of, kind_word, required_refusal, RelationDecl, RelationOwner,
+};
 use provenance_core::{NodeType, ScopeId, StableId};
 use serde::{de::DeserializeOwned, Serialize};
 
-fn declared<T: RelationOwner>(name: &str) -> &'static RelationDecl {
+pub(super) fn declared<T: RelationOwner>(name: &str) -> &'static RelationDecl {
     declaration_of(T::relations(), name).expect("every writer names a declared relation")
 }
 
@@ -227,9 +229,8 @@ impl StateStore {
                     })?;
                 anyhow::ensure!(
                     !(decl.required && list.len() == 1),
-                    "a {} needs one {}",
-                    kind_word(T::OWNER),
-                    kind_word(decl.target)
+                    "{}",
+                    required_refusal(decl)
                 );
                 list.remove(position);
                 Ok(record.clone())

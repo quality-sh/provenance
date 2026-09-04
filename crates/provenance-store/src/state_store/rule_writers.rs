@@ -1,6 +1,8 @@
+use super::reference_writers::declared;
 use super::writers::sorted_ids;
 use super::{CreateResolutionInput, CreateRuleInput, StateStore};
 use crate::shards;
+use provenance_core::model::relations::required_refusal;
 use provenance_core::{NodeType, Resolution, Rule, SUPPORTED_SCHEMA_VERSION};
 
 impl StateStore {
@@ -30,7 +32,8 @@ impl StateStore {
         } = input;
         anyhow::ensure!(
             !requirement_ids.is_empty(),
-            "a resolution needs one requirement"
+            "{}",
+            required_refusal(declared::<Resolution>("requirement_ids"))
         );
         for requirement_id in &requirement_ids {
             self.ensure_node_exists(
@@ -100,7 +103,11 @@ impl StateStore {
             origin_message,
         } = input;
         super::statement_policy::ensure_statement_is_writable(&self.layout, &statement)?;
-        anyhow::ensure!(!requirement_ids.is_empty(), "a rule needs one requirement");
+        anyhow::ensure!(
+            !requirement_ids.is_empty(),
+            "{}",
+            required_refusal(declared::<Rule>("requirement_ids"))
+        );
         for requirement_id in &requirement_ids {
             self.ensure_node_exists(
                 &scope_id,

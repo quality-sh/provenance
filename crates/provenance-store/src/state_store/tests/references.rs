@@ -252,7 +252,7 @@ fn a_create_with_no_requirement_is_refused() {
     let (_dir, store, scope) = seeded_requirement_store();
     let error = store
         .create_rule(CreateRuleInput {
-            scope_id: scope,
+            scope_id: scope.clone(),
             id: sid("rule_orphan"),
             name: None,
             description: None,
@@ -268,6 +268,29 @@ fn a_create_with_no_requirement_is_refused() {
         })
         .unwrap_err();
     assert_eq!(error.to_string(), "a rule needs one requirement");
+
+    let error = store
+        .create_resolution(CreateResolutionInput {
+            scope_id: scope,
+            id: sid("res_orphan"),
+            title: "An orphan".into(),
+            requirement_ids: Vec::new(),
+            supersedes: Vec::new(),
+            position: "Adopt".into(),
+            rationale: "An orphan".into(),
+            status: ResolutionStatus::Proposed,
+            context: None,
+            enforcement: None,
+            confidence: None,
+            inputs: Vec::new(),
+            made_by: None,
+            approved_by: None,
+            approved_at: None,
+            origin_thread: None,
+            origin_message: None,
+        })
+        .unwrap_err();
+    assert_eq!(error.to_string(), "a resolution needs one requirement");
 }
 
 #[test]
