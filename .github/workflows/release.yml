@@ -62,6 +62,10 @@ jobs:
         with:
           key: ${{ matrix.target }}
       - run: cargo build --release -p provenance-cli --features scanner --target ${{ matrix.target }}
+      - name: The release binary must not contain dogfood
+        shell: bash
+        run: |
+          ! grep -qa dogfood "target/${{ matrix.target }}/release/${{ matrix.binary }}"
 
       - name: Package Unix archive
         if: matrix.archive == 'tar.gz'
