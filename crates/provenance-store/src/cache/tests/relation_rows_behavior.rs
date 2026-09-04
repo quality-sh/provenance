@@ -68,6 +68,39 @@ async fn materialize_derives_one_row_per_declared_reference() {
     );
 }
 
+/// The loader hand-lists the owner kinds it derives rows from. Every kind
+/// must contribute rows and the links must come through, so deleting any
+/// branch of the loader turns this red instead of leaving the table short.
+#[tokio::test]
+async fn every_owner_kind_and_the_links_derive_relation_rows() {
+    let (_dir, layout, _scope) = owner_row_layout();
+    materialize_state(&layout).await.unwrap();
+    let rows = relation_rows(&layout).await;
+    for owner in [
+        "source",
+        "requirement",
+        "resolution",
+        "rule",
+        "topic",
+        "question",
+        "boundary",
+    ] {
+        assert!(
+            rows.iter().any(|row| row.0 == owner),
+            "no relation rows derive from the {owner} records: {rows:?}"
+        );
+    }
+    assert!(
+        rows.iter().any(|row| row.2 == "links"),
+        "no rows derive from the topic and question links: {rows:?}"
+    );
+    assert!(rows.contains(&row(
+        ("source", "source_schads"),
+        "supersedes",
+        ("source", "source_award_2019")
+    )));
+}
+
 #[tokio::test]
 async fn catch_up_rebuilds_the_rows_of_a_scope_whose_owner_family_moved() {
     let (_dir, layout, scope) = seeded_layout();
