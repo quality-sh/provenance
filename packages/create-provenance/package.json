@@ -7,11 +7,21 @@
     "type": "git",
     "url": "git+https://github.com/quality-sh/provenance.git"
   },
+  "homepage": "https://github.com/quality-sh/provenance#readme",
+  "bugs": "https://github.com/quality-sh/provenance/issues",
+  "keywords": [
+    "provenance",
+    "initializer",
+    "scaffold",
+    "cli",
+    "traceability"
+  ],
   "type": "module",
   "files": [
     "bin",
     "src",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "bin": {
     "create-provenance": "bin/create-provenance.mjs"
@@ -20,6 +30,7 @@
     "node": ">=20"
   },
   "scripts": {
+    "prepack": "node -e \"require('node:fs').copyFileSync('../../LICENSE', 'LICENSE')\"",
     "test": "node --test test/*.test.js",
     "test:manager-smoke": "node test/manager-smoke.js"
   }
