@@ -2,7 +2,7 @@
 name: provenance-grounded-writing
 description: Write specific, evidence-grounded statements for requirements, rules, sources, resolutions, and boundaries — not generic capability language. Use before calling `requirements create`, `rules create`, `sources create`, `resolutions create`, or `boundaries create`, especially for a root or mid-level requirement, a statement merging several candidates, or a resolution's position and rationale.
 ---
-<!-- Installed by provenance 0.2.2; content hash fnv1a64:a0fc3ac080dd8d24 -->
+<!-- Installed by provenance 0.2.2; content hash fnv1a64:c7c2618f923bb82b -->
 
 # Grounded writing
 
@@ -48,8 +48,7 @@ reports rather than hiding.
   ("identity," "reporting," "comms")? Categories aren't requirements.
 - **Evidence.** Is there a real locator for the claim — a source clause or a place in the
   code — or is it explicitly provisional? For graph grounding, attach a requirement source with
-  `requirements source-ref add` (which also creates a `references` edge), or create a valid
-  `references` edge directly; otherwise gap reporting emits `missing_source_refs`. `fog`
+  `requirements source-ref add`; otherwise gap reporting emits `missing_source_refs`. `fog`
   is unstructured text attached to a Requirement, while `unsupported` / `exploratory`
   mark ideation evidence or speculation. The CLI reports grounding gaps; it does not
   prevent an ungrounded Requirement or Rule from being active. A Rule's

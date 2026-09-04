@@ -2,7 +2,7 @@
 name: provenance-fork-tournament
 description: Run a fork tournament when a shaping session hits a genuine design fork — mutually exclusive directions, expensive to reverse, and the human's preference unknowable without concrete artifacts to react to. Implements the `prototype` resolution method from docs/shaping.md - spawn stance-based agents producing competing artifacts as proposals (phase 1, end session), then present them for human disposal and land the decision as a Resolution (phase 2).
 ---
-<!-- Installed by provenance 0.2.2; content hash fnv1a64:1e796d53cf38e8d2 -->
+<!-- Installed by provenance 0.2.2; content hash fnv1a64:b4dd86418cea8313 -->
 
 # Fork tournament (`prototype`)
 
@@ -255,7 +255,9 @@ The promotion gate, with a clock. This is a grill-shaped turn against the artifa
   contested claim or blocking adjudication. `dispositions` is the sole authority for
   `accepted|rejected|deferred`; reject losers with rationale naming the winning resolution.
   The actor ID must be repository-allowlisted and is an audit attestation, not a signature.
-- **Generic `edges create` is available** and requires existing endpoints. Relevant valid
-  directions are `spawns` (resolution → requirement), `produces` (requirement or resolution
-  → rule), and `supersedes` (requirement → requirement). Proposals are not graph edge
-  endpoints, so graft traceability to competing proposals rides on resolution input references.
+- **References are fields on the records, not edges.** A spawned requirement points at the
+  resolution it came out of with `requirements spawned-by set`; a rule names the requirement
+  it serves and the decision that produced it with `rules requirement add` and
+  `rules resolution add`; a replacement is recorded with `requirements supersedes add` and
+  `resolutions supersedes add`. Proposals are not graph endpoints, so graft traceability to
+  competing proposals rides on resolution input references.
