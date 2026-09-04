@@ -22,7 +22,7 @@ jobs:
   # Pushes to main always run every job; the filters only narrow PRs.
   changes:
     name: Detect changes
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     outputs:
       rust: ${{ steps.filter.outputs.rust }}
       sdk: ${{ steps.filter.outputs.sdk }}
@@ -83,7 +83,7 @@ jobs:
     name: Build provenance-cli (linux)
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
@@ -112,10 +112,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: windows-latest
+          - os: blacksmith-4vcpu-windows-2025
             target: x86_64-pc-windows-msvc
             binary: provenance.exe
-          - os: macos-15
+          - os: blacksmith-6vcpu-macos-15
             target: aarch64-apple-darwin
             binary: provenance
     steps:
@@ -141,7 +141,7 @@ jobs:
     name: Format
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
@@ -154,7 +154,7 @@ jobs:
     name: Clippy
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
@@ -198,7 +198,7 @@ jobs:
     name: Default-features CLI test
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
@@ -216,7 +216,7 @@ jobs:
     name: Rule Coverage
     needs: [changes, build-cli-linux]
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -232,7 +232,7 @@ jobs:
     name: Rust SDK example
     needs: [changes, build-cli-linux]
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
@@ -269,7 +269,7 @@ jobs:
     name: TypeScript SDK
     needs: [changes, build-cli-linux]
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -295,7 +295,7 @@ jobs:
     name: TypeScript SDK example
     needs: [changes, build-cli-linux]
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -341,7 +341,7 @@ jobs:
     name: Initializer
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.sdk == 'true'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -424,9 +424,9 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - ubuntu-latest
-          - macos-latest
-          - windows-latest
+          - blacksmith-4vcpu-ubuntu-2404
+          - blacksmith-6vcpu-macos-15
+          - blacksmith-4vcpu-windows-2025
     steps:
       - uses: actions/checkout@v7
         with:
@@ -469,20 +469,20 @@ jobs:
             "$archive" "$temporary/extracted"
           cmp "$temporary/source/file.txt" "$temporary/extracted/file.txt"
       - name: Run ShellCheck
-        if: matrix.os == 'ubuntu-latest'
+        if: runner.os == 'Linux'
         run: shellcheck .github/scripts/*.sh .github/scripts/release-smoke/*.sh
       - name: Install workflow validator
-        if: matrix.os == 'ubuntu-latest'
+        if: runner.os == 'Linux'
         env:
           GOBIN: ${{ runner.temp }}/release-tools
         run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
       - name: Validate workflows
-        if: matrix.os == 'ubuntu-latest'
+        if: runner.os == 'Linux'
         env:
           GOBIN: ${{ runner.temp }}/release-tools
         run: '"$GOBIN/actionlint"'
       - name: Test release smoke helpers
-        if: matrix.os == 'ubuntu-latest'
+        if: runner.os == 'Linux'
         shell: bash
         run: bash .github/scripts/release-smoke/test.sh
 
@@ -509,7 +509,7 @@ jobs:
       - typescript-sdk-packed-install
       - release-smoke-tools
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Check needed job results
         env:
