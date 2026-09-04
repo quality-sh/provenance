@@ -1,8 +1,8 @@
 use super::aggregate_validation::{ensure_supported_schema_version, ASSERTION_KIND};
 use super::{validate_assertion_intrinsic, AssertionRecord, IdeationAggregate};
 use crate::model::{
-    Contribution, IdeationEvidenceType, MaterialClaim, PromotionState, ProposalCard, StableId,
-    SynthesisPacket,
+    disposition_requires_prior_assertion, Contribution, DispositionRecord, IdeationEvidenceType,
+    MaterialClaim, PromotionState, ProposalCard, StableId, SynthesisPacket,
 };
 use provenance_macros::rule;
 use std::collections::{BTreeMap, BTreeSet};
@@ -230,20 +230,34 @@ const fn is_positive_evidence_type(evidence_type: IdeationEvidenceType) -> bool 
     )
 }
 
+/// A proposal a packet qualifies, with no assertion and no decision behind it,
+/// is a hole in the run: the swarm was ready to assert it and never did.
+///
+/// A proposal already disposed of is not that hole. The dispositions decide
+/// which ones those are through the one question both assertion gates ask,
+/// [`disposition_requires_prior_assertion`]: a decision that needs no prior
+/// assertion - a rejection, a deferral, or a person's acceptance naming the
+/// artifact they ratified - closes the proposal on its own terms, and the run
+/// has nothing left to assert.
 pub(super) fn ensure_qualifying_assertions(
     proposals: &[ProposalCard],
     synthesis_packets: &[SynthesisPacket],
     assertions: &[AssertionRecord],
+    dispositions: &[DispositionRecord],
 ) -> anyhow::Result<()> {
     for proposal in proposals {
         let qualifying = synthesis_packets
             .iter()
             .any(|packet| packet_qualifies_proposal(packet, proposal, assertions));
+        let asserted = assertions
+            .iter()
+            .any(|assertion| assertion.proposal_id == proposal.id);
+        let closed_without_assertion = dispositions.iter().any(|disposition| {
+            disposition.proposal_id == proposal.id
+                && !disposition_requires_prior_assertion(disposition)
+        });
         anyhow::ensure!(
-            !qualifying
-                || assertions
-                    .iter()
-                    .any(|assertion| assertion.proposal_id == proposal.id),
+            !qualifying || asserted || closed_without_assertion,
             "qualifying proposal {} requires an assertion",
             proposal.id.as_str()
         );
