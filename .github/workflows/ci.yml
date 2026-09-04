@@ -106,7 +106,7 @@ jobs:
   build-cli-platforms:
     name: Build provenance-cli (${{ matrix.target }})
     needs: changes
-    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true'
+    if: github.event_name == 'push'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -115,9 +115,6 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             binary: provenance.exe
-          - os: macos-15-intel
-            target: x86_64-apple-darwin
-            binary: provenance
           - os: macos-15
             target: aarch64-apple-darwin
             binary: provenance
@@ -379,7 +376,7 @@ jobs:
   typescript-sdk-packed-install:
     name: Packaged SDK install (${{ matrix.target }})
     needs: [changes, build-cli-linux, build-cli-platforms]
-    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true'
+    if: github.event_name == 'push'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -390,9 +387,6 @@ jobs:
             yarn-pnp: true
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            yarn-pnp: false
-          - os: macos-15-intel
-            target: x86_64-apple-darwin
             yarn-pnp: false
           - os: macos-15
             target: aarch64-apple-darwin

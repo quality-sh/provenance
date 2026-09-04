@@ -8,7 +8,6 @@ The release workflow builds and uploads:
 
 - `provenance-<tag>-x86_64-pc-windows-msvc.zip`
 - `provenance-<tag>-x86_64-unknown-linux-gnu.tar.gz`
-- `provenance-<tag>-x86_64-apple-darwin.tar.gz`
 - `provenance-<tag>-aarch64-apple-darwin.tar.gz`
 - `SHA256SUMS`
 

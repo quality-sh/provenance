@@ -3,6 +3,5 @@
 export const enginePackages: ReadonlyMap<string, string> = new Map([
   ["linux-x64-glibc", "@quality-sh/provenance-linux-x64-gnu"],
   ["win32-x64", "@quality-sh/provenance-win32-x64-msvc"],
-  ["darwin-x64", "@quality-sh/provenance-darwin-x64"],
   ["darwin-arm64", "@quality-sh/provenance-darwin-arm64"],
 ]);
