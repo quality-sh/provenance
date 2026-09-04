@@ -50,7 +50,7 @@
     "@quality-sh/provenance-win32-x64-msvc": "0.2.2"
   },
   "dependencies": {
-    "typescript": "^5.9.3"
+    "typescript": "^7.0.2"
   },
   "scripts": {
     "build": "node scripts/generate-release-consumers.js --check && tsc -p tsconfig.json",
