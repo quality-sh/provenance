@@ -115,7 +115,7 @@ jobs:
           - os: blacksmith-4vcpu-windows-2025
             target: x86_64-pc-windows-msvc
             binary: provenance.exe
-          - os: blacksmith-6vcpu-macos-15
+          - os: macos-15-intel
             target: x86_64-apple-darwin
             binary: provenance
           - os: blacksmith-6vcpu-macos-15
