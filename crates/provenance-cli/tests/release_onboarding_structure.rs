@@ -344,21 +344,23 @@ fn release_smoke_waits_for_preflight_and_both_registries() {
 }
 
 #[test]
-fn initializer_smoke_matrix_covers_every_supported_package_manager() {
+fn initializer_smoke_covers_every_supported_package_manager() {
     let workflow = fs::read_to_string(workspace_root().join(".github/workflows/ci.yml")).unwrap();
     let manager_job = workflow
-        .split_once("  initializer-package-managers:")
+        .split_once("  initializer:")
         .unwrap()
         .1
         .split_once("  typescript-sdk-packed-install:")
         .unwrap()
         .0;
 
+    let smoke_loop = manager_job
+        .lines()
+        .map(str::trim)
+        .find(|line| line.starts_with("for manager in "))
+        .expect("the initializer job loops over the package managers");
     for manager in ["npm", "pnpm", "yarn", "bun", "deno", "nub"] {
-        assert!(
-            manager_job.contains(&format!("- manager: {manager}")),
-            "{manager}"
-        );
+        assert!(smoke_loop.contains(manager), "{manager}");
     }
 }
 

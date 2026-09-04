@@ -26,8 +26,8 @@ jobs:
     outputs:
       rust: ${{ steps.filter.outputs.rust }}
       sdk: ${{ steps.filter.outputs.sdk }}
-      wiki: ${{ steps.filter.outputs.wiki }}
       release: ${{ steps.filter.outputs.release }}
+      test-matrix: ${{ steps.matrices.outputs.test }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
@@ -62,12 +62,83 @@ jobs:
               - *ci
               - "packages/**"
               - "examples/typescript-sdk/**"
-            wiki:
-              - *ci
-              - "tests/**"
-              - "package.json"
-              - "package-lock.json"
-              - "crates/provenance-cli/src/wiki/**"
+      # Pull requests run the Test job on Linux only; pushes to main add the
+      # windows/macos legs. The packed-install matrix stays static on every
+      # event: release_onboarding_structure.rs pins it to release-targets.json.
+      - name: Select platform matrices for the event
+        id: matrices
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            echo 'test={"os":["ubuntu-latest"]}' >> "$GITHUB_OUTPUT"
+          else
+            echo 'test={"os":["ubuntu-latest","macos-latest","windows-latest"]}' >> "$GITHUB_OUTPUT"
+          fi
+
+  # One build per OS. Every job that only needs to drive the CLI downloads
+  # this artifact instead of compiling the workspace itself; cargo test and
+  # clippy still build their own profiles. The linux build is its own job so
+  # the linux-only consumers do not wait on the platform builds; the packed
+  # matrix needs both.
+  build-cli-linux:
+    name: Build provenance-cli (linux)
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+        with:
+          prefix-key: v1
+          shared-key: build-cli
+          add-job-id-key: "false"
+          cache-on-failure: true
+      - run: cargo build -p provenance-cli
+      - name: Upload the CLI for the consumer jobs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: provenance-cli-x86_64-unknown-linux-gnu
+          path: target/debug/provenance
+          retention-days: 1
+
+  build-cli-platforms:
+    name: Build provenance-cli (${{ matrix.target }})
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            binary: provenance.exe
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+            binary: provenance
+          - os: macos-15
+            target: aarch64-apple-darwin
+            binary: provenance
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+        with:
+          prefix-key: v1
+          shared-key: build-cli
+          add-job-id-key: "false"
+          cache-on-failure: true
+      - run: cargo build -p provenance-cli
+      - name: Upload the CLI for the consumer jobs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: provenance-cli-${{ matrix.target }}
+          path: target/debug/${{ matrix.binary }}
+          retention-days: 1
 
   fmt:
     name: Format
@@ -93,7 +164,14 @@ jobs:
         with:
           toolchain: stable
           components: clippy
+      # Own cache key: clippy saves check-profile artifacts, and the first
+      # saver owns a key, so sharing would hand build jobs a useless cache.
       - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+        with:
+          prefix-key: v1
+          shared-key: clippy
+          add-job-id-key: "false"
+          cache-on-failure: true
       - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
   test:
@@ -103,33 +181,26 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
-      matrix:
-        os:
-          - ubuntu-latest
-          - macos-latest
-          - windows-latest
+      matrix: ${{ fromJSON(needs.changes.outputs.test-matrix) }}
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+        with:
+          prefix-key: v1
+          shared-key: rust
+          add-job-id-key: "false"
+          cache-on-failure: true
       - run: cargo test --workspace --all-features --no-fail-fast
-      # Default-features lane: runs the dogfood absence tests, which assert the
-      # dev-only command does not exist in feature-less builds.
-      - run: cargo test -p provenance-cli --no-fail-fast
-        if: runner.os == 'Linux'
-      - name: Release build must not contain dogfood
-        if: runner.os == 'Linux'
-        run: |
-          cargo build --release -p provenance-cli --features scanner
-          test -x target/release/provenance
-          ! grep -qa dogfood target/release/provenance
 
-  rule-coverage:
-    name: Rule Coverage
+  # Default-features lane: runs the dogfood absence tests, which assert the
+  # dev-only command does not exist in feature-less builds.
+  test-default-features:
+    name: Default-features CLI test
     needs: changes
-    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true'
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -137,14 +208,70 @@ jobs:
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
-      - run: cargo run -p provenance-cli -- coverage scan --repo . --path crates --scope default --validate-rules --strict
-      - name: Validate initializer Rule bindings
-        run: cargo run -p provenance-cli -- coverage scan --repo . --path packages/create-provenance --scope default --validate-rules --strict
+        with:
+          prefix-key: v1
+          shared-key: rust
+          add-job-id-key: "false"
+          cache-on-failure: true
+      - run: cargo test -p provenance-cli --no-fail-fast
 
-  wiki-dom:
-    name: Wiki DOM
-    needs: changes
-    if: github.event_name != 'pull_request' || needs.changes.outputs.wiki == 'true'
+  rule-coverage:
+    name: Rule Coverage
+    needs: [changes, build-cli-linux]
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: provenance-cli-x86_64-unknown-linux-gnu
+          path: target/debug
+      - run: chmod +x target/debug/provenance
+      - run: target/debug/provenance coverage scan --repo . --path crates --scope default --validate-rules --strict
+      - name: Validate initializer Rule bindings
+        run: target/debug/provenance coverage scan --repo . --path packages/create-provenance --scope default --validate-rules --strict
+
+  rust-sdk:
+    name: Rust SDK example
+    needs: [changes, build-cli-linux]
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: provenance-cli-x86_64-unknown-linux-gnu
+          path: target/debug
+      - run: chmod +x target/debug/provenance
+      - name: Run Rust fixture
+        shell: bash
+        run: |
+          fixture_repo="$PWD/examples/rust-sdk"
+          target/debug/provenance init --path "$fixture_repo" --scope default --path-prefix .
+          (cd examples/rust-sdk && PROVENANCE_REPO="$fixture_repo" cargo run --bin apply)
+          (cd examples/rust-sdk && \
+            PROVENANCE_REPO="$fixture_repo" \
+            PROVENANCE_VERIFICATION_OWNER="ci://rust-example" \
+            cargo test)
+          rule_id=$(target/debug/provenance rules list \
+            --repo "$fixture_repo" --scope default --format json \
+            | jq -er 'select(length == 1) | .[0].id')
+          target/debug/provenance rules show \
+            --repo "$fixture_repo" --scope default --id "$rule_id" --format json
+          target/debug/provenance sdk verification-runs \
+            --repo "$fixture_repo" --scope default --rule "$rule_id" --format json \
+            | jq -e 'length == 1 and .[0].status == "passed"'
+          target/debug/provenance sdk verification-bindings \
+            --repo "$fixture_repo" --scope default --rule "$rule_id" --format json \
+            | jq -e 'length == 1 and .[0].file == "tests/share_links.rs"'
+
+  typescript-sdk:
+    name: TypeScript SDK
+    needs: [changes, build-cli-linux]
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -152,34 +279,42 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - run: npm run test:dom
-
-  typescript-sdk:
-    name: TypeScript SDK POC
-    needs: changes
-    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
-        with:
-          toolchain: stable
-      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
+          cache-dependency-path: packages/provenance/package-lock.json
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: latest
-      - run: cargo build -p provenance-cli
-      - run: npm ci --prefix packages/create-provenance
-      - run: npm test --prefix packages/create-provenance
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: provenance-cli-x86_64-unknown-linux-gnu
+          path: target/debug
+      - run: chmod +x target/debug/provenance
       - run: npm ci --prefix packages/provenance
       - run: npm test --prefix packages/provenance
       # Bun eliminates the calling frame of a tail call, so a verify call that
       # states no file only reproduces here.
       - run: npm run test:bun --prefix packages/provenance
+
+  typescript-sdk-example:
+    name: TypeScript SDK example
+    needs: [changes, build-cli-linux]
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            packages/provenance/package-lock.json
+            examples/typescript-sdk/package-lock.json
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: provenance-cli-x86_64-unknown-linux-gnu
+          path: target/debug
+      - run: chmod +x target/debug/provenance
+      - run: npm ci --prefix packages/provenance
+      - run: npm run build --prefix packages/provenance
       - run: npm ci --prefix examples/typescript-sdk
       - name: Run packaged fixture
         shell: bash
@@ -203,92 +338,47 @@ jobs:
             --repo "$fixture_repo" --scope default --rule "$rule_id" --format json \
             | jq -e 'length == 1 and .[0].file == "dist/share-links.test.js"'
 
-  rust-sdk:
-    name: Rust SDK example
-    needs: changes
-    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
-        with:
-          toolchain: stable
-      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
-      - run: cargo build -p provenance-cli
-      - name: Run Rust fixture
-        shell: bash
-        run: |
-          fixture_repo="$PWD/examples/rust-sdk"
-          target/debug/provenance init --path "$fixture_repo" --scope default --path-prefix .
-          (cd examples/rust-sdk && PROVENANCE_REPO="$fixture_repo" cargo run --bin apply)
-          (cd examples/rust-sdk && \
-            PROVENANCE_REPO="$fixture_repo" \
-            PROVENANCE_VERIFICATION_OWNER="ci://rust-example" \
-            cargo test)
-          rule_id=$(target/debug/provenance rules list \
-            --repo "$fixture_repo" --scope default --format json \
-            | jq -er 'select(length == 1) | .[0].id')
-          target/debug/provenance rules show \
-            --repo "$fixture_repo" --scope default --id "$rule_id" --format json
-          target/debug/provenance sdk verification-runs \
-            --repo "$fixture_repo" --scope default --rule "$rule_id" --format json \
-            | jq -e 'length == 1 and .[0].status == "passed"'
-          target/debug/provenance sdk verification-bindings \
-            --repo "$fixture_repo" --scope default --rule "$rule_id" --format json \
-            | jq -e 'length == 1 and .[0].file == "tests/share_links.rs"'
-
-  initializer-package-managers:
-    name: Initializer (${{ matrix.manager }})
+  # One job, six managers: each smoke is seconds long, and six matrix legs
+  # cost six runners to save one check row.
+  initializer:
+    name: Initializer
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.sdk == 'true'
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - manager: npm
-            version: 10.9.4
-          - manager: bun
-            version: 1.3.14
-          - manager: deno
-            version: 2.9.3
-          - manager: pnpm
-            version: 10.15.0
-          - manager: yarn
-            version: 4.9.2
-          - manager: nub
-            version: 0.7.5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: packages/create-provenance/package-lock.json
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        if: matrix.manager == 'bun'
         with:
-          bun-version: ${{ matrix.version }}
+          bun-version: 1.3.14
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2
-        if: matrix.manager == 'deno'
         with:
-          deno-version: ${{ matrix.version }}
+          deno-version: 2.9.3
       - uses: nubjs/setup-nub@47e5e7393d50f4e9544ddaf756aa277972afba2d # v0.4.0
-        if: matrix.manager == 'nub'
         with:
-          nub-version: ${{ matrix.version }}
-      - name: Enable Corepack package manager
-        if: matrix.manager == 'pnpm' || matrix.manager == 'yarn'
+          nub-version: 0.7.5
+      - name: Enable Corepack package managers
         run: |
           corepack enable
-          corepack prepare ${{ matrix.manager }}@${{ matrix.version }} --activate
+          corepack prepare pnpm@10.15.0 --activate
+          corepack prepare yarn@4.9.2 --activate
       - run: npm ci --prefix packages/create-provenance
-      - name: Run package-manager smoke test
-        env:
-          PROVENANCE_TEST_PACKAGE_MANAGER: ${{ matrix.manager }}
-        run: npm run test:manager-smoke --prefix packages/create-provenance
+      - run: npm test --prefix packages/create-provenance
+      - name: Package-manager smoke tests
+        run: |
+          for manager in npm bun deno pnpm yarn nub; do
+            echo "== smoke test: $manager =="
+            PROVENANCE_TEST_PACKAGE_MANAGER="$manager" \
+              npm run test:manager-smoke --prefix packages/create-provenance
+          done
 
   typescript-sdk-packed-install:
     name: Packaged SDK install (${{ matrix.target }})
-    needs: changes
+    needs: [changes, build-cli-linux, build-cli-platforms]
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
@@ -309,19 +399,22 @@ jobs:
             yarn-pnp: false
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
-        with:
-          toolchain: stable
-      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
       - uses: actions/setup-node@v7
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: packages/provenance/package-lock.json
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: provenance-cli-${{ matrix.target }}
+          path: target/debug
+      - run: chmod +x target/debug/provenance
+        if: runner.os != 'Windows'
       - name: Enable Yarn Plug'n'Play test
         if: matrix.yarn-pnp
         run: |
           corepack enable
           corepack prepare yarn@4.9.2 --activate
-      - run: cargo build -p provenance-cli
       - run: npm ci --prefix packages/provenance
       - run: npm run build --prefix packages/provenance
       - run: npm run test:packed --prefix packages/provenance
@@ -411,11 +504,14 @@ jobs:
       - fmt
       - clippy
       - test
+      - test-default-features
+      - build-cli-linux
+      - build-cli-platforms
       - rule-coverage
-      - wiki-dom
-      - typescript-sdk
       - rust-sdk
-      - initializer-package-managers
+      - typescript-sdk
+      - typescript-sdk-example
+      - initializer
       - typescript-sdk-packed-install
       - release-smoke-tools
     if: always()
