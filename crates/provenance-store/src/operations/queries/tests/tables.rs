@@ -2,10 +2,10 @@
 //! store wrote: byte for byte, past the bind limit, by kind rank, and
 //! with retired rows only when asked.
 
-use super::comparison::test_stores::TestStore;
-use crate::cache::read::kind_of;
+use super::comparison::test_stores::{self, TestStore};
+use crate::cache::read::{column_values, kind_of, select_columns};
 use crate::cache::tests::fixtures::pinned_store::TWIN_ID;
-use crate::cache::{catch_up_state, open_cache};
+use crate::cache::{catch_up_state, open_cache, quoted};
 use crate::operations::reader::ReadSnapshot;
 use provenance_core::model::ProjectionRow;
 use provenance_core::{
@@ -86,6 +86,83 @@ async fn a_stored_record_reads_back_as_its_canonical_bytes() {
     )
     .await;
     drop(snapshot);
+    pool.close().await;
+}
+
+/// Every stored row of one kind reads back as the values the derive
+/// encoded, storage class included. The record's bytes cannot show a
+/// class swap: serde reads the JSON `1` an integer column gives into an
+/// `f64` field as `1.0` all the same, so this compares the values
+/// themselves.
+async fn assert_rows_read_as_written<K: ProjectionRow + Serialize>(
+    pool: &SqlitePool,
+    scope: &str,
+    records: Vec<K>,
+) {
+    assert!(
+        !records.is_empty(),
+        "{}: the store must seed the kind",
+        K::TABLE
+    );
+    let sql = format!(
+        "SELECT {} FROM {} WHERE scope_id = ? AND id = ?",
+        select_columns::<K>(),
+        quoted(K::TABLE)
+    );
+    for record in records {
+        let id = serde_json::to_value(&record).unwrap()["id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let row = sqlx::query(&sql)
+            .bind(scope)
+            .bind(&id)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            column_values::<K>(&row).unwrap(),
+            record.row().unwrap(),
+            "{}: {id} reads back in other storage classes",
+            K::TABLE
+        );
+    }
+}
+
+/// The repository's own state holds a real in a `REAL` column (a
+/// resolution confidence of one) that no seeded fixture writes, so this is
+/// the store-side twin of `a_round_confidence_stays_a_float`: an integral
+/// real read back as an integer fails here.
+#[tokio::test]
+async fn every_stored_row_of_the_repository_state_reads_back_as_written() {
+    let store = test_stores::repository_state();
+    let state = store.state_store();
+    let scope = &store.scope;
+    let resolutions = state.list_resolutions(scope).unwrap();
+    assert!(
+        resolutions
+            .iter()
+            .any(|resolution| resolution.confidence == Some(1.0)),
+        "the repository state must hold a resolution with confidence 1.0"
+    );
+    catch_up_state(&store.layout()).await.unwrap();
+    let pool = open_cache(&store.layout()).await.unwrap();
+    let word = scope.as_str();
+    assert_rows_read_as_written::<Source>(&pool, word, state.list_sources(scope).unwrap()).await;
+    assert_rows_read_as_written::<Requirement>(
+        &pool,
+        word,
+        state.list_requirements(scope).unwrap(),
+    )
+    .await;
+    assert_rows_read_as_written::<Resolution>(&pool, word, resolutions).await;
+    assert_rows_read_as_written::<Rule>(&pool, word, state.list_rules(scope).unwrap()).await;
+    assert_rows_read_as_written::<Topic>(&pool, word, state.list_topics(scope).unwrap()).await;
+    assert_rows_read_as_written::<Question>(&pool, word, state.list_questions(scope).unwrap())
+        .await;
+    assert_rows_read_as_written::<Domain>(&pool, word, state.list_domains(scope).unwrap()).await;
+    assert_rows_read_as_written::<Boundary>(&pool, word, state.list_boundaries(scope).unwrap())
+        .await;
     pool.close().await;
 }
 

@@ -11,7 +11,7 @@ use sqlx::sqlite::{SqliteRow, SqliteValueRef};
 use sqlx::{Decode, Row, TypeInfo, ValueRef};
 
 /// The quoted column list of one record type, for a select.
-pub(super) fn select_columns<K: ProjectionRow>() -> String {
+pub fn select_columns<K: ProjectionRow>() -> String {
     K::COLUMNS
         .iter()
         .map(|column| quoted(column))
@@ -21,10 +21,15 @@ pub(super) fn select_columns<K: ProjectionRow>() -> String {
 
 /// The record a row holds, read column by column.
 pub(super) fn decode<K: ProjectionRow>(row: &SqliteRow) -> anyhow::Result<K> {
-    let values = (0..K::COLUMNS.len())
+    K::from_row(&column_values::<K>(row)?)
+}
+
+/// The row's values in `COLUMNS` order, each in the storage class the
+/// database reports.
+pub fn column_values<K: ProjectionRow>(row: &SqliteRow) -> anyhow::Result<Vec<ColumnValue>> {
+    (0..K::COLUMNS.len())
         .map(|index| column_value(row, index))
-        .collect::<anyhow::Result<Vec<_>>>()?;
-    K::from_row(&values)
+        .collect()
 }
 
 fn column_value(row: &SqliteRow, index: usize) -> anyhow::Result<ColumnValue> {
