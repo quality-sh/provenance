@@ -234,3 +234,27 @@ async fn annotate_only_refuses_a_half_migrated_database() {
     let healed = get_through(&store, ReadPolicy::default()).await.unwrap();
     assert!(healed.result.found, "catch-up heals the window and answers");
 }
+
+/// Family digest rows are one per scope, so a manifest that names no
+/// scope materializes a revision beside no digest rows. That projection
+/// is complete, and `annotate_only` answers over it.
+#[tokio::test]
+#[verifies("rule_annotate_only_refuses_a_half_migrated_projection", examples)]
+async fn a_projection_with_no_scope_is_not_half_migrated() {
+    let store = test_stores::seeded_queries();
+    catch_up_state(&store.layout()).await.unwrap();
+    let manifest_path = store.layout().manifest_path();
+    let mut manifest: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&manifest_path).unwrap()).unwrap();
+    manifest["scopes"] = serde_json::json!([]);
+    std::fs::write(&manifest_path, serde_json::to_string(&manifest).unwrap()).unwrap();
+    catch_up_state(&store.layout()).await.unwrap();
+    let answer = get_through(
+        &store,
+        ReadPolicy::with_freshness(FreshnessPolicy::AnnotateOnly),
+    )
+    .await
+    .expect("a complete projection with no scope answers");
+    assert!(!answer.result.found, "the scope is gone with its rows");
+    assert_eq!(answer.stamp.policy, StampPolicy::AnnotateOnly);
+}

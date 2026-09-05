@@ -13,6 +13,7 @@ use crate::layout::ProvenanceLayout;
 use crate::migrations;
 use crate::operations::read_policy::FreshnessPolicy;
 use crate::publication::publication_guard;
+use crate::state_store::StateStore;
 use provenance_core::protocol::StampPolicy;
 use provenance_macros::rule;
 use sqlx::SqlitePool;
@@ -97,7 +98,9 @@ async fn stored(layout: &ProvenanceLayout, error: anyhow::Error) -> anyhow::Resu
 /// at all is behind too. So is a half-migrated file: a migration commits
 /// and forgets the family digests, and the rebuild that refills the
 /// tables runs after it, so a revision beside no digests means the tables
-/// are empty and no freshness step will run to fill them.
+/// are empty and no freshness step will run to fill them. Digest rows are
+/// one per scope, so a manifest that names no scope has none to lose and
+/// is not read as that window.
 #[rule("rule_annotate_only_refuses_a_half_migrated_projection")]
 async fn ensure_current_schema(pool: &SqlitePool, layout: &ProvenanceLayout) -> anyhow::Result<()> {
     let behind = ReadRefusal::SchemaBehind {
@@ -126,7 +129,12 @@ async fn ensure_current_schema(pool: &SqlitePool, layout: &ProvenanceLayout) -> 
     )
     .fetch_one(pool)
     .await?;
-    if half_migrated {
+    if half_migrated
+        && !StateStore::new(layout.clone())
+            .manifest()?
+            .scopes
+            .is_empty()
+    {
         return Err(ReadRefusal::HalfMigrated {
             database: layout.cache_db_path(),
         }
