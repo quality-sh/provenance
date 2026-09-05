@@ -150,13 +150,22 @@ async fn resolve_symbol_on_a_missing_file_answers_bindings_only() {
 async fn resolve_symbol_scans_only_a_repository_relative_path() {
     let store = store_with_rule();
     bind(&store, "bind_dotted", "./src/pay.rs");
-    let outside = store.root.parent().unwrap().join("outside_pay.rs");
-    std::fs::write(&outside, "#[rule(\"rule_overtime\")]\nfn outside() {}\n").unwrap();
+    // A sibling directory beside the store, gone with the test.
+    let beside = tempfile::tempdir_in(store.root.parent().unwrap()).unwrap();
+    std::fs::write(
+        beside.path().join("outside_pay.rs"),
+        "#[rule(\"rule_overtime\")]\nfn outside() {}\n",
+    )
+    .unwrap();
+    let climbing = format!(
+        "../{}/outside_pay.rs",
+        beside.path().file_name().unwrap().to_str().unwrap()
+    );
     let absolute = store.root.join("src/pay.rs");
     for (file, expected) in [
         ("./src/pay.rs", vec!["rule_overtime"]),
         (absolute.as_str(), Vec::new()),
-        ("../outside_pay.rs", Vec::new()),
+        (climbing.as_str(), Vec::new()),
         ("src/../src/pay.rs", Vec::new()),
     ] {
         let answer =
@@ -177,5 +186,4 @@ async fn resolve_symbol_scans_only_a_repository_relative_path() {
         .unwrap();
         assert!(with_line.result.rules.is_empty(), "{file}: no scanned site");
     }
-    std::fs::remove_file(outside).unwrap();
 }

@@ -136,11 +136,12 @@ projection up to date under the publication lock before the read;
 `annotate_only`, which answers at the stored revision; or `catch_up_failed`,
 when the step refused and the answer is at the stored revision with the error
 text in `freshness_error`. The commands run `catch_up`; no flag selects a
-policy yet, and the `read.freshness_policy` setting is reserved for that. `attested` names the projection tables behind the
-answer. `live` names what the stamp does not cover, from a closed list:
-`canonical` (canonical shards), `scanned_sites` (a scan of the working tree),
-`verification_runs` (the run file), and `diff` (git). A stamp never implies
-freshness for anything it does not list.
+policy yet, and the `read.freshness_policy` setting is reserved for that.
+`attested` names the projection tables behind the answer. `live` names what
+the stamp does not cover, from a closed list: `canonical` (canonical shards),
+`scanned_sites` (a scan of the working tree), `verification_runs` (the run
+file), and `diff` (git). A stamp never implies freshness for anything it does
+not list.
 
 `get` takes `node_type` and `id` and answers `found` plus the canonical record
 under `node`, tagged with the same `node_type`. The node kinds are `source`,
