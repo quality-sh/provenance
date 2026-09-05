@@ -1,4 +1,4 @@
-# W3 operations re-back: implementation plan (revision 3)
+# W3 operations re-back: implementation plan (revision 4)
 
 Bead `provenance-1wh.2`. Read at `577ab96` (PR 180 merged); every file:line below was counted there. This document replaces
 the W3 section of `docs/research/2026-08-27-qrspi-1wh-query-uniformity-plan.md` (branch
@@ -11,10 +11,11 @@ Revision 2 folded Ben's rulings of 2026-09-05, four resolutions under `req_query
 scan limit, not a request field; boundary `boundary_query_answers_do_not_page`), `res_impact_follows_declared_flow` (flow
 direction, ten steps, no synthetic step), `res_projection_tables_mirror_record_types` (one column per record field, a
 derive, a round-trip gate; revision 1's whole-record JSON column rejected), and `res_stamp_names_projection_instance`
-(instance id on the wire). Revision 3 folds the two adversarial reviews of revision 2 (Fable: one blocker, five major,
-fourteen minor; GLM: one blocker, five major, eight minor; every finding taken, the choices between them in L). Section B is
-the bead text. Settled and not reopened: the served read path is the projection; freshness annotates and never refuses;
-reads snapshot under the publication lock; the vocabulary is closed; protocol is 6.
+(instance id on the wire). Revision 3 folded the two adversarial reviews of revision 2 (Fable: one blocker, five major,
+fourteen minor; GLM: one blocker, five major, eight minor; the choices between them in L); revision 4 folds the review of
+revision 3 (one major, five minor). Section B is the bead text. Settled and not reopened: the served read path is the
+projection; freshness annotates and never refuses; reads snapshot under the publication lock; the vocabulary is closed;
+protocol is 6.
 
 ## A. Scope and non-goals
 
@@ -49,10 +50,10 @@ unbounded (`impact.rs:67`, `symbols.rs:29`; walker at `provenance-scanner/src/wa
 independently and OR-merges one `has_more` (`evidence.rs:60-63,85`). The projection holds eighteen families
 (`cache/projection_families.rs:25-66`), a derived `relations` table with `idx_relations_out` and `idx_relations_in`
 (`migrations/021_relations_table.sql:9-19`), and the stamp tables (`018_projection_stamp.sql:45-64`); nothing in production
-reads `relations` yet. The kind tables hold column subsets, not records: `requirements` has `scope_id, id, statement,
-status, domain_id, fog` (`002:14-20`, `009:1`, `010:1`), `rules` has five columns (`003:17-27`, `015`, `016`); none carries
-`retired`, `description`, `source_refs`, or the other fields `GraphNode` serializes whole (`protocol/node.rs:16-27`).
-Section C widens them to mirror the record types (`res_projection_tables_mirror_record_types`).
+reads `relations` yet. The kind tables hold column subsets, not records: `requirements` has six columns (`002:14-20`,
+`009:1`, `010:1`), `rules` five (`003:17-27`); none carries `retired`, `description`, `source_refs`, or the other fields
+`GraphNode` serializes whole (`protocol/node.rs:16-27`). Section C widens them to mirror the record types
+(`res_projection_tables_mirror_record_types`).
 
 *Per-operation mapping.*
 
@@ -150,16 +151,18 @@ instr(search_text, ?) > 0 [AND retired = 0] ORDER BY id`), `front.rs` (`SqlFront
 and `GraphRecords` (`state_adapter.rs:22-32`) and never touch the trait.
 
 *Search.* Kinds are visited in rank order (`graph.rs:30-40`), which equals `records::load`'s sort (`records.rs:67-71`). The
-`instr` prefilter is a superset (a needle can span two pieces), and the exact per-piece `contains` (`records.rs:126-130`)
-runs in Rust before a row counts toward `limit + 1`.
+`instr` prefilter is a superset (a needle can span two pieces); the exact per-piece `contains` (`records.rs:126-130`) runs
+in Rust before a row counts.
 
 *Retired records.* `walk.rs:29-60` builds the front from `records::load(.., include_retired)` (`records.rs:66`), so today a
 retired record contributes no outgoing rows and is never an endpoint, a retired origin named with an explicit `node_type`
 still answers its live `in` neighbours, and `kind_of` returns `None` for a retired origin. `relations` carries no retired
 marker (`021:9-19`) and the hop query has no filter, so the executors reproduce this: with `include_retired` false, the
-out-rows of a retired origin are dropped, `kind_of` skips retired rows, and every endpoint is checked against its kind
-table's `retired` column (the `records_by_ids` hydration lookup already reads it) before it counts toward the page. The
-fixture in J exercises every case both ways.
+out-rows of a retired origin are dropped, `kind_of` skips retired rows, and every endpoint is marked in `seen` first and
+then checked against its kind table's `retired` column (the `records_by_ids` hydration lookup already reads it) before it
+counts toward the page: the order `walk.rs:166-171` and `impact.rs:41-48` keep today, so a second path to a retired or
+dangling node is skipped, and a diamond over a retired requirement answers what it answers today. The fixture in J carries
+that diamond and exercises every case both ways.
 
 *`SqlFront`.* `RelationSource` has two synchronous methods (`front.rs:57-65`); `related_nodes` and `flow_neighbors` sort
 after collecting (`front.rs:123-131`), so a front supplies rows and the core owns the order. sqlx is async, so `SqlFront` is
@@ -171,21 +174,22 @@ parameters), `WHERE scope_id = ? AND owner_type = ? AND owner_id IN (...)` over 
 (`front.rs:17,69-74`) and refusing a name with no declaration, so the trait is not edited. `related_nodes`,
 `flow_neighbors`, and the executors' filters (`walk.rs:86-103`) run unchanged over it; no operation gets a private walk. A
 lookup for an id outside the fetched frontier is an invariant violation (`debug_assert!` plus a test). `neighbors` is one
-hop; `trace` and `impact` fetch one hop per depth, and trace's `seen` set (`walk.rs:166`) is keyed by kind and id. Rejected:
-loading the whole `relations` table per request (no index use); `block_in_place` in the synchronous trait (panics on the
-current-thread runtime `#[tokio::test]` uses).
+hop; `trace` and `impact` fetch one hop per depth, and both `seen` sets (`walk.rs:166`, `impact.rs:28,41`, id-only today)
+are keyed by kind and id under entry 1. Rejected: a whole-table load per request (no index use); `block_in_place` in the
+synchronous trait (panics on the current-thread runtime).
 
 *Duplicate references.* `relations` is one row per (owner, relation, target) (`021:16`, `INSERT OR IGNORE` at
 `relation_rows.rs:57-58`), while `outgoing_of` and `incoming_of` (`front.rs:250-266,283-289`) yield one row per stored
 reference, so a requirement citing one source under two clauses answers two `cites` neighbours today and one from
 `relations`. Decision: one neighbor per (relation, direction, endpoint) is the served meaning; `related_nodes` dedupes in
-core after its sort, so `RecordFront`, `SqlFront`, wiki, and gaps agree. This is derivation history entry 1 (D). The front
-equivalence property carries a two-clause citation fixture.
+core after its sort, so `RecordFront`, `SqlFront`, wiki, and gaps agree; `prime` (`cache/prime.rs:152`) and the `impact`
+command (`cache/impact.rs:111`) lose duplicate rows too, and the two-clause fixture asserts `prime` lists the source once.
+This is derivation history entry 1 (D). The front equivalence property carries the two-clause fixture.
 
 *Front equivalence gate.* A property test materializes one scope and asserts `related_nodes` and `flow_neighbors` (both
 ways) agree over `RecordFront` and `SqlFront` for every record; corpus: the seeded store
-(`operations/queries/tests.rs:16-68`), the gap fixtures, the retired and two-clause fixtures (J), and the repository's own
-state.
+(`operations/queries/tests.rs:16-68`), the gap fixtures, the retired and two-clause fixtures (J), and the tempdir copy of
+the repository's own state (J).
 
 ## D. Stamp semantics
 
@@ -207,14 +211,16 @@ TypeScript `QueryEnvelope` (`protocol.ts:212-215`) gains `stamp?: Stamp`; the en
 (`engine.ts:20-28,47-53`).
 
 *Derivation version.* `pub const READ_DERIVATION: u32 = 1` in `operations/stamp.rs` (new), with a numbered history in its
-doc comment; entry 1: one neighbor per (relation, direction, endpoint), and trace's `seen` keyed by kind and id. It bumps
-when reader logic changes an answer for the same projection rows: traversal order, a filter's semantics, decoding, scan
-accounting. It does not bump for a migration (the serial moves then; the digest moves only when canonical bytes do,
-`projection_digest.rs:32-52`) or for a fix in a live half. A golden test (`operations/queries/tests/golden.rs`) answers a
-fixed request set over a frozen corpus built by `cache/tests/fixtures/golden.rs` (every kind, every relation, retired
-records, over-limit lists; never `.provenance/state`, which moves on most PRs), digests the answers with the stamp removed,
-and compares to a committed file keyed by `READ_DERIVATION`; the file regenerates only in a commit that bumps the constant,
-and a test asserts the key equals it.
+doc comment. PR 1 ships `0` (today's semantics, no entry); PR 2 bumps to `1` with entry 1: one neighbor per (relation,
+direction, endpoint) on the served operations, `prime`, and the `impact` command, and the trace and impact `seen` sets keyed
+by kind and id. It bumps when reader logic changes an answer for the same projection rows: traversal order, a filter's
+semantics, decoding, scan accounting. It does not bump for a migration (the serial moves then; the digest moves only when
+canonical bytes do, `projection_digest.rs:32-52`) or for a fix in a live half. A golden test
+(`operations/queries/tests/golden.rs`) answers a fixed request set over a frozen corpus built by
+`cache/tests/fixtures/golden.rs` (every kind, every relation, retired records, over-limit lists, the two-clause citation and
+a cross-kind `links` pair so entry 1 is pinned; never `.provenance/state`, which moves on most PRs), digests the answers
+with `stamp` and `freshness_error` removed, and compares to a committed file keyed by `READ_DERIVATION`; the file
+regenerates only in a commit that bumps the constant, and a test asserts the key equals it.
 
 *Per-operation table.* The two array cells hold the literal wire strings and nothing else: `attested` is family words plus
 `relations`, `live` is from the closed four-word list. The third column says which answer fields each covers. Before an
@@ -235,8 +241,7 @@ operation flips (K) its row reads `attested: []` and `live: ["canonical"]` plus 
 
 One helper, `operations/reader.rs` (new): `async fn answer<R>(repo, scope, policy, run) -> (R, Stamp)`.
 
-1. Take the guard: `publication::publication_guard(layout).await` (`publication/guard.rs:68-83`). Under read-only validation
-   it holds no lock (`guard.rs:70-72`).
+1. Take the guard (`publication_guard`, `guard.rs:68-83`; no lock under read-only validation, `guard.rs:70-72`).
 2. Open the pool once (`cache.rs:34-39`). Freshness step. `catch_up`: `catch_up_with_guard(&guard, &pool, layout)`
    (`catch_up.rs:37`, taking the reader's pool instead of opening its own at `:41`, re-exported from `materialize.rs` as
    `pub(crate) use catch_up::{catch_up_with_guard, CatchUpReport}` because `mod catch_up` is private): migrations, a rebuild
@@ -265,14 +270,12 @@ One helper, `operations/reader.rs` (new): `async fn answer<R>(repo, scope, polic
 6. Drop the guard; print.
 
 *Policy and knobs.* `operations/read_policy.rs` (new): `enum FreshnessPolicy { CatchUp, AnnotateOnly, RefuseStale }`,
-`struct ReadPolicy { freshness, scan_limit }`, defaults `CatchUp` and 2000 files. Ben measured the scan at about 1.1 s for
-657 files on this repository (1.7 ms per file), so 2000 files bounds the scan near 3.5 s; W5 tunes it. The names reserved
-for the configuration file are `read.freshness_policy` and `read.scan_limit`. No configuration file reader exists in the
-tree; W3 ships the struct as the seam and bead `provenance-1wh.3` wires the file. No journal knob, no visit budget, no
-request-side knob.
+`struct ReadPolicy { freshness, scan_limit }`, defaults `CatchUp` and 2000 files (Ben measured 1.1 s for 657 files here, so
+2000 bounds the scan near 3.5 s; W5 tunes it). The reserved configuration names are `read.freshness_policy` and
+`read.scan_limit`; no configuration reader exists in the tree, so W3 ships the struct as the seam and bead
+`provenance-1wh.3` wires the file. No journal knob, no visit budget, no request-side knob.
 
-*Async.* `queries::get` and the other seven become `pub async fn`; `handlers/sdk/query.rs:24-64` and `handlers/sdk.rs:13`
-become async (the binary is on tokio, `main.rs:16-21`). The CLI adapter stays thin.
+*Async.* The eight `queries::*` functions, `handlers/sdk/query.rs:24-64`, and `handlers/sdk.rs:13` become async.
 
 *Cost, stated plainly.* Reads serialize against publications and against each other. Under `catch_up` every read copies the
 state tree (`catch_up.rs:59`, `guard.rs:94-99`), hashes every canonical byte (`catch_up.rs:86-97`), and runs the two
@@ -282,12 +285,12 @@ on the read path, and an unflipped operation answers over canonical inside the s
 ## F. Limits and truthful cut flags
 
 There is no paging (`res_query_answers_stop_at_the_limit`, `boundary_query_answers_do_not_page`). Every operation keeps
-`limit` (50 by default, 200 at most, `protocol.rs:28,31`) and `has_more` from `take_page` (`protocol.rs:84-88`). No request
-gains a cursor; no response gains a next page; no token module exists. `evidence` gains four additive booleans,
-`implementation_bindings_has_more`, `verification_bindings_has_more`, `verification_runs_has_more`, `reviews_has_more`, each
-the cut flag of its own `take_page` call (`evidence.rs:60-63`); the top-level `has_more` keeps its OR meaning
-(`evidence.rs:85`). A test pins that a fixture where two lists exceed the limit sets exactly those two flags. The TypeScript
-`EvidenceResponse` (`protocol.ts:364`) gains the four optional booleans.
+`limit` (50 by default, 200 at most, `protocol.rs:28,31`) and `has_more` from `take_page` (`protocol.rs:84-88`); no request
+gains a cursor and no response a next page. `evidence` gains four additive booleans, `implementation_bindings_has_more`,
+`verification_bindings_has_more`, `verification_runs_has_more`, `reviews_has_more`, each the cut flag of its own `take_page`
+call (`evidence.rs:60-63`); the top-level `has_more` keeps its OR meaning (`evidence.rs:85`). A test pins that a fixture
+where two lists exceed the limit sets exactly those two flags. The TypeScript `EvidenceResponse` (`protocol.ts:364`) gains
+the four optional booleans.
 
 ## G. The scan limit
 
@@ -300,8 +303,9 @@ order, and the bool says whether it stopped. `impact` (`impact.rs:67`) calls it 
 `scan_cut: bool`, false when the scan finished; `true` says the scanned sites are a lower bound. `resolve_symbol` does not
 walk the tree: the request names one file, so it calls `scan_file` (`walker.rs:122`) on `repo.join(file)` alone; one file
 never meets the limit, the answer cannot miss the file the caller asked about, and `resolve_symbol` carries no `scan_cut`
-field. Nothing else bounds the graph walk: depth ten (`impact.rs:37`, `TRACE_MAX_DEPTH`) over indexed rows is the bound.
-Tests read `scan_cut` from the response, not a log.
+field. A named file with no known extension (`walker.rs:98-100` skips it today) or one that cannot be read yields no scanned
+sites and is not an error; bindings still answer. Depth ten (`impact.rs:37`) over indexed rows is the only walk bound; tests
+read `scan_cut` from the response.
 
 ## H. Dangling-target existence validation for ideation targets
 
@@ -324,15 +328,15 @@ contributions and synthesis packets, which `GraphRecords` (`state_adapter.rs:22-
 existence validation"); it lands as its own PR 4 (K) so PR 3 stays flips plus leftovers.
 
 *Exposure: deferred.* Ideation and thread rows do not enter `relations` in this bead (cut plan L12). The gate for the later
-bead: this validation merged; `provenance gaps` reports no dangling target on the repository's own state; and an owner
-decision on the relation name the rows carry, because the thirteen-name vocabulary printed at `docs/cli.md:138-142` is
-closed and a new name is a vocabulary change. Until then, served reads never reach an ideation record through a walk.
+bead: this validation merged; `provenance gaps` clean of dangling targets on the repository's own state; an owner decision
+on the relation name, because the thirteen-name vocabulary (`docs/cli.md:138-142`) is closed. Until then no served walk
+reaches an ideation record.
 
 ## I. PR 180 leftovers assigned to W3
 
-1. `INDIRECT` dead entry (`cache/impact.rs:41-47`). `contradicts` is declared `flow = none` (`shaping.rs:176`), so
-   `flow_neighbors` never yields it (`front.rs:168`) and the filter never sees it. Decision: delete the entry; add a test
-   that every `INDIRECT` name resolves through `declaration_for` to a declaration whose flow is not `None`.
+1. `INDIRECT` dead entry (`cache/impact.rs:41-47`): `contradicts` is `flow = none` (`shaping.rs:176`), so `flow_neighbors`
+   never yields it (`front.rs:168`). Delete the entry; a test asserts every `INDIRECT` name resolves to a declaration whose
+   flow is not `None`.
 2. Cut plan L3: `is_resolved` (`cache/gaps/contradiction.rs:37-48`) treats any `resolution_id` as settling the pair,
    including a rejected resolution. Fix: the pair is settled only when the named resolution exists in the scope and its
    status is not `Rejected` (`ResolutionStatus`, `core/model/artifacts/kinds.rs:94-108`); `supersedes` unchanged. RED test:
@@ -340,9 +344,9 @@ closed and a new name is a vocabulary change. Until then, served reads never rea
 3. Cut plan L5: the neighbors order is rank, id, declaration order, direction (`front.rs:123-131`), one row per (relation,
    direction, endpoint). With no cursor, the order is frozen by the rank-order pin test and the golden file (D): a reorder
    is a visible derivation bump.
-4. `contradicts` shape on the filter: pre-cut the relation joined two requirements; now a question owns it
-   (`state-format.md:32-34`), so `neighbors` of a requirement with `relations: ["contradicts"]` answers the question `in`,
-   and the other requirement is one more hop. Documentation only: one sentence in `docs/cli.md` after line 146. No code.
+4. `contradicts` shape on the filter: a question owns it now (`state-format.md:32-34`), so `neighbors` of a requirement over
+   `contradicts` answers the question `in`, and the other requirement is one more hop. Documentation only: one sentence in
+   `docs/cli.md` after line 146.
 
 ## J. Test strategy
 
@@ -350,7 +354,6 @@ closed and a new name is a vocabulary change. Until then, served reads never rea
 evidence, symbols}.rs` under `#[cfg(test)]`, `super::` imports rewritten to `crate::` paths (`walk.rs:1-13`,
 `impact.rs:10-11`, `evidence.rs:8`, `symbols.rs:9-10` name siblings) so `bindings`, `sites`, and `stale` are the production
 modules, not copies; each carries a two-line header naming the operation it preserves and the commit that may delete it.
-They read canonical shards.
 
 *Differential harness.* `operations/queries/tests/differential.rs`: for each operation and a request set, run the oracle and
 the served executor over the same store with `scan_limit` at `usize::MAX`, serialize both to `serde_json::Value`, strip the
@@ -359,47 +362,45 @@ and cross-kind fixtures it asserts the documented derivation-1 delta instead. Co
 (`queries/tests.rs:16-68`), the CLI fixtures (`tests/query_support/fixtures.rs:28-42`), the gap fixtures, new fixtures in a
 sibling `cache/tests/fixtures/` module (`fixtures.rs` is 315): a retired source, requirement, and rule that both reference
 and are referenced (exercised with `include_retired` both ways; the live state has one retired rule), a two-clause citation,
-over-limit lists, two over-long evidence lists, a cleared review; and the repository's own `.provenance/state`, opened
-through `StateStore` at the workspace root (no test on main reads it today). Each operation flips only when its rows are
-green. The `records` oracle (get, search) and `differential.rs` stay until the bead that deletes `records::load`; the walk,
-impact, evidence, and symbols oracles leave in the last commit of PR 3 once the front equivalence property and the
-per-operation tests stand.
+over-limit lists, two over-long evidence lists, a cleared review; and a copy of the repository's own `.provenance/state` in
+a `tempfile::TempDir` (the `StateSnapshot` machinery, `publication.rs:17-19`). No test opens the workspace root through the
+reader: the served executor takes the real publication lock and writes `provenance.db` into the checkout (`cache.rs:34-39`),
+and parallel test binaries would contend on both. Each operation flips only when its rows are green. The `records` oracle
+(get, search) and `differential.rs` stay until the bead that deletes `records::load`; the walk, impact, evidence, and
+symbols oracles leave in the last commit of PR 3 once the front equivalence property and the per-operation tests stand.
 
-*Derive and tables.* The round-trip tests per type and the column drift test (C); trybuild refusals for the derive; the
-catch-up dumps compare the eleven widened tables and `relations` as today (`catch_up_behavior.rs:44-56`,
-`relation_rows_behavior.rs:11-22`); the front equivalence property (C).
+*Derive and tables.* The round-trip and drift tests (C); trybuild refusals; the catch-up dumps compare the eleven widened
+tables and `relations` as today (`catch_up_behavior.rs:44-56`, `relation_rows_behavior.rs:11-22`); the front equivalence
+property (C).
 
-*Order stability.* A property test inserts and retires records between two identical requests and asserts the surviving
-records keep their relative order in `search`, `neighbors`, and `trace`.
+*Order stability.* A property test inserts and retires records between two identical requests and asserts the survivors keep
+their relative order in `search`, `neighbors`, and `trace`.
 
 *Limit truthfulness.* A scope with more matches than the limit for each operation asserts `has_more` and a page of exactly
 `limit`; the evidence fixture with two over-long lists asserts the two flags (F); a repository with more language files than
 `scan_limit` asserts `scan_cut` on `impact`, that two runs cut the same file set, and that sub-limit runs answer the same
 union as `scan_path` (G); `resolve_symbol` on a file past the cut still answers its rule.
 
-*Stamp truthfulness, one test per live constituent.* Mutate the constituent alone and assert the attested fields and the
-stamp's serial and digest stand still: add a scanner annotation in the working tree (`scanned_sites`); append a run to
-`verification-runs.jsonl` (`verification_runs`); make a commit that touches a bound file (`diff`); for `stale`, edit a
-canonical shard and assert the answer changes while the stamp lists `canonical`. A second test per flipped operation edits a
-canonical shard and asserts the serial advances by one under `catch_up` and stands still under `annotate_only`.
+*Stamp truthfulness, one test per live constituent.* Mutate the constituent alone and assert the attested fields, serial,
+and digest stand still: a scanner annotation in the working tree (`scanned_sites`); a run appended to
+`verification-runs.jsonl` (`verification_runs`); a commit touching a bound file (`diff`); for `stale`, a canonical edit that
+changes the answer while the stamp lists `canonical`. A second test per flipped operation edits a canonical shard and
+asserts the serial advances by one under `catch_up` and stands still under `annotate_only`.
 
-*Guard interleaving.* The `test_probes` pattern (`test_probes.rs:23-40`; `materialize_guard_behavior.rs:22-38`): a probe
-inside the reader entry asserts the lock is held; a probe starts a canonical write on another thread and asserts it waits
-until the answer prints; a third runs `evidence` with `base` under the guard and asserts it returns (the `stale.rs:36` trap
-in E).
+*Guard interleaving.* The `test_probes` pattern (`test_probes.rs:23-40`; `materialize_guard_behavior.rs:22-38`): one probe
+asserts the lock is held inside the reader; one starts a canonical write on another thread and asserts it waits for the
+answer; one runs `evidence` with `base` under the guard and asserts it returns (the `stale.rs:36` trap).
 
 *Homes.* `operations/queries/tests/{reader, stamp, limits, order}.rs` (`queries/tests.rs` is 175 and keeps its five).
 
 *TypeScript.* `protocol.ts` gains `Stamp`, `stamp?`, `freshness_error?`, the four evidence booleans, and `scan_cut?` on
-`ImpactResponse` only; the type tests compile an old-shape response against the new types, and the runtime suite reads one
-stamped answer.
+`ImpactResponse` only; the type tests compile an old-shape response against the new types.
 
 ## K. Delivery
 
-Four PRs: the derive and migration are a self-contained, zero-behaviour-change unit that reviews best alone; the flips and
-leftovers are PR 3; section H is PR 4. Each PR is green at every commit (`cargo fmt --all --check`, `cargo clippy
---workspace --all-targets --all-features -- -D warnings`, `cargo test --workspace`, `npm test`) and gets the deslop pass
-before ready.
+Four PRs: reader and stamp; the derive and migration (a zero-behaviour-change unit that reviews best alone); the flips and
+leftovers; section H. Each PR is green at every commit (fmt, clippy `-D warnings`, `cargo test --workspace`, `npm test`) and
+gets the deslop pass before ready.
 
 *PR 1, branch `1wh-w3-reader`: reader entry and stamp; nothing served from SQL yet.*
 1. Oracle copies and the differential harness over the current executors (green against themselves).
@@ -410,8 +411,8 @@ before ready.
    `a_canonical_write_waits_for_a_read_to_finish`, `evidence_with_a_base_answers_under_the_guard`,
    `a_canonical_edit_advances_the_serial_under_catch_up`, `a_read_answers_at_the_stored_serial_when_catch_up_refuses`,
    `a_read_with_no_database_refuses_and_names_materialize`.
-4. Golden builder, golden file, `READ_DERIVATION` key test; TypeScript `Stamp` types. Green: the eight operations' test
-   count unchanged plus the new ones; every existing response byte unchanged apart from `stamp`.
+4. Golden builder, golden file, `READ_DERIVATION = 0` and its key test; TypeScript `Stamp` types. Green: the eight
+   operations' test count unchanged plus the new ones; every existing response byte unchanged apart from `stamp`.
 
 *PR 2, branch `1wh-w3-record-columns`: the derive and the mirrored tables; no flip.*
 1. `ColumnValue` and the `ProjectionRow` trait in core; the derive in `provenance-macros/src/projection_row.rs`; trybuild
@@ -424,20 +425,23 @@ before ready.
    `materialize_writes_search_text_from_searchable_text`, `catch_up_equals_rebuild_over_the_widened_tables`,
    `a_link_under_two_kinds_keeps_both_relation_rows`.
 4. `cache/read/{rows, records, front}.rs`; the dedupe in `related_nodes` with its fixture RED; the front equivalence
-   property RED over `RecordFront` versus `SqlFront`. Green: no served byte changes except the derivation-1 dedupe.
+   property RED over `RecordFront` versus `SqlFront`; `READ_DERIVATION` to `1` with entry 1 and the golden file regenerated
+   in the same commit; `prime_lists_a_twice_cited_source_once`. Green: no served byte change except entry 1.
 
 *PR 3, branch `1wh-w3-flips`: the seven flips, the leftovers, oracle removal.* After step 8 `records::load` and `find`
-(`records.rs:12,75`) have only the `records` oracle as caller; they move under `#[cfg(test)]` until W5 deletes them, so
-`clippy -D warnings` stays green.
+(`records.rs:12,75`) have only the `records` oracle as caller; they move under `#[cfg(test)]` until W5 deletes them (clippy
+stays green).
 1. Flip `get`; RED: differential rows, `get_reads_a_retired_record_only_when_asked` over the `retired` column.
 2. Flip `search`; RED: differential rows, `search_visits_kinds_in_rank_order_and_stops_at_the_limit`.
 3. Flip `neighbors` and `trace`; RED: differential rows, the order pin, `trace_stops_at_the_limit_and_says_has_more`,
-   `a_retired_origin_still_answers_its_live_in_neighbours`.
+   `a_retired_origin_still_answers_its_live_in_neighbours`, `a_diamond_over_a_retired_node_answers_as_today`.
 4. `scan_path_bounded` and `scan_limit`; flip `impact`; RED: differential rows, `impact_says_when_the_scan_was_cut`,
    `a_cut_scan_reads_the_same_files_twice`, `an_indirect_name_is_a_declared_relation_with_a_flow` (I.1),
    `a_resolution_reaches_the_rules_that_name_it_only`.
 5. Flip `evidence`; RED: differential rows, `evidence_reports_which_list_was_cut`, `a_cleared_review_is_not_open`.
-6. Flip `resolve_symbol` over `scan_file`; RED: differential rows, `resolve_symbol_reads_the_named_file_only`.
+6. Flip `resolve_symbol` over `scan_file`; RED: differential rows, `resolve_symbol_reads_the_named_file_only`,
+   `resolve_symbol_on_an_unscanned_extension_answers_bindings_only`,
+   `resolve_symbol_on_a_missing_file_answers_bindings_only`.
 7. Stamp truthfulness tests per live constituent (J); `is_resolved` fix (I.2) RED:
    `a_rejected_resolution_does_not_settle_a_contradiction`.
 8. Delete the walk, impact, evidence, and symbols oracles; keep `records` and `differential.rs`; docs: `docs/cli.md` (stamp,
@@ -457,43 +461,37 @@ deleted. `evidence.rs` (94), `catch_up.rs` (273), and `protocol/query.rs` (175) 
 
 ## L. Risks and open points
 
-1. Per-read tree copy and full hash under `catch_up` (E). Default: accept in W3; W5 measures and, if a read here exceeds one
-   second, moves catch-up to hash in place under the guard and snapshot only when a unit moved.
-2. The synchronous lock trap (`guard.rs:7-12`). Any live half that calls `with_repository_publication` deadlocks under the
-   reader entry. Default: the interleaving test runs every operation with every optional field set; `stale::disturbed` is
-   the one known site and goes through `graph_evidence_under_guard`.
-3. The derive reads spelled types, as `Relations` does. A struct-typed field without `#[column(json)]`, or a type alias,
-   round-trips wrong. Default: the per-type round-trip test with every field filled is the gate, and a new struct-typed
-   field fails it before it reaches a database.
+1. Per-read tree copy and full hash under `catch_up` (E). Default: accept in W3; W5 measures and may hash in place under the
+   guard, snapshotting only when a unit moved.
+2. The synchronous lock trap (`guard.rs:7-12`): a live half that calls `with_repository_publication` deadlocks under the
+   reader. Default: the interleaving test runs every operation with every optional field set.
+3. The derive reads spelled types, as `Relations` does; a struct-typed field without `#[column(json)]`, or a type alias,
+   round-trips wrong. Default: the per-type round-trip tests are the gate.
 4. `f64` fields (`confidence`) pass through JSON and SQLite REAL; a decoder that tries `i64` first would print `1.0` as `1`.
    Default: `REAL` affinity in 022, storage-class decoding in `rows.rs`, and fixtures at `1.0` and `0.95`.
-5. Migration 022 drops and recreates eleven tables and `relations`. Default: the projection is rebuildable, catch-up
-   rebuilds after the migration (`catch_up.rs:55-57`), and no `sqlx::query` outside `materialize/`, `migrations.rs`, and
-   `tests/` reads those tables today.
-6. `search` text equality across the SQL prefilter (C). Default: the prefilter is a superset by construction and the Rust
-   filter decides; `differential.rs` with the `records` oracle stays in CI until `records::load` leaves, and pins it.
+5. Migration 022 drops and recreates eleven tables and `relations`. Default: catch-up rebuilds after it
+   (`catch_up.rs:55-57`), and nothing outside `materialize/`, `migrations.rs`, and `tests/` queries those tables today.
+6. `search` text equality across the SQL prefilter (C). Default: the prefilter is a superset and the Rust filter decides;
+   `differential.rs` with the `records` oracle pins it until `records::load` leaves.
 7. The scan default (2000 files) rests on one measurement. Default: W5 tunes it; `scan_cut` makes a low value visible.
-8. Impact: the strict one-step reading was rejected (`res_impact_follows_declared_flow`); the walk stays multi-step over
-   declared flows with no synthetic step, which is what `impact.rs:37-60` does today.
+8. Impact: the one-step reading was rejected (`res_impact_follows_declared_flow`); the walk stays as today
+   (`impact.rs:37-60`).
 9. `refuse_stale` is reserved and refused as unimplemented. Default: W5 implements it; the enum member keeps the word.
-10. `catch_up_failed` is a fourth `policy` word and names an outcome, not a policy. Default: keep it, with `freshness_error`
-    carrying the reason; W5 may rename it with the configuration surface, under a derivation bump.
-11. Ideation exposure deferred (H) and `IdeationTargetType` gaining `Boundary`. Default: the gate named in H; the parse list
-    (`ideation.rs:32-43`) grows by one.
-12. Where the two reviews differ. Duplicate references: Fable dedupes in `related_nodes` (core), GLM in the fetched hop
-    rows; core wins, so the two fronts agree by construction and wiki and gaps see one meaning. Retired records: GLM joins
-    `retired` in the hop; the executor-side filter wins, the hop stays two index reads and the endpoint check reuses the
-    hydration lookup. Section H: GLM asks for a bead split or a cited decision; the bead description names the work, and PR
-    4 keeps PR 3 reviewable. Oracle imports: `crate::` paths, no closure copy.
-13. A flip is a code path, not a runtime switch. Default: each flip is one commit that reverts cleanly; the stamp's
-    `attested: []` row is how a reverted operation is seen on the wire.
+10. `catch_up_failed` is a `policy` word that names an outcome. Default: keep it; W5 may rename it under a derivation bump.
+11. Ideation exposure deferred and `IdeationTargetType` gains `Boundary` (H). Default: the gate in H; `ideation.rs:32-43`
+    grows by one.
+12. Where the two revision-2 reviews differed. Duplicates: dedupe in core `related_nodes` (Fable) over the hop rows (GLM),
+    so the fronts agree by construction. Retired records: executor-side filter over a hop join (GLM), so the hop stays two
+    index reads. Section H: kept in the bead (its description names it) as PR 4, not split to a bead (GLM). Oracle imports:
+    `crate::` paths, no closure copy.
+13. A flip is a code path, not a switch. Default: one commit per flip, reverting cleanly; a revert shows as `attested: []`.
 
 *Rulings against the tree.* `res_projection_tables_mirror_record_types` names "one column for each field"; three tables
-disagree today and 022 aligns them: `requirement_reviews.before_text`/`after_text` versus `before`/`after` (`018:35-36`,
-`integrations.rs:160-161`), `boundaries.source_id`/`source_clause` versus `source_ref` (`007:6-7`), and no table carries
-`schema_version`. `res_query_answers_stop_at_the_limit` cites a scan of about one second for 657 files; no timing test
-exists in the tree, so that is Ben's measurement, not a pinned fact. No review finding contradicts a binding resolution.
+disagree today and 022 aligns them: `requirement_reviews.before_text`/`after_text` versus `before`/`after` (`018:35-36`),
+`boundaries.source_id`/`source_clause` versus `source_ref` (`007:6-7`), and no table carries `schema_version`. The scan
+timing in `res_query_answers_stop_at_the_limit` is Ben's measurement; no timing test exists in the tree. No review finding
+contradicts a binding resolution.
 
 *Old citations not verifiable at `577ab96`.* `idx_edges_scope_type_from` (dropped by 021); `edge_rank` (deleted);
-`handlers/sdk/query/walk.rs`; `dangling.rs 7-15` (now `gaps/model.rs:18` and `dangling.rs:36-65`); the three ideation call
-sites, which check dispositions' `canonical_artifact`, not `IdeationTarget`.
+`handlers/sdk/query/walk.rs`; `dangling.rs 7-15` (now `gaps/model.rs:18`, `dangling.rs:36-65`); the three ideation call
+sites (they check `canonical_artifact`, not `IdeationTarget`).
