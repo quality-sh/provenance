@@ -95,12 +95,29 @@ impl<'c> LiveHandle<'c> {
         StateStore::new(self.layout()).list_verification_runs(scope)
     }
 
-    /// What a commit range did to the code carrying graph evidence.
-    /// `head` defaults to the current commit.
-    pub fn disturbed(
+    /// The two commits a range names, resolved; `head` defaults to the
+    /// current commit. A range that does not resolve refuses here, before
+    /// anything else is read.
+    pub fn resolve_range(
         &self,
         base: String,
         head: Option<String>,
+    ) -> anyhow::Result<(String, String)> {
+        self.only(Live::Diff);
+        git::resolve_range(
+            self.context.repo(),
+            Some(base),
+            Some(head.unwrap_or_else(|| "HEAD".to_string())),
+            None,
+        )
+    }
+
+    /// What the resolved commit range did to the code carrying graph
+    /// evidence.
+    pub fn disturbed(
+        &self,
+        base: String,
+        head: String,
         rules: &[String],
         graph: &GraphEvidence,
     ) -> anyhow::Result<Disturbed> {
@@ -121,16 +138,10 @@ pub struct Disturbed {
 pub fn disturbed(
     repo: &Utf8Path,
     base: String,
-    head: Option<String>,
+    head: String,
     rules: &[String],
     graph: &GraphEvidence,
 ) -> anyhow::Result<Disturbed> {
-    let (base, head) = git::resolve_range(
-        repo,
-        Some(base),
-        Some(head.unwrap_or_else(|| "HEAD".to_string())),
-        None,
-    )?;
     let base_files = git::revision_files(repo, &base)?;
     let head_files = git::revision_files(repo, &head)?;
     let changes = git::changed_files(repo, &base, &head)?;

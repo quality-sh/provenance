@@ -279,3 +279,40 @@ async fn a_canonical_edit_advances_the_serial_under_catch_up() {
     assert_eq!(second.stamp.instance_id, first.stamp.instance_id);
     assert!(second.freshness_error.is_none());
 }
+
+/// `stale` resolves the commit range before it reads the store, as it did
+/// before the reader, so when both are bad the range is the error.
+#[tokio::test]
+async fn a_bad_base_is_refused_before_the_store_is_read() {
+    let corpus = corpus::seeded_queries();
+    // One healthy read materializes, so the later reads answer at the
+    // stored serial and reach the executor.
+    get_through(&corpus, ReadPolicy::default()).await.unwrap();
+    let shard = crate::shards::requirements_path(&corpus.layout(), &corpus.scope);
+    std::fs::write(&shard, "not a record\n").unwrap();
+    let refused = queries::stale(
+        Some(corpus.root.clone()),
+        &corpus.scope,
+        StaleQuery {
+            protocol_version: Some(SDK_PROTOCOL_VERSION),
+            base: "no_such_commit".into(),
+            head: None,
+            rules: Vec::new(),
+            include_retired: false,
+            limit: 10,
+        },
+    )
+    .await
+    .unwrap_err();
+    let text = format!("{refused:#}");
+    assert!(text.contains("rev-parse"), "{text}");
+    let refused = queries::evidence(
+        Some(corpus.root.clone()),
+        &corpus.scope,
+        requests::evidence("rule_overtime", Some("no_such_commit".into())),
+    )
+    .await
+    .unwrap_err();
+    let text = format!("{refused:#}");
+    assert!(text.contains("rev-parse"), "{text}");
+}

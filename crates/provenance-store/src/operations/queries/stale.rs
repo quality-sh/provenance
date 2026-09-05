@@ -17,12 +17,14 @@ pub(super) fn stale(
 ) -> anyhow::Result<StaleResult> {
     ensure_protocol_version(request.protocol_version)?;
     ensure_limit(request.limit)?;
+    // The range resolves before the store is read, as it did before the
+    // reader, so a bad base is the error that surfaces.
+    let diff = ctx.live(Live::Diff);
+    let (base, head) = diff.resolve_range(request.base, request.head)?;
     let graph = ctx
         .live(Live::Canonical)
         .graph_evidence(scope, request.include_retired)?;
-    let found =
-        ctx.live(Live::Diff)
-            .disturbed(request.base, request.head, &request.rules, &graph)?;
+    let found = diff.disturbed(base, head, &request.rules, &graph)?;
     let summary = summarize(&found.sites);
     let (sites, has_more) = take_page(found.sites, request.limit);
     Ok(StaleResult {

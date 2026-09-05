@@ -65,14 +65,10 @@ pub(super) fn evidence(
     let stale = request
         .base
         .map(|base| {
+            let diff = ctx.live(Live::Diff);
+            let (base, head) = diff.resolve_range(base, request.head)?;
             let graph = canonical.graph_evidence(scope, request.include_retired)?;
-            ctx.live(Live::Diff)
-                .disturbed(
-                    base,
-                    request.head,
-                    std::slice::from_ref(&request.rule),
-                    &graph,
-                )
+            diff.disturbed(base, head, std::slice::from_ref(&request.rule), &graph)
                 .map(|found| StaleEvidence {
                     base: found.base,
                     head: found.head,
