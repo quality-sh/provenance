@@ -9,6 +9,7 @@ use provenance_core::model::ProjectionRow;
 use provenance_core::{
     Boundary, Domain, NodeType, Question, Requirement, Resolution, Rule, Source, StableId, Topic,
 };
+use provenance_macros::rule;
 use sqlx::Row;
 
 /// The column that says a record retired, on the kinds that retire in
@@ -50,6 +51,7 @@ impl<K: ProjectionRow> Table<'_, K> {
     /// The records with the given ids, one per id, in id order, retired or
     /// not. The ids go to the database in chunks, since one statement
     /// binds a bounded number of parameters; a repeated id is asked once.
+    #[rule("rule_by_ids_answers_a_repeated_id_once")]
     pub async fn by_ids(&self, ids: &[StableId]) -> anyhow::Result<Vec<K>> {
         let mut wanted: Vec<&str> = ids.iter().map(StableId::as_str).collect();
         wanted.sort_unstable();

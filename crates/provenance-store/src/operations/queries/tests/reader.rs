@@ -17,6 +17,7 @@ use provenance_core::protocol::{
     SDK_PROTOCOL_VERSION,
 };
 use provenance_core::{NodeType, Requirement, Rule};
+use provenance_macros::verifies;
 
 /// The latest revision serial and the instance id, read directly.
 async fn stored(store: &TestStore) -> (i64, String) {
@@ -176,6 +177,7 @@ async fn evidence_stamps(store: &TestStore, base: &str) -> Vec<(&'static str, St
 }
 
 #[tokio::test]
+#[verifies("rule_query_answer_carries_a_stamp", exhaustion)]
 async fn every_answer_carries_a_stamp_at_the_stored_serial() {
     let store = test_stores::seeded_queries();
     let base = store.base_commit.clone().expect("a commit to diff against");
@@ -206,6 +208,7 @@ async fn every_answer_carries_a_stamp_at_the_stored_serial() {
 }
 
 #[tokio::test]
+#[verifies("rule_stamp_lists_a_live_word_for_uncovered_parts", examples)]
 async fn evidence_without_a_base_lists_no_diff() {
     let store = test_stores::seeded_queries();
     let answer = queries::evidence(
@@ -220,6 +223,7 @@ async fn evidence_without_a_base_lists_no_diff() {
 }
 
 #[tokio::test]
+#[verifies("rule_stamp_attests_every_table_read", examples)]
 async fn a_table_handle_puts_its_word_in_attested() {
     let store = test_stores::seeded_queries();
     crate::cache::catch_up_state(&store.layout()).await.unwrap();

@@ -12,6 +12,7 @@ use provenance_core::{
     Boundary, Domain, ImplementationBinding, NodeType, Question, Requirement, RequirementReview,
     Resolution, Rule, Source, StableId, Topic, VerificationBinding,
 };
+use provenance_macros::verifies;
 use serde::Serialize;
 use sqlx::SqlitePool;
 
@@ -57,6 +58,7 @@ async fn assert_reads_back<K: ProjectionRow + Serialize>(snapshot: &ReadSnapshot
 }
 
 #[tokio::test]
+#[verifies("rule_record_reads_back_from_its_row_identical", examples)]
 async fn a_stored_record_reads_back_as_its_canonical_bytes() {
     let store = TestStore::pinned();
     let state = store.state_store();
@@ -235,6 +237,7 @@ async fn by_ids_reads_past_the_bind_limit() {
 /// One record per id: an id that repeats across two chunks is still one
 /// row in the answer.
 #[tokio::test]
+#[verifies("rule_by_ids_answers_a_repeated_id_once", examples)]
 async fn by_ids_reads_a_repeated_id_once_across_chunks() {
     let store = TestStore::pinned();
     let (pool, snapshot) = snapshot_of(&store).await;

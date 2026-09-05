@@ -14,6 +14,7 @@ use crate::migrations;
 use crate::operations::read_policy::FreshnessPolicy;
 use crate::publication::publication_guard;
 use provenance_core::protocol::StampPolicy;
+use provenance_macros::rule;
 use sqlx::SqlitePool;
 
 pub(super) struct Freshness {
@@ -58,6 +59,7 @@ pub(super) async fn run(
 /// waits for the switch to WAL, at most the retry's deadline plus one
 /// busy timeout (`cache::WalSwitchRetry`); once the file is WAL the switch
 /// costs nothing.
+#[rule("rule_read_holds_guard_for_freshness_only")]
 async fn catch_up(layout: &ProvenanceLayout) -> anyhow::Result<SqlitePool> {
     let guard = publication_guard(layout).await?;
     let pool = open_cache(layout).await?;
@@ -73,6 +75,7 @@ async fn catch_up(layout: &ProvenanceLayout) -> anyhow::Result<SqlitePool> {
 /// directory this process cannot write is the one case WAL changes: the
 /// `-shm` file cannot be created, so the database opens as an immutable
 /// image.
+#[rule("rule_failed_freshness_answers_at_stored_serial")]
 async fn stored(layout: &ProvenanceLayout, error: anyhow::Error) -> anyhow::Result<Freshness> {
     let text = format!("{error:#}");
     let pool = match open_existing_cache(layout).await {

@@ -12,6 +12,7 @@ use crate::model::ids::StableId;
 use crate::model::services::Domain;
 use crate::model::shaping::{ArtifactLink, ArtifactLinkTargetType, Boundary, Question, Topic};
 use crate::model::{Requirement, Resolution, Rule, Source};
+use provenance_macros::rule;
 
 /// The relation name of the artifact links topics and questions carry.
 pub const LINKS: &str = "links";
@@ -89,6 +90,7 @@ fn declaration_index(owner: NodeType, name: &str) -> usize {
 /// rank, id, declaration order, out before in. One neighbour per
 /// (relation, direction, endpoint): a source cited under two clauses is
 /// stored twice and reached once.
+#[rule("rule_neighbors_one_per_relation_direction_endpoint")]
 pub fn related_nodes<S: RelationSource>(
     source: &S,
     node_type: NodeType,

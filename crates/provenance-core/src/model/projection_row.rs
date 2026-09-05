@@ -8,6 +8,7 @@
 //! a list or a struct is text that holds its JSON. Core has no database
 //! dependency; the store binds and reads the values.
 
+use provenance_macros::rule;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::{Map, Number, Value};
@@ -25,7 +26,10 @@ pub enum ColumnValue {
 /// The result type the derive writes into its signatures.
 pub type RowResult<T> = anyhow::Result<T>;
 
-/// A record kind stored as one table with one column per field.
+/// A record kind stored as one table with one column per field, whose
+/// `row` then `from_row` gives back the same record.
+#[rule("rule_record_table_has_one_column_per_field")]
+#[rule("rule_record_reads_back_from_its_row_identical")]
 pub trait ProjectionRow: Serialize + DeserializeOwned + Sized {
     /// The table name.
     const TABLE: &'static str;

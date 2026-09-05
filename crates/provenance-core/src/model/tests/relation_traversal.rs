@@ -4,6 +4,7 @@ use crate::model::relations::{
     flow_neighbors, related_nodes, RelatedNode, RelationDirection, RelationEndpoint, LINKS,
 };
 use crate::model::NodeType;
+use provenance_macros::verifies;
 
 type Reached = Vec<(&'static str, RelationDirection, NodeType, String)>;
 
@@ -206,6 +207,7 @@ fn a_dangling_reference_is_still_reported_as_stored() {
 /// references and answers one `cites` neighbour each way: one neighbour
 /// per (relation, direction, endpoint).
 #[test]
+#[verifies("rule_neighbors_one_per_relation_direction_endpoint", examples)]
 fn a_source_cited_under_two_clauses_is_one_neighbour() {
     let mut records = fixture();
     records.requirements[0].source_refs.push(crate::model::SourceReference {
