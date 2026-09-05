@@ -88,12 +88,16 @@ async fn a_canonical_write_does_not_wait_for_a_read() {
     assert!(stamped.result.found);
 }
 
+/// The first snapshot keeps its pool's one connection for its whole life,
+/// so the publication and the second snapshot run on a second pool; WAL
+/// is what lets both read the same file.
 #[tokio::test]
 async fn a_read_that_started_before_a_publication_answers_at_its_serial() {
     let corpus = corpus::seeded_queries();
     let layout = corpus.layout();
     catch_up_state(&layout).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
+    let second_pool = open_cache(&layout).await.unwrap();
 
     let first = ReadSnapshot::open(&pool, &corpus.scope)
         .await
@@ -113,7 +117,9 @@ async fn a_read_that_started_before_a_publication_answers_at_its_serial() {
         RequirementStatus::Active,
     );
     let guard = publication_guard(&layout).await.unwrap();
-    let report = catch_up_with_guard(&guard, &pool, &layout).await.unwrap();
+    let report = catch_up_with_guard(&guard, &second_pool, &layout)
+        .await
+        .unwrap();
     drop(guard);
     assert_eq!(report.serial, first.serial() + 1);
 
@@ -126,7 +132,7 @@ async fn a_read_that_started_before_a_publication_answers_at_its_serial() {
         before,
         "the open snapshot still reads its own serial"
     );
-    let second = ReadSnapshot::open(&pool, &corpus.scope)
+    let second = ReadSnapshot::open(&second_pool, &corpus.scope)
         .await
         .unwrap()
         .expect("a revision");
@@ -142,4 +148,5 @@ async fn a_read_that_started_before_a_publication_answers_at_its_serial() {
     drop(first);
     drop(second);
     pool.close().await;
+    second_pool.close().await;
 }

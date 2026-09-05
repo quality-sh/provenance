@@ -23,7 +23,7 @@ pub use projection_families::ProjectionFamily;
 pub use traceability::*;
 
 use crate::layout::ProvenanceLayout;
-use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode};
+use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 use sqlx::SqlitePool;
 use std::str::FromStr;
 use std::time::Duration;
@@ -79,10 +79,23 @@ fn cache_options(layout: &ProvenanceLayout) -> anyhow::Result<SqliteConnectOptio
 /// switch needs an exclusive lock, and a build whose busy timeout does not
 /// wait for it fails the first open of a DELETE-mode file another process
 /// holds; once the file is WAL the switch is a no-op.
+///
+/// The pool holds one connection. Every caller reads and writes one
+/// statement at a time, so one is enough, and it keeps the close clean:
+/// sqlx returns a dropped connection through a spawned task, so a pool
+/// that may grow opens a second connection for the next statement, and at
+/// `close` the two `sqlite3_close` calls overlap on two worker threads.
+/// The last of them cannot take the exclusive lock, and `SQLite` then skips
+/// the checkpoint that removes the `-wal` and `-shm` files. A pool of one
+/// closes once, and the files go with it.
 async fn connect(options: SqliteConnectOptions) -> anyhow::Result<SqlitePool> {
     let mut attempt = 0;
     loop {
-        match SqlitePool::connect_with(options.clone()).await {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(options.clone())
+            .await;
+        match pool {
             Ok(pool) => return Ok(pool),
             Err(error) if is_busy(&error) && attempt < WAL_SWITCH_ATTEMPTS => {
                 attempt += 1;
