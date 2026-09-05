@@ -49,3 +49,43 @@ pub struct Stamped<Result> {
     /// `catch_up_failed`.
     pub freshness_error: Option<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{Stamp, StampPolicy};
+    use serde_json::json;
+
+    /// The wire shape the TypeScript `Stamp` mirrors: field names and the
+    /// policy words.
+    #[test]
+    fn the_stamp_serializes_to_its_wire_shape() {
+        let stamp = Stamp {
+            serial: 41,
+            digest: "sha256:0000".into(),
+            instance_id: "uuid".into(),
+            derivation: 1,
+            policy: StampPolicy::CatchUpFailed,
+            attested: vec!["relations".into()],
+            live: vec!["canonical".into()],
+        };
+        assert_eq!(
+            serde_json::to_value(&stamp).unwrap(),
+            json!({
+                "serial": 41,
+                "digest": "sha256:0000",
+                "instance_id": "uuid",
+                "derivation": 1,
+                "policy": "catch_up_failed",
+                "attested": ["relations"],
+                "live": ["canonical"],
+            })
+        );
+        for (policy, word) in [
+            (StampPolicy::CatchUp, "catch_up"),
+            (StampPolicy::AnnotateOnly, "annotate_only"),
+            (StampPolicy::RefuseStale, "refuse_stale"),
+        ] {
+            assert_eq!(serde_json::to_value(policy).unwrap(), json!(word));
+        }
+    }
+}

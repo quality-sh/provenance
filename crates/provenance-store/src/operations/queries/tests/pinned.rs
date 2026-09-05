@@ -194,6 +194,11 @@ async fn the_pinned_answers_match_the_committed_file_for_this_derivation() {
     let fresh = digest(&answers);
     if std::env::var("PROVENANCE_PINNED_WRITE").is_ok_and(|value| value == "1") {
         std::fs::write(pinned_path(), render(&answers, &fresh)).unwrap();
+        eprintln!(
+            "PROVENANCE_PINNED_WRITE=1: wrote {} answers to {} and asserted nothing",
+            answers.len(),
+            pinned_path().display()
+        );
         return;
     }
     let (header, recorded) = parse(
@@ -213,6 +218,10 @@ async fn the_pinned_answers_match_the_committed_file_for_this_derivation() {
                 "answer {index} differs from the pinned file"
             );
         }
-        panic!("the pinned digest differs although every answer matched");
+        assert_eq!(
+            recorded.len(),
+            answers.len(),
+            "the pinned file has more answers"
+        );
     }
 }

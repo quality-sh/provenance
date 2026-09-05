@@ -75,7 +75,9 @@ pub fn seeded_queries() -> TestStore {
 }
 
 /// The cache fixtures: the seeded layout with its binding and review
-/// shards, and the owner-row layout with a row for every owner kind.
+/// shards, and the owner-row layout with a row for every owner kind. The
+/// pinned store is not here: the pinned answers test owns it, and one
+/// failure over it is enough.
 pub fn cache_fixtures() -> Vec<TestStore> {
     let (dir, layout, scope) = fixtures::seeded_layout();
     crate::cache::tests::projection_stamp_behavior::seed_integration_shards(
@@ -85,7 +87,7 @@ pub fn cache_fixtures() -> Vec<TestStore> {
     let seeded = TestStore::new("cache_seeded", dir, scope);
     let (dir, _layout, scope) = fixtures::owner_row_layout();
     let owners = TestStore::new("cache_owner_rows", dir, scope);
-    vec![seeded, owners, TestStore::pinned()]
+    vec![seeded, owners]
 }
 
 /// A copy of this repository's own canonical state.

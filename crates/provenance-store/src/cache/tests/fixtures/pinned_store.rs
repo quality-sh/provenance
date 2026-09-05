@@ -318,16 +318,9 @@ fn write_lines(path: &camino::Utf8Path, lines: &[String]) {
 
 /// Marks one record retired in place, as a retire would leave it.
 pub fn mark_retired(path: &camino::Utf8Path, id: &str) {
-    let rewritten: Vec<String> = std::fs::read_to_string(path)
-        .unwrap()
-        .lines()
-        .map(|line| {
-            let mut record: serde_json::Value = serde_json::from_str(line).unwrap();
-            if record["id"] == id {
-                record["retired"] = serde_json::Value::Bool(true);
-            }
-            record.to_string()
-        })
-        .collect();
-    write_lines(path, &rewritten);
+    super::rewrite_records(path, |record| {
+        if record["id"] == id {
+            record["retired"] = serde_json::Value::Bool(true);
+        }
+    });
 }

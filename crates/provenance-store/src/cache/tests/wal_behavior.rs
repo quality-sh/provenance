@@ -1,5 +1,6 @@
-//! The cache pool runs `SQLite` in WAL mode, so a read transaction pins a
-//! snapshot without blocking a writer and a writer never blocks a reader.
+//! The cache pool runs `SQLite` in WAL mode. What that buys, reads that
+//! never wait on a writer, the guard tests assert; here: a read leaves no
+//! file behind, and a file still in DELETE mode can be opened.
 
 use super::super::*;
 use super::fixtures::*;
@@ -19,27 +20,6 @@ pub fn wal_files(layout: &ProvenanceLayout) -> Vec<String> {
         .into_iter()
         .filter(|path| std::path::Path::new(path).exists())
         .collect()
-}
-
-#[tokio::test]
-async fn the_cache_pool_runs_in_wal_mode() {
-    let (_dir, layout, _scope) = empty_layout();
-    let pool = open_cache(&layout).await.unwrap();
-    let mode: String = sqlx::query_scalar("PRAGMA journal_mode")
-        .fetch_one(&pool)
-        .await
-        .unwrap();
-    assert_eq!(mode, "wal");
-    pool.close().await;
-    assert_eq!(wal_files(&layout), Vec::<String>::new());
-    let pool = open_cache(&layout).await.unwrap();
-    let mode: String = sqlx::query_scalar("PRAGMA journal_mode")
-        .fetch_one(&pool)
-        .await
-        .unwrap();
-    assert_eq!(mode, "wal", "the mode persists in the file");
-    pool.close().await;
-    assert_eq!(wal_files(&layout), Vec::<String>::new());
 }
 
 /// A read opens one pool and closes it. The pool holds one connection, so

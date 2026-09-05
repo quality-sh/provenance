@@ -10,17 +10,10 @@ use provenance_core::protocol::StampPolicy;
 /// Empties the requirement list of every rule in the shard, which the
 /// graph validator refuses: a rule needs one requirement.
 fn orphan_every_rule(store: &test_stores::TestStore) {
-    let path = crate::shards::rules_path(&store.layout(), &store.scope);
-    let rewritten: Vec<String> = std::fs::read_to_string(&path)
-        .unwrap()
-        .lines()
-        .map(|line| {
-            let mut record: serde_json::Value = serde_json::from_str(line).unwrap();
-            record["requirement_ids"] = serde_json::json!([]);
-            record.to_string()
-        })
-        .collect();
-    std::fs::write(&path, format!("{}\n", rewritten.join("\n"))).unwrap();
+    crate::cache::tests::fixtures::rewrite_records(
+        &crate::shards::rules_path(&store.layout(), &store.scope),
+        |record| record["requirement_ids"] = serde_json::json!([]),
+    );
 }
 
 #[tokio::test]
@@ -88,18 +81,6 @@ async fn a_refused_catch_up_over_no_database_names_materialize() {
     let text = format!("{refused:#}");
     assert!(text.contains("provenance materialize"), "{text}");
     assert!(text.contains("needs one requirement"), "{text}");
-}
-
-#[tokio::test]
-async fn refuse_stale_is_reserved() {
-    let store = test_stores::seeded_queries();
-    let refused = get_through(
-        &store,
-        ReadPolicy::with_freshness(FreshnessPolicy::RefuseStale),
-    )
-    .await
-    .unwrap_err();
-    assert!(refused.to_string().contains("refuse_stale"), "{refused}");
 }
 
 /// Makes the directory writable again when the test ends, however it ends.

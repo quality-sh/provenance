@@ -2,9 +2,8 @@
 
 use crate::cache::tests::fixtures::seeded_layout;
 use crate::cache::{materialize_state, open_cache};
-use crate::operations::stamp::{self, READ_DERIVATION};
+use crate::operations::stamp;
 use provenance_core::protocol::StampPolicy;
-use serde_json::json;
 
 #[tokio::test]
 async fn the_stamp_carries_the_stored_instance_id() {
@@ -32,19 +31,6 @@ async fn the_stamp_carries_the_stored_instance_id() {
     assert_eq!(stamp.instance_id, instance_id);
     assert_eq!(stamp.serial, serial);
     assert_eq!(stamp.digest, digest);
-    assert_eq!(stamp.derivation, READ_DERIVATION);
-    assert_eq!(
-        serde_json::to_value(&stamp).unwrap(),
-        json!({
-            "serial": serial,
-            "digest": digest,
-            "instance_id": instance_id,
-            "derivation": READ_DERIVATION,
-            "policy": "catch_up",
-            "attested": [],
-            "live": ["canonical"],
-        })
-    );
 }
 
 #[tokio::test]

@@ -81,15 +81,20 @@ fn is_renaming_use(line: &str) -> bool {
         && (trimmed.contains(" as ") || trimmed.contains('*'))
 }
 
+/// A comment may name a path without reading anything.
+fn is_comment(line: &str) -> bool {
+    line.trim_start().starts_with("//")
+}
+
 fn bypasses(name: &str, source: &str) -> Vec<String> {
+    let code: Vec<&str> = source.lines().filter(|line| !is_comment(line)).collect();
     let mut found: Vec<String> = BYPASS_PATHS
         .iter()
-        .filter(|path| source.contains(**path))
+        .filter(|path| code.iter().any(|line| line.contains(**path)))
         .map(|path| format!("{name}: {path}"))
         .collect();
     found.extend(
-        source
-            .lines()
+        code.iter()
             .filter(|line| is_renaming_use(line))
             .map(|line| format!("{name}: {}", line.trim())),
     );
@@ -103,6 +108,12 @@ fn the_gate_sees_a_planted_bypass() {
         bypasses("planted.rs", planted),
         ["planted.rs: provenance_scanner::scan_path"]
     );
+}
+
+#[test]
+fn a_comment_naming_a_path_does_not_trip_the_gate() {
+    let planted = "/// Reads nothing; `StateStore::new` is the constructor.\n// see crate::cache\nfn read() {}";
+    assert_eq!(bypasses("planted.rs", planted), Vec::<String>::new());
 }
 
 #[test]

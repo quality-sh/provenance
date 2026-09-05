@@ -227,6 +227,21 @@ fn seed_shaping_owners(store: &StateStore, scope: &ScopeId) {
         .unwrap();
 }
 
+/// Rewrites every record of a shard in place, past the writers' checks,
+/// as a hand edit would.
+pub fn rewrite_records(path: &camino::Utf8Path, mut change: impl FnMut(&mut serde_json::Value)) {
+    let rewritten: Vec<String> = std::fs::read_to_string(path)
+        .unwrap()
+        .lines()
+        .map(|line| {
+            let mut record: serde_json::Value = serde_json::from_str(line).unwrap();
+            change(&mut record);
+            record.to_string()
+        })
+        .collect();
+    std::fs::write(path, format!("{}\n", rewritten.join("\n"))).unwrap();
+}
+
 /// Appends one raw record to a shard, past the writers' checks: the gap
 /// policy reads state a hand edit can leave behind.
 pub fn append_record(path: &camino::Utf8Path, record: &serde_json::Value) {
