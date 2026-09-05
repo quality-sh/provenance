@@ -18,6 +18,7 @@ mod freshness;
 mod live;
 mod snapshot;
 
+pub(crate) use freshness::is_missing_table;
 pub use live::{Disturbed, Live, LiveHandle};
 pub use snapshot::{ReadSnapshot, Relations, Table};
 
@@ -45,6 +46,8 @@ pub enum ReadRefusal {
     },
     #[error("the refuse_stale freshness policy is reserved and not implemented")]
     RefuseStaleUnimplemented,
+    #[error("the projection in {database} is behind on migrations; run `provenance materialize`")]
+    SchemaBehind { database: Utf8PathBuf },
 }
 
 /// Everything one read may reach: the pinned snapshot and the live halves.

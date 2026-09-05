@@ -139,3 +139,76 @@ async fn a_read_only_checkout_answers_at_its_serial() {
     assert_eq!(stamped.stamp.serial, healthy.stamp.serial);
     assert!(stamped.freshness_error.is_some());
 }
+
+/// A cache file from before migration 018: the migration table stops at
+/// 017 and no revision table exists.
+async fn old_database(corpus: &corpus::Corpus) {
+    use sqlx::{Connection, SqliteConnection};
+    let layout = corpus.layout();
+    std::fs::create_dir_all(layout.cache_dir()).unwrap();
+    let options = sqlx::sqlite::SqliteConnectOptions::new()
+        .filename(layout.cache_db_path())
+        .create_if_missing(true);
+    let mut connection = SqliteConnection::connect_with(&options).await.unwrap();
+    sqlx::query(
+        "CREATE TABLE _schema_migrations (id TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+    )
+    .execute(&mut connection)
+    .await
+    .unwrap();
+    for id in 1..=17 {
+        sqlx::query("INSERT INTO _schema_migrations (id) VALUES (?)")
+            .bind(format!("{id:03}"))
+            .execute(&mut connection)
+            .await
+            .unwrap();
+    }
+    connection.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn annotate_only_refuses_a_database_behind_on_migrations_by_type() {
+    let corpus = corpus::seeded_queries();
+    old_database(&corpus).await;
+    let refused = get_through(
+        &corpus,
+        ReadPolicy::with_freshness(FreshnessPolicy::AnnotateOnly),
+    )
+    .await
+    .unwrap_err();
+    assert!(
+        matches!(
+            refused.downcast_ref::<crate::operations::reader::ReadRefusal>(),
+            Some(crate::operations::reader::ReadRefusal::SchemaBehind { .. })
+        ),
+        "{refused:#}"
+    );
+    assert!(refused.to_string().contains("provenance materialize"));
+}
+
+/// When the freshness step fails before it can migrate, the read falls
+/// back to the stored file; an old file holds no revision table, and the
+/// refusal must still be the typed one that names materialize.
+#[tokio::test]
+async fn a_pre_stamp_database_refuses_and_names_materialize_when_catch_up_fails() {
+    let corpus = corpus::seeded_queries();
+    old_database(&corpus).await;
+    // A file where the lock directory belongs makes the guard fail before
+    // catch-up can run a migration.
+    let locks = corpus.layout().cache_dir().join("locks");
+    std::fs::remove_dir_all(&locks).unwrap();
+    std::fs::write(&locks, b"").unwrap();
+    let refused = get_through(&corpus, ReadPolicy::default())
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(
+            refused.downcast_ref::<crate::operations::reader::ReadRefusal>(),
+            Some(crate::operations::reader::ReadRefusal::NoProjection { .. })
+        ),
+        "{refused:#}"
+    );
+    let text = format!("{refused:#}");
+    assert!(text.contains("provenance materialize"), "{text}");
+    assert!(!text.contains("no such table"), "{text}");
+}

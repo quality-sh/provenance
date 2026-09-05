@@ -41,7 +41,7 @@ pub(super) async fn run(
             let pool = open_existing_cache(layout)
                 .await
                 .map_err(|error| no_projection(layout, &error))?;
-            if let Err(error) = ensure_current_schema(&pool).await {
+            if let Err(error) = ensure_current_schema(&pool, layout).await {
                 pool.close().await;
                 return Err(error);
             }
@@ -94,16 +94,39 @@ async fn stored(layout: &ProvenanceLayout, error: anyhow::Error) -> anyhow::Resu
 }
 
 /// Under `annotate_only` a database behind on migrations refuses: no
-/// freshness step will bring it forward.
-async fn ensure_current_schema(pool: &SqlitePool) -> anyhow::Result<()> {
-    let applied = migrations::applied_migrations(pool).await?;
-    anyhow::ensure!(
-        applied
-            .iter()
-            .any(|id| id == migrations::LATEST_MIGRATION_ID),
-        "the projection is behind on migrations; run `provenance materialize`"
-    );
-    Ok(())
+/// freshness step will bring it forward. A file with no migration table
+/// at all is behind too.
+async fn ensure_current_schema(pool: &SqlitePool, layout: &ProvenanceLayout) -> anyhow::Result<()> {
+    let behind = ReadRefusal::SchemaBehind {
+        database: layout.cache_db_path(),
+    };
+    let applied = match migrations::applied_migrations(pool).await {
+        Ok(applied) => applied,
+        Err(error)
+            if error
+                .downcast_ref::<sqlx::Error>()
+                .is_some_and(is_missing_table) =>
+        {
+            return Err(behind.into())
+        }
+        Err(error) => return Err(error),
+    };
+    if applied
+        .iter()
+        .any(|id| id == migrations::LATEST_MIGRATION_ID)
+    {
+        Ok(())
+    } else {
+        Err(behind.into())
+    }
+}
+
+/// Whether an error says a table this schema expects is not there.
+pub fn is_missing_table(error: &sqlx::Error) -> bool {
+    match error {
+        sqlx::Error::Database(database) => database.message().contains("no such table"),
+        _ => false,
+    }
 }
 
 fn no_projection(layout: &ProvenanceLayout, error: &anyhow::Error) -> anyhow::Error {

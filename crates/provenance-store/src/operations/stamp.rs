@@ -53,17 +53,25 @@ pub fn seal(context: ReadContext, policy: StampPolicy) -> Stamp {
     )
 }
 
-/// Reads the stored revision on one connection. Inside an open transaction
-/// this is the first read, so it pins the snapshot every later row comes
-/// from. `None` means the database was never materialized.
+/// Reads the stored revision on one connection.
+///
+/// Inside an open transaction this is the first read, so it pins the
+/// snapshot every later row comes from. `None` means the database was
+/// never materialized, or predates the revision tables and so holds no
+/// revision either.
 pub async fn stored_revision(
     connection: &mut SqliteConnection,
 ) -> anyhow::Result<Option<StoredRevision>> {
-    let revision: Option<(i64, String)> = sqlx::query_as(
+    let revision: Result<Option<(i64, String)>, sqlx::Error> = sqlx::query_as(
         "SELECT serial, digest FROM projection_revision ORDER BY serial DESC LIMIT 1",
     )
     .fetch_optional(&mut *connection)
-    .await?;
+    .await;
+    let revision = match revision {
+        Ok(revision) => revision,
+        Err(error) if super::reader::is_missing_table(&error) => None,
+        Err(error) => return Err(error.into()),
+    };
     let Some((serial, digest)) = revision else {
         return Ok(None);
     };
