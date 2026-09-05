@@ -6,6 +6,8 @@ use provenance_core::protocol::{
 };
 use provenance_core::{NodeType, ScopeId, StableId};
 
+use super::nodes;
+
 /// Loads every canonical record a query can name, in one settled order.
 ///
 /// Active views leave retired records out. The order is node type then
@@ -83,16 +85,16 @@ pub(super) fn find<'a>(
     })
 }
 
-pub(super) fn get(
-    ctx: &ReadContext,
-    scope: &ScopeId,
-    request: GetQuery,
-) -> anyhow::Result<GetResult> {
+pub(super) async fn get(ctx: &ReadContext, request: GetQuery) -> anyhow::Result<GetResult> {
     ensure_protocol_version(request.protocol_version)?;
     let id = StableId::new(request.id)?;
-    let store = ctx.live(Live::Canonical).store();
-    let nodes = load(&store, scope, request.include_retired)?;
-    let node = find(&nodes, Some(request.node_type), &id).cloned();
+    let node = nodes::node(
+        ctx.snapshot(),
+        request.node_type,
+        &id,
+        request.include_retired,
+    )
+    .await?;
     Ok(GetResult {
         found: node.is_some(),
         node,

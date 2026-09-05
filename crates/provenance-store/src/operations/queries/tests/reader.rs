@@ -47,9 +47,8 @@ pub(super) async fn get_through(
     store: &TestStore,
     policy: ReadPolicy,
 ) -> anyhow::Result<Stamped<GetResult>> {
-    let scope = store.scope.clone();
     answer(&store.root, &store.scope, policy, move |ctx| {
-        Box::pin(async move { records::get(ctx, &scope, get_query("req_overtime")) })
+        Box::pin(async move { records::get(ctx, get_query("req_overtime")).await })
     })
     .await
 }
@@ -190,18 +189,18 @@ async fn every_answer_carries_a_stamp_at_the_stored_serial() {
         assert_eq!(stamp.derivation, READ_DERIVATION, "{operation} derivation");
         assert_eq!(stamp.policy, StampPolicy::CatchUp, "{operation} policy");
         assert!(stamp.digest.starts_with("sha256:"), "{operation} digest");
-        let (attested, live) = words(stamp);
-        assert!(
-            attested.is_empty(),
-            "{operation} attests nothing before its flip"
-        );
-        let expected: &[&str] = match *operation {
-            "impact" | "resolve_symbol" => &["canonical", "scanned_sites"],
-            "evidence" => &["canonical", "diff", "verification_runs"],
-            "stale" => &["canonical", "diff"],
-            _ => &["canonical"],
+        let (attested, live): (&[&str], &[&str]) = match *operation {
+            "get" => (&["requirements"], &[]),
+            "impact" | "resolve_symbol" => (&[], &["canonical", "scanned_sites"]),
+            "evidence" => (&[], &["canonical", "diff", "verification_runs"]),
+            "stale" => (&[], &["canonical", "diff"]),
+            _ => (&[], &["canonical"]),
         };
-        assert_eq!(live, expected, "{operation} live words");
+        assert_eq!(
+            words(stamp),
+            (attested.to_vec(), live.to_vec()),
+            "{operation} stamp words"
+        );
     }
 }
 

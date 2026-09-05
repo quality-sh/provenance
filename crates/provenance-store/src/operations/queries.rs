@@ -20,6 +20,7 @@ use super::reader::{self, ReadContext, ReadFuture};
 mod bindings;
 mod evidence;
 mod impact;
+mod nodes;
 mod records;
 mod stale;
 mod symbols;
@@ -42,9 +43,8 @@ pub async fn get(
     scope: &ScopeId,
     request: GetQuery,
 ) -> anyhow::Result<Stamped<GetResult>> {
-    let inner = scope.clone();
     served(repo, scope, move |ctx| {
-        Box::pin(async move { records::get(ctx, &inner, request) })
+        Box::pin(async move { records::get(ctx, request).await })
     })
     .await
 }

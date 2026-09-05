@@ -13,6 +13,7 @@ mod comparison;
 mod front_equivalence;
 mod pinned;
 mod reader;
+mod retired;
 mod stamp;
 mod tables;
 

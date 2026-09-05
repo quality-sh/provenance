@@ -226,7 +226,11 @@ async fn by_ids_reads_past_the_bind_limit() {
         .collect();
     wanted.push(sid("rule_overtime_001"));
     wanted.insert(7, sid("rule_penalty_001"));
-    let found = ids(&snapshot.table::<Rule>().by_ids(&wanted).await.unwrap());
+    let found = ids(&snapshot
+        .table::<Rule>()
+        .by_ids(&wanted, true)
+        .await
+        .unwrap());
     assert_eq!(found, ["rule_overtime_001", "rule_penalty_001"]);
     drop(snapshot);
     pool.close().await;
@@ -242,7 +246,11 @@ async fn by_ids_reads_a_repeated_id_once_across_chunks() {
     wanted.push(sid("rule_overtime_001"));
     wanted.push(sid("rule_overtime_001"));
     wanted.push(sid("rule_penalty_001"));
-    let found = ids(&snapshot.table::<Rule>().by_ids(&wanted).await.unwrap());
+    let found = ids(&snapshot
+        .table::<Rule>()
+        .by_ids(&wanted, true)
+        .await
+        .unwrap());
     assert_eq!(found, ["rule_overtime_001", "rule_penalty_001"]);
     drop(snapshot);
     pool.close().await;

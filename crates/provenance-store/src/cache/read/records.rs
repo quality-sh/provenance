@@ -9,6 +9,7 @@ use provenance_core::model::ProjectionRow;
 use provenance_core::{
     Boundary, Domain, NodeType, Question, Requirement, Resolution, Rule, Source, StableId, Topic,
 };
+use provenance_macros::rule;
 use sqlx::Row;
 
 /// The column that says a record retired, on the kinds that retire in
@@ -19,7 +20,10 @@ fn has_retired<K: ProjectionRow>() -> bool {
     K::COLUMNS.contains(&RETIRED)
 }
 
-/// The clause that leaves retired rows out, on a kind that has them.
+/// The clause that leaves retired rows out, on a kind that has them. Every
+/// lookup that decides whether a record counts goes through it, so a
+/// retired record is answered only when the request asks for it.
+#[rule("rule_retired_records_answer_only_when_asked")]
 fn active_clause<K: ProjectionRow>(include_retired: bool) -> &'static str {
     if has_retired::<K>() && !include_retired {
         " AND retired = 0"
@@ -47,10 +51,11 @@ impl<K: ProjectionRow> Table<'_, K> {
         row.as_ref().map(decode::<K>).transpose()
     }
 
-    /// The records with the given ids, one per id, in id order, retired or
-    /// not. The ids go to the database in chunks, since one statement
-    /// binds a bounded number of parameters; a repeated id is asked once.
-    pub async fn by_ids(&self, ids: &[StableId]) -> anyhow::Result<Vec<K>> {
+    /// The records with the given ids that count under the view, one per
+    /// id, in id order. The ids go to the database in chunks, since one
+    /// statement binds a bounded number of parameters; a repeated id is
+    /// asked once.
+    pub async fn by_ids(&self, ids: &[StableId], include_retired: bool) -> anyhow::Result<Vec<K>> {
         let mut wanted: Vec<&str> = ids.iter().map(StableId::as_str).collect();
         wanted.sort_unstable();
         wanted.dedup();
@@ -58,9 +63,10 @@ impl<K: ProjectionRow> Table<'_, K> {
         for chunk in wanted.chunks(BIND_CHUNK) {
             let marks = vec!["?"; chunk.len()].join(", ");
             let sql = format!(
-                "SELECT {} FROM {} WHERE scope_id = ? AND id IN ({marks})",
+                "SELECT {} FROM {} WHERE scope_id = ? AND id IN ({marks}){}",
                 select_columns::<K>(),
-                quoted(K::TABLE)
+                quoted(K::TABLE),
+                active_clause::<K>(include_retired)
             );
             let mut query = sqlx::query(&sql).bind(self.snapshot().scope().as_str());
             for id in chunk {
