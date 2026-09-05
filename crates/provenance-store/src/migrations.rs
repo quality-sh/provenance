@@ -1,5 +1,6 @@
 use crate::layout::ProvenanceLayout;
 use anyhow::Context;
+use provenance_macros::rule;
 use sqlx::{Executor, SqlitePool};
 
 pub const INITIAL_MIGRATION_ID: &str = "001";
@@ -144,6 +145,7 @@ pub async fn run_migrations(
 /// that rebuild leaves a database whose next catch-up pass re-derives
 /// every family, instead of one whose digests claim rows that are not
 /// there.
+#[rule("rule_interrupted_migration_reloads_every_family")]
 async fn forget_digests(tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>) -> anyhow::Result<()> {
     for table in ["projection_unit_digests", "projection_family_digests"] {
         tx.execute(format!("DELETE FROM {table}").as_str()).await?;

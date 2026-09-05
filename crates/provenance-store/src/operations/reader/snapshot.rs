@@ -9,12 +9,18 @@ use crate::cache::quoted;
 use crate::operations::stamp::{stored_revision, StoredRevision};
 use provenance_core::model::ProjectionRow;
 use provenance_core::ScopeId;
+use provenance_macros::rule;
 use sqlx::{Sqlite, SqlitePool, Transaction};
 use std::collections::BTreeSet;
 use std::marker::PhantomData;
 use std::sync::{Mutex, PoisonError};
 
 /// One read transaction at one revision.
+///
+/// A projection table is readable only through its handles, and each
+/// handle records its family word, so the stamp's `attested` list names
+/// every table the read opened.
+#[rule("rule_stamp_attests_every_table_read")]
 pub struct ReadSnapshot {
     tx: tokio::sync::Mutex<Transaction<'static, Sqlite>>,
     scope: ScopeId,
@@ -27,6 +33,7 @@ impl ReadSnapshot {
     /// is the stored revision, which pins the snapshot: every row read
     /// later in the transaction is at that serial. `None` means the
     /// database holds no revision.
+    #[rule("rule_read_answers_from_one_pinned_transaction")]
     pub(crate) async fn open(pool: &SqlitePool, scope: &ScopeId) -> anyhow::Result<Option<Self>> {
         let mut tx = pool.begin().await?;
         let Some(revision) = stored_revision(&mut tx).await? else {

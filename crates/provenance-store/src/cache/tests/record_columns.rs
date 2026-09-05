@@ -11,6 +11,7 @@ use provenance_core::{
     Boundary, Domain, ImplementationBinding, Question, Requirement, RequirementReview, Resolution,
     Rule, Source, Topic, VerificationBinding,
 };
+use provenance_macros::verifies;
 use std::collections::BTreeSet;
 
 async fn table_columns(pool: &sqlx::SqlitePool, table: &str) -> BTreeSet<String> {
@@ -41,6 +42,7 @@ async fn assert_mirrors<K: ProjectionRow>(pool: &sqlx::SqlitePool, kind: bool) {
 /// The gate runs over the migrated schema alone, before any row loads:
 /// a drifted column then fails here, by name, and not at an insert.
 #[tokio::test]
+#[verifies("rule_record_table_has_one_column_per_field", exhaustion)]
 async fn every_kind_table_mirrors_its_record_columns() {
     let (_dir, layout, _scope) = seeded_layout();
     let pool = open_cache(&layout).await.unwrap();

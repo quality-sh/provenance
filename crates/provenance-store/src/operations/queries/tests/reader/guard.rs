@@ -11,10 +11,12 @@ use crate::operations::reader::{answer, ReadSnapshot};
 use crate::publication::{publication_guard, with_repository_publication};
 use crate::test_probes::publication_lock_is_held;
 use provenance_core::{Requirement, RequirementStatus};
+use provenance_macros::verifies;
 use std::sync::mpsc;
 use std::time::Duration;
 
 #[tokio::test]
+#[verifies("rule_read_holds_guard_for_freshness_only", examples)]
 async fn the_publication_lock_is_free_while_a_read_answers() {
     let store = test_stores::seeded_queries();
     let layout = store.layout();
@@ -90,6 +92,7 @@ async fn a_canonical_write_does_not_wait_for_a_read() {
 /// so the publication and the second snapshot run on a second pool; WAL
 /// is what lets both read the same file.
 #[tokio::test]
+#[verifies("rule_read_answers_from_one_pinned_transaction", examples)]
 async fn a_read_that_started_before_a_publication_answers_at_its_serial() {
     let store = test_stores::seeded_queries();
     let layout = store.layout();

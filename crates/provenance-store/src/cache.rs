@@ -24,6 +24,7 @@ pub use projection_families::ProjectionFamily;
 pub use traceability::*;
 
 use crate::layout::ProvenanceLayout;
+use provenance_macros::rule;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 use sqlx::SqlitePool;
 use std::str::FromStr;
@@ -123,6 +124,7 @@ fn cache_options(layout: &ProvenanceLayout) -> anyhow::Result<SqliteConnectOptio
 /// The last of them cannot take the exclusive lock, and `SQLite` then skips
 /// the checkpoint that removes the `-wal` and `-shm` files. A pool of one
 /// closes once, and the files go with it.
+#[rule("rule_completed_read_leaves_no_wal_files")]
 async fn connect(
     options: SqliteConnectOptions,
     retry: WalSwitchRetry,

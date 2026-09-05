@@ -53,7 +53,10 @@ impl<K: ProjectionRow> Table<'_, K> {
     }
 
     /// The records with the given ids that count under the view, one per
-    /// id, in id order; a repeated id is answered once.
+    /// id, in id order; a repeated id is answered once. The lookup is
+    /// `by_field` on the id column, whose chunked select folds repeated
+    /// values before it asks.
+    #[rule("rule_by_ids_answers_a_repeated_id_once")]
     pub async fn by_ids(&self, ids: &[StableId], include_retired: bool) -> anyhow::Result<Vec<K>> {
         let wanted: Vec<&str> = ids.iter().map(StableId::as_str).collect();
         self.by_field("id", &wanted, include_retired).await

@@ -33,6 +33,7 @@ use crate::layout::ProvenanceLayout;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::protocol::Stamped;
 use provenance_core::ScopeId;
+use provenance_macros::rule;
 use std::collections::BTreeSet;
 use std::future::Future;
 use std::pin::Pin;
@@ -41,8 +42,10 @@ use std::sync::Mutex;
 /// The future one read runs over its context.
 pub type ReadFuture<'c, R> = Pin<Box<dyn Future<Output = anyhow::Result<R>> + Send + 'c>>;
 
-/// Why a read refused.
+/// Why a read refused. A read with no stored revision refuses here and
+/// names `provenance materialize`, under every freshness policy.
 #[derive(Debug, thiserror::Error)]
+#[rule("rule_no_revision_refuses_and_names_materialize")]
 pub enum ReadRefusal {
     #[error("no projection revision in {database}; run `provenance materialize`{because}")]
     NoProjection {
@@ -85,6 +88,7 @@ impl ReadContext {
     }
 
     /// A handle on one live part; taking it puts the word on the stamp.
+    #[rule("rule_stamp_lists_a_live_word_for_uncovered_parts")]
     pub fn live(&self, what: Live) -> LiveHandle<'_> {
         self.live
             .lock()
@@ -112,7 +116,9 @@ impl ReadContext {
 }
 
 /// Runs one read: the freshness step under the guard, then `run` over a
-/// pinned snapshot, then the stamp.
+/// pinned snapshot, then the stamp. Every query answer leaves through here,
+/// so every answer carries a stamp.
+#[rule("rule_query_answer_carries_a_stamp")]
 pub async fn answer<R: Send>(
     repo: &Utf8Path,
     scope: &ScopeId,

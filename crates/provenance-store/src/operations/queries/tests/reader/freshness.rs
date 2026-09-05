@@ -18,6 +18,7 @@ fn orphan_every_rule(store: &test_stores::TestStore) {
 }
 
 #[tokio::test]
+#[verifies("rule_failed_freshness_answers_at_stored_serial", examples)]
 async fn a_read_answers_at_the_stored_serial_when_catch_up_refuses() {
     let store = test_stores::seeded_queries();
     crate::cache::tests::fixtures::create_requirement(
@@ -51,6 +52,7 @@ async fn a_read_answers_at_the_stored_serial_when_catch_up_refuses() {
 }
 
 #[tokio::test]
+#[verifies("rule_no_revision_refuses_and_names_materialize", examples)]
 async fn a_read_with_no_database_refuses_and_names_materialize() {
     let store = test_stores::seeded_queries();
     let refused = get_through(
