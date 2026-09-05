@@ -25,7 +25,6 @@ pub(super) fn impact(
     let repo = ctx.repo();
     let store = ctx.live(Live::Canonical).store();
     let graph = walk::ScopeGraph::load(&store, scope, request.include_retired)?;
-    let mut seen = BTreeSet::from([id.as_str().to_string()]);
     let mut rules = BTreeSet::new();
     if graph.find(NodeType::Rule, &id).is_some() {
         rules.insert(id.as_str().to_string());
@@ -34,11 +33,15 @@ pub(super) fn impact(
         .kind_of(&id)
         .map(|node_type| vec![(node_type, id)])
         .unwrap_or_default();
+    let mut seen: BTreeSet<(u8, String)> = frontier.iter().map(walk::seen_key).collect();
     for _ in 0..TRACE_MAX_DEPTH {
         let mut next = Vec::new();
         for (origin_type, origin) in &frontier {
             for step in flow_neighbors(&graph.front(), *origin_type, origin, true) {
-                if !seen.insert(step.endpoint.id.as_str().to_string()) {
+                if !seen.insert(walk::seen_key(&(
+                    step.endpoint.node_type,
+                    step.endpoint.id.clone(),
+                ))) {
                     continue;
                 }
                 if graph

@@ -5,8 +5,9 @@
 //! eleven record families go through the one `ProjectionRow` loader; the
 //! seven collaboration families keep their hand-written inserts.
 
+use super::collaboration_records;
 use super::record_rows::{kind_search, load_kind};
-use super::{collaboration_records, record_rows};
+use crate::cache::quoted;
 use crate::cache::ProjectionFamily;
 use crate::state_store::StateStore;
 use provenance_core::protocol::GraphNode;
@@ -20,7 +21,7 @@ pub(super) async fn delete_rows(
 ) -> anyhow::Result<()> {
     sqlx::query(&format!(
         "DELETE FROM {} WHERE scope_id = ?",
-        record_rows::quoted(family.family_name())
+        quoted(family.family_name())
     ))
     .bind(scope.as_str())
     .execute(&mut **tx)

@@ -201,4 +201,35 @@ fn a_dangling_reference_is_still_reported_as_stored() {
         .iter()
         .any(|node| node.relation == "refines" && node.direction == RelationDirection::In));
 }
+
+/// A requirement citing one source under two clauses stores two
+/// references and answers one `cites` neighbour each way: one neighbour
+/// per (relation, direction, endpoint).
+#[test]
+fn a_source_cited_under_two_clauses_is_one_neighbour() {
+    let mut records = fixture();
+    records.requirements[0].source_refs.push(crate::model::SourceReference {
+        source_id: sid("source_award"),
+        clause: Some("clause 2".into()),
+    });
+    let front = front(&records);
+    let from_requirement = flatten(related_nodes(&front, NodeType::Requirement, &sid("req_overtime")));
+    assert_eq!(
+        from_requirement.iter().filter(|node| **node == out("cites", NodeType::Source, "source_award")).count(),
+        1,
+        "{from_requirement:?}"
+    );
+    let from_source = flatten(related_nodes(&front, NodeType::Source, &sid("source_award")));
+    assert_eq!(
+        from_source.iter().filter(|node| **node == inbound("cites", NodeType::Requirement, "req_overtime")).count(),
+        1,
+        "{from_source:?}"
+    );
+    let upstream = flatten(flow_neighbors(&front, NodeType::Requirement, &sid("req_overtime"), false));
+    assert_eq!(
+        upstream.iter().filter(|node| **node == out("cites", NodeType::Source, "source_award")).count(),
+        1,
+        "{upstream:?}"
+    );
+}
 }

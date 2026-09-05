@@ -8,6 +8,7 @@ mod units;
 
 pub use catch_up::catch_up_with_guard;
 pub use catch_up::{catch_up_state, CatchUpReport};
+pub use record_rows::SEARCH_TEXT;
 pub use units::{unit_digest, units_for, Unit};
 
 use super::{open_cache, MaterializeReport};

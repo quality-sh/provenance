@@ -5,6 +5,7 @@ mod materialize;
 mod prime;
 mod projection_digest;
 mod projection_families;
+pub mod read;
 mod traceability;
 
 pub use gaps::*;
@@ -154,6 +155,12 @@ fn is_busy(error: &sqlx::Error) -> bool {
 
 pub(crate) fn serde_name<T: serde::Serialize>(value: &T) -> anyhow::Result<String> {
     Ok(serde_json::to_value(value)?.as_str().unwrap().to_string())
+}
+
+/// A quoted SQL identifier: `key`, `field`, `before`, and `after` are
+/// column names and SQL keywords both.
+pub(crate) fn quoted(identifier: &str) -> String {
+    format!("\"{identifier}\"")
 }
 
 #[cfg(test)]

@@ -155,18 +155,21 @@ pub(super) fn trace(
     let id = StableId::new(request.id.clone())?;
     let store = ctx.live(Live::Canonical).store();
     let graph = ScopeGraph::load(&store, scope, request.include_retired)?;
-    let mut seen = BTreeSet::from([id.as_str().to_string()]);
     let mut frontier: Vec<(NodeType, StableId)> = request
         .node_type
         .or_else(|| graph.kind_of(&id))
         .map(|node_type| vec![(node_type, id)])
         .unwrap_or_default();
+    let mut seen: BTreeSet<(u8, String)> = frontier.iter().map(seen_key).collect();
     let mut reached = Vec::new();
     for depth in 1..=request.max_depth {
         let mut next = Vec::new();
         for (origin_type, origin) in &frontier {
             for step in graph.steps(*origin_type, origin, request.direction, &request.relations) {
-                if !seen.insert(step.endpoint.id.as_str().to_string()) {
+                if !seen.insert(seen_key(&(
+                    step.endpoint.node_type,
+                    step.endpoint.id.clone(),
+                ))) {
                     continue;
                 }
                 if let Some(node) = graph.find(step.endpoint.node_type, &step.endpoint.id) {
@@ -208,6 +211,12 @@ fn ensure_relations(relations: &[String]) -> anyhow::Result<()> {
         }
     }
     Ok(())
+}
+
+/// The key a walk remembers a visited record by: its kind and its id,
+/// so one id under two kinds is two records.
+pub(super) fn seen_key((node_type, id): &(NodeType, StableId)) -> (u8, String) {
+    (records::rank(*node_type), id.as_str().to_string())
 }
 
 fn node_order(node: &GraphNode) -> (u8, String) {

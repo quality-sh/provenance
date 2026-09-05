@@ -6,13 +6,14 @@
 //! searchable pieces. Identifiers are quoted, since `key`, `field`,
 //! `before`, and `after` are SQL keywords.
 
+use crate::cache::quoted;
 use provenance_core::model::{ColumnValue, ProjectionRow};
 use provenance_core::protocol::GraphNode;
 use sqlx::sqlite::SqliteArguments;
 use sqlx::{query::Query, Sqlite, Transaction};
 
 /// The derived search column on a kind table.
-pub(super) const SEARCH_TEXT: &str = "search_text";
+pub const SEARCH_TEXT: &str = "search_text";
 
 /// The separator between the pieces of `search_text`.
 const SEARCH_TEXT_SEPARATOR: &str = "\u{1}";
@@ -31,10 +32,6 @@ fn search_text(node: &GraphNode) -> String {
 /// variant that carries the kind.
 pub(super) fn kind_search<K: Clone>(wrap: fn(Box<K>) -> GraphNode) -> impl Fn(&K) -> String + Sync {
     move |record| search_text(&wrap(Box::new(record.clone())))
-}
-
-pub(super) fn quoted(identifier: &str) -> String {
-    format!("\"{identifier}\"")
 }
 
 /// The insert for one record, with the search column when the table has

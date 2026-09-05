@@ -442,3 +442,17 @@ fn gaps_flag_requirements_without_domain_id_but_not_requirements_with_one() {
         && gap.requirement_id.as_deref() == Some("req_schads_overtime")
         && gap.reason.contains("domain_id")));
 }
+
+/// The requirement graph view lists a source once, however many clauses
+/// the requirement cites it under.
+#[test]
+fn prime_lists_a_twice_cited_source_once() {
+    let (_dir, layout, scope) = super::fixtures::pinned_store::pinned_store_layout();
+    let view = get_requirement_graph(&layout, &scope, &sid("req_overtime")).unwrap();
+    let citations: Vec<_> = view
+        .relations
+        .iter()
+        .filter(|row| row.relation == "cites" && row.target_id.as_str() == "source_schads")
+        .collect();
+    assert_eq!(citations.len(), 1, "{citations:?}");
+}

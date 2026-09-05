@@ -3,13 +3,15 @@
 //! sqlx executes on `&mut` the connection, so every handle method takes
 //! the transaction for the span of one statement and never across two
 //! handles at once, which is how the operations read: one statement at a
-//! time.
+//! time. The row readers behind the handles live in `cache::read`.
 
-use crate::cache::ProjectionFamily;
+use crate::cache::quoted;
 use crate::operations::stamp::{stored_revision, StoredRevision};
+use provenance_core::model::ProjectionRow;
 use provenance_core::ScopeId;
 use sqlx::{Sqlite, SqlitePool, Transaction};
 use std::collections::BTreeSet;
+use std::marker::PhantomData;
 use std::sync::{Mutex, PoisonError};
 
 /// One read transaction at one revision.
@@ -50,13 +52,17 @@ impl ReadSnapshot {
         &self.revision.instance_id
     }
 
+    pub(crate) const fn scope(&self) -> &ScopeId {
+        &self.scope
+    }
+
     /// A handle on one kind or integration table; taking it puts the
-    /// family word in `attested`.
-    pub fn table(&self, family: ProjectionFamily) -> Table<'_> {
-        self.attest(family.family_name());
+    /// table's family word in `attested`.
+    pub fn table<K: ProjectionRow>(&self) -> Table<'_, K> {
+        self.attest(K::TABLE);
         Table {
             snapshot: self,
-            family,
+            kind: PhantomData,
         }
     }
 
@@ -74,13 +80,22 @@ impl ReadSnapshot {
             .insert(word);
     }
 
+    /// The transaction, for the span of one statement.
+    pub(crate) async fn connection(
+        &self,
+    ) -> tokio::sync::MutexGuard<'_, Transaction<'static, Sqlite>> {
+        self.tx.lock().await
+    }
+
     async fn count_rows(&self, table: &str) -> anyhow::Result<i64> {
-        let mut tx = self.tx.lock().await;
-        let count: i64 =
-            sqlx::query_scalar(&format!("SELECT COUNT(*) FROM {table} WHERE scope_id = ?"))
-                .bind(self.scope.as_str())
-                .fetch_one(&mut **tx)
-                .await?;
+        let mut tx = self.connection().await;
+        let count: i64 = sqlx::query_scalar(&format!(
+            "SELECT COUNT(*) FROM {} WHERE scope_id = ?",
+            quoted(table)
+        ))
+        .bind(self.scope.as_str())
+        .fetch_one(&mut **tx)
+        .await?;
         Ok(count)
     }
 
@@ -95,20 +110,22 @@ impl ReadSnapshot {
     }
 }
 
-/// One projection table at the snapshot's revision.
-pub struct Table<'s> {
+/// One record table at the snapshot's revision, typed by the record it
+/// holds. The marker is a function type, so the handle is `Send` and
+/// `Sync` whatever the record type is.
+pub struct Table<'s, K> {
     snapshot: &'s ReadSnapshot,
-    family: ProjectionFamily,
+    kind: PhantomData<fn() -> K>,
 }
 
-impl Table<'_> {
-    pub const fn family(&self) -> ProjectionFamily {
-        self.family
+impl<'s, K: ProjectionRow> Table<'s, K> {
+    pub(crate) const fn snapshot(&self) -> &'s ReadSnapshot {
+        self.snapshot
     }
 
     /// The scope's row count in the table.
     pub async fn count(&self) -> anyhow::Result<i64> {
-        self.snapshot.count_rows(self.family.family_name()).await
+        self.snapshot.count_rows(K::TABLE).await
     }
 }
 
@@ -117,7 +134,11 @@ pub struct Relations<'s> {
     snapshot: &'s ReadSnapshot,
 }
 
-impl Relations<'_> {
+impl<'s> Relations<'s> {
+    pub(crate) const fn snapshot(&self) -> &'s ReadSnapshot {
+        self.snapshot
+    }
+
     /// The scope's row count in the table.
     pub async fn count(&self) -> anyhow::Result<i64> {
         self.snapshot.count_rows("relations").await

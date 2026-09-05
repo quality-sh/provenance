@@ -4,13 +4,13 @@
 use super::super::comparison::test_stores;
 use super::get_query;
 use crate::cache::tests::fixtures::create_requirement;
-use crate::cache::{catch_up_state, catch_up_with_guard, open_cache, ProjectionFamily};
+use crate::cache::{catch_up_state, catch_up_with_guard, open_cache};
 use crate::operations::queries::records;
 use crate::operations::read_policy::ReadPolicy;
 use crate::operations::reader::{answer, ReadSnapshot};
 use crate::publication::{publication_guard, with_repository_publication};
 use crate::test_probes::publication_lock_is_held;
-use provenance_core::RequirementStatus;
+use provenance_core::{Requirement, RequirementStatus};
 use std::sync::mpsc;
 use std::time::Duration;
 
@@ -103,11 +103,7 @@ async fn a_read_that_started_before_a_publication_answers_at_its_serial() {
         .await
         .unwrap()
         .expect("a revision");
-    let before = first
-        .table(ProjectionFamily::Requirements)
-        .count()
-        .await
-        .unwrap();
+    let before = first.table::<Requirement>().count().await.unwrap();
     assert_eq!(before, 1);
 
     create_requirement(
@@ -124,11 +120,7 @@ async fn a_read_that_started_before_a_publication_answers_at_its_serial() {
     assert_eq!(report.serial, first.serial() + 1);
 
     assert_eq!(
-        first
-            .table(ProjectionFamily::Requirements)
-            .count()
-            .await
-            .unwrap(),
+        first.table::<Requirement>().count().await.unwrap(),
         before,
         "the open snapshot still reads its own serial"
     );
@@ -138,11 +130,7 @@ async fn a_read_that_started_before_a_publication_answers_at_its_serial() {
         .expect("a revision");
     assert_eq!(second.serial(), first.serial() + 1);
     assert_eq!(
-        second
-            .table(ProjectionFamily::Requirements)
-            .count()
-            .await
-            .unwrap(),
+        second.table::<Requirement>().count().await.unwrap(),
         before + 1
     );
     drop(first);

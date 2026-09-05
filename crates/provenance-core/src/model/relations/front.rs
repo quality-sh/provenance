@@ -83,9 +83,12 @@ fn declaration_index(owner: NodeType, name: &str) -> usize {
         .unwrap_or(usize::MAX)
 }
 
-/// Walks every declared relation around one record, both ways, and labels
-/// each reached record with what reached it. Order: node rank, id,
-/// declaration order, out before in.
+/// Walks every declared relation around one record, both ways.
+///
+/// Each reached record is labelled with what reached it. Order: node
+/// rank, id, declaration order, out before in. One neighbour per
+/// (relation, direction, endpoint): a source cited under two clauses is
+/// stored twice and reached once.
 pub fn related_nodes<S: RelationSource>(
     source: &S,
     node_type: NodeType,
@@ -129,7 +132,9 @@ pub fn related_nodes<S: RelationSource>(
             .then_with(|| left_index.cmp(right_index))
             .then_with(|| direction_rank(left.direction).cmp(&direction_rank(right.direction)))
     });
-    reached.into_iter().map(|(_, node)| node).collect()
+    let mut nodes: Vec<RelatedNode> = reached.into_iter().map(|(_, node)| node).collect();
+    nodes.dedup();
+    nodes
 }
 
 const fn direction_rank(direction: RelationDirection) -> u8 {
