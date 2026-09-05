@@ -131,8 +131,24 @@ pub async fn run_migrations(
             applied.push(id.to_string());
         }
     }
+    if !applied.is_empty() {
+        forget_digests(&mut tx).await?;
+    }
     tx.commit().await?;
     Ok(applied)
+}
+
+/// A migration may recreate tables, and the rebuild that refills them
+/// commits on its own after this transaction. The digests that say which
+/// units and families are loaded go with the migration, so a crash before
+/// that rebuild leaves a database whose next catch-up pass re-derives
+/// every family, instead of one whose digests claim rows that are not
+/// there.
+async fn forget_digests(tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>) -> anyhow::Result<()> {
+    for table in ["projection_unit_digests", "projection_family_digests"] {
+        tx.execute(format!("DELETE FROM {table}").as_str()).await?;
+    }
+    Ok(())
 }
 
 fn remove_services_shards(layout: &ProvenanceLayout) -> anyhow::Result<()> {
