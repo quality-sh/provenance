@@ -75,8 +75,8 @@ pub async fn served_value(store: &TestStore, request: &Request, policy: ReadPoli
             Ok(match request {
                 Request::Get(query) => settle(records::get(ctx, query).await),
                 Request::Search(query) => settle(records::search(ctx, query).await),
-                Request::Neighbors(query) => settle(walk::neighbors(ctx, &scope, query)),
-                Request::Trace(query) => settle(walk::trace(ctx, &scope, query)),
+                Request::Neighbors(query) => settle(walk::neighbors(ctx, query).await),
+                Request::Trace(query) => settle(walk::trace(ctx, query).await),
                 Request::Impact(query) => settle(impact::impact(ctx, &scope, query)),
                 Request::Evidence(query) => settle(evidence::evidence(ctx, &scope, query)),
                 Request::Stale(query) => settle(stale::stale(ctx, &scope, query)),

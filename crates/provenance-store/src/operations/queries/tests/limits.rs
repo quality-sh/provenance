@@ -38,3 +38,31 @@ async fn search_visits_kinds_in_rank_order_and_stops_at_the_limit() {
     );
     assert!(answer.stamp.live.is_empty());
 }
+
+/// `req_top` has three live records one hop away, so a limit of two cuts
+/// the first depth; the stamp shows the walk read nothing past it.
+#[tokio::test]
+#[verifies("rule_query_answers_stop_at_the_limit", examples)]
+async fn trace_stops_at_the_limit_and_says_has_more() {
+    let store = TestStore::pinned();
+    let answer = queries::trace(
+        Some(store.root.clone()),
+        &store.scope,
+        requests::trace("req_top", false, 2),
+    )
+    .await
+    .unwrap();
+    let ids: Vec<(usize, &str)> = answer
+        .result
+        .nodes
+        .iter()
+        .map(|node| (node.depth, node.node.id().as_str()))
+        .collect();
+    assert_eq!(ids, [(1, "req_left"), (1, "twin_record")]);
+    assert!(answer.result.has_more);
+    assert_eq!(
+        answer.stamp.attested,
+        ["domains", "relations", "requirements", "rules", "sources"]
+    );
+    assert!(answer.stamp.live.is_empty());
+}

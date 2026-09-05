@@ -65,9 +65,8 @@ pub async fn neighbors(
     scope: &ScopeId,
     request: NeighborsQuery,
 ) -> anyhow::Result<Stamped<NeighborsResult>> {
-    let inner = scope.clone();
     served(repo, scope, move |ctx| {
-        Box::pin(async move { walk::neighbors(ctx, &inner, request) })
+        Box::pin(async move { walk::neighbors(ctx, request).await })
     })
     .await
 }
@@ -77,9 +76,8 @@ pub async fn trace(
     scope: &ScopeId,
     request: TraceQuery,
 ) -> anyhow::Result<Stamped<TraceResult>> {
-    let inner = scope.clone();
     served(repo, scope, move |ctx| {
-        Box::pin(async move { walk::trace(ctx, &inner, request) })
+        Box::pin(async move { walk::trace(ctx, request).await })
     })
     .await
 }
