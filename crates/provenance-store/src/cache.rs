@@ -34,10 +34,31 @@ pub struct MaterializeReport {
     pub migrations_applied: Vec<String>,
 }
 
-/// How long `open_cache` keeps trying while another process holds a
-/// DELETE-mode file open across the switch to WAL.
-const WAL_SWITCH_ATTEMPTS: u32 = 50;
-const WAL_SWITCH_PAUSE: Duration = Duration::from_millis(100);
+/// How a connect waits while another process holds a DELETE-mode file
+/// open across the switch to WAL.
+///
+/// Each attempt waits up to `busy_timeout` inside `SQLite`, then the connect
+/// fails as busy and the next attempt starts after `pause`, until
+/// `deadline` of wall time has passed since the first attempt. A caller
+/// that opens the file under the publication guard therefore holds the
+/// guard for at most `deadline` plus one `busy_timeout` in the legacy-file
+/// case; with the defaults that is fifteen seconds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WalSwitchRetry {
+    pub busy_timeout: Duration,
+    pub pause: Duration,
+    pub deadline: Duration,
+}
+
+impl Default for WalSwitchRetry {
+    fn default() -> Self {
+        Self {
+            busy_timeout: Duration::from_secs(5),
+            pause: Duration::from_millis(100),
+            deadline: Duration::from_secs(10),
+        }
+    }
+}
 
 /// Opens the cache database, creating it when absent.
 ///
@@ -46,13 +67,25 @@ const WAL_SWITCH_PAUSE: Duration = Duration::from_millis(100);
 /// in the file; the `-wal` and `-shm` files sit beside it in the cache
 /// directory.
 pub async fn open_cache(layout: &ProvenanceLayout) -> anyhow::Result<SqlitePool> {
+    open_cache_with(layout, WalSwitchRetry::default()).await
+}
+
+/// `open_cache` with the retry stated, so a test can shorten the waits.
+pub async fn open_cache_with(
+    layout: &ProvenanceLayout,
+    retry: WalSwitchRetry,
+) -> anyhow::Result<SqlitePool> {
     std::fs::create_dir_all(layout.cache_dir())?;
-    connect(cache_options(layout)?.create_if_missing(true)).await
+    connect(cache_options(layout)?.create_if_missing(true), retry).await
 }
 
 /// Opens the cache database only when the file exists.
 pub async fn open_existing_cache(layout: &ProvenanceLayout) -> anyhow::Result<SqlitePool> {
-    connect(cache_options(layout)?.create_if_missing(false)).await
+    connect(
+        cache_options(layout)?.create_if_missing(false),
+        WalSwitchRetry::default(),
+    )
+    .await
 }
 
 /// Opens the cache database as an immutable image, for a cache directory
@@ -64,6 +97,7 @@ pub async fn open_immutable_cache(layout: &ProvenanceLayout) -> anyhow::Result<S
             .create_if_missing(false)
             .read_only(true)
             .immutable(true),
+        WalSwitchRetry::default(),
     )
     .await
 }
@@ -88,8 +122,12 @@ fn cache_options(layout: &ProvenanceLayout) -> anyhow::Result<SqliteConnectOptio
 /// The last of them cannot take the exclusive lock, and `SQLite` then skips
 /// the checkpoint that removes the `-wal` and `-shm` files. A pool of one
 /// closes once, and the files go with it.
-async fn connect(options: SqliteConnectOptions) -> anyhow::Result<SqlitePool> {
-    let mut attempt = 0;
+async fn connect(
+    options: SqliteConnectOptions,
+    retry: WalSwitchRetry,
+) -> anyhow::Result<SqlitePool> {
+    let options = options.busy_timeout(retry.busy_timeout);
+    let started = std::time::Instant::now();
     loop {
         let pool = SqlitePoolOptions::new()
             .max_connections(1)
@@ -97,9 +135,8 @@ async fn connect(options: SqliteConnectOptions) -> anyhow::Result<SqlitePool> {
             .await;
         match pool {
             Ok(pool) => return Ok(pool),
-            Err(error) if is_busy(&error) && attempt < WAL_SWITCH_ATTEMPTS => {
-                attempt += 1;
-                tokio::time::sleep(WAL_SWITCH_PAUSE).await;
+            Err(error) if is_busy(&error) && started.elapsed() < retry.deadline => {
+                tokio::time::sleep(retry.pause).await;
             }
             Err(error) => return Err(error.into()),
         }

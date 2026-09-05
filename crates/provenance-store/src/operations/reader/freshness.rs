@@ -55,6 +55,11 @@ pub(super) async fn run(
     }
 }
 
+/// The guard is held across the open, so two first reads on a fresh clone
+/// cannot both create the file. On a file still in DELETE mode the open
+/// waits for the switch to WAL, at most the retry's deadline plus one
+/// busy timeout (`cache::WalSwitchRetry`); once the file is WAL the switch
+/// costs nothing.
 async fn catch_up(layout: &ProvenanceLayout) -> anyhow::Result<SqlitePool> {
     let guard = publication_guard(layout).await?;
     let pool = open_cache(layout).await?;
