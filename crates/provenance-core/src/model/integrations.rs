@@ -1,4 +1,5 @@
 use camino::Utf8PathBuf;
+use provenance_macros::ProjectionRow;
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
 use std::{fmt, str::FromStr};
 
@@ -128,7 +129,8 @@ pub struct VerificationRun {
 }
 
 /// One durable language-authored relationship from a code site to a Rule.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ProjectionRow)]
+#[table("verification_bindings")]
 pub struct VerificationBinding {
     pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
@@ -149,7 +151,8 @@ pub struct VerificationBinding {
 ///
 /// The record keeps why review was asked for. A verification run arriving
 /// after the change clears it in place rather than removing the reason.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ProjectionRow)]
+#[table("requirement_reviews")]
 pub struct RequirementReview {
     pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
@@ -168,7 +171,8 @@ pub struct RequirementReview {
 
 /// One canonical primary implementation relationship from an exported
 /// production symbol to a Rule.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ProjectionRow)]
+#[table("implementation_bindings")]
 pub struct ImplementationBinding {
     pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,

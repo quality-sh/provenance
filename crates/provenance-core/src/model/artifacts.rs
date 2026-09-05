@@ -1,4 +1,4 @@
-use provenance_macros::Relations;
+use provenance_macros::{ProjectionRow, Relations};
 use serde::{Deserialize, Serialize};
 
 use super::ids::{SchemaVersion, ScopeId, StableId};
@@ -18,7 +18,8 @@ const fn is_false(value: &bool) -> bool {
     !*value
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Relations)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Relations, ProjectionRow)]
+#[table("sources")]
 pub struct Source {
     pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
@@ -26,6 +27,7 @@ pub struct Source {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub declared_by: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[column(json)]
     pub declaration_address: Option<super::DeclarationAddress>,
     #[serde(default, skip_serializing_if = "is_false")]
     pub retired: bool,
@@ -77,7 +79,8 @@ pub struct SourceReference {
     pub clause: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Relations)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Relations, ProjectionRow)]
+#[table("requirements")]
 pub struct Requirement {
     pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
@@ -85,6 +88,7 @@ pub struct Requirement {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub declared_by: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[column(json)]
     pub declaration_address: Option<super::DeclarationAddress>,
     #[serde(default, skip_serializing_if = "is_false")]
     pub retired: bool,
@@ -164,7 +168,8 @@ impl TryFrom<ResolutionInputFields> for ResolutionInput {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Relations)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Relations, ProjectionRow)]
+#[table("resolutions")]
 pub struct Resolution {
     pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
@@ -219,7 +224,8 @@ pub struct Resolution {
     pub origin_message: Option<StableId>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Relations)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Relations, ProjectionRow)]
+#[table("rules")]
 pub struct Rule {
     pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
@@ -227,6 +233,7 @@ pub struct Rule {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub declared_by: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[column(json)]
     pub declaration_address: Option<super::DeclarationAddress>,
     #[serde(default, skip_serializing_if = "is_false")]
     pub retired: bool,

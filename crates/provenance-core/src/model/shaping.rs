@@ -1,4 +1,4 @@
-use provenance_macros::Relations;
+use provenance_macros::{ProjectionRow, Relations};
 use serde::{Deserialize, Serialize};
 
 use super::artifacts::SourceReference;
@@ -110,7 +110,8 @@ pub struct ArtifactLink {
     pub target_id: StableId,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Relations)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Relations, ProjectionRow)]
+#[table("boundaries")]
 pub struct Boundary {
     pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
@@ -121,10 +122,12 @@ pub struct Boundary {
     pub statement: String,
     #[relation(target = Source, flow = none, name = "cites", via = source_id)]
     #[serde(default, alias = "sourceRef", skip_serializing_if = "Option::is_none")]
+    #[column(json)]
     pub source_ref: Option<SourceReference>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Relations)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Relations, ProjectionRow)]
+#[table("topics")]
 pub struct Topic {
     pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
@@ -142,7 +145,8 @@ pub struct Topic {
     pub links: Vec<ArtifactLink>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Relations)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Relations, ProjectionRow)]
+#[table("questions")]
 pub struct Question {
     pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
