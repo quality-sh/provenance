@@ -95,6 +95,7 @@ jobs:
           shared-key: build-cli
           add-job-id-key: "false"
           cache-on-failure: true
+          save-if: github.ref == 'refs/heads/main'
       - run: cargo build -p provenance-cli
       - name: Upload the CLI for the consumer jobs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -129,6 +130,7 @@ jobs:
           shared-key: build-cli
           add-job-id-key: "false"
           cache-on-failure: true
+          save-if: github.ref == 'refs/heads/main'
       - run: cargo build -p provenance-cli
       - name: Upload the CLI for the consumer jobs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -169,6 +171,7 @@ jobs:
           shared-key: clippy
           add-job-id-key: "false"
           cache-on-failure: true
+          save-if: github.ref == 'refs/heads/main'
       - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
   test:
@@ -190,6 +193,7 @@ jobs:
           shared-key: rust
           add-job-id-key: "false"
           cache-on-failure: true
+          save-if: github.ref == 'refs/heads/main'
       - run: cargo test --workspace --all-features --no-fail-fast
 
   # Default-features lane: runs the dogfood absence tests, which assert the
@@ -210,6 +214,7 @@ jobs:
           shared-key: rust
           add-job-id-key: "false"
           cache-on-failure: true
+          save-if: github.ref == 'refs/heads/main'
       - run: cargo test -p provenance-cli --no-fail-fast
 
   rule-coverage:
@@ -285,7 +290,7 @@ jobs:
           name: provenance-cli-x86_64-unknown-linux-gnu
           path: target/debug
       - run: chmod +x target/debug/provenance
-      - run: npm ci --prefix packages/provenance
+      - run: npm ci --no-audit --no-fund --prefix packages/provenance
       - run: npm test --prefix packages/provenance
       # Bun eliminates the calling frame of a tail call, so a verify call that
       # states no file only reproduces here.
@@ -310,9 +315,9 @@ jobs:
           name: provenance-cli-x86_64-unknown-linux-gnu
           path: target/debug
       - run: chmod +x target/debug/provenance
-      - run: npm ci --prefix packages/provenance
+      - run: npm ci --no-audit --no-fund --prefix packages/provenance
       - run: npm run build --prefix packages/provenance
-      - run: npm ci --prefix examples/typescript-sdk
+      - run: npm ci --no-audit --no-fund --prefix examples/typescript-sdk
       - name: Run packaged fixture
         shell: bash
         run: |
@@ -363,7 +368,7 @@ jobs:
           corepack enable
           corepack prepare pnpm@10.15.0 --activate
           corepack prepare yarn@4.9.2 --activate
-      - run: npm ci --prefix packages/create-provenance
+      - run: npm ci --no-audit --no-fund --prefix packages/create-provenance
       - run: npm test --prefix packages/create-provenance
       - name: Package-manager smoke tests
         run: |
@@ -409,7 +414,7 @@ jobs:
         run: |
           corepack enable
           corepack prepare yarn@4.9.2 --activate
-      - run: npm ci --prefix packages/provenance
+      - run: npm ci --no-audit --no-fund --prefix packages/provenance
       - run: npm run build --prefix packages/provenance
       - run: npm run test:packed --prefix packages/provenance
         env:
