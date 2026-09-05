@@ -148,6 +148,10 @@ fn a_kernel_authored_requirement_adopts_one_exact_unowned_identity() {
             description: None,
             status: RequirementStatus::Active,
             domain_id: None,
+            refines: None,
+            depends_on: Vec::new(),
+            supersedes: Vec::new(),
+            spawned_by: None,
             origin_thread: None,
             origin_message: None,
         })

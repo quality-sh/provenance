@@ -1,11 +1,11 @@
 use provenance_core::{
     ArtifactLink, CanonicalArtifact, ClaimChallenge, ConsensusFinding, ContestedClaim,
-    ContributionStance, DeclarationAddress, DispositionActor, DispositionDecision, EdgeType,
-    EvidenceGap, IdeationEvidenceReference, IdeationTarget, MaterialClaim, MessageRole,
-    MinorityObjection, NodeType, PromotionState, ProposalTraceability, ProposalType,
-    QuestionStatus, RequiredHumanDecision, RequirementStatus, ResolutionInput, ResolutionMethod,
-    ResolutionStatus, RuleSeverity, RuleStatus, ScopeId, SourceReference, SourceType, StableId,
-    SuggestedArtifact, SuggestedArtifactChange, ThreadParent, TopicStatus, UncertaintyRating,
+    ContributionStance, DeclarationAddress, DispositionActor, DispositionDecision, EvidenceGap,
+    IdeationEvidenceReference, IdeationTarget, MaterialClaim, MessageRole, MinorityObjection,
+    PromotionState, ProposalTraceability, ProposalType, QuestionStatus, RequiredHumanDecision,
+    RequirementStatus, ResolutionInput, ResolutionMethod, ResolutionStatus, RuleSeverity,
+    RuleStatus, ScopeId, SourceReference, SourceType, StableId, SuggestedArtifact,
+    SuggestedArtifactChange, ThreadParent, TopicStatus, UncertaintyRating,
     UnsupportedRecommendation, UnsupportedSpeculation, VerificationMethod,
 };
 use serde::{Deserialize, Serialize};
@@ -20,7 +20,7 @@ pub struct CreateSourceInput {
     pub commit_pin: Option<String>,
     pub effective_date: Option<i64>,
     pub review_date: Option<i64>,
-    pub superseded_by: Option<StableId>,
+    pub supersedes: Vec<StableId>,
     pub origin_thread: Option<StableId>,
     pub origin_message: Option<StableId>,
 }
@@ -32,6 +32,10 @@ pub struct CreateRequirementInput {
     pub description: Option<String>,
     pub status: RequirementStatus,
     pub domain_id: Option<StableId>,
+    pub refines: Option<StableId>,
+    pub depends_on: Vec<StableId>,
+    pub supersedes: Vec<StableId>,
+    pub spawned_by: Option<StableId>,
     pub origin_thread: Option<StableId>,
     pub origin_message: Option<StableId>,
 }
@@ -49,15 +53,6 @@ pub struct AddSourceReferenceInput {
     pub source_id: StableId,
     pub requirement_id: StableId,
     pub clause: Option<String>,
-}
-
-pub struct CreateEdgeInput {
-    pub scope_id: ScopeId,
-    pub edge_type: EdgeType,
-    pub from_type: NodeType,
-    pub from_id: StableId,
-    pub to_type: NodeType,
-    pub to_id: StableId,
 }
 
 pub struct CreateBoundaryInput {
@@ -87,6 +82,7 @@ pub struct CreateQuestionInput {
     pub answer: Option<String>,
     pub links: Vec<ArtifactLink>,
     pub resolution_id: Option<StableId>,
+    pub contradicts: Option<StableId>,
 }
 
 pub struct UpdateQuestionInput {
@@ -102,7 +98,8 @@ pub struct CreateResolutionInput {
     pub scope_id: ScopeId,
     pub id: StableId,
     pub title: String,
-    pub requirement_id: Option<StableId>,
+    pub requirement_ids: Vec<StableId>,
+    pub supersedes: Vec<StableId>,
     pub position: String,
     pub rationale: String,
     pub status: ResolutionStatus,
@@ -113,7 +110,6 @@ pub struct CreateResolutionInput {
     pub made_by: Option<String>,
     pub approved_by: Option<String>,
     pub approved_at: Option<i64>,
-    pub superseded_by: Option<StableId>,
     pub origin_thread: Option<StableId>,
     pub origin_message: Option<StableId>,
 }
@@ -123,8 +119,8 @@ pub struct CreateRuleInput {
     pub id: StableId,
     pub name: Option<String>,
     pub description: Option<String>,
-    pub requirement_id: Option<StableId>,
-    pub resolution_id: Option<StableId>,
+    pub requirement_ids: Vec<StableId>,
+    pub resolution_ids: Vec<StableId>,
     pub statement: String,
     pub status: RuleStatus,
     pub severity: RuleSeverity,

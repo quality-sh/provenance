@@ -1,4 +1,5 @@
 use super::*;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_macros::verifies;
 
 /// A record at an unreadable version never reaches the projection.
@@ -32,7 +33,10 @@ fn issue_rejects_unsupported_pinned_record_schema_versions() {
     let source = std::fs::read_to_string(&source_path).unwrap();
     std::fs::write(
         &source_path,
-        source.replace("\"schema_version\":1", "\"schema_version\":2"),
+        source.replace(
+            &format!("\"schema_version\":{}", SUPPORTED_SCHEMA_VERSION.0),
+            &format!("\"schema_version\":{}", SUPPORTED_SCHEMA_VERSION.0 + 1),
+        ),
     )
     .unwrap();
     git(temp.path(), &["add", ".provenance/state"]);
@@ -50,9 +54,11 @@ fn issue_rejects_unsupported_pinned_record_schema_versions() {
         .assert()
         .failure()
         .stderr(predicate::str::contains("sources/source.jsonl line 1"))
-        .stderr(predicate::str::contains(
-            "record source_v2 has schema_version 2, but this build reads schema_version 1 only",
-        ));
+        .stderr(predicate::str::contains(format!(
+            "record source_v2 has schema_version {}, but this build reads schema_version {} only",
+            SUPPORTED_SCHEMA_VERSION.0 + 1,
+            SUPPORTED_SCHEMA_VERSION.0
+        )));
 }
 
 #[test]
@@ -118,12 +124,13 @@ fn selected_scope_ignores_future_data_from_another_scope() {
             "future_field": true
         }));
     std::fs::write(&manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
-    let future_edges = temp.path().join(".provenance/state/edges/edges-99.jsonl");
-    std::fs::create_dir_all(future_edges.parent().unwrap()).unwrap();
+    let future_requirements = temp
+        .path()
+        .join(".provenance/state/scopes/future/requirements/req.jsonl");
+    std::fs::create_dir_all(future_requirements.parent().unwrap()).unwrap();
     std::fs::write(
-        future_edges,
-        r#"{"schema_version":2,"scope_id":"future","id":"edge_future","future_field":true}
-"#,
+        future_requirements,
+        serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0 + 1, "scope_id":"future","id":"req_future","statement":"Future","status":"active","future_field":true}).to_string() + "\n",
     )
     .unwrap();
     git(temp.path(), &["add", ".provenance/state"]);

@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use serde_json::{json, Value};
 use std::process::Command as ProcessCommand;
 
@@ -44,7 +45,7 @@ fn repeated_verification_runs_reuse_one_durable_binding() {
     );
     let head = git(repo, &["rev-parse", "HEAD"]);
     let spec = json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "spec": "share-links",
         "declared_by": "spec://typescript",
         "requirements": [{"key": "sharing", "statement": "Users can share"}],

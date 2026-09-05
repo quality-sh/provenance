@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use serde_json::{json, Value};
 use std::fs;
 
@@ -8,7 +9,7 @@ fn provenance() -> Command {
 
 fn document() -> Value {
     json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "spec": "workflow-runtime",
         "declared_by": "spec://typescript/workflow-runtime",
         "requirements": [{

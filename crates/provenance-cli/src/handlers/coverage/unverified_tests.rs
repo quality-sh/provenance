@@ -4,9 +4,9 @@
 use super::unverified_rule_warnings;
 use camino::Utf8PathBuf;
 use provenance_core::coverage::EvidenceAnchor;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_core::{
-    Rule, RuleSeverity, RuleStatus, SchemaVersion, ScopeId, StableId, VerificationBinding,
-    VerificationMethod,
+    Rule, RuleSeverity, RuleStatus, ScopeId, StableId, VerificationBinding, VerificationMethod,
 };
 use provenance_scanner::{
     Annotation, AnnotationLocation, AttributeBinding, CoverageLevel, FileScan, Language,
@@ -15,7 +15,7 @@ use provenance_scanner::{
 
 fn rule(id: &str, status: RuleStatus) -> Rule {
     Rule {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: ScopeId::new("default").unwrap(),
         id: StableId::new(id).unwrap(),
         declared_by: None,
@@ -28,6 +28,8 @@ fn rule(id: &str, status: RuleStatus) -> Rule {
         severity: RuleSeverity::High,
         source_document: None,
         source_section: None,
+        requirement_ids: Vec::new(),
+        resolution_ids: Vec::new(),
         origin_thread: None,
         origin_message: None,
     }
@@ -81,7 +83,7 @@ fn scan_with_annotation(rule_id: &str, verification: Option<Verification>) -> Fi
 
 fn typed_binding(rule_id: &str) -> VerificationBinding {
     VerificationBinding {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: ScopeId::new("default").unwrap(),
         id: StableId::new("verification_binding_typed").unwrap(),
         rule_id: StableId::new(rule_id).unwrap(),

@@ -1,17 +1,23 @@
 use super::*;
 
 #[test]
-fn noscope_sized_source_and_requirement_adoption_preserves_all_ids_and_edges() {
+fn noscope_sized_source_and_requirement_adoption_preserves_all_ids_and_citations() {
     let (_dir, store, scope) = initialized_store();
     create_unowned_source(&store, &scope, "Policy");
+    create_unowned_requirement(
+        &store,
+        &scope,
+        "req_unrelated",
+        "The unrelated Requirement stays unowned",
+    );
     store
         .create_rule(CreateRuleInput {
             scope_id: scope.clone(),
             id: StableId::new("rule_unrelated").unwrap(),
             name: None,
             description: None,
-            requirement_id: None,
-            resolution_id: None,
+            requirement_ids: vec![StableId::new("req_unrelated").unwrap()],
+            resolution_ids: Vec::new(),
             statement: "The unrelated Rule stays unowned".to_string(),
             status: RuleStatus::Active,
             severity: RuleSeverity::Medium,
@@ -41,19 +47,14 @@ fn noscope_sized_source_and_requirement_adoption_preserves_all_ids_and_edges() {
         requirements.push(declaration);
         targets.push(target(TypedDeclarationKind::Requirement, &id));
     }
-    let edges_path = crate::shards::edges_path(&store.layout);
-    store
-        .mutate_jsonl_records(&edges_path, |edges: &mut Vec<provenance_core::Edge>| {
-            edges[0].id = StableId::new("edge_imported_identity").unwrap();
-            Ok(())
-        })
-        .unwrap();
     let input = TypedSpecInput {
         schema_version: SUPPORTED_SCHEMA_VERSION.0,
         spec: "migration".to_string(),
         declared_by: OWNER.to_string(),
         adopt_unowned: targets,
         sources: vec![TypedSourceInput {
+            supersedes: None,
+
             key: "policy".to_string(),
             id: Some("source_policy".to_string()),
             name: "Policy".to_string(),
@@ -69,13 +70,15 @@ fn noscope_sized_source_and_requirement_adoption_preserves_all_ids_and_edges() {
     assert_eq!((plan.created, plan.conflicts), (0, 0));
     assert_eq!(plan.resources.len(), 71);
     store.apply_typed_spec(&scope, input.clone()).unwrap();
-    assert_eq!(store.list_requirements(&scope).unwrap().len(), 70);
+    assert_eq!(store.list_requirements(&scope).unwrap().len(), 71);
     assert_eq!(store.list_sources(&scope).unwrap().len(), 1);
-    let edges = store.list_edges().unwrap();
-    assert_eq!(edges.len(), 70);
-    assert!(edges
+    assert!(store
+        .list_requirements(&scope)
+        .unwrap()
         .iter()
-        .any(|edge| edge.id.as_str() == "edge_imported_identity"));
+        .filter(|requirement| requirement.id.as_str() != "req_unrelated")
+        .all(|requirement| requirement.source_refs.len() == 1
+            && requirement.source_refs[0].source_id.as_str() == "source_policy"));
     let unrelated = &store.list_rules(&scope).unwrap()[0];
     assert_eq!(unrelated.id.as_str(), "rule_unrelated");
     assert_eq!(unrelated.declared_by, None);

@@ -5,6 +5,7 @@ use crate::{
         CreateProposalCardInput, CreateSynthesisPacketInput, StateStore,
     },
 };
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_core::{
     AssertionId, DispositionActor, DispositionDecision, IdentityType, PromotionState,
     ProposalTraceability, ProposalType, ScopeId, StableId,
@@ -84,7 +85,7 @@ fn land_modern_swarm_records(store: &StateStore, scope: &ScopeId) {
     let shipped_contributions = store.list_contributions(scope).unwrap().len();
     let shipped_packets = store.list_synthesis_packets(scope).unwrap().len();
     let contribution: provenance_core::Contribution = serde_json::from_value(serde_json::json!({
-        "schema_version": 1, "scope_id": "default", "id": "contribution_modern",
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "contribution_modern",
         "target": {"artifact_type": "requirement", "artifact_id": "req_modern"},
         "participant_slot": "reviewer", "stance": "support", "strongest_finding": "Observed",
         "evidence_references": [{"reference_id": "evidence_modern", "evidence_type": "source", "summary": "Pinned"}],
@@ -93,7 +94,7 @@ fn land_modern_swarm_records(store: &StateStore, scope: &ScopeId) {
         "unsupported_recommendations": [], "uncertainty": {"level": "low", "rationale": "Direct"}, "open_questions": []
     })).unwrap();
     let synthesis: provenance_core::SynthesisPacket = serde_json::from_value(serde_json::json!({
-        "schema_version": 1, "scope_id": "default", "id": "synthesis_modern",
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "synthesis_modern",
         "target": {"artifact_type": "requirement", "artifact_id": "req_modern"}, "summary": "Adjudicated",
         "consensus": [], "contested_claims": [], "minority_objections": [],
         "evidence_gaps": [{"question": "Unverified", "needed_evidence_type": "source", "blocking_promotion": true}],

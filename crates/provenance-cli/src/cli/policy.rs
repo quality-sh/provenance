@@ -1,8 +1,11 @@
+use crate::cli::references::{ResolutionListCommand, RuleListCommand};
 use crate::output::OutputFormat;
 use camino::Utf8PathBuf;
 use clap::Subcommand;
 
 #[derive(Subcommand)]
+// `Create` carries every field of a resolution; the reference verbs carry four flags.
+#[allow(clippy::large_enum_variant)]
 pub enum ResolutionsCommand {
     Create {
         #[arg(long, default_value = ".")]
@@ -13,8 +16,12 @@ pub enum ResolutionsCommand {
         id: String,
         #[arg(long)]
         title: String,
+        /// A requirement this resolution resolves. Repeat for several.
+        #[arg(long, required = true)]
+        requirement_id: Vec<String>,
+        /// An older resolution this one replaces. Repeat for several.
         #[arg(long)]
-        requirement_id: Option<String>,
+        supersedes: Vec<String>,
         #[arg(long)]
         position: String,
         #[arg(long)]
@@ -40,13 +47,21 @@ pub enum ResolutionsCommand {
         #[arg(long)]
         approved_at: Option<i64>,
         #[arg(long)]
-        superseded_by: Option<String>,
-        #[arg(long)]
         origin_thread: Option<String>,
         #[arg(long)]
         origin_message: Option<String>,
         #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
         format: OutputFormat,
+    },
+    /// Add or remove a requirement this resolution resolves.
+    Requirement {
+        #[command(subcommand)]
+        command: ResolutionListCommand,
+    },
+    /// Add or remove an older resolution this one replaces.
+    Supersedes {
+        #[command(subcommand)]
+        command: ResolutionListCommand,
     },
 }
 
@@ -72,12 +87,14 @@ pub enum RulesCommand {
         /// Longer prose about the rule, for anything the statement leaves out.
         #[arg(long)]
         description: Option<String>,
-        /// Requirement this rule serves. Must already exist in the scope.
+        /// A requirement this rule serves; repeat for several. Each must
+        /// already exist in the scope.
+        #[arg(long, required = true)]
+        requirement_id: Vec<String>,
+        /// A resolution that produced this rule; repeat for several. Each
+        /// must already exist in the scope.
         #[arg(long)]
-        requirement_id: Option<String>,
-        /// Resolution that produced this rule. Must already exist in the scope.
-        #[arg(long)]
-        resolution_id: Option<String>,
+        resolution_id: Vec<String>,
         /// What must be true, in one sentence a reader can check code against.
         #[arg(long)]
         statement: String,
@@ -114,6 +131,16 @@ pub enum RulesCommand {
         /// How to print the list.
         #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
         format: OutputFormat,
+    },
+    /// Add or remove a requirement this rule serves.
+    Requirement {
+        #[command(subcommand)]
+        command: RuleListCommand,
+    },
+    /// Add or remove a resolution that produced this rule.
+    Resolution {
+        #[command(subcommand)]
+        command: RuleListCommand,
     },
     /// Print one rule in full.
     Show {

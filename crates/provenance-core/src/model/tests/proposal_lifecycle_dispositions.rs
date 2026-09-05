@@ -1,3 +1,4 @@
+
 #[test]
 #[verifies("rule_qualified_proposal_assertion", examples)]
 fn rejected_disposition_allows_blocked_or_contested_proposal_without_assertion() {
@@ -17,7 +18,7 @@ fn rejected_disposition_allows_blocked_or_contested_proposal_without_assertion()
         let synthesis_packets = vec![serde_json::from_value(synthesis).unwrap()];
         let proposals = vec![serde_json::from_value(proposal).unwrap()];
         let dispositions = vec![serde_json::from_value(serde_json::json!({
-            "schema_version": 1, "scope_id": "default", "id": format!("disposition_{blocked}"),
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": format!("disposition_{blocked}"),
             "proposal_id": "proposal_a", "decision": "rejected", "rationale": "Did not pass adjudication",
             "actor": {"identity_type": "human", "id": "reviewer"}
         })).unwrap()];
@@ -48,7 +49,7 @@ fn validate_ratified_acceptance(identity_type: &str, names_artifact: bool) -> an
     let synthesis_packets = vec![serde_json::from_value(synthesis).unwrap()];
     let proposals = vec![serde_json::from_value(proposal).unwrap()];
     let mut disposition = serde_json::json!({
-        "schema_version": 1, "scope_id": "default", "id": "disposition_a",
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "disposition_a",
         "proposal_id": "proposal_a", "decision": "accepted", "rationale": "Ratified the winner",
         "actor": {"identity_type": identity_type, "id": "reviewer"}
     });
@@ -99,7 +100,7 @@ fn accepted_disposition_still_requires_assertion() {
     let synthesis_packets = vec![serde_json::from_value(synthesis).unwrap()];
     let proposals = vec![serde_json::from_value(proposal).unwrap()];
     let dispositions = vec![serde_json::from_value(serde_json::json!({
-        "schema_version": 1, "scope_id": "default", "id": "disposition_a",
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "disposition_a",
         "proposal_id": "proposal_a", "decision": "accepted", "rationale": "Reviewed",
         "actor": {"identity_type": "human", "id": "reviewer"}
     })).unwrap()];
@@ -127,7 +128,7 @@ fn rejected_or_deferred_disposition_can_override_asserted_state() {
         let proposals = vec![serde_json::from_value(proposal).unwrap()];
         let assertions = vec![serde_json::from_value(assertion).unwrap()];
         let dispositions = vec![serde_json::from_value(serde_json::json!({
-            "schema_version": 1, "scope_id": "default", "id": format!("disposition_{decision}"),
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": format!("disposition_{decision}"),
             "proposal_id": "proposal_a", "decision": decision, "rationale": "Reviewed",
             "actor": {"identity_type": "human", "id": "reviewer"}
         })).unwrap()];
@@ -148,7 +149,7 @@ fn rejected_or_deferred_disposition_can_override_asserted_state() {
 #[test]
 fn disposition_external_action_is_closed_and_round_trips_generically() {
     let value = serde_json::json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "disposition_a",
         "proposal_id": "proposal_a",
@@ -177,7 +178,7 @@ fn disposition_external_action_is_closed_and_round_trips_generically() {
 #[test]
 fn disposition_external_action_rejects_null_and_blank_identity_parts() {
     let base = serde_json::json!({
-        "schema_version": 1, "scope_id": "default", "id": "disposition_a",
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "disposition_a",
         "proposal_id": "proposal_a", "decision": "rejected", "rationale": "Reviewed",
         "actor": {"identity_type": "human", "id": "reviewer"}
     });
@@ -214,7 +215,7 @@ fn validate_allowlist_case(
     let assertions = vec![serde_json::from_value(assertion).unwrap()];
     let dispositions = if carries_disposition {
         vec![serde_json::from_value(serde_json::json!({
-            "schema_version": 1, "scope_id": "default", "id": "disposition_a",
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "disposition_a",
             "proposal_id": "proposal_a", "decision": "rejected", "rationale": "Reviewed",
             "actor": {"identity_type": "human", "id": actor_id}
         }))
@@ -337,7 +338,7 @@ fn validate_qualified_proposal(carries_ratified_acceptance: bool) -> anyhow::Res
     let proposals = vec![serde_json::from_value(proposal).unwrap()];
     let dispositions = if carries_ratified_acceptance {
         vec![serde_json::from_value(serde_json::json!({
-            "schema_version": 1, "scope_id": "default", "id": "disposition_a",
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "disposition_a",
             "proposal_id": "proposal_a", "decision": "accepted", "rationale": "Ratified the winner",
             "actor": {"identity_type": "human", "id": "reviewer"},
             "canonical_artifact": {"artifact_type": "resolution", "artifact_id": "res_a"}

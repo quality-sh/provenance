@@ -47,8 +47,7 @@ reports rather than hiding.
   ("identity," "reporting," "comms")? Categories aren't requirements.
 - **Evidence.** Is there a real locator for the claim — a source clause or a place in the
   code — or is it explicitly provisional? For graph grounding, attach a requirement source with
-  `requirements source-ref add` (which also creates a `references` edge), or create a valid
-  `references` edge directly; otherwise gap reporting emits `missing_source_refs`. `fog`
+  `requirements source-ref add`; otherwise gap reporting emits `missing_source_refs`. `fog`
   is unstructured text attached to a Requirement, while `unsupported` / `exploratory`
   mark ideation evidence or speculation. The CLI reports grounding gaps; it does not
   prevent an ungrounded Requirement or Rule from being active. A Rule's

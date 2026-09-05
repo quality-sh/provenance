@@ -12,7 +12,6 @@ mod docs;
 #[cfg(feature = "dogfood")]
 mod dogfood;
 mod domains;
-mod edges;
 mod export;
 mod gaps;
 mod graph;
@@ -26,6 +25,7 @@ mod orphans;
 mod prime;
 mod proposals;
 mod questions;
+mod references;
 mod repo;
 mod requirements;
 mod resolutions;
@@ -113,9 +113,6 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
         }
         Command::Requirements { command } => {
             requirements::handle(command)?;
-        }
-        Command::Edges { command } => {
-            edges::handle(command)?;
         }
         Command::GraphReference { command } => {
             graph_reference::handle(command)?;

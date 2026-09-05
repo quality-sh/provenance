@@ -119,7 +119,6 @@ export type {
   AffectedRule,
   ApplyResult,
   Direction,
-  EdgeType,
   EvidenceDiffSite,
   EvidenceDiffState,
   EvidenceDiffSummary,

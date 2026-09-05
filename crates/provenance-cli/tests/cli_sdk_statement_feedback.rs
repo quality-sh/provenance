@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 
@@ -25,7 +26,7 @@ fn init_repo() -> tempfile::TempDir {
 
 fn invalid_spec() -> Value {
     json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "spec": "feedback",
         "declared_by": "spec://typescript/feedback",
         "requirements": [{
@@ -108,5 +109,4 @@ fn sdk_apply_exits_nonzero_with_the_same_structured_diagnostics() {
     let graph: Value = serde_json::from_slice(&export.stdout).unwrap();
     assert!(graph["requirements"].as_array().unwrap().is_empty());
     assert!(graph["rules"].as_array().unwrap().is_empty());
-    assert!(graph["edges"].as_array().unwrap().is_empty());
 }

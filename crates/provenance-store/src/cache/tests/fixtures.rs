@@ -1,11 +1,13 @@
 use super::super::*;
 use crate::state_store::{
-    AddSourceReferenceInput, CreateDomainInput, CreateRequirementInput, CreateResolutionInput,
-    CreateRuleInput, CreateSourceInput, StateStore,
+    AddSourceReferenceInput, CreateBoundaryInput, CreateDomainInput, CreateQuestionInput,
+    CreateRequirementInput, CreateResolutionInput, CreateRuleInput, CreateSourceInput,
+    CreateTopicInput, StateStore,
 };
 use provenance_core::{
-    Manifest, RepoPathPrefix, RequirementStatus, ResolutionStatus, RuleSeverity, RuleStatus,
-    ScopeId, SourceType, StableId,
+    ArtifactLink, ArtifactLinkTargetType, Manifest, QuestionStatus, RepoPathPrefix,
+    RequirementStatus, ResolutionMethod, ResolutionStatus, RuleSeverity, RuleStatus, ScopeId,
+    SourceReference, SourceType, StableId, TopicStatus,
 };
 
 pub fn sid(value: &str) -> StableId {
@@ -51,6 +53,10 @@ pub fn seeded_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
             description: None,
             status: RequirementStatus::Active,
             domain_id: Some(sid("domain_payroll")),
+            refines: None,
+            depends_on: Vec::new(),
+            supersedes: Vec::new(),
+            spawned_by: None,
             origin_thread: None,
             origin_message: None,
         })
@@ -61,7 +67,8 @@ pub fn seeded_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
             scope_id: scope.clone(),
             id: sid("res_schads_overtime"),
             title: "Overtime interpretation".into(),
-            requirement_id: Some(sid("req_schads_overtime")),
+            requirement_ids: vec![sid("req_schads_overtime")],
+            supersedes: Vec::new(),
             position: "Use award threshold".into(),
             rationale: "Matches source clause".into(),
             status: ResolutionStatus::Proposed,
@@ -72,7 +79,6 @@ pub fn seeded_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
             made_by: None,
             approved_by: None,
             approved_at: None,
-            superseded_by: None,
             origin_thread: None,
             origin_message: None,
         })
@@ -83,8 +89,8 @@ pub fn seeded_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
             id: sid("rule_schads_pay_001"),
             name: None,
             description: None,
-            requirement_id: Some(sid("req_schads_overtime")),
-            resolution_id: Some(sid("res_schads_overtime")),
+            requirement_ids: vec![sid("req_schads_overtime")],
+            resolution_ids: vec![sid("res_schads_overtime")],
             statement: "Pay overtime after the threshold".into(),
             status: RuleStatus::Active,
             severity: RuleSeverity::High,
@@ -95,6 +101,138 @@ pub fn seeded_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
         })
         .unwrap();
     (dir, layout, scope)
+}
+
+/// Every owner kind carries at least one relation row: two sources in a
+/// supersession chain, the sourced requirement, the decision and rule
+/// that name it, a topic and a question with links, and a boundary. The
+/// derived relation loader hand-lists the owner kinds, so the relation
+/// tests need a row from each.
+pub fn owner_row_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
+    let (dir, layout, scope) = empty_layout();
+    let store = StateStore::new(layout.clone());
+    seed_owner_chain(&store, &scope);
+    seed_shaping_owners(&store, &scope);
+    (dir, layout, scope)
+}
+
+fn seed_owner_chain(store: &StateStore, scope: &ScopeId) {
+    store
+        .create_domain(CreateDomainInput {
+            scope_id: scope.clone(),
+            id: sid("domain_payroll"),
+            name: "Payroll".into(),
+            description: None,
+            color: None,
+        })
+        .unwrap();
+    create_source(store, scope, "source_award_2019");
+    store
+        .create_source(CreateSourceInput {
+            scope_id: scope.clone(),
+            id: sid("source_schads"),
+            name: "source_schads".into(),
+            source_type: SourceType::Policy,
+            url: None,
+            reference: None,
+            commit_pin: None,
+            effective_date: None,
+            review_date: None,
+            supersedes: vec![sid("source_award_2019")],
+            origin_thread: None,
+            origin_message: None,
+        })
+        .unwrap();
+    store
+        .create_requirement(CreateRequirementInput {
+            scope_id: scope.clone(),
+            id: sid("req_schads_overtime"),
+            statement: "Overtime".into(),
+            description: None,
+            status: RequirementStatus::Active,
+            domain_id: Some(sid("domain_payroll")),
+            refines: None,
+            depends_on: Vec::new(),
+            supersedes: Vec::new(),
+            spawned_by: None,
+            origin_thread: None,
+            origin_message: None,
+        })
+        .unwrap();
+    attach_source(store, scope, "req_schads_overtime", "source_schads");
+    create_resolution(store, scope, "res_schads_overtime", "req_schads_overtime");
+    store
+        .create_rule(CreateRuleInput {
+            scope_id: scope.clone(),
+            id: sid("rule_schads_pay_001"),
+            name: None,
+            description: None,
+            requirement_ids: vec![sid("req_schads_overtime")],
+            resolution_ids: vec![sid("res_schads_overtime")],
+            statement: "Pay overtime after the threshold".into(),
+            status: RuleStatus::Active,
+            severity: RuleSeverity::High,
+            source_document: None,
+            source_section: None,
+            origin_thread: None,
+            origin_message: None,
+        })
+        .unwrap();
+}
+
+fn seed_shaping_owners(store: &StateStore, scope: &ScopeId) {
+    store
+        .create_topic(CreateTopicInput {
+            scope_id: scope.clone(),
+            id: sid("topic_rates"),
+            requirement_id: sid("req_schads_overtime"),
+            title: "Rates".into(),
+            status: TopicStatus::Open,
+            links: vec![ArtifactLink {
+                target_type: ArtifactLinkTargetType::Requirement,
+                target_id: sid("req_schads_overtime"),
+            }],
+        })
+        .unwrap();
+    store
+        .create_question(CreateQuestionInput {
+            scope_id: scope.clone(),
+            id: sid("question_threshold"),
+            topic_id: sid("topic_rates"),
+            question: "Which threshold applies?".into(),
+            resolution_method: ResolutionMethod::Grill,
+            status: QuestionStatus::Open,
+            answer: None,
+            links: vec![ArtifactLink {
+                target_type: ArtifactLinkTargetType::Rule,
+                target_id: sid("rule_schads_pay_001"),
+            }],
+            resolution_id: None,
+            contradicts: None,
+        })
+        .unwrap();
+    store
+        .create_boundary(CreateBoundaryInput {
+            scope_id: scope.clone(),
+            id: sid("boundary_no_backpay"),
+            requirement_id: sid("req_schads_overtime"),
+            statement: "No back pay".into(),
+            source_ref: Some(SourceReference {
+                source_id: sid("source_schads"),
+                clause: None,
+            }),
+        })
+        .unwrap();
+}
+
+/// Appends one raw record to a shard, past the writers' checks: the gap
+/// policy reads state a hand edit can leave behind.
+pub fn append_record(path: &camino::Utf8Path, record: &serde_json::Value) {
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let mut contents = std::fs::read_to_string(path).unwrap_or_default();
+    contents.push_str(&record.to_string());
+    contents.push('\n');
+    std::fs::write(path, contents).unwrap();
 }
 
 pub fn create_source(store: &StateStore, scope: &ScopeId, id: &str) {
@@ -109,7 +247,7 @@ pub fn create_source(store: &StateStore, scope: &ScopeId, id: &str) {
             commit_pin: None,
             effective_date: None,
             review_date: None,
-            superseded_by: None,
+            supersedes: Vec::new(),
             origin_thread: None,
             origin_message: None,
         })
@@ -130,6 +268,35 @@ pub fn create_requirement(
             description: None,
             status,
             domain_id: None,
+            refines: None,
+            depends_on: Vec::new(),
+            supersedes: Vec::new(),
+            spawned_by: None,
+            origin_thread: None,
+            origin_message: None,
+        })
+        .unwrap();
+}
+
+/// A proposed resolution naming one requirement.
+pub fn create_resolution(store: &StateStore, scope: &ScopeId, id: &str, requirement_id: &str) {
+    store
+        .create_resolution(CreateResolutionInput {
+            scope_id: scope.clone(),
+            id: sid(id),
+            title: id.to_string(),
+            requirement_ids: vec![sid(requirement_id)],
+            supersedes: Vec::new(),
+            position: "Adopt".into(),
+            rationale: format!("{id} rationale"),
+            status: ResolutionStatus::Proposed,
+            context: None,
+            enforcement: None,
+            confidence: None,
+            inputs: Vec::new(),
+            made_by: None,
+            approved_by: None,
+            approved_at: None,
             origin_thread: None,
             origin_message: None,
         })

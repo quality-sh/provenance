@@ -13,6 +13,7 @@ import {
 } from "./spec.js";
 import { appendByIdentity, requireText, uniqueByKey } from "./fluent-validation.js";
 import { FluentRule, FluentSource } from "./fluent-declarations.js";
+import { STATE_SCHEMA_VERSION } from "./protocol.js";
 
 export { FluentRule, FluentSource } from "./fluent-declarations.js";
 
@@ -25,6 +26,23 @@ type RuleVerifier = (
 
 const requirementDescriptions = new WeakMap<object, string>();
 
+/** The relation fields a requirement declaration may set. */
+export interface RequirementRelations {
+  /** The key of the requirement in the same spec this one refines. */
+  readonly refines?: string;
+  /** Keys of requirements in the same spec this one depends on. */
+  readonly dependsOn: readonly string[];
+  /** Keys of older requirements in the same spec this one replaces. */
+  readonly supersedes: readonly string[];
+  /** The canonical id of the resolution this requirement came out of. */
+  readonly spawnedBy?: string;
+}
+
+const noRelations: RequirementRelations = Object.freeze({
+  dependsOn: Object.freeze([]),
+  supersedes: Object.freeze([]),
+});
+
 export class FluentRequirement<
   Key extends string = string,
   Rules extends readonly FluentRule[] = readonly [],
@@ -36,6 +54,7 @@ export class FluentRequirement<
   readonly adoptsUnowned: boolean;
   readonly sourceDeclarations: Sources;
   readonly ruleDeclarations: Rules;
+  readonly relations: RequirementRelations;
 
   constructor(
     key: Key,
@@ -45,6 +64,7 @@ export class FluentRequirement<
     description?: string,
     explicitId?: string,
     adoptsUnowned = false,
+    relations: RequirementRelations = noRelations,
   ) {
     requireKey("requirement", key);
     this.key = key;
@@ -53,6 +73,11 @@ export class FluentRequirement<
     this.adoptsUnowned = adoptsUnowned;
     this.sourceDeclarations = Object.freeze([...sources]) as unknown as Sources;
     this.ruleDeclarations = Object.freeze([...rules]) as unknown as Rules;
+    this.relations = Object.freeze({
+      ...relations,
+      dependsOn: Object.freeze([...relations.dependsOn]),
+      supersedes: Object.freeze([...relations.supersedes]),
+    });
     if (description !== undefined) requirementDescriptions.set(this, description);
     Object.freeze(this);
   }
@@ -67,6 +92,7 @@ export class FluentRequirement<
       requirementDescriptions.get(this),
       this.explicitId,
       this.adoptsUnowned,
+      this.relations,
     );
   }
 
@@ -79,6 +105,8 @@ export class FluentRequirement<
       this.ruleDeclarations,
       requirementDescriptions.get(this),
       existingId,
+      false,
+      this.relations,
     );
   }
 
@@ -92,6 +120,7 @@ export class FluentRequirement<
       requirementDescriptions.get(this),
       existingId,
       true,
+      this.relations,
     );
   }
 
@@ -105,6 +134,7 @@ export class FluentRequirement<
       description,
       this.explicitId,
       this.adoptsUnowned,
+      this.relations,
     );
   }
 
@@ -122,6 +152,7 @@ export class FluentRequirement<
       requirementDescriptions.get(this),
       this.explicitId,
       this.adoptsUnowned,
+      this.relations,
     );
   }
 
@@ -136,6 +167,53 @@ export class FluentRequirement<
       requirementDescriptions.get(this),
       this.explicitId,
       this.adoptsUnowned,
+      this.relations,
+    );
+  }
+
+  // Names the requirement of the same spec this one refines.
+  refines(parent: AnyRequirement): FluentRequirement<Key, Rules, Sources> {
+    return this.withRelations({ ...this.relations, refines: parent.key });
+  }
+
+  // Names the requirements of the same spec this one depends on.
+  dependsOn(...requirements: readonly AnyRequirement[]): FluentRequirement<Key, Rules, Sources> {
+    return this.withRelations({
+      ...this.relations,
+      dependsOn: appendByIdentity(
+        this.relations.dependsOn,
+        requirements.map(({ key }) => key),
+      ),
+    });
+  }
+
+  // Names the older requirements of the same spec this one replaces.
+  supersedes(...requirements: readonly AnyRequirement[]): FluentRequirement<Key, Rules, Sources> {
+    return this.withRelations({
+      ...this.relations,
+      supersedes: appendByIdentity(
+        this.relations.supersedes,
+        requirements.map(({ key }) => key),
+      ),
+    });
+  }
+
+  // Names the resolution, by canonical id, this requirement came out of.
+  spawnedBy(resolutionId: string): FluentRequirement<Key, Rules, Sources> {
+    requireText("resolution id", resolutionId);
+    return this.withRelations({ ...this.relations, spawnedBy: resolutionId });
+  }
+
+  private withRelations(relations: RequirementRelations): FluentRequirement<Key, Rules, Sources> {
+    return new FluentRequirement(
+      this.key,
+      this.text,
+      this.sourceDeclarations,
+      this.ruleDeclarations,
+      requirementDescriptions.get(this),
+      this.explicitId,
+      this.adoptsUnowned,
+      relations,
     );
   }
 }
@@ -272,8 +350,16 @@ function buildSpec<
       throw new Error(`Source declaration \`${source.key}\` has no source type`);
     }
   }
+  const requirementKeys = new Set(requirements.map(({ key }) => key));
   for (const requirement of requirements) {
     requireText(`Requirement \`${requirement.key}\` statement`, requirement.text);
+    for (const named of relatedKeys(requirement.relations)) {
+      if (!requirementKeys.has(named)) {
+        throw new Error(
+          `Requirement \`${requirement.key}\` names Requirement \`${named}\` not included in the spec`,
+        );
+      }
+    }
     for (const source of requirement.sourceDeclarations) {
       if (!sourceSet.has(source)) {
         throw new Error(
@@ -359,13 +445,20 @@ function document(
   requirements: readonly AnyRequirement[],
   memberships: ReadonlyMap<FluentRule, AnyRequirement[]>,
 ): Omit<TypedSpecDocument, "declared_by"> {
-  const sourceRecords = sources.map((source) => source.declaration!);
+  const sourceRecords = sources.map((source) => ({
+    ...source.declaration!,
+    ...listField("supersedes", source.supersededKeys),
+  }));
   const requirementRecords = requirements.map<RequirementDeclaration>((requirement) => ({
     key: requirement.key,
     id: requirement.explicitId,
     statement: requirement.text!,
     description: requirementDescriptions.get(requirement),
     sources: requirement.sourceDeclarations.map(({ key }) => key).sort(),
+    refines: requirement.relations.refines,
+    ...listField("depends_on", requirement.relations.dependsOn),
+    ...listField("supersedes", requirement.relations.supersedes),
+    spawned_by: requirement.relations.spawnedBy,
   }));
   const ruleRecords = [...memberships].map<RuleDeclaration>(([rule, parents]) => ({
     key: rule.key,
@@ -373,6 +466,7 @@ function document(
     requirements: parents.map(({ key }) => key).sort(),
     statement: rule.text!,
     implementation: rule.implementation,
+    ...listField("resolution_ids", rule.resolutionIds),
   }));
   sourceRecords.sort(byKey);
   requirementRecords.sort(byKey);
@@ -389,7 +483,7 @@ function document(
       .map((rule) => ({ kind: "rule" as const, id: rule.explicitId! })),
   ];
   return {
-    schema_version: 1,
+    schema_version: STATE_SCHEMA_VERSION,
     spec: spec.key,
     ...(adoptUnowned.length === 0 ? {} : { adopt_unowned: adoptUnowned }),
     sources: sourceRecords,
@@ -428,6 +522,26 @@ function ruleAddress(
 
 function requireKey(kind: string, key: string): void {
   requireText(`${kind} key`, key);
+}
+
+/** The keys a requirement's relations name in the same spec. */
+function relatedKeys(relations: RequirementRelations): string[] {
+  return [
+    ...(relations.refines === undefined ? [] : [relations.refines]),
+    ...relations.dependsOn,
+    ...relations.supersedes,
+  ];
+}
+
+/** A list field travels only when something is in it; an omitted list
+ *  leaves the canonical record untouched. */
+function listField<Name extends string>(
+  name: Name,
+  values: readonly string[],
+): { [Key in Name]?: string[] } {
+  return values.length === 0
+    ? {}
+    : ({ [name]: [...values].sort() } as { [Key in Name]?: string[] });
 }
 
 function byKey(left: { key: string }, right: { key: string }): number {

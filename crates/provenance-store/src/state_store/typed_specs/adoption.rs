@@ -101,10 +101,17 @@ fn decide_sources(
         };
         let address = source_address(&input.spec, &declaration.key)?;
         let target = target(TypedDeclarationKind::Source, id);
-        let desired = desired_source(scope_id, &input.declared_by, &address, id, declaration)?;
-        let reconciled = reconciled_source(existing, desired);
+        let desired = desired_source(
+            scope_id,
+            &input.declared_by,
+            &address,
+            id,
+            declaration,
+            &ids.sources,
+        )?;
+        let reconciled = reconciled_source(existing, desired, declaration, &ids.sources);
         let exact = same_source_definition(existing, &reconciled)
-            && relationships.source_matches(id, &current.edges);
+            && relationships.source_matches(id, current.relationships());
         let requested = adopted.contains(&target);
         if rejects(
             existing.declared_by.as_deref(),
@@ -113,7 +120,7 @@ fn decide_sources(
             exact,
         ) {
             let mut changes = source_changes(existing, &reconciled);
-            relationships.add_source_change(id, &current.edges, &mut changes);
+            relationships.add_source_change(id, current.relationships(), &mut changes);
             ensure_definition_change(existing, &reconciled, &mut changes);
             preserve_default_conflict(
                 requested,
@@ -161,10 +168,11 @@ fn decide_requirements(
             id,
             declaration,
             &ids.sources,
-        );
-        let reconciled = reconciled_requirement(existing, desired);
+            &ids.requirements,
+        )?;
+        let reconciled = reconciled_requirement(existing, desired, declaration, &ids.requirements)?;
         let exact = same_requirement_definition(existing, &reconciled)
-            && relationships.requirement_matches(id, &current.edges);
+            && relationships.requirement_matches(id, current.relationships());
         let requested = adopted.contains(&target);
         if rejects(
             existing.declared_by.as_deref(),
@@ -173,7 +181,7 @@ fn decide_requirements(
             exact,
         ) {
             let mut changes = requirement_changes(existing, &reconciled);
-            relationships.add_requirement_change(id, &current.edges, &mut changes);
+            relationships.add_requirement_change(id, current.relationships(), &mut changes);
             ensure_definition_change(existing, &reconciled, &mut changes);
             preserve_default_conflict(
                 requested,
@@ -214,8 +222,15 @@ fn decide_rules(
             continue;
         };
         let target = target(TypedDeclarationKind::Rule, id);
-        let desired = desired_rule(scope_id, &input.declared_by, &address, id, declaration);
-        let reconciled = reconciled_rule(existing, desired);
+        let desired = desired_rule(
+            scope_id,
+            &input.declared_by,
+            &address,
+            id,
+            declaration,
+            &ids.requirements,
+        )?;
+        let reconciled = reconciled_rule(existing, desired, declaration, &ids.requirements)?;
         let implementation_exact = implementation_matches(
             id,
             declaration.implementation.as_ref(),
@@ -224,7 +239,7 @@ fn decide_rules(
         );
         let exact = same_rule_definition(existing, &reconciled)
             && implementation_exact
-            && relationships.rule_matches(id, &current.edges);
+            && relationships.rule_matches(id, current.relationships());
         let requested = adopted.contains(&target);
         if rejects(
             existing.declared_by.as_deref(),
@@ -244,7 +259,7 @@ fn decide_rules(
                     after: serde_json::to_value(implementation)?,
                 });
             }
-            relationships.add_rule_change(id, &current.edges, &mut changes);
+            relationships.add_rule_change(id, current.relationships(), &mut changes);
             ensure_definition_change(existing, &reconciled, &mut changes);
             preserve_default_conflict(
                 requested,

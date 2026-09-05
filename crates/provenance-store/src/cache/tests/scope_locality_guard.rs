@@ -9,6 +9,7 @@ use super::super::*;
 use super::fixtures::*;
 use crate::state_store::StateStore;
 use provenance_core::ScopeId;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use std::collections::BTreeSet;
 
 /// Where a recorded read sits: inside a scope, in the global unit, or
@@ -63,7 +64,7 @@ fn two_scope_layout() -> (
         &requirements,
         format!(
             "{}\n",
-            serde_json::json!({"schema_version": 1, "scope_id": "second",
+            serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "second",
                 "id": "req_second", "statement": "Second", "status": "active"})
         ),
     )
@@ -101,9 +102,9 @@ fn each_scoped_family_derives_from_its_own_scope_and_the_global_unit_only() {
     let store = StateStore::new(layout);
     let mut recorded_any = false;
     for scope in [&first, &second] {
-        for family in ProjectionFamily::ALL.into_iter().filter(|f| f.is_scoped()) {
+        for family in ProjectionFamily::ALL {
             crate::test_probes::start_recording_reads();
-            family.canonical_records(&store, Some(scope)).unwrap();
+            family.canonical_records(&store, scope).unwrap();
             let reads = crate::test_probes::take_recorded_reads();
             // A family whose directory does not exist reads nothing.
             recorded_any |= !reads.is_empty();
@@ -126,22 +127,4 @@ fn each_scoped_family_derives_from_its_own_scope_and_the_global_unit_only() {
         }
     }
     assert!(recorded_any, "the derivations must record their reads");
-}
-
-#[test]
-fn the_edges_family_derives_from_the_global_unit_only() {
-    let (_dir, layout, _first, _second) = two_scope_layout();
-    let store = StateStore::new(layout);
-    crate::test_probes::start_recording_reads();
-    ProjectionFamily::Edges
-        .canonical_records(&store, None)
-        .unwrap();
-    let reads = crate::test_probes::take_recorded_reads();
-    assert!(!reads.is_empty());
-    for path in &reads {
-        assert!(
-            matches!(locality(path), Locality::Global),
-            "edges read outside the global unit: {path}"
-        );
-    }
 }

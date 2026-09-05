@@ -16,7 +16,7 @@ pub use artifacts::{
     ResolutionStatus, Rule, RuleSeverity, RuleStatus, Source, SourceReference, SourceType,
 };
 pub use collaboration::{Message, MessageRole, Thread, ThreadParent, ThreadStatus};
-pub use graph::{Edge, EdgeType, NodeType};
+pub use graph::NodeType;
 pub use ideation::contributions::{
     ClaimChallenge, Contribution, MaterialClaim, SuggestedArtifactChange, UncertaintyRating,
     UnsupportedRecommendation,
@@ -49,7 +49,6 @@ pub use integrations::{
     VerificationMethod, VerificationRun, VerificationRunStatus,
 };
 pub use manifest::{Manifest, RepoPathPrefix, Scope};
-pub use relations::{RelationDerivation, RelationKind};
 pub use services::Domain;
 pub use shaping::{
     ArtifactLink, ArtifactLinkTargetType, Boundary, Question, QuestionStatus, ResolutionMethod,

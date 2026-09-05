@@ -32,6 +32,24 @@ fn cli_creates_and_exports_enriched_sources_and_resolutions() {
             "--scope",
             "default",
             "--id",
+            "source_sah_2025",
+            "--name",
+            "Support at Home 2025",
+            "--source-type",
+            "legislation",
+        ])
+        .assert()
+        .success();
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .args([
+            "sources",
+            "create",
+            "--repo",
+            &repo,
+            "--scope",
+            "default",
+            "--id",
             "source_sah",
             "--name",
             "Support at Home",
@@ -45,7 +63,7 @@ fn cli_creates_and_exports_enriched_sources_and_resolutions() {
             "1714521600000",
             "--review-date",
             "1717200000000",
-            "--superseded-by",
+            "--supersedes",
             "source_sah_2025",
             "--format",
             "json",
@@ -58,9 +76,8 @@ fn cli_creates_and_exports_enriched_sources_and_resolutions() {
         .stdout(predicates::str::contains(
             r#""commit_pin": "5e1f2a9c4b6d8e0f1234567890abcdef12345678""#,
         ))
-        .stdout(predicates::str::contains(
-            r#""superseded_by": "source_sah_2025""#,
-        ));
+        .stdout(predicates::str::contains(r#""supersedes": ["#))
+        .stdout(predicates::str::contains(r#""source_sah_2025""#));
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
@@ -76,6 +93,30 @@ fn cli_creates_and_exports_enriched_sources_and_resolutions() {
             "Support at Home shall be traceable",
             "--format",
             "json",
+        ])
+        .assert()
+        .success();
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .args([
+            "resolutions",
+            "create",
+            "--repo",
+            &repo,
+            "--scope",
+            "default",
+            "--id",
+            "res_sah_2025",
+            "--title",
+            "SAH extraction, revised",
+            "--requirement-id",
+            "req_sah",
+            "--position",
+            "Revised extraction",
+            "--rationale",
+            "Reviewed",
+            "--status",
+            "draft",
         ])
         .assert()
         .success();
@@ -118,7 +159,7 @@ fn cli_creates_and_exports_enriched_sources_and_resolutions() {
             "Approver Two",
             "--approved-at",
             "1714780800000",
-            "--superseded-by",
+            "--supersedes",
             "res_sah_2025",
             "--format",
             "json",
@@ -127,9 +168,8 @@ fn cli_creates_and_exports_enriched_sources_and_resolutions() {
         .success()
         .stdout(predicates::str::contains(r#""input_type": "regulatory""#))
         .stdout(predicates::str::contains(r#""made_by": "Analyst One""#))
-        .stdout(predicates::str::contains(
-            r#""superseded_by": "res_sah_2025""#,
-        ));
+        .stdout(predicates::str::contains(r#""supersedes": ["#))
+        .stdout(predicates::str::contains(r#""res_sah_2025""#));
 
     Command::cargo_bin("provenance")
         .unwrap()
@@ -211,6 +251,22 @@ fn cli_rejects_a_resolution_input_with_a_blank_reference() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
+            "requirements",
+            "create",
+            "--repo",
+            &repo,
+            "--scope",
+            "default",
+            "--id",
+            "req_sah",
+            "--statement",
+            "SAH applies",
+        ])
+        .assert()
+        .success();
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .args([
             "resolutions",
             "create",
             "--repo",
@@ -219,6 +275,8 @@ fn cli_rejects_a_resolution_input_with_a_blank_reference() {
             "default",
             "--id",
             "res_sah",
+            "--requirement-id",
+            "req_sah",
             "--title",
             "SAH extraction",
             "--position",
@@ -257,6 +315,22 @@ fn cli_rejects_an_imported_resolution_input_with_a_blank_summary() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
+            "requirements",
+            "create",
+            "--repo",
+            &repo,
+            "--scope",
+            "default",
+            "--id",
+            "req_sah",
+            "--statement",
+            "SAH applies",
+        ])
+        .assert()
+        .success();
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .args([
             "resolutions",
             "create",
             "--repo",
@@ -265,6 +339,8 @@ fn cli_rejects_an_imported_resolution_input_with_a_blank_summary() {
             "default",
             "--id",
             "res_sah",
+            "--requirement-id",
+            "req_sah",
             "--title",
             "SAH extraction",
             "--position",

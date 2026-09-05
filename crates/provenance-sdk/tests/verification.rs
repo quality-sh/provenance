@@ -3,6 +3,7 @@
 
 use std::sync::{Mutex, MutexGuard};
 
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_core::{Manifest, RepoPathPrefix, ScopeId, VerificationRunStatus};
 use provenance_macros::verifies;
 use provenance_sdk::{operations, verify};
@@ -32,7 +33,7 @@ fn repository() -> (tempfile::TempDir, MutexGuard<'static, ()>) {
 
 fn seeded_rule(root: &std::path::Path) -> String {
     let input: provenance_sdk::TypedSpecInput = serde_json::from_value(serde_json::json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "spec": "share-links",
         "declared_by": "spec://rust",
         "requirements": [{

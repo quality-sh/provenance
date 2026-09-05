@@ -2,7 +2,7 @@ use super::{ensure_graph_schema_version, GraphReferenceError};
 use crate::{layout::ProvenanceLayout, state_store::StateStore};
 use camino::Utf8Path;
 use provenance_core::{
-    Boundary, Domain, Edge, ImplementationBinding, Question, Requirement, Resolution, Rule, Scope,
+    Boundary, Domain, ImplementationBinding, Question, Requirement, Resolution, Rule, Scope,
     ScopeId, Source, Topic, VerificationBinding, SUPPORTED_SCHEMA_VERSION,
 };
 use provenance_macros::rule;
@@ -44,7 +44,6 @@ pub struct GraphExport {
     pub verification_bindings: Vec<VerificationBinding>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub implementation_bindings: Vec<ImplementationBinding>,
-    pub edges: Vec<Edge>,
 }
 
 pub(super) fn load_projection(
@@ -86,7 +85,6 @@ pub(super) fn load_projection(
         implementation_bindings: store
             .closed_implementation_bindings(&scope_id)
             .map_err(incomplete)?,
-        edges: store.closed_edges(&scope_id).map_err(incomplete)?,
     };
     graph.validate_schema_versions()?;
     validate_scope_ownership(&graph, &scope_id)?;
@@ -117,7 +115,6 @@ impl GraphExport {
         require_supported!(&self.rules, "rule");
         require_supported!(&self.verification_bindings, "verification binding");
         require_supported!(&self.implementation_bindings, "implementation binding");
-        require_supported!(&self.edges, "edge");
         Ok(())
     }
 
@@ -238,7 +235,6 @@ fn sort_records(graph: &mut GraphExport) {
     graph
         .implementation_bindings
         .sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
-    graph.edges.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
 }
 
 /// Decides whether a pinned graph may travel as the scope it claims to be.
@@ -282,7 +278,6 @@ pub(super) fn validate_scope_ownership(
     require_scope!(&graph.rules, "rule");
     require_scope!(&graph.verification_bindings, "verification binding");
     require_scope!(&graph.implementation_bindings, "implementation binding");
-    require_scope!(&graph.edges, "edge");
     Ok(())
 }
 

@@ -1,6 +1,4 @@
-use provenance_core::{
-    EdgeType, NodeType, RequirementReview, ScopeId, StableId, SUPPORTED_SCHEMA_VERSION,
-};
+use provenance_core::{RequirementReview, ScopeId, StableId, SUPPORTED_SCHEMA_VERSION};
 use sha2::{Digest, Sha256};
 
 use super::{ReconciledResource, StateStore, TypedResourceKind};
@@ -135,16 +133,10 @@ impl StateStore {
         requirement_id: &StableId,
     ) -> anyhow::Result<Vec<StableId>> {
         Ok(self
-            .list_edges()?
+            .list_rules(scope)?
             .into_iter()
-            .filter(|edge| {
-                edge.scope_id == *scope
-                    && edge.edge_type == EdgeType::Produces
-                    && edge.from_type == NodeType::Requirement
-                    && edge.to_type == NodeType::Rule
-                    && edge.from_id == *requirement_id
-            })
-            .map(|edge| edge.to_id)
+            .filter(|rule| rule.requirement_ids.contains(requirement_id))
+            .map(|rule| rule.id)
             .collect())
     }
 

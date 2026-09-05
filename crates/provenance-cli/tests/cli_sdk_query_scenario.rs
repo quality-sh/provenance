@@ -72,7 +72,7 @@ fn an_agent_answers_impact_evidence_neighbors_and_trace_from_bounded_responses()
     let trace = sdk(
         repo,
         "trace",
-        &json!({"id": ids.source.as_str(), "direction": "out"}),
+        &json!({"id": ids.source.as_str(), "direction": "in"}),
     );
     assert!(trace["nodes"]
         .as_array()
@@ -106,7 +106,8 @@ fn every_primitive_answers_the_same_bytes_on_a_second_run() {
         let answer = twice(repo, command, &request);
         let parsed: Value = serde_json::from_str(&answer).unwrap();
         assert_eq!(
-            parsed["protocol_version"], 5,
+            parsed["protocol_version"],
+            provenance_core::SDK_PROTOCOL_VERSION,
             "{command} names the protocol"
         );
         assert!(

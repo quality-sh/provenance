@@ -2,13 +2,12 @@ mod adoption;
 mod identity;
 mod lifecycle;
 mod reconcile;
-mod relationships;
 mod rule_addresses;
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use provenance_core::{
-    DeclarationAddress, Edge, ImplementationBinding, Requirement, Rule, ScopeId, Source, StableId,
+    DeclarationAddress, ImplementationBinding, Requirement, Rule, ScopeId, Source, StableId,
     SUPPORTED_SCHEMA_VERSION,
 };
 use provenance_macros::rule;
@@ -16,21 +15,23 @@ use provenance_macros::rule;
 use super::requirement_reviews;
 use super::{
     ReconcileState, ReconciledResource, StateStore, TypedDeclarationKind, TypedFieldChange,
-    TypedRequirementInput, TypedRuleInput, TypedSpecInput, TypedSpecResult,
+    TypedRuleInput, TypedSpecInput, TypedSpecResult,
 };
 use crate::shards;
 use identity::{
     declaration_ids, normalize_rule_relationships, owned_declaration_ids, requirement_identity,
     rule_declaration_ids, source_identity, validate_references,
 };
-use reconcile::{reconcile_requirements, reconcile_rules, reconcile_sources};
+use reconcile::{
+    ensure_acyclic, ensure_resolutions_exist, reconcile_requirements, reconcile_rules,
+    reconcile_sources,
+};
 pub(in crate::state_store) use rule_addresses::rule_address;
 
 struct CurrentTypedState {
     sources: Vec<Source>,
     requirements: Vec<Requirement>,
     rules: Vec<Rule>,
-    edges: Vec<Edge>,
     implementation_bindings: Vec<ImplementationBinding>,
     source_addresses: BTreeMap<DeclarationAddress, StableId>,
     requirement_addresses: BTreeMap<DeclarationAddress, StableId>,
@@ -47,10 +48,7 @@ struct DesiredTypedIds {
 pub(super) struct DesiredTypedGraph<'a> {
     pub(super) spec: &'a str,
     pub(super) owner: &'a str,
-    pub(super) requirements: &'a [TypedRequirementInput],
     pub(super) rules: &'a [TypedRuleInput],
-    pub(super) source_ids: &'a BTreeMap<String, StableId>,
-    pub(super) requirement_ids: &'a BTreeMap<String, StableId>,
     pub(super) rule_ids: &'a BTreeMap<DeclarationAddress, StableId>,
 }
 
@@ -90,6 +88,7 @@ fn desired_typed_ids(
         &current.rule_addresses,
     )?;
     validate_references(
+        &input.sources,
         &input.requirements,
         &input.rules,
         |key| sources.contains_key(key),
@@ -154,7 +153,6 @@ impl StateStore {
         }
         let adopted_rule_ids = adopted_rule_ids(&input);
 
-        let requirement_relationships = input.requirements.clone();
         let rule_relationships = input.rules.clone();
         let spec = input.spec;
         let (sources, source_resources) = reconcile_sources(
@@ -181,14 +179,14 @@ impl StateStore {
             &input.declared_by,
             input.rules,
             &ids.rules,
+            &ids.requirements,
         )?;
+        ensure_resolutions_exist(self, scope_id, &requirements, &rules)?;
+        ensure_acyclic(&requirements)?;
         let graph = DesiredTypedGraph {
             spec: &spec,
             owner: &input.declared_by,
-            requirements: &requirement_relationships,
             rules: &rule_relationships,
-            source_ids: &ids.sources,
-            requirement_ids: &ids.requirements,
             rule_ids: &ids.rules,
         };
         let implementation_reconciliation = super::implementation_bindings::reconcile(
@@ -228,7 +226,6 @@ impl StateStore {
                 &shards::implementation_bindings_path(&self.layout, scope_id),
                 implementation_reconciliation.records,
             )?;
-            relationships::reconcile(self, scope_id, graph)?;
             self.raise_requirement_reviews(scope_id, &requirement_resources, &rule_resources)?;
         }
 
@@ -281,11 +278,6 @@ impl StateStore {
         let requirements = self.list_requirements(scope_id)?;
         let rules = self.list_rules(scope_id)?;
         let implementation_bindings = self.list_implementation_bindings(scope_id)?;
-        let edges = self
-            .list_edges()?
-            .into_iter()
-            .filter(|edge| edge.scope_id == *scope_id)
-            .collect();
         let source_addresses = owned_declaration_ids(owner, &sources, |record| {
             (
                 &record.id,
@@ -311,7 +303,6 @@ impl StateStore {
             sources,
             requirements,
             rules,
-            edges,
             implementation_bindings,
             source_addresses,
             requirement_addresses,

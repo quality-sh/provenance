@@ -1,4 +1,5 @@
 use super::*;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_macros::verifies;
 use provenance_store::graph_reference::{graph_digest, GraphExport};
 use serde_json::json;
@@ -263,6 +264,21 @@ fn implementation_binding_travels_in_the_exact_graph_and_changes_its_digest() {
     let temp = committed_store();
     provenance(temp.path())
         .args([
+            "requirements",
+            "create",
+            "--repo",
+            ".",
+            "--scope",
+            "default",
+            "--id",
+            "req_runtime",
+            "--statement",
+            "Accepted workflows start",
+        ])
+        .assert()
+        .success();
+    provenance(temp.path())
+        .args([
             "rules",
             "create",
             "--repo",
@@ -271,6 +287,8 @@ fn implementation_binding_travels_in_the_exact_graph_and_changes_its_digest() {
             "default",
             "--id",
             "rule_runtime",
+            "--requirement-id",
+            "req_runtime",
             "--statement",
             "Accepted workflows start",
         ])
@@ -286,11 +304,14 @@ fn implementation_binding_travels_in_the_exact_graph_and_changes_its_digest() {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(
         &path,
-        concat!(
-            "{\"schema_version\":1,\"scope_id\":\"default\",",
-            "\"id\":\"implementation_binding_runtime\",\"rule_id\":\"rule_runtime\",",
-            "\"declared_by\":\"spec://typescript/workflows\",",
-            "\"file\":\"src/runtime.ts\",\"symbol\":\"startWorkflow\"}\n"
+        format!(
+            concat!(
+                "{{\"schema_version\":{},\"scope_id\":\"default\",",
+                "\"id\":\"implementation_binding_runtime\",\"rule_id\":\"rule_runtime\",",
+                "\"declared_by\":\"spec://typescript/workflows\",",
+                "\"file\":\"src/runtime.ts\",\"symbol\":\"startWorkflow\"}}\n"
+            ),
+            SUPPORTED_SCHEMA_VERSION.0
         ),
     )
     .unwrap();

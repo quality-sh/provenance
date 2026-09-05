@@ -5,7 +5,6 @@ use provenance_macros::rule;
 use provenance_store::{layout::ProvenanceLayout, state_store::StateStore};
 use std::collections::BTreeSet;
 
-mod edges;
 mod index;
 mod references;
 mod scope;
@@ -142,7 +141,6 @@ fn validate_locked(store: &StateStore, manifest: &Manifest) -> anyhow::Result<()
         &mut index,
         &mut dangling,
     )?;
-    edges::validate(store, &manifest_scopes, &index, &mut dangling)?;
 
     anyhow::ensure!(
         scope_directory_findings.is_empty(),
@@ -169,7 +167,6 @@ mod tests {
         let repo = Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
         let layout = ProvenanceLayout::new(repo.clone());
         std::fs::create_dir_all(layout.scopes_dir()).unwrap();
-        std::fs::create_dir_all(layout.edges_dir()).unwrap();
         std::fs::write(layout.manifest_path(), "not the planned manifest").unwrap();
         std::fs::create_dir_all(layout.cache_dir()).unwrap();
         std::fs::write(layout.publication_marker_path(), "not a publication marker").unwrap();
@@ -214,7 +211,6 @@ mod tests {
         let repo = Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
         let layout = ProvenanceLayout::new(repo.clone());
         std::fs::create_dir_all(layout.scopes_dir()).unwrap();
-        std::fs::create_dir_all(layout.edges_dir()).unwrap();
         let manifest = Manifest::default_with_scope(
             ScopeId::new("default").unwrap(),
             RepoPathPrefix::new("."),

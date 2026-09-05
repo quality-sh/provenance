@@ -29,6 +29,8 @@ export interface SourceDeclaration {
   kind: string;
   url?: string;
   reference?: string;
+  /** Keys of older sources in the same document this one replaces. */
+  supersedes?: string[];
 }
 
 export interface RequirementDeclaration {
@@ -37,6 +39,14 @@ export interface RequirementDeclaration {
   statement: string;
   description?: string;
   sources: string[];
+  /** The key of the requirement in the same document this one refines. */
+  refines?: string;
+  /** Keys of requirements in the same document this one depends on. */
+  depends_on?: string[];
+  /** Keys of older requirements in the same document this one replaces. */
+  supersedes?: string[];
+  /** The canonical id of the resolution this requirement came out of. */
+  spawned_by?: string;
 }
 
 export interface RuleDeclaration {
@@ -49,6 +59,8 @@ export interface RuleDeclaration {
   name?: string;
   description?: string;
   implementation?: ImplementationDeclaration;
+  /** Canonical ids of the resolutions this rule follows from. */
+  resolution_ids?: string[];
 }
 
 export interface ImplementationDeclaration {
@@ -56,8 +68,11 @@ export interface ImplementationDeclaration {
   symbol: string;
 }
 
+/** The state schema version every typed spec document names. */
+export const STATE_SCHEMA_VERSION = 2;
+
 export interface TypedSpecDocument {
-  schema_version: 1;
+  schema_version: typeof STATE_SCHEMA_VERSION;
   spec: string;
   declared_by: string;
   adopt_unowned?: AdoptionTarget[];
@@ -183,17 +198,6 @@ export type NodeType =
   | "domain"
   | "boundary";
 
-export type EdgeType =
-  | "references"
-  | "refines_into"
-  | "depends_on"
-  | "contradicts"
-  | "supersedes"
-  | "needs"
-  | "resolves"
-  | "spawns"
-  | "produces";
-
 export type Direction = "out" | "in" | "both";
 
 /** One canonical record as the engine hands it back. */
@@ -243,8 +247,15 @@ export interface SearchResponse extends PagedResponse {
   nodes: GraphNode[];
 }
 
+/**
+ * One record one hop away. `relation` names the field that joins the two
+ * records: `cites`, `domain_id`, `refines`, `depends_on`, `supersedes`,
+ * `spawned_by`, `requirement_ids`, `resolution_ids`, `requirement_id`,
+ * `topic_id`, `resolution_id`, `contradicts`, or `links`. `out` means the
+ * queried record holds the field; `in` means the neighbour does.
+ */
 export interface Neighbor {
-  edge_type: EdgeType;
+  relation: string;
   direction: "out" | "in";
   node: GraphNode;
 }
@@ -253,7 +264,8 @@ export interface NeighborsRequest extends PagedRequest {
   id: string;
   node_type?: NodeType;
   direction?: Direction;
-  edge_types?: EdgeType[];
+  /** Relation names to follow; every declared relation when omitted. */
+  relations?: string[];
 }
 
 export interface NeighborsResponse extends PagedResponse {

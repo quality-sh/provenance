@@ -16,6 +16,10 @@ export interface SourceDeclaration<in out SpecKey extends string, out Key extend
   document(reference: string): SourceDeclaration<SpecKey, Key>;
   kind(kind: SourceKind): SourceDeclaration<SpecKey, Key>;
   name(name: string): SourceDeclaration<SpecKey, Key>;
+  /** Names the older sources of the same spec this one replaces. */
+  supersedes(
+    ...sources: readonly SourceDeclaration<SpecKey, string>[]
+  ): SourceDeclaration<SpecKey, Key>;
 }
 
 /** An immutable Rule declaration, optionally local to one Requirement key. */
@@ -29,6 +33,8 @@ export interface RuleDeclaration<
   id(existingId: string): RuleDeclaration<SpecKey, Key, RequirementKey>;
   adoptUnowned(existingId: string): RuleDeclaration<SpecKey, Key, RequirementKey>;
   implementedBy(target: ImplementationTarget): RuleDeclaration<SpecKey, Key, RequirementKey>;
+  /** Names the resolutions, by canonical id, this rule follows from. */
+  resolutions(...resolutionIds: readonly string[]): RuleDeclaration<SpecKey, Key, RequirementKey>;
   verify(
     key: string,
     callback: () => unknown | Promise<unknown>,
@@ -58,6 +64,18 @@ export interface RequirementDeclaration<
       | RuleDeclaration<SpecKey, string, Key>
     )[]
   ): RequirementDeclaration<SpecKey, Key>;
+  /** Names the requirement of the same spec this one refines. */
+  refines(parent: RequirementDeclaration<SpecKey, any>): RequirementDeclaration<SpecKey, Key>;
+  /** Names the requirements of the same spec this one depends on. */
+  dependsOn(
+    ...requirements: readonly RequirementDeclaration<SpecKey, any>[]
+  ): RequirementDeclaration<SpecKey, Key>;
+  /** Names the older requirements of the same spec this one replaces. */
+  supersedes(
+    ...requirements: readonly RequirementDeclaration<SpecKey, any>[]
+  ): RequirementDeclaration<SpecKey, Key>;
+  /** Names the resolution, by canonical id, this requirement came out of. */
+  spawnedBy(resolutionId: string): RequirementDeclaration<SpecKey, Key>;
 }
 
 /** The immutable declaration factory for one literal spec key. */

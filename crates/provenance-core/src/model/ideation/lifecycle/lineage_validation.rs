@@ -73,6 +73,7 @@ fn visit<'a>(
 #[cfg(test)]
 mod tests {
     use super::{validate, AssertionRecord, ProposalCard};
+    use crate::SUPPORTED_SCHEMA_VERSION;
     use provenance_macros::verifies;
     use serde_json::json;
     use std::collections::BTreeSet;
@@ -205,7 +206,7 @@ mod tests {
                     .map(|assertion| format!("assertion_{assertion}"))
                     .collect();
                 serde_json::from_value(json!({
-                    "schema_version": 1, "scope_id": "default",
+                    "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default",
                     "id": format!("proposal_{proposal}"),
                     "proposal_key": format!("p{proposal}"), "proposal_type": "question",
                     "title": "generated", "summary": "generated",
@@ -224,7 +225,7 @@ mod tests {
             .enumerate()
             .map(|(assertion, holder)| {
                 serde_json::from_value(json!({
-                    "schema_version": 1, "scope_id": "default",
+                    "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default",
                     "id": format!("assertion_{assertion}"),
                     "proposal_id": format!("proposal_{holder}"),
                     "synthesis_packet_id": "synthesis_a", "supporting_claim_ids": ["claim_a"]

@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use serde_json::{json, Value};
 use std::path::Path;
 
@@ -53,7 +54,7 @@ fn init_repo() -> tempfile::TempDir {
         .assert()
         .success();
     let input = json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "spec": "runtime",
         "declared_by": "spec://typescript/runtime",
         "requirements": [{

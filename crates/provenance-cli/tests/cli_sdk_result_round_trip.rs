@@ -3,6 +3,7 @@
 //! every byte and every omission.
 
 use assert_cmd::Command;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_store::operations::TypedSpecPlan;
 use provenance_store::state_store::TypedSpecResult;
 use serde_json::json;
@@ -30,7 +31,7 @@ fn init_repo() -> tempfile::TempDir {
 
 fn emitted(repo: &str, command: &str) -> String {
     let input = json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "spec": "share-links",
         "declared_by": "spec://typescript/share-links",
         "requirements": [{

@@ -10,10 +10,11 @@
 //! moved to a terminal state to make it look like history.
 
 use crate::state_store::ideation_batches::validate_legacy_disposition_shard;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_core::{
     DispositionActor, DispositionDecision, DispositionRecord, IdeationTarget, IdeationTargetType,
-    IdentityType, PromotionState, ProposalCard, ProposalTraceability, ProposalType, SchemaVersion,
-    ScopeId, StableId,
+    IdentityType, PromotionState, ProposalCard, ProposalTraceability, ProposalType, ScopeId,
+    StableId,
 };
 use provenance_macros::verifies;
 use std::collections::BTreeSet;
@@ -277,7 +278,7 @@ fn proposals_for(rows: &[DispositionRecord], state: PromotionState) -> Vec<Propo
 
 fn proposal(id: &str, promotion_state: PromotionState) -> ProposalCard {
     ProposalCard {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: ScopeId::new("default").unwrap(),
         id: StableId::new(id).unwrap(),
         proposal_key: "overtime".into(),
@@ -303,7 +304,7 @@ fn proposal(id: &str, promotion_state: PromotionState) -> ProposalCard {
 
 fn legacy_row(id: &str, proposal_id: &str) -> DispositionRecord {
     DispositionRecord {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: ScopeId::new("default").unwrap(),
         id: StableId::new(id).unwrap(),
         proposal_id: StableId::new(proposal_id).unwrap(),

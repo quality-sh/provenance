@@ -27,6 +27,18 @@ impl Fixture {
             ".",
         ]);
         provenance(&[
+            "requirements",
+            "create",
+            "--repo",
+            repo.to_str().unwrap(),
+            "--scope",
+            "default",
+            "--id",
+            "req_anchor",
+            "--statement",
+            "The anchor requirement holds",
+        ]);
+        provenance(&[
             "rules",
             "create",
             "--repo",
@@ -35,6 +47,8 @@ impl Fixture {
             "default",
             "--id",
             "rule_anchor",
+            "--requirement-id",
+            "req_anchor",
             "--statement",
             "Anchor the primary implementation",
             "--severity",

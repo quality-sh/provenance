@@ -49,11 +49,7 @@ pub struct UnfinishedPage {
 
 impl UnfinishedPage {
     pub const fn item_count(&self) -> usize {
-        self.gaps.len()
-            + self.orphans.rules.len()
-            + self.orphans.resolutions.len()
-            + self.orphans.sources.len()
-            + self.open_questions.len()
+        self.gaps.len() + self.orphans.sources.len() + self.open_questions.len()
     }
 }
 

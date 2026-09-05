@@ -1,5 +1,6 @@
 use super::initialized_store;
 use crate::state_store::{CreateProposalCardInput, ProposalDemand};
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_core::{
     ArtifactLink, ArtifactLinkTargetType, IdeationEvidenceReference, IdeationEvidenceType,
     IdeationTarget, IdeationTargetType, PromotionState, ProposalTraceability, ProposalType,
@@ -55,7 +56,7 @@ fn seed_asserted_proposal(
     scope: &provenance_core::ScopeId,
 ) {
     let contribution: provenance_core::Contribution = serde_json::from_value(serde_json::json!({
-        "schema_version": 1, "scope_id": "default", "id": "contribution_a",
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "contribution_a",
         "target": {"artifact_type": "requirement", "artifact_id": "req_overtime"},
         "participant_slot": "reviewer", "stance": "support", "strongest_finding": "Observed",
         "evidence_references": [{"reference_id": "evidence_a", "evidence_type": "source", "summary": "Pinned"}],
@@ -64,7 +65,7 @@ fn seed_asserted_proposal(
         "unsupported_recommendations": [], "uncertainty": {"level": "low", "rationale": "Direct"}, "open_questions": []
     })).unwrap();
     let mut synthesis: provenance_core::SynthesisPacket = serde_json::from_value(serde_json::json!({
-        "schema_version": 1, "scope_id": "default", "id": "synthesis_a",
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "synthesis_a",
         "target": {"artifact_type": "requirement", "artifact_id": "req_overtime"}, "summary": "Adjudicated",
         "consensus": [], "contested_claims": [], "minority_objections": [],
         "evidence_gaps": [{"question": "Unverified", "needed_evidence_type": "source", "blocking_promotion": true}],
@@ -101,7 +102,7 @@ fn seed_asserted_proposal(
     crate::jsonl::write_jsonl_atomic(
         &crate::shards::assertion_records_path(&store.layout, scope),
         &[provenance_core::AssertionRecord {
-            schema_version: provenance_core::SchemaVersion(1),
+            schema_version: provenance_core::SUPPORTED_SCHEMA_VERSION,
             scope_id: scope.clone(),
             id: provenance_core::AssertionId::new("assertion_a").unwrap(),
             proposal_id: StableId::new("proposal_asserted").unwrap(),
@@ -225,7 +226,7 @@ fn topic_claim_atomically_surfaces_matching_asserted_proposal_with_derived_state
     crate::jsonl::write_jsonl_atomic(
         &crate::shards::topics_path(&store.layout, &scope),
         &[Topic {
-            schema_version: provenance_core::SchemaVersion(1),
+            schema_version: provenance_core::SUPPORTED_SCHEMA_VERSION,
             scope_id: scope.clone(),
             id: topic_id.clone(),
             requirement_id: StableId::new("req_overtime").unwrap(),
@@ -259,7 +260,7 @@ fn topic_claim_atomically_surfaces_matching_asserted_proposal_with_derived_state
 fn a_topic_claim_surfaces_proposals_in_its_explicit_territory() {
     let (_dir, store, scope) = initialized_store();
     let topic = Topic {
-        schema_version: provenance_core::SchemaVersion(1),
+        schema_version: provenance_core::SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: StableId::new("topic_overtime").unwrap(),
         requirement_id: StableId::new("req_overtime").unwrap(),

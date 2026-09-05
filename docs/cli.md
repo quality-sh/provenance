@@ -19,7 +19,7 @@ provenance init --path . --scope default --path-prefix . --disposition-actor-id 
 provenance sources create --scope default --id source_policy --name "Policy"
 provenance domains create --scope default --id domain_policy --name "Policy"
 provenance requirements create --scope default --id req_policy --statement "Follow policy" --domain-id domain_policy
-provenance edges create --scope default --type references --from-type source --from-id source_policy --to-type requirement --to-id req_policy
+provenance requirements source-ref add --scope default --requirement-id req_policy --source-id source_policy
 provenance materialize --format json
 provenance export --scope default --format json --output provenance-export.json
 provenance check --format json
@@ -133,17 +133,24 @@ under `node`, tagged with the same `node_type`. The node kinds are `source`,
 `nodes`: records whose id, statement, name, description, title, or question
 contains the phrase. A search that names no kinds answers the six original
 kinds; `domain` and `boundary` records are answered only when `node_types`
-names them, so protocol version 5 clients meet no kind they cannot read.
+names them.
 
 `neighbors` takes `id`, an optional `node_type`, a `direction` of `out`, `in`,
-or `both`, and an optional `edge_types` filter. It reads exactly one edge and
-answers `neighbors`, each carrying `edge_type`, the `direction` the edge was
-read in, and the record at the other end. A Rule's neighbours are the
-Requirements that produce it; a Requirement's are its Rules and its Sources.
-`trace` takes the same parameters plus `max_depth`, 3 by default and 10 at
-most, and answers `nodes`, each carrying the `depth` it was reached at. Tracing
-out from a Source reaches its Requirements at depth 1 and the Rules they
-produce at depth 2.
+or `both`, and an optional `relations` filter naming declared relations
+(`cites`, `domain_id`, `refines`, `depends_on`, `supersedes`, `spawned_by`,
+`requirement_ids`, `resolution_ids`, `requirement_id`, `topic_id`,
+`resolution_id`, `contradicts`, `links`); an unknown name is refused. It reads
+every declared relation one hop away and answers `neighbors`, each carrying
+the `relation`, the `direction` it was read in, and the record at the other
+end. `out` is a relation the record holds in its own field; `in` is a relation
+another record's field holds toward it. A Rule's `out` neighbours are the
+Requirements and Resolutions its lists name; a Requirement's `out` neighbours
+are its Sources and its domain, and its `in` neighbours the Rules and
+Resolutions that name it. `trace` takes the same parameters plus `max_depth`,
+3 by default and 10 at most, and answers `nodes`, each carrying the `depth` it
+was reached at. Tracing `in` from a Source reaches the Requirements that cite
+it at depth 1 and the Rules that name them at depth 2; tracing `out` from a
+Rule reaches its Requirements at depth 1 and their Sources at depth 2.
 
 `impact` takes `id` and answers `affected_rules`: every Rule the record
 reaches, each with the `implementations` and `verifications` that stand behind
@@ -335,12 +342,14 @@ path when no `--path` is given.
 The command exits non-zero when the merge conflicts or when the merged records
 would not survive a direct write, and git then leaves the path unmerged for a
 human. Merging is a write, so the merged records face the write-time checks:
-the edges shard is re-checked against the edge endpoint table and a merge that
-would store an invalid edge fails naming that edge, rather than storing it for
-`provenance check` to find later. Requirement and Rule shards are deserialized
-as their record types. Their selected merge result is compared with the merge
-ancestor, and a new or statement-changed record with an ASD-STE100 Issue 9 Rule
-8.1 finding is rejected before the result path is written. Other per-scope
+every shard that holds a record kind with declared relations (sources,
+requirements, resolutions, rules, topics, questions, boundaries) is
+deserialized as its record type, and a record missing a required relation
+(a rule or resolution with no requirement) fails the merge naming that
+record, rather than storing it for `provenance check` to find later.
+Requirement and Rule merge results are also compared with the merge ancestor,
+and a new or statement-changed record with an ASD-STE100 Issue 9 Rule 8.1
+finding is rejected before the result path is written. Other per-scope
 families merge without typed validation today.
 
 The JSON report names each conflicting record, its kind (`add_add`,
@@ -381,7 +390,7 @@ other-scope changes but rejects selected-scope graph changes until they are comm
 All four operations emit versioned JSON. Reference identity is idempotently derived
 from the Git repository roots, `.provenance/state`, scope, full commit ID, and canonical
 graph digest. Exact exports include only graph-bearing sources, domains, requirements,
-boundaries, topics, questions, resolutions, rules, and edges; they do not add proposal,
+boundaries, topics, questions, resolutions, and rules; they do not add proposal,
 promotion, collaboration, or workflow-specific fields. The
 exact-export document carries the same `graph_digest` as the reference it was cut
 from, so it verifies offline, with no repository in hand:
@@ -459,13 +468,13 @@ are distinct. Correlation is audit metadata: it does not replace disposition or 
 identity, and a duplicate disposition cannot mutate it.
 Dispositions do not rewrite proposal definitions; `proposals list` derives effective state.
 
-Graph edge commands: `edges create --type references|refines_into|depends_on|contradicts|supersedes|needs|resolves|spawns|produces --from-type source|requirement|resolution|rule --from-id <id> --to-type source|requirement|resolution|rule --to-id <id>`, `edges list`, and `edges delete --id <edge-id>`. Creation validates edge type/endpoints and requires both endpoint records to exist.
+Relation commands, one per reference field: `requirements refines set|clear --requirement-id <id> [--target-id <requirement-id>]`, `requirements depends-on add|clear`, `requirements supersedes add|clear`, `requirements spawned-by set|clear`, `requirements source-ref add|clear --requirement-id <id> --source-id <id>`, `rules requirement add|clear --rule-id <id> --target-id <requirement-id>`, `rules resolution add|clear`, `resolutions requirement add|clear --resolution-id <id> --target-id <requirement-id>`, `resolutions supersedes add|clear`, `sources supersedes add|clear --source-id <id> --target-id <source-id>`, and `questions contradicts set|clear --id <question-id> [--target-id <requirement-id>]`. `add` and `set` refuse a missing target and a `refines`, `depends_on`, or `supersedes` cycle; `clear` refuses the last entry of a required list ("a rule needs one requirement", "a resolution needs one requirement"). `rules create` and `resolutions create` take `--requirement-id` (required, repeatable); `rules create --resolution-id`, `requirements create --refines|--spawned-by|--depends-on|--supersedes`, and `questions create --contradicts` set the same fields at creation.
 
 Rule read commands: `rules list` gives one line per rule in the scope, carrying id, status,
 severity, a cut statement, and the source document and section it cites; `rules show --id
 <rule-id>` prints one rule whole. `traceability <rule-id>` walks the chain behind a rule and
-returns only the edges it crossed, not the whole scope.
+returns only the relations it crossed, not the whole scope.
 
 Shaping turn-state commands: `questions create` requires `--method` (grill, prototype, research, verify, or task); `topics claim/release/close` and `questions claim/release/answer` manage claim state (claiming an already-claimed item fails and reports the holder; closing a topic or answering a question clears its claim); `requirements fog set/show/clear` manages the deliberately unstructured fog text on an anchor requirement.
 
-Creation commands accept enriched v1 metadata for cloud-imported projects. Examples: `sources create --source-type legislation --reference "Department guidance" --commit-pin 5e1f2a9c4b6d8e0f1234567890abcdef12345678 --effective-date 1714521600000 --review-date 1717200000000 --superseded-by source_2025`, `requirements create --status discovery --description "Research note" --domain-id domain_policy`, `resolutions create --status draft --confidence 0.9 --context "Code scan" --input-type regulatory --input-reference "Program manual" --input-summary "Reviewed rules" --made-by "Analyst" --approved-by "Approver" --approved-at 1714780800000 --superseded-by res_2025`, `rules create --status draft --source-document docs/policy.md --source-section "Expiry limits"` (these fields are citations, not implementation bindings), and `proposals create --confidence 0.83`. Confidence values must be between `0.0` and `1.0`; source commit pins must be 7-64 hexadecimal characters.
+Creation commands accept enriched v1 metadata for cloud-imported projects. Examples: `sources create --source-type legislation --reference "Department guidance" --commit-pin 5e1f2a9c4b6d8e0f1234567890abcdef12345678 --effective-date 1714521600000 --review-date 1717200000000 --supersedes source_2024`, `requirements create --status discovery --description "Research note" --domain-id domain_policy`, `resolutions create --status draft --confidence 0.9 --context "Code scan" --input-type regulatory --input-reference "Program manual" --input-summary "Reviewed rules" --made-by "Analyst" --approved-by "Approver" --approved-at 1714780800000 --supersedes res_2024`, `rules create --status draft --source-document docs/policy.md --source-section "Expiry limits"` (these fields are citations, not implementation bindings), and `proposals create --confidence 0.83`. Confidence values must be between `0.0` and `1.0`; source commit pins must be 7-64 hexadecimal characters.

@@ -2,6 +2,7 @@ use super::support::{
     create_requirement, create_rule, diagnostic, error_json, export, init, provenance,
     provenance_tree, write_json, REQUIREMENTS_SHARD,
 };
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::path::Path;
@@ -28,27 +29,27 @@ fn import_output(repo: &Path, input: &Path, dry_run: bool) -> std::process::Outp
 fn candidate(repo: &Path, path: &Path, statement: &str) {
     let exported_path = path.with_extension("base.json");
     let mut value = export(repo, &exported_path);
-    value["requirements"] = json!([{
-        "schema_version": 1,
-        "scope_id": "default",
-        "id": "req_changed",
-        "statement": statement,
-        "status": "active"
-    }]);
+    for requirement in value["requirements"].as_array_mut().unwrap() {
+        if requirement["id"] == "req_changed" {
+            requirement["statement"] = json!(statement);
+        }
+    }
     value["rules"] = json!([{
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "rule_changed",
         "statement": statement,
         "status": "active",
-        "severity": "high"
+        "severity": "high",
+        "requirement_ids": ["req_changed"]
     }, {
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "rule_added",
         "statement": statement,
         "status": "active",
-        "severity": "high"
+        "severity": "high",
+        "requirement_ids": ["req_changed"]
     }]);
     write_json(path, &value);
 }
@@ -102,12 +103,13 @@ fn import_allows_clean_changes_and_unchanged_legacy_invalid_statements() {
     let mut value = export(&repo, &directory.path().join("legacy.json"));
     value["requirements"][0]["description"] = json!("Unrelated metadata");
     value["rules"] = json!([{
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "rule_clean",
         "statement": "A clean rule",
         "status": "active",
-        "severity": "high"
+        "severity": "high",
+        "requirement_ids": [value["requirements"][0]["id"].clone()]
     }]);
     write_json(&input, &value);
 

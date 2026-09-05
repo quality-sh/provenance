@@ -1,6 +1,7 @@
 use provenance_macros::verifies;
 
 use super::{requirement, rule, source, spec};
+use crate::SUPPORTED_SCHEMA_VERSION;
 
 fn sample(order: bool) -> super::SpecBuilder {
     let first = requirement("sharing")
@@ -302,7 +303,7 @@ fn handles_carry_declaration_addresses() {
 #[verifies("rule_rust_typed_input_round_trip", examples)]
 fn materialize_emits_the_wire_document_with_addresses() {
     let input = sample(true).build().unwrap().materialize("spec://rust");
-    assert_eq!(input.schema_version, 1);
+    assert_eq!(input.schema_version, SUPPORTED_SCHEMA_VERSION.0);
     assert_eq!(input.declared_by, "spec://rust");
     assert!(input.rules.iter().all(|rule| rule.address.is_some()));
     let round_trip: crate::protocol::TypedSpecInput =
@@ -430,5 +431,45 @@ fn a_source_without_a_source_type_is_rejected() {
     assert_eq!(
         error.violations(),
         ["source `brief` must declare a source type"]
+    );
+}
+
+#[test]
+fn a_source_superseding_an_undeclared_key_is_a_reference_violation() {
+    use crate::authoring::reference_violations;
+    use crate::protocol::{TypedRequirementInput, TypedSourceInput};
+
+    let sources = [TypedSourceInput {
+        key: "award".into(),
+        id: None,
+        name: "Award".into(),
+        kind: "policy".into(),
+        url: None,
+        reference: None,
+        supersedes: Some(vec!["ghost".into()]),
+    }];
+    let requirements = [TypedRequirementInput {
+        key: "pay".into(),
+        id: None,
+        statement: "Overtime is paid".into(),
+        description: None,
+        sources: vec!["award".into()],
+        refines: None,
+        depends_on: None,
+        supersedes: None,
+        spawned_by: None,
+    }];
+
+    let violations = reference_violations(
+        &sources,
+        &requirements,
+        &[],
+        |key| key == "award",
+        |key| key == "pay",
+    );
+
+    assert_eq!(
+        violations,
+        ["source `award` references undeclared source `ghost`"]
     );
 }

@@ -5,20 +5,25 @@ use super::super::chrome::{breadcrumb_from_lineage, container_html, page_shell, 
 use super::super::citations::{gap_links, push_gap_citations, push_source_citations};
 use super::super::field_notes::field_notes;
 use super::super::fragments::{
-    push_attribution, push_classification_block, push_classification_row, push_decision_sections,
-    push_lineage, push_prose_section, push_rule_territory_card, push_section_open,
+    push_attribution, push_classification_block, push_classification_link_row,
+    push_classification_row, push_decision_sections, push_lineage, push_prose_section,
+    push_rule_territory_card, push_section_open,
 };
 use super::super::html::{escape_attr, escape_html, icon_svg, PageLinksRenderer};
 use super::super::labels::{format_confidence, requirement_status_badge, resolution_status_word};
 
 /// Every titled link this page renders, in reading order: the breadcrumb and
 /// lineage, the resolving decisions, the refinements, the related
-/// requirements, and the source citations.
+/// requirements, the superseded and depending requirements, and the source
+/// citations.
 fn page_links(page: &RequirementPage) -> Vec<&PageLink> {
     let mut links: Vec<&PageLink> = page.lineage.iter().map(|entry| &entry.link).collect();
     links.extend(page.decisions.iter().map(|decision| &decision.link));
     links.extend(&page.children);
     links.extend(&page.siblings);
+    links.extend(&page.supersedes);
+    links.extend(&page.depends_on);
+    links.extend(page.superseded_by.iter());
     links.extend(page.produced_rules.iter().map(|rule| &rule.link));
     links.extend(page.sources.iter().map(|citation| &citation.link));
     links.extend(gap_links(&page.gaps));
@@ -123,6 +128,15 @@ pub fn render_requirement(scope: &str, page: &RequirementPage) -> String {
         } else {
             push_classification_row(&mut rows, "i-git-branch", "Domain", domain_id, true);
         }
+    }
+    for link in &page.supersedes {
+        push_classification_link_row(&mut rows, &links, "i-scale", "Supersedes", link);
+    }
+    for link in &page.depends_on {
+        push_classification_link_row(&mut rows, &links, "i-git-branch", "Depends on", link);
+    }
+    if let Some(superseded_by) = &page.superseded_by {
+        push_classification_link_row(&mut rows, &links, "i-scale", "Superseded by", superseded_by);
     }
     for decision in &page.decisions {
         if let Some(enforcement) = &decision.enforcement {

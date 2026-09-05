@@ -1,6 +1,6 @@
 use super::{initialized_store, seeded_requirement_store, seeded_source_requirement_store};
 use crate::state_store::{AddSourceReferenceInput, CreateRequirementInput, CreateSourceInput};
-use provenance_core::{EdgeType, RequirementStatus, SourceType, StableId};
+use provenance_core::{RequirementStatus, SourceType, StableId};
 
 #[test]
 fn source_requirement_records_are_written_deterministically() {
@@ -16,7 +16,7 @@ fn source_requirement_records_are_written_deterministically() {
             commit_pin: None,
             effective_date: None,
             review_date: None,
-            superseded_by: None,
+            supersedes: Vec::new(),
             origin_thread: None,
             origin_message: None,
         })
@@ -29,6 +29,10 @@ fn source_requirement_records_are_written_deterministically() {
             description: None,
             status: RequirementStatus::Active,
             domain_id: None,
+            refines: None,
+            depends_on: Vec::new(),
+            supersedes: Vec::new(),
+            spawned_by: None,
             origin_thread: None,
             origin_message: None,
         })
@@ -46,8 +50,10 @@ fn source_requirement_records_are_written_deterministically() {
         "source_schads"
     );
     assert_eq!(
-        store.list_edges().unwrap()[0].edge_type,
-        EdgeType::References
+        store.list_requirements(&scope).unwrap()[0].source_refs[0]
+            .source_id
+            .as_str(),
+        "source_schads"
     );
 }
 
@@ -88,7 +94,7 @@ fn concurrent_source_creates_preserve_all_records() {
                 commit_pin: None,
                 effective_date: None,
                 review_date: None,
-                superseded_by: None,
+                supersedes: Vec::new(),
                 origin_thread: None,
                 origin_message: None,
             })
@@ -115,7 +121,7 @@ fn concurrent_source_creates_preserve_all_records() {
                     commit_pin: None,
                     effective_date: None,
                     review_date: None,
-                    superseded_by: None,
+                    supersedes: Vec::new(),
                     origin_thread: None,
                     origin_message: None,
                 })
@@ -174,7 +180,7 @@ fn repository_publication_cannot_overwrite_a_concurrent_writer() {
                     commit_pin: None,
                     effective_date: None,
                     review_date: None,
-                    superseded_by: None,
+                    supersedes: Vec::new(),
                     origin_thread: None,
                     origin_message: None,
                 })
@@ -237,7 +243,6 @@ fn repository_publication_excludes_an_entire_multi_shard_write() {
     publisher.join().unwrap();
     writer.join().unwrap();
 
-    assert_eq!(store.list_edges().unwrap().len(), 1);
     assert_eq!(
         store.list_requirements(&scope).unwrap()[0].source_refs,
         vec![provenance_core::SourceReference {

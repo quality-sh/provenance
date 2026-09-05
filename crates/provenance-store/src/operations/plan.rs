@@ -3,7 +3,7 @@ use crate::{
     state_store::{ReconcileState, StateStore, TypedResourceKind, TypedSpecInput, TypedSpecResult},
 };
 use camino::Utf8Path;
-use provenance_core::{EdgeType, NodeType, StableId};
+use provenance_core::StableId;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -128,14 +128,12 @@ fn affected_rule_ids(
         }
     }
 
-    for edge in store.list_edges()?.into_iter().filter(|edge| {
-        edge.scope_id == *scope
-            && edge.edge_type == EdgeType::Produces
-            && edge.from_type == NodeType::Requirement
-            && edge.to_type == NodeType::Rule
-            && changed_requirements.contains(&&edge.from_id)
+    for rule in store.list_rules(scope)?.into_iter().filter(|rule| {
+        rule.requirement_ids
+            .iter()
+            .any(|requirement| changed_requirements.contains(&requirement))
     }) {
-        push_unique(&mut rules, edge.to_id);
+        push_unique(&mut rules, rule.id);
     }
     for requirement in changed
         .iter()

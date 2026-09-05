@@ -1,0 +1,6 @@
+error: relation on `refines` names no target
+ --> tests/compile_fail/missing_target.rs:7:5
+  |
+7 | /     #[relation(flow = target_upstream)]
+8 | |     pub refines: Option<StableId>,
+  | |_________________________________^

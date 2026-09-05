@@ -1,4 +1,5 @@
 use super::common::{parse_json_arg, warn_if_skills_missing};
+use super::references;
 use crate::cli::shaping::QuestionsCommand;
 use crate::output;
 use provenance_core::{ArtifactLink, QuestionStatus, ResolutionMethod, ScopeId, StableId};
@@ -21,6 +22,7 @@ pub(super) fn handle(command: QuestionsCommand, quiet: bool) -> anyhow::Result<(
             answer,
             links_json,
             resolution_id,
+            contradicts,
             format,
         } => {
             warn_if_skills_missing(&repo, quiet)?;
@@ -35,10 +37,12 @@ pub(super) fn handle(command: QuestionsCommand, quiet: bool) -> anyhow::Result<(
                     answer,
                     links: parse_json_arg::<Vec<ArtifactLink>>("links-json", &links_json)?,
                     resolution_id: resolution_id.map(StableId::new).transpose()?,
+                    contradicts: contradicts.map(StableId::new).transpose()?,
                 },
             )?;
             output::print(format, &question)?;
         }
+        QuestionsCommand::Contradicts { command } => references::question_contradicts(command)?,
         QuestionsCommand::List {
             repo,
             scope,

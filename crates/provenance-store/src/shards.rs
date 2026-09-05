@@ -145,7 +145,3 @@ pub fn ideation_landings_path(layout: &ProvenanceLayout, scope: &ScopeId) -> Utf
         .join(scope.as_str())
         .join("ideation/landings.jsonl")
 }
-
-pub fn edges_path(layout: &ProvenanceLayout) -> Utf8PathBuf {
-    layout.edges_dir().join("edges-00.jsonl")
-}

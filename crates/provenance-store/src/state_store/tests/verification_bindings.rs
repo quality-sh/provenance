@@ -16,8 +16,8 @@ fn seeded_rule_store() -> (
             id: StableId::new("rule_expiry").unwrap(),
             name: None,
             description: None,
-            requirement_id: Some(StableId::new("req_overtime").unwrap()),
-            resolution_id: None,
+            requirement_ids: vec![StableId::new("req_overtime").unwrap()],
+            resolution_ids: Vec::new(),
             statement: "Share links expire".into(),
             status: RuleStatus::Active,
             severity: RuleSeverity::Medium,
@@ -100,13 +100,29 @@ fn explicit_identity_is_independent_of_the_containing_scope() {
     )
     .unwrap();
     store
+        .create_requirement(crate::state_store::CreateRequirementInput {
+            scope_id: other_scope.clone(),
+            id: StableId::new("req_other").unwrap(),
+            statement: "Other".into(),
+            description: None,
+            status: provenance_core::RequirementStatus::Active,
+            domain_id: None,
+            refines: None,
+            depends_on: Vec::new(),
+            supersedes: Vec::new(),
+            spawned_by: None,
+            origin_thread: None,
+            origin_message: None,
+        })
+        .unwrap();
+    store
         .create_rule(CreateRuleInput {
             scope_id: other_scope.clone(),
             id: StableId::new("rule_expiry").unwrap(),
             name: None,
             description: None,
-            requirement_id: None,
-            resolution_id: None,
+            requirement_ids: vec![StableId::new("req_other").unwrap()],
+            resolution_ids: Vec::new(),
             statement: "Share links expire".into(),
             status: RuleStatus::Active,
             severity: RuleSeverity::Medium,

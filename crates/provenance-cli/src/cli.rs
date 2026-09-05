@@ -3,6 +3,7 @@ pub mod graph;
 pub mod ideation;
 pub mod knowledge;
 pub mod policy;
+pub mod references;
 pub mod sdk;
 pub mod shaping;
 pub mod workspace;
@@ -119,10 +120,6 @@ pub enum Command {
     Requirements {
         #[command(subcommand)]
         command: knowledge::RequirementsCommand,
-    },
-    Edges {
-        #[command(subcommand)]
-        command: graph::EdgesCommand,
     },
     GraphReference {
         #[command(subcommand)]

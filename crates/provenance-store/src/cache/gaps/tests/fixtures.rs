@@ -1,8 +1,9 @@
 use super::super::{compute_gaps, GapGraph, GapItem, GapKind};
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_core::{
-    Edge, EdgeType, NodeType, Question, QuestionStatus, Requirement, RequirementStatus, Resolution,
-    ResolutionMethod, ResolutionStatus, Rule, RuleSeverity, RuleStatus, SchemaVersion, ScopeId,
-    Source, SourceType, StableId, Topic, TopicStatus,
+    NodeType, Question, QuestionStatus, Requirement, RequirementStatus, Resolution,
+    ResolutionMethod, ResolutionStatus, Rule, RuleSeverity, RuleStatus, ScopeId, Source,
+    SourceType, StableId, Topic, TopicStatus,
 };
 
 pub fn sid(value: &str) -> StableId {
@@ -15,7 +16,7 @@ fn scope_id() -> ScopeId {
 
 pub fn requirement(id: &str) -> Requirement {
     Requirement {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id(),
         id: sid(id),
         declared_by: None,
@@ -27,6 +28,10 @@ pub fn requirement(id: &str) -> Requirement {
         status: RequirementStatus::Active,
         domain_id: None,
         source_refs: Vec::new(),
+        refines: None,
+        depends_on: Vec::new(),
+        supersedes: Vec::new(),
+        spawned_by: None,
         origin_thread: None,
         origin_message: None,
     }
@@ -34,7 +39,7 @@ pub fn requirement(id: &str) -> Requirement {
 
 pub fn resolution(id: &str) -> Resolution {
     Resolution {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id(),
         id: sid(id),
         title: id.to_string(),
@@ -48,8 +53,9 @@ pub fn resolution(id: &str) -> Resolution {
         made_by: None,
         approved_by: None,
         approved_at: None,
-        superseded_by: None,
         review_on: None,
+        requirement_ids: Vec::new(),
+        supersedes: Vec::new(),
         origin_thread: None,
         origin_message: None,
     }
@@ -57,7 +63,7 @@ pub fn resolution(id: &str) -> Resolution {
 
 pub fn rule(id: &str) -> Rule {
     Rule {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id(),
         id: sid(id),
         declared_by: None,
@@ -70,6 +76,8 @@ pub fn rule(id: &str) -> Rule {
         severity: RuleSeverity::High,
         source_document: None,
         source_section: None,
+        requirement_ids: Vec::new(),
+        resolution_ids: Vec::new(),
         origin_thread: None,
         origin_message: None,
     }
@@ -81,7 +89,7 @@ pub fn topic(id: &str, status: TopicStatus) -> Topic {
 
 pub fn topic_for(id: &str, requirement_id: &str, status: TopicStatus) -> Topic {
     Topic {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id(),
         id: sid(id),
         requirement_id: sid(requirement_id),
@@ -104,7 +112,7 @@ pub fn question_for(
     status: QuestionStatus,
 ) -> Question {
     Question {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id(),
         id: sid(id),
         topic_id: sid(topic_id),
@@ -116,13 +124,14 @@ pub fn question_for(
         claimed_at: None,
         answer: (status == QuestionStatus::Answered).then(|| "Done".to_string()),
         links: Vec::new(),
+        contradicts: None,
         resolution_id: None,
     }
 }
 
 pub fn source(id: &str) -> Source {
     Source {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id(),
         id: sid(id),
         declared_by: None,
@@ -135,23 +144,9 @@ pub fn source(id: &str) -> Source {
         commit_pin: None,
         effective_date: None,
         review_date: None,
-        superseded_by: None,
+        supersedes: Vec::new(),
         origin_thread: None,
         origin_message: None,
-    }
-}
-
-pub fn edge(edge_type: EdgeType, from: (NodeType, &str), to: (NodeType, &str)) -> Edge {
-    Edge {
-        schema_version: SchemaVersion(1),
-        scope_id: scope_id(),
-        id: Edge::stable_id(edge_type, from.0, &sid(from.1), to.0, &sid(to.1)).unwrap(),
-        edge_type,
-        from_type: from.0,
-        from_id: sid(from.1),
-        to_type: to.0,
-        to_id: sid(to.1),
-        label: None,
     }
 }
 
@@ -162,7 +157,7 @@ pub fn compute_for(
     rules: &[Rule],
     topics: &[Topic],
     questions: &[Question],
-    edges: &[Edge],
+    domains: &[provenance_core::Domain],
 ) -> Vec<GapItem> {
     let scope = scope_id();
     compute_gaps(&GapGraph {
@@ -173,16 +168,15 @@ pub fn compute_for(
         rules,
         topics,
         questions,
-        edges,
         threads: &[],
-        domains: &[],
+        domains,
         boundaries: &[],
     })
 }
 
 pub fn domain(id: &str) -> provenance_core::Domain {
     provenance_core::Domain {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id(),
         id: sid(id),
         name: id.to_string(),
@@ -193,7 +187,7 @@ pub fn domain(id: &str) -> provenance_core::Domain {
 
 pub fn thread(id: &str, parent_type: NodeType, parent_id: &str) -> provenance_core::Thread {
     provenance_core::Thread {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id(),
         id: sid(id),
         parent: provenance_core::ThreadParent {

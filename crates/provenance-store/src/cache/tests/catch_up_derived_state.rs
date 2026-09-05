@@ -10,13 +10,14 @@ use super::catch_up_behavior::assert_catch_up_equals_rebuild;
 use super::projection_digest_sensitivity::aggregate_layout;
 use crate::state_store::StateStore;
 use provenance_core::ScopeId;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 fn remove_shard(
     layout: &crate::layout::ProvenanceLayout,
     family: ProjectionFamily,
     scope: &ScopeId,
 ) {
-    let path = family.shard_path(layout, Some(scope)).unwrap();
+    let path = family.shard_path(layout, scope);
     if path.exists() {
         std::fs::remove_file(path).unwrap();
     }
@@ -39,9 +40,7 @@ async fn a_hand_emptied_disposition_shard_moves_the_cards_effective_state() {
     materialize_state(&layout).await.unwrap();
     assert_eq!(effective_state(&layout).await, "deferred");
 
-    let dispositions = ProjectionFamily::Dispositions
-        .shard_path(&layout, Some(&scope))
-        .unwrap();
+    let dispositions = ProjectionFamily::Dispositions.shard_path(&layout, &scope);
     std::fs::write(dispositions, "").unwrap();
 
     assert_catch_up_equals_rebuild(&layout).await;
@@ -80,13 +79,9 @@ async fn a_writer_path_disposition_moves_the_cards_effective_state() {
 #[tokio::test]
 async fn an_assertion_write_moves_the_cards_effective_state() {
     let (_dir, layout, scope) = aggregate_layout();
-    let assertions = ProjectionFamily::AssertionRecords
-        .shard_path(&layout, Some(&scope))
-        .unwrap();
+    let assertions = ProjectionFamily::AssertionRecords.shard_path(&layout, &scope);
     let assertion_line = std::fs::read_to_string(&assertions).unwrap();
-    let packets = ProjectionFamily::SynthesisPackets
-        .shard_path(&layout, Some(&scope))
-        .unwrap();
+    let packets = ProjectionFamily::SynthesisPackets.shard_path(&layout, &scope);
     let qualifying_packet = std::fs::read_to_string(&packets).unwrap();
     // A qualifying packet requires an assertion. Start with a packet that
     // suggests nothing.
@@ -127,7 +122,7 @@ async fn a_legacy_promotion_decision_is_refused_by_catch_up_and_by_rebuild() {
         legacy,
         format!(
             "{}\n",
-            serde_json::json!({"schema_version": 1, "scope_id": scope.as_str(),
+            serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope.as_str(),
                 "promotionDecisionId": "decision_legacy", "proposalId": "proposal_base",
                 "decision": "accepted", "rationale": "Accepted.",
                 "decidedBy": {"identityType": "human", "userId": "reviewer"},

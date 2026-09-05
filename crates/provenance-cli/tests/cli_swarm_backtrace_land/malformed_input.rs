@@ -1,6 +1,7 @@
 use super::support::{create_source, init_repo, write_run_dir};
 use assert_cmd::Command;
 use predicates::prelude::PredicateBooleanExt;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 fn write_bad_nested_stable_id(root: &std::path::Path) {
     let extractors = root.join("extractors");
@@ -9,9 +10,9 @@ fn write_bad_nested_stable_id(root: &std::path::Path) {
     std::fs::create_dir_all(&merge).unwrap();
     std::fs::write(
         extractors.join("bad.json"),
-        r#"{
+        serde_json::json!({
           "contribution": {
-            "schema_version": 1,
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": "default",
             "id": "contrib_backtrace_extract_auth",
             "target": {"artifact_type": "source", "artifact_id": "source_codebase"},
@@ -28,14 +29,14 @@ fn write_bad_nested_stable_id(root: &std::path::Path) {
             "uncertainty": {"level":"low","rationale":"Direct guard evidence."},
             "open_questions": []
           }
-        }"#,
+        }).to_string(),
     )
     .unwrap();
     std::fs::write(
         merge.join("merged.json"),
-        r#"{
+        serde_json::json!({
           "synthesis_packet": {
-            "schema_version": 1,
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": "default",
             "id": "synth_backtrace_auth",
             "target": {"artifact_type": "source", "artifact_id": "source_codebase"},
@@ -50,7 +51,8 @@ fn write_bad_nested_stable_id(root: &std::path::Path) {
             "required_human_decisions": []
           },
           "proposals": []
-        }"#,
+        })
+        .to_string(),
     )
     .unwrap();
 }
@@ -61,7 +63,7 @@ fn write_bad_proposal_confidence(root: &std::path::Path) {
     let merge_json = std::fs::read_to_string(&merge_path).unwrap();
     std::fs::write(
         &merge_path,
-        merge_json.replace(r#""confidence": 0.91"#, r#""confidence": 1.5"#),
+        merge_json.replace(r#""confidence":0.91"#, r#""confidence":1.5"#),
     )
     .unwrap();
 }
@@ -72,7 +74,7 @@ fn write_merge_output_with_unknown_key(root: &std::path::Path) {
     let merge_json = std::fs::read_to_string(&merge_path).unwrap();
     std::fs::write(
         &merge_path,
-        merge_json.replace(r#""proposals": ["#, r#""proposal": ["#),
+        merge_json.replace(r#""proposals":["#, r#""proposal":["#),
     )
     .unwrap();
 }

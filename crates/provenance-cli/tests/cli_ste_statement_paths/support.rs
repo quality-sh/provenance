@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use serde_json::{json, Value};
 use std::{collections::BTreeMap, path::Path};
 
@@ -22,6 +23,7 @@ pub fn init(repo: &Path) {
         ])
         .assert()
         .success();
+    create_requirement(repo, "req_rule_anchor", "The anchor requirement holds");
 }
 
 pub fn create_requirement(repo: &Path, id: &str, statement: &str) {
@@ -53,6 +55,8 @@ pub fn create_rule(repo: &Path, id: &str, statement: &str) {
             "default",
             "--id",
             id,
+            "--requirement-id",
+            "req_rule_anchor",
             "--statement",
             statement,
         ])
@@ -145,7 +149,7 @@ fn collect_files(root: &Path, current: &Path, files: &mut BTreeMap<String, Vec<u
 pub fn record(id: &str, statement: &str, kind: &str) -> String {
     let value = if kind == "requirement" {
         json!({
-            "schema_version": 1,
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": "default",
             "id": id,
             "statement": statement,
@@ -153,12 +157,13 @@ pub fn record(id: &str, statement: &str, kind: &str) -> String {
         })
     } else {
         json!({
-            "schema_version": 1,
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": "default",
             "id": id,
             "statement": statement,
             "status": "active",
-            "severity": "high"
+            "severity": "high",
+            "requirement_ids": ["req_anchor"]
         })
     };
     format!("{}\n", serde_json::to_string(&value).unwrap())

@@ -1,5 +1,6 @@
 use super::initialized_store;
 use crate::state_store::{StateStore, TypedSpecInput};
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::{collections::BTreeMap, path::Path};
@@ -120,7 +121,7 @@ fn apply_returns_plan_diagnostics_before_any_state_edge_or_binding_write() {
 
 fn spec(requirement: &str, rule: &str, description: Option<&str>) -> TypedSpecInput {
     serde_json::from_value(json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "spec": "feedback",
         "declared_by": "spec://typescript/feedback",
         "requirements": [{
@@ -139,7 +140,7 @@ fn spec(requirement: &str, rule: &str, description: Option<&str>) -> TypedSpecIn
 
 fn spec_with_source_and_implementation(requirement: &str) -> TypedSpecInput {
     serde_json::from_value(json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "spec": "feedback",
         "declared_by": "spec://typescript/feedback",
         "sources": [{

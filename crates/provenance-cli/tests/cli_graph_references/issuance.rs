@@ -1,4 +1,5 @@
 use super::*;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_macros::verifies;
 
 #[test]
@@ -15,7 +16,7 @@ fn issue_is_versioned_deterministic_and_correlation_is_not_identity() {
         ],
     );
 
-    assert_eq!(first["schema_version"], 1);
+    assert_eq!(first["schema_version"], SUPPORTED_SCHEMA_VERSION.0);
     assert_eq!(first["reference_id"], second["reference_id"]);
     assert_eq!(first["graph_digest"], second["graph_digest"]);
     assert_eq!(second["correlation"]["system"], "github");
@@ -82,7 +83,10 @@ fn explicit_commit_allows_dirty_state_and_exact_operations_read_the_pin() {
             ])
             .assert()
             .success()
-            .stdout(predicate::str::contains("\"schema_version\": 1"));
+            .stdout(predicate::str::contains(format!(
+                "\"schema_version\": {}",
+                SUPPORTED_SCHEMA_VERSION.0
+            )));
     }
 }
 

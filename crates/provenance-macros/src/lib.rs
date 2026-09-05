@@ -1,4 +1,7 @@
-//! Marker attributes binding code to provenance rules.
+//! Marker attributes binding code to provenance rules, and the derive that
+//! declares a record kind's reference fields.
+
+mod relations;
 
 use proc_macro::{TokenStream, TokenTree};
 
@@ -7,8 +10,8 @@ use proc_macro::{TokenStream, TokenTree};
 /// Takes the rule's id as a single string literal:
 ///
 /// ```ignore
-/// #[rule("rule_prov_edge_endpoint_table")]
-/// pub fn validate_edge_endpoint(...) { ... }
+/// #[rule("rule_prov_relation_vocabulary_closed")]
+/// pub const fn declared_relations() -> ... { ... }
 /// ```
 ///
 /// The attribute binds the item to an independent Rule record. It does
@@ -36,8 +39,8 @@ const VERIFICATION_METHODS: [&str; 6] = [
 ///
 /// ```ignore
 /// #[test]
-/// #[verifies("rule_prov_edge_endpoint_table", exhaustion)]
-/// fn endpoint_table_conforms_to_rule_leaf() { ... }
+/// #[verifies("rule_prov_relation_vocabulary_closed", exhaustion)]
+/// fn every_owner_kind_appears_once_in_the_declared_tables() { ... }
 /// ```
 ///
 /// Methods: `exhaustion` (every input in a finite domain is tried),
@@ -91,4 +94,18 @@ fn validate_rule_id(attr: &TokenStream) {
         }
         _ => panic!("rule takes exactly one rule id string literal"),
     }
+}
+
+/// Declares the reference fields of one record kind.
+///
+/// Every `StableId`-typed field carries `#[relation(target = Kind, flow =
+/// target_upstream | target_downstream | none [, required] [, name = "..."]
+/// [, via = field])]` or `#[relation(none)]`; the field named `id` is the
+/// owner key. The derive emits `Kind::RELATIONS` and `impl RelationOwner`.
+#[proc_macro_derive(Relations, attributes(relation))]
+pub fn relations(input: TokenStream) -> TokenStream {
+    let input = syn::parse_macro_input!(input as syn::DeriveInput);
+    relations::expand(&input)
+        .unwrap_or_else(syn::Error::into_compile_error)
+        .into()
 }

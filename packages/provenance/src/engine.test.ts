@@ -3,6 +3,7 @@ import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { STATE_SCHEMA_VERSION } from "./protocol.js";
 
 import { configure, defineSpec, plan } from "./index.js";
 import type { ImplementationBinding } from "./protocol.js";
@@ -69,7 +70,7 @@ async function rejectsIncompatibleEngineBeforeCommand(): Promise<void> {
     info: {
       engine_version: "9.0.0",
       protocol_version: 9,
-      state_schema_version: 1,
+      state_schema_version: STATE_SCHEMA_VERSION,
       repository: "/project",
     },
     plan: {
@@ -90,7 +91,7 @@ test("the adoption SDK rejects a protocol-4 engine before the requested command"
     info: {
       engine_version: "0.1.0",
       protocol_version: 4,
-      state_schema_version: 1,
+      state_schema_version: STATE_SCHEMA_VERSION,
       repository: "/project",
     },
     plan: {
@@ -108,8 +109,8 @@ async function leavesRepositoryDiscoveryToRust(): Promise<void> {
   const recorder = recordingEngine({
     info: {
       engine_version: "0.1.0",
-      protocol_version: 5,
-      state_schema_version: 1,
+      protocol_version: 6,
+      state_schema_version: STATE_SCHEMA_VERSION,
       repository: "/project",
     },
     plan: {

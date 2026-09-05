@@ -60,7 +60,7 @@ A loose idea arrives. One session's work — do **not** also resolve questions.
      ref where one exists (e.g. a privacy policy clause).
    - **Fog**: everything sensed but not yet sharp.
    - **First questions**: each minted with a `resolution_method` (see below), sized to
-     one agent session, wired with blocking edges where order matters.
+     one agent session, ordered by `depends_on` where order matters.
 3. Handoff.
 
 ### Work
@@ -68,7 +68,7 @@ A loose idea arrives. One session's work — do **not** also resolve questions.
 The turn loop, against an anchor requirement:
 
 1. **Prime** — load the map low-res. The frontier is *computed from graph semantics*,
-   not hand-wired: requirements with no source edge, unresolved `contradicts` pairs,
+   not hand-wired: requirements that cite no source, unresolved `contradicts` pairs,
    requirements that can't produce a rule, open questions and unexplored topics.
 2. **Claim** — at method-dependent granularity (see table below). Claiming happens
    before any work so concurrent sessions skip claimed items.
@@ -230,13 +230,21 @@ code realizes it or evidence verifies it.
 next to the code without making the function the Rule itself:
 
 ```rust
-#[rule("rule_prov_edge_endpoint_table")]
-pub fn validate_edge_endpoint(
-    edge_type: EdgeType,
-    from: NodeType,
-    to: NodeType,
-) -> Result<(), EdgeValidationError> {
-    // the primary implementation, in one place
+#[rule("rule_prov_relation_vocabulary_closed")]
+pub const fn declared_relations() -> &'static [&'static [RelationDecl]] {
+    // the one hand-written concatenation of the seven derived tables
+}
+```
+
+A relation field carries its declaration on the struct, and the derive writes
+the table the function above concatenates:
+
+```rust
+#[derive(Relations)]
+pub struct Rule {
+    #[relation(target = Requirement, flow = target_upstream, required)]
+    pub requirement_ids: Vec<StableId>,
+    // ...
 }
 ```
 
@@ -251,9 +259,9 @@ Tests bind evidence to a Rule and say how it was shown:
 
 ```rust
 #[test]
-#[verifies("rule_prov_edge_endpoint_table", exhaustion)]
-fn endpoint_table_conforms_to_rule_leaf() {
-    // every edge type against every endpoint pair
+#[verifies("rule_prov_relation_vocabulary_closed", exhaustion)]
+fn every_owner_kind_appears_once_in_the_declared_tables() {
+    // every derived table against the hand-written list
 }
 ```
 

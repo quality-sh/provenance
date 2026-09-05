@@ -16,7 +16,10 @@ fn get_returns_one_record_under_a_versioned_envelope() {
         &json!({"node_type": "rule", "id": ids.rule.as_str()}),
     );
 
-    assert_eq!(answer["protocol_version"], 5);
+    assert_eq!(
+        answer["protocol_version"],
+        provenance_core::SDK_PROTOCOL_VERSION
+    );
     assert_eq!(answer["operation"], "get");
     assert_eq!(answer["found"], true);
     assert_eq!(answer["node"]["node_type"], "rule");
@@ -75,8 +78,9 @@ fn get_refuses_a_request_written_for_another_protocol_version() {
         &json!({"protocol_version": 2, "node_type": "rule", "id": ids.rule}),
     );
 
+    let spoken = format!("speaks {}", provenance_core::SDK_PROTOCOL_VERSION);
     assert!(
-        error.contains("protocol version 2") && error.contains("speaks 5"),
+        error.contains("protocol version 2") && error.contains(&spoken),
         "error should name both versions: {error}"
     );
 }

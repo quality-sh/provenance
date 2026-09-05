@@ -1,5 +1,6 @@
 use assert_cmd::Command;
 use predicates::prelude::PredicateBooleanExt;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 #[test]
 fn import_rejects_duplicate_thread_ids_and_names_the_offender() {
@@ -167,7 +168,7 @@ fn thread(id: &str, status: &str, created_at: i64) -> serde_json::Value {
 
 fn thread_in(id: &str, scope_id: &str, parent_id: &str, created_at: i64) -> serde_json::Value {
     serde_json::json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": scope_id,
         "id": id,
         "parent": {"node_type": "requirement", "node_id": parent_id},
@@ -198,7 +199,7 @@ fn add_scope_with_requirement(repo: &std::path::Path, scope_id: &str, requiremen
         format!(
             "{}\n",
             serde_json::json!({
-                "schema_version": 1,
+                "schema_version": SUPPORTED_SCHEMA_VERSION.0,
                 "scope_id": scope_id,
                 "id": requirement_id,
                 "statement": "Parent in another scope",

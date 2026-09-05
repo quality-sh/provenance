@@ -3,7 +3,6 @@ use crate::wiki::model::{
     DecisionIndexPage, DomainGroup, DomainIndexPage, DomainState, PageId, PageLink, RecordKind,
     RequirementPage, ResolutionPage, RulePage, SearchEntry, SearchIndexPage, SourcePage,
 };
-use provenance_core::{EdgeType, NodeType};
 use provenance_macros::rule;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -314,12 +313,12 @@ fn flat_rule_entries(rules: &[RuleRecord<'_>]) -> Vec<SearchEntry> {
 /// Decides which domains a requirement belongs to on the wiki.
 ///
 /// A requirement belongs to its own domain and to every domain of every
-/// requirement it refines from, walking the `refines_into` chain all the way
-/// up. A record whose chain names no domain gets an empty set here and is
-/// grouped as Unassigned by the caller; it is never dropped from the index.
+/// requirement it refines, walking the `refines` chain all the way up. A
+/// record whose chain names no domain gets an empty set here and is grouped
+/// as Unassigned by the caller; it is never dropped from the index.
 ///
-/// The walk visits each requirement at most once, so a cycle in
-/// `refines_into` ends the walk instead of hanging.
+/// The walk visits each requirement at most once, so a cycle in `refines`
+/// ends the walk instead of hanging.
 #[rule("rule_domain_attribution")]
 fn effective_requirement_domains(
     state: &ScopeExport,
@@ -329,18 +328,16 @@ fn effective_requirement_domains(
         .iter()
         .map(|requirement| (requirement.id, requirement))
         .collect::<BTreeMap<_, _>>();
-    let mut parents = BTreeMap::<&str, Vec<&str>>::new();
-    for edge in &state.edges {
-        if edge.edge_type == EdgeType::RefinesInto
-            && edge.from_type == NodeType::Requirement
-            && edge.to_type == NodeType::Requirement
-        {
-            parents
-                .entry(edge.to_id.as_str())
-                .or_default()
-                .push(edge.from_id.as_str());
-        }
-    }
+    let parents = state
+        .requirements
+        .iter()
+        .filter_map(|requirement| {
+            requirement
+                .refines
+                .as_ref()
+                .map(|parent| (requirement.id.as_str(), parent.as_str()))
+        })
+        .collect::<BTreeMap<&str, &str>>();
 
     requirements
         .iter()
@@ -357,8 +354,8 @@ fn effective_requirement_domains(
                         domains.insert(domain_id.to_string());
                     }
                 }
-                if let Some(parent_ids) = parents.get(id) {
-                    pending.extend(parent_ids.iter().copied());
+                if let Some(parent_id) = parents.get(id) {
+                    pending.push(parent_id);
                 }
             }
             (requirement.id.to_string(), domains)

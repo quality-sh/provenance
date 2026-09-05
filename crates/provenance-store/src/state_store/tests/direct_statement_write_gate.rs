@@ -25,9 +25,9 @@ fn semicolon_free_requirement_and_rule_are_written() {
         ))
         .unwrap();
 
+    assert_eq!(rule.requirement_ids, vec![requirement.id.clone()]);
     assert_eq!(store.list_requirements(&scope).unwrap(), vec![requirement]);
     assert_eq!(store.list_rules(&scope).unwrap(), vec![rule]);
-    assert_eq!(store.list_edges().unwrap().len(), 1);
 }
 
 #[test]
@@ -50,7 +50,7 @@ fn semicolon_requirement_returns_rule_8_1_details_without_changing_canonical_sta
 
 #[test]
 #[verifies("rule_ste_direct_statement_write_gate", examples)]
-fn semicolon_rule_returns_rule_8_1_details_without_changing_canonical_state_or_edges() {
+fn semicolon_rule_returns_rule_8_1_details_without_changing_canonical_state() {
     let (_dir, store, scope) = seeded_requirement_store();
     store
         .create_rule(rule_input(
@@ -83,6 +83,10 @@ fn requirement_input(scope: &ScopeId, id: &str, statement: &str) -> CreateRequir
         description: None,
         status: RequirementStatus::Active,
         domain_id: None,
+        refines: None,
+        depends_on: Vec::new(),
+        supersedes: Vec::new(),
+        spawned_by: None,
         origin_thread: None,
         origin_message: None,
     }
@@ -99,8 +103,8 @@ fn rule_input(
         id: StableId::new(id).unwrap(),
         name: None,
         description: None,
-        requirement_id: Some(requirement_id.clone()),
-        resolution_id: None,
+        requirement_ids: vec![requirement_id.clone()],
+        resolution_ids: Vec::new(),
         statement: statement.into(),
         status: RuleStatus::Active,
         severity: RuleSeverity::High,

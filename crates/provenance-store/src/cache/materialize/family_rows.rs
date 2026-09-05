@@ -13,24 +13,15 @@ use sqlx::{Sqlite, Transaction};
 pub(super) async fn delete_rows(
     tx: &mut Transaction<'_, Sqlite>,
     family: ProjectionFamily,
-    scope: Option<&ScopeId>,
+    scope: &ScopeId,
 ) -> anyhow::Result<()> {
-    match scope {
-        Some(scope) => {
-            sqlx::query(&format!(
-                "DELETE FROM {} WHERE scope_id = ?",
-                family.family_name()
-            ))
-            .bind(scope.as_str())
-            .execute(&mut **tx)
-            .await?;
-        }
-        None => {
-            sqlx::query(&format!("DELETE FROM {}", family.family_name()))
-                .execute(&mut **tx)
-                .await?;
-        }
-    }
+    sqlx::query(&format!(
+        "DELETE FROM {} WHERE scope_id = ?",
+        family.family_name()
+    ))
+    .bind(scope.as_str())
+    .execute(&mut **tx)
+    .await?;
     Ok(())
 }
 
@@ -38,17 +29,8 @@ pub(super) async fn load_rows(
     tx: &mut Transaction<'_, Sqlite>,
     store: &StateStore,
     family: ProjectionFamily,
-    scope: Option<&ScopeId>,
+    scope: &ScopeId,
 ) -> anyhow::Result<u64> {
-    if family == ProjectionFamily::Edges {
-        return graph_records::load_edges(tx, store).await;
-    }
-    let scope = scope.ok_or_else(|| {
-        anyhow::anyhow!(
-            "family `{}` shards per scope and needs one",
-            family.family_name()
-        )
-    })?;
     match family {
         ProjectionFamily::Sources => graph_records::load_sources(tx, store, scope).await,
         ProjectionFamily::Domains => graph_records::load_domains(tx, store, scope).await,
@@ -84,6 +66,5 @@ pub(super) async fn load_rows(
         ProjectionFamily::RequirementReviews => {
             integration_records::load_requirement_reviews(tx, store, scope).await
         }
-        ProjectionFamily::Edges => unreachable!("edges answered above"),
     }
 }

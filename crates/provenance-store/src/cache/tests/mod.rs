@@ -10,6 +10,7 @@ mod materialization_behavior;
 mod materialize_guard_behavior;
 mod projection_digest_sensitivity;
 mod projection_stamp_behavior;
+mod relation_rows_behavior;
 mod reporting_behavior;
 mod scope_locality_guard;
 mod traceability_behavior;

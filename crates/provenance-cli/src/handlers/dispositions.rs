@@ -78,6 +78,7 @@ pub(super) fn handle(command: DispositionsCommand) -> anyhow::Result<()> {
             let scope_id = ScopeId::new(scope)?;
             let dispositions = store.with_repository_publication(|| {
                 store.validate_ideation_scope(&scope_id)?;
+                store.validate_graph_scope(&scope_id)?;
                 store.list_dispositions(&scope_id)
             })?;
             output::print(format, &dispositions)?;

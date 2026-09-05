@@ -22,6 +22,7 @@ pub const REMOVE_SERVICES_SHARDS_MIGRATION_ID: &str = "017";
 pub const PROJECTION_STAMP_MIGRATION_ID: &str = "018";
 pub const FAMILY_CONTENT_DIGEST_MIGRATION_ID: &str = "019";
 pub const UNIT_DIGESTS_MIGRATION_ID: &str = "020";
+pub const RELATIONS_TABLE_MIGRATION_ID: &str = "021";
 const INITIAL_SQL: &str = include_str!("../migrations/001_initial_cache.sql");
 const SOURCE_REQUIREMENT_SQL: &str =
     include_str!("../migrations/002_sources_requirements_edges.sql");
@@ -49,6 +50,7 @@ const REMOVE_SERVICES_SHARDS_SQL: &str =
 const PROJECTION_STAMP_SQL: &str = include_str!("../migrations/018_projection_stamp.sql");
 const FAMILY_CONTENT_DIGEST_SQL: &str = include_str!("../migrations/019_family_content_digest.sql");
 const UNIT_DIGESTS_SQL: &str = include_str!("../migrations/020_unit_digests.sql");
+const RELATIONS_TABLE_SQL: &str = include_str!("../migrations/021_relations_table.sql");
 
 pub async fn run_migrations(
     pool: &SqlitePool,
@@ -102,6 +104,7 @@ pub async fn run_migrations(
             FAMILY_CONTENT_DIGEST_SQL,
         ),
         (UNIT_DIGESTS_MIGRATION_ID, UNIT_DIGESTS_SQL),
+        (RELATIONS_TABLE_MIGRATION_ID, RELATIONS_TABLE_SQL),
     ] {
         let already_applied: Option<String> =
             sqlx::query_scalar("SELECT id FROM _schema_migrations WHERE id = ?")
@@ -190,7 +193,7 @@ mod tests {
             run_migrations(&pool, &layout).await.unwrap(),
             vec![
                 "001", "002", "003", "004", "005", "006", "007", "008", "009", "010", "011", "012",
-                "013", "014", "015", "016", "017", "018", "019", "020"
+                "013", "014", "015", "016", "017", "018", "019", "020", "021"
             ]
         );
         assert!(run_migrations(&pool, &layout).await.unwrap().is_empty());
@@ -198,7 +201,7 @@ mod tests {
             applied_migrations(&pool).await.unwrap(),
             vec![
                 "001", "002", "003", "004", "005", "006", "007", "008", "009", "010", "011", "012",
-                "013", "014", "015", "016", "017", "018", "019", "020"
+                "013", "014", "015", "016", "017", "018", "019", "020", "021"
             ]
         );
     }

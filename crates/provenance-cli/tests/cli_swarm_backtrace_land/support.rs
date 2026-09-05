@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 pub fn init_repo(repo: &str) {
     Command::cargo_bin("provenance")
@@ -57,7 +58,7 @@ pub fn write_run_dir(root: &std::path::Path, strongest_finding: &str) {
         format!(
             r#"{{
               "contribution": {{
-                "schema_version": 1,
+                "schema_version": {version},
                 "scope_id": "default",
                 "id": "contrib_backtrace_extract_auth",
                 "target": {{"artifact_type": "source", "artifact_id": "source_codebase"}},
@@ -74,15 +75,16 @@ pub fn write_run_dir(root: &std::path::Path, strongest_finding: &str) {
                 "uncertainty": {{"level":"low","rationale":"Direct guard evidence."}},
                 "open_questions": []
               }}
-            }}"#
+            }}"#,
+            version = SUPPORTED_SCHEMA_VERSION.0
         ),
     )
     .unwrap();
     std::fs::write(
         refuters.join("auth.json"),
-        r#"{
+        serde_json::json!({
           "contribution": {
-            "schema_version": 1,
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": "default",
             "id": "contrib_backtrace_refute_auth",
             "target": {"artifact_type": "source", "artifact_id": "source_codebase"},
@@ -99,14 +101,14 @@ pub fn write_run_dir(root: &std::path::Path, strongest_finding: &str) {
             "uncertainty": {"level":"medium","rationale":"Intent requires human confirmation."},
             "open_questions": ["Is this guard intentional product behavior?"]
           }
-        }"#,
+        }).to_string(),
     )
     .unwrap();
     std::fs::write(
         merge.join("merged.json"),
-        r#"{
+        serde_json::json!({
           "synthesis_packet": {
-            "schema_version": 1,
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": "default",
             "id": "synth_backtrace_auth",
             "target": {"artifact_type": "source", "artifact_id": "source_codebase"},
@@ -121,7 +123,7 @@ pub fn write_run_dir(root: &std::path::Path, strongest_finding: &str) {
             "required_human_decisions": []
           },
           "proposals": [{
-            "schema_version": 1,
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": "default",
             "id": "prop_req_publish_requires_worker",
             "proposal_key": "backtrace/auth/publish_requires_worker",
@@ -138,14 +140,14 @@ pub fn write_run_dir(root: &std::path::Path, strongest_finding: &str) {
             "promotion_state": "proposed"
           }],
           "assertions": [{
-            "schema_version": 1,
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
             "scope_id": "default",
             "id": "assertion_req_publish_requires_worker",
             "proposal_id": "prop_req_publish_requires_worker",
             "synthesis_packet_id": "synth_backtrace_auth",
             "supporting_claim_ids": ["claim_auth_guard"]
           }]
-        }"#,
+        }).to_string(),
     )
     .unwrap();
 }

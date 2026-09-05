@@ -3,8 +3,7 @@ use crate::wiki::model::{
     DecisionSection, EvidenceThread, FieldNote, InputCitation, RuleCard, SourceCitation,
 };
 use provenance_core::{
-    EdgeType, Message, NodeType, Requirement, Resolution, ResolutionInput, Rule, Source, StableId,
-    Thread,
+    Message, NodeType, Requirement, Resolution, ResolutionInput, Rule, Source, StableId, Thread,
 };
 use std::collections::BTreeSet;
 
@@ -81,9 +80,9 @@ impl Assembler<'_> {
         }
     }
 
-    /// Joins a requirement's inline source refs and `references` edges into
-    /// citations. Gap detection for missing and dangling references is shared
-    /// with prime via `compute_gaps`.
+    /// The citations a requirement carries, one per source it cites. Gap
+    /// detection for missing and dangling references is shared with prime
+    /// via `compute_gaps`.
     pub(super) fn requirement_sources(&self, requirement: &Requirement) -> Vec<SourceCitation> {
         let mut citations = Vec::new();
         let mut cited: BTreeSet<&str> = BTreeSet::new();
@@ -92,22 +91,6 @@ impl Assembler<'_> {
                 if cited.insert(source.id.as_str()) {
                     citations.push(self.source_citation(source, reference.clause.clone()));
                 }
-            }
-        }
-        for source in &self.state.sources {
-            if cited.contains(source.id.as_str()) {
-                continue;
-            }
-            let edge = self.edges().find(|edge| {
-                edge.edge_type == EdgeType::References
-                    && edge.from_type == NodeType::Source
-                    && edge.from_id == source.id
-                    && edge.to_type == NodeType::Requirement
-                    && edge.to_id == requirement.id
-            });
-            if let Some(edge) = edge {
-                cited.insert(source.id.as_str());
-                citations.push(self.source_citation(source, edge.label.clone()));
             }
         }
         citations

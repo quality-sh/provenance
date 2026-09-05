@@ -78,6 +78,21 @@ fn requirement_creation_rejects_a_deterministic_violation_without_writing_the_re
 #[verifies("rule_ste_direct_statement_write_gate", examples)]
 fn rule_creation_rejects_a_deterministic_violation_without_writing_the_record() {
     let repo = initialized_repo();
+    provenance()
+        .args([
+            "requirements",
+            "create",
+            "--repo",
+            repo.path().to_str().unwrap(),
+            "--scope",
+            "default",
+            "--id",
+            "req_anchor",
+            "--statement",
+            "The anchor requirement holds",
+        ])
+        .assert()
+        .success();
 
     provenance()
         .args([
@@ -89,6 +104,8 @@ fn rule_creation_rejects_a_deterministic_violation_without_writing_the_record() 
             "default",
             "--id",
             "rule_rejected",
+            "--requirement-id",
+            "req_anchor",
             "--statement",
             "Use one sentence; do not join two",
         ])

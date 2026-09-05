@@ -15,7 +15,6 @@ fn gaps_with(
         rules: &[],
         topics: &[],
         questions: &[],
-        edges: &[],
         threads,
         domains,
         boundaries: &[],

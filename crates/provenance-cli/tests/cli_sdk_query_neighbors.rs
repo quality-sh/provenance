@@ -1,7 +1,7 @@
 #[path = "query_support/fixtures.rs"]
 mod fixtures;
 
-use fixtures::{apply_shared_rule, init_repo, sdk};
+use fixtures::{apply_shared_rule, init_repo, sdk, sdk_error};
 use serde_json::{json, Value};
 
 fn neighbor_ids(answer: &Value, node_type: &str) -> Vec<String> {
@@ -24,7 +24,10 @@ fn neighbors_of_a_rule_are_the_requirements_that_produce_it() {
 
     let answer = sdk(repo, "neighbors", &json!({"id": ids.rule.as_str()}));
 
-    assert_eq!(answer["protocol_version"], 5);
+    assert_eq!(
+        answer["protocol_version"],
+        provenance_core::SDK_PROTOCOL_VERSION
+    );
     assert_eq!(answer["operation"], "neighbors");
     assert_eq!(answer["id"], ids.rule);
     assert_eq!(answer["has_more"], false);
@@ -35,7 +38,9 @@ fn neighbors_of_a_rule_are_the_requirements_that_produce_it() {
         .as_array()
         .unwrap()
         .iter()
-        .all(|neighbor| neighbor["edge_type"] == "produces" && neighbor["direction"] == "in"));
+        .all(
+            |neighbor| neighbor["relation"] == "requirement_ids" && neighbor["direction"] == "out"
+        ));
 }
 
 #[test]
@@ -50,6 +55,8 @@ fn neighbors_of_a_requirement_are_its_rule_and_its_source() {
     assert_eq!(neighbor_ids(&answer, "source"), vec![ids.source]);
 }
 
+/// `out` reads the requirement's own fields: its citation names the
+/// source. `in` reads the records whose fields name it: the rule's list.
 #[test]
 fn neighbors_reads_only_the_direction_the_caller_names() {
     let directory = init_repo();
@@ -61,16 +68,94 @@ fn neighbors_reads_only_the_direction_the_caller_names() {
         "neighbors",
         &json!({"id": ids.sharing.as_str(), "direction": "out"}),
     );
-    assert_eq!(neighbor_ids(&outgoing, "rule"), vec![ids.rule.clone()]);
-    assert!(neighbor_ids(&outgoing, "source").is_empty());
+    assert_eq!(neighbor_ids(&outgoing, "source"), vec![ids.source.clone()]);
+    assert!(neighbor_ids(&outgoing, "rule").is_empty());
 
     let incoming = sdk(
         repo,
         "neighbors",
         &json!({"id": ids.sharing.as_str(), "direction": "in"}),
     );
-    assert_eq!(neighbor_ids(&incoming, "source"), vec![ids.source]);
-    assert!(neighbor_ids(&incoming, "rule").is_empty());
+    assert_eq!(neighbor_ids(&incoming, "rule"), vec![ids.rule]);
+    assert!(neighbor_ids(&incoming, "source").is_empty());
+}
+
+#[test]
+fn neighbors_refuses_a_relation_no_declaration_carries() {
+    let directory = init_repo();
+    let repo = directory.path().to_str().unwrap();
+    let ids = apply_shared_rule(&directory);
+
+    let error = sdk_error(
+        repo,
+        "neighbors",
+        &json!({"id": ids.rule.as_str(), "relations": ["produces"]}),
+    );
+
+    assert!(error.contains("unknown relation `produces`"), "{error}");
+}
+
+/// A retired edge name says what holds the fact now, and every refusal
+/// lists the closed vocabulary.
+#[test]
+fn a_retired_relation_names_its_replacement_and_the_refusal_lists_the_vocabulary() {
+    let directory = init_repo();
+    let repo = directory.path().to_str().unwrap();
+    let ids = apply_shared_rule(&directory);
+
+    let error = sdk_error(
+        repo,
+        "neighbors",
+        &json!({"id": ids.rule.as_str(), "relations": ["refines_into"]}),
+    );
+
+    assert!(error.contains("unknown relation `refines_into`"), "{error}");
+    assert!(error.contains("it is now refines"), "{error}");
+    for name in [
+        "cites",
+        "contradicts",
+        "depends_on",
+        "domain_id",
+        "links",
+        "refines",
+        "requirement_id",
+        "requirement_ids",
+        "resolution_id",
+        "resolution_ids",
+        "spawned_by",
+        "supersedes",
+        "topic_id",
+    ] {
+        assert!(error.contains(&format!("`{name}`")), "{error}");
+    }
+}
+
+#[test]
+fn every_retired_edge_name_names_what_holds_the_fact_now() {
+    let directory = init_repo();
+    let repo = directory.path().to_str().unwrap();
+    let ids = apply_shared_rule(&directory);
+    let replacements = [
+        ("references", "it is now cites"),
+        ("refines_into", "it is now refines"),
+        (
+            "produces",
+            "it is now requirement_ids/resolution_ids on the rule",
+        ),
+        ("resolves", "it is now requirement_ids on the resolution"),
+        ("spawns", "it is now spawned_by on the requirement"),
+        ("superseded_by", "it is now supersedes on the newer record"),
+        ("needs", "it is removed"),
+    ];
+
+    for (retired, clause) in replacements {
+        let error = sdk_error(
+            repo,
+            "neighbors",
+            &json!({"id": ids.rule.as_str(), "relations": [retired]}),
+        );
+        assert!(error.contains(clause), "{retired}: {error}");
+    }
 }
 
 #[test]

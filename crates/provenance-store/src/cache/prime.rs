@@ -1,7 +1,10 @@
 use crate::cache::{find_gaps, GapItem};
 use crate::layout::ProvenanceLayout;
 use crate::state_store::StateStore;
-use provenance_core::{Edge, EdgeType, Message, Requirement, Rule, Source, Thread};
+use provenance_core::model::relations::{
+    related_nodes, RecordFront, RelationDirection, RelationRow,
+};
+use provenance_core::{Message, NodeType, Requirement, Rule, Source, Thread};
 use std::collections::BTreeSet;
 use std::fmt::Write;
 
@@ -9,7 +12,7 @@ use std::fmt::Write;
 pub struct RequirementGraphView {
     pub requirement: Requirement,
     pub sources: Vec<Source>,
-    pub edges: Vec<Edge>,
+    pub relations: Vec<RelationRow>,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -123,27 +126,55 @@ fn get_requirement_graph_locked(
         .into_iter()
         .find(|requirement| requirement.id == *requirement_id)
         .ok_or_else(|| anyhow::anyhow!("requirement not found"))?;
-    let edges: Vec<_> = store
-        .list_edges()?
+    let source_ids: BTreeSet<_> = requirement
+        .source_refs
+        .iter()
+        .map(|reference| reference.source_id.as_str().to_string())
+        .collect();
+    let all_sources = store.list_sources(scope)?;
+    let requirements = store.list_requirements(scope)?;
+    let resolutions = store.list_resolutions(scope)?;
+    let rules = store.list_rules(scope)?;
+    let topics = store.list_topics(scope)?;
+    let questions = store.list_questions(scope)?;
+    let domains = store.list_domains(scope)?;
+    let boundaries = store.list_boundaries(scope)?;
+    let front = RecordFront {
+        sources: &all_sources,
+        requirements: &requirements,
+        resolutions: &resolutions,
+        rules: &rules,
+        topics: &topics,
+        questions: &questions,
+        domains: &domains,
+        boundaries: &boundaries,
+    };
+    let relations = related_nodes(&front, NodeType::Requirement, requirement_id)
         .into_iter()
-        .filter(|edge| {
-            edge.scope_id == *scope
-                && (edge.to_id == *requirement_id || edge.from_id == *requirement_id)
+        .map(|node| match node.direction {
+            RelationDirection::Out => RelationRow {
+                owner_type: NodeType::Requirement,
+                owner_id: requirement_id.clone(),
+                relation: node.relation.to_string(),
+                target_type: node.endpoint.node_type,
+                target_id: node.endpoint.id,
+            },
+            RelationDirection::In => RelationRow {
+                owner_type: node.endpoint.node_type,
+                owner_id: node.endpoint.id,
+                relation: node.relation.to_string(),
+                target_type: NodeType::Requirement,
+                target_id: requirement_id.clone(),
+            },
         })
         .collect();
-    let source_ids: BTreeSet<_> = edges
-        .iter()
-        .filter(|edge| edge.edge_type == EdgeType::References && edge.to_id == *requirement_id)
-        .map(|edge| edge.from_id.as_str().to_string())
-        .collect();
-    let sources = store
-        .list_sources(scope)?
+    let sources = all_sources
         .into_iter()
         .filter(|source| source_ids.contains(source.id.as_str()))
         .collect();
     Ok(RequirementGraphView {
         requirement,
         sources,
-        edges,
+        relations,
     })
 }

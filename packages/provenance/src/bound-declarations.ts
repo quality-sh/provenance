@@ -11,6 +11,7 @@ import type {
 } from "./protocol.js";
 import type { VerifyOptions } from "./spec.js";
 import type {
+  RequirementDeclaration as PublicRequirement,
   RuleDeclaration as PublicRule,
   SourceDeclaration as PublicSource,
 } from "./bound-types.js";
@@ -36,6 +37,8 @@ export interface SourceState {
   readonly adoptsUnowned?: boolean;
   readonly name?: string;
   readonly declaration?: SourceDeclaration;
+  /** Keys of the older sources this one replaces. */
+  readonly supersedes?: readonly string[];
 }
 
 export interface RequirementState {
@@ -48,6 +51,14 @@ export interface RequirementState {
   readonly description?: string;
   readonly sources: readonly object[];
   readonly rules: readonly object[];
+  /** The key of the requirement this one refines. */
+  readonly refines?: string;
+  /** Keys of the requirements this one depends on. */
+  readonly dependsOn?: readonly string[];
+  /** Keys of the older requirements this one replaces. */
+  readonly supersedes?: readonly string[];
+  /** The canonical id of the resolution this requirement came out of. */
+  readonly spawnedBy?: string;
 }
 
 export interface RuleState {
@@ -60,6 +71,8 @@ export interface RuleState {
   readonly explicitId?: string;
   readonly adoptsUnowned?: boolean;
   readonly implementation?: ImplementationDeclaration;
+  /** Canonical ids of the resolutions this rule follows from. */
+  readonly resolutionIds?: readonly string[];
 }
 
 const declarationState: unique symbol = Symbol("Provenance declaration state");
@@ -151,6 +164,16 @@ export class BoundSource<SpecKey extends string, Key extends string> {
     });
   }
 
+  // Names the older sources of the same spec this one replaces.
+  supersedes(...sources: readonly PublicSource<SpecKey, string>[]): BoundSource<SpecKey, Key> {
+    const state = sourceState(this);
+    for (const source of sources) assertContext("Source", sourceState(source), state.context);
+    return new BoundSource({
+      ...state,
+      supersedes: appendKeys(state.supersedes, sources, sourceState),
+    });
+  }
+
   private copyAdoption(): BoundSource<SpecKey, Key> {
     return new BoundSource({ ...sourceState(this), adoptsUnowned: true });
   }
@@ -216,6 +239,19 @@ export class BoundRule<
 
   implementedBy(_target: ImplementationTarget): BoundRule<SpecKey, Key, Owner> {
     return this.copy({ implementation: captureImplementationReference([moduleFile]) });
+  }
+
+  // Names the resolutions, by canonical id, this rule follows from.
+  resolutions(...resolutionIds: readonly string[]): BoundRule<SpecKey, Key, Owner> {
+    for (const resolutionId of resolutionIds) requireText("resolution id", resolutionId);
+    const state = ruleState(this);
+    return this.copy({
+      resolutionIds: Object.freeze(
+        [...(state.resolutionIds ?? []), ...resolutionIds].filter(
+          (id, index, all) => all.indexOf(id) === index,
+        ),
+      ),
+    });
   }
 
   verify(
@@ -302,6 +338,42 @@ export class BoundRequirement<SpecKey extends string, Key extends string> {
     return this.copy({ rules: appendSnapshots("Rule", state.rules, rules, ruleState) });
   }
 
+  // Names the requirement of the same spec this one refines.
+  refines(parent: PublicRequirement<SpecKey, any>): BoundRequirement<SpecKey, Key> {
+    const state = requirementState(this);
+    const parentState = requirementState(parent);
+    assertContext("Requirement", parentState, state.context);
+    return this.copy({ refines: parentState.key });
+  }
+
+  // Names the requirements of the same spec this one depends on.
+  dependsOn(
+    ...requirements: readonly PublicRequirement<SpecKey, any>[]
+  ): BoundRequirement<SpecKey, Key> {
+    const state = requirementState(this);
+    for (const requirement of requirements) {
+      assertContext("Requirement", requirementState(requirement), state.context);
+    }
+    return this.copy({ dependsOn: appendKeys(state.dependsOn, requirements, requirementState) });
+  }
+
+  // Names the older requirements of the same spec this one replaces.
+  supersedes(
+    ...requirements: readonly PublicRequirement<SpecKey, any>[]
+  ): BoundRequirement<SpecKey, Key> {
+    const state = requirementState(this);
+    for (const requirement of requirements) {
+      assertContext("Requirement", requirementState(requirement), state.context);
+    }
+    return this.copy({ supersedes: appendKeys(state.supersedes, requirements, requirementState) });
+  }
+
+  // Names the resolution, by canonical id, this requirement came out of.
+  spawnedBy(resolutionId: string): BoundRequirement<SpecKey, Key> {
+    requireText("resolution id", resolutionId);
+    return this.copy({ spawnedBy: resolutionId });
+  }
+
   private copy(change: Partial<RequirementState>): BoundRequirement<SpecKey, Key> {
     return new BoundRequirement({ ...requirementState(this), ...change });
   }
@@ -369,6 +441,20 @@ function appendSnapshots<T extends object, State extends { lineage: object; key:
     result.push(value);
   }
   return Object.freeze(result);
+}
+
+/** The keys of the named declarations, appended once each. */
+function appendKeys(
+  existing: readonly string[] | undefined,
+  added: readonly object[],
+  stateOf: (value: object) => { key: string },
+): readonly string[] {
+  const keys = [...(existing ?? [])];
+  for (const value of added) {
+    const { key } = stateOf(value);
+    if (!keys.includes(key)) keys.push(key);
+  }
+  return Object.freeze(keys);
 }
 
 function freezeRequirementState(state: RequirementState): RequirementState {

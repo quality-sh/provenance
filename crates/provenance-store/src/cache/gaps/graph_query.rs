@@ -1,35 +1,8 @@
-use super::model::node_type_word;
+use provenance_core::model::relations::RecordFront;
 use provenance_core::{
-    Boundary, Domain, Edge, EdgeType, NodeType, Question, Requirement, Resolution, Rule, ScopeId,
-    Source, StableId, Thread, Topic,
+    Boundary, Domain, NodeType, Question, Requirement, Resolution, Rule, ScopeId, Source, StableId,
+    Thread, Topic,
 };
-use std::collections::BTreeSet;
-
-/// A record type that may produce a rule.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RuleProducer {
-    Requirement,
-    Resolution,
-}
-
-impl RuleProducer {
-    /// Producers required for a rule to have complete traceability.
-    ///
-    /// A resolution may produce a rule when a decision removed ambiguity,
-    /// but a rule always refines a requirement directly.
-    pub const REQUIRED: [Self; 1] = [Self::Requirement];
-
-    pub const fn node_type(self) -> NodeType {
-        match self {
-            Self::Requirement => NodeType::Requirement,
-            Self::Resolution => NodeType::Resolution,
-        }
-    }
-
-    pub const fn word(self) -> &'static str {
-        node_type_word(self.node_type())
-    }
-}
 
 pub struct GapGraph<'a> {
     pub scope: &'a ScopeId,
@@ -39,10 +12,25 @@ pub struct GapGraph<'a> {
     pub rules: &'a [Rule],
     pub topics: &'a [Topic],
     pub questions: &'a [Question],
-    pub edges: &'a [Edge],
     pub threads: &'a [Thread],
     pub domains: &'a [Domain],
     pub boundaries: &'a [Boundary],
+}
+
+impl GapGraph<'_> {
+    /// The traversal front over these records.
+    pub const fn front(&self) -> RecordFront<'_> {
+        RecordFront {
+            sources: self.sources,
+            requirements: self.requirements,
+            resolutions: self.resolutions,
+            rules: self.rules,
+            topics: self.topics,
+            questions: self.questions,
+            domains: self.domains,
+            boundaries: self.boundaries,
+        }
+    }
 }
 
 /// Read-only joins over a [`GapGraph`].
@@ -57,31 +45,6 @@ pub struct GraphQuery<'a, 'graph> {
 impl<'a, 'graph> GraphQuery<'a, 'graph> {
     pub const fn new(graph: &'a GapGraph<'graph>) -> Self {
         Self { graph }
-    }
-
-    pub fn edges(&self) -> impl Iterator<Item = &Edge> {
-        let scope = self.graph.scope;
-        self.graph
-            .edges
-            .iter()
-            .filter(move |edge| edge.scope_id == *scope)
-    }
-
-    pub fn edge_exists(
-        &self,
-        edge_type: EdgeType,
-        from_type: NodeType,
-        from_id: &StableId,
-        to_type: NodeType,
-        to_id: &StableId,
-    ) -> bool {
-        self.edges().any(|edge| {
-            edge.edge_type == edge_type
-                && edge.from_type == from_type
-                && edge.from_id == *from_id
-                && edge.to_type == to_type
-                && edge.to_id == *to_id
-        })
     }
 
     pub fn source_exists(&self, id: &StableId) -> bool {
@@ -127,53 +90,29 @@ impl<'a, 'graph> GraphQuery<'a, 'graph> {
         }
     }
 
+    /// The resolutions whose `requirement_ids` name the requirement.
     pub fn resolving_resolutions(&self, requirement_id: &StableId) -> Vec<&'graph Resolution> {
         self.graph
             .resolutions
             .iter()
-            .filter(|resolution| {
-                self.edge_exists(
-                    EdgeType::Resolves,
-                    NodeType::Resolution,
-                    &resolution.id,
-                    NodeType::Requirement,
-                    requirement_id,
-                )
-            })
+            .filter(|resolution| resolution.requirement_ids.contains(requirement_id))
             .collect()
     }
 
-    pub fn resolution_resolves_any_requirement(&self, resolution_id: &StableId) -> bool {
-        self.graph.requirements.iter().any(|requirement| {
-            self.edge_exists(
-                EdgeType::Resolves,
-                NodeType::Resolution,
-                resolution_id,
-                NodeType::Requirement,
-                &requirement.id,
-            )
-        })
-    }
-
+    /// The rules a requirement produces: named in `requirement_ids`, or
+    /// named in `resolution_ids` by a resolution that resolves it.
     pub fn produced_rules_for_requirement(&self, requirement_id: &StableId) -> Vec<&'graph Rule> {
-        let resolution_ids: BTreeSet<&str> = self
-            .resolving_resolutions(requirement_id)
-            .into_iter()
-            .map(|resolution| resolution.id.as_str())
-            .collect();
+        let resolving = self.resolving_resolutions(requirement_id);
         self.graph
             .rules
             .iter()
             .filter(|rule| {
-                self.edges().any(|edge| {
-                    edge.edge_type == EdgeType::Produces
-                        && edge.to_type == NodeType::Rule
-                        && edge.to_id == rule.id
-                        && ((edge.from_type == NodeType::Requirement
-                            && edge.from_id == *requirement_id)
-                            || (edge.from_type == NodeType::Resolution
-                                && resolution_ids.contains(edge.from_id.as_str())))
-                })
+                rule.requirement_ids.contains(requirement_id)
+                    || rule.resolution_ids.iter().any(|resolution| {
+                        resolving
+                            .iter()
+                            .any(|resolving| resolving.id == *resolution)
+                    })
             })
             .collect()
     }
@@ -182,64 +121,33 @@ impl<'a, 'graph> GraphQuery<'a, 'graph> {
         self.graph
             .rules
             .iter()
-            .filter(|rule| {
-                self.edge_exists(
-                    EdgeType::Produces,
-                    NodeType::Resolution,
-                    resolution_id,
-                    NodeType::Rule,
-                    &rule.id,
-                )
-            })
+            .filter(|rule| rule.resolution_ids.contains(resolution_id))
             .collect()
     }
 
-    /// The requirements recorded as producing this rule. A `produces` edge
-    /// from a record that is not in the scope is a dangling reference, not a
-    /// producer, so the join runs from the records that exist.
+    /// The requirements a rule names. A named requirement that is not in
+    /// the scope is a dangling reference, not a producer.
     pub fn producing_requirements(&self, rule_id: &StableId) -> Vec<&'graph Requirement> {
+        let Some(rule) = self.graph.rules.iter().find(|rule| rule.id == *rule_id) else {
+            return Vec::new();
+        };
         self.graph
             .requirements
             .iter()
-            .filter(|requirement| {
-                self.edge_exists(
-                    EdgeType::Produces,
-                    NodeType::Requirement,
-                    &requirement.id,
-                    NodeType::Rule,
-                    rule_id,
-                )
-            })
+            .filter(|requirement| rule.requirement_ids.contains(&requirement.id))
             .collect()
     }
 
-    /// The resolutions recorded as producing this rule, on the same terms as
+    /// The resolutions a rule names, on the same terms as
     /// [`Self::producing_requirements`].
     pub fn producing_resolutions(&self, rule_id: &StableId) -> Vec<&'graph Resolution> {
+        let Some(rule) = self.graph.rules.iter().find(|rule| rule.id == *rule_id) else {
+            return Vec::new();
+        };
         self.graph
             .resolutions
             .iter()
-            .filter(|resolution| {
-                self.edge_exists(
-                    EdgeType::Produces,
-                    NodeType::Resolution,
-                    &resolution.id,
-                    NodeType::Rule,
-                    rule_id,
-                )
-            })
-            .collect()
-    }
-
-    /// Which required producers this rule is missing, in
-    /// [`RuleProducer::REQUIRED`] order.
-    pub fn missing_rule_producers(&self, rule_id: &StableId) -> Vec<RuleProducer> {
-        RuleProducer::REQUIRED
-            .into_iter()
-            .filter(|producer| match producer {
-                RuleProducer::Requirement => self.producing_requirements(rule_id).is_empty(),
-                RuleProducer::Resolution => self.producing_resolutions(rule_id).is_empty(),
-            })
+            .filter(|resolution| rule.resolution_ids.contains(&resolution.id))
             .collect()
     }
 
@@ -257,13 +165,6 @@ impl<'a, 'graph> GraphQuery<'a, 'graph> {
             .source_refs
             .iter()
             .any(|reference| self.source_exists(&reference.source_id))
-            || self.edges().any(|edge| {
-                edge.edge_type == EdgeType::References
-                    && edge.from_type == NodeType::Source
-                    && self.source_exists(&edge.from_id)
-                    && edge.to_type == NodeType::Requirement
-                    && edge.to_id == requirement.id
-            })
     }
 
     pub fn source_is_referenced(&self, source_id: &StableId) -> bool {
@@ -272,14 +173,6 @@ impl<'a, 'graph> GraphQuery<'a, 'graph> {
                 .source_refs
                 .iter()
                 .any(|reference| reference.source_id == *source_id)
-        }) || self.graph.requirements.iter().any(|requirement| {
-            self.edge_exists(
-                EdgeType::References,
-                NodeType::Source,
-                source_id,
-                NodeType::Requirement,
-                &requirement.id,
-            )
         })
     }
 }

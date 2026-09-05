@@ -1,0 +1,5 @@
+error: unknown relation key `colour`; expected target, flow, required, name, via, or none
+ --> tests/compile_fail/unknown_key.rs:7:62
+  |
+7 |     #[relation(target = Requirement, flow = target_upstream, colour = "red")]
+  |                                                              ^^^^^^

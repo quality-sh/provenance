@@ -131,7 +131,7 @@ fn cli_traceability_chain_reports_rule_upstream_nodes_and_gaps() {
         ])
         .assert()
         .success();
-    // A second chain in the same scope, touching the rule nowhere. Its edges
+    // A second chain in the same scope, touching the rule nowhere. Its relations
     // are what `traceability` used to hand back alongside the real chain.
     Command::cargo_bin("provenance")
         .unwrap()
@@ -203,8 +203,10 @@ fn cli_traceability_chain_reports_rule_upstream_nodes_and_gaps() {
         ])
         .assert()
         .success()
-        .stdout(predicates::str::contains("\"edge_type\": \"needs\""))
-        .stdout(predicates::str::contains("\"from_type\": \"requirement\""));
+        .stdout(predicates::str::contains(
+            "\"relation\": \"requirement_ids\"",
+        ))
+        .stdout(predicates::str::contains("\"owner_type\": \"resolution\""));
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
@@ -221,7 +223,7 @@ fn cli_traceability_chain_reports_rule_upstream_nodes_and_gaps() {
         .success()
         .stdout(predicates::str::contains("source_schads"))
         .stdout(predicates::str::contains("res_schads_overtime"))
-        // The other chain's records and edges stay out of a view of this rule.
+        // The other chain's records and relations stay out of a view of this rule.
         .stdout(predicates::str::contains("req_unrelated").not())
         .stdout(predicates::str::contains("source_unrelated").not());
     Command::cargo_bin("provenance")

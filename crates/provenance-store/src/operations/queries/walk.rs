@@ -1,64 +1,113 @@
 use crate::state_store::StateStore;
+use provenance_core::model::relations::{
+    related_nodes, RecordFront, RelatedNode, RelationDirection,
+};
 use provenance_core::protocol::{
     ensure_limit, ensure_max_depth, ensure_protocol_version, take_page, Direction, GraphNode,
     Neighbor, NeighborsQuery, NeighborsResult, TraceQuery, TraceResult, TracedNode,
 };
-use provenance_core::{Edge, EdgeType, NodeType, ScopeId, StableId};
+use provenance_core::{NodeType, ScopeId, StableId};
 use std::collections::BTreeSet;
 
 use super::records;
 
-pub(super) fn scoped_edges(store: &StateStore, scope: &ScopeId) -> anyhow::Result<Vec<Edge>> {
-    let mut edges = store
-        .list_edges()?
-        .into_iter()
-        .filter(|edge| edge.scope_id == *scope)
-        .collect::<Vec<_>>();
-    edges.sort_by(|left, right| left.id.as_str().cmp(right.id.as_str()));
-    Ok(edges)
+/// The records of one scope as a traversal front, with the loaded node
+/// list beside them so a reached record can be handed back whole.
+pub(super) struct ScopeGraph {
+    nodes: Vec<GraphNode>,
+    sources: Vec<provenance_core::Source>,
+    requirements: Vec<provenance_core::Requirement>,
+    resolutions: Vec<provenance_core::Resolution>,
+    rules: Vec<provenance_core::Rule>,
+    topics: Vec<provenance_core::Topic>,
+    questions: Vec<provenance_core::Question>,
+    domains: Vec<provenance_core::Domain>,
+    boundaries: Vec<provenance_core::Boundary>,
 }
 
-/// One end of an edge, as this walk reads it.
-struct Step {
-    edge_type: EdgeType,
-    direction: Direction,
-    node_type: NodeType,
-    id: StableId,
-}
-
-/// Reads both ends of one edge for a record, in the directions asked for.
-fn steps(
-    edge: &Edge,
-    from: &StableId,
-    node_type: Option<NodeType>,
-    wanted: Direction,
-) -> Vec<Step> {
-    let mut steps = Vec::new();
-    if wanted.reads_out()
-        && edge.from_id == *from
-        && node_type.is_none_or(|kind| kind == edge.from_type)
-    {
-        steps.push(Step {
-            edge_type: edge.edge_type,
-            direction: Direction::Out,
-            node_type: edge.to_type,
-            id: edge.to_id.clone(),
-        });
+impl ScopeGraph {
+    pub(super) fn load(
+        store: &StateStore,
+        scope: &ScopeId,
+        include_retired: bool,
+    ) -> anyhow::Result<Self> {
+        let nodes = records::load(store, scope, include_retired)?;
+        let mut graph = Self {
+            nodes: Vec::new(),
+            sources: Vec::new(),
+            requirements: Vec::new(),
+            resolutions: Vec::new(),
+            rules: Vec::new(),
+            topics: Vec::new(),
+            questions: Vec::new(),
+            domains: Vec::new(),
+            boundaries: Vec::new(),
+        };
+        for node in &nodes {
+            match node {
+                GraphNode::Source(record) => graph.sources.push((**record).clone()),
+                GraphNode::Requirement(record) => graph.requirements.push((**record).clone()),
+                GraphNode::Resolution(record) => graph.resolutions.push((**record).clone()),
+                GraphNode::Rule(record) => graph.rules.push((**record).clone()),
+                GraphNode::Topic(record) => graph.topics.push((**record).clone()),
+                GraphNode::Question(record) => graph.questions.push((**record).clone()),
+                GraphNode::Domain(record) => graph.domains.push((**record).clone()),
+                GraphNode::Boundary(record) => graph.boundaries.push((**record).clone()),
+            }
+        }
+        graph.nodes = nodes;
+        Ok(graph)
     }
-    if wanted.reads_in() && edge.to_id == *from && node_type.is_none_or(|kind| kind == edge.to_type)
-    {
-        steps.push(Step {
-            edge_type: edge.edge_type,
-            direction: Direction::In,
-            node_type: edge.from_type,
-            id: edge.from_id.clone(),
-        });
+
+    pub(super) fn front(&self) -> RecordFront<'_> {
+        RecordFront {
+            sources: &self.sources,
+            requirements: &self.requirements,
+            resolutions: &self.resolutions,
+            rules: &self.rules,
+            topics: &self.topics,
+            questions: &self.questions,
+            domains: &self.domains,
+            boundaries: &self.boundaries,
+        }
     }
-    steps
+
+    pub(super) fn find(&self, node_type: NodeType, id: &StableId) -> Option<&GraphNode> {
+        records::find(&self.nodes, Some(node_type), id)
+    }
+
+    /// The kind of a record named without one: the first kind, in rank
+    /// order, that holds the id.
+    pub(super) fn kind_of(&self, id: &StableId) -> Option<NodeType> {
+        records::find(&self.nodes, None, id).map(GraphNode::node_type)
+    }
+
+    /// The relations around one record that the request admits.
+    pub(super) fn steps(
+        &self,
+        node_type: NodeType,
+        id: &StableId,
+        wanted: Direction,
+        relations: &[String],
+    ) -> Vec<RelatedNode> {
+        related_nodes(&self.front(), node_type, id)
+            .into_iter()
+            .filter(|node| match node.direction {
+                RelationDirection::Out => wanted.reads_out(),
+                RelationDirection::In => wanted.reads_in(),
+            })
+            .filter(|node| {
+                relations.is_empty() || relations.iter().any(|name| name == node.relation)
+            })
+            .collect()
+    }
 }
 
-fn selected(edge: &Edge, edge_types: &[EdgeType]) -> bool {
-    edge_types.is_empty() || edge_types.contains(&edge.edge_type)
+const fn direction_of(direction: RelationDirection) -> Direction {
+    match direction {
+        RelationDirection::Out => Direction::Out,
+        RelationDirection::In => Direction::In,
+    }
 }
 
 pub(super) fn neighbors(
@@ -68,24 +117,21 @@ pub(super) fn neighbors(
 ) -> anyhow::Result<NeighborsResult> {
     ensure_protocol_version(request.protocol_version)?;
     ensure_limit(request.limit)?;
+    ensure_relations(&request.relations)?;
     let id = StableId::new(request.id.clone())?;
-    let nodes = records::load(store, scope, request.include_retired)?;
+    let graph = ScopeGraph::load(store, scope, request.include_retired)?;
     let mut found = Vec::new();
-    for edge in scoped_edges(store, scope)?
-        .iter()
-        .filter(|edge| selected(edge, &request.edge_types))
-    {
-        for step in steps(edge, &id, request.node_type, request.direction) {
-            if let Some(node) = records::find(&nodes, Some(step.node_type), &step.id) {
+    if let Some(node_type) = request.node_type.or_else(|| graph.kind_of(&id)) {
+        for step in graph.steps(node_type, &id, request.direction, &request.relations) {
+            if let Some(node) = graph.find(step.endpoint.node_type, &step.endpoint.id) {
                 found.push(Neighbor {
-                    edge_type: step.edge_type,
-                    direction: step.direction,
+                    relation: step.relation.to_string(),
+                    direction: direction_of(step.direction),
                     node: node.clone(),
                 });
             }
         }
     }
-    found.sort_by_key(neighbor_order);
     let (neighbors, has_more) = take_page(found, request.limit);
     Ok(NeighborsResult {
         id: request.id,
@@ -103,26 +149,25 @@ pub(super) fn trace(
     ensure_protocol_version(request.protocol_version)?;
     ensure_limit(request.limit)?;
     ensure_max_depth(request.max_depth)?;
+    ensure_relations(&request.relations)?;
     let id = StableId::new(request.id.clone())?;
-    let nodes = records::load(store, scope, request.include_retired)?;
-    let edges = scoped_edges(store, scope)?
-        .into_iter()
-        .filter(|edge| selected(edge, &request.edge_types))
-        .collect::<Vec<_>>();
+    let graph = ScopeGraph::load(store, scope, request.include_retired)?;
     let mut seen = BTreeSet::from([id.as_str().to_string()]);
-    let mut frontier = vec![id];
+    let mut frontier: Vec<(NodeType, StableId)> = request
+        .node_type
+        .or_else(|| graph.kind_of(&id))
+        .map(|node_type| vec![(node_type, id)])
+        .unwrap_or_default();
     let mut reached = Vec::new();
     for depth in 1..=request.max_depth {
         let mut next = Vec::new();
-        for origin in &frontier {
-            for edge in &edges {
-                for step in steps(edge, origin, None, request.direction) {
-                    if !seen.insert(step.id.as_str().to_string()) {
-                        continue;
-                    }
-                    if let Some(node) = records::find(&nodes, Some(step.node_type), &step.id) {
-                        next.push(node.clone());
-                    }
+        for (origin_type, origin) in &frontier {
+            for step in graph.steps(*origin_type, origin, request.direction, &request.relations) {
+                if !seen.insert(step.endpoint.id.as_str().to_string()) {
+                    continue;
+                }
+                if let Some(node) = graph.find(step.endpoint.node_type, &step.endpoint.id) {
+                    next.push(node.clone());
                 }
             }
         }
@@ -130,7 +175,10 @@ pub(super) fn trace(
         if next.is_empty() {
             break;
         }
-        frontier = next.iter().map(|node| node.id().clone()).collect();
+        frontier = next
+            .iter()
+            .map(|node| (node.node_type(), node.id().clone()))
+            .collect();
         reached.extend(next.into_iter().map(|node| TracedNode { depth, node }));
         if reached.len() > request.limit {
             break;
@@ -146,13 +194,17 @@ pub(super) fn trace(
     })
 }
 
-fn neighbor_order(neighbor: &Neighbor) -> (u8, String, u8, u8) {
-    (
-        records::rank(neighbor.node.node_type()),
-        neighbor.node.id().as_str().to_string(),
-        edge_rank(neighbor.edge_type),
-        direction_rank(neighbor.direction),
-    )
+/// Refuses a filter naming a relation no declaration carries.
+fn ensure_relations(relations: &[String]) -> anyhow::Result<()> {
+    for name in relations {
+        if !provenance_core::model::relations::is_relation_name(name) {
+            anyhow::bail!(
+                "{}",
+                provenance_core::model::relations::unknown_relation_refusal(name)
+            );
+        }
+    }
+    Ok(())
 }
 
 fn node_order(node: &GraphNode) -> (u8, String) {
@@ -160,26 +212,4 @@ fn node_order(node: &GraphNode) -> (u8, String) {
         records::rank(node.node_type()),
         node.id().as_str().to_string(),
     )
-}
-
-const fn direction_rank(direction: Direction) -> u8 {
-    match direction {
-        Direction::Out => 0,
-        Direction::In => 1,
-        Direction::Both => 2,
-    }
-}
-
-const fn edge_rank(edge_type: EdgeType) -> u8 {
-    match edge_type {
-        EdgeType::References => 0,
-        EdgeType::RefinesInto => 1,
-        EdgeType::DependsOn => 2,
-        EdgeType::Contradicts => 3,
-        EdgeType::Supersedes => 4,
-        EdgeType::Needs => 5,
-        EdgeType::Resolves => 6,
-        EdgeType::Spawns => 7,
-        EdgeType::Produces => 8,
-    }
 }

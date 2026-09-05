@@ -1,5 +1,6 @@
 use super::super::*;
 use super::fixtures::*;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 const PROJECTION_TABLES: [&str; 7] = [
     "implementation_bindings",
@@ -37,11 +38,11 @@ fn projection_family_table_names_every_stored_family_once() {
         .iter()
         .map(|family| family.family_name())
         .collect();
-    assert_eq!(names.len(), 19);
+    assert_eq!(names.len(), 18);
     let mut unique = names.clone();
     unique.sort_unstable();
     unique.dedup();
-    assert_eq!(unique.len(), 19, "family names must be unique");
+    assert_eq!(unique.len(), 18, "family names must be unique");
     for expected in [
         "sources",
         "domains",
@@ -49,7 +50,6 @@ fn projection_family_table_names_every_stored_family_once() {
         "boundaries",
         "topics",
         "questions",
-        "edges",
         "resolutions",
         "rules",
         "messages",
@@ -67,18 +67,6 @@ fn projection_family_table_names_every_stored_family_once() {
     }
 }
 
-#[test]
-fn only_the_edges_family_is_global() {
-    for family in ProjectionFamily::ALL {
-        assert_eq!(
-            family.is_scoped(),
-            family.family_name() != "edges",
-            "scoping wrong for {}",
-            family.family_name()
-        );
-    }
-}
-
 pub(super) fn seed_integration_shards(layout: &crate::layout::ProvenanceLayout, scope: &str) {
     let write = |path: camino::Utf8PathBuf, line: &str| {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -88,19 +76,22 @@ pub(super) fn seed_integration_shards(layout: &crate::layout::ProvenanceLayout, 
     write(
         crate::shards::implementation_bindings_path(layout, &scope_id),
         &format!(
-            r#"{{"schema_version":1,"scope_id":"{scope}","id":"bind_impl_a","rule_id":"rule_schads_pay_001","declared_by":"agent","file":"src/pay.rs","symbol":"pay"}}"#
+            r#"{{"schema_version":{version},"scope_id":"{scope}","id":"bind_impl_a","rule_id":"rule_schads_pay_001","declared_by":"agent","file":"src/pay.rs","symbol":"pay"}}"#,
+            version = SUPPORTED_SCHEMA_VERSION.0
         ),
     );
     write(
         crate::shards::verification_bindings_path(layout, &scope_id),
         &format!(
-            r#"{{"schema_version":1,"scope_id":"{scope}","id":"bind_ver_a","rule_id":"rule_schads_pay_001","key":"pay_examples","method":"examples","declared_by":"agent","file":"tests/pay.rs","symbol":"pay_works"}}"#
+            r#"{{"schema_version":{version},"scope_id":"{scope}","id":"bind_ver_a","rule_id":"rule_schads_pay_001","key":"pay_examples","method":"examples","declared_by":"agent","file":"tests/pay.rs","symbol":"pay_works"}}"#,
+            version = SUPPORTED_SCHEMA_VERSION.0
         ),
     );
     write(
         crate::shards::requirement_reviews_path(layout, &scope_id),
         &format!(
-            r#"{{"schema_version":1,"scope_id":"{scope}","id":"review_a","rule_id":"rule_schads_pay_001","requirement_id":"req_schads_overtime","field":"statement","before":"Overtime","after":"Overtime pay","changed_at":1}}"#
+            r#"{{"schema_version":{version},"scope_id":"{scope}","id":"review_a","rule_id":"rule_schads_pay_001","requirement_id":"req_schads_overtime","field":"statement","before":"Overtime","after":"Overtime pay","changed_at":1}}"#,
+            version = SUPPORTED_SCHEMA_VERSION.0
         ),
     );
 }
@@ -166,14 +157,9 @@ async fn materialization_stores_a_revision_stamp_with_instance_identity() {
     .fetch_all(&pool)
     .await
     .unwrap();
-    assert_eq!(rows.len(), 19, "one row per family for the one scope");
+    assert_eq!(rows.len(), 18, "one row per family for the one scope");
     for (scope_id, family, digest, count) in &rows {
-        let expected_scope = if family == "edges" {
-            ""
-        } else {
-            scope.as_str()
-        };
-        assert_eq!(scope_id, expected_scope, "scope for {family}");
+        assert_eq!(scope_id, scope.as_str(), "scope for {family}");
         assert!(digest.starts_with("sha256:"), "digest for {family}");
         let expected_count = match family.as_str() {
             "sources"
@@ -184,7 +170,6 @@ async fn materialization_stores_a_revision_stamp_with_instance_identity() {
             | "implementation_bindings"
             | "verification_bindings"
             | "requirement_reviews" => 1,
-            "edges" => 5,
             _ => 0,
         };
         assert_eq!(*count, expected_count, "count for {family}");
@@ -219,20 +204,13 @@ fn revision_digest_reproduces_from_a_walk_of_the_family_table() {
 
     let mut walked = Vec::new();
     for family in ProjectionFamily::ALL {
-        let keys: Vec<Option<&provenance_core::ScopeId>> = if family.is_scoped() {
-            vec![Some(&scope)]
-        } else {
-            vec![None]
-        };
-        for key in keys {
-            let (bytes, record_count) = family.canonical_records(&store, key).unwrap();
-            walked.push(serde_json::json!({
-                "family": family.family_name(),
-                "scope_id": key.map_or("", provenance_core::ScopeId::as_str),
-                "digest": crate::canonical_digest::digest(&bytes),
-                "record_count": record_count,
-            }));
-        }
+        let (bytes, record_count) = family.canonical_records(&store, &scope).unwrap();
+        walked.push(serde_json::json!({
+            "family": family.family_name(),
+            "scope_id": scope.as_str(),
+            "digest": crate::canonical_digest::digest(&bytes),
+            "record_count": record_count,
+        }));
     }
     let reproduced = crate::canonical_digest::digest(
         &crate::canonical_digest::canonical_bytes(&walked).unwrap(),

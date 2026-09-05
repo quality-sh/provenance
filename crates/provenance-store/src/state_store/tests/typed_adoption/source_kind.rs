@@ -27,7 +27,7 @@ fn create_unowned_brief(store: &StateStore, scope: &ScopeId) {
             commit_pin: None,
             effective_date: None,
             review_date: None,
-            superseded_by: None,
+            supersedes: Vec::new(),
             origin_thread: None,
             origin_message: None,
         })
@@ -69,7 +69,9 @@ fn fluent_adoption_of_an_external_integration_source_keeps_its_kind() {
     assert_eq!(input.sources[0].reference, None);
     assert_eq!(input.sources[0].url, None);
 
-    let edge_before = store.list_edges().unwrap()[0].clone();
+    let citation_before = store.list_requirements(&scope).unwrap()[0]
+        .source_refs
+        .clone();
 
     // Adoption moves both records into declaration ownership and
     // changes nothing else.
@@ -108,12 +110,10 @@ fn fluent_adoption_of_an_external_integration_source_keeps_its_kind() {
     assert_eq!(requirements[0].statement, REQUIREMENT_STATEMENT);
     assert_eq!(requirements[0].declared_by.as_deref(), Some(OWNER));
 
-    // The citation edge survives adoption unchanged, identity included.
-    let edges = store.list_edges().unwrap();
-    assert_eq!(edges.len(), 1);
-    assert_eq!(edges[0], edge_before);
-    assert_eq!(edges[0].from_id.as_str(), BRIEF_ID);
-    assert_eq!(edges[0].to_id.as_str(), REQUIREMENT_ID);
+    // The citation survives adoption unchanged.
+    assert_eq!(requirements[0].source_refs, citation_before);
+    assert_eq!(requirements[0].source_refs.len(), 1);
+    assert_eq!(requirements[0].source_refs[0].source_id.as_str(), BRIEF_ID);
 
     let replay = store.plan_typed_spec(&scope, input).unwrap();
     assert_eq!(

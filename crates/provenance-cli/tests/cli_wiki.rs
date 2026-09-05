@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::process::Command as StdCommand;
@@ -344,57 +345,60 @@ fn seed_state(dir: &std::path::Path, repo: &str) {
     let import_path = dir.join("state.json");
     std::fs::write(
         &import_path,
-        r#"{
-  "scope": "default",
-  "sources": [{
-    "schema_version": 1,
-    "scope_id": "default",
-    "id": "source_sah",
-    "name": "Support at Home",
-    "source_type": "legislation",
-    "url": "https://example.test/sah",
-    "reference": "Department guidance"
-  }],
-  "requirements": [{
-    "schema_version": 1,
-    "scope_id": "default",
-    "id": "req_gap",
-    "statement": "Uncited requirement",
-    "status": "active",
-    "source_refs": []
-  }, {
-    "schema_version": 1,
-    "scope_id": "default",
-    "id": "req_sah",
-    "statement": "Support at Home shall be traceable",
-    "status": "active",
-    "source_refs": [{"source_id": "source_sah", "clause": "Program overview"}]
-  }],
-  "resolutions": [{
-    "schema_version": 1,
-    "scope_id": "default",
-    "id": "res_sah",
-    "title": "SAH extraction",
-    "position": "Keep as draft extraction",
-    "rationale": "Needs human review",
-    "status": "approved",
-    "review_on": null
-  }],
-  "rules": [{
-    "schema_version": 1,
-    "scope_id": "default",
-    "id": "rule_sah_001",
-    "name": "SAH rule",
-    "statement": "Draft rule shall stay draft",
-    "status": "active",
-    "severity": "high",
-    "source_document": "Example-API-main/src/example.php",
-    "source_section": "lines 1-3"
-  }],
-  "edges": [],
-  "threads": [],
-  "messages": []
-}"#,
+        serde_json::json!({
+          "scope": "default",
+          "sources": [{
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+            "scope_id": "default",
+            "id": "source_sah",
+            "name": "Support at Home",
+            "source_type": "legislation",
+            "url": "https://example.test/sah",
+            "reference": "Department guidance"
+          }],
+          "requirements": [{
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+            "scope_id": "default",
+            "id": "req_gap",
+            "statement": "Uncited requirement",
+            "status": "active",
+            "source_refs": []
+          }, {
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+            "scope_id": "default",
+            "id": "req_sah",
+            "statement": "Support at Home shall be traceable",
+            "status": "active",
+            "source_refs": [{"source_id": "source_sah", "clause": "Program overview"}]
+          }],
+          "resolutions": [{
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+            "scope_id": "default",
+            "id": "res_sah",
+            "title": "SAH extraction",
+            "position": "Keep as draft extraction",
+            "rationale": "Needs human review",
+            "status": "approved",
+            "requirement_ids": ["req_sah"],
+            "review_on": null
+          }],
+          "rules": [{
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+            "scope_id": "default",
+            "id": "rule_sah_001",
+            "name": "SAH rule",
+            "statement": "Draft rule shall stay draft",
+            "status": "active",
+            "severity": "high",
+            "requirement_ids": ["req_sah"],
+            "resolution_ids": ["res_sah"],
+            "source_document": "Example-API-main/src/example.php",
+            "source_section": "lines 1-3"
+          }],
+          "threads": [],
+          "messages": []
+        })
+        .to_string(),
     )
     .unwrap();
 
@@ -411,40 +415,6 @@ fn seed_state(dir: &std::path::Path, repo: &str) {
             "--format",
             "json",
         ])
-        .assert()
-        .success();
-
-    create_edge(
-        repo,
-        "resolves",
-        "resolution",
-        "res_sah",
-        "requirement",
-        "req_sah",
-    );
-    create_edge(
-        repo,
-        "produces",
-        "resolution",
-        "res_sah",
-        "rule",
-        "rule_sah_001",
-    );
-}
-
-fn create_edge(
-    repo: &str,
-    edge_type: &str,
-    from_type: &str,
-    from_id: &str,
-    to_type: &str,
-    to_id: &str,
-) {
-    Command::cargo_bin("provenance")
-        .unwrap()
-        .args(["edges", "create", "--repo", repo, "--scope", "default"])
-        .args(["--type", edge_type, "--from-type", from_type])
-        .args(["--from-id", from_id, "--to-type", to_type, "--to-id", to_id])
         .assert()
         .success();
 }

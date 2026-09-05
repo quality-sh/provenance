@@ -1,10 +1,11 @@
 use provenance_core::{
-    EdgeType, NodeType, QuestionStatus, RepoPathPrefix, RequirementStatus, ResolutionMethod,
-    ResolutionStatus, RuleSeverity, RuleStatus, SchemaVersion, SourceType, StableId, TopicStatus,
+    QuestionStatus, RepoPathPrefix, RequirementStatus, ResolutionMethod, ResolutionStatus,
+    RuleSeverity, RuleStatus, SourceType, StableId, TopicStatus,
 };
 use provenance_macros::verifies;
 
 use super::*;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 mod collaboration;
 
@@ -23,7 +24,6 @@ enum RecordFamily {
     Rule,
     VerificationBinding,
     ImplementationBinding,
-    Edge,
 }
 
 // Built from an exhaustive match so that adding a RecordFamily variant
@@ -41,8 +41,7 @@ fn all_families() -> Vec<RecordFamily> {
         RecordFamily::Resolution => Some(RecordFamily::Rule),
         RecordFamily::Rule => Some(RecordFamily::VerificationBinding),
         RecordFamily::VerificationBinding => Some(RecordFamily::ImplementationBinding),
-        RecordFamily::ImplementationBinding => Some(RecordFamily::Edge),
-        RecordFamily::Edge => None,
+        RecordFamily::ImplementationBinding => None,
     } {
         all.push(next);
     }
@@ -61,7 +60,6 @@ const fn record_id(family: RecordFamily) -> &'static str {
         RecordFamily::Rule => "rule_pinned",
         RecordFamily::VerificationBinding => "verification_binding_pinned",
         RecordFamily::ImplementationBinding => "implementation_binding_pinned",
-        RecordFamily::Edge => "edge_pinned",
     }
 }
 
@@ -71,7 +69,7 @@ fn stable_id(family: RecordFamily) -> StableId {
 
 fn source_record(scope: &ScopeId) -> Source {
     Source {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: stable_id(RecordFamily::Source),
         declared_by: None,
@@ -84,7 +82,7 @@ fn source_record(scope: &ScopeId) -> Source {
         commit_pin: None,
         effective_date: None,
         review_date: None,
-        superseded_by: None,
+        supersedes: Vec::new(),
         origin_thread: None,
         origin_message: None,
     }
@@ -92,7 +90,7 @@ fn source_record(scope: &ScopeId) -> Source {
 
 fn domain_record(scope: &ScopeId) -> Domain {
     Domain {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: stable_id(RecordFamily::Domain),
         name: "Pinned domain".into(),
@@ -103,7 +101,7 @@ fn domain_record(scope: &ScopeId) -> Domain {
 
 fn requirement_record(scope: &ScopeId) -> Requirement {
     Requirement {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: stable_id(RecordFamily::Requirement),
         declared_by: None,
@@ -115,6 +113,10 @@ fn requirement_record(scope: &ScopeId) -> Requirement {
         status: RequirementStatus::Active,
         domain_id: None,
         source_refs: Vec::new(),
+        refines: None,
+        depends_on: Vec::new(),
+        supersedes: Vec::new(),
+        spawned_by: None,
         origin_thread: None,
         origin_message: None,
     }
@@ -122,7 +124,7 @@ fn requirement_record(scope: &ScopeId) -> Requirement {
 
 fn boundary_record(scope: &ScopeId) -> Boundary {
     Boundary {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: stable_id(RecordFamily::Boundary),
         requirement_id: stable_id(RecordFamily::Requirement),
@@ -133,7 +135,7 @@ fn boundary_record(scope: &ScopeId) -> Boundary {
 
 fn topic_record(scope: &ScopeId) -> Topic {
     Topic {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: stable_id(RecordFamily::Topic),
         requirement_id: stable_id(RecordFamily::Requirement),
@@ -147,7 +149,7 @@ fn topic_record(scope: &ScopeId) -> Topic {
 
 fn question_record(scope: &ScopeId) -> Question {
     Question {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: stable_id(RecordFamily::Question),
         topic_id: stable_id(RecordFamily::Topic),
@@ -159,13 +161,14 @@ fn question_record(scope: &ScopeId) -> Question {
         claimed_at: None,
         answer: None,
         links: Vec::new(),
+        contradicts: None,
         resolution_id: None,
     }
 }
 
 fn resolution_record(scope: &ScopeId) -> Resolution {
     Resolution {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: stable_id(RecordFamily::Resolution),
         title: "Pinned resolution".into(),
@@ -179,8 +182,9 @@ fn resolution_record(scope: &ScopeId) -> Resolution {
         made_by: None,
         approved_by: None,
         approved_at: None,
-        superseded_by: None,
         review_on: None,
+        requirement_ids: Vec::new(),
+        supersedes: Vec::new(),
         origin_thread: None,
         origin_message: None,
     }
@@ -188,7 +192,7 @@ fn resolution_record(scope: &ScopeId) -> Resolution {
 
 fn rule_record(scope: &ScopeId) -> Rule {
     Rule {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: stable_id(RecordFamily::Rule),
         declared_by: None,
@@ -201,6 +205,8 @@ fn rule_record(scope: &ScopeId) -> Rule {
         severity: RuleSeverity::Medium,
         source_document: None,
         source_section: None,
+        requirement_ids: Vec::new(),
+        resolution_ids: Vec::new(),
         origin_thread: None,
         origin_message: None,
     }
@@ -208,7 +214,7 @@ fn rule_record(scope: &ScopeId) -> Rule {
 
 fn verification_binding_record(scope: &ScopeId) -> VerificationBinding {
     VerificationBinding {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: stable_id(RecordFamily::VerificationBinding),
         rule_id: stable_id(RecordFamily::Rule),
@@ -223,7 +229,7 @@ fn verification_binding_record(scope: &ScopeId) -> VerificationBinding {
 
 fn implementation_binding_record(scope: &ScopeId) -> ImplementationBinding {
     ImplementationBinding {
-        schema_version: SchemaVersion(1),
+        schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: stable_id(RecordFamily::ImplementationBinding),
         rule_id: stable_id(RecordFamily::Rule),
@@ -231,20 +237,6 @@ fn implementation_binding_record(scope: &ScopeId) -> ImplementationBinding {
         retired: false,
         file: "src/pinned.ts".into(),
         symbol: "pinnedImplementation".into(),
-    }
-}
-
-fn edge_record(scope: &ScopeId) -> Edge {
-    Edge {
-        schema_version: SchemaVersion(1),
-        scope_id: scope.clone(),
-        id: stable_id(RecordFamily::Edge),
-        edge_type: EdgeType::References,
-        from_type: NodeType::Source,
-        from_id: stable_id(RecordFamily::Source),
-        to_type: NodeType::Requirement,
-        to_id: stable_id(RecordFamily::Requirement),
-        label: None,
     }
 }
 
@@ -296,10 +288,6 @@ fn graph_in_scope(scope: &ScopeId, populated: &[RecordFamily]) -> GraphExport {
             .collect(),
         implementation_bindings: holds(RecordFamily::ImplementationBinding)
             .then(|| implementation_binding_record(scope))
-            .into_iter()
-            .collect(),
-        edges: holds(RecordFamily::Edge)
-            .then(|| edge_record(scope))
             .into_iter()
             .collect(),
     }
@@ -359,11 +347,6 @@ fn move_family_to_scope(graph: &mut GraphExport, family: RecordFamily, scope: &S
                 record.scope_id = scope.clone();
             }
         }
-        RecordFamily::Edge => {
-            for record in &mut graph.edges {
-                record.scope_id = scope.clone();
-            }
-        }
     }
 }
 
@@ -387,7 +370,6 @@ fn family_count_of(graph: &GraphExport) -> usize {
         rules,
         verification_bindings,
         implementation_bindings,
-        edges,
     } = graph;
     let counts = [
         sources.len(),
@@ -400,7 +382,6 @@ fn family_count_of(graph: &GraphExport) -> usize {
         rules.len(),
         verification_bindings.len(),
         implementation_bindings.len(),
-        edges.len(),
     ];
     assert!(
         counts.iter().all(|count| *count == 1),

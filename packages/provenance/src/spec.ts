@@ -6,6 +6,7 @@ import type {
   TypedSpecDocument,
 } from "./protocol.js";
 import type { VerificationMethod } from "./rules.js";
+import { STATE_SCHEMA_VERSION } from "./protocol.js";
 
 export interface SourceOptions {
   id?: string;
@@ -323,7 +324,7 @@ function document(session: ConstructionSession): DesiredSpecDocument {
     (left.requirement ?? "").localeCompare(right.requirement ?? "") ||
     left.key.localeCompare(right.key),
   );
-  return { schema_version: 1, spec: session.spec, sources, requirements, rules };
+  return { schema_version: STATE_SCHEMA_VERSION, spec: session.spec, sources, requirements, rules };
 }
 
 function sourceAddress(session: ConstructionSession, source: SourceBuilder): DeclarationAddress {

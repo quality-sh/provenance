@@ -18,6 +18,8 @@ fn rule_input(requirement_key: &str, statement: &str) -> TypedSpecInput {
         vec![target(TypedDeclarationKind::Rule, "rule_existing")],
     );
     input.rules.push(TypedRuleInput {
+        resolution_ids: None,
+
         key: "enforcement".to_string(),
         id: Some("rule_existing".to_string()),
         address: None,
@@ -60,8 +62,8 @@ fn store_with_unowned_rule() -> (tempfile::TempDir, StateStore, ScopeId) {
             id: StableId::new("rule_existing").unwrap(),
             name: None,
             description: None,
-            requirement_id: Some(StableId::new("req_first").unwrap()),
-            resolution_id: None,
+            requirement_ids: vec![StableId::new("req_first").unwrap()],
+            resolution_ids: Vec::new(),
             statement: "The canonical Rule keeps its identity".to_string(),
             status: RuleStatus::Active,
             severity: RuleSeverity::Medium,
@@ -91,7 +93,7 @@ fn rule_adoption_rejects_a_definition_change() {
 #[test]
 fn rule_adoption_rejects_a_requirement_relationship_change() {
     let (_dir, store, scope) = store_with_unowned_rule();
-    let before = store.list_edges().unwrap();
+    let before = store.list_rules(&scope).unwrap();
     let input = rule_input("second", "The canonical Rule keeps its identity");
 
     let plan = store.plan_typed_spec(&scope, input.clone()).unwrap();
@@ -101,10 +103,11 @@ fn rule_adoption_rejects_a_requirement_relationship_change() {
         .iter()
         .any(|change| change.field == "relationships")));
     assert!(store.apply_typed_spec(&scope, input).is_err());
-    assert_eq!(store.list_edges().unwrap(), before);
+    assert_eq!(store.list_rules(&scope).unwrap(), before);
 }
 
 #[test]
+#[allow(clippy::too_many_lines)]
 fn rule_adoption_preserves_a_resolution_relationship_outside_the_typed_surface() {
     let (_dir, store, scope) = initialized_store();
     store
@@ -133,7 +136,8 @@ fn rule_adoption_preserves_a_resolution_relationship_outside_the_typed_surface()
             scope_id: scope.clone(),
             id: StableId::new("req_first").unwrap(),
             title: "Existing decision".to_string(),
-            requirement_id: Some(StableId::new("req_second").unwrap()),
+            requirement_ids: vec![StableId::new("req_second").unwrap()],
+            supersedes: Vec::new(),
             position: "Keep the canonical Rule".to_string(),
             rationale: "The existing decision remains canonical".to_string(),
             status: ResolutionStatus::Proposed,
@@ -144,7 +148,6 @@ fn rule_adoption_preserves_a_resolution_relationship_outside_the_typed_surface()
             made_by: None,
             approved_by: None,
             approved_at: None,
-            superseded_by: None,
             origin_thread: None,
             origin_message: None,
         })
@@ -155,8 +158,8 @@ fn rule_adoption_preserves_a_resolution_relationship_outside_the_typed_surface()
             id: StableId::new("rule_existing").unwrap(),
             name: None,
             description: None,
-            requirement_id: Some(StableId::new("req_second").unwrap()),
-            resolution_id: Some(StableId::new("req_first").unwrap()),
+            requirement_ids: vec![StableId::new("req_second").unwrap()],
+            resolution_ids: vec![StableId::new("req_first").unwrap()],
             statement: "The canonical Rule keeps its identity".to_string(),
             status: RuleStatus::Active,
             severity: RuleSeverity::Medium,
@@ -166,7 +169,7 @@ fn rule_adoption_preserves_a_resolution_relationship_outside_the_typed_surface()
             origin_message: None,
         })
         .unwrap();
-    let before = store.list_edges().unwrap();
+    let before = store.list_rules(&scope).unwrap();
     let mut input = document(
         OWNER,
         vec![
@@ -184,6 +187,8 @@ fn rule_adoption_preserves_a_resolution_relationship_outside_the_typed_surface()
         vec![target(TypedDeclarationKind::Rule, "rule_existing")],
     );
     input.rules.push(TypedRuleInput {
+        resolution_ids: None,
+
         key: "enforcement".to_string(),
         id: Some("rule_existing".to_string()),
         address: None,
@@ -198,10 +203,14 @@ fn rule_adoption_preserves_a_resolution_relationship_outside_the_typed_surface()
     let plan = store.plan_typed_spec(&scope, input.clone()).unwrap();
     assert_eq!(plan.conflicts, 0);
     store.apply_typed_spec(&scope, input).unwrap();
-    assert_eq!(store.list_edges().unwrap().len(), before.len());
-    assert!(store.list_edges().unwrap().iter().any(|edge| {
-        edge.from_type == provenance_core::NodeType::Resolution
-            && edge.from_id.as_str() == "req_first"
-            && edge.to_id.as_str() == "rule_existing"
-    }));
+    let rules = store.list_rules(&scope).unwrap();
+    assert_eq!(rules.len(), before.len());
+    let existing = rules
+        .iter()
+        .find(|rule| rule.id.as_str() == "rule_existing")
+        .unwrap();
+    assert!(existing
+        .resolution_ids
+        .iter()
+        .any(|id| id.as_str() == "req_first"));
 }

@@ -270,7 +270,7 @@ mod tests {
 
     fn proposal(id: &str) -> ProposalCard {
         serde_json::from_value(json!({
-            "schema_version": 1, "scope_id": "default", "id": id, "proposal_key": id,
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": id, "proposal_key": id,
             "proposal_type": "question", "title": id, "summary": id,
             "traceability": {
                 "target": {"artifact_type": "requirement", "artifact_id": "req_a"},
@@ -283,7 +283,7 @@ mod tests {
 
     fn assertion_for(proposal_id: &str) -> AssertionRecord {
         serde_json::from_value(json!({
-            "schema_version": 1, "scope_id": "default",
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default",
             "id": format!("assertion_{proposal_id}"), "proposal_id": proposal_id,
             "synthesis_packet_id": "synthesis_a", "supporting_claim_ids": ["claim_a"]
         }))
@@ -292,7 +292,7 @@ mod tests {
 
     fn disposition_for(proposal_id: &str, decision: &str) -> DispositionRecord {
         serde_json::from_value(json!({
-            "schema_version": 1, "scope_id": "default",
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default",
             "id": format!("disposition_{proposal_id}"), "proposal_id": proposal_id,
             "decision": decision, "rationale": "Reviewed",
             "actor": {"identity_type": "human", "id": "reviewer"}

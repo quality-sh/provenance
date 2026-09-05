@@ -1,6 +1,9 @@
+use super::reference_writers::declared;
+use super::writers::sorted_ids;
 use super::{CreateResolutionInput, CreateRuleInput, StateStore};
 use crate::shards;
-use provenance_core::{EdgeType, NodeType, Resolution, Rule, SUPPORTED_SCHEMA_VERSION};
+use provenance_core::model::relations::required_refusal;
+use provenance_core::{NodeType, Resolution, Rule, SUPPORTED_SCHEMA_VERSION};
 
 impl StateStore {
     pub fn create_resolution(&self, input: CreateResolutionInput) -> anyhow::Result<Resolution> {
@@ -12,7 +15,8 @@ impl StateStore {
             scope_id,
             id,
             title,
-            requirement_id,
+            requirement_ids,
+            supersedes,
             position,
             rationale,
             status,
@@ -23,18 +27,27 @@ impl StateStore {
             made_by,
             approved_by,
             approved_at,
-            superseded_by,
             origin_thread,
             origin_message,
         } = input;
-        if let Some(requirement_id) = &requirement_id {
-            anyhow::ensure!(
-                self.list_requirements(&scope_id)?
-                    .iter()
-                    .any(|requirement| &requirement.id == requirement_id),
-                "requirement does not exist"
-            );
+        anyhow::ensure!(
+            !requirement_ids.is_empty(),
+            "{}",
+            required_refusal(declared::<Resolution>("requirement_ids"))
+        );
+        for requirement_id in &requirement_ids {
+            self.ensure_node_exists(
+                &scope_id,
+                NodeType::Requirement,
+                requirement_id,
+                "--requirement-id",
+            )?;
         }
+        for older in &supersedes {
+            self.ensure_node_exists(&scope_id, NodeType::Resolution, older, "--supersedes")?;
+        }
+        let requirement_ids = sorted_ids(requirement_ids);
+        let supersedes = sorted_ids(supersedes);
         let path = shards::resolutions_path(&self.layout, &scope_id);
         let resolution = self.mutate_jsonl_records(&path, |records: &mut Vec<Resolution>| {
             let resolution = Resolution {
@@ -52,7 +65,8 @@ impl StateStore {
                 made_by,
                 approved_by,
                 approved_at,
-                superseded_by,
+                requirement_ids: requirement_ids.clone(),
+                supersedes,
                 review_on: None,
                 origin_thread,
                 origin_message,
@@ -65,24 +79,6 @@ impl StateStore {
             records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
             Ok(resolution)
         })?;
-        if let Some(requirement_id) = requirement_id {
-            self.add_edge(
-                scope_id.clone(),
-                EdgeType::Needs,
-                NodeType::Requirement,
-                requirement_id.clone(),
-                NodeType::Resolution,
-                id.clone(),
-            )?;
-            self.add_edge(
-                scope_id,
-                EdgeType::Resolves,
-                NodeType::Resolution,
-                id,
-                NodeType::Requirement,
-                requirement_id,
-            )?;
-        }
         Ok(resolution)
     }
 
@@ -96,8 +92,8 @@ impl StateStore {
             id,
             name,
             description,
-            requirement_id,
-            resolution_id,
+            requirement_ids,
+            resolution_ids,
             statement,
             status,
             severity,
@@ -107,22 +103,29 @@ impl StateStore {
             origin_message,
         } = input;
         super::statement_policy::ensure_statement_is_writable(&self.layout, &statement)?;
-        if let Some(requirement_id) = &requirement_id {
-            anyhow::ensure!(
-                self.list_requirements(&scope_id)?
-                    .iter()
-                    .any(|requirement| &requirement.id == requirement_id),
-                "requirement does not exist"
-            );
+        anyhow::ensure!(
+            !requirement_ids.is_empty(),
+            "{}",
+            required_refusal(declared::<Rule>("requirement_ids"))
+        );
+        for requirement_id in &requirement_ids {
+            self.ensure_node_exists(
+                &scope_id,
+                NodeType::Requirement,
+                requirement_id,
+                "--requirement-id",
+            )?;
         }
-        if let Some(resolution_id) = &resolution_id {
-            anyhow::ensure!(
-                self.list_resolutions(&scope_id)?
-                    .iter()
-                    .any(|resolution| &resolution.id == resolution_id),
-                "resolution does not exist"
-            );
+        for resolution_id in &resolution_ids {
+            self.ensure_node_exists(
+                &scope_id,
+                NodeType::Resolution,
+                resolution_id,
+                "--resolution-id",
+            )?;
         }
+        let requirement_ids = sorted_ids(requirement_ids);
+        let resolution_ids = sorted_ids(resolution_ids);
         let path = shards::rules_path(&self.layout, &scope_id);
         let rule = self.mutate_jsonl_records(&path, |records: &mut Vec<Rule>| {
             let rule = Rule {
@@ -137,6 +140,8 @@ impl StateStore {
                 statement,
                 status,
                 severity,
+                requirement_ids: requirement_ids.clone(),
+                resolution_ids: resolution_ids.clone(),
                 source_document,
                 source_section,
                 origin_thread,
@@ -150,26 +155,6 @@ impl StateStore {
             records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
             Ok(rule)
         })?;
-        if let Some(requirement_id) = requirement_id {
-            self.add_edge(
-                scope_id.clone(),
-                EdgeType::Produces,
-                NodeType::Requirement,
-                requirement_id,
-                NodeType::Rule,
-                id.clone(),
-            )?;
-        }
-        if let Some(resolution_id) = resolution_id {
-            self.add_edge(
-                scope_id,
-                EdgeType::Produces,
-                NodeType::Resolution,
-                resolution_id,
-                NodeType::Rule,
-                id,
-            )?;
-        }
         Ok(rule)
     }
 }

@@ -1,3 +1,4 @@
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use serde_json::{json, Value};
 
 pub(in crate::handlers::schema) fn reference_schema() -> Value {
@@ -46,7 +47,7 @@ pub(in crate::handlers::schema) fn export_schema() -> Value {
                 "additionalProperties": false,
                 "required": [
                     "schema_version", "scope", "sources", "domains", "requirements",
-                    "boundaries", "topics", "questions", "resolutions", "rules", "edges"
+                    "boundaries", "topics", "questions", "resolutions", "rules"
                 ],
                 "properties": {
                     "schema_version": schema_version(),
@@ -60,8 +61,7 @@ pub(in crate::handlers::schema) fn export_schema() -> Value {
                     "resolutions": record_array("resolution"),
                     "rules": record_array("rule"),
                     "verification_bindings": record_array("verificationBinding"),
-                    "implementation_bindings": record_array("implementationBinding"),
-                    "edges": record_array("edge")
+                    "implementation_bindings": record_array("implementationBinding")
                 }
             }
         },
@@ -81,7 +81,7 @@ pub(in crate::handlers::schema) fn export_schema() -> Value {
 /// worth stating anyway: it says what the field is, and a stricter validator
 /// refuses `1.0` on it.
 fn schema_version() -> Value {
-    json!({"type": "integer", "const": 1})
+    json!({"type": "integer", "const": SUPPORTED_SCHEMA_VERSION.0})
 }
 
 fn record_array(name: &str) -> Value {
@@ -109,6 +109,7 @@ fn closed_record(required: &[&str], properties: Value) -> Value {
 #[allow(clippy::redundant_clone, clippy::too_many_lines)]
 fn export_definitions() -> Value {
     let id = json!({"type": "string", "pattern": "^[a-z0-9_-]+$"});
+    let id_list = json!({"type": "array", "items": id.clone()});
     let version = schema_version();
     let string = json!({"type": "string"});
     let confidence = json!({"type": "number", "minimum": 0, "maximum": 1});
@@ -139,7 +140,7 @@ fn export_definitions() -> Value {
                     "pattern": "^[0-9A-Fa-f]+$"
                 },
                 "effective_date": {"type": "integer"},
-                "review_date": {"type": "integer"}, "superseded_by": id.clone()
+                "review_date": {"type": "integer"}, "supersedes": id_list.clone()
             })
         ),
         "domain": closed_record(&["schema_version", "scope_id", "id", "name"], json!({
@@ -154,7 +155,9 @@ fn export_definitions() -> Value {
                 "description": string.clone(), "fog": string.clone(),
                 "status": {"enum": ["active", "discovery", "refinement", "resolved"]},
                 "domain_id": id.clone(),
-                "source_refs": {"type": "array", "items": {"$ref": "#/$defs/sourceReference"}}
+                "source_refs": {"type": "array", "items": {"$ref": "#/$defs/sourceReference"}},
+                "refines": id.clone(), "depends_on": id_list.clone(),
+                "supersedes": id_list.clone(), "spawned_by": id.clone()
             })
         ),
         "boundary": closed_record(
@@ -181,12 +184,12 @@ fn export_definitions() -> Value {
                 "topic_id": id.clone(), "requirement_id": id.clone(), "question": string.clone(),
                 "resolution_method": {"enum": ["grill", "prototype", "research", "verify", "task"]},
                 "status": {"enum": ["open", "blocked_on_human", "answered"]},
-                "answer": string.clone(), "resolution_id": id.clone(),
+                "answer": string.clone(), "resolution_id": id.clone(), "contradicts": id.clone(),
                 "links": {"type": "array", "items": {"$ref": "#/$defs/artifactLink"}}
             })
         ),
         "resolution": closed_record(
-            &["schema_version", "scope_id", "id", "title", "position", "rationale", "status", "inputs", "review_on"],
+            &["schema_version", "scope_id", "id", "title", "position", "rationale", "status", "inputs", "review_on", "requirement_ids"],
             json!({
                 "schema_version": version.clone(), "scope_id": id.clone(), "id": id.clone(),
                 "title": string.clone(), "position": string.clone(), "rationale": string.clone(),
@@ -194,17 +197,19 @@ fn export_definitions() -> Value {
                 "context": string.clone(), "enforcement": string.clone(), "confidence": confidence,
                 "inputs": {"type": "array", "items": {"$ref": "#/$defs/resolutionInput"}},
                 "made_by": string.clone(), "approved_by": string.clone(), "approved_at": {"type": "integer"},
-                "superseded_by": id.clone(), "review_on": {"type": ["string", "null"]}
+                "requirement_ids": id_list.clone(), "supersedes": id_list.clone(),
+                "review_on": {"type": ["string", "null"]}
             })
         ),
         "rule": closed_record(
-            &["schema_version", "scope_id", "id", "statement", "status", "severity"],
+            &["schema_version", "scope_id", "id", "statement", "status", "severity", "requirement_ids"],
             json!({
                 "schema_version": version.clone(), "scope_id": id.clone(), "id": id.clone(),
                 "declared_by": string.clone(), "declaration_address": declaration_address(), "retired": {"type": "boolean"}, "name": string.clone(),
                 "description": string.clone(),
                 "statement": string.clone(), "status": {"enum": ["draft", "review", "active", "deprecated", "archived"]},
                 "severity": {"enum": ["low", "medium", "high", "critical"]},
+                "requirement_ids": id_list.clone(), "resolution_ids": id_list.clone(),
                 "source_document": string.clone(), "source_section": string.clone()
             })
         ),
@@ -226,17 +231,6 @@ fn export_definitions() -> Value {
                 "retired": {"type": "boolean"},
                 "file": {"type": "string", "minLength": 1},
                 "symbol": {"type": "string", "minLength": 1}
-            })
-        ),
-        "edge": closed_record(
-            &["schema_version", "scope_id", "id", "edge_type", "from_type", "from_id", "to_type", "to_id"],
-            json!({
-                "schema_version": version, "scope_id": id.clone(), "id": id.clone(),
-                "edge_type": {"enum": ["references", "refines_into", "depends_on", "contradicts", "supersedes", "needs", "resolves", "spawns", "produces"]},
-                "from_type": {"enum": ["source", "requirement", "resolution", "rule", "topic", "question"]},
-                "from_id": id.clone(),
-                "to_type": {"enum": ["source", "requirement", "resolution", "rule", "topic", "question"]},
-                "to_id": id, "label": string
             })
         )
     })

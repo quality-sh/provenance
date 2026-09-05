@@ -64,16 +64,7 @@ fn push_orphans(html: &mut String, page: &UnfinishedPage, links: &PageLinksRende
         return;
     }
     html.push_str("<ul class=\"link-list\">\n");
-    for orphan in &page.orphans.rules {
-        writeln!(
-            html,
-            "<li>{} — {}</li>",
-            links.link(&orphan.link, None),
-            escape_html(&orphan.reason)
-        )
-        .expect("writing to a String should not fail");
-    }
-    for orphan in page.orphans.resolutions.iter().chain(&page.orphans.sources) {
+    for orphan in &page.orphans.sources {
         writeln!(
             html,
             "<li>{} — {}</li>",
@@ -87,11 +78,9 @@ fn push_orphans(html: &mut String, page: &UnfinishedPage, links: &PageLinksRende
 
 fn orphan_links(page: &UnfinishedPage) -> Vec<&PageLink> {
     page.orphans
-        .rules
+        .sources
         .iter()
         .map(|orphan| &orphan.link)
-        .chain(page.orphans.resolutions.iter().map(|orphan| &orphan.link))
-        .chain(page.orphans.sources.iter().map(|orphan| &orphan.link))
         .collect()
 }
 

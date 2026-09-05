@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 #[test]
 fn dispositions_list_rejects_invalid_lifecycle_records() {
@@ -19,10 +20,7 @@ fn dispositions_list_rejects_invalid_lifecycle_records() {
     std::fs::create_dir_all(dispositions.parent().unwrap()).unwrap();
     std::fs::write(
         dispositions,
-        concat!(
-            r#"{"schema_version":1,"scope_id":"default","id":"forged_disposition","proposal_id":"missing_proposal","decision":"accepted","rationale":"Forged","actor":{"identity_type":"human","id":"forger"}}"#,
-            "\n"
-        ),
+        serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"forged_disposition","proposal_id":"missing_proposal","decision":"accepted","rationale":"Forged","actor":{"identity_type":"human","id":"forger"}}).to_string() + "\n",
     )
     .unwrap();
 

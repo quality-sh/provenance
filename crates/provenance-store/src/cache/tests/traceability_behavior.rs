@@ -8,9 +8,7 @@
 use super::super::*;
 use super::fixtures::*;
 use crate::state_store::{CreateResolutionInput, CreateRuleInput, StateStore};
-use provenance_core::{
-    EdgeType, RequirementStatus, ResolutionStatus, RuleSeverity, RuleStatus, ScopeId,
-};
+use provenance_core::{RequirementStatus, ResolutionStatus, RuleSeverity, RuleStatus, ScopeId};
 
 /// A rule with both kinds of producer: `req_direct` names it outright, and
 /// `res_indirect` produces it while resolving `req_resolved`. Each
@@ -28,7 +26,8 @@ fn seed_two_producers(layout: &ProvenanceLayout, scope: &ScopeId) {
             scope_id: scope.clone(),
             id: sid("res_indirect"),
             title: "Indirect decision".into(),
-            requirement_id: Some(sid("req_resolved")),
+            requirement_ids: vec![sid("req_resolved")],
+            supersedes: Vec::new(),
             position: "Adopt".into(),
             rationale: "Settles the other requirement".into(),
             status: ResolutionStatus::Proposed,
@@ -39,7 +38,6 @@ fn seed_two_producers(layout: &ProvenanceLayout, scope: &ScopeId) {
             made_by: None,
             approved_by: None,
             approved_at: None,
-            superseded_by: None,
             origin_thread: None,
             origin_message: None,
         })
@@ -50,8 +48,8 @@ fn seed_two_producers(layout: &ProvenanceLayout, scope: &ScopeId) {
             id: sid("rule_two_producers"),
             name: None,
             description: None,
-            requirement_id: Some(sid("req_direct")),
-            resolution_id: Some(sid("res_indirect")),
+            requirement_ids: vec![sid("req_direct")],
+            resolution_ids: vec![sid("res_indirect")],
             statement: "Both producers are recorded".into(),
             status: RuleStatus::Active,
             severity: RuleSeverity::High,
@@ -118,26 +116,25 @@ fn both_requirements_bring_their_own_sources() {
     );
 }
 
-/// Exactly the edges the walk crossed: two produces, one resolves, two
-/// references. The `needs` edge from `req_resolved` to `res_indirect` is in
-/// the scope but off the walk, and the rule's own id is never mistaken for a
-/// requirement.
+/// Exactly the rows the walk crossed: the rule's two lists, the
+/// resolution's requirement, and the two citations. The rule's own id is
+/// never mistaken for a requirement.
 #[test]
-fn only_the_walked_edges_are_returned() {
+fn only_the_walked_relations_are_returned() {
     let (_dir, layout, scope) = empty_layout();
     seed_two_producers(&layout, &scope);
 
     let trace = trace_rule(&layout, &scope, &sid("rule_two_producers")).unwrap();
 
     let mut walked = trace
-        .edges
+        .relations
         .iter()
-        .map(|edge| {
+        .map(|row| {
             format!(
-                "{:?} {} -> {}",
-                edge.edge_type,
-                edge.from_id.as_str(),
-                edge.to_id.as_str()
+                "{} {} -> {}",
+                row.relation,
+                row.owner_id.as_str(),
+                row.target_id.as_str()
             )
         })
         .collect::<Vec<_>>();
@@ -145,14 +142,11 @@ fn only_the_walked_edges_are_returned() {
     assert_eq!(
         walked,
         sorted(vec![
-            format!("{:?} req_direct -> rule_two_producers", EdgeType::Produces),
-            format!(
-                "{:?} res_indirect -> rule_two_producers",
-                EdgeType::Produces
-            ),
-            format!("{:?} res_indirect -> req_resolved", EdgeType::Resolves),
-            format!("{:?} source_direct -> req_direct", EdgeType::References),
-            format!("{:?} source_resolved -> req_resolved", EdgeType::References),
+            "requirement_ids rule_two_producers -> req_direct".to_string(),
+            "resolution_ids rule_two_producers -> res_indirect".to_string(),
+            "requirement_ids res_indirect -> req_resolved".to_string(),
+            "cites req_direct -> source_direct".to_string(),
+            "cites req_resolved -> source_resolved".to_string(),
         ])
     );
     assert!(!trace

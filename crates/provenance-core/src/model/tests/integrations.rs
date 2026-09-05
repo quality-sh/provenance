@@ -25,7 +25,7 @@ fn verification_methods_round_trip_as_the_six_method_words() {
 #[test]
 fn verification_binding_serializes_its_explicit_key_and_code_facts() {
     let binding = VerificationBinding {
-        schema_version: crate::SchemaVersion(1),
+        schema_version: crate::SUPPORTED_SCHEMA_VERSION,
         scope_id: ScopeId::new("default").unwrap(),
         id: StableId::new("verification_binding_one").unwrap(),
         rule_id: StableId::new("rule_expiry").unwrap(),

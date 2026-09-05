@@ -2,6 +2,7 @@ use super::super::load_corpus;
 use super::fixtures::*;
 use camino::Utf8PathBuf;
 use provenance_core::RequirementStatus;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 #[test]
 fn load_corpus_reads_state_from_disk() {
@@ -12,7 +13,7 @@ fn load_corpus_reads_state_from_disk() {
     std::fs::create_dir_all(manifest_path.parent().unwrap()).unwrap();
     std::fs::write(
         &manifest_path,
-        r#"{"schema_version":1,"disposition_actor_ids":[],"scopes":[{"id":"default","path_prefix":"."}]}"#,
+        serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"disposition_actor_ids":[],"scopes":[{"id":"default","path_prefix":"."}]}).to_string(),
     )
     .unwrap();
     provenance_store::jsonl::write_jsonl_atomic(

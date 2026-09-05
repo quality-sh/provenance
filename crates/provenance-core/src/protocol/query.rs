@@ -1,7 +1,7 @@
 use camino::Utf8PathBuf;
 use serde::{Deserialize, Serialize};
 
-use crate::model::{EdgeType, NodeType};
+use crate::model::NodeType;
 
 use super::{QUERY_DEFAULT_LIMIT, TRACE_DEFAULT_MAX_DEPTH};
 
@@ -13,10 +13,11 @@ const fn default_max_depth() -> usize {
     TRACE_DEFAULT_MAX_DEPTH
 }
 
-/// Which way a query follows an edge.
+/// Which way a query follows a relation.
 ///
-/// `out` leaves the named record along the edge it starts, `in` arrives at
-/// it, and `both` reads the edge from either end.
+/// `out` reads the relations the named record holds in its own fields, `in`
+/// reads the relations other records hold toward it, and `both` reads every
+/// relation from either end.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Direction {
@@ -75,7 +76,7 @@ pub struct NeighborsQuery {
     #[serde(default)]
     pub direction: Direction,
     #[serde(default)]
-    pub edge_types: Vec<EdgeType>,
+    pub relations: Vec<String>,
     #[serde(default)]
     pub include_retired: bool,
     #[serde(default = "default_limit")]
@@ -94,7 +95,7 @@ pub struct TraceQuery {
     #[serde(default)]
     pub direction: Direction,
     #[serde(default)]
-    pub edge_types: Vec<EdgeType>,
+    pub relations: Vec<String>,
     #[serde(default = "default_max_depth")]
     pub max_depth: usize,
     #[serde(default)]

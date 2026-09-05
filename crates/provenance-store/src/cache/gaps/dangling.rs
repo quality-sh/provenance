@@ -2,139 +2,108 @@ use super::{
     graph_query::GraphQuery,
     model::{node_type_word, GapItem, GapKind},
 };
-use provenance_core::{Edge, EdgeType, NodeType, StableId};
+use provenance_core::model::relations::{link_target, RelationOwner};
+use provenance_core::{ArtifactLink, NodeType, StableId};
 
+/// Every declared reference field of every owner kind, then the hand-walked
+/// links and thread parents.
 pub(super) fn add_reference_gaps(query: &GraphQuery<'_, '_>, gaps: &mut Vec<GapItem>) {
-    add_requirement_source_refs(query, gaps);
-    add_source_refs(query, gaps);
-    add_resolution_refs(query, gaps);
-    add_topic_refs(query, gaps);
-    add_question_refs(query, gaps);
-    add_thread_refs(query, gaps);
-    add_edge_refs(query, gaps);
-}
-
-fn add_requirement_source_refs(query: &GraphQuery<'_, '_>, gaps: &mut Vec<GapItem>) {
-    for requirement in query.graph.requirements {
-        for reference in &requirement.source_refs {
-            if !query.source_exists(&reference.source_id) {
-                gaps.push(
-                    GapItem::new(
-                        GapKind::DanglingReference,
-                        NodeType::Requirement,
-                        &requirement.id,
-                        format!(
-                            "source ref points at missing source {}",
-                            reference.source_id.as_str()
-                        ),
-                    )
-                    .with_related(NodeType::Source, &reference.source_id),
-                );
-            }
-        }
-    }
-}
-
-fn add_source_refs(query: &GraphQuery<'_, '_>, gaps: &mut Vec<GapItem>) {
-    for source in query.graph.sources {
-        if let Some(id) = &source.superseded_by {
-            if !query.source_exists(id) {
-                gaps.push(
-                    GapItem::new(
-                        GapKind::DanglingReference,
-                        NodeType::Source,
-                        &source.id,
-                        format!("superseded by missing source {}", id.as_str()),
-                    )
-                    .with_related(NodeType::Source, id),
-                );
-            }
-        }
-    }
-}
-
-fn add_resolution_refs(query: &GraphQuery<'_, '_>, gaps: &mut Vec<GapItem>) {
-    for resolution in query.graph.resolutions {
-        if let Some(id) = &resolution.superseded_by {
-            if !query.resolution_exists(id) {
-                gaps.push(
-                    GapItem::new(
-                        GapKind::DanglingReference,
-                        NodeType::Resolution,
-                        &resolution.id,
-                        format!("superseded by missing resolution {}", id.as_str()),
-                    )
-                    .with_related(NodeType::Resolution, id),
-                );
-            }
-        }
-    }
-}
-
-fn add_topic_refs(query: &GraphQuery<'_, '_>, gaps: &mut Vec<GapItem>) {
+    add_declared_refs(query, query.graph.sources, gaps);
+    add_declared_refs(query, query.graph.requirements, gaps);
+    add_declared_refs(query, query.graph.resolutions, gaps);
+    add_declared_refs(query, query.graph.rules, gaps);
+    add_declared_refs(query, query.graph.topics, gaps);
+    add_declared_refs(query, query.graph.questions, gaps);
+    add_declared_refs(query, query.graph.boundaries, gaps);
     for topic in query.graph.topics {
-        if !query.requirement_exists(&topic.requirement_id) {
-            gaps.push(
-                GapItem::new(
-                    GapKind::DanglingReference,
-                    NodeType::Topic,
-                    &topic.id,
-                    format!(
-                        "topic points at missing requirement {}",
-                        topic.requirement_id.as_str()
-                    ),
-                )
-                .with_related(NodeType::Requirement, &topic.requirement_id),
-            );
+        add_link_refs(query, NodeType::Topic, &topic.id, &topic.links, None, gaps);
+    }
+    for question in query.graph.questions {
+        add_link_refs(
+            query,
+            NodeType::Question,
+            &question.id,
+            &question.links,
+            Some(&question.requirement_id),
+            gaps,
+        );
+    }
+    add_thread_refs(query, gaps);
+}
+
+/// One gap per reference whose target is not in the scope, worded from
+/// the declaration: `<relation> points at missing <kind> <id>`.
+fn add_declared_refs<T: RelationOwner>(
+    query: &GraphQuery<'_, '_>,
+    records: &[T],
+    gaps: &mut Vec<GapItem>,
+) {
+    for record in records {
+        for (name, target) in record.references() {
+            let decl = provenance_core::model::relations::declaration_of(T::relations(), name)
+                .expect("references name declared fields");
+            if query.node_exists(decl.target, target) {
+                continue;
+            }
+            let mut gap = GapItem::new(
+                GapKind::DanglingReference,
+                T::OWNER,
+                record.id(),
+                format!(
+                    "{name} points at missing {} {}",
+                    node_type_word(decl.target),
+                    target.as_str()
+                ),
+            )
+            .with_related(decl.target, target);
+            if let Some(requirement) = shaping_requirement(T::OWNER, record) {
+                gap = gap.with_requirement(requirement);
+            }
+            gaps.push(gap);
         }
     }
 }
 
-fn add_question_refs(query: &GraphQuery<'_, '_>, gaps: &mut Vec<GapItem>) {
-    for question in query.graph.questions {
-        if !query.topic_exists(&question.topic_id) {
-            gaps.push(
-                GapItem::new(
-                    GapKind::DanglingReference,
-                    NodeType::Question,
-                    &question.id,
-                    format!(
-                        "question points at missing topic {}",
-                        question.topic_id.as_str()
-                    ),
-                )
-                .with_related(NodeType::Topic, &question.topic_id)
-                .with_requirement(&question.requirement_id),
-            );
+/// A question's gap names its requirement so prime can group it.
+fn shaping_requirement<T: RelationOwner>(owner: NodeType, record: &T) -> Option<&StableId> {
+    if owner != NodeType::Question {
+        return None;
+    }
+    record
+        .references()
+        .into_iter()
+        .find(|(name, _)| *name == "requirement_id")
+        .map(|(_, id)| id)
+}
+
+fn add_link_refs(
+    query: &GraphQuery<'_, '_>,
+    owner: NodeType,
+    id: &StableId,
+    links: &[ArtifactLink],
+    requirement: Option<&StableId>,
+    gaps: &mut Vec<GapItem>,
+) {
+    for link in links {
+        let target = link_target(link);
+        if query.node_exists(target, &link.target_id) {
+            continue;
         }
-        if !query.requirement_exists(&question.requirement_id) {
-            gaps.push(
-                GapItem::new(
-                    GapKind::DanglingReference,
-                    NodeType::Question,
-                    &question.id,
-                    format!(
-                        "question points at missing requirement {}",
-                        question.requirement_id.as_str()
-                    ),
-                )
-                .with_related(NodeType::Requirement, &question.requirement_id),
-            );
+        let mut gap = GapItem::new(
+            GapKind::DanglingReference,
+            owner,
+            id,
+            format!(
+                "links points at missing {} {}",
+                node_type_word(target),
+                link.target_id.as_str()
+            ),
+        )
+        .with_related(target, &link.target_id);
+        if let Some(requirement) = requirement {
+            gap = gap.with_requirement(requirement);
         }
-        if let Some(id) = &question.resolution_id {
-            if !query.resolution_exists(id) {
-                gaps.push(
-                    GapItem::new(
-                        GapKind::DanglingReference,
-                        NodeType::Question,
-                        &question.id,
-                        format!("question points at missing resolution {}", id.as_str()),
-                    )
-                    .with_related(NodeType::Resolution, id)
-                    .with_requirement(&question.requirement_id),
-                );
-            }
-        }
+        gaps.push(gap);
     }
 }
 
@@ -153,73 +122,5 @@ fn add_thread_refs(query: &GraphQuery<'_, '_>, gaps: &mut Vec<GapItem>) {
                 ),
             ));
         }
-    }
-}
-
-fn add_edge_refs(query: &GraphQuery<'_, '_>, gaps: &mut Vec<GapItem>) {
-    for edge in query.edges() {
-        let from_exists = query.node_exists(edge.from_type, &edge.from_id);
-        let to_exists = query.node_exists(edge.to_type, &edge.to_id);
-        if !from_exists {
-            add_edge_endpoint_gap(
-                gaps,
-                edge,
-                (edge.from_type, &edge.from_id),
-                (edge.to_type, &edge.to_id),
-                to_exists,
-                "from",
-            );
-        }
-        if !to_exists {
-            add_edge_endpoint_gap(
-                gaps,
-                edge,
-                (edge.to_type, &edge.to_id),
-                (edge.from_type, &edge.from_id),
-                from_exists,
-                "to",
-            );
-        }
-    }
-}
-
-fn add_edge_endpoint_gap(
-    gaps: &mut Vec<GapItem>,
-    edge: &Edge,
-    missing: (NodeType, &StableId),
-    other: (NodeType, &StableId),
-    other_exists: bool,
-    direction: &str,
-) {
-    let anchor = if other_exists { other } else { missing };
-    let related = if other_exists { missing } else { other };
-    gaps.push(
-        GapItem::new(
-            GapKind::DanglingReference,
-            anchor.0,
-            anchor.1,
-            format!(
-                "{} edge {} points {direction} missing {} {}",
-                edge_type_word(edge.edge_type),
-                edge.id.as_str(),
-                node_type_word(missing.0),
-                missing.1.as_str()
-            ),
-        )
-        .with_related(related.0, related.1),
-    );
-}
-
-const fn edge_type_word(edge_type: EdgeType) -> &'static str {
-    match edge_type {
-        EdgeType::References => "references",
-        EdgeType::RefinesInto => "refines_into",
-        EdgeType::DependsOn => "depends_on",
-        EdgeType::Contradicts => "contradicts",
-        EdgeType::Supersedes => "supersedes",
-        EdgeType::Needs => "needs",
-        EdgeType::Resolves => "resolves",
-        EdgeType::Spawns => "spawns",
-        EdgeType::Produces => "produces",
     }
 }

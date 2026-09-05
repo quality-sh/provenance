@@ -16,6 +16,7 @@ import {
   type SourceState,
 } from "./bound-declarations.js";
 import { registerSpec, type SpecHandle } from "./spec.js";
+import { STATE_SCHEMA_VERSION } from "./protocol.js";
 
 interface Collected<State> {
   readonly value: object;
@@ -33,9 +34,17 @@ export function buildBoundSpec(
   const requirements = uniqueRoots(context, roots);
   const sources = new Map<string, Collected<SourceState>>();
   const rules = new Map<string, CollectedRule>();
+  const requirementKeys = new Set(requirements.map((value) => requirementState(value).key));
   for (const requirement of requirements) {
     const state = requirementState(requirement);
     requireText(`Requirement \`${state.key}\` statement`, state.text);
+    for (const named of relatedKeys(state)) {
+      if (!requirementKeys.has(named)) {
+        throw new Error(
+          `Requirement \`${state.key}\` names Requirement \`${named}\` not included in the spec`,
+        );
+      }
+    }
     for (const source of state.sources) collectSource(context, sources, source);
     collectRules(context, rules, state);
   }
@@ -126,7 +135,10 @@ function compileDocument(
   sources: ReadonlyMap<string, Collected<SourceState>>,
   rules: ReadonlyMap<string, CollectedRule>,
 ): Omit<TypedSpecDocument, "declared_by"> {
-  const sourceRecords = [...sources.values()].map(({ state }) => state.declaration!);
+  const sourceRecords = [...sources.values()].map<SourceDeclaration>(({ state }) => ({
+    ...state.declaration!,
+    ...listField("supersedes", state.supersedes),
+  }));
   const requirementRecords = requirements.map<RequirementDeclaration>((value) => {
     const state = requirementState(value);
     return {
@@ -135,6 +147,10 @@ function compileDocument(
       statement: state.text!,
       description: state.description,
       sources: state.sources.map((source) => sourceState(source).key).sort(),
+      refines: state.refines,
+      ...listField("depends_on", state.dependsOn),
+      ...listField("supersedes", state.supersedes),
+      spawned_by: state.spawnedBy,
     };
   });
   const ruleRecords = [...rules.values()].map<RuleDeclaration>(({ state, parents }) => ({
@@ -144,6 +160,7 @@ function compileDocument(
     requirements: [...parents].sort(),
     statement: state.text!,
     implementation: state.implementation,
+    ...listField("resolution_ids", state.resolutionIds),
   }));
   sourceRecords.sort(byKey);
   requirementRecords.sort(byKey);
@@ -163,7 +180,7 @@ function compileDocument(
       .map(({ state }) => ({ kind: "rule" as const, id: state.explicitId! })),
   ];
   return {
-    schema_version: 1,
+    schema_version: STATE_SCHEMA_VERSION,
     spec,
     ...(adoptUnowned.length === 0 ? {} : { adopt_unowned: adoptUnowned }),
     sources: sourceRecords,
@@ -174,4 +191,24 @@ function compileDocument(
 
 function byKey(left: { key: string }, right: { key: string }): number {
   return left.key.localeCompare(right.key);
+}
+
+/** The keys a requirement's relations name in the same spec. */
+function relatedKeys(state: RequirementState): string[] {
+  return [
+    ...(state.refines === undefined ? [] : [state.refines]),
+    ...(state.dependsOn ?? []),
+    ...(state.supersedes ?? []),
+  ];
+}
+
+/** A list field travels only when something is in it; an omitted list
+ *  leaves the canonical record untouched. */
+function listField<Name extends string>(
+  name: Name,
+  values: readonly string[] | undefined,
+): { [Key in Name]?: string[] } {
+  return values === undefined || values.length === 0
+    ? {}
+    : ({ [name]: [...values].sort() } as { [Key in Name]?: string[] });
 }

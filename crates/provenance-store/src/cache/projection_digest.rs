@@ -14,9 +14,8 @@ use serde::Serialize;
 
 /// The content digest of one (family, scope) record list.
 ///
-/// `scope_id` is empty for the global edges family. The serialized form of
-/// this struct is the revision digest's input, so its field set is part of
-/// the digest contract.
+/// The serialized form of this struct is the revision digest's input, so
+/// its field set is part of the digest contract.
 #[derive(Debug, Clone, Serialize)]
 pub struct FamilyContentDigest {
     #[serde(skip)]
@@ -38,17 +37,12 @@ pub fn family_content_digests(
     sorted.sort_by(|left, right| left.as_str().cmp(right.as_str()));
     let mut digests = Vec::new();
     for family in ProjectionFamily::ALL {
-        let scope_keys: Vec<Option<&ScopeId>> = if family.is_scoped() {
-            sorted.iter().map(|scope| Some(*scope)).collect()
-        } else {
-            vec![None]
-        };
-        for scope in scope_keys {
+        for scope in &sorted {
             let (bytes, record_count) = family.canonical_records(store, scope)?;
             digests.push(FamilyContentDigest {
                 kind: family,
                 family: family.family_name(),
-                scope_id: scope.map(ScopeId::as_str).unwrap_or_default().to_string(),
+                scope_id: scope.as_str().to_string(),
                 digest: canonical_digest::digest(&bytes),
                 record_count,
             });
@@ -92,12 +86,7 @@ pub fn revision_digest_from_stored_rows(
     scopes.dedup();
     let mut families = Vec::new();
     for family in ProjectionFamily::ALL {
-        let scope_keys: Vec<&str> = if family.is_scoped() {
-            scopes.clone()
-        } else {
-            vec![""]
-        };
-        for scope_id in scope_keys {
+        for scope_id in scopes.clone() {
             let (digest, record_count) =
                 by_key
                     .get(&(family.family_name(), scope_id))

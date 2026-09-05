@@ -25,17 +25,17 @@ same aggregate validator a rebuild runs, and a refusal commits nothing.
 It then hashes the complete canonical bytes of each hash unit. There is
 one unit per manifest scope, which is the scope's directory, and one
 global unit, which is every regular canonical file under `state/` outside
-`scopes/`: the manifest, the edge shards, and the dictionary. A unit
+`scopes/`: the manifest and the dictionary. A unit
 digest frames the relative path and the bytes of every file in sorted
 path order. It ignores the temporary `.tmp*` files an interrupted atomic
 write leaves beside a shard.
 
 An unchanged unit is not parsed. A changed scope unit parses that scope's
 families again and rewrites only the families whose content digest moved.
-A changed global unit reloads the edges table whole. Edge rows belong to
-the global unit and are never deleted on a scope change or a scope
-departure. A departed scope loses its rows in the eighteen scoped tables
-and its digest rows. A new scope loads. The projection keeps the content
+A changed global unit updates its digest row; no family derives from it. A
+changed scope unit also reloads the scope's `relations` rows for each owner
+kind whose family moved. A departed scope loses its rows in the eighteen
+tables, its `relations` rows, and its digest rows. A new scope loads. The projection keeps the content
 digest and record count for each family and scope, so the revision digest
 is reassembled from stored rows without parsing a shard.
 
@@ -63,7 +63,7 @@ interleave with a projection write.
 | Family | Derivation | Files read |
 |---|---|---|
 | sources, domains, requirements, boundaries, topics, questions, resolutions, rules | `read_jsonl(<shard>)` | own shard |
-| edges | `read_edge_shards` | every `edges/*.jsonl` (global unit) |
+| relations | derived from the seven owner kinds' reference fields; no digest row | the scope's own shards |
 | threads | `read_jsonl(threads.jsonl)` | own shard |
 | messages | `read_message_shards` | every `threads/YYYY-MM.jsonl` in the scope |
 | implementation_bindings, verification_bindings | `read_jsonl(<shard>)` | own shard |

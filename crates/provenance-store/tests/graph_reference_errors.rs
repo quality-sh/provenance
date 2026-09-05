@@ -1,3 +1,4 @@
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_core::{Manifest, RepoPathPrefix, ScopeId};
 use provenance_macros::verifies;
 use provenance_store::{
@@ -56,7 +57,7 @@ fn committed_store() -> tempfile::TempDir {
 /// replaced with the value under test.
 fn reference_document(field: &str, value: serde_json::Value) -> Vec<u8> {
     let mut document = json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "reference_id": format!("grf1_{}", "0".repeat(64)),
         "repository_id": format!("git1_{}", "1".repeat(64)),
         "store_path": ".provenance/state",
@@ -84,7 +85,7 @@ fn well_formed_reference_is_accepted() {
     let reference = GraphReference::from_json(&reference_document("scope_id", json!("default")))
         .expect("a well-formed reference document is accepted");
 
-    assert_eq!(reference.schema_version, 1);
+    assert_eq!(reference.schema_version, SUPPORTED_SCHEMA_VERSION.0);
     assert_eq!(reference.store_path, ".provenance/state");
     assert_eq!(reference.correlation, None);
 }
@@ -214,22 +215,28 @@ fn correlation_must_be_whole_when_present() {
 
 #[test]
 fn malformed_reference_is_typed_as_incomplete() {
-    let error = GraphReference::from_json(br#"{"schema_version":1}"#).unwrap_err();
+    let error = GraphReference::from_json(
+        serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0})
+            .to_string()
+            .as_bytes(),
+    )
+    .unwrap_err();
     assert!(matches!(error, GraphReferenceError::Incomplete { .. }));
 }
 
 #[test]
 fn unsupported_reference_version_is_typed_as_incomplete() {
-    let document = br#"{
-        "schema_version": 2,
+    let document = serde_json::json!({
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0 + 1,
         "reference_id": "grf1_x",
         "repository_id": "git1_x",
         "store_path": ".provenance/state",
         "scope_id": "default",
         "commit": "0000000000000000000000000000000000000000",
         "graph_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
-    }"#;
-    let error = GraphReference::from_json(document).unwrap_err();
+    })
+    .to_string();
+    let error = GraphReference::from_json(document.as_bytes()).unwrap_err();
     assert!(matches!(error, GraphReferenceError::Incomplete { .. }));
 }
 
@@ -241,7 +248,7 @@ fn store_api_rejects_invalid_reference_contract() {
     let reference = references.issue("default", None, None).unwrap();
 
     let mut unsupported = reference.clone();
-    unsupported.schema_version = 2;
+    unsupported.schema_version = SUPPORTED_SCHEMA_VERSION.0 + 1;
     assert!(matches!(
         references.show(&unsupported),
         Err(GraphReferenceError::Incomplete { .. })
@@ -330,7 +337,7 @@ fn exact_export_rejects_non_canonical_graph_families() {
 /// read, well before the digest is looked at.
 fn export_document(graph: &serde_json::Value) -> serde_json::Value {
     json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "operation": "exact-export",
         "reference_id": format!("grf1_{}", "0".repeat(64)),
         "graph_digest": derived_digest(graph),
@@ -347,7 +354,7 @@ fn derived_digest(graph: &serde_json::Value) -> String {
 
 fn empty_graph() -> serde_json::Value {
     json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope": {"id": "default", "path_prefix": "."},
         "sources": [],
         "domains": [],
@@ -356,8 +363,7 @@ fn empty_graph() -> serde_json::Value {
         "topics": [],
         "questions": [],
         "resolutions": [],
-        "rules": [],
-        "edges": []
+        "rules": []
     })
 }
 
@@ -365,7 +371,7 @@ fn empty_graph() -> serde_json::Value {
 fn exact_export_rejects_unsupported_record_schema_versions() {
     let mut graph = empty_graph();
     graph["sources"] = json!([{
-        "schema_version": 2,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0 + 1,
         "scope_id": "default",
         "id": "source_policy",
         "name": "Policy",
@@ -377,32 +383,39 @@ fn exact_export_rejects_unsupported_record_schema_versions() {
     let error = ExactExport::from_json(&serde_json::to_vec(&document).unwrap()).unwrap_err();
     assert!(matches!(error, GraphReferenceError::Incomplete { .. }));
     assert!(error.to_string().contains("source 'source_policy'"));
-    assert!(error.to_string().contains("schema_version 2"));
+    assert!(error.to_string().contains(&format!(
+        "schema_version {}",
+        SUPPORTED_SCHEMA_VERSION.0 + 1
+    )));
 }
 
 #[test]
 fn exact_export_rejection_names_the_unsupported_document_version() {
     let mut document = export_document(&empty_graph());
-    document["schema_version"] = json!(2);
+    document["schema_version"] = json!(SUPPORTED_SCHEMA_VERSION.0 + 1);
 
     let error = ExactExport::from_json(&serde_json::to_vec(&document).unwrap()).unwrap_err();
 
-    assert!(error
-        .to_string()
-        .contains("exact export has unsupported schema_version 2; expected 1"));
+    assert!(error.to_string().contains(&format!(
+        "exact export has unsupported schema_version {}; expected {}",
+        SUPPORTED_SCHEMA_VERSION.0 + 1,
+        SUPPORTED_SCHEMA_VERSION.0
+    )));
 }
 
 #[test]
 fn exact_export_rejection_names_the_unsupported_graph_version() {
     let mut graph = empty_graph();
-    graph["schema_version"] = json!(2);
+    graph["schema_version"] = json!(SUPPORTED_SCHEMA_VERSION.0 + 1);
     let document = export_document(&graph);
 
     let error = ExactExport::from_json(&serde_json::to_vec(&document).unwrap()).unwrap_err();
 
-    assert!(error
-        .to_string()
-        .contains("graph has unsupported schema_version 2; expected 1"));
+    assert!(error.to_string().contains(&format!(
+        "graph has unsupported schema_version {}; expected {}",
+        SUPPORTED_SCHEMA_VERSION.0 + 1,
+        SUPPORTED_SCHEMA_VERSION.0
+    )));
 }
 
 #[test]
@@ -410,7 +423,7 @@ fn exact_export_rejection_names_the_unsupported_graph_version() {
 fn exact_export_rejects_collaboration_metadata() {
     let mut graph = empty_graph();
     graph["sources"] = json!([{
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "source_policy",
         "name": "Policy",

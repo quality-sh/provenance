@@ -3,7 +3,7 @@ use super::collaboration::Thread;
 #[test]
 fn resolved_threads_roundtrip_as_v1_state() {
     let thread = serde_json::json!({
-        "schema_version": 1,
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "default",
         "id": "thread_rule_rule_sah_001",
         "parent": {

@@ -7,7 +7,7 @@ mod state_adapter;
 
 use provenance_macros::rule;
 
-pub use graph_query::{GapGraph, GraphQuery, RuleProducer};
+pub use graph_query::{GapGraph, GraphQuery};
 pub use model::{node_type_word, GapItem, GapKind};
 pub use state_adapter::find_gaps;
 pub(in crate::cache) use state_adapter::GraphRecords;
@@ -24,8 +24,6 @@ pub fn compute_gaps(graph: &GapGraph<'_>) -> Vec<GapItem> {
     let query = GraphQuery::new(graph);
     let mut gaps = Vec::new();
     frontier::add_requirement_gaps(&query, &mut gaps);
-    frontier::add_resolution_gaps(&query, &mut gaps);
-    frontier::add_rule_gaps(&query, &mut gaps);
     frontier::add_source_gaps(&query, &mut gaps);
     dangling::add_reference_gaps(&query, &mut gaps);
     contradiction::add_gaps(&query, &mut gaps);

@@ -16,6 +16,8 @@ fn at_depth(answer: &Value, depth: u64) -> Vec<String> {
     ids
 }
 
+/// A source is named by the requirements that cite it, and each of those
+/// by the rule's list, so the walk to the rules reads `in` at every hop.
 #[test]
 fn trace_walks_from_a_source_to_the_rules_it_grounds() {
     let directory = init_repo();
@@ -25,10 +27,13 @@ fn trace_walks_from_a_source_to_the_rules_it_grounds() {
     let answer = sdk(
         repo,
         "trace",
-        &json!({"id": ids.source.as_str(), "direction": "out"}),
+        &json!({"id": ids.source.as_str(), "direction": "in"}),
     );
 
-    assert_eq!(answer["protocol_version"], 5);
+    assert_eq!(
+        answer["protocol_version"],
+        provenance_core::SDK_PROTOCOL_VERSION
+    );
     assert_eq!(answer["operation"], "trace");
     assert_eq!(answer["id"], ids.source);
     assert_eq!(answer["max_depth"], 3);
@@ -47,7 +52,7 @@ fn trace_stops_at_the_depth_the_caller_names() {
     let answer = sdk(
         repo,
         "trace",
-        &json!({"id": ids.source, "direction": "out", "max_depth": 1}),
+        &json!({"id": ids.source, "direction": "in", "max_depth": 1}),
     );
 
     assert_eq!(answer["max_depth"], 1);
@@ -55,13 +60,15 @@ fn trace_stops_at_the_depth_the_caller_names() {
     assert!(at_depth(&answer, 2).is_empty());
 }
 
+/// The rule's own list names its requirements, and each requirement's own
+/// citation names the source: the walk back reads `out` at every hop.
 #[test]
 fn trace_walks_back_from_a_rule_to_the_source_behind_it() {
     let directory = init_repo();
     let repo = directory.path().to_str().unwrap();
     let ids = apply_shared_rule(&directory);
 
-    let answer = sdk(repo, "trace", &json!({"id": ids.rule, "direction": "in"}));
+    let answer = sdk(repo, "trace", &json!({"id": ids.rule, "direction": "out"}));
 
     assert_eq!(at_depth(&answer, 2), vec![ids.source]);
 }

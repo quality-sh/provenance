@@ -1,3 +1,5 @@
+use super::common::stable_ids;
+use super::references;
 use crate::cli::knowledge::SourcesCommand;
 use crate::output;
 use provenance_core::{ScopeId, SourceType, StableId};
@@ -19,7 +21,7 @@ pub(super) fn handle(command: SourcesCommand) -> anyhow::Result<()> {
             commit_pin,
             effective_date,
             review_date,
-            superseded_by,
+            supersedes,
             origin_thread,
             origin_message,
             format,
@@ -35,12 +37,13 @@ pub(super) fn handle(command: SourcesCommand) -> anyhow::Result<()> {
                     commit_pin,
                     effective_date,
                     review_date,
-                    superseded_by: superseded_by.map(StableId::new).transpose()?,
+                    supersedes: stable_ids(supersedes)?,
                     origin_thread: origin_thread.map(StableId::new).transpose()?,
                     origin_message: origin_message.map(StableId::new).transpose()?,
                 })?;
             output::print(format, &source)?;
         }
+        SourcesCommand::Supersedes { command } => references::source_supersedes(command)?,
     }
     Ok(())
 }

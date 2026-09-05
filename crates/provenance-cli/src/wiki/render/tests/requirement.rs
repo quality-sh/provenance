@@ -25,6 +25,42 @@ fn requirement_page_carries_the_mockup_structure() {
     assert!(!html.contains(">rule_sah_inv_016</a>"));
 }
 
+/// The requirement's own `supersedes` and `depends_on`, and the reverse
+/// supersession, render as classification rows like the other kinds.
+#[test]
+fn requirement_page_renders_supersedes_depends_on_and_superseded_by_rows() {
+    let page = requirement_fixture();
+    let plain = render_requirement("default", &page);
+    assert!(!plain.contains(">Supersedes</span>"), "{plain}");
+    assert!(!plain.contains(">Superseded by</span>"), "{plain}");
+
+    let mut page = requirement_fixture();
+    page.supersedes = vec![link(
+        PageKind::Requirement,
+        "req_whole_claim",
+        "The whole-claim rule",
+    )];
+    page.depends_on = vec![link(
+        PageKind::Requirement,
+        "req_claim_lines",
+        "Claim lines shall exist",
+    )];
+    page.superseded_by = Some(link(
+        PageKind::Requirement,
+        "req_split_v2",
+        "The split, second revision",
+    ));
+
+    let html = render_requirement("default", &page);
+
+    assert!(html.contains(">Supersedes</span>"), "{html}");
+    assert!(html.contains(">Depends on</span>"), "{html}");
+    assert!(html.contains(">Superseded by</span>"), "{html}");
+    assert!(html.contains(">The whole-claim rule</a>"), "{html}");
+    assert!(html.contains(">Claim lines shall exist</a>"), "{html}");
+    assert!(html.contains(">The split, second revision</a>"), "{html}");
+}
+
 #[test]
 fn produced_rule_titles_are_disambiguated_across_the_whole_page() {
     let mut page = requirement_fixture();

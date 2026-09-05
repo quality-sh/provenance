@@ -89,9 +89,9 @@ resolve the questions you create.
      --format json
    ```
 
-2. **Attach known sources to the anchor.** Requirements with neither a valid embedded
-   source reference nor a valid `references` edge remain on the missing-source frontier,
-   so add source references when evidence already exists.
+2. **Attach known sources to the anchor.** Requirements with no valid source reference
+   remain on the missing-source frontier, so add source references when evidence already
+   exists.
 
    ```sh
    provenance requirements source-ref add --scope <scope> \
@@ -173,7 +173,7 @@ supplies rules and computed gaps (plus active threads only with `--include-threa
 the anchor graph, fog, boundaries, topics, and questions with their separate commands. The
 shaping-focused subset of the computed graph frontier includes:
 
-- requirements with neither a valid source reference nor a valid `references` edge;
+- requirements with no valid source reference;
 - unresolved `contradicts` pairs;
 - resolved requirements (including those with a resolving resolution) with no downstream
   Rule;
@@ -251,10 +251,9 @@ provenance requirements create --scope <scope> \
   --status discovery \
   --format json
 
-provenance edges create --scope <scope> \
-  --type spawns \
-  --from-type resolution --from-id res_<stable_slug> \
-  --to-type requirement --to-id req_<spawned_slug> \
+provenance requirements spawned-by set --scope <scope> \
+  --requirement-id req_<spawned_slug> \
+  --target-id res_<stable_slug> \
   --format json
 
 provenance questions answer --scope <scope> \
@@ -484,7 +483,7 @@ Before moving to the next question, verify the current answer has been handled:
 - each precise atomic behavioural obligation is landed as a Rule; any known primary
   implementation and evidence carry `#[rule]` and `#[verifies]` bindings, and
   `coverage scan --validate-rules` reports any remaining absence honestly;
-- spawned requirements are created and linked with `spawns` or `refines_into` edges;
+- spawned requirements are created and tied back with `spawned_by` or `refines`;
 - boundaries/out-of-scope rejections are explicit;
 - source references and evidence are attached where they exist;
 - proposal definitions remain immutable `proposed` records; assertion lineage uses assertion
