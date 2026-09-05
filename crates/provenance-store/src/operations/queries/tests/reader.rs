@@ -212,7 +212,11 @@ async fn every_answer_carries_a_stamp_at_the_stored_serial() {
                 ],
                 &[],
             ),
-            "impact" | "resolve_symbol" => (&[], &["canonical", "scanned_sites"]),
+            "impact" => (
+                &["relations", "requirements", "rules", "sources"],
+                &["scanned_sites"],
+            ),
+            "resolve_symbol" => (&[], &["canonical", "scanned_sites"]),
             "evidence" => (&[], &["canonical", "diff", "verification_runs"]),
             "stale" => (&[], &["canonical", "diff"]),
             _ => (&[], &["canonical"]),

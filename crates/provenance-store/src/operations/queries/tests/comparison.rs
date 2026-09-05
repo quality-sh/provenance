@@ -43,10 +43,12 @@ fn settle<T: serde::Serialize>(answer: anyhow::Result<T>) -> Value {
     }
 }
 
+/// The baseline side. Its result types are the served ones, so the
+/// additive fields sit on it at their defaults and are stripped too.
 fn baseline_answer(store: &TestStore, request: &Request, scans: &[FileScan]) -> Value {
     let state = store.state_store();
     let (repo, scope) = (store.root.as_path(), &store.scope);
-    match request.clone() {
+    let mut answer = match request.clone() {
         Request::Get(query) => settle(baseline::records::get(&state, scope, query)),
         Request::Search(query) => settle(baseline::records::search(&state, scope, query)),
         Request::Neighbors(query) => settle(baseline::walk::neighbors(&state, scope, query)),
@@ -61,7 +63,9 @@ fn baseline_answer(store: &TestStore, request: &Request, scans: &[FileScan]) -> 
         Request::ResolveSymbol(query) => settle(baseline::symbols::resolve(
             repo, &state, scope, query, scans,
         )),
-    }
+    };
+    strip_additive(&mut answer);
+    answer
 }
 
 /// One request through the reader under the given policy, as a value; a
@@ -77,7 +81,7 @@ pub async fn served_value(store: &TestStore, request: &Request, policy: ReadPoli
                 Request::Search(query) => settle(records::search(ctx, query).await),
                 Request::Neighbors(query) => settle(walk::neighbors(ctx, query).await),
                 Request::Trace(query) => settle(walk::trace(ctx, query).await),
-                Request::Impact(query) => settle(impact::impact(ctx, &scope, query)),
+                Request::Impact(query) => settle(impact::impact(ctx, query).await),
                 Request::Evidence(query) => settle(evidence::evidence(ctx, &scope, query)),
                 Request::Stale(query) => settle(stale::stale(ctx, &scope, query)),
                 Request::ResolveSymbol(query) => settle(symbols::resolve(ctx, &scope, query)),

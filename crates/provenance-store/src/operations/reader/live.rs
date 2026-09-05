@@ -13,7 +13,7 @@ use crate::state_store::StateStore;
 use camino::Utf8Path;
 use provenance_core::coverage::{EvidenceDiffSite, EvidenceDiffState};
 use provenance_core::{ScopeId, VerificationRun};
-use provenance_scanner::FileScan;
+use provenance_scanner::{FileScan, Language};
 
 /// The closed list of live words.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -79,14 +79,30 @@ impl<'c> LiveHandle<'c> {
         cache::graph_evidence(&self.layout(), scope, include_retired)
     }
 
-    /// A scan of the whole working tree. A test can set the scan in
-    /// advance, so a timing row measures graph and binding work only.
-    pub fn scan_tree(&self) -> anyhow::Result<Vec<FileScan>> {
+    /// A scan of the working tree, stopped at the policy's file count; the
+    /// flag says when it stopped. A test can set the scan in advance, so a
+    /// timing row measures graph and binding work only.
+    pub fn scan_tree(&self) -> anyhow::Result<(Vec<FileScan>, bool)> {
         self.only(Live::ScannedSites);
         if let Some(scans) = crate::test_probes::test_scan() {
-            return Ok(scans);
+            return Ok((scans, false));
         }
-        provenance_scanner::scan_path(self.context.repo())
+        provenance_scanner::scan_path_bounded(self.context.repo(), self.context.scan_limit())
+    }
+
+    /// A scan of one named file alone, so it never meets the file count
+    /// and cannot miss the file. A file the scanner has no language for,
+    /// or one that cannot be read, yields no sites. A test that set the
+    /// tree scan in advance is handed that file's entry from it.
+    pub fn scan_file(&self, file: &Utf8Path) -> Option<FileScan> {
+        self.only(Live::ScannedSites);
+        let path = self.context.repo().join(file);
+        if let Some(scans) = crate::test_probes::test_scan() {
+            return scans.into_iter().find(|scan| scan.file_path == path);
+        }
+        let language = path.extension().and_then(Language::from_extension)?;
+        let content = std::fs::read_to_string(&path).ok()?;
+        Some(provenance_scanner::scan_file(&path, language, &content))
     }
 
     /// The scope's verification runs.

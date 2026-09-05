@@ -22,6 +22,11 @@ pub(crate) use freshness::is_missing_table;
 pub use live::{Disturbed, Live, LiveHandle};
 pub use snapshot::{ReadSnapshot, Relations, Table};
 
+/// The projection readers that run over the handles: the fetched relation
+/// front and the kind probe. The operations reach them from here, so a
+/// query module never names the cache.
+pub use crate::cache::read::{kind_of, SqlFront};
+
 use super::read_policy::ReadPolicy;
 use super::stamp;
 use crate::layout::ProvenanceLayout;

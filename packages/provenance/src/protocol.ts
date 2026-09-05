@@ -332,6 +332,12 @@ export interface ImpactRequest extends PagedRequest {
 export interface ImpactResponse extends PagedResponse {
   id: string;
   affected_rules: AffectedRule[];
+  /**
+   * The working-tree scan stopped at the engine's file count, so the
+   * scanned sites are a lower bound. Absent on an answer recorded before
+   * the flag existed.
+   */
+  scan_cut?: boolean;
 }
 
 export interface VerificationBinding {

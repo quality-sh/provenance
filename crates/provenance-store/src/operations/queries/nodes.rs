@@ -23,41 +23,49 @@ macro_rules! for_kind {
         match $node_type {
             NodeType::Source => {
                 type $kind = Source;
+                #[allow(unused_variables)]
                 let $wrap = |record: Source| GraphNode::Source(Box::new(record));
                 $body
             }
             NodeType::Requirement => {
                 type $kind = Requirement;
+                #[allow(unused_variables)]
                 let $wrap = |record: Requirement| GraphNode::Requirement(Box::new(record));
                 $body
             }
             NodeType::Resolution => {
                 type $kind = Resolution;
+                #[allow(unused_variables)]
                 let $wrap = |record: Resolution| GraphNode::Resolution(Box::new(record));
                 $body
             }
             NodeType::Rule => {
                 type $kind = Rule;
+                #[allow(unused_variables)]
                 let $wrap = |record: Rule| GraphNode::Rule(Box::new(record));
                 $body
             }
             NodeType::Topic => {
                 type $kind = Topic;
+                #[allow(unused_variables)]
                 let $wrap = |record: Topic| GraphNode::Topic(Box::new(record));
                 $body
             }
             NodeType::Question => {
                 type $kind = Question;
+                #[allow(unused_variables)]
                 let $wrap = |record: Question| GraphNode::Question(Box::new(record));
                 $body
             }
             NodeType::Domain => {
                 type $kind = Domain;
+                #[allow(unused_variables)]
                 let $wrap = |record: Domain| GraphNode::Domain(Box::new(record));
                 $body
             }
             NodeType::Boundary => {
                 type $kind = Boundary;
+                #[allow(unused_variables)]
                 let $wrap = |record: Boundary| GraphNode::Boundary(Box::new(record));
                 $body
             }
@@ -107,6 +115,31 @@ pub(super) async fn nodes(
         for record in records {
             found.insert(key(record.node_type(), record.id()), record);
         }
+    }
+    Ok(found)
+}
+
+/// The endpoints that name a record that counts under the view, in rank
+/// and id order. Each kind is asked once, and only for its ids.
+pub(super) async fn counting(
+    snapshot: &ReadSnapshot,
+    wanted: &[(NodeType, StableId)],
+    include_retired: bool,
+) -> anyhow::Result<Vec<(NodeType, StableId)>> {
+    let mut by_kind: BTreeMap<u8, (NodeType, Vec<StableId>)> = BTreeMap::new();
+    for (node_type, id) in wanted {
+        by_kind
+            .entry(node_type.rank())
+            .or_insert_with(|| (*node_type, Vec::new()))
+            .1
+            .push(id.clone());
+    }
+    let mut found = Vec::new();
+    for (node_type, ids) in by_kind.into_values() {
+        let counting: Vec<StableId> = for_kind!(node_type, K, wrap => {
+            snapshot.table::<K>().ids_that_count(&ids, include_retired).await?
+        });
+        found.extend(counting.into_iter().map(|id| (node_type, id)));
     }
     Ok(found)
 }

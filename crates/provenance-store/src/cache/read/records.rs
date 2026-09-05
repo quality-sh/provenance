@@ -84,6 +84,72 @@ impl<K: ProjectionRow> Table<'_, K> {
         Ok(records.into_iter().map(|(_, record)| record).collect())
     }
 
+    /// The records whose named column holds one of the values, under the
+    /// view, in id order. The values go to the database in chunks.
+    pub async fn by_field(
+        &self,
+        column: &'static str,
+        values: &[&str],
+        include_retired: bool,
+    ) -> anyhow::Result<Vec<K>> {
+        let mut records: Vec<(String, K)> = Vec::new();
+        for chunk in values.chunks(BIND_CHUNK) {
+            let marks = vec!["?"; chunk.len()].join(", ");
+            let sql = format!(
+                "SELECT {} FROM {} WHERE scope_id = ? AND {} IN ({marks}){}",
+                select_columns::<K>(),
+                quoted(K::TABLE),
+                quoted(column),
+                active_clause::<K>(include_retired)
+            );
+            let mut query = sqlx::query(&sql).bind(self.snapshot().scope().as_str());
+            for value in chunk {
+                query = query.bind(*value);
+            }
+            let rows = {
+                let mut tx = self.snapshot().connection().await;
+                query.fetch_all(&mut **tx).await?
+            };
+            for row in rows {
+                records.push((row.try_get("id")?, decode::<K>(&row)?));
+            }
+        }
+        records.sort_by(|left, right| left.0.cmp(&right.0));
+        Ok(records.into_iter().map(|(_, record)| record).collect())
+    }
+
+    /// The given ids that name a row that counts under the view, in id
+    /// order; a repeated id is answered once.
+    pub async fn ids_that_count(
+        &self,
+        ids: &[StableId],
+        include_retired: bool,
+    ) -> anyhow::Result<Vec<StableId>> {
+        let mut wanted: Vec<&str> = ids.iter().map(StableId::as_str).collect();
+        wanted.sort_unstable();
+        wanted.dedup();
+        let mut found: Vec<String> = Vec::new();
+        for chunk in wanted.chunks(BIND_CHUNK) {
+            let marks = vec!["?"; chunk.len()].join(", ");
+            let sql = format!(
+                "SELECT id FROM {} WHERE scope_id = ? AND id IN ({marks}){}",
+                quoted(K::TABLE),
+                active_clause::<K>(include_retired)
+            );
+            let mut query = sqlx::query_scalar(&sql).bind(self.snapshot().scope().as_str());
+            for id in chunk {
+                query = query.bind(*id);
+            }
+            let rows: Vec<String> = {
+                let mut tx = self.snapshot().connection().await;
+                query.fetch_all(&mut **tx).await?
+            };
+            found.extend(rows);
+        }
+        found.sort_unstable();
+        found.into_iter().map(StableId::new).collect()
+    }
+
     /// Whether the id names a row that counts: present, and not retired
     /// unless retired rows are asked for.
     pub async fn live(&self, id: &StableId, include_retired: bool) -> anyhow::Result<bool> {

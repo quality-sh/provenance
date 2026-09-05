@@ -87,9 +87,8 @@ pub async fn impact(
     scope: &ScopeId,
     request: ImpactQuery,
 ) -> anyhow::Result<Stamped<ImpactResult>> {
-    let inner = scope.clone();
     served(repo, scope, move |ctx| {
-        Box::pin(async move { impact::impact(ctx, &inner, request) })
+        Box::pin(async move { impact::impact(ctx, request).await })
     })
     .await
 }

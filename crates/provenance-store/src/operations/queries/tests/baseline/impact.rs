@@ -83,5 +83,6 @@ pub fn impact(
         limit: request.limit,
         has_more,
         affected_rules,
+        scan_cut: false,
     })
 }

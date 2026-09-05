@@ -2,8 +2,7 @@
 //! hop per depth, the core's `related_nodes` order over the rows, and the
 //! records handed back whole from their kind tables.
 
-use crate::cache::read::{kind_of, SqlFront};
-use crate::operations::reader::{ReadContext, ReadSnapshot};
+use crate::operations::reader::{kind_of, ReadContext, ReadSnapshot, SqlFront};
 use provenance_core::model::relations::{related_nodes, RelatedNode, RelationDirection};
 use provenance_core::protocol::{
     ensure_limit, ensure_max_depth, ensure_protocol_version, take_page, Direction, GraphNode,

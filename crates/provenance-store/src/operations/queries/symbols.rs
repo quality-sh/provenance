@@ -26,7 +26,7 @@ pub(super) fn resolve(
     let repo = ctx.repo();
     let store = ctx.live(Live::Canonical).store();
     let bindings = Bindings::load(&store, scope, request.include_retired)?;
-    let scans = ctx.live(Live::ScannedSites).scan_tree()?;
+    let (scans, _) = ctx.live(Live::ScannedSites).scan_tree()?;
     let mut ids = BTreeSet::new();
     for site in source_sites(&scans) {
         if relative(repo, site.file_path()) == *file

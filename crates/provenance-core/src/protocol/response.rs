@@ -75,6 +75,10 @@ pub struct ImpactResult {
     pub limit: usize,
     pub has_more: bool,
     pub affected_rules: Vec<AffectedRule>,
+    /// The working-tree scan stopped at the configured file count, so the
+    /// scanned sites are a lower bound.
+    #[serde(default)]
+    pub scan_cut: bool,
 }
 
 /// What a commit range did to the code carrying a Rule's evidence.
