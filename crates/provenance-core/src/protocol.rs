@@ -1,6 +1,7 @@
 mod node;
 mod query;
 mod response;
+mod stamp;
 mod typed_spec;
 
 use camino::Utf8PathBuf;
@@ -17,6 +18,7 @@ pub use response::{
     EvidenceResult, GetResult, ImpactResult, NeighborsResult, QueryResponse, ResolveSymbolResult,
     SearchResult, StaleEvidence, StaleResult, TraceResult,
 };
+pub use stamp::{Stamp, StampPolicy, Stamped};
 pub use typed_spec::{
     CheckStatementRequest, TypedAdoptionTarget, TypedDeclarationKind, TypedImplementationInput,
     TypedRequirementInput, TypedRuleInput, TypedSourceInput, TypedSpecInput,

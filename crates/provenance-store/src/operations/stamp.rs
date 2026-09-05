@@ -1,0 +1,62 @@
+//! The stored revision a read answers at, and the stamp built from it.
+
+use provenance_core::protocol::{Stamp, StampPolicy};
+use sqlx::SqliteConnection;
+
+/// The reader logic version the stamp carries.
+///
+/// It moves when reader logic changes an answer for the same rows; not for
+/// a migration, and not for a fix on a live half. The golden test compares
+/// a frozen corpus's answers to a file keyed by this number, regenerated
+/// only in the commit that bumps it.
+///
+/// History:
+/// - 0: the semantics of the canonical executors before any flip.
+pub const READ_DERIVATION: u32 = 0;
+
+/// The latest `projection_revision` row and the `projection_instance` row.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredRevision {
+    pub serial: i64,
+    pub digest: String,
+    pub instance_id: String,
+}
+
+impl StoredRevision {
+    /// The stamp for an answer read at this revision.
+    pub fn stamp(&self, policy: StampPolicy, attested: Vec<String>, live: Vec<String>) -> Stamp {
+        Stamp {
+            serial: self.serial,
+            digest: self.digest.clone(),
+            instance_id: self.instance_id.clone(),
+            derivation: READ_DERIVATION,
+            policy,
+            attested,
+            live,
+        }
+    }
+}
+
+/// Reads the stored revision on one connection. Inside an open transaction
+/// this is the first read, so it pins the snapshot every later row comes
+/// from. `None` means the database was never materialized.
+pub async fn stored_revision(
+    connection: &mut SqliteConnection,
+) -> anyhow::Result<Option<StoredRevision>> {
+    let revision: Option<(i64, String)> = sqlx::query_as(
+        "SELECT serial, digest FROM projection_revision ORDER BY serial DESC LIMIT 1",
+    )
+    .fetch_optional(&mut *connection)
+    .await?;
+    let Some((serial, digest)) = revision else {
+        return Ok(None);
+    };
+    let instance_id: String = sqlx::query_scalar("SELECT instance_id FROM projection_instance")
+        .fetch_one(&mut *connection)
+        .await?;
+    Ok(Some(StoredRevision {
+        serial,
+        digest,
+        instance_id,
+    }))
+}

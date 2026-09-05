@@ -10,6 +10,7 @@ use provenance_core::{
 
 mod differential;
 mod oracle;
+mod stamp;
 
 fn sid(value: &str) -> StableId {
     StableId::new(value).unwrap()
