@@ -54,9 +54,8 @@ pub async fn search(
     scope: &ScopeId,
     request: SearchQuery,
 ) -> anyhow::Result<Stamped<SearchResult>> {
-    let inner = scope.clone();
     served(repo, scope, move |ctx| {
-        Box::pin(async move { records::search(ctx, &inner, request) })
+        Box::pin(async move { records::search(ctx, request).await })
     })
     .await
 }

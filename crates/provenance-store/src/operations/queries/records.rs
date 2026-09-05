@@ -1,4 +1,4 @@
-use crate::operations::reader::{Live, ReadContext};
+use crate::operations::reader::ReadContext;
 use crate::state_store::StateStore;
 use provenance_core::protocol::{
     ensure_limit, ensure_protocol_version, take_page, GetQuery, GetResult, GraphNode, SearchQuery,
@@ -101,9 +101,12 @@ pub(super) async fn get(ctx: &ReadContext, request: GetQuery) -> anyhow::Result<
     })
 }
 
-pub(super) fn search(
+/// Visits the wanted kinds in rank order, each table once, and stops
+/// reading once the page and its cut flag are decided. The table's
+/// `instr` match is over the joined pieces, so a needle spanning two
+/// pieces can come back; the per-piece `contains` decides.
+pub(super) async fn search(
     ctx: &ReadContext,
-    scope: &ScopeId,
     request: SearchQuery,
 ) -> anyhow::Result<SearchResult> {
     ensure_protocol_version(request.protocol_version)?;
@@ -115,26 +118,30 @@ pub(super) fn search(
     // the six kinds version 5 always answered. Domains and boundaries are
     // opt-in through an explicit node_types entry, so a strict old client
     // never meets a kind it cannot read.
-    let wanted = if request.node_types.is_empty() {
-        PROTOCOL_FIVE_DEFAULT_KINDS.map(rank).to_vec()
+    let mut wanted = if request.node_types.is_empty() {
+        PROTOCOL_FIVE_DEFAULT_KINDS.to_vec()
     } else {
-        request
-            .node_types
-            .iter()
-            .map(|kind| rank(*kind))
-            .collect::<Vec<_>>()
+        request.node_types.clone()
     };
-    let store = ctx.live(Live::Canonical).store();
-    let matched = load(&store, scope, request.include_retired)?
-        .into_iter()
-        .filter(|node| wanted.contains(&rank(node.node_type())))
-        .filter(|node| {
-            node.searchable_text()
-                .iter()
-                .any(|text| text.to_lowercase().contains(&needle))
-        })
-        .take(request.limit + 1)
-        .collect::<Vec<_>>();
+    wanted.sort_by_key(|kind| rank(*kind));
+    wanted.dedup_by_key(|kind| rank(*kind));
+    let mut matched = Vec::new();
+    for kind in wanted {
+        if matched.len() > request.limit {
+            break;
+        }
+        let room = request.limit + 1 - matched.len();
+        let rows = nodes::search(ctx.snapshot(), kind, &needle, request.include_retired).await?;
+        matched.extend(
+            rows.into_iter()
+                .filter(|node| {
+                    node.searchable_text()
+                        .iter()
+                        .any(|text| text.to_lowercase().contains(&needle))
+                })
+                .take(room),
+        );
+    }
     let (nodes, has_more) = take_page(matched, request.limit);
     Ok(SearchResult {
         limit: request.limit,

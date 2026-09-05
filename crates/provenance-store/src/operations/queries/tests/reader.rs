@@ -191,6 +191,17 @@ async fn every_answer_carries_a_stamp_at_the_stored_serial() {
         assert!(stamp.digest.starts_with("sha256:"), "{operation} digest");
         let (attested, live): (&[&str], &[&str]) = match *operation {
             "get" => (&["requirements"], &[]),
+            "search" => (
+                &[
+                    "questions",
+                    "requirements",
+                    "resolutions",
+                    "rules",
+                    "sources",
+                    "topics",
+                ],
+                &[],
+            ),
             "impact" | "resolve_symbol" => (&[], &["canonical", "scanned_sites"]),
             "evidence" => (&[], &["canonical", "diff", "verification_runs"]),
             "stale" => (&[], &["canonical", "diff"]),

@@ -11,6 +11,7 @@ use provenance_core::{
 mod baseline;
 mod comparison;
 mod front_equivalence;
+mod limits;
 mod pinned;
 mod reader;
 mod retired;
