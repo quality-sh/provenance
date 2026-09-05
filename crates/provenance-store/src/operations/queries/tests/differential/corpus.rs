@@ -38,10 +38,20 @@ impl Corpus {
         StateStore::new(self.layout())
     }
 
-    /// The frozen corpus of the golden test.
+    /// The frozen corpus of the golden test, under two commits so the
+    /// diff half answers over it: the base holds the source file as the
+    /// builder wrote it, the head adds one function below the sites.
     pub fn golden() -> Self {
         let (dir, _layout, scope) = fixtures::golden::golden_layout();
-        Self::new("golden", dir, scope)
+        let mut corpus = Self::new("golden", dir, scope);
+        let base = git_commit(&corpus.root, "base");
+        let source = corpus.root.join("src/pay.rs");
+        let mut content = std::fs::read_to_string(&source).unwrap();
+        content.push_str("\nfn audit() {}\n");
+        std::fs::write(&source, content).unwrap();
+        git_commit(&corpus.root, "head");
+        corpus.base_commit = base;
+        corpus
     }
 }
 
@@ -107,12 +117,16 @@ fn copy_tree(source: &Utf8Path, destination: &Utf8Path) {
 }
 
 /// Commits the tree and returns the commit id, or `None` when git is not
-/// on the path; the corpus then runs without its diff cases.
+/// on the path; the corpus then runs without its diff cases. Author,
+/// dates, and signing are fixed, so the same tree gives the same id on
+/// every machine and the golden file can hold it.
 fn git_commit(root: &Utf8Path, message: &str) -> Option<String> {
     let run = |args: &[&str]| {
         std::process::Command::new("git")
             .args(args)
             .current_dir(root)
+            .env("GIT_AUTHOR_DATE", "2026-01-01T00:00:00Z")
+            .env("GIT_COMMITTER_DATE", "2026-01-01T00:00:00Z")
             .output()
             .ok()
             .filter(|output| output.status.success())
@@ -127,6 +141,8 @@ fn git_commit(root: &Utf8Path, message: &str) -> Option<String> {
         "user.name=Provenance Test",
         "-c",
         "user.email=test@example.com",
+        "-c",
+        "commit.gpgsign=false",
         "commit",
         "-q",
         "-m",

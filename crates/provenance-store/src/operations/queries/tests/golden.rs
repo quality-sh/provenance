@@ -1,7 +1,9 @@
 //! The golden test: a fixed request set over the frozen corpus answers
 //! the same bytes as the committed file, keyed by `READ_DERIVATION`.
 //!
-//! The file is regenerated only in a commit that bumps the constant:
+//! The file holds one line for the key and the digest, then one compact
+//! line per answer, so a regeneration diff reads answer by answer. It is
+//! regenerated only in a commit that bumps the constant:
 //! `PROVENANCE_GOLDEN_WRITE=1 cargo test -p provenance-store golden`.
 
 use super::differential::corpus::Corpus;
@@ -10,7 +12,7 @@ use super::differential::{served_value, strip_additive};
 use crate::operations::read_policy::{FreshnessPolicy, ReadPolicy};
 use crate::operations::stamp::READ_DERIVATION;
 use provenance_core::protocol::{
-    GetQuery, ImpactQuery, NeighborsQuery, ResolveSymbolQuery, SDK_PROTOCOL_VERSION,
+    GetQuery, ImpactQuery, NeighborsQuery, ResolveSymbolQuery, StaleQuery, SDK_PROTOCOL_VERSION,
 };
 use provenance_core::NodeType;
 use serde_json::{json, Value};
@@ -51,9 +53,9 @@ fn resolve(file: &str, symbol: Option<&str>, line: Option<usize>) -> Request {
     })
 }
 
-/// The fixed request set. `stale` is absent: its answer names commit ids,
-/// which no frozen corpus can hold.
-fn request_set() -> Vec<Request> {
+/// The fixed request set. `base` is the corpus's first commit, whose id
+/// is fixed by the corpus's fixed author and dates.
+fn request_set(base: &str) -> Vec<Request> {
     let mut set = vec![
         get(NodeType::Domain, "domain_payroll", false),
         get(NodeType::Source, "source_schads", false),
@@ -124,6 +126,18 @@ fn request_set() -> Vec<Request> {
     let mut with_retired = requests::evidence("rule_overtime_001", None);
     with_retired.include_retired = true;
     set.push(Request::Evidence(with_retired));
+    set.push(Request::Evidence(requests::evidence(
+        "rule_overtime_001",
+        Some(base.to_string()),
+    )));
+    set.push(Request::Stale(StaleQuery {
+        protocol_version: Some(SDK_PROTOCOL_VERSION),
+        base: base.to_string(),
+        head: None,
+        rules: Vec::new(),
+        include_retired: false,
+        limit: 50,
+    }));
     set.extend([
         resolve("src/pay.rs", None, None),
         resolve("src/pay.rs", Some("pay"), None),
@@ -136,13 +150,14 @@ fn request_set() -> Vec<Request> {
 
 async fn answers() -> Vec<Value> {
     let corpus = Corpus::golden();
+    let base = corpus.base_commit.clone().expect("git on the path");
     crate::cache::catch_up_state(&corpus.layout())
         .await
         .unwrap();
     crate::test_probes::set_preset_scan(None);
     let policy = ReadPolicy::with_freshness(FreshnessPolicy::AnnotateOnly);
     let mut answers = Vec::new();
-    for request in request_set() {
+    for request in request_set(&base) {
         let mut answer = served_value(&corpus, &request, policy).await;
         strip_additive(&mut answer);
         answers.push(json!({
@@ -159,30 +174,38 @@ fn digest(answers: &[Value]) -> String {
     format!("sha256:{:x}", Sha256::digest(bytes))
 }
 
+/// The file: one header line, then one compact line per answer.
+fn render(answers: &[Value], digest: &str) -> String {
+    let mut lines = vec![json!({ "derivation": READ_DERIVATION, "digest": digest }).to_string()];
+    lines.extend(answers.iter().map(Value::to_string));
+    format!("{}\n", lines.join("\n"))
+}
+
+fn parse(file: &str) -> (Value, Vec<Value>) {
+    let mut lines = file
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).unwrap());
+    let header = lines.next().expect("a header line");
+    (header, lines.collect())
+}
+
 #[tokio::test]
 async fn the_golden_answers_match_the_committed_file_for_this_derivation() {
     let answers = answers().await;
     let fresh = digest(&answers);
     if std::env::var("PROVENANCE_GOLDEN_WRITE").is_ok_and(|value| value == "1") {
-        let file = json!({
-            "derivation": READ_DERIVATION,
-            "digest": fresh,
-            "answers": answers,
-        });
-        std::fs::write(golden_path(), serde_json::to_string_pretty(&file).unwrap()).unwrap();
+        std::fs::write(golden_path(), render(&answers, &fresh)).unwrap();
         return;
     }
-    let stored: Value = serde_json::from_str(
+    let (header, recorded) = parse(
         &std::fs::read_to_string(golden_path()).expect("golden.json is committed beside this test"),
-    )
-    .unwrap();
+    );
     assert_eq!(
-        stored["derivation"],
+        header["derivation"],
         json!(READ_DERIVATION),
         "the golden file is keyed by READ_DERIVATION; regenerate it in the commit that bumps the constant"
     );
-    if stored["digest"] != json!(fresh) {
-        let recorded = stored["answers"].as_array().unwrap();
+    if header["digest"] != json!(fresh) {
         for (index, answer) in answers.iter().enumerate() {
             assert_eq!(
                 recorded.get(index),
