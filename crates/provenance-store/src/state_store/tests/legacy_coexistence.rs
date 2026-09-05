@@ -2,13 +2,13 @@ use crate::{
     layout::ProvenanceLayout,
     state_store::{
         CreateAssertionInput, CreateContributionInput, CreateDispositionInput,
-        CreateProposalCardInput, CreateSynthesisPacketInput, StateStore,
+        CreateProposalCardInput, CreateRequirementInput, CreateSynthesisPacketInput, StateStore,
     },
 };
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_core::{
     AssertionId, DispositionActor, DispositionDecision, IdentityType, PromotionState,
-    ProposalTraceability, ProposalType, ScopeId, StableId,
+    ProposalTraceability, ProposalType, RequirementStatus, ScopeId, StableId,
 };
 
 #[test]
@@ -82,6 +82,22 @@ fn modern_lifecycle_coexists_with_frozen_shipped_records() {
 /// writers, so that they join the shipped records copied in above instead of
 /// replacing the shards that hold them.
 fn land_modern_swarm_records(store: &StateStore, scope: &ScopeId) {
+    store
+        .create_requirement(CreateRequirementInput {
+            scope_id: scope.clone(),
+            id: StableId::new("req_modern").unwrap(),
+            statement: "The modern records name this requirement".into(),
+            description: None,
+            status: RequirementStatus::Active,
+            domain_id: None,
+            refines: None,
+            depends_on: Vec::new(),
+            supersedes: Vec::new(),
+            spawned_by: None,
+            origin_thread: None,
+            origin_message: None,
+        })
+        .unwrap();
     let shipped_contributions = store.list_contributions(scope).unwrap().len();
     let shipped_packets = store.list_synthesis_packets(scope).unwrap().len();
     let contribution: provenance_core::Contribution = serde_json::from_value(serde_json::json!({

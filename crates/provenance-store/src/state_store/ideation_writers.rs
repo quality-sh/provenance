@@ -46,6 +46,8 @@ impl StateStore {
         for claim in &material_claims {
             validate_optional_confidence_score(claim.confidence)?;
         }
+        self.canonical_artifact_index(&scope_id)?
+            .ensure_target_exists(&target)?;
         let contribution = Contribution {
             schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: scope_id.clone(),
@@ -159,6 +161,8 @@ impl StateStore {
             suggested_artifacts,
             required_human_decisions,
         } = input;
+        self.canonical_artifact_index(&scope_id)?
+            .ensure_target_exists(&target)?;
         let synthesis_packet = SynthesisPacket {
             schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: scope_id.clone(),

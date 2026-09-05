@@ -70,6 +70,7 @@ mod direct_statement_write_gate;
 mod graph_validation;
 mod ideation;
 mod ideation_duplicates;
+mod ideation_targets;
 mod implementation_bindings;
 mod legacy_coexistence;
 mod manifest;

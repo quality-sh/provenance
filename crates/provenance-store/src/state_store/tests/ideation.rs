@@ -1,4 +1,4 @@
-use super::initialized_store;
+use super::{initialized_store, seeded_requirement_store};
 use crate::state_store::{
     CreateContributionInput, CreateSynthesisPacketInput, IdeationLandingBatch,
 };
@@ -11,7 +11,7 @@ use provenance_macros::verifies;
 
 #[test]
 fn ideation_output_records_are_written_deterministically() {
-    let (_dir, store, scope) = initialized_store();
+    let (_dir, store, scope) = seeded_requirement_store();
 
     store
         .create_contribution(CreateContributionInput {
@@ -101,7 +101,7 @@ fn invalid_lifecycle_batch_is_rejected_without_partial_writes() {
 
 #[test]
 fn direct_contribution_create_and_replace_respect_landed_records() {
-    let (_dir, store, scope) = initialized_store();
+    let (_dir, store, scope) = seeded_requirement_store();
     store
         .land_ideation_batch(
             &scope,
@@ -131,7 +131,7 @@ fn direct_contribution_create_and_replace_respect_landed_records() {
 
 #[test]
 fn direct_synthesis_create_and_replace_respect_landed_records() {
-    let (_dir, store, scope) = initialized_store();
+    let (_dir, store, scope) = seeded_requirement_store();
     store
         .land_ideation_batch(
             &scope,
@@ -229,7 +229,7 @@ fn composite_ideation_list_holds_publication_lock_between_reads() {
 #[test]
 #[verifies("rule_asserted_evidence_immutable", examples)]
 fn direct_replacement_cannot_retarget_asserted_evidence() {
-    let (_dir, store, scope) = initialized_store();
+    let (_dir, store, scope) = seeded_requirement_store();
     let batch: IdeationLandingBatch = serde_json::from_value(serde_json::json!({
         "contributions": [{
             "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "contribution_landed",
