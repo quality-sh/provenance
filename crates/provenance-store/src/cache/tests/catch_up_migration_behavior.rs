@@ -7,6 +7,7 @@ use super::catch_up_serial_behavior::latest_revision;
 use super::fixtures::seeded_layout;
 use crate::cache::{catch_up_state, materialize_state, open_cache};
 use crate::migrations::RECORD_COLUMNS_MIGRATION_ID;
+use provenance_macros::verifies;
 
 async fn requirement_count(pool: &sqlx::SqlitePool) -> i64 {
     sqlx::query_scalar("SELECT COUNT(*) FROM requirements")
@@ -27,6 +28,7 @@ async fn forget_migration_022(pool: &sqlx::SqlitePool) {
 }
 
 #[tokio::test]
+#[verifies("rule_interrupted_migration_reloads_every_family", examples)]
 async fn a_crash_between_a_migration_and_its_rebuild_is_healed_by_the_next_pass() {
     let (_dir, layout, _scope) = seeded_layout();
     materialize_state(&layout).await.unwrap();

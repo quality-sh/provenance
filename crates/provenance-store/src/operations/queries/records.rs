@@ -1,17 +1,25 @@
-use crate::operations::reader::{Live, ReadContext};
-use crate::state_store::StateStore;
+use crate::operations::reader::ReadContext;
+#[cfg(test)]
+use provenance_core::protocol::GraphNode;
 use provenance_core::protocol::{
-    ensure_limit, ensure_protocol_version, take_page, GetQuery, GetResult, GraphNode, SearchQuery,
+    ensure_limit, ensure_protocol_version, take_page, GetQuery, GetResult, SearchQuery,
     SearchResult,
 };
-use provenance_core::{NodeType, ScopeId, StableId};
+#[cfg(test)]
+use provenance_core::ScopeId;
+use provenance_core::{NodeType, StableId};
+
+use super::nodes;
 
 /// Loads every canonical record a query can name, in one settled order.
 ///
 /// Active views leave retired records out. The order is node type then
 /// canonical ID, so two runs over the same state answer the same bytes.
+/// No operation reads canonical records any more; the comparison tests
+/// still do, until the baseline goes.
+#[cfg(test)]
 pub(super) fn load(
-    store: &StateStore,
+    store: &crate::state_store::StateStore,
     scope: &ScopeId,
     include_retired: bool,
 ) -> anyhow::Result<Vec<GraphNode>> {
@@ -73,35 +81,28 @@ pub(super) fn load(
     Ok(nodes)
 }
 
-pub(super) fn find<'a>(
-    nodes: &'a [GraphNode],
-    node_type: Option<NodeType>,
-    id: &StableId,
-) -> Option<&'a GraphNode> {
-    nodes.iter().find(|node| {
-        node.id() == id && node_type.is_none_or(|wanted| rank(node.node_type()) == rank(wanted))
-    })
-}
-
-pub(super) fn get(
-    ctx: &ReadContext,
-    scope: &ScopeId,
-    request: GetQuery,
-) -> anyhow::Result<GetResult> {
+pub(super) async fn get(ctx: &ReadContext, request: GetQuery) -> anyhow::Result<GetResult> {
     ensure_protocol_version(request.protocol_version)?;
     let id = StableId::new(request.id)?;
-    let store = ctx.live(Live::Canonical).store();
-    let nodes = load(&store, scope, request.include_retired)?;
-    let node = find(&nodes, Some(request.node_type), &id).cloned();
+    let node = nodes::node(
+        ctx.snapshot(),
+        request.node_type,
+        &id,
+        request.include_retired,
+    )
+    .await?;
     Ok(GetResult {
         found: node.is_some(),
         node,
     })
 }
 
-pub(super) fn search(
+/// Visits the wanted kinds in rank order, each table once, and stops
+/// reading once the page and its cut flag are decided. The table's
+/// `instr` match is over the joined pieces, so a needle spanning two
+/// pieces can come back; the per-piece `contains` decides.
+pub(super) async fn search(
     ctx: &ReadContext,
-    scope: &ScopeId,
     request: SearchQuery,
 ) -> anyhow::Result<SearchResult> {
     ensure_protocol_version(request.protocol_version)?;
@@ -113,26 +114,30 @@ pub(super) fn search(
     // the six kinds version 5 always answered. Domains and boundaries are
     // opt-in through an explicit node_types entry, so a strict old client
     // never meets a kind it cannot read.
-    let wanted = if request.node_types.is_empty() {
-        PROTOCOL_FIVE_DEFAULT_KINDS.map(rank).to_vec()
+    let mut wanted = if request.node_types.is_empty() {
+        PROTOCOL_FIVE_DEFAULT_KINDS.to_vec()
     } else {
-        request
-            .node_types
-            .iter()
-            .map(|kind| rank(*kind))
-            .collect::<Vec<_>>()
+        request.node_types.clone()
     };
-    let store = ctx.live(Live::Canonical).store();
-    let matched = load(&store, scope, request.include_retired)?
-        .into_iter()
-        .filter(|node| wanted.contains(&rank(node.node_type())))
-        .filter(|node| {
-            node.searchable_text()
-                .iter()
-                .any(|text| text.to_lowercase().contains(&needle))
-        })
-        .take(request.limit + 1)
-        .collect::<Vec<_>>();
+    wanted.sort_by_key(|kind| rank(*kind));
+    wanted.dedup_by_key(|kind| rank(*kind));
+    let mut matched = Vec::new();
+    for kind in wanted {
+        if matched.len() > request.limit {
+            break;
+        }
+        let room = request.limit + 1 - matched.len();
+        let rows = nodes::search(ctx.snapshot(), kind, &needle, request.include_retired).await?;
+        matched.extend(
+            rows.into_iter()
+                .filter(|node| {
+                    node.searchable_text()
+                        .iter()
+                        .any(|text| text.to_lowercase().contains(&needle))
+                })
+                .take(room),
+        );
+    }
     let (nodes, has_more) = take_page(matched, request.limit);
     Ok(SearchResult {
         limit: request.limit,

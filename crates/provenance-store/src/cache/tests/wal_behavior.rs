@@ -8,6 +8,7 @@ use super::fixtures::*;
 use crate::layout::ProvenanceLayout;
 use provenance_core::protocol::{GetQuery, SDK_PROTOCOL_VERSION};
 use provenance_core::NodeType;
+use provenance_macros::verifies;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode};
 use sqlx::{Connection, SqliteConnection};
 use std::str::FromStr;
@@ -27,6 +28,7 @@ pub fn wal_files(layout: &ProvenanceLayout) -> Vec<String> {
 /// and `-shm` files. A pool that grew to two connections closed them at
 /// once, and about half of all reads left the files behind.
 #[tokio::test]
+#[verifies("rule_completed_read_leaves_no_wal_files", examples)]
 async fn a_completed_read_leaves_no_wal_files() {
     let (_dir, layout, scope) = seeded_layout();
     let root = Some(layout.root().to_path_buf());

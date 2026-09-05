@@ -3,9 +3,10 @@
 
 use super::super::comparison::test_stores;
 use super::get_through;
-use crate::cache::catch_up_state;
+use crate::cache::{catch_up_state, open_cache};
 use crate::operations::read_policy::{FreshnessPolicy, ReadPolicy};
 use provenance_core::protocol::StampPolicy;
+use provenance_macros::verifies;
 
 /// Empties the requirement list of every rule in the shard, which the
 /// graph validator refuses: a rule needs one requirement.
@@ -17,6 +18,7 @@ fn orphan_every_rule(store: &test_stores::TestStore) {
 }
 
 #[tokio::test]
+#[verifies("rule_failed_freshness_answers_at_stored_serial", examples)]
 async fn a_read_answers_at_the_stored_serial_when_catch_up_refuses() {
     let store = test_stores::seeded_queries();
     crate::cache::tests::fixtures::create_requirement(
@@ -50,6 +52,7 @@ async fn a_read_answers_at_the_stored_serial_when_catch_up_refuses() {
 }
 
 #[tokio::test]
+#[verifies("rule_no_revision_refuses_and_names_materialize", examples)]
 async fn a_read_with_no_database_refuses_and_names_materialize() {
     let store = test_stores::seeded_queries();
     let refused = get_through(
@@ -192,4 +195,68 @@ async fn a_pre_stamp_database_refuses_and_names_materialize_when_catch_up_fails(
     let text = format!("{refused:#}");
     assert!(text.contains("provenance materialize"), "{text}");
     assert!(!text.contains("no such table"), "{text}");
+}
+
+/// A migration that committed before its rebuild ran leaves a revision
+/// row beside empty tables and no family digests. `catch_up` heals that
+/// window before it answers; `annotate_only` runs no freshness step, so
+/// it must refuse instead of answering over empty tables.
+#[tokio::test]
+#[verifies("rule_annotate_only_refuses_a_half_migrated_projection", examples)]
+async fn annotate_only_refuses_a_half_migrated_database() {
+    let store = test_stores::seeded_queries();
+    catch_up_state(&store.layout()).await.unwrap();
+    let pool = open_cache(&store.layout()).await.unwrap();
+    sqlx::query("DELETE FROM _schema_migrations WHERE id = ?")
+        .bind(crate::migrations::RECORD_COLUMNS_MIGRATION_ID)
+        .execute(&pool)
+        .await
+        .unwrap();
+    pool.close().await;
+    crate::test_probes::crash_at("catch_up_after_migrations");
+    let crashed = catch_up_state(&store.layout()).await.unwrap_err();
+    crate::test_probes::disarm("catch_up_after_migrations");
+    assert!(crashed.to_string().contains("injected crash"), "{crashed}");
+
+    let refused = get_through(
+        &store,
+        ReadPolicy::with_freshness(FreshnessPolicy::AnnotateOnly),
+    )
+    .await
+    .unwrap_err();
+    assert!(
+        matches!(
+            refused.downcast_ref::<crate::operations::reader::ReadRefusal>(),
+            Some(crate::operations::reader::ReadRefusal::HalfMigrated { .. })
+        ),
+        "{refused:#}"
+    );
+    assert!(refused.to_string().contains("provenance materialize"));
+
+    let healed = get_through(&store, ReadPolicy::default()).await.unwrap();
+    assert!(healed.result.found, "catch-up heals the window and answers");
+}
+
+/// Family digest rows are one per scope, so a manifest that names no
+/// scope materializes a revision beside no digest rows. That projection
+/// is complete, and `annotate_only` answers over it.
+#[tokio::test]
+#[verifies("rule_annotate_only_refuses_a_half_migrated_projection", examples)]
+async fn a_projection_with_no_scope_is_not_half_migrated() {
+    let store = test_stores::seeded_queries();
+    catch_up_state(&store.layout()).await.unwrap();
+    let manifest_path = store.layout().manifest_path();
+    let mut manifest: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&manifest_path).unwrap()).unwrap();
+    manifest["scopes"] = serde_json::json!([]);
+    std::fs::write(&manifest_path, serde_json::to_string(&manifest).unwrap()).unwrap();
+    catch_up_state(&store.layout()).await.unwrap();
+    let answer = get_through(
+        &store,
+        ReadPolicy::with_freshness(FreshnessPolicy::AnnotateOnly),
+    )
+    .await
+    .expect("a complete projection with no scope answers");
+    assert!(!answer.result.found, "the scope is gone with its rows");
+    assert_eq!(answer.stamp.policy, StampPolicy::AnnotateOnly);
 }

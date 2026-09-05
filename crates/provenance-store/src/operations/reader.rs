@@ -22,12 +22,18 @@ pub(crate) use freshness::is_missing_table;
 pub use live::{Disturbed, Live, LiveHandle};
 pub use snapshot::{ReadSnapshot, Relations, Table};
 
+/// The projection readers that run over the handles: the fetched relation
+/// front and the kind probe. The operations reach them from here, so a
+/// query module never names the cache.
+pub use crate::cache::read::{kind_of, SqlFront};
+
 use super::read_policy::ReadPolicy;
 use super::stamp;
 use crate::layout::ProvenanceLayout;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::protocol::Stamped;
 use provenance_core::ScopeId;
+use provenance_macros::rule;
 use std::collections::BTreeSet;
 use std::future::Future;
 use std::pin::Pin;
@@ -36,8 +42,10 @@ use std::sync::Mutex;
 /// The future one read runs over its context.
 pub type ReadFuture<'c, R> = Pin<Box<dyn Future<Output = anyhow::Result<R>> + Send + 'c>>;
 
-/// Why a read refused.
+/// Why a read refused. A read with no stored revision refuses here and
+/// names `provenance materialize`, under every freshness policy.
 #[derive(Debug, thiserror::Error)]
+#[rule("rule_no_revision_refuses_and_names_materialize")]
 pub enum ReadRefusal {
     #[error("no projection revision in {database}; run `provenance materialize`{because}")]
     NoProjection {
@@ -48,6 +56,8 @@ pub enum ReadRefusal {
     RefuseStaleUnimplemented,
     #[error("the projection in {database} is behind on migrations; run `provenance materialize`")]
     SchemaBehind { database: Utf8PathBuf },
+    #[error("the projection in {database} holds a revision but no family digests, so its tables were never reloaded after a migration; run `provenance materialize`")]
+    HalfMigrated { database: Utf8PathBuf },
 }
 
 /// Everything one read may reach: the pinned snapshot and the live parts.
@@ -78,6 +88,7 @@ impl ReadContext {
     }
 
     /// A handle on one live part; taking it puts the word on the stamp.
+    #[rule("rule_stamp_lists_a_live_word_for_uncovered_parts")]
     pub fn live(&self, what: Live) -> LiveHandle<'_> {
         self.live
             .lock()
@@ -105,7 +116,9 @@ impl ReadContext {
 }
 
 /// Runs one read: the freshness step under the guard, then `run` over a
-/// pinned snapshot, then the stamp.
+/// pinned snapshot, then the stamp. Every query answer leaves through here,
+/// so every answer carries a stamp.
+#[rule("rule_query_answer_carries_a_stamp")]
 pub async fn answer<R: Send>(
     repo: &Utf8Path,
     scope: &ScopeId,

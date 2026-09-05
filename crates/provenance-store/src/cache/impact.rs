@@ -37,14 +37,9 @@ pub struct ImpactOptions {
 
 /// The relations impact follows only when asked to: a refinement, a
 /// dependency, a supersession, or a spawn changes the reading of a record
-/// without changing what it produces.
-const INDIRECT: [&str; 5] = [
-    "refines",
-    "depends_on",
-    "contradicts",
-    "supersedes",
-    "spawned_by",
-];
+/// without changing what it produces. `contradicts` is not here: it has
+/// no flow, so the walk never yields it.
+const INDIRECT: [&str; 4] = ["refines", "depends_on", "supersedes", "spawned_by"];
 
 pub fn analyze_impact(
     layout: &ProvenanceLayout,
@@ -124,5 +119,26 @@ const fn direction_key(direction: ImpactDirection) -> &'static str {
     match direction {
         ImpactDirection::Upstream => "upstream",
         ImpactDirection::Downstream => "downstream",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::INDIRECT;
+    use provenance_core::model::relations::{declared_relations, RelationFlow};
+
+    /// A name `flow_neighbors` never yields cannot be an indirect step;
+    /// an entry for it would be dead.
+    #[test]
+    fn an_indirect_name_is_a_declared_relation_with_a_flow() {
+        for name in INDIRECT {
+            assert!(
+                declared_relations()
+                    .iter()
+                    .flat_map(|table| table.iter())
+                    .any(|decl| decl.name == name && decl.flow != RelationFlow::None),
+                "{name} has no declaration with a flow"
+            );
+        }
     }
 }

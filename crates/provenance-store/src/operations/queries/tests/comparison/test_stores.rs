@@ -122,7 +122,7 @@ fn copy_tree(source: &Utf8Path, destination: &Utf8Path) {
 /// on the path; the store then runs without its diff cases. Author,
 /// dates, and signing are fixed, so the same tree gives the same id on
 /// every machine and the pinned file can hold it.
-fn git_commit(root: &Utf8Path, message: &str) -> Option<String> {
+pub fn git_commit(root: &Utf8Path, message: &str) -> Option<String> {
     let run = |args: &[&str]| {
         std::process::Command::new("git")
             .args(args)

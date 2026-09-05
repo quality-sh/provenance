@@ -17,9 +17,9 @@ use provenance_core::ScopeId;
 use super::read_policy::ReadPolicy;
 use super::reader::{self, ReadContext, ReadFuture};
 
-mod bindings;
 mod evidence;
 mod impact;
+mod nodes;
 mod records;
 mod stale;
 mod symbols;
@@ -42,9 +42,8 @@ pub async fn get(
     scope: &ScopeId,
     request: GetQuery,
 ) -> anyhow::Result<Stamped<GetResult>> {
-    let inner = scope.clone();
     served(repo, scope, move |ctx| {
-        Box::pin(async move { records::get(ctx, &inner, request) })
+        Box::pin(async move { records::get(ctx, request).await })
     })
     .await
 }
@@ -54,9 +53,8 @@ pub async fn search(
     scope: &ScopeId,
     request: SearchQuery,
 ) -> anyhow::Result<Stamped<SearchResult>> {
-    let inner = scope.clone();
     served(repo, scope, move |ctx| {
-        Box::pin(async move { records::search(ctx, &inner, request) })
+        Box::pin(async move { records::search(ctx, request).await })
     })
     .await
 }
@@ -66,9 +64,8 @@ pub async fn neighbors(
     scope: &ScopeId,
     request: NeighborsQuery,
 ) -> anyhow::Result<Stamped<NeighborsResult>> {
-    let inner = scope.clone();
     served(repo, scope, move |ctx| {
-        Box::pin(async move { walk::neighbors(ctx, &inner, request) })
+        Box::pin(async move { walk::neighbors(ctx, request).await })
     })
     .await
 }
@@ -78,9 +75,8 @@ pub async fn trace(
     scope: &ScopeId,
     request: TraceQuery,
 ) -> anyhow::Result<Stamped<TraceResult>> {
-    let inner = scope.clone();
     served(repo, scope, move |ctx| {
-        Box::pin(async move { walk::trace(ctx, &inner, request) })
+        Box::pin(async move { walk::trace(ctx, request).await })
     })
     .await
 }
@@ -90,9 +86,8 @@ pub async fn impact(
     scope: &ScopeId,
     request: ImpactQuery,
 ) -> anyhow::Result<Stamped<ImpactResult>> {
-    let inner = scope.clone();
     served(repo, scope, move |ctx| {
-        Box::pin(async move { impact::impact(ctx, &inner, request) })
+        Box::pin(async move { impact::impact(ctx, request).await })
     })
     .await
 }
@@ -102,9 +97,8 @@ pub async fn evidence(
     scope: &ScopeId,
     request: EvidenceQuery,
 ) -> anyhow::Result<Stamped<EvidenceResult>> {
-    let inner = scope.clone();
     served(repo, scope, move |ctx| {
-        Box::pin(async move { evidence::evidence(ctx, &inner, request) })
+        Box::pin(async move { evidence::evidence(ctx, request).await })
     })
     .await
 }
@@ -126,9 +120,8 @@ pub async fn resolve_symbol(
     scope: &ScopeId,
     request: ResolveSymbolQuery,
 ) -> anyhow::Result<Stamped<ResolveSymbolResult>> {
-    let inner = scope.clone();
     served(repo, scope, move |ctx| {
-        Box::pin(async move { symbols::resolve(ctx, &inner, request) })
+        Box::pin(async move { symbols::resolve(ctx, request).await })
     })
     .await
 }

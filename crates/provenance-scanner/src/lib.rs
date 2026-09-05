@@ -12,6 +12,6 @@ pub use parser::{
 pub use site::{source_sites, SourceSite, SourceSiteRole};
 pub use validate::{validate_annotations, validate_bindings, ValidationWarning};
 pub use walker::{
-    scan_file, scan_path, scan_path_with_content, AnnotationLocation, AttributeBinding, FileScan,
-    FileScanWithContent, Language,
+    scan_file, scan_path, scan_path_bounded, scan_path_with_content, AnnotationLocation,
+    AttributeBinding, FileScan, FileScanWithContent, Language,
 };

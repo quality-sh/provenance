@@ -13,7 +13,9 @@ use crate::layout::ProvenanceLayout;
 use crate::migrations;
 use crate::operations::read_policy::FreshnessPolicy;
 use crate::publication::publication_guard;
+use crate::state_store::StateStore;
 use provenance_core::protocol::StampPolicy;
+use provenance_macros::rule;
 use sqlx::SqlitePool;
 
 pub(super) struct Freshness {
@@ -58,6 +60,7 @@ pub(super) async fn run(
 /// waits for the switch to WAL, at most the retry's deadline plus one
 /// busy timeout (`cache::WalSwitchRetry`); once the file is WAL the switch
 /// costs nothing.
+#[rule("rule_read_holds_guard_for_freshness_only")]
 async fn catch_up(layout: &ProvenanceLayout) -> anyhow::Result<SqlitePool> {
     let guard = publication_guard(layout).await?;
     let pool = open_cache(layout).await?;
@@ -73,6 +76,7 @@ async fn catch_up(layout: &ProvenanceLayout) -> anyhow::Result<SqlitePool> {
 /// directory this process cannot write is the one case WAL changes: the
 /// `-shm` file cannot be created, so the database opens as an immutable
 /// image.
+#[rule("rule_failed_freshness_answers_at_stored_serial")]
 async fn stored(layout: &ProvenanceLayout, error: anyhow::Error) -> anyhow::Result<Freshness> {
     let text = format!("{error:#}");
     let pool = match open_existing_cache(layout).await {
@@ -93,7 +97,13 @@ async fn stored(layout: &ProvenanceLayout, error: anyhow::Error) -> anyhow::Resu
 
 /// Under `annotate_only` a database behind on migrations refuses: no
 /// freshness step will bring it forward. A file with no migration table
-/// at all is behind too.
+/// at all is behind too. So is a half-migrated file: a migration commits
+/// and forgets the family digests, and the rebuild that refills the
+/// tables runs after it, so a revision beside no digests means the tables
+/// are empty and no freshness step will run to fill them. Digest rows are
+/// one per scope, so a manifest that names no scope has none to lose and
+/// is not read as that window.
+#[rule("rule_annotate_only_refuses_a_half_migrated_projection")]
 async fn ensure_current_schema(pool: &SqlitePool, layout: &ProvenanceLayout) -> anyhow::Result<()> {
     let behind = ReadRefusal::SchemaBehind {
         database: layout.cache_db_path(),
@@ -109,14 +119,30 @@ async fn ensure_current_schema(pool: &SqlitePool, layout: &ProvenanceLayout) -> 
         }
         Err(error) => return Err(error),
     };
-    if applied
+    if !applied
         .iter()
         .any(|id| id == migrations::LATEST_MIGRATION_ID)
     {
-        Ok(())
-    } else {
-        Err(behind.into())
+        return Err(behind.into());
     }
+    let half_migrated: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM projection_revision) \
+         AND NOT EXISTS (SELECT 1 FROM projection_family_digests)",
+    )
+    .fetch_one(pool)
+    .await?;
+    if half_migrated
+        && !StateStore::new(layout.clone())
+            .manifest()?
+            .scopes
+            .is_empty()
+    {
+        return Err(ReadRefusal::HalfMigrated {
+            database: layout.cache_db_path(),
+        }
+        .into());
+    }
+    Ok(())
 }
 
 /// Whether an error says a table this schema expects is not there.

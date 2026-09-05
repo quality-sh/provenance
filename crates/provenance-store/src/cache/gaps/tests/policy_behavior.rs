@@ -43,6 +43,39 @@ fn a_question_with_a_resolution_settles_its_contradiction() {
     assert_eq!(count_kind(&gaps, GapKind::UnresolvedContradictsPair), 0);
 }
 
+/// A question that names a rejected resolution, or one that does not
+/// exist, has not settled its pair.
+#[test]
+#[verifies("rule_rejected_resolution_does_not_settle_contradiction", examples)]
+fn a_rejected_resolution_does_not_settle_a_contradiction() {
+    let requirements = vec![requirement("req_left"), requirement("req_right")];
+    let resolutions = vec![Resolution {
+        status: ResolutionStatus::Rejected,
+        requirement_ids: vec![sid("req_left")],
+        ..resolution("res_rejected")
+    }];
+    for named in ["res_rejected", "res_missing"] {
+        let questions = vec![Question {
+            resolution_id: Some(sid(named)),
+            ..contradiction("question_pair", "req_left", "req_right")
+        }];
+        let gaps = compute_for(
+            &[],
+            &requirements,
+            &resolutions,
+            &[],
+            &pair_topic(),
+            &questions,
+            &[],
+        );
+        assert_eq!(
+            count_kind(&gaps, GapKind::UnresolvedContradictsPair),
+            1,
+            "{named} must not settle the pair"
+        );
+    }
+}
+
 #[test]
 #[verifies("rule_graph_gaps", examples)]
 fn approved_resolution_need_not_produce_a_rule_but_resolved_requirement_still_does() {

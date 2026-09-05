@@ -7,9 +7,13 @@ use crate::parser::{annotation_marker_position, parse_annotations, Verification}
 use crate::{Annotation, ParseWarning};
 
 use bindings::parse_binding_line;
+pub use bounded::scan_path_bounded;
 use rust_lines::{rust_annotation_marker_position, rust_line_states, RustLexicalState};
 
 mod bindings;
+mod bounded;
+#[cfg(test)]
+mod bounded_tests;
 mod rust_lines;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]

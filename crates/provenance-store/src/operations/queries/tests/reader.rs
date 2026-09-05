@@ -17,6 +17,7 @@ use provenance_core::protocol::{
     SDK_PROTOCOL_VERSION,
 };
 use provenance_core::{NodeType, Requirement, Rule};
+use provenance_macros::verifies;
 
 /// The latest revision serial and the instance id, read directly.
 async fn stored(store: &TestStore) -> (i64, String) {
@@ -47,9 +48,8 @@ pub(super) async fn get_through(
     store: &TestStore,
     policy: ReadPolicy,
 ) -> anyhow::Result<Stamped<GetResult>> {
-    let scope = store.scope.clone();
     answer(&store.root, &store.scope, policy, move |ctx| {
-        Box::pin(async move { records::get(ctx, &scope, get_query("req_overtime")) })
+        Box::pin(async move { records::get(ctx, get_query("req_overtime")).await })
     })
     .await
 }
@@ -176,6 +176,7 @@ async fn evidence_stamps(store: &TestStore, base: &str) -> Vec<(&'static str, St
 }
 
 #[tokio::test]
+#[verifies("rule_query_answer_carries_a_stamp", exhaustion)]
 async fn every_answer_carries_a_stamp_at_the_stored_serial() {
     let store = test_stores::seeded_queries();
     let base = store.base_commit.clone().expect("a commit to diff against");
@@ -190,22 +191,58 @@ async fn every_answer_carries_a_stamp_at_the_stored_serial() {
         assert_eq!(stamp.derivation, READ_DERIVATION, "{operation} derivation");
         assert_eq!(stamp.policy, StampPolicy::CatchUp, "{operation} policy");
         assert!(stamp.digest.starts_with("sha256:"), "{operation} digest");
-        let (attested, live) = words(stamp);
-        assert!(
-            attested.is_empty(),
-            "{operation} attests nothing before its flip"
-        );
-        let expected: &[&str] = match *operation {
-            "impact" | "resolve_symbol" => &["canonical", "scanned_sites"],
-            "evidence" => &["canonical", "diff", "verification_runs"],
-            "stale" => &["canonical", "diff"],
-            _ => &["canonical"],
+        let (attested, live): (&[&str], &[&str]) = match *operation {
+            "get" => (&["requirements"], &[]),
+            "neighbors" | "trace" => (
+                &[
+                    "boundaries",
+                    "domains",
+                    "relations",
+                    "requirements",
+                    "sources",
+                ],
+                &[],
+            ),
+            "search" => (
+                &[
+                    "questions",
+                    "requirements",
+                    "resolutions",
+                    "rules",
+                    "sources",
+                    "topics",
+                ],
+                &[],
+            ),
+            "impact" => (
+                &["relations", "requirements", "rules", "sources"],
+                &["scanned_sites"],
+            ),
+            "resolve_symbol" => (
+                &["implementation_bindings", "rules", "verification_bindings"],
+                &["scanned_sites"],
+            ),
+            "evidence" => (
+                &[
+                    "implementation_bindings",
+                    "requirement_reviews",
+                    "verification_bindings",
+                ],
+                &["canonical", "diff", "verification_runs"],
+            ),
+            "stale" => (&[], &["canonical", "diff"]),
+            _ => (&[], &["canonical"]),
         };
-        assert_eq!(live, expected, "{operation} live words");
+        assert_eq!(
+            words(stamp),
+            (attested.to_vec(), live.to_vec()),
+            "{operation} stamp words"
+        );
     }
 }
 
 #[tokio::test]
+#[verifies("rule_stamp_lists_a_live_word_for_uncovered_parts", examples)]
 async fn evidence_without_a_base_lists_no_diff() {
     let store = test_stores::seeded_queries();
     let answer = queries::evidence(
@@ -216,10 +253,15 @@ async fn evidence_without_a_base_lists_no_diff() {
     .await
     .unwrap();
     assert!(answer.result.stale.is_none());
-    assert_eq!(words(&answer.stamp).1, ["canonical", "verification_runs"]);
+    assert_eq!(
+        words(&answer.stamp).1,
+        ["verification_runs"],
+        "canonical is read for the diff half alone, so it is not listed either"
+    );
 }
 
 #[tokio::test]
+#[verifies("rule_stamp_attests_every_table_read", examples)]
 async fn a_table_handle_puts_its_word_in_attested() {
     let store = test_stores::seeded_queries();
     crate::cache::catch_up_state(&store.layout()).await.unwrap();

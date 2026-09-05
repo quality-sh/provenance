@@ -2,42 +2,46 @@ use crate::operations::reader::{Live, ReadContext};
 use provenance_core::protocol::{
     ensure_limit, ensure_protocol_version, take_page, EvidenceQuery, EvidenceResult, StaleEvidence,
 };
-use provenance_core::{ScopeId, StableId};
-
-use super::bindings::Bindings;
+use provenance_core::{ImplementationBinding, RequirementReview, StableId, VerificationBinding};
+use provenance_macros::rule;
 
 /// Everything standing behind one Rule, kept apart by kind.
 ///
-/// Implementation bindings, verification bindings, and verification runs are
-/// separate records and stay separate here. Review required says the
-/// Requirement was restated; stale says the code carrying the evidence
-/// changed, and it is read from a diff the caller names.
-pub(super) fn evidence(
+/// Implementation bindings, verification bindings, and open reviews come
+/// from the projection; verification runs stay cache JSONL. Review
+/// required says the Requirement was restated; stale says the code
+/// carrying the evidence changed, and it is read from a diff the caller
+/// names. Each of the four lists carries its own cut flag beside the
+/// top-level `has_more`, which stays the OR of the four.
+#[rule("rule_evidence_flags_each_cut_list")]
+pub(super) async fn evidence(
     ctx: &ReadContext,
-    scope: &ScopeId,
     request: EvidenceQuery,
 ) -> anyhow::Result<EvidenceResult> {
     ensure_protocol_version(request.protocol_version)?;
     ensure_limit(request.limit)?;
     let rule = StableId::new(request.rule.clone())?;
-    let canonical = ctx.live(Live::Canonical);
-    let store = canonical.store();
-    let bindings = Bindings::load(&store, scope, request.include_retired)?;
-    let implementations = bindings
-        .implementations
+    let scope = ctx.snapshot().scope().clone();
+    let include_retired = request.include_retired;
+    let snapshot = ctx.snapshot();
+    let by_rule = [rule.as_str()];
+    let implementations = snapshot
+        .table::<ImplementationBinding>()
+        .by_field("rule_id", &by_rule, include_retired)
+        .await?
         .into_iter()
-        .filter(|binding| binding.rule_id == rule)
         .take(request.limit + 1)
         .collect::<Vec<_>>();
-    let verifications = bindings
-        .verifications
+    let verifications = snapshot
+        .table::<VerificationBinding>()
+        .by_field("rule_id", &by_rule, include_retired)
+        .await?
         .into_iter()
-        .filter(|binding| binding.rule_id == rule)
         .take(request.limit + 1)
         .collect::<Vec<_>>();
     let mut runs = ctx
         .live(Live::VerificationRuns)
-        .runs(scope)?
+        .runs(&scope)?
         .into_iter()
         .filter(|run| run.rule_id == rule)
         .collect::<Vec<_>>();
@@ -49,25 +53,32 @@ pub(super) fn evidence(
     });
     let latest_verification_run = runs.first().cloned();
     runs.truncate(request.limit + 1);
-    let mut reviews = store
-        .open_requirement_reviews(scope)?
+    // The table answers in id order; only the reviews still waiting on a
+    // run are open.
+    let mut reviews = snapshot
+        .table::<RequirementReview>()
+        .by_field("rule_id", &by_rule, include_retired)
+        .await?
         .into_iter()
-        .filter(|review| review.rule_id == rule)
+        .filter(|review| review.cleared_at.is_none())
         .collect::<Vec<_>>();
-    reviews.sort_by(|left, right| left.id.as_str().cmp(right.id.as_str()));
     let review_required = !reviews.is_empty();
     reviews.truncate(request.limit + 1);
 
-    let (implementation_bindings, cut_implementations) = take_page(implementations, request.limit);
-    let (verification_bindings, cut_verifications) = take_page(verifications, request.limit);
-    let (verification_runs, cut_runs) = take_page(runs, request.limit);
-    let (reviews, cut_reviews) = take_page(reviews, request.limit);
+    let (implementation_bindings, implementation_bindings_has_more) =
+        take_page(implementations, request.limit);
+    let (verification_bindings, verification_bindings_has_more) =
+        take_page(verifications, request.limit);
+    let (verification_runs, verification_runs_has_more) = take_page(runs, request.limit);
+    let (reviews, reviews_has_more) = take_page(reviews, request.limit);
     let stale = request
         .base
         .map(|base| {
             let diff = ctx.live(Live::Diff);
             let (base, head) = diff.resolve_range(base, request.head)?;
-            let graph = canonical.graph_evidence(scope, request.include_retired)?;
+            let graph = ctx
+                .live(Live::Canonical)
+                .graph_evidence(&scope, include_retired)?;
             diff.disturbed(base, head, std::slice::from_ref(&request.rule), &graph)
                 .map(|found| StaleEvidence {
                     base: found.base,
@@ -79,7 +90,10 @@ pub(super) fn evidence(
     Ok(EvidenceResult {
         rule_id: request.rule,
         limit: request.limit,
-        has_more: cut_implementations || cut_verifications || cut_runs || cut_reviews,
+        has_more: implementation_bindings_has_more
+            || verification_bindings_has_more
+            || verification_runs_has_more
+            || reviews_has_more,
         implementation_bindings,
         verification_bindings,
         verification_runs,
@@ -87,5 +101,9 @@ pub(super) fn evidence(
         review_required,
         reviews,
         stale,
+        implementation_bindings_has_more,
+        verification_bindings_has_more,
+        verification_runs_has_more,
+        reviews_has_more,
     })
 }

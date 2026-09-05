@@ -5,6 +5,7 @@ mod stamp;
 mod typed_spec;
 
 use camino::Utf8PathBuf;
+use provenance_macros::rule;
 use serde::{Deserialize, Serialize};
 
 pub use node::{
@@ -83,6 +84,9 @@ pub fn ensure_max_depth(depth: usize) -> anyhow::Result<()> {
 }
 
 /// Cuts one over-long page down to its limit and says whether more remain.
+/// Every operation answers through it, so an answer stops at the limit
+/// and carries `has_more`; no operation pages.
+#[rule("rule_query_answers_stop_at_the_limit")]
 pub fn take_page<T>(mut items: Vec<T>, limit: usize) -> (Vec<T>, bool) {
     let has_more = items.len() > limit;
     items.truncate(limit);

@@ -10,10 +10,17 @@ use provenance_core::{
 
 mod baseline;
 mod comparison;
+mod evidence;
 mod front_equivalence;
+mod impact;
+mod limits;
+mod live;
+mod order;
 mod pinned;
 mod reader;
+mod retired;
 mod stamp;
+mod symbols;
 mod tables;
 
 fn sid(value: &str) -> StableId {

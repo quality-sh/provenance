@@ -2,7 +2,6 @@
 //! records the store holds so every kind and every operation gets a case.
 
 use super::test_stores::TestStore;
-use crate::operations::queries::bindings::Bindings;
 use crate::operations::queries::tests::baseline::records;
 use provenance_core::protocol::{
     Direction, EvidenceQuery, GetQuery, GraphNode, ImpactQuery, NeighborsQuery, ResolveSymbolQuery,
@@ -147,14 +146,15 @@ pub fn for_store(store: &TestStore) -> Vec<Request> {
             limit: 50,
         }));
     }
-    let bindings = Bindings::load(&state, &store.scope, true).unwrap();
-    let mut files: Vec<String> = bindings
-        .implementations
+    let mut files: Vec<String> = state
+        .list_implementation_bindings(&store.scope)
+        .unwrap()
         .iter()
         .map(|binding| binding.file.to_string())
         .chain(
-            bindings
-                .verifications
+            state
+                .list_verification_bindings(&store.scope)
+                .unwrap()
                 .iter()
                 .map(|binding| binding.file.to_string()),
         )

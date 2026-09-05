@@ -2,13 +2,14 @@ use super::{
     graph_query::GraphQuery,
     model::{GapItem, GapKind},
 };
-use provenance_core::{NodeType, Question, StableId};
+use provenance_core::{NodeType, Question, ResolutionStatus, StableId};
+use provenance_macros::rule;
 use std::collections::BTreeSet;
 
 /// A contradiction is a question that names both requirements. The
 /// unordered pair is the gap identity; it is settled when the question
-/// carries a resolution or either requirement lists the other in
-/// `supersedes`.
+/// carries a resolution that exists and was not rejected, or either
+/// requirement lists the other in `supersedes`.
 pub(super) fn add_gaps(query: &GraphQuery<'_, '_>, gaps: &mut Vec<GapItem>) {
     let mut seen: BTreeSet<(&str, &str)> = BTreeSet::new();
     for question in query.graph.questions {
@@ -34,8 +35,16 @@ pub(super) fn add_gaps(query: &GraphQuery<'_, '_>, gaps: &mut Vec<GapItem>) {
     }
 }
 
+/// The pair is settled by a resolution only when the named resolution
+/// exists and was not rejected; a supersession either way settles it too.
+#[rule("rule_rejected_resolution_does_not_settle_contradiction")]
 fn is_resolved(query: &GraphQuery<'_, '_>, question: &Question, other: &StableId) -> bool {
-    if question.resolution_id.is_some() {
+    let settled_by_resolution = question.resolution_id.as_ref().is_some_and(|id| {
+        query.graph.resolutions.iter().any(|resolution| {
+            resolution.id == *id && resolution.status != ResolutionStatus::Rejected
+        })
+    });
+    if settled_by_resolution {
         return true;
     }
     let supersedes =

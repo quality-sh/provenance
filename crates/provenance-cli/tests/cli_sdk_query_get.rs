@@ -50,8 +50,12 @@ fn get_carries_a_stamp_beside_the_answer() {
     assert!(!stamp["instance_id"].as_str().unwrap().is_empty());
     assert!(stamp["derivation"].is_u64());
     assert_eq!(stamp["policy"], "catch_up");
-    assert_eq!(stamp["attested"], json!([]));
-    assert_eq!(stamp["live"], json!(["canonical"]));
+    assert_eq!(
+        stamp["attested"],
+        json!(["rules"]),
+        "get reads the rule from its table"
+    );
+    assert_eq!(stamp["live"], json!([]), "get reads nothing live");
     assert!(answer.get("freshness_error").is_none());
     assert_eq!(answer["found"], true);
 }

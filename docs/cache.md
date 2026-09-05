@@ -6,8 +6,20 @@ ideation records, implementation and verification bindings, requirement
 reviews, source commit pins, proposal confidence, assertions, and derived
 proposal state. Canonical JSONL is the only write target. The database is
 never the source of truth for writes; read authority is delegated to the
-stamped projection, and the SDK query operations move onto it stage by
-stage.
+stamped projection. Seven of the eight SDK query operations answer from it
+(`get`, `search`, `neighbors`, `trace`, `impact`, `evidence`,
+`resolve_symbol`); `stale` reads git and canonical shards and attests
+nothing.
+
+Each record kind has one table with one column for each field of its
+Rust record type, named as the field; list and struct fields are JSON
+text, and the eight kind tables carry one derived `search_text` column.
+The three integration tables (`implementation_bindings`,
+`verification_bindings`, `requirement_reviews`) mirror their types the
+same way. A derive on each type writes the column list, the insert, and
+the row decoder, so a new field cannot reach one side without the other.
+The `relations` table holds one row per (owner, relation, target),
+derived from the owner kinds' reference fields.
 
 Each materialization stores a revision stamp beside the rows: a monotonic
 serial, a projection digest, and a projection instance id. The digest
@@ -57,6 +69,24 @@ publication guard. The lock belongs to an open file description rather
 than a thread, acquisition waits on the blocking pool, and the guard stays
 held from snapshot through commit. No canonical publication can
 interleave with a projection write.
+
+## Read path
+
+A query read takes the guard for its freshness step only. Under the
+default `catch_up` policy it opens the pool inside the guard, runs one
+catch-up pass, and drops the guard; under `annotate_only` it takes no
+guard and refuses a database that is absent, behind on migrations, or
+half-migrated (a revision beside no family digests). It then answers
+from a snapshot pinned inside one `SQLite` read transaction, whose first
+read is the stored revision, so every row read later is at that serial.
+The database runs in WAL mode, so a reader never blocks a writer and a
+writer never blocks a reader; the `-wal` and `-shm` files sit beside the
+database. A projection table is readable only through the snapshot's
+handles, which record the table's family word in the stamp's `attested`
+list; a live part (canonical shards, the working-tree scan, the run
+file, git) only through a handle that records its word in `live`. A
+failed freshness step answers at the stored serial with the policy word
+`catch_up_failed` and the error text beside the answer.
 
 ## What each family's derivation reads
 

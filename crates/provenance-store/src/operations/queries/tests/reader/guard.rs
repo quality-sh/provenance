@@ -11,10 +11,12 @@ use crate::operations::reader::{answer, ReadSnapshot};
 use crate::publication::{publication_guard, with_repository_publication};
 use crate::test_probes::publication_lock_is_held;
 use provenance_core::{Requirement, RequirementStatus};
+use provenance_macros::verifies;
 use std::sync::mpsc;
 use std::time::Duration;
 
 #[tokio::test]
+#[verifies("rule_read_holds_guard_for_freshness_only", examples)]
 async fn the_publication_lock_is_free_while_a_read_answers() {
     let store = test_stores::seeded_queries();
     let layout = store.layout();
@@ -25,7 +27,6 @@ async fn the_publication_lock_is_free_while_a_read_answers() {
         probe_seen.set(publication_lock_is_held(&probe_layout));
         Ok(())
     });
-    let scope = store.scope.clone();
     let run_layout = layout.clone();
     let stamped = answer(
         &store.root,
@@ -37,7 +38,7 @@ async fn the_publication_lock_is_free_while_a_read_answers() {
                     !publication_lock_is_held(&run_layout),
                     "the lock must be free while the read answers"
                 );
-                let found = records::get(ctx, &scope, get_query("req_overtime"))?;
+                let found = records::get(ctx, get_query("req_overtime")).await?;
                 anyhow::ensure!(
                     !publication_lock_is_held(&run_layout),
                     "the lock must be free after the operation read canonical state"
@@ -60,7 +61,6 @@ async fn the_publication_lock_is_free_while_a_read_answers() {
 async fn a_canonical_write_does_not_wait_for_a_read() {
     let store = test_stores::seeded_queries();
     let layout = store.layout();
-    let scope = store.scope.clone();
     let stamped = answer(
         &store.root,
         &store.scope,
@@ -79,7 +79,7 @@ async fn a_canonical_write_does_not_wait_for_a_read() {
                     .recv_timeout(Duration::from_secs(5))
                     .expect("a canonical write must not wait on an open read");
                 writer.join().unwrap()?;
-                records::get(ctx, &scope, get_query("req_overtime"))
+                records::get(ctx, get_query("req_overtime")).await
             })
         },
     )
@@ -92,6 +92,7 @@ async fn a_canonical_write_does_not_wait_for_a_read() {
 /// so the publication and the second snapshot run on a second pool; WAL
 /// is what lets both read the same file.
 #[tokio::test]
+#[verifies("rule_read_answers_from_one_pinned_transaction", examples)]
 async fn a_read_that_started_before_a_publication_answers_at_its_serial() {
     let store = test_stores::seeded_queries();
     let layout = store.layout();
