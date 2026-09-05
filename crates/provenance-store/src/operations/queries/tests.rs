@@ -10,6 +10,7 @@ use provenance_core::{
 
 mod baseline;
 mod comparison;
+mod evidence;
 mod front_equivalence;
 mod impact;
 mod limits;

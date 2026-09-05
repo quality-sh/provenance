@@ -412,6 +412,14 @@ export interface EvidenceResponse extends PagedResponse {
   review_required: boolean;
   reviews: RequirementReview[];
   stale: StaleEvidence | null;
+  /**
+   * The cut flag of each list; `has_more` is the OR of the four. Absent
+   * on an answer recorded before the flags existed.
+   */
+  implementation_bindings_has_more?: boolean;
+  verification_bindings_has_more?: boolean;
+  verification_runs_has_more?: boolean;
+  reviews_has_more?: boolean;
 }
 
 export interface StaleRequest extends PagedRequest {

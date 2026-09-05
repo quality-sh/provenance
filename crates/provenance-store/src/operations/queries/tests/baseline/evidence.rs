@@ -94,5 +94,9 @@ pub fn evidence(
         review_required,
         reviews,
         stale,
+        implementation_bindings_has_more: false,
+        verification_bindings_has_more: false,
+        verification_runs_has_more: false,
+        reviews_has_more: false,
     })
 }

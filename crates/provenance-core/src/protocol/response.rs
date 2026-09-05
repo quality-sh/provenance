@@ -90,6 +90,10 @@ pub struct StaleEvidence {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "the wire shape: one cut flag per list beside the top-level one"
+)]
 pub struct EvidenceResult {
     pub rule_id: String,
     pub limit: usize,
@@ -102,6 +106,15 @@ pub struct EvidenceResult {
     pub review_required: bool,
     pub reviews: Vec<RequirementReview>,
     pub stale: Option<StaleEvidence>,
+    /// The cut flag of each list; `has_more` is the OR of the four.
+    #[serde(default)]
+    pub implementation_bindings_has_more: bool,
+    #[serde(default)]
+    pub verification_bindings_has_more: bool,
+    #[serde(default)]
+    pub verification_runs_has_more: bool,
+    #[serde(default)]
+    pub reviews_has_more: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

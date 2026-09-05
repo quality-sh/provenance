@@ -82,7 +82,7 @@ pub async fn served_value(store: &TestStore, request: &Request, policy: ReadPoli
                 Request::Neighbors(query) => settle(walk::neighbors(ctx, query).await),
                 Request::Trace(query) => settle(walk::trace(ctx, query).await),
                 Request::Impact(query) => settle(impact::impact(ctx, query).await),
-                Request::Evidence(query) => settle(evidence::evidence(ctx, &scope, query)),
+                Request::Evidence(query) => settle(evidence::evidence(ctx, query).await),
                 Request::Stale(query) => settle(stale::stale(ctx, &scope, query)),
                 Request::ResolveSymbol(query) => settle(symbols::resolve(ctx, &scope, query)),
             })

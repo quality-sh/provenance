@@ -98,9 +98,8 @@ pub async fn evidence(
     scope: &ScopeId,
     request: EvidenceQuery,
 ) -> anyhow::Result<Stamped<EvidenceResult>> {
-    let inner = scope.clone();
     served(repo, scope, move |ctx| {
-        Box::pin(async move { evidence::evidence(ctx, &inner, request) })
+        Box::pin(async move { evidence::evidence(ctx, request).await })
     })
     .await
 }

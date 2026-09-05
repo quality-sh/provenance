@@ -217,7 +217,14 @@ async fn every_answer_carries_a_stamp_at_the_stored_serial() {
                 &["scanned_sites"],
             ),
             "resolve_symbol" => (&[], &["canonical", "scanned_sites"]),
-            "evidence" => (&[], &["canonical", "diff", "verification_runs"]),
+            "evidence" => (
+                &[
+                    "implementation_bindings",
+                    "requirement_reviews",
+                    "verification_bindings",
+                ],
+                &["canonical", "diff", "verification_runs"],
+            ),
             "stale" => (&[], &["canonical", "diff"]),
             _ => (&[], &["canonical"]),
         };
@@ -240,7 +247,11 @@ async fn evidence_without_a_base_lists_no_diff() {
     .await
     .unwrap();
     assert!(answer.result.stale.is_none());
-    assert_eq!(words(&answer.stamp).1, ["canonical", "verification_runs"]);
+    assert_eq!(
+        words(&answer.stamp).1,
+        ["verification_runs"],
+        "canonical is read for the diff half alone, so it is not listed either"
+    );
 }
 
 #[tokio::test]
