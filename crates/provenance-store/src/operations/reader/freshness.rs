@@ -1,13 +1,11 @@
 //! The freshness step a read runs before it answers.
 //!
-//! `catch_up` takes the publication guard, opens the pool inside it (the
-//! guard already serializes every projection write, so two first reads on
-//! a fresh clone cannot both create the file), runs one catch-up pass, and
-//! drops the guard. When that step fails and the database holds a
-//! revision, the read goes on at the stored serial with the policy word
-//! `catch_up_failed` and the error text beside the answer. `annotate_only`
-//! takes no guard and refuses an absent database. `refuse_stale` is
-//! reserved and not implemented yet.
+//! `catch_up` takes the publication guard, opens the pool inside it, runs
+//! one catch-up pass, and drops the guard. When that step fails and the
+//! database holds a revision, the read goes on at the stored serial with
+//! the policy word `catch_up_failed` and the error text beside the answer.
+//! `annotate_only` takes no guard and refuses an absent database.
+//! `refuse_stale` is reserved and not implemented yet.
 
 use super::ReadRefusal;
 use crate::cache::{catch_up_with_guard, open_cache, open_existing_cache, open_immutable_cache};

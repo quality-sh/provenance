@@ -93,8 +93,8 @@ pub async fn served_value(store: &TestStore, request: &Request, policy: ReadPoli
 
 /// The served side: the operations through the reader. The freshness step
 /// stays out of the number: the store is caught up once, then every read
-/// runs under `annotate_only`. The scan comes from the test-set the comparison tests
-/// took before the clock started.
+/// runs under `annotate_only`. The scan is the one `prepare` took before
+/// the clock started.
 async fn served_answer(store: &TestStore, request: &Request) -> Value {
     let policy = ReadPolicy::with_freshness(FreshnessPolicy::AnnotateOnly);
     let mut answer = served_value(store, request, policy).await;
@@ -141,7 +141,7 @@ async fn assert_agreement(store: TestStore) {
     crate::test_probes::set_test_scan(None);
 }
 
-/// Times every case the comparison tests runs over one store and prints the rows.
+/// Times every case the comparison tests run over one store and prints the rows.
 async fn print_timings(store: TestStore) {
     let (scans, rebuild_ms, catch_up_ms) = prepare(&store).await;
     let started = Instant::now();

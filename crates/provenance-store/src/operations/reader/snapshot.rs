@@ -23,8 +23,8 @@ pub struct ReadSnapshot {
 impl ReadSnapshot {
     /// Begins a read transaction on one pooled connection. Its first read
     /// is the stored revision, which pins the snapshot: every row read
-    /// later in the transaction is at that serial by the rule of `SQLite` itself.
-    /// `None` means the database holds no revision.
+    /// later in the transaction is at that serial. `None` means the
+    /// database holds no revision.
     pub(crate) async fn open(pool: &SqlitePool, scope: &ScopeId) -> anyhow::Result<Option<Self>> {
         let mut tx = pool.begin().await?;
         let Some(revision) = stored_revision(&mut tx).await? else {

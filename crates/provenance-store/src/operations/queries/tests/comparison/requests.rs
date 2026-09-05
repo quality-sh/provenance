@@ -1,4 +1,4 @@
-//! The request set the comparison tests runs over one store, derived from the
+//! The request set the comparison tests run over one store, derived from the
 //! records the store holds so every kind and every operation gets a case.
 
 use super::test_stores::TestStore;

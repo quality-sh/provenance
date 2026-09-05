@@ -1,4 +1,4 @@
-//! The stores the comparison tests runs over. Each store is one
+//! The stores the comparison tests run over. Each store is one
 //! temporary repository; no store is the workspace root, which would write
 //! a database into the checkout and take the real publication lock.
 

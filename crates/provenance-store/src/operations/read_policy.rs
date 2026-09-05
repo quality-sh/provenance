@@ -1,8 +1,7 @@
 //! The policy a query read runs under.
 //!
 //! No configuration file fills it yet; the reserved names for that file
-//! are `read.freshness_policy` and `read.scan_limit`. There is no journal
-//! knob, no visit budget, and no request-side knob.
+//! are `read.freshness_policy` and `read.scan_limit`.
 
 use provenance_core::protocol::StampPolicy;
 

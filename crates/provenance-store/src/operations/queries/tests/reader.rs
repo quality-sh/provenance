@@ -275,8 +275,8 @@ async fn a_canonical_edit_advances_the_serial_under_catch_up() {
     assert!(second.freshness_error.is_none());
 }
 
-/// `stale` resolves the commit range before it reads the store, as it did
-/// before the reader, so when both are bad the range is the error.
+/// `stale` resolves the commit range before it reads the store, so when
+/// both are bad the range is the error.
 #[tokio::test]
 async fn a_bad_base_is_refused_before_the_store_is_read() {
     let store = test_stores::seeded_queries();

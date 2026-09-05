@@ -17,8 +17,8 @@ pub(super) fn stale(
 ) -> anyhow::Result<StaleResult> {
     ensure_protocol_version(request.protocol_version)?;
     ensure_limit(request.limit)?;
-    // The range resolves before the store is read, as it did before the
-    // reader, so a bad base is the error that surfaces.
+    // The range resolves before the store is read, so a bad base is the
+    // error that surfaces.
     let diff = ctx.live(Live::Diff);
     let (base, head) = diff.resolve_range(request.base, request.head)?;
     let graph = ctx

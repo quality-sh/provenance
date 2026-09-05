@@ -3,9 +3,9 @@
 //! Production code calls [`at`] at a named point and [`record_read`] with
 //! every canonical path it opens. Outside tests both are no-ops. A test arms
 //! a closure for a label on its own thread, or records the set of paths one
-//! derivation reads. A test can also test-set the working-tree scan the
-//! reader hands out, so a timing row measures graph work and not the scan,
-//! and can ask whether the publication lock is held.
+//! derivation reads. A test can also set the working-tree scan the reader
+//! hands out, so a timing row measures graph work and not the scan, and
+//! can ask whether the publication lock is held.
 
 #[cfg(test)]
 use std::cell::RefCell;
@@ -22,7 +22,7 @@ thread_local! {
     static SCAN: RefCell<Option<Vec<provenance_scanner::FileScan>>> = const { RefCell::new(None) };
 }
 
-/// The test-set scan, when a test set one on this thread.
+/// The scan a test set on this thread, when there is one.
 #[cfg(test)]
 pub fn test_scan() -> Option<Vec<provenance_scanner::FileScan>> {
     SCAN.with(|scan| scan.borrow().clone())

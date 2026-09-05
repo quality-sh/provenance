@@ -1,6 +1,7 @@
-//! The cache pool runs `SQLite` in WAL mode. What that buys, reads that
-//! never wait on a writer, the guard tests assert; here: a read leaves no
-//! file behind, and a file still in DELETE mode can be opened.
+//! The cache pool runs `SQLite` in WAL mode. The guard tests assert what
+//! that buys: a read never waits on a writer. The tests here assert that a
+//! read leaves no file behind and that a file still in DELETE mode can be
+//! opened.
 
 use super::super::*;
 use super::fixtures::*;
@@ -22,11 +23,9 @@ pub fn wal_files(layout: &ProvenanceLayout) -> Vec<String> {
         .collect()
 }
 
-/// A read opens one pool and closes it. The pool holds one connection, so
-/// the close is one `sqlite3_close`, which takes the exclusive lock and
-/// removes the `-wal` and `-shm` files. A pool that grew to two connections closed
-/// them on two worker threads at once, and the second closer could not
-/// take the lock, so about half of all reads left the files behind.
+/// A read opens one pool and closes it, and the close removes the `-wal`
+/// and `-shm` files. A pool that grew to two connections closed them at
+/// once, and about half of all reads left the files behind.
 #[tokio::test]
 async fn a_completed_read_leaves_no_wal_files() {
     let (_dir, layout, scope) = seeded_layout();

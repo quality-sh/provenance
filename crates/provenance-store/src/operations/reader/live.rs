@@ -2,7 +2,7 @@
 //!
 //! Each half is reachable only through a handle taken with
 //! [`ReadContext::live`], which records the word, and each method exists
-//! on its own word only: a handle asked for another word's read is an
+//! on its own word only: a handle asked for another word's read is a
 //! programming error.
 
 use super::ReadContext;
@@ -79,8 +79,8 @@ impl<'c> LiveHandle<'c> {
         cache::graph_evidence(&self.layout(), scope, include_retired)
     }
 
-    /// A scan of the whole working tree. A test may test-set the scan, so a
-    /// timing row measures graph and binding work only.
+    /// A scan of the whole working tree. A test can set the scan in
+    /// advance, so a timing row measures graph and binding work only.
     pub fn scan_tree(&self) -> anyhow::Result<Vec<FileScan>> {
         self.only(Live::ScannedSites);
         if let Some(scans) = crate::test_probes::test_scan() {
