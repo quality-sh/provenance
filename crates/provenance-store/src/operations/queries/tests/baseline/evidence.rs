@@ -8,8 +8,8 @@ use provenance_core::protocol::{
 };
 use provenance_core::{ScopeId, StableId};
 
+use super::bindings::Bindings;
 use super::stale;
-use crate::operations::queries::bindings::Bindings;
 
 /// Everything standing behind one Rule, kept apart by kind.
 ///

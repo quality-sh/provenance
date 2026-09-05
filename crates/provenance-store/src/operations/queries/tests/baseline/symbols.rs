@@ -10,8 +10,8 @@ use provenance_core::{NodeType, ScopeId, StableId};
 use provenance_scanner::source_sites;
 use std::collections::BTreeSet;
 
+use super::bindings::Bindings;
 use super::records;
-use crate::operations::queries::bindings::Bindings;
 use crate::operations::sites::relative;
 
 /// Names the Rules bound to one code site.

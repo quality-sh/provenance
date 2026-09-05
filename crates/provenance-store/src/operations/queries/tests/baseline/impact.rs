@@ -10,8 +10,8 @@ use provenance_core::protocol::{
 use provenance_core::{NodeType, ScopeId, StableId};
 use std::collections::BTreeSet;
 
+use super::bindings::Bindings;
 use super::walk;
-use crate::operations::queries::bindings::Bindings;
 use crate::operations::sites;
 
 /// Names every Rule a record reaches, with the code standing behind it.

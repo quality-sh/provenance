@@ -1,10 +1,13 @@
 use crate::operations::reader::ReadContext;
-use crate::state_store::StateStore;
+#[cfg(test)]
+use provenance_core::protocol::GraphNode;
 use provenance_core::protocol::{
-    ensure_limit, ensure_protocol_version, take_page, GetQuery, GetResult, GraphNode, SearchQuery,
+    ensure_limit, ensure_protocol_version, take_page, GetQuery, GetResult, SearchQuery,
     SearchResult,
 };
-use provenance_core::{NodeType, ScopeId, StableId};
+#[cfg(test)]
+use provenance_core::ScopeId;
+use provenance_core::{NodeType, StableId};
 
 use super::nodes;
 
@@ -12,8 +15,11 @@ use super::nodes;
 ///
 /// Active views leave retired records out. The order is node type then
 /// canonical ID, so two runs over the same state answer the same bytes.
+/// No operation reads canonical records any more; the comparison tests
+/// still do, until the baseline goes.
+#[cfg(test)]
 pub(super) fn load(
-    store: &StateStore,
+    store: &crate::state_store::StateStore,
     scope: &ScopeId,
     include_retired: bool,
 ) -> anyhow::Result<Vec<GraphNode>> {
@@ -73,16 +79,6 @@ pub(super) fn load(
             .then_with(|| left.id().as_str().cmp(right.id().as_str()))
     });
     Ok(nodes)
-}
-
-pub(super) fn find<'a>(
-    nodes: &'a [GraphNode],
-    node_type: Option<NodeType>,
-    id: &StableId,
-) -> Option<&'a GraphNode> {
-    nodes.iter().find(|node| {
-        node.id() == id && node_type.is_none_or(|wanted| rank(node.node_type()) == rank(wanted))
-    })
 }
 
 pub(super) async fn get(ctx: &ReadContext, request: GetQuery) -> anyhow::Result<GetResult> {

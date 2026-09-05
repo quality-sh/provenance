@@ -19,6 +19,7 @@ mod pinned;
 mod reader;
 mod retired;
 mod stamp;
+mod symbols;
 mod tables;
 
 fn sid(value: &str) -> StableId {

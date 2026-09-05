@@ -1,3 +1,6 @@
+//! Baseline: the canonical binding loader the baseline copies read through.
+//! The commit that deletes `records::load` deletes this copy.
+
 use crate::state_store::StateStore;
 use provenance_core::{ImplementationBinding, ScopeId, VerificationBinding};
 
@@ -5,13 +8,13 @@ use provenance_core::{ImplementationBinding, ScopeId, VerificationBinding};
 ///
 /// Active views leave retired bindings out; the flag is the only way to see
 /// them, and it reads the same way in every primitive.
-pub(super) struct Bindings {
+pub struct Bindings {
     pub implementations: Vec<ImplementationBinding>,
     pub verifications: Vec<VerificationBinding>,
 }
 
 impl Bindings {
-    pub(super) fn load(
+    pub fn load(
         store: &StateStore,
         scope: &ScopeId,
         include_retired: bool,

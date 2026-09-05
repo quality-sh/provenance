@@ -17,7 +17,6 @@ use provenance_core::ScopeId;
 use super::read_policy::ReadPolicy;
 use super::reader::{self, ReadContext, ReadFuture};
 
-mod bindings;
 mod evidence;
 mod impact;
 mod nodes;
@@ -121,9 +120,8 @@ pub async fn resolve_symbol(
     scope: &ScopeId,
     request: ResolveSymbolQuery,
 ) -> anyhow::Result<Stamped<ResolveSymbolResult>> {
-    let inner = scope.clone();
     served(repo, scope, move |ctx| {
-        Box::pin(async move { symbols::resolve(ctx, &inner, request) })
+        Box::pin(async move { symbols::resolve(ctx, request).await })
     })
     .await
 }

@@ -2,8 +2,7 @@
 //! records the store holds so every kind and every operation gets a case.
 
 use super::test_stores::TestStore;
-use crate::operations::queries::bindings::Bindings;
-use crate::operations::queries::tests::baseline::records;
+use crate::operations::queries::tests::baseline::{bindings::Bindings, records};
 use provenance_core::protocol::{
     Direction, EvidenceQuery, GetQuery, GraphNode, ImpactQuery, NeighborsQuery, ResolveSymbolQuery,
     SearchQuery, StaleQuery, TraceQuery, SDK_PROTOCOL_VERSION,

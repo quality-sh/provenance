@@ -216,7 +216,10 @@ async fn every_answer_carries_a_stamp_at_the_stored_serial() {
                 &["relations", "requirements", "rules", "sources"],
                 &["scanned_sites"],
             ),
-            "resolve_symbol" => (&[], &["canonical", "scanned_sites"]),
+            "resolve_symbol" => (
+                &["implementation_bindings", "rules", "verification_bindings"],
+                &["scanned_sites"],
+            ),
             "evidence" => (
                 &[
                     "implementation_bindings",
