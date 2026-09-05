@@ -47,7 +47,7 @@ fn relative(root: &Utf8Path, files: &[super::FileScan]) -> Vec<String> {
 }
 
 #[test]
-#[verifies("rule_scan_cut_is_deterministic_and_reported", examples)]
+#[verifies("rule_scan_cut_is_deterministic", examples)]
 fn a_cut_scan_reads_the_same_files_twice() {
     let (_dir, root) = tree();
     let (first, cut) = scan_path_bounded(&root, 4).unwrap();
@@ -63,7 +63,7 @@ fn a_cut_scan_reads_the_same_files_twice() {
 }
 
 #[test]
-#[verifies("rule_scan_cut_is_deterministic_and_reported", examples)]
+#[verifies("rule_scan_cut_is_deterministic", examples)]
 fn a_sub_limit_scan_matches_scan_path() {
     let (_dir, root) = tree();
     let whole = scan_path(&root).unwrap();

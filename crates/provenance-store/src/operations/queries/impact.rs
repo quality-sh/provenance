@@ -20,6 +20,7 @@ use super::nodes::{self, Key};
 /// answers. The working-tree scan behind the sites stops at the
 /// configured file count and `scan_cut` says when it did.
 #[rule("rule_impact_follows_declared_flow")]
+#[rule("rule_impact_reports_a_cut_scan")]
 pub(super) async fn impact(
     ctx: &ReadContext,
     request: ImpactQuery,

@@ -77,7 +77,7 @@ async fn impact_under(
 /// site. A limit the tree fits under reads it; a limit of zero cuts the
 /// scan before it, and the answer says so.
 #[tokio::test]
-#[verifies("rule_scan_cut_is_deterministic_and_reported", examples)]
+#[verifies("rule_impact_reports_a_cut_scan", examples)]
 async fn impact_says_when_the_scan_was_cut() {
     let store = test_stores::seeded_queries();
     crate::cache::tests::fixtures::create_rule_of(

@@ -13,9 +13,9 @@ use provenance_macros::rule;
 use super::{is_ignored_directory, scan_file, FileScan, Language};
 
 /// Scans at most `max_files` language files under `path`, the first that
-/// many in sorted walk order, and says whether the walk stopped short.
-/// `true` means the scanned sites are a lower bound.
-#[rule("rule_scan_cut_is_deterministic_and_reported")]
+/// many in sorted walk order, so two runs cut the same set, and says
+/// whether the walk stopped short.
+#[rule("rule_scan_cut_is_deterministic")]
 pub fn scan_path_bounded(
     path: &Utf8Path,
     max_files: usize,
