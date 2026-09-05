@@ -131,11 +131,12 @@ Every answer carries a `stamp` that says what it reflects. `serial` and
 `digest` name the projection revision the rows came from and `instance_id` the
 projection instance; serials compare only within one instance. `derivation` is
 the reader logic version, which moves when the same rows answer differently.
-`policy` is the freshness step the reader ran: `catch_up` by default, which
-brings the projection up to date under the publication lock before the read;
+`policy` is the freshness step the reader ran: `catch_up`, which brings the
+projection up to date under the publication lock before the read;
 `annotate_only`, which answers at the stored revision; or `catch_up_failed`,
 when the step refused and the answer is at the stored revision with the error
-text in `freshness_error`. `attested` names the projection tables behind the
+text in `freshness_error`. The commands run `catch_up`; no flag selects a
+policy yet, and the `read.freshness_policy` setting is reserved for that. `attested` names the projection tables behind the
 answer. `live` names what the stamp does not cover, from a closed list:
 `canonical` (canonical shards), `scanned_sites` (a scan of the working tree),
 `verification_runs` (the run file), and `diff` (git). A stamp never implies
@@ -158,15 +159,16 @@ or `both`, and an optional `relations` filter naming declared relations
 every declared relation one hop away and answers `neighbors`, each carrying
 the `relation`, the `direction` it was read in, and the record at the other
 end. A question owns `contradicts`, so the `neighbors` of a requirement answer
-the question `in`, and the other requirement is one more hop away. `out` is a relation the record holds in its own field; `in` is a relation
-another record's field holds toward it. A Rule's `out` neighbours are the
-Requirements and Resolutions its lists name; a Requirement's `out` neighbours
-are its Sources and its domain, and its `in` neighbours the Rules and
-Resolutions that name it. `trace` takes the same parameters plus `max_depth`,
-3 by default and 10 at most, and answers `nodes`, each carrying the `depth` it
-was reached at. Tracing `in` from a Source reaches the Requirements that cite
-it at depth 1 and the Rules that name them at depth 2; tracing `out` from a
-Rule reaches its Requirements at depth 1 and their Sources at depth 2.
+the question `in`, and the other requirement is one more hop away. `out` is a
+relation the record holds in its own field; `in` is a relation another
+record's field holds toward it. A Rule's `out` neighbours are the Requirements
+and Resolutions its lists name; a Requirement's `out` neighbours are its
+Sources and its domain, and its `in` neighbours the Rules and Resolutions that
+name it. `trace` takes the same parameters plus `max_depth`, 3 by default and
+10 at most, and answers `nodes`, each carrying the `depth` it was reached at.
+Tracing `in` from a Source reaches the Requirements that cite it at depth 1
+and the Rules that name them at depth 2; tracing `out` from a Rule reaches its
+Requirements at depth 1 and their Sources at depth 2.
 
 `impact` takes `id` and answers `affected_rules`: every Rule the record
 reaches, each with the `implementations` and `verifications` that stand behind
