@@ -13,7 +13,11 @@ use sqlx::SqliteConnection;
 ///
 /// History:
 /// - 0: the semantics of the canonical operations before any flip.
-pub const READ_DERIVATION: u32 = 0;
+/// - 1: one neighbour per (relation, direction, endpoint) on the served
+///   operations, `prime`, and the `impact` command, so a source cited under
+///   two clauses is reached once; the trace and impact `seen` sets keyed by
+///   kind and id, so one id under two kinds is two records.
+pub const READ_DERIVATION: u32 = 1;
 
 /// The latest `projection_revision` row and the `projection_instance` row.
 #[derive(Debug, Clone, PartialEq, Eq)]

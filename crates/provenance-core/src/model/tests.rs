@@ -1,6 +1,8 @@
 use crate::SUPPORTED_SCHEMA_VERSION;
 use provenance_macros::verifies;
 
+mod projection_row;
+
 include!("tests/artifacts.rs");
 include!("tests/collaboration.rs");
 include!("tests/graph.rs");

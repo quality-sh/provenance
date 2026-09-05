@@ -2,21 +2,6 @@ use crate::{cache::serde_name, state_store::StateStore};
 use provenance_core::ScopeId;
 use sqlx::{Sqlite, Transaction};
 
-pub(super) async fn load_scope(
-    tx: &mut Transaction<'_, Sqlite>,
-    store: &StateStore,
-    scope: &ScopeId,
-) -> anyhow::Result<u64> {
-    let mut loaded = load_threads(tx, store, scope).await?;
-    loaded += load_messages(tx, store, scope).await?;
-    loaded += load_contributions(tx, store, scope).await?;
-    loaded += load_synthesis_packets(tx, store, scope).await?;
-    loaded += load_assertion_records(tx, store, scope).await?;
-    loaded += load_proposal_cards(tx, store, scope).await?;
-    loaded += load_dispositions(tx, store, scope).await?;
-    Ok(loaded)
-}
-
 pub(super) async fn load_threads(
     tx: &mut Transaction<'_, Sqlite>,
     store: &StateStore,

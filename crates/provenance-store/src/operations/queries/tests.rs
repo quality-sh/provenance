@@ -10,9 +10,11 @@ use provenance_core::{
 
 mod baseline;
 mod comparison;
+mod front_equivalence;
 mod pinned;
 mod reader;
 mod stamp;
+mod tables;
 
 fn sid(value: &str) -> StableId {
     StableId::new(value).unwrap()

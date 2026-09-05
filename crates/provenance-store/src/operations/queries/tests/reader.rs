@@ -7,7 +7,7 @@ mod guard;
 
 use super::comparison::requests;
 use super::comparison::test_stores::{self, TestStore};
-use crate::cache::{open_cache, ProjectionFamily};
+use crate::cache::open_cache;
 use crate::operations::queries::{self, records};
 use crate::operations::read_policy::ReadPolicy;
 use crate::operations::reader::{answer, ReadSnapshot};
@@ -16,7 +16,7 @@ use provenance_core::protocol::{
     GetQuery, GetResult, ImpactQuery, ResolveSymbolQuery, StaleQuery, Stamp, StampPolicy, Stamped,
     SDK_PROTOCOL_VERSION,
 };
-use provenance_core::NodeType;
+use provenance_core::{NodeType, Requirement, Rule};
 
 /// The latest revision serial and the instance id, read directly.
 async fn stored(store: &TestStore) -> (i64, String) {
@@ -225,7 +225,7 @@ async fn a_table_handle_puts_its_word_in_attested() {
     crate::cache::catch_up_state(&store.layout()).await.unwrap();
     let stamped = answer(&store.root, &store.scope, ReadPolicy::default(), |ctx| {
         Box::pin(async move {
-            let requirements = ctx.snapshot().table(ProjectionFamily::Requirements);
+            let requirements = ctx.snapshot().table::<Requirement>();
             let rows = requirements.count().await?;
             let relations = ctx.snapshot().relations().count().await?;
             Ok((rows, relations))
@@ -248,7 +248,7 @@ async fn a_table_handle_puts_its_word_in_attested() {
         .await
         .unwrap()
         .expect("a revision");
-    let _rules = snapshot.table(ProjectionFamily::Rules);
+    let _rules = snapshot.table::<Rule>();
     let context = crate::operations::reader::ReadContext::for_test(snapshot, &store.root);
     let _store = context
         .live(crate::operations::reader::Live::Canonical)

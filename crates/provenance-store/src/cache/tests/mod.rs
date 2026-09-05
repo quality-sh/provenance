@@ -1,6 +1,7 @@
 mod catch_up_behavior;
 mod catch_up_derived_state;
 mod catch_up_domain_coverage;
+mod catch_up_migration_behavior;
 mod catch_up_serial_behavior;
 mod catch_up_validation_behavior;
 pub mod fixtures;
@@ -10,6 +11,7 @@ mod materialization_behavior;
 mod materialize_guard_behavior;
 mod projection_digest_sensitivity;
 pub mod projection_stamp_behavior;
+mod record_columns;
 mod relation_rows_behavior;
 mod reporting_behavior;
 mod scope_locality_guard;

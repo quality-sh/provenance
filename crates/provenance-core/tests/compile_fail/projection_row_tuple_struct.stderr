@@ -1,0 +1,5 @@
+error: ProjectionRow derives on a struct with named fields; a tuple struct has no column names
+ --> tests/compile_fail/projection_row_tuple_struct.rs:5:16
+  |
+5 | pub struct Pair(String, i64);
+  |                ^^^^^^^^^^^^^

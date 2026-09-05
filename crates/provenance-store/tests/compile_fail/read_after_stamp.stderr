@@ -3,9 +3,9 @@ error[E0505]: cannot move out of `context` because it is borrowed
   |
 6 | fn misuse(context: ReadContext) {
   |           ------- binding `context` declared here
-7 |     let requirements = context.snapshot().table(ProjectionFamily::Requirements);
+7 |     let requirements = context.snapshot().table::<Requirement>();
   |                        ------- borrow of `context` occurs here
 8 |     let _stamp = seal(context, StampPolicy::CatchUp);
   |                       ^^^^^^^ move out of `context` occurs here
-9 |     let _ = requirements.family();
+9 |     let _ = requirements.count();
   |             ------------ borrow later used here

@@ -1,14 +1,14 @@
 mod catch_up;
 mod collaboration_records;
 mod family_rows;
-mod graph_records;
-mod integration_records;
+mod record_rows;
 mod relation_rows;
 mod stamp;
 mod units;
 
 pub use catch_up::catch_up_with_guard;
 pub use catch_up::{catch_up_state, CatchUpReport};
+pub use record_rows::SEARCH_TEXT;
 pub use units::{unit_digest, units_for, Unit};
 
 use super::{open_cache, MaterializeReport};
@@ -66,9 +66,9 @@ pub(super) async fn materialize_with_guard(
 
     let mut records_loaded = 0;
     for scope in &manifest.scopes {
-        records_loaded += graph_records::load_scope(&mut tx, &store, &scope.id).await?;
-        records_loaded += collaboration_records::load_scope(&mut tx, &store, &scope.id).await?;
-        records_loaded += integration_records::load_scope(&mut tx, &store, &scope.id).await?;
+        for family in super::ProjectionFamily::ALL {
+            records_loaded += family_rows::load_rows(&mut tx, &store, family, &scope.id).await?;
+        }
         relation_rows::load_rows(&mut tx, &store, &scope.id).await?;
     }
     let scope_ids: Vec<_> = manifest

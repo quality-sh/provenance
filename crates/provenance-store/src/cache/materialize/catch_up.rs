@@ -49,6 +49,7 @@ pub async fn catch_up_with_guard(
 ) -> anyhow::Result<CatchUpReport> {
     crate::test_probes::at("run_migrations_under_guard")?;
     let migrations_applied = migrations::run_migrations(pool, layout).await?;
+    crate::test_probes::at("catch_up_after_migrations")?;
     let stored: Option<(i64, String)> = sqlx::query_as(
         "SELECT serial, digest FROM projection_revision ORDER BY serial DESC LIMIT 1",
     )
