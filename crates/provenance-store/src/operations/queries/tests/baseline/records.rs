@@ -1,4 +1,4 @@
-//! Oracle: the `records` executor as it read canonical shards before the flip (get, search, load, find).
+//! Baseline: the `records` operation as it read canonical shards before the flip (get, search, load, find).
 //! The commit that deletes `records::load` deletes this copy.
 
 use crate::state_store::StateStore;

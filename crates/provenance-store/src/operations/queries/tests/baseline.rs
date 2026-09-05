@@ -1,5 +1,5 @@
-//! Frozen copies of the executors as they read canonical shards before
-//! any operation flipped to the projection. The differential harness runs
+//! Frozen copies of the operations as they read canonical shards before
+//! any operation flipped to the projection. The comparison tests runs
 //! each served operation against its copy over the same store.
 
 pub mod evidence;

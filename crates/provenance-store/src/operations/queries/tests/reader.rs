@@ -5,8 +5,8 @@
 mod freshness;
 mod guard;
 
-use super::differential::corpus::{self, Corpus};
-use super::differential::requests;
+use super::comparison::requests;
+use super::comparison::test_stores::{self, TestStore};
 use crate::cache::{open_cache, ProjectionFamily};
 use crate::operations::queries::{self, records};
 use crate::operations::read_policy::ReadPolicy;
@@ -19,8 +19,8 @@ use provenance_core::protocol::{
 use provenance_core::NodeType;
 
 /// The latest revision serial and the instance id, read directly.
-async fn stored(corpus: &Corpus) -> (i64, String) {
-    let pool = open_cache(&corpus.layout()).await.unwrap();
+async fn stored(store: &TestStore) -> (i64, String) {
+    let pool = open_cache(&store.layout()).await.unwrap();
     let serial: i64 = sqlx::query_scalar("SELECT MAX(serial) FROM projection_revision")
         .fetch_one(&pool)
         .await
@@ -44,11 +44,11 @@ pub(super) fn get_query(id: &str) -> GetQuery {
 
 /// One `get` through the reader under the given policy.
 pub(super) async fn get_through(
-    corpus: &Corpus,
+    store: &TestStore,
     policy: ReadPolicy,
 ) -> anyhow::Result<Stamped<GetResult>> {
-    let scope = corpus.scope.clone();
-    answer(&corpus.root, &corpus.scope, policy, move |ctx| {
+    let scope = store.scope.clone();
+    answer(&store.root, &store.scope, policy, move |ctx| {
         Box::pin(async move { records::get(ctx, &scope, get_query("req_overtime")) })
     })
     .await
@@ -62,9 +62,9 @@ fn words(stamp: &Stamp) -> (Vec<&str>, Vec<&str>) {
 }
 
 /// The stamps of the four graph operations over `req_overtime`.
-async fn graph_stamps(corpus: &Corpus) -> Vec<(&'static str, Stamp)> {
-    let repo = || Some(corpus.root.clone());
-    let scope = &corpus.scope;
+async fn graph_stamps(store: &TestStore) -> Vec<(&'static str, Stamp)> {
+    let repo = || Some(store.root.clone());
+    let scope = &store.scope;
     vec![
         (
             "get",
@@ -101,11 +101,11 @@ async fn graph_stamps(corpus: &Corpus) -> Vec<(&'static str, Stamp)> {
     ]
 }
 
-/// The stamps of the four operations that read a live half beside
+/// The stamps of the four operations that read a live part beside
 /// canonical state.
-async fn evidence_stamps(corpus: &Corpus, base: &str) -> Vec<(&'static str, Stamp)> {
-    let repo = || Some(corpus.root.clone());
-    let scope = &corpus.scope;
+async fn evidence_stamps(store: &TestStore, base: &str) -> Vec<(&'static str, Stamp)> {
+    let repo = || Some(store.root.clone());
+    let scope = &store.scope;
     let version = Some(SDK_PROTOCOL_VERSION);
     vec![
         (
@@ -177,16 +177,13 @@ async fn evidence_stamps(corpus: &Corpus, base: &str) -> Vec<(&'static str, Stam
 
 #[tokio::test]
 async fn every_answer_carries_a_stamp_at_the_stored_serial() {
-    let corpus = corpus::seeded_queries();
-    let base = corpus
-        .base_commit
-        .clone()
-        .expect("a commit to diff against");
-    let mut stamps = graph_stamps(&corpus).await;
-    stamps.extend(evidence_stamps(&corpus, &base).await);
+    let store = test_stores::seeded_queries();
+    let base = store.base_commit.clone().expect("a commit to diff against");
+    let mut stamps = graph_stamps(&store).await;
+    stamps.extend(evidence_stamps(&store, &base).await);
     assert_eq!(stamps.len(), 8);
 
-    let (serial, instance_id) = stored(&corpus).await;
+    let (serial, instance_id) = stored(&store).await;
     for (operation, stamp) in &stamps {
         assert_eq!(stamp.serial, serial, "{operation} serial");
         assert_eq!(stamp.instance_id, instance_id, "{operation} instance");
@@ -210,10 +207,10 @@ async fn every_answer_carries_a_stamp_at_the_stored_serial() {
 
 #[tokio::test]
 async fn evidence_without_a_base_lists_no_diff() {
-    let corpus = corpus::seeded_queries();
+    let store = test_stores::seeded_queries();
     let answer = queries::evidence(
-        Some(corpus.root.clone()),
-        &corpus.scope,
+        Some(store.root.clone()),
+        &store.scope,
         requests::evidence("rule_overtime", None),
     )
     .await
@@ -224,11 +221,9 @@ async fn evidence_without_a_base_lists_no_diff() {
 
 #[tokio::test]
 async fn a_table_handle_puts_its_word_in_attested() {
-    let corpus = corpus::seeded_queries();
-    crate::cache::catch_up_state(&corpus.layout())
-        .await
-        .unwrap();
-    let stamped = answer(&corpus.root, &corpus.scope, ReadPolicy::default(), |ctx| {
+    let store = test_stores::seeded_queries();
+    crate::cache::catch_up_state(&store.layout()).await.unwrap();
+    let stamped = answer(&store.root, &store.scope, ReadPolicy::default(), |ctx| {
         Box::pin(async move {
             let requirements = ctx.snapshot().table(ProjectionFamily::Requirements);
             let rows = requirements.count().await?;
@@ -248,13 +243,13 @@ async fn a_table_handle_puts_its_word_in_attested() {
         (vec!["relations", "requirements"], Vec::new())
     );
 
-    let pool = open_cache(&corpus.layout()).await.unwrap();
-    let snapshot = ReadSnapshot::open(&pool, &corpus.scope)
+    let pool = open_cache(&store.layout()).await.unwrap();
+    let snapshot = ReadSnapshot::open(&pool, &store.scope)
         .await
         .unwrap()
         .expect("a revision");
     let _rules = snapshot.table(ProjectionFamily::Rules);
-    let context = crate::operations::reader::ReadContext::for_test(snapshot, &corpus.root);
+    let context = crate::operations::reader::ReadContext::for_test(snapshot, &store.root);
     let _store = context
         .live(crate::operations::reader::Live::Canonical)
         .store();
@@ -265,15 +260,15 @@ async fn a_table_handle_puts_its_word_in_attested() {
 
 #[tokio::test]
 async fn a_canonical_edit_advances_the_serial_under_catch_up() {
-    let corpus = corpus::seeded_queries();
-    let first = get_through(&corpus, ReadPolicy::default()).await.unwrap();
+    let store = test_stores::seeded_queries();
+    let first = get_through(&store, ReadPolicy::default()).await.unwrap();
     crate::cache::tests::fixtures::create_requirement(
-        &corpus.store(),
-        &corpus.scope,
+        &store.state_store(),
+        &store.scope,
         "req_second",
         provenance_core::RequirementStatus::Active,
     );
-    let second = get_through(&corpus, ReadPolicy::default()).await.unwrap();
+    let second = get_through(&store, ReadPolicy::default()).await.unwrap();
     assert_eq!(second.stamp.serial, first.stamp.serial + 1);
     assert_ne!(second.stamp.digest, first.stamp.digest);
     assert_eq!(second.stamp.instance_id, first.stamp.instance_id);
@@ -284,15 +279,15 @@ async fn a_canonical_edit_advances_the_serial_under_catch_up() {
 /// before the reader, so when both are bad the range is the error.
 #[tokio::test]
 async fn a_bad_base_is_refused_before_the_store_is_read() {
-    let corpus = corpus::seeded_queries();
+    let store = test_stores::seeded_queries();
     // One healthy read materializes, so the later reads answer at the
-    // stored serial and reach the executor.
-    get_through(&corpus, ReadPolicy::default()).await.unwrap();
-    let shard = crate::shards::requirements_path(&corpus.layout(), &corpus.scope);
+    // stored serial and reach the operation.
+    get_through(&store, ReadPolicy::default()).await.unwrap();
+    let shard = crate::shards::requirements_path(&store.layout(), &store.scope);
     std::fs::write(&shard, "not a record\n").unwrap();
     let refused = queries::stale(
-        Some(corpus.root.clone()),
-        &corpus.scope,
+        Some(store.root.clone()),
+        &store.scope,
         StaleQuery {
             protocol_version: Some(SDK_PROTOCOL_VERSION),
             base: "no_such_commit".into(),
@@ -307,8 +302,8 @@ async fn a_bad_base_is_refused_before_the_store_is_read() {
     let text = format!("{refused:#}");
     assert!(text.contains("rev-parse"), "{text}");
     let refused = queries::evidence(
-        Some(corpus.root.clone()),
-        &corpus.scope,
+        Some(store.root.clone()),
+        &store.scope,
         requests::evidence("rule_overtime", Some("no_such_commit".into())),
     )
     .await

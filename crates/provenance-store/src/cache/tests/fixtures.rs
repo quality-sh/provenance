@@ -10,7 +10,7 @@ use provenance_core::{
     SourceReference, SourceType, StableId, TopicStatus,
 };
 
-pub mod golden;
+pub mod pinned_store;
 
 pub fn sid(value: &str) -> StableId {
     StableId::new(value).unwrap()

@@ -2,7 +2,7 @@
 //!
 //! sqlx executes on `&mut` the connection, so every handle method takes
 //! the transaction for the span of one statement and never across two
-//! handles at once, which is how the executors read: one statement at a
+//! handles at once, which is how the operations read: one statement at a
 //! time.
 
 use crate::cache::ProjectionFamily;

@@ -1,7 +1,7 @@
 //! The publication guard covers the freshness step only. The answer is
 //! read outside it from a snapshot pinned in one read transaction.
 
-use super::super::differential::corpus;
+use super::super::comparison::test_stores;
 use super::get_query;
 use crate::cache::tests::fixtures::create_requirement;
 use crate::cache::{catch_up_state, catch_up_with_guard, open_cache, ProjectionFamily};
@@ -16,8 +16,8 @@ use std::time::Duration;
 
 #[tokio::test]
 async fn the_publication_lock_is_free_while_a_read_answers() {
-    let corpus = corpus::seeded_queries();
-    let layout = corpus.layout();
+    let store = test_stores::seeded_queries();
+    let layout = store.layout();
     let held_during_catch_up = std::rc::Rc::new(std::cell::Cell::new(false));
     let probe_layout = layout.clone();
     let probe_seen = held_during_catch_up.clone();
@@ -25,11 +25,11 @@ async fn the_publication_lock_is_free_while_a_read_answers() {
         probe_seen.set(publication_lock_is_held(&probe_layout));
         Ok(())
     });
-    let scope = corpus.scope.clone();
+    let scope = store.scope.clone();
     let run_layout = layout.clone();
     let stamped = answer(
-        &corpus.root,
-        &corpus.scope,
+        &store.root,
+        &store.scope,
         ReadPolicy::default(),
         move |ctx| {
             Box::pin(async move {
@@ -40,7 +40,7 @@ async fn the_publication_lock_is_free_while_a_read_answers() {
                 let found = records::get(ctx, &scope, get_query("req_overtime"))?;
                 anyhow::ensure!(
                     !publication_lock_is_held(&run_layout),
-                    "the lock must be free after the executor read canonical state"
+                    "the lock must be free after the operation read canonical state"
                 );
                 Ok(found)
             })
@@ -58,12 +58,12 @@ async fn the_publication_lock_is_free_while_a_read_answers() {
 
 #[tokio::test]
 async fn a_canonical_write_does_not_wait_for_a_read() {
-    let corpus = corpus::seeded_queries();
-    let layout = corpus.layout();
-    let scope = corpus.scope.clone();
+    let store = test_stores::seeded_queries();
+    let layout = store.layout();
+    let scope = store.scope.clone();
     let stamped = answer(
-        &corpus.root,
-        &corpus.scope,
+        &store.root,
+        &store.scope,
         ReadPolicy::default(),
         move |ctx| {
             Box::pin(async move {
@@ -93,13 +93,13 @@ async fn a_canonical_write_does_not_wait_for_a_read() {
 /// is what lets both read the same file.
 #[tokio::test]
 async fn a_read_that_started_before_a_publication_answers_at_its_serial() {
-    let corpus = corpus::seeded_queries();
-    let layout = corpus.layout();
+    let store = test_stores::seeded_queries();
+    let layout = store.layout();
     catch_up_state(&layout).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
     let second_pool = open_cache(&layout).await.unwrap();
 
-    let first = ReadSnapshot::open(&pool, &corpus.scope)
+    let first = ReadSnapshot::open(&pool, &store.scope)
         .await
         .unwrap()
         .expect("a revision");
@@ -111,8 +111,8 @@ async fn a_read_that_started_before_a_publication_answers_at_its_serial() {
     assert_eq!(before, 1);
 
     create_requirement(
-        &corpus.store(),
-        &corpus.scope,
+        &store.state_store(),
+        &store.scope,
         "req_second",
         RequirementStatus::Active,
     );
@@ -132,7 +132,7 @@ async fn a_read_that_started_before_a_publication_answers_at_its_serial() {
         before,
         "the open snapshot still reads its own serial"
     );
-    let second = ReadSnapshot::open(&second_pool, &corpus.scope)
+    let second = ReadSnapshot::open(&second_pool, &store.scope)
         .await
         .unwrap()
         .expect("a revision");

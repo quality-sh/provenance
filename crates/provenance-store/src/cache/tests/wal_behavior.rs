@@ -13,7 +13,7 @@ use std::time::Duration;
 
 /// The `-wal` and `-shm` files `SQLite` keeps beside an open WAL database
 /// and removes when the last connection closes.
-pub fn sidecars(layout: &ProvenanceLayout) -> Vec<String> {
+pub fn wal_files(layout: &ProvenanceLayout) -> Vec<String> {
     let database = layout.cache_db_path();
     [format!("{database}-wal"), format!("{database}-shm")]
         .into_iter()
@@ -31,7 +31,7 @@ async fn the_cache_pool_runs_in_wal_mode() {
         .unwrap();
     assert_eq!(mode, "wal");
     pool.close().await;
-    assert_eq!(sidecars(&layout), Vec::<String>::new());
+    assert_eq!(wal_files(&layout), Vec::<String>::new());
     let pool = open_cache(&layout).await.unwrap();
     let mode: String = sqlx::query_scalar("PRAGMA journal_mode")
         .fetch_one(&pool)
@@ -39,16 +39,16 @@ async fn the_cache_pool_runs_in_wal_mode() {
         .unwrap();
     assert_eq!(mode, "wal", "the mode persists in the file");
     pool.close().await;
-    assert_eq!(sidecars(&layout), Vec::<String>::new());
+    assert_eq!(wal_files(&layout), Vec::<String>::new());
 }
 
 /// A read opens one pool and closes it. The pool holds one connection, so
 /// the close is one `sqlite3_close`, which takes the exclusive lock and
-/// removes the sidecar files. A pool that grew to two connections closed
+/// removes the `-wal` and `-shm` files. A pool that grew to two connections closed
 /// them on two worker threads at once, and the second closer could not
 /// take the lock, so about half of all reads left the files behind.
 #[tokio::test]
-async fn a_completed_read_leaves_no_sidecar_files() {
+async fn a_completed_read_leaves_no_wal_files() {
     let (_dir, layout, scope) = seeded_layout();
     let root = Some(layout.root().to_path_buf());
     for round in 0..20 {
@@ -66,9 +66,9 @@ async fn a_completed_read_leaves_no_sidecar_files() {
         .unwrap();
         assert!(answer.result.found);
         assert_eq!(
-            sidecars(&layout),
+            wal_files(&layout),
             Vec::<String>::new(),
-            "read {round} left sidecar files behind"
+            "read {round} left `-wal` and `-shm` files behind"
         );
     }
 }

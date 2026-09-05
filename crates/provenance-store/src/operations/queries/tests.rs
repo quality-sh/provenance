@@ -8,9 +8,9 @@ use provenance_core::{
     Manifest, NodeType, RepoPathPrefix, RequirementStatus, ScopeId, StableId, SDK_PROTOCOL_VERSION,
 };
 
-mod differential;
-mod golden;
-mod oracle;
+mod baseline;
+mod comparison;
+mod pinned;
 mod reader;
 mod stamp;
 

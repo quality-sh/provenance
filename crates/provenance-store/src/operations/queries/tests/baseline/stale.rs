@@ -1,4 +1,4 @@
-//! Oracle: the `stale` executor as it read the diff and canonical graph evidence before the flip.
+//! Baseline: the `stale` operation as it read the diff and canonical graph evidence before the flip.
 //! The commit that flips the last operation onto the projection deletes this copy.
 
 use crate::{cache, layout::ProvenanceLayout};

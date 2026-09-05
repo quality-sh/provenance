@@ -1,4 +1,4 @@
-//! The frozen corpus behind the golden test and the differential harness:
+//! The frozen store behind the pinned answers test and the comparison tests:
 //! every kind and every relation, retired records that reference and are
 //! referenced, a diamond over a retired requirement, a source cited under
 //! two clauses, a `links` pair naming one id under two kinds, lists past
@@ -21,7 +21,7 @@ use provenance_core::{
 /// under two kinds.
 pub const TWIN_ID: &str = "twin_record";
 
-pub fn golden_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
+pub fn pinned_store_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
     let (dir, layout, scope) = empty_layout();
     let store = StateStore::new(layout.clone());
     seed_graph(&store, &scope);
@@ -245,7 +245,7 @@ fn seed_integrations(layout: &ProvenanceLayout, scope: &ScopeId) {
         .iter()
         .map(|(id, rule, file, symbol, retired)| {
             format!(
-                r#"{{"schema_version":{version},"scope_id":"{scope_word}","id":"{id}","rule_id":"{rule}","declared_by":"spec://golden","retired":{retired},"file":"{file}","symbol":"{symbol}"}}"#
+                r#"{{"schema_version":{version},"scope_id":"{scope_word}","id":"{id}","rule_id":"{rule}","declared_by":"spec://pinned","retired":{retired},"file":"{file}","symbol":"{symbol}"}}"#
             )
         })
         .collect();
@@ -284,7 +284,7 @@ fn seed_integrations(layout: &ProvenanceLayout, scope: &ScopeId) {
         .iter()
         .map(|(id, rule, key, file, symbol)| {
             format!(
-                r#"{{"schema_version":{version},"scope_id":"{scope_word}","id":"{id}","rule_id":"{rule}","key":"{key}","method":"examples","declared_by":"spec://golden","file":"{file}","symbol":"{symbol}"}}"#
+                r#"{{"schema_version":{version},"scope_id":"{scope_word}","id":"{id}","rule_id":"{rule}","key":"{key}","method":"examples","declared_by":"spec://pinned","file":"{file}","symbol":"{symbol}"}}"#
             )
         })
         .collect();

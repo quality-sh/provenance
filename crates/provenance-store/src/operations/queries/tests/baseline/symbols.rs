@@ -1,4 +1,4 @@
-//! Oracle: the `symbols` executor as it matched scanned sites and bindings before the flip, with the scan passed in.
+//! Baseline: the `symbols` operation as it matched scanned sites and bindings before the flip, with the scan passed in.
 //! The commit that flips the last operation onto the projection deletes this copy.
 
 use crate::state_store::StateStore;

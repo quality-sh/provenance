@@ -1,4 +1,4 @@
-//! Oracle: the `impact` executor as it walked `RecordFront` before the flip, with the scan passed in.
+//! Baseline: the `impact` operation as it walked `RecordFront` before the flip, with the scan passed in.
 //! The commit that flips the last operation onto the projection deletes this copy.
 
 use crate::state_store::StateStore;

@@ -7,12 +7,12 @@ use sqlx::SqliteConnection;
 /// The reader logic version the stamp carries.
 ///
 /// It moves when reader logic changes an answer for the same rows; not for
-/// a migration, and not for a fix on a live half. The golden test compares
-/// a frozen corpus's answers to a file keyed by this number, regenerated
+/// a migration, and not for a fix on a live part. The pinned answers test compares
+/// a frozen store's answers to a file keyed by this number, regenerated
 /// only in the commit that bumps it.
 ///
 /// History:
-/// - 0: the semantics of the canonical executors before any flip.
+/// - 0: the semantics of the canonical operations before any flip.
 pub const READ_DERIVATION: u32 = 0;
 
 /// The latest `projection_revision` row and the `projection_instance` row.

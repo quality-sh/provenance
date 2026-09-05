@@ -5,14 +5,14 @@
 //! never queues behind a publication or behind another reader. The stamp
 //! on the answer is derived from the handles the read took: a projection
 //! table is readable only through the snapshot, which records its family
-//! word in `attested`, and a live half (canonical shards, the working-tree
+//! word in `attested`, and a live part (canonical shards, the working-tree
 //! scan, the run file, git) only through [`ReadContext::live`], which
 //! records its word in `live`. The context is consumed to build the stamp,
 //! so nothing reads after stamping.
 //!
 //! The context guards its transaction with an async mutex and its word
 //! sets with plain mutexes, so the future a read runs is `Send`; the
-//! executors read one statement at a time, so no lock is contended.
+//! operations read one statement at a time, so no lock is contended.
 
 mod freshness;
 mod live;
@@ -50,7 +50,7 @@ pub enum ReadRefusal {
     SchemaBehind { database: Utf8PathBuf },
 }
 
-/// Everything one read may reach: the pinned snapshot and the live halves.
+/// Everything one read may reach: the pinned snapshot and the live parts.
 pub struct ReadContext {
     snapshot: ReadSnapshot,
     live: Mutex<BTreeSet<Live>>,
@@ -77,7 +77,7 @@ impl ReadContext {
         &self.snapshot
     }
 
-    /// A handle on one live half; taking it puts the word on the stamp.
+    /// A handle on one live part; taking it puts the word on the stamp.
     pub fn live(&self, what: Live) -> LiveHandle<'_> {
         self.live
             .lock()

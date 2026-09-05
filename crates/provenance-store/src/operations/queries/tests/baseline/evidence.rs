@@ -1,4 +1,4 @@
-//! Oracle: the `evidence` executor as it read canonical bindings, runs, and reviews before the flip.
+//! Baseline: the `evidence` operation as it read canonical bindings, runs, and reviews before the flip.
 //! The commit that flips the last operation onto the projection deletes this copy.
 
 use crate::state_store::StateStore;

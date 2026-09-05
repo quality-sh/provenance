@@ -1,9 +1,9 @@
-//! The request set the harness runs over one corpus, derived from the
-//! records the corpus holds so every kind and every operation gets a case.
+//! The request set the comparison tests runs over one store, derived from the
+//! records the store holds so every kind and every operation gets a case.
 
-use super::corpus::Corpus;
+use super::test_stores::TestStore;
 use crate::operations::queries::bindings::Bindings;
-use crate::operations::queries::tests::oracle::records;
+use crate::operations::queries::tests::baseline::records;
 use provenance_core::protocol::{
     Direction, EvidenceQuery, GetQuery, GraphNode, ImpactQuery, NeighborsQuery, ResolveSymbolQuery,
     SearchQuery, StaleQuery, TraceQuery, SDK_PROTOCOL_VERSION,
@@ -88,9 +88,9 @@ fn sampled(nodes: &[GraphNode]) -> Vec<&GraphNode> {
     picked
 }
 
-pub fn for_corpus(corpus: &Corpus) -> Vec<Request> {
-    let store = corpus.store();
-    let nodes = records::load(&store, &corpus.scope, true).unwrap();
+pub fn for_store(store: &TestStore) -> Vec<Request> {
+    let state = store.state_store();
+    let nodes = records::load(&state, &store.scope, true).unwrap();
     let sample = sampled(&nodes);
     let mut requests = Vec::new();
     for node in &sample {
@@ -120,7 +120,7 @@ pub fn for_corpus(corpus: &Corpus) -> Vec<Request> {
         }));
         if node.node_type() == NodeType::Rule {
             requests.push(Request::Evidence(evidence(&id, None)));
-            if let Some(base) = &corpus.base_commit {
+            if let Some(base) = &store.base_commit {
                 requests.push(Request::Evidence(evidence(&id, Some(base.clone()))));
             }
         }
@@ -137,7 +137,7 @@ pub fn for_corpus(corpus: &Corpus) -> Vec<Request> {
         "e",
         vec![NodeType::Domain, NodeType::Boundary, NodeType::Rule],
     )));
-    if let Some(base) = &corpus.base_commit {
+    if let Some(base) = &store.base_commit {
         requests.push(Request::Stale(StaleQuery {
             protocol_version: Some(SDK_PROTOCOL_VERSION),
             base: base.clone(),
@@ -147,7 +147,7 @@ pub fn for_corpus(corpus: &Corpus) -> Vec<Request> {
             limit: 50,
         }));
     }
-    let bindings = Bindings::load(&store, &corpus.scope, true).unwrap();
+    let bindings = Bindings::load(&state, &store.scope, true).unwrap();
     let mut files: Vec<String> = bindings
         .implementations
         .iter()

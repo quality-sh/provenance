@@ -1,14 +1,14 @@
-//! The golden test: a fixed request set over the frozen corpus answers
+//! The pinned answers test: a fixed request set over the frozen store answers
 //! the same bytes as the committed file, keyed by `READ_DERIVATION`.
 //!
 //! The file holds one line for the key and the digest, then one compact
 //! line per answer, so a regeneration diff reads answer by answer. It is
 //! regenerated only in a commit that bumps the constant:
-//! `PROVENANCE_GOLDEN_WRITE=1 cargo test -p provenance-store golden`.
+//! `PROVENANCE_PINNED_WRITE=1 cargo test -p provenance-store pinned`.
 
-use super::differential::corpus::Corpus;
-use super::differential::requests::{self, Request};
-use super::differential::{served_value, strip_additive};
+use super::comparison::requests::{self, Request};
+use super::comparison::test_stores::TestStore;
+use super::comparison::{served_value, strip_additive};
 use crate::operations::read_policy::{FreshnessPolicy, ReadPolicy};
 use crate::operations::stamp::READ_DERIVATION;
 use provenance_core::protocol::{
@@ -19,8 +19,9 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 
-fn golden_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/operations/queries/tests/golden.json")
+fn pinned_path() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("src/operations/queries/tests/pinned_answers.json")
 }
 
 fn get(kind: NodeType, id: &str, include_retired: bool) -> Request {
@@ -53,8 +54,8 @@ fn resolve(file: &str, symbol: Option<&str>, line: Option<usize>) -> Request {
     })
 }
 
-/// The fixed request set. `base` is the corpus's first commit, whose id
-/// is fixed by the corpus's fixed author and dates.
+/// The fixed request set. `base` is the store's first commit, whose id
+/// is fixed by the store's fixed author and dates.
 fn request_set(base: &str) -> Vec<Request> {
     let mut set = vec![
         get(NodeType::Domain, "domain_payroll", false),
@@ -149,16 +150,14 @@ fn request_set(base: &str) -> Vec<Request> {
 }
 
 async fn answers() -> Vec<Value> {
-    let corpus = Corpus::golden();
-    let base = corpus.base_commit.clone().expect("git on the path");
-    crate::cache::catch_up_state(&corpus.layout())
-        .await
-        .unwrap();
-    crate::test_probes::set_preset_scan(None);
+    let store = TestStore::pinned();
+    let base = store.base_commit.clone().expect("git on the path");
+    crate::cache::catch_up_state(&store.layout()).await.unwrap();
+    crate::test_probes::set_test_scan(None);
     let policy = ReadPolicy::with_freshness(FreshnessPolicy::AnnotateOnly);
     let mut answers = Vec::new();
     for request in request_set(&base) {
-        let mut answer = served_value(&corpus, &request, policy).await;
+        let mut answer = served_value(&store, &request, policy).await;
         strip_additive(&mut answer);
         answers.push(json!({
             "operation": request.operation(),
@@ -190,29 +189,30 @@ fn parse(file: &str) -> (Value, Vec<Value>) {
 }
 
 #[tokio::test]
-async fn the_golden_answers_match_the_committed_file_for_this_derivation() {
+async fn the_pinned_answers_match_the_committed_file_for_this_derivation() {
     let answers = answers().await;
     let fresh = digest(&answers);
-    if std::env::var("PROVENANCE_GOLDEN_WRITE").is_ok_and(|value| value == "1") {
-        std::fs::write(golden_path(), render(&answers, &fresh)).unwrap();
+    if std::env::var("PROVENANCE_PINNED_WRITE").is_ok_and(|value| value == "1") {
+        std::fs::write(pinned_path(), render(&answers, &fresh)).unwrap();
         return;
     }
     let (header, recorded) = parse(
-        &std::fs::read_to_string(golden_path()).expect("golden.json is committed beside this test"),
+        &std::fs::read_to_string(pinned_path())
+            .expect("pinned_answers.json is committed beside this test"),
     );
     assert_eq!(
         header["derivation"],
         json!(READ_DERIVATION),
-        "the golden file is keyed by READ_DERIVATION; regenerate it in the commit that bumps the constant"
+        "the pinned file is keyed by READ_DERIVATION; regenerate it in the commit that bumps the constant"
     );
     if header["digest"] != json!(fresh) {
         for (index, answer) in answers.iter().enumerate() {
             assert_eq!(
                 recorded.get(index),
                 Some(answer),
-                "answer {index} differs from the golden file"
+                "answer {index} differs from the pinned file"
             );
         }
-        panic!("the golden digest differs although every answer matched");
+        panic!("the pinned digest differs although every answer matched");
     }
 }

@@ -1,9 +1,9 @@
-//! The live halves of an answer: what the stamp does not cover.
+//! The live parts of an answer: what the stamp does not cover.
 //!
 //! Each half is reachable only through a handle taken with
 //! [`ReadContext::live`], which records the word, and each method exists
 //! on its own word only: a handle asked for another word's read is an
-//! invariant violation.
+//! programming error.
 
 use super::ReadContext;
 use crate::cache::{self, GraphEvidence};
@@ -79,11 +79,11 @@ impl<'c> LiveHandle<'c> {
         cache::graph_evidence(&self.layout(), scope, include_retired)
     }
 
-    /// A scan of the whole working tree. A test may preset the scan, so a
+    /// A scan of the whole working tree. A test may test-set the scan, so a
     /// timing row measures graph and binding work only.
     pub fn scan_tree(&self) -> anyhow::Result<Vec<FileScan>> {
         self.only(Live::ScannedSites);
-        if let Some(scans) = crate::test_probes::preset_scan() {
+        if let Some(scans) = crate::test_probes::test_scan() {
             return Ok(scans);
         }
         provenance_scanner::scan_path(self.context.repo())

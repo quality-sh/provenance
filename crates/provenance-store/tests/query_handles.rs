@@ -1,13 +1,13 @@
-//! No query executor reads a projection table, a canonical shard, the
+//! No query operation reads a projection table, a canonical shard, the
 //! working tree, a run file, or git except through the reader's handles.
 //!
 //! The handles record what they hand out, so `attested` and `live` on the
 //! stamp are derived from what was read and cannot omit a table or a live
 //! half. The types guard omission, not excess; this gate guards the other
-//! direction by text: an executor that named one of these paths would read
+//! direction by text: an operation that named one of these paths would read
 //! something the stamp does not list. The scan walks every module under
 //! `src/operations/queries/`, subdirectories included, and skips only the
-//! test tree, where the oracle copies read canonical state on purpose.
+//! test tree, where the baseline copies read canonical state on purpose.
 //!
 //! The gate refuses module paths, not call spellings, so a reader cannot
 //! be renamed away: `use crate::stale::git as vcs` is refused because
@@ -16,7 +16,7 @@
 
 use std::path::{Path, PathBuf};
 
-/// Module paths that reach state past the handles. The executors may name
+/// Module paths that reach state past the handles. The operations may name
 /// `crate::state_store::StateStore` as a type and `provenance_scanner`'s
 /// site readers, which read nothing; the constructors and the scanners
 /// that do read are listed by their own spelling.
@@ -45,7 +45,7 @@ fn queries_dir() -> PathBuf {
 
 /// Every `.rs` file under `dir` except `tests.rs` and the `tests` tree,
 /// named by its path relative to `dir`.
-fn executor_modules(dir: &Path) -> Vec<(String, String)> {
+fn operation_modules(dir: &Path) -> Vec<(String, String)> {
     fn walk(root: &Path, dir: &Path, modules: &mut Vec<(String, String)>) {
         for entry in std::fs::read_dir(dir).unwrap() {
             let path = entry.unwrap().path();
@@ -139,14 +139,14 @@ fn the_gate_walks_subdirectory_modules_and_skips_the_test_tree() {
         "fn read() { provenance_scanner::scan_path(repo) }\n",
     )
     .unwrap();
-    std::fs::create_dir_all(queries.join("tests/oracle")).unwrap();
+    std::fs::create_dir_all(queries.join("tests/baseline")).unwrap();
     std::fs::write(
-        queries.join("tests/oracle/impact.rs"),
+        queries.join("tests/baseline/impact.rs"),
         "fn read() { provenance_scanner::scan_path(repo) }\n",
     )
     .unwrap();
-    std::fs::write(queries.join("tests.rs"), "mod oracle;\n").unwrap();
-    let names: Vec<String> = executor_modules(queries)
+    std::fs::write(queries.join("tests.rs"), "mod baseline;\n").unwrap();
+    let names: Vec<String> = operation_modules(queries)
         .into_iter()
         .map(|(name, _)| name)
         .collect();
@@ -155,10 +155,10 @@ fn the_gate_walks_subdirectory_modules_and_skips_the_test_tree() {
 
 #[test]
 fn no_query_module_bypasses_the_handles() {
-    let modules = executor_modules(&queries_dir());
+    let modules = operation_modules(&queries_dir());
     assert!(
         modules.len() >= 7,
-        "the scan must see the executor modules; saw {modules:?}"
+        "the scan must see the operation modules; saw {modules:?}"
     );
     let found: Vec<String> = modules
         .iter()

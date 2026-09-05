@@ -1,5 +1,5 @@
-//! The stores the differential harness runs over. Each corpus is one
-//! temporary repository; no corpus is the workspace root, which would write
+//! The stores the comparison tests runs over. Each store is one
+//! temporary repository; no store is the workspace root, which would write
 //! a database into the checkout and take the real publication lock.
 
 use crate::cache::tests::fixtures;
@@ -8,17 +8,17 @@ use crate::state_store::StateStore;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::ScopeId;
 
-pub struct Corpus {
+pub struct TestStore {
     pub name: &'static str,
     _dir: tempfile::TempDir,
     pub root: Utf8PathBuf,
     pub scope: ScopeId,
-    /// The first commit of a corpus with a git history, for the diff half
+    /// The first commit of a store with a git history, for the diff half
     /// of `evidence` and for `stale`.
     pub base_commit: Option<String>,
 }
 
-impl Corpus {
+impl TestStore {
     fn new(name: &'static str, dir: tempfile::TempDir, scope: ScopeId) -> Self {
         let root = Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
         Self {
@@ -34,62 +34,62 @@ impl Corpus {
         ProvenanceLayout::new(self.root.clone())
     }
 
-    pub fn store(&self) -> StateStore {
+    pub fn state_store(&self) -> StateStore {
         StateStore::new(self.layout())
     }
 
-    /// The frozen corpus of the golden test, under two commits so the
+    /// The frozen store of the pinned answers test, under two commits so the
     /// diff half answers over it: the base holds the source file as the
     /// builder wrote it, the head adds one function below the sites.
-    pub fn golden() -> Self {
-        let (dir, _layout, scope) = fixtures::golden::golden_layout();
-        let mut corpus = Self::new("golden", dir, scope);
-        let base = git_commit(&corpus.root, "base");
-        let source = corpus.root.join("src/pay.rs");
+    pub fn pinned() -> Self {
+        let (dir, _layout, scope) = fixtures::pinned_store::pinned_store_layout();
+        let mut store = Self::new("pinned", dir, scope);
+        let base = git_commit(&store.root, "base");
+        let source = store.root.join("src/pay.rs");
         let mut content = std::fs::read_to_string(&source).unwrap();
         content.push_str("\nfn audit() {}\n");
         std::fs::write(&source, content).unwrap();
-        git_commit(&corpus.root, "head");
-        corpus.base_commit = base;
-        corpus
+        git_commit(&store.root, "head");
+        store.base_commit = base;
+        store
     }
 }
 
 /// The seeded query store with a rule-bearing source file under two
 /// commits, so the diff half of `evidence` and `stale` answer over it.
-pub fn seeded_queries() -> Corpus {
+pub fn seeded_queries() -> TestStore {
     let (dir, _store, scope) = super::super::seeded_store();
-    let mut corpus = Corpus::new("seeded_queries", dir, scope);
-    let source = corpus.root.join("src/pay.rs");
+    let mut store = TestStore::new("seeded_queries", dir, scope);
+    let source = store.root.join("src/pay.rs");
     std::fs::create_dir_all(source.parent().unwrap()).unwrap();
     std::fs::write(&source, "#[rule(\"rule_overtime\")]\nfn pay() {}\n").unwrap();
-    let base = git_commit(&corpus.root, "base");
+    let base = git_commit(&store.root, "base");
     std::fs::write(
         &source,
         "#[rule(\"rule_overtime\")]\nfn pay() -> u32 {\n    1\n}\n",
     )
     .unwrap();
-    git_commit(&corpus.root, "head");
-    corpus.base_commit = base;
-    corpus
+    git_commit(&store.root, "head");
+    store.base_commit = base;
+    store
 }
 
 /// The cache fixtures: the seeded layout with its binding and review
 /// shards, and the owner-row layout with a row for every owner kind.
-pub fn cache_fixtures() -> Vec<Corpus> {
+pub fn cache_fixtures() -> Vec<TestStore> {
     let (dir, layout, scope) = fixtures::seeded_layout();
     crate::cache::tests::projection_stamp_behavior::seed_integration_shards(
         &layout,
         scope.as_str(),
     );
-    let seeded = Corpus::new("cache_seeded", dir, scope);
+    let seeded = TestStore::new("cache_seeded", dir, scope);
     let (dir, _layout, scope) = fixtures::owner_row_layout();
-    let owners = Corpus::new("cache_owner_rows", dir, scope);
-    vec![seeded, owners, Corpus::golden()]
+    let owners = TestStore::new("cache_owner_rows", dir, scope);
+    vec![seeded, owners, TestStore::pinned()]
 }
 
 /// A copy of this repository's own canonical state.
-pub fn repository_state() -> Corpus {
+pub fn repository_state() -> TestStore {
     let workspace = Utf8Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .canonicalize_utf8()
@@ -100,7 +100,7 @@ pub fn repository_state() -> Corpus {
         &workspace.join(".provenance/state"),
         &ProvenanceLayout::new(root).state_dir(),
     );
-    Corpus::new("repository_state", dir, ScopeId::new("default").unwrap())
+    TestStore::new("repository_state", dir, ScopeId::new("default").unwrap())
 }
 
 fn copy_tree(source: &Utf8Path, destination: &Utf8Path) {
@@ -117,9 +117,9 @@ fn copy_tree(source: &Utf8Path, destination: &Utf8Path) {
 }
 
 /// Commits the tree and returns the commit id, or `None` when git is not
-/// on the path; the corpus then runs without its diff cases. Author,
+/// on the path; the store then runs without its diff cases. Author,
 /// dates, and signing are fixed, so the same tree gives the same id on
-/// every machine and the golden file can hold it.
+/// every machine and the pinned file can hold it.
 fn git_commit(root: &Utf8Path, message: &str) -> Option<String> {
     let run = |args: &[&str]| {
         std::process::Command::new("git")

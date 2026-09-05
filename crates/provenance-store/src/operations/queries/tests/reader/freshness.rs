@@ -1,7 +1,7 @@
 //! A failed freshness step answers at the stored serial and says so; no
 //! revision at all refuses and names `provenance materialize`.
 
-use super::super::differential::corpus;
+use super::super::comparison::test_stores;
 use super::get_through;
 use crate::cache::catch_up_state;
 use crate::operations::read_policy::{FreshnessPolicy, ReadPolicy};
@@ -9,8 +9,8 @@ use provenance_core::protocol::StampPolicy;
 
 /// Empties the requirement list of every rule in the shard, which the
 /// graph validator refuses: a rule needs one requirement.
-fn orphan_every_rule(corpus: &corpus::Corpus) {
-    let path = crate::shards::rules_path(&corpus.layout(), &corpus.scope);
+fn orphan_every_rule(store: &test_stores::TestStore) {
+    let path = crate::shards::rules_path(&store.layout(), &store.scope);
     let rewritten: Vec<String> = std::fs::read_to_string(&path)
         .unwrap()
         .lines()
@@ -25,27 +25,27 @@ fn orphan_every_rule(corpus: &corpus::Corpus) {
 
 #[tokio::test]
 async fn a_read_answers_at_the_stored_serial_when_catch_up_refuses() {
-    let corpus = corpus::seeded_queries();
+    let store = test_stores::seeded_queries();
     crate::cache::tests::fixtures::create_requirement(
-        &corpus.store(),
-        &corpus.scope,
+        &store.state_store(),
+        &store.scope,
         "req_rule_anchor",
         provenance_core::RequirementStatus::Active,
     );
     crate::cache::tests::fixtures::create_rule_of(
-        &corpus.store(),
-        &corpus.scope,
+        &store.state_store(),
+        &store.scope,
         "rule_anchored",
         "req_rule_anchor",
     );
-    let healthy = get_through(&corpus, ReadPolicy::default()).await.unwrap();
+    let healthy = get_through(&store, ReadPolicy::default()).await.unwrap();
     assert_eq!(healthy.stamp.policy, StampPolicy::CatchUp);
 
-    orphan_every_rule(&corpus);
-    let refused = catch_up_state(&corpus.layout()).await.unwrap_err();
+    orphan_every_rule(&store);
+    let refused = catch_up_state(&store.layout()).await.unwrap_err();
     assert!(refused.to_string().contains("needs one requirement"));
 
-    let stamped = get_through(&corpus, ReadPolicy::default()).await.unwrap();
+    let stamped = get_through(&store, ReadPolicy::default()).await.unwrap();
     assert!(stamped.result.found, "the read still answers");
     assert_eq!(stamped.stamp.policy, StampPolicy::CatchUpFailed);
     assert_eq!(stamped.stamp.serial, healthy.stamp.serial);
@@ -58,9 +58,9 @@ async fn a_read_answers_at_the_stored_serial_when_catch_up_refuses() {
 
 #[tokio::test]
 async fn a_read_with_no_database_refuses_and_names_materialize() {
-    let corpus = corpus::seeded_queries();
+    let store = test_stores::seeded_queries();
     let refused = get_through(
-        &corpus,
+        &store,
         ReadPolicy::with_freshness(FreshnessPolicy::AnnotateOnly),
     )
     .await
@@ -69,20 +69,20 @@ async fn a_read_with_no_database_refuses_and_names_materialize() {
         refused.to_string().contains("provenance materialize"),
         "{refused}"
     );
-    assert!(!corpus.layout().cache_db_path().exists());
+    assert!(!store.layout().cache_db_path().exists());
 }
 
 #[tokio::test]
 async fn a_refused_catch_up_over_no_database_names_materialize() {
-    let corpus = corpus::seeded_queries();
+    let store = test_stores::seeded_queries();
     crate::cache::tests::fixtures::create_rule_of(
-        &corpus.store(),
-        &corpus.scope,
+        &store.state_store(),
+        &store.scope,
         "rule_anchored",
         "req_overtime",
     );
-    orphan_every_rule(&corpus);
-    let refused = get_through(&corpus, ReadPolicy::default())
+    orphan_every_rule(&store);
+    let refused = get_through(&store, ReadPolicy::default())
         .await
         .unwrap_err();
     let text = format!("{refused:#}");
@@ -92,9 +92,9 @@ async fn a_refused_catch_up_over_no_database_names_materialize() {
 
 #[tokio::test]
 async fn refuse_stale_is_reserved() {
-    let corpus = corpus::seeded_queries();
+    let store = test_stores::seeded_queries();
     let refused = get_through(
-        &corpus,
+        &store,
         ReadPolicy::with_freshness(FreshnessPolicy::RefuseStale),
     )
     .await
@@ -122,10 +122,10 @@ impl Drop for Writable {
 async fn a_read_only_checkout_answers_at_its_serial() {
     use std::os::unix::fs::PermissionsExt;
 
-    let corpus = corpus::seeded_queries();
-    let healthy = get_through(&corpus, ReadPolicy::default()).await.unwrap();
+    let store = test_stores::seeded_queries();
+    let healthy = get_through(&store, ReadPolicy::default()).await.unwrap();
 
-    let cache = corpus.layout().cache_dir();
+    let cache = store.layout().cache_dir();
     let _restore = Writable(cache.clone());
     std::fs::set_permissions(&cache, std::fs::Permissions::from_mode(0o555)).unwrap();
     if std::fs::write(cache.join("probe"), b"").is_ok() {
@@ -133,7 +133,7 @@ async fn a_read_only_checkout_answers_at_its_serial() {
         return;
     }
 
-    let stamped = get_through(&corpus, ReadPolicy::default()).await.unwrap();
+    let stamped = get_through(&store, ReadPolicy::default()).await.unwrap();
     assert!(stamped.result.found);
     assert_eq!(stamped.stamp.policy, StampPolicy::CatchUpFailed);
     assert_eq!(stamped.stamp.serial, healthy.stamp.serial);
@@ -142,9 +142,9 @@ async fn a_read_only_checkout_answers_at_its_serial() {
 
 /// A cache file from before migration 018: the migration table stops at
 /// 017 and no revision table exists.
-async fn old_database(corpus: &corpus::Corpus) {
+async fn old_database(store: &test_stores::TestStore) {
     use sqlx::{Connection, SqliteConnection};
-    let layout = corpus.layout();
+    let layout = store.layout();
     std::fs::create_dir_all(layout.cache_dir()).unwrap();
     let options = sqlx::sqlite::SqliteConnectOptions::new()
         .filename(layout.cache_db_path())
@@ -168,10 +168,10 @@ async fn old_database(corpus: &corpus::Corpus) {
 
 #[tokio::test]
 async fn annotate_only_refuses_a_database_behind_on_migrations_by_type() {
-    let corpus = corpus::seeded_queries();
-    old_database(&corpus).await;
+    let store = test_stores::seeded_queries();
+    old_database(&store).await;
     let refused = get_through(
-        &corpus,
+        &store,
         ReadPolicy::with_freshness(FreshnessPolicy::AnnotateOnly),
     )
     .await
@@ -191,14 +191,14 @@ async fn annotate_only_refuses_a_database_behind_on_migrations_by_type() {
 /// refusal must still be the typed one that names materialize.
 #[tokio::test]
 async fn a_pre_stamp_database_refuses_and_names_materialize_when_catch_up_fails() {
-    let corpus = corpus::seeded_queries();
-    old_database(&corpus).await;
+    let store = test_stores::seeded_queries();
+    old_database(&store).await;
     // A file where the lock directory belongs makes the guard fail before
     // catch-up can run a migration.
-    let locks = corpus.layout().cache_dir().join("locks");
+    let locks = store.layout().cache_dir().join("locks");
     std::fs::remove_dir_all(&locks).unwrap();
     std::fs::write(&locks, b"").unwrap();
-    let refused = get_through(&corpus, ReadPolicy::default())
+    let refused = get_through(&store, ReadPolicy::default())
         .await
         .unwrap_err();
     assert!(
