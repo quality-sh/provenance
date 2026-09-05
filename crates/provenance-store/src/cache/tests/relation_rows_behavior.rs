@@ -68,9 +68,12 @@ async fn materialize_derives_one_row_per_declared_reference() {
     );
 }
 
-/// The loader hand-lists the owner kinds it derives rows from. Every kind
-/// must contribute rows and the links must come through, so deleting any
-/// branch of the loader turns this red instead of leaving the table short.
+/// The loader hand-lists the owner kinds it derives rows from, and lists
+/// the links of a topic and of a question apart from their declared
+/// fields. A kind's `links` rows would satisfy a check that only asks for
+/// some row of that kind, so one declared row is pinned per kind and one
+/// `links` row per owner that carries links. Deleting any branch of the
+/// loader turns this red instead of leaving the table short.
 #[tokio::test]
 async fn every_owner_kind_and_the_links_derive_relation_rows() {
     let (_dir, layout, _scope) = owner_row_layout();
@@ -94,11 +97,70 @@ async fn every_owner_kind_and_the_links_derive_relation_rows() {
         rows.iter().any(|row| row.2 == "links"),
         "no rows derive from the topic and question links: {rows:?}"
     );
-    assert!(rows.contains(&row(
-        ("source", "source_schads"),
-        "supersedes",
-        ("source", "source_award_2019")
-    )));
+    let declared = [
+        row(
+            ("source", "source_schads"),
+            "supersedes",
+            ("source", "source_award_2019"),
+        ),
+        row(
+            ("requirement", "req_schads_overtime"),
+            "cites",
+            ("source", "source_schads"),
+        ),
+        row(
+            ("resolution", "res_schads_overtime"),
+            "requirement_ids",
+            ("requirement", "req_schads_overtime"),
+        ),
+        row(
+            ("rule", "rule_schads_pay_001"),
+            "requirement_ids",
+            ("requirement", "req_schads_overtime"),
+        ),
+        row(
+            ("topic", "topic_rates"),
+            "requirement_id",
+            ("requirement", "req_schads_overtime"),
+        ),
+        row(
+            ("question", "question_threshold"),
+            "topic_id",
+            ("topic", "topic_rates"),
+        ),
+        row(
+            ("boundary", "boundary_no_backpay"),
+            "requirement_id",
+            ("requirement", "req_schads_overtime"),
+        ),
+    ];
+    for expected in &declared {
+        assert!(
+            rows.contains(expected),
+            "the declared {} row of the {} records is missing: {rows:?}",
+            expected.2,
+            expected.0
+        );
+    }
+    let linked = [
+        row(
+            ("topic", "topic_rates"),
+            "links",
+            ("requirement", "req_schads_overtime"),
+        ),
+        row(
+            ("question", "question_threshold"),
+            "links",
+            ("rule", "rule_schads_pay_001"),
+        ),
+    ];
+    for expected in &linked {
+        assert!(
+            rows.contains(expected),
+            "the links row of the {} records is missing: {rows:?}",
+            expected.0
+        );
+    }
 }
 
 #[tokio::test]
