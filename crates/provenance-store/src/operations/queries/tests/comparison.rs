@@ -1,6 +1,9 @@
-//! Runs each served operation and its baseline copy over the same store and
-//! asserts the answers agree. One ignored test times both sides over every
-//! store and prints the rows; it is a report, not a gate:
+//! Runs each served operation that still has a baseline copy (`get`,
+//! `search`, `stale`) against that copy over the same store and asserts
+//! the answers agree; the other operations lost their copies when they
+//! moved onto the projection, and the pinned answers file holds their
+//! bytes. One ignored test times both sides over every store and prints
+//! the rows; it is a report, not a gate:
 //!
 //! `cargo test -p provenance-store --release -- --ignored timing_comparison_rows --nocapture`
 
@@ -11,13 +14,13 @@ mod timing;
 use super::baseline;
 use crate::operations::read_policy::{FreshnessPolicy, ReadPolicy};
 use crate::operations::reader;
-use provenance_scanner::FileScan;
 use requests::Request;
 use serde_json::{json, Value};
 use std::time::Instant;
 use test_stores::TestStore;
 
-/// Fields the served side adds beside the answer; the baseline has none.
+/// Fields the served side adds beside the answer; the baseline has them
+/// at their defaults.
 const ADDITIVE_FIELDS: [&str; 7] = [
     "stamp",
     "freshness_error",
@@ -43,29 +46,22 @@ fn settle<T: serde::Serialize>(answer: anyhow::Result<T>) -> Value {
     }
 }
 
-/// The baseline side. Its result types are the served ones, so the
-/// additive fields sit on it at their defaults and are stripped too.
-fn baseline_answer(store: &TestStore, request: &Request, scans: &[FileScan]) -> Value {
+/// The baseline side, for the operations that still have one.
+fn baseline_answer(store: &TestStore, request: &Request) -> Option<Value> {
     let state = store.state_store();
     let (repo, scope) = (store.root.as_path(), &store.scope);
     let mut answer = match request.clone() {
         Request::Get(query) => settle(baseline::records::get(&state, scope, query)),
         Request::Search(query) => settle(baseline::records::search(&state, scope, query)),
-        Request::Neighbors(query) => settle(baseline::walk::neighbors(&state, scope, query)),
-        Request::Trace(query) => settle(baseline::walk::trace(&state, scope, query)),
-        Request::Impact(query) => {
-            settle(baseline::impact::impact(repo, &state, scope, query, scans))
-        }
-        Request::Evidence(query) => {
-            settle(baseline::evidence::evidence(repo, &state, scope, query))
-        }
         Request::Stale(query) => settle(baseline::stale::stale(repo, scope, query)),
-        Request::ResolveSymbol(query) => settle(baseline::symbols::resolve(
-            repo, &state, scope, query, scans,
-        )),
+        Request::Neighbors(_)
+        | Request::Trace(_)
+        | Request::Impact(_)
+        | Request::Evidence(_)
+        | Request::ResolveSymbol(_) => return None,
     };
     strip_additive(&mut answer);
-    answer
+    Some(answer)
 }
 
 /// One request through the reader under the given policy, as a value; a
@@ -106,9 +102,9 @@ async fn served_answer(store: &TestStore, request: &Request) -> Value {
     answer
 }
 
-/// One catch-up so the served side has a projection, then the scan both
-/// sides read from.
-async fn prepare(store: &TestStore) -> (Vec<FileScan>, f64, f64) {
+/// One catch-up so the served side has a projection, then the scan the
+/// served side reads from.
+async fn prepare(store: &TestStore) -> (f64, f64) {
     let layout = store.layout();
     let started = Instant::now();
     crate::cache::catch_up_state(&layout).await.unwrap();
@@ -118,20 +114,18 @@ async fn prepare(store: &TestStore) -> (Vec<FileScan>, f64, f64) {
     crate::cache::catch_up_state(&layout).await.unwrap();
     let catch_up_ms = timing::elapsed_ms(started);
     let scans = provenance_scanner::scan_path(&store.root).unwrap();
-    crate::test_probes::set_test_scan(Some(scans.clone()));
-    (scans, rebuild_ms, catch_up_ms)
+    crate::test_probes::set_test_scan(Some(scans));
+    (rebuild_ms, catch_up_ms)
 }
 
 async fn assert_agreement(store: TestStore) {
-    let (scans, _, _) = prepare(&store).await;
+    prepare(&store).await;
     let requests = requests::for_store(&store);
-    assert!(
-        requests.len() >= 8,
-        "{}: the request set must cover the operations",
-        store.name
-    );
+    let mut compared = 0;
     for request in &requests {
-        let baseline = baseline_answer(&store, request, &scans);
+        let Some(baseline) = baseline_answer(&store, request) else {
+            continue;
+        };
         let served = served_answer(&store, request).await;
         assert_eq!(
             baseline,
@@ -141,25 +135,33 @@ async fn assert_agreement(store: TestStore) {
             request.describe(),
             store.name
         );
+        compared += 1;
     }
+    assert!(
+        compared >= 4,
+        "{}: the request set must cover the operations with a baseline",
+        store.name
+    );
     crate::test_probes::set_test_scan(None);
 }
 
-/// Times every case the comparison tests run over one store and prints the rows.
+/// Times every case with a baseline over one store and prints the rows.
 async fn print_timings(store: TestStore) {
-    let (scans, rebuild_ms, catch_up_ms) = prepare(&store).await;
+    let (rebuild_ms, catch_up_ms) = prepare(&store).await;
     let started = Instant::now();
     provenance_scanner::scan_path(&store.root).unwrap();
     let scan_ms = timing::elapsed_ms(started);
     let mut rows = Vec::new();
     for request in &requests::for_store(&store) {
-        baseline_answer(&store, request, &scans);
+        if baseline_answer(&store, request).is_none() {
+            continue;
+        }
         served_answer(&store, request).await;
         let mut baseline_samples = Vec::new();
         let mut served_samples = Vec::new();
         for _ in 0..timing::RUNS {
             let started = Instant::now();
-            baseline_answer(&store, request, &scans);
+            baseline_answer(&store, request);
             baseline_samples.push(timing::elapsed_ms(started));
             let started = Instant::now();
             served_answer(&store, request).await;

@@ -124,7 +124,22 @@ refuses a request written for another one. Every request accepts
 `include_retired`, false by default: active views leave retired records and
 retired bindings out, and this flag is the only way to see them. Every request
 that can match more than one record accepts `limit`, 50 by default and 200 at
-most, and its answer carries `limit` and `has_more`.
+most, and its answer carries `limit` and `has_more`. An answer stops at the
+limit; there is no cursor and no next page.
+
+Every answer carries a `stamp` that says what it reflects. `serial` and
+`digest` name the projection revision the rows came from and `instance_id` the
+projection instance; serials compare only within one instance. `derivation` is
+the reader logic version, which moves when the same rows answer differently.
+`policy` is the freshness step the reader ran: `catch_up` by default, which
+brings the projection up to date under the publication lock before the read;
+`annotate_only`, which answers at the stored revision; or `catch_up_failed`,
+when the step refused and the answer is at the stored revision with the error
+text in `freshness_error`. `attested` names the projection tables behind the
+answer. `live` names what the stamp does not cover, from a closed list:
+`canonical` (canonical shards), `scanned_sites` (a scan of the working tree),
+`verification_runs` (the run file), and `diff` (git). A stamp never implies
+freshness for anything it does not list.
 
 `get` takes `node_type` and `id` and answers `found` plus the canonical record
 under `node`, tagged with the same `node_type`. The node kinds are `source`,
@@ -142,7 +157,8 @@ or `both`, and an optional `relations` filter naming declared relations
 `resolution_id`, `contradicts`, `links`); an unknown name is refused. It reads
 every declared relation one hop away and answers `neighbors`, each carrying
 the `relation`, the `direction` it was read in, and the record at the other
-end. `out` is a relation the record holds in its own field; `in` is a relation
+end. A question owns `contradicts`, so the `neighbors` of a requirement answer
+the question `in`, and the other requirement is one more hop away. `out` is a relation the record holds in its own field; `in` is a relation
 another record's field holds toward it. A Rule's `out` neighbours are the
 Requirements and Resolutions its lists name; a Requirement's `out` neighbours
 are its Sources and its domain, and its `in` neighbours the Rules and
@@ -154,9 +170,14 @@ Rule reaches its Requirements at depth 1 and their Sources at depth 2.
 
 `impact` takes `id` and answers `affected_rules`: every Rule the record
 reaches, each with the `implementations` and `verifications` that stand behind
-it, in the same shape `plan` already reports. `resolve-symbol` takes `file` and
-an optional `symbol` or `line` and answers `rules`, the Rule records bound to
-that code site.
+it, in the same shape `plan` already reports. The walk follows each declared
+relation in its flow direction and never adds a step no declaration gives: a
+resolution reaches the rules that name it, not the requirements it answers.
+The scan of the working tree behind the sites stops at a configured file count
+over a sorted walk, and `scan_cut` is true when it stopped, so the scanned
+sites are then a lower bound. `resolve-symbol` takes `file` and an optional
+`symbol` or `line` and answers `rules`, the Rule records bound to that code
+site. It scans the named file alone, so the file count never applies to it.
 
 `evidence` takes `rule` and answers what stands behind it, kept apart by kind:
 `implementation_bindings`, `verification_bindings`, `verification_runs`,
@@ -164,7 +185,10 @@ that code site.
 and `stale`. Review required means the Requirement the Rule serves was
 restated; stale means the code carrying the evidence changed. Stale is read
 from a diff and never guessed, so `stale` is null unless the request names a
-`base` commit, with `head` defaulting to the current commit.
+`base` commit, with `head` defaulting to the current commit. Each of the four
+lists carries its own cut flag, `implementation_bindings_has_more`,
+`verification_bindings_has_more`, `verification_runs_has_more`, and
+`reviews_has_more`; the top-level `has_more` is true when any of them is.
 
 `stale` takes `base`, an optional `head`, and an optional `rules` filter, and
 answers the disturbed evidence `sites` with a `summary` counting them. It uses
