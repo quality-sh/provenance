@@ -53,15 +53,3 @@ bd.db
 # Machine-local Dolt backup destination
 dolt-backup.json
 dolt-backup-state.json
-
-# Added by bd (missing required patterns)
-.env
-export-state.json
-last_pull
-embeddeddolt/
-proxieddb/
-daemon.*
-*.lock
-*.corrupt.backup/
-.beads-credential-key
-proxied_server_client_info.json
