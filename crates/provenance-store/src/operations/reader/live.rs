@@ -10,7 +10,7 @@ use crate::cache::{self, GraphEvidence};
 use crate::layout::ProvenanceLayout;
 use crate::stale::{gate, git};
 use crate::state_store::StateStore;
-use camino::Utf8Path;
+use camino::{Utf8Component, Utf8Path};
 use provenance_core::coverage::{EvidenceDiffSite, EvidenceDiffState};
 use provenance_core::{ScopeId, VerificationRun};
 use provenance_scanner::{FileScan, Language};
@@ -91,11 +91,21 @@ impl<'c> LiveHandle<'c> {
     }
 
     /// A scan of one named file alone, so it never meets the file count
-    /// and cannot miss the file. A file the scanner has no language for,
-    /// or one that cannot be read, yields no sites. A test that set the
-    /// tree scan in advance is handed that file's entry from it.
+    /// and cannot miss the file. Only a repository-relative path in
+    /// canonical spelling names a file, as the bindings read it: an
+    /// absolute path, a `.` segment, or a `..` segment scans nothing, so
+    /// no file outside the repository is read. A file the scanner has no
+    /// language for, or one that cannot be read, yields no sites. A test
+    /// that set the tree scan in advance is handed that file's entry.
     pub fn scan_file(&self, file: &Utf8Path) -> Option<FileScan> {
         self.only(Live::ScannedSites);
+        let relative = !file.is_absolute()
+            && file
+                .components()
+                .all(|component| matches!(component, Utf8Component::Normal(_)));
+        if !relative {
+            return None;
+        }
         let path = self.context.repo().join(file);
         if let Some(scans) = crate::test_probes::test_scan() {
             return scans.into_iter().find(|scan| scan.file_path == path);

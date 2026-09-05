@@ -1,4 +1,4 @@
-{"derivation":1,"digest":"sha256:c85c2306462acc0dc5e12e8ac106831b25924af07b040739e0892dfde212c542"}
+{"derivation":1,"digest":"sha256:e206959f451c8b41aacf1c60a13fe00e8c25767f5166690b3abd20e27055fc16"}
 {"answer":{"found":true,"node":{"description":"Wages and overtime","id":"domain_payroll","name":"Payroll","node_type":"domain","schema_version":2,"scope_id":"default"}},"operation":"get","request":"domain:domain_payroll"}
 {"answer":{"found":true,"node":{"id":"source_schads","name":"SCHADS award","node_type":"source","reference":"clause 28","schema_version":2,"scope_id":"default","source_type":"policy","supersedes":["source_award_2019"],"url":null}},"operation":"get","request":"source:source_schads"}
 {"answer":{"found":true,"node":{"domain_id":"domain_payroll","id":"req_overtime","node_type":"requirement","schema_version":2,"scope_id":"default","source_refs":[{"source_id":"source_retired_note"},{"clause":"cl_1","source_id":"source_schads"},{"clause":"cl_2","source_id":"source_schads"}],"statement":"req overtime overtime statement","status":"active"}},"operation":"get","request":"requirement:req_overtime"}
@@ -46,3 +46,5 @@
 {"answer":{"file":"src/pay.rs","has_more":false,"limit":50,"rules":[]},"operation":"resolve_symbol","request":"src/pay.rs"}
 {"answer":{"file":"src/rates.rs","has_more":false,"limit":50,"rules":[{"description":"Pay overtime after the threshold","id":"rule_overtime_001","name":"Overtime threshold","node_type":"rule","requirement_ids":["req_overtime"],"resolution_ids":["res_overtime"],"schema_version":2,"scope_id":"default","severity":"high","statement":"Overtime is paid after the threshold","status":"active"},{"id":"rule_penalty_001","node_type":"rule","requirement_ids":["req_penalty"],"schema_version":2,"scope_id":"default","severity":"high","statement":"rule_penalty_001 statement","status":"active"}]},"operation":"resolve_symbol","request":"src/rates.rs"}
 {"answer":{"file":"src/none.rs","has_more":false,"limit":50,"rules":[]},"operation":"resolve_symbol","request":"src/none.rs"}
+{"answer":{"file":"./src/pay.rs","has_more":false,"limit":50,"rules":[]},"operation":"resolve_symbol","request":"./src/pay.rs"}
+{"answer":{"file":"../src/pay.rs","has_more":false,"limit":50,"rules":[]},"operation":"resolve_symbol","request":"../src/pay.rs"}

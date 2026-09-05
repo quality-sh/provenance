@@ -140,3 +140,42 @@ async fn resolve_symbol_on_a_missing_file_answers_bindings_only() {
     assert_eq!(rule_ids(&answer.result.rules), ["rule_overtime"]);
     assert!(!answer.result.has_more);
 }
+
+/// Only a repository-relative path in canonical spelling names a file to
+/// scan, as the bindings half reads it. A `./` prefix, an absolute path,
+/// and a path that climbs out of the repository scan nothing; the
+/// bindings still answer, and nothing outside the repository is read.
+#[tokio::test]
+#[verifies("rule_resolve_symbol_reads_the_named_file_only", examples)]
+async fn resolve_symbol_scans_only_a_repository_relative_path() {
+    let store = store_with_rule();
+    bind(&store, "bind_dotted", "./src/pay.rs");
+    let outside = store.root.parent().unwrap().join("outside_pay.rs");
+    std::fs::write(&outside, "#[rule(\"rule_overtime\")]\nfn outside() {}\n").unwrap();
+    let absolute = store.root.join("src/pay.rs");
+    for (file, expected) in [
+        ("./src/pay.rs", vec!["rule_overtime"]),
+        (absolute.as_str(), Vec::new()),
+        ("../outside_pay.rs", Vec::new()),
+        ("src/../src/pay.rs", Vec::new()),
+    ] {
+        let answer =
+            queries::resolve_symbol(Some(store.root.clone()), &store.scope, resolve(file, None))
+                .await
+                .unwrap();
+        assert_eq!(
+            rule_ids(&answer.result.rules),
+            expected,
+            "{file}: bindings answer by their spelling; no file is scanned"
+        );
+        let with_line = queries::resolve_symbol(
+            Some(store.root.clone()),
+            &store.scope,
+            resolve(file, Some(1)),
+        )
+        .await
+        .unwrap();
+        assert!(with_line.result.rules.is_empty(), "{file}: no scanned site");
+    }
+    std::fs::remove_file(outside).unwrap();
+}
