@@ -17,60 +17,102 @@ pub(super) fn key(node_type: NodeType, id: &StableId) -> Key {
 }
 
 /// Runs one body over the record type behind a node kind, with `$kind`
-/// bound to the type and `$wrap` to its `GraphNode` constructor.
+/// bound to the type and, in the second form, `$wrap` to its `GraphNode`
+/// constructor.
 macro_rules! for_kind {
+    ($node_type:expr, $kind:ident => $body:expr) => {
+        match $node_type {
+            NodeType::Source => {
+                type $kind = Source;
+                $body
+            }
+            NodeType::Requirement => {
+                type $kind = Requirement;
+                $body
+            }
+            NodeType::Resolution => {
+                type $kind = Resolution;
+                $body
+            }
+            NodeType::Rule => {
+                type $kind = Rule;
+                $body
+            }
+            NodeType::Topic => {
+                type $kind = Topic;
+                $body
+            }
+            NodeType::Question => {
+                type $kind = Question;
+                $body
+            }
+            NodeType::Domain => {
+                type $kind = Domain;
+                $body
+            }
+            NodeType::Boundary => {
+                type $kind = Boundary;
+                $body
+            }
+        }
+    };
     ($node_type:expr, $kind:ident, $wrap:ident => $body:expr) => {
         match $node_type {
             NodeType::Source => {
                 type $kind = Source;
-                #[allow(unused_variables)]
                 let $wrap = |record: Source| GraphNode::Source(Box::new(record));
                 $body
             }
             NodeType::Requirement => {
                 type $kind = Requirement;
-                #[allow(unused_variables)]
                 let $wrap = |record: Requirement| GraphNode::Requirement(Box::new(record));
                 $body
             }
             NodeType::Resolution => {
                 type $kind = Resolution;
-                #[allow(unused_variables)]
                 let $wrap = |record: Resolution| GraphNode::Resolution(Box::new(record));
                 $body
             }
             NodeType::Rule => {
                 type $kind = Rule;
-                #[allow(unused_variables)]
                 let $wrap = |record: Rule| GraphNode::Rule(Box::new(record));
                 $body
             }
             NodeType::Topic => {
                 type $kind = Topic;
-                #[allow(unused_variables)]
                 let $wrap = |record: Topic| GraphNode::Topic(Box::new(record));
                 $body
             }
             NodeType::Question => {
                 type $kind = Question;
-                #[allow(unused_variables)]
                 let $wrap = |record: Question| GraphNode::Question(Box::new(record));
                 $body
             }
             NodeType::Domain => {
                 type $kind = Domain;
-                #[allow(unused_variables)]
                 let $wrap = |record: Domain| GraphNode::Domain(Box::new(record));
                 $body
             }
             NodeType::Boundary => {
                 type $kind = Boundary;
-                #[allow(unused_variables)]
                 let $wrap = |record: Boundary| GraphNode::Boundary(Box::new(record));
                 $body
             }
         }
     };
+}
+
+/// The kinds the endpoints name, each with its ids, in rank order.
+fn by_kind(wanted: &[(NodeType, StableId)]) -> BTreeMap<u8, (NodeType, Vec<StableId>)> {
+    let mut kinds: BTreeMap<u8, (NodeType, Vec<StableId>)> = BTreeMap::new();
+    for (node_type, id) in wanted {
+        kinds
+            .entry(node_type.rank())
+            .or_insert_with(|| (*node_type, Vec::new()))
+            .1
+            .push(id.clone());
+    }
+    kinds
 }
 
 /// One record that counts under the view: present, and not retired
@@ -93,16 +135,8 @@ pub(super) async fn nodes(
     wanted: &[(NodeType, StableId)],
     include_retired: bool,
 ) -> anyhow::Result<BTreeMap<Key, GraphNode>> {
-    let mut by_kind: BTreeMap<u8, (NodeType, Vec<StableId>)> = BTreeMap::new();
-    for (node_type, id) in wanted {
-        by_kind
-            .entry(node_type.rank())
-            .or_insert_with(|| (*node_type, Vec::new()))
-            .1
-            .push(id.clone());
-    }
     let mut found = BTreeMap::new();
-    for (node_type, ids) in by_kind.into_values() {
+    for (node_type, ids) in by_kind(wanted).into_values() {
         let records: Vec<GraphNode> = for_kind!(node_type, K, wrap => {
             snapshot
                 .table::<K>()
@@ -126,17 +160,9 @@ pub(super) async fn counting(
     wanted: &[(NodeType, StableId)],
     include_retired: bool,
 ) -> anyhow::Result<Vec<(NodeType, StableId)>> {
-    let mut by_kind: BTreeMap<u8, (NodeType, Vec<StableId>)> = BTreeMap::new();
-    for (node_type, id) in wanted {
-        by_kind
-            .entry(node_type.rank())
-            .or_insert_with(|| (*node_type, Vec::new()))
-            .1
-            .push(id.clone());
-    }
     let mut found = Vec::new();
-    for (node_type, ids) in by_kind.into_values() {
-        let counting: Vec<StableId> = for_kind!(node_type, K, wrap => {
+    for (node_type, ids) in by_kind(wanted).into_values() {
+        let counting: Vec<StableId> = for_kind!(node_type, K => {
             snapshot.table::<K>().ids_that_count(&ids, include_retired).await?
         });
         found.extend(counting.into_iter().map(|id| (node_type, id)));

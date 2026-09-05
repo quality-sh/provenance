@@ -52,46 +52,25 @@ impl<K: ProjectionRow> Table<'_, K> {
     }
 
     /// The records with the given ids that count under the view, one per
-    /// id, in id order. The ids go to the database in chunks, since one
-    /// statement binds a bounded number of parameters; a repeated id is
-    /// asked once.
+    /// id, in id order; a repeated id is answered once.
     pub async fn by_ids(&self, ids: &[StableId], include_retired: bool) -> anyhow::Result<Vec<K>> {
-        let mut wanted: Vec<&str> = ids.iter().map(StableId::as_str).collect();
-        wanted.sort_unstable();
-        wanted.dedup();
-        let mut records: Vec<(String, K)> = Vec::new();
-        for chunk in wanted.chunks(BIND_CHUNK) {
-            let marks = vec!["?"; chunk.len()].join(", ");
-            let sql = format!(
-                "SELECT {} FROM {} WHERE scope_id = ? AND id IN ({marks}){}",
-                select_columns::<K>(),
-                quoted(K::TABLE),
-                active_clause::<K>(include_retired)
-            );
-            let mut query = sqlx::query(&sql).bind(self.snapshot().scope().as_str());
-            for id in chunk {
-                query = query.bind(*id);
-            }
-            let rows = {
-                let mut tx = self.snapshot().connection().await;
-                query.fetch_all(&mut **tx).await?
-            };
-            for row in rows {
-                records.push((row.try_get("id")?, decode::<K>(&row)?));
-            }
-        }
-        records.sort_by(|left, right| left.0.cmp(&right.0));
-        Ok(records.into_iter().map(|(_, record)| record).collect())
+        let wanted: Vec<&str> = ids.iter().map(StableId::as_str).collect();
+        self.by_field("id", &wanted, include_retired).await
     }
 
     /// The records whose named column holds one of the values, under the
-    /// view, in id order. The values go to the database in chunks.
+    /// view, in id order. The values go to the database in chunks, since
+    /// one statement binds a bounded number of parameters; a repeated
+    /// value is asked once, so no row comes back twice.
     pub async fn by_field(
         &self,
         column: &'static str,
         values: &[&str],
         include_retired: bool,
     ) -> anyhow::Result<Vec<K>> {
+        let mut values = values.to_vec();
+        values.sort_unstable();
+        values.dedup();
         let mut records: Vec<(String, K)> = Vec::new();
         for chunk in values.chunks(BIND_CHUNK) {
             let marks = vec!["?"; chunk.len()].join(", ");
