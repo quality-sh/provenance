@@ -38,11 +38,15 @@ async fn assert_mirrors<K: ProjectionRow>(pool: &sqlx::SqlitePool, kind: bool) {
     );
 }
 
+/// The gate runs over the migrated schema alone, before any row loads:
+/// a drifted column then fails here, by name, and not at an insert.
 #[tokio::test]
 async fn every_kind_table_mirrors_its_record_columns() {
     let (_dir, layout, _scope) = seeded_layout();
-    materialize_state(&layout).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
+    crate::migrations::run_migrations(&pool, &layout)
+        .await
+        .unwrap();
     assert_mirrors::<Source>(&pool, true).await;
     assert_mirrors::<Requirement>(&pool, true).await;
     assert_mirrors::<Resolution>(&pool, true).await;
