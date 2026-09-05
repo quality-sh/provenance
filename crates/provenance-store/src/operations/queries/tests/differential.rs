@@ -1,8 +1,8 @@
 //! Runs each served operation and its oracle copy over the same store and
-//! asserts the answers agree, then times both sides and prints the rows.
+//! asserts the answers agree. One ignored test times both sides over every
+//! corpus and prints the rows; it is a report, not a gate:
 //!
-//! `cargo test -p provenance-store differential -- --nocapture` shows the
-//! rows; `PROVENANCE_AB_GATE=1` makes the ceilings assert (timing.rs).
+//! `cargo test -p provenance-store --release -- --ignored ab_timing_rows --nocapture`
 
 pub mod corpus;
 pub mod requests;
@@ -98,7 +98,9 @@ async fn served_answer(corpus: &Corpus, request: &Request) -> Value {
     answer
 }
 
-async fn run_corpus(corpus: Corpus) {
+/// One catch-up so the served side has a projection, then the scan both
+/// sides read from.
+async fn prepare(corpus: &Corpus) -> (Vec<FileScan>, f64, f64) {
     let layout = corpus.layout();
     let started = Instant::now();
     crate::cache::catch_up_state(&layout).await.unwrap();
@@ -107,12 +109,13 @@ async fn run_corpus(corpus: Corpus) {
     let started = Instant::now();
     crate::cache::catch_up_state(&layout).await.unwrap();
     let catch_up_ms = timing::elapsed_ms(started);
-
-    let started = Instant::now();
     let scans = provenance_scanner::scan_path(&corpus.root).unwrap();
-    let scan_ms = timing::elapsed_ms(started);
     crate::test_probes::set_preset_scan(Some(scans.clone()));
+    (scans, rebuild_ms, catch_up_ms)
+}
 
+async fn assert_agreement(corpus: Corpus) {
+    let (scans, _, _) = prepare(&corpus).await;
     let requests = requests::for_corpus(&corpus);
     assert!(
         requests.len() >= 8,
@@ -131,19 +134,22 @@ async fn run_corpus(corpus: Corpus) {
             corpus.name
         );
     }
+    crate::test_probes::set_preset_scan(None);
+}
 
+/// Times every case the harness runs over one corpus and prints the rows.
+async fn print_timings(corpus: Corpus) {
+    let (scans, rebuild_ms, catch_up_ms) = prepare(&corpus).await;
+    let started = Instant::now();
+    provenance_scanner::scan_path(&corpus.root).unwrap();
+    let scan_ms = timing::elapsed_ms(started);
     let mut rows = Vec::new();
-    let mut timed: Vec<&'static str> = Vec::new();
-    for request in &requests {
-        if timed.contains(&request.operation()) {
-            continue;
-        }
-        timed.push(request.operation());
+    for request in &requests::for_corpus(&corpus) {
         oracle_answer(&corpus, request, &scans);
         served_answer(&corpus, request).await;
         let mut oracle_samples = Vec::new();
         let mut served_samples = Vec::new();
-        for _ in 0..timing::runs() {
+        for _ in 0..timing::RUNS {
             let started = Instant::now();
             oracle_answer(&corpus, request, &scans);
             oracle_samples.push(timing::elapsed_ms(started));
@@ -160,22 +166,33 @@ async fn run_corpus(corpus: Corpus) {
     }
     crate::test_probes::set_preset_scan(None);
     timing::print_rows(corpus.name, &rows, scan_ms, rebuild_ms, catch_up_ms);
-    timing::check_ceilings(corpus.name, &rows, scan_ms, catch_up_ms);
 }
 
 #[tokio::test]
 async fn served_answers_match_the_oracle_over_the_seeded_query_store() {
-    run_corpus(corpus::seeded_queries()).await;
+    assert_agreement(corpus::seeded_queries()).await;
 }
 
 #[tokio::test]
 async fn served_answers_match_the_oracle_over_the_cache_fixtures() {
     for corpus in corpus::cache_fixtures() {
-        run_corpus(corpus).await;
+        assert_agreement(corpus).await;
     }
 }
 
 #[tokio::test]
 async fn served_answers_match_the_oracle_over_the_repository_state() {
-    run_corpus(corpus::repository_state()).await;
+    assert_agreement(corpus::repository_state()).await;
+}
+
+/// The A/B report over every corpus. Run it by hand:
+/// `cargo test -p provenance-store --release -- --ignored ab_timing_rows --nocapture`
+#[tokio::test]
+#[ignore = "a report, not a gate; run by hand with --ignored"]
+async fn ab_timing_rows() {
+    print_timings(corpus::seeded_queries()).await;
+    for corpus in corpus::cache_fixtures() {
+        print_timings(corpus).await;
+    }
+    print_timings(corpus::repository_state()).await;
 }
