@@ -17,44 +17,14 @@ pub(super) fn key(node_type: NodeType, id: &StableId) -> Key {
 }
 
 /// Runs one body over the record type behind a node kind, with `$kind`
-/// bound to the type and, in the second form, `$wrap` to its `GraphNode`
-/// constructor.
+/// bound to the type and `$wrap` to its `GraphNode` constructor; the
+/// short form leaves the constructor unused.
 macro_rules! for_kind {
     ($node_type:expr, $kind:ident => $body:expr) => {
-        match $node_type {
-            NodeType::Source => {
-                type $kind = Source;
-                $body
-            }
-            NodeType::Requirement => {
-                type $kind = Requirement;
-                $body
-            }
-            NodeType::Resolution => {
-                type $kind = Resolution;
-                $body
-            }
-            NodeType::Rule => {
-                type $kind = Rule;
-                $body
-            }
-            NodeType::Topic => {
-                type $kind = Topic;
-                $body
-            }
-            NodeType::Question => {
-                type $kind = Question;
-                $body
-            }
-            NodeType::Domain => {
-                type $kind = Domain;
-                $body
-            }
-            NodeType::Boundary => {
-                type $kind = Boundary;
-                $body
-            }
-        }
+        for_kind!($node_type, $kind, wrap => {
+            let _ = wrap;
+            $body
+        })
     };
     ($node_type:expr, $kind:ident, $wrap:ident => $body:expr) => {
         match $node_type {
