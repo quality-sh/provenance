@@ -3,9 +3,10 @@
 
 use super::super::comparison::test_stores;
 use super::get_through;
-use crate::cache::catch_up_state;
+use crate::cache::{catch_up_state, open_cache};
 use crate::operations::read_policy::{FreshnessPolicy, ReadPolicy};
 use provenance_core::protocol::StampPolicy;
+use provenance_macros::verifies;
 
 /// Empties the requirement list of every rule in the shard, which the
 /// graph validator refuses: a rule needs one requirement.
@@ -192,4 +193,44 @@ async fn a_pre_stamp_database_refuses_and_names_materialize_when_catch_up_fails(
     let text = format!("{refused:#}");
     assert!(text.contains("provenance materialize"), "{text}");
     assert!(!text.contains("no such table"), "{text}");
+}
+
+/// A migration that committed before its rebuild ran leaves a revision
+/// row beside empty tables and no family digests. `catch_up` heals that
+/// window before it answers; `annotate_only` runs no freshness step, so
+/// it must refuse instead of answering over empty tables.
+#[tokio::test]
+#[verifies("rule_annotate_only_refuses_a_half_migrated_projection", examples)]
+async fn annotate_only_refuses_a_half_migrated_database() {
+    let store = test_stores::seeded_queries();
+    catch_up_state(&store.layout()).await.unwrap();
+    let pool = open_cache(&store.layout()).await.unwrap();
+    sqlx::query("DELETE FROM _schema_migrations WHERE id = ?")
+        .bind(crate::migrations::RECORD_COLUMNS_MIGRATION_ID)
+        .execute(&pool)
+        .await
+        .unwrap();
+    pool.close().await;
+    crate::test_probes::crash_at("catch_up_after_migrations");
+    let crashed = catch_up_state(&store.layout()).await.unwrap_err();
+    crate::test_probes::disarm("catch_up_after_migrations");
+    assert!(crashed.to_string().contains("injected crash"), "{crashed}");
+
+    let refused = get_through(
+        &store,
+        ReadPolicy::with_freshness(FreshnessPolicy::AnnotateOnly),
+    )
+    .await
+    .unwrap_err();
+    assert!(
+        matches!(
+            refused.downcast_ref::<crate::operations::reader::ReadRefusal>(),
+            Some(crate::operations::reader::ReadRefusal::HalfMigrated { .. })
+        ),
+        "{refused:#}"
+    );
+    assert!(refused.to_string().contains("provenance materialize"));
+
+    let healed = get_through(&store, ReadPolicy::default()).await.unwrap();
+    assert!(healed.result.found, "catch-up heals the window and answers");
 }

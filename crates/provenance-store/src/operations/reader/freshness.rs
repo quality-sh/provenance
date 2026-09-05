@@ -14,6 +14,7 @@ use crate::migrations;
 use crate::operations::read_policy::FreshnessPolicy;
 use crate::publication::publication_guard;
 use provenance_core::protocol::StampPolicy;
+use provenance_macros::rule;
 use sqlx::SqlitePool;
 
 pub(super) struct Freshness {
@@ -93,7 +94,11 @@ async fn stored(layout: &ProvenanceLayout, error: anyhow::Error) -> anyhow::Resu
 
 /// Under `annotate_only` a database behind on migrations refuses: no
 /// freshness step will bring it forward. A file with no migration table
-/// at all is behind too.
+/// at all is behind too. So is a half-migrated file: a migration commits
+/// and forgets the family digests, and the rebuild that refills the
+/// tables runs after it, so a revision beside no digests means the tables
+/// are empty and no freshness step will run to fill them.
+#[rule("rule_annotate_only_refuses_a_half_migrated_projection")]
 async fn ensure_current_schema(pool: &SqlitePool, layout: &ProvenanceLayout) -> anyhow::Result<()> {
     let behind = ReadRefusal::SchemaBehind {
         database: layout.cache_db_path(),
@@ -109,14 +114,25 @@ async fn ensure_current_schema(pool: &SqlitePool, layout: &ProvenanceLayout) -> 
         }
         Err(error) => return Err(error),
     };
-    if applied
+    if !applied
         .iter()
         .any(|id| id == migrations::LATEST_MIGRATION_ID)
     {
-        Ok(())
-    } else {
-        Err(behind.into())
+        return Err(behind.into());
     }
+    let half_migrated: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM projection_revision) \
+         AND NOT EXISTS (SELECT 1 FROM projection_family_digests)",
+    )
+    .fetch_one(pool)
+    .await?;
+    if half_migrated {
+        return Err(ReadRefusal::HalfMigrated {
+            database: layout.cache_db_path(),
+        }
+        .into());
+    }
+    Ok(())
 }
 
 /// Whether an error says a table this schema expects is not there.

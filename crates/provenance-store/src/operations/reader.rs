@@ -48,6 +48,8 @@ pub enum ReadRefusal {
     RefuseStaleUnimplemented,
     #[error("the projection in {database} is behind on migrations; run `provenance materialize`")]
     SchemaBehind { database: Utf8PathBuf },
+    #[error("the projection in {database} holds a revision but no family digests, so its tables were never reloaded after a migration; run `provenance materialize`")]
+    HalfMigrated { database: Utf8PathBuf },
 }
 
 /// Everything one read may reach: the pinned snapshot and the live parts.
