@@ -1,6 +1,8 @@
-//! Marker attributes binding code to provenance rules, and the derive that
-//! declares a record kind's reference fields.
+//! Marker attributes binding code to provenance rules, the derive that
+//! declares a record kind's reference fields, and the derive that stores a
+//! record kind as one projection table row.
 
+mod projection_row;
 mod relations;
 
 use proc_macro::{TokenStream, TokenTree};
@@ -106,6 +108,22 @@ fn validate_rule_id(attr: &TokenStream) {
 pub fn relations(input: TokenStream) -> TokenStream {
     let input = syn::parse_macro_input!(input as syn::DeriveInput);
     relations::expand(&input)
+        .unwrap_or_else(syn::Error::into_compile_error)
+        .into()
+}
+
+/// Stores one record kind as one projection table row: one column per
+/// field, named as the field, in declaration order.
+///
+/// The struct names its table with `#[table("name")]`. A field whose
+/// struct type holds JSON text carries `#[column(json)]`; a `Vec` needs no
+/// mark. The derive emits `impl ProjectionRow for Kind`. It refuses a
+/// tuple struct and a field named `search_text`, the search column the
+/// store derives beside the record's own.
+#[proc_macro_derive(ProjectionRow, attributes(table, column))]
+pub fn projection_row(input: TokenStream) -> TokenStream {
+    let input = syn::parse_macro_input!(input as syn::DeriveInput);
+    projection_row::expand(&input)
         .unwrap_or_else(syn::Error::into_compile_error)
         .into()
 }

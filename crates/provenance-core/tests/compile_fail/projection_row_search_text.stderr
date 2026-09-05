@@ -1,0 +1,5 @@
+error: field `search_text` takes the name of the derived search column; rename the field
+ --> tests/compile_fail/projection_row_search_text.rs:7:5
+  |
+7 |     pub search_text: String,
+  |     ^^^^^^^^^^^^^^^^^^^^^^^

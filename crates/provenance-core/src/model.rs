@@ -6,6 +6,7 @@ mod ids;
 mod integrations;
 mod manifest;
 mod parsing;
+pub mod projection_row;
 pub mod relations;
 mod services;
 mod shaping;
@@ -49,6 +50,7 @@ pub use integrations::{
     VerificationMethod, VerificationRun, VerificationRunStatus,
 };
 pub use manifest::{Manifest, RepoPathPrefix, Scope};
+pub use projection_row::{ColumnValue, ProjectionRow};
 pub use services::Domain;
 pub use shaping::{
     ArtifactLink, ArtifactLinkTargetType, Boundary, Question, QuestionStatus, ResolutionMethod,
