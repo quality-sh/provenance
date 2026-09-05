@@ -28,7 +28,7 @@ jobs:
           echo "::warning::SOCKET_SECURITY_API_KEY is not set. Create a key in the" \
             "Socket dashboard (socket.dev) and add it as a repository secret to" \
             "enable this scan."
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         if: env.SOCKET_SECURITY_API_KEY != ''
         with:
           python-version: "3.12"
