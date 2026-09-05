@@ -175,7 +175,7 @@ pub fn for_corpus(corpus: &Corpus) -> Vec<Request> {
     requests
 }
 
-fn neighbors(id: &str, include_retired: bool, limit: usize) -> NeighborsQuery {
+pub fn neighbors(id: &str, include_retired: bool, limit: usize) -> NeighborsQuery {
     NeighborsQuery {
         protocol_version: Some(SDK_PROTOCOL_VERSION),
         id: id.to_string(),
@@ -187,7 +187,7 @@ fn neighbors(id: &str, include_retired: bool, limit: usize) -> NeighborsQuery {
     }
 }
 
-fn trace(id: &str, include_retired: bool, limit: usize) -> TraceQuery {
+pub fn trace(id: &str, include_retired: bool, limit: usize) -> TraceQuery {
     TraceQuery {
         protocol_version: Some(SDK_PROTOCOL_VERSION),
         id: id.to_string(),
@@ -200,7 +200,7 @@ fn trace(id: &str, include_retired: bool, limit: usize) -> TraceQuery {
     }
 }
 
-fn evidence(rule: &str, base: Option<String>) -> EvidenceQuery {
+pub fn evidence(rule: &str, base: Option<String>) -> EvidenceQuery {
     EvidenceQuery {
         protocol_version: Some(SDK_PROTOCOL_VERSION),
         rule: rule.to_string(),
@@ -211,7 +211,7 @@ fn evidence(rule: &str, base: Option<String>) -> EvidenceQuery {
     }
 }
 
-fn search(text: &str, node_types: Vec<NodeType>) -> SearchQuery {
+pub fn search(text: &str, node_types: Vec<NodeType>) -> SearchQuery {
     SearchQuery {
         protocol_version: Some(SDK_PROTOCOL_VERSION),
         text: text.to_string(),

@@ -3,7 +3,9 @@
 //! Production code calls [`at`] at a named point and [`record_read`] with
 //! every canonical path it opens. Outside tests both are no-ops. A test arms
 //! a closure for a label on its own thread, or records the set of paths one
-//! derivation reads.
+//! derivation reads. A test can also preset the working-tree scan the
+//! reader hands out, so a timing row measures graph work and not the scan,
+//! and can ask whether the publication lock is held.
 
 #[cfg(test)]
 use std::cell::RefCell;
@@ -17,6 +19,44 @@ type Probe = Box<dyn FnMut() -> anyhow::Result<()>>;
 thread_local! {
     static PROBES: RefCell<HashMap<&'static str, Probe>> = RefCell::new(HashMap::new());
     static READS: RefCell<Option<BTreeSet<String>>> = const { RefCell::new(None) };
+    static SCAN: RefCell<Option<Vec<provenance_scanner::FileScan>>> = const { RefCell::new(None) };
+}
+
+/// The preset scan, when a test set one on this thread.
+#[cfg(test)]
+pub fn preset_scan() -> Option<Vec<provenance_scanner::FileScan>> {
+    SCAN.with(|scan| scan.borrow().clone())
+}
+
+#[cfg(not(test))]
+pub const fn preset_scan() -> Option<Vec<provenance_scanner::FileScan>> {
+    None
+}
+
+#[cfg(test)]
+pub fn set_preset_scan(scans: Option<Vec<provenance_scanner::FileScan>>) {
+    SCAN.with(|scan| *scan.borrow_mut() = scans);
+}
+
+/// Whether another holder has the repository's publication lock right now.
+#[cfg(test)]
+pub fn publication_lock_is_held(layout: &crate::layout::ProvenanceLayout) -> bool {
+    use fs2::FileExt;
+    let path = layout.publication_lock_path();
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(path)
+        .unwrap();
+    if file.try_lock_exclusive().is_ok() {
+        let _ = fs2::FileExt::unlock(&file);
+        false
+    } else {
+        true
+    }
 }
 
 #[cfg(test)]

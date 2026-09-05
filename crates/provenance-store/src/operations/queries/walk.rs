@@ -1,3 +1,4 @@
+use crate::operations::reader::{Live, ReadContext};
 use crate::state_store::StateStore;
 use provenance_core::model::relations::{
     related_nodes, RecordFront, RelatedNode, RelationDirection,
@@ -111,7 +112,7 @@ const fn direction_of(direction: RelationDirection) -> Direction {
 }
 
 pub(super) fn neighbors(
-    store: &StateStore,
+    ctx: &ReadContext,
     scope: &ScopeId,
     request: NeighborsQuery,
 ) -> anyhow::Result<NeighborsResult> {
@@ -119,7 +120,8 @@ pub(super) fn neighbors(
     ensure_limit(request.limit)?;
     ensure_relations(&request.relations)?;
     let id = StableId::new(request.id.clone())?;
-    let graph = ScopeGraph::load(store, scope, request.include_retired)?;
+    let store = ctx.live(Live::Canonical).store();
+    let graph = ScopeGraph::load(&store, scope, request.include_retired)?;
     let mut found = Vec::new();
     if let Some(node_type) = request.node_type.or_else(|| graph.kind_of(&id)) {
         for step in graph.steps(node_type, &id, request.direction, &request.relations) {
@@ -142,7 +144,7 @@ pub(super) fn neighbors(
 }
 
 pub(super) fn trace(
-    store: &StateStore,
+    ctx: &ReadContext,
     scope: &ScopeId,
     request: TraceQuery,
 ) -> anyhow::Result<TraceResult> {
@@ -151,7 +153,8 @@ pub(super) fn trace(
     ensure_max_depth(request.max_depth)?;
     ensure_relations(&request.relations)?;
     let id = StableId::new(request.id.clone())?;
-    let graph = ScopeGraph::load(store, scope, request.include_retired)?;
+    let store = ctx.live(Live::Canonical).store();
+    let graph = ScopeGraph::load(&store, scope, request.include_retired)?;
     let mut seen = BTreeSet::from([id.as_str().to_string()]);
     let mut frontier: Vec<(NodeType, StableId)> = request
         .node_type

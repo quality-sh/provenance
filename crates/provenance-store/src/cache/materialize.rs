@@ -7,6 +7,7 @@ mod relation_rows;
 mod stamp;
 mod units;
 
+pub use catch_up::catch_up_with_guard;
 pub use catch_up::{catch_up_state, CatchUpReport};
 pub use units::{unit_digest, units_for, Unit};
 

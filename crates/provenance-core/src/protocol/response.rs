@@ -6,28 +6,34 @@ use crate::model::{
     ImplementationBinding, RequirementReview, VerificationBinding, VerificationRun,
 };
 
-use super::{AffectedRule, GraphNode, Neighbor, TracedNode, SDK_PROTOCOL_VERSION};
+use super::{AffectedRule, GraphNode, Neighbor, Stamp, Stamped, TracedNode, SDK_PROTOCOL_VERSION};
 
 /// The envelope every query primitive answers in.
 ///
 /// The protocol version travels with the answer, so a caller holding a
-/// recorded response can tell which contract produced it, and `operation`
-/// names which primitive it came from.
+/// recorded response can tell which contract produced it, `operation`
+/// names which primitive it came from, and `stamp` says what the answer
+/// reflects.
 #[derive(Debug, Clone, Serialize)]
 // The envelope stays encode-only: `operation` is a static name.
 pub struct QueryResponse<Result> {
     pub protocol_version: u32,
     pub operation: &'static str,
+    pub stamp: Stamp,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub freshness_error: Option<String>,
     #[serde(flatten)]
     pub result: Result,
 }
 
 impl<Result> QueryResponse<Result> {
-    pub const fn new(operation: &'static str, result: Result) -> Self {
+    pub fn new(operation: &'static str, answer: Stamped<Result>) -> Self {
         Self {
             protocol_version: SDK_PROTOCOL_VERSION,
             operation,
-            result,
+            stamp: answer.stamp,
+            freshness_error: answer.freshness_error,
+            result: answer.result,
         }
     }
 }

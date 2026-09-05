@@ -23,6 +23,9 @@ pub const PROJECTION_STAMP_MIGRATION_ID: &str = "018";
 pub const FAMILY_CONTENT_DIGEST_MIGRATION_ID: &str = "019";
 pub const UNIT_DIGESTS_MIGRATION_ID: &str = "020";
 pub const RELATIONS_TABLE_MIGRATION_ID: &str = "021";
+/// The last migration `run_migrations` applies. A reader under
+/// `annotate_only` refuses a database that lacks it.
+pub const LATEST_MIGRATION_ID: &str = RELATIONS_TABLE_MIGRATION_ID;
 const INITIAL_SQL: &str = include_str!("../migrations/001_initial_cache.sql");
 const SOURCE_REQUIREMENT_SQL: &str =
     include_str!("../migrations/002_sources_requirements_edges.sql");
@@ -197,6 +200,10 @@ mod tests {
             ]
         );
         assert!(run_migrations(&pool, &layout).await.unwrap().is_empty());
+        assert_eq!(
+            applied_migrations(&pool).await.unwrap().last().unwrap(),
+            LATEST_MIGRATION_ID
+        );
         assert_eq!(
             applied_migrations(&pool).await.unwrap(),
             vec![

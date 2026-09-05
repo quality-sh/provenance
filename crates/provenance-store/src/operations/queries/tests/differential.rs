@@ -4,11 +4,13 @@
 //! `cargo test -p provenance-store differential -- --nocapture` shows the
 //! rows; `PROVENANCE_AB_GATE=1` makes the ceilings assert (timing.rs).
 
-mod corpus;
-mod requests;
+pub mod corpus;
+pub mod requests;
 mod timing;
 
 use super::oracle;
+use crate::operations::read_policy::{FreshnessPolicy, ReadPolicy};
+use crate::operations::reader;
 use corpus::Corpus;
 use provenance_scanner::FileScan;
 use requests::Request;
@@ -58,20 +60,33 @@ fn oracle_answer(corpus: &Corpus, request: &Request, scans: &[FileScan]) -> Valu
     }
 }
 
-/// The served side: today's executors over the canonical shards.
-fn served_answer(corpus: &Corpus, request: &Request) -> Value {
+/// The served side: the executors through the reader. The freshness step
+/// stays out of the number: the corpus is caught up once, then every read
+/// runs under `annotate_only`. The scan comes from the preset the harness
+/// took before the clock started.
+async fn served_answer(corpus: &Corpus, request: &Request) -> Value {
     use super::super::{evidence, impact, records, stale, symbols, walk};
-    let store = corpus.store();
-    let (repo, scope) = (corpus.root.as_path(), &corpus.scope);
-    let mut answer = match request.clone() {
-        Request::Get(query) => settle(records::get(&store, scope, query)),
-        Request::Search(query) => settle(records::search(&store, scope, query)),
-        Request::Neighbors(query) => settle(walk::neighbors(&store, scope, query)),
-        Request::Trace(query) => settle(walk::trace(&store, scope, query)),
-        Request::Impact(query) => settle(impact::impact(repo, &store, scope, query)),
-        Request::Evidence(query) => settle(evidence::evidence(repo, &store, scope, query)),
-        Request::Stale(query) => settle(stale::stale(repo, scope, query)),
-        Request::ResolveSymbol(query) => settle(symbols::resolve(repo, &store, scope, query)),
+    let scope = corpus.scope.clone();
+    let request = request.clone();
+    let policy = ReadPolicy::with_freshness(FreshnessPolicy::AnnotateOnly);
+    let served = reader::answer(&corpus.root, &corpus.scope, policy, move |ctx| {
+        Box::pin(async move {
+            Ok(match request {
+                Request::Get(query) => settle(records::get(ctx, &scope, query)),
+                Request::Search(query) => settle(records::search(ctx, &scope, query)),
+                Request::Neighbors(query) => settle(walk::neighbors(ctx, &scope, query)),
+                Request::Trace(query) => settle(walk::trace(ctx, &scope, query)),
+                Request::Impact(query) => settle(impact::impact(ctx, &scope, query)),
+                Request::Evidence(query) => settle(evidence::evidence(ctx, &scope, query)),
+                Request::Stale(query) => settle(stale::stale(ctx, &scope, query)),
+                Request::ResolveSymbol(query) => settle(symbols::resolve(ctx, &scope, query)),
+            })
+        })
+    })
+    .await;
+    let mut answer = match served {
+        Ok(stamped) => stamped.result,
+        Err(error) => json!({ "error": error.to_string() }),
     };
     strip_additive(&mut answer);
     answer
@@ -90,6 +105,7 @@ async fn run_corpus(corpus: Corpus) {
     let started = Instant::now();
     let scans = provenance_scanner::scan_path(&corpus.root).unwrap();
     let scan_ms = timing::elapsed_ms(started);
+    crate::test_probes::set_preset_scan(Some(scans.clone()));
 
     let requests = requests::for_corpus(&corpus);
     assert!(
@@ -99,7 +115,7 @@ async fn run_corpus(corpus: Corpus) {
     );
     for request in &requests {
         let oracle = oracle_answer(&corpus, request, &scans);
-        let served = served_answer(&corpus, request);
+        let served = served_answer(&corpus, request).await;
         assert_eq!(
             oracle,
             served,
@@ -118,7 +134,7 @@ async fn run_corpus(corpus: Corpus) {
         }
         timed.push(request.operation());
         oracle_answer(&corpus, request, &scans);
-        served_answer(&corpus, request);
+        served_answer(&corpus, request).await;
         let mut oracle_samples = Vec::new();
         let mut served_samples = Vec::new();
         for _ in 0..timing::runs() {
@@ -126,7 +142,7 @@ async fn run_corpus(corpus: Corpus) {
             oracle_answer(&corpus, request, &scans);
             oracle_samples.push(timing::elapsed_ms(started));
             let started = Instant::now();
-            served_answer(&corpus, request);
+            served_answer(&corpus, request).await;
             served_samples.push(timing::elapsed_ms(started));
         }
         rows.push(timing::Row {
@@ -136,6 +152,7 @@ async fn run_corpus(corpus: Corpus) {
             served_ms: timing::median(&mut served_samples),
         });
     }
+    crate::test_probes::set_preset_scan(None);
     timing::print_rows(corpus.name, &rows, scan_ms, rebuild_ms, catch_up_ms);
     timing::check_ceilings(corpus.name, &rows, scan_ms, catch_up_ms);
 }

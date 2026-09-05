@@ -278,6 +278,27 @@ pub fn create_requirement(
         .unwrap();
 }
 
+/// An active rule refining one requirement and no resolution.
+pub fn create_rule_of(store: &StateStore, scope: &ScopeId, id: &str, requirement_id: &str) {
+    store
+        .create_rule(CreateRuleInput {
+            scope_id: scope.clone(),
+            id: sid(id),
+            name: None,
+            description: None,
+            requirement_ids: vec![sid(requirement_id)],
+            resolution_ids: Vec::new(),
+            statement: format!("{id} statement"),
+            status: RuleStatus::Active,
+            severity: RuleSeverity::High,
+            source_document: None,
+            source_section: None,
+            origin_thread: None,
+            origin_message: None,
+        })
+        .unwrap();
+}
+
 /// A proposed resolution naming one requirement.
 pub fn create_resolution(store: &StateStore, scope: &ScopeId, id: &str, requirement_id: &str) {
     store

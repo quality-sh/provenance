@@ -1,5 +1,6 @@
 //! The stored revision a read answers at, and the stamp built from it.
 
+use super::reader::ReadContext;
 use provenance_core::protocol::{Stamp, StampPolicy};
 use sqlx::SqliteConnection;
 
@@ -35,6 +36,21 @@ impl StoredRevision {
             live,
         }
     }
+}
+
+/// The stamp for one finished read: the one way to build it. It consumes
+/// the context and its snapshot, so nothing reads after stamping, and the
+/// two word lists are derived from the handles the read took.
+pub fn seal(context: ReadContext, policy: StampPolicy) -> Stamp {
+    let (snapshot, live) = context.into_parts();
+    let (revision, attested) = snapshot.finish();
+    revision.stamp(
+        policy,
+        attested.into_iter().map(str::to_string).collect(),
+        live.into_iter()
+            .map(|word| word.word().to_string())
+            .collect(),
+    )
 }
 
 /// Reads the stored revision on one connection. Inside an open transaction

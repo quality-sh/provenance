@@ -1,11 +1,10 @@
-use crate::state_store::StateStore;
-use camino::Utf8Path;
+use crate::operations::reader::{Live, ReadContext};
 use provenance_core::protocol::{
     ensure_limit, ensure_protocol_version, take_page, EvidenceQuery, EvidenceResult, StaleEvidence,
 };
 use provenance_core::{ScopeId, StableId};
 
-use super::{bindings::Bindings, stale};
+use super::bindings::Bindings;
 
 /// Everything standing behind one Rule, kept apart by kind.
 ///
@@ -14,15 +13,16 @@ use super::{bindings::Bindings, stale};
 /// Requirement was restated; stale says the code carrying the evidence
 /// changed, and it is read from a diff the caller names.
 pub(super) fn evidence(
-    repo: &Utf8Path,
-    store: &StateStore,
+    ctx: &ReadContext,
     scope: &ScopeId,
     request: EvidenceQuery,
 ) -> anyhow::Result<EvidenceResult> {
     ensure_protocol_version(request.protocol_version)?;
     ensure_limit(request.limit)?;
     let rule = StableId::new(request.rule.clone())?;
-    let bindings = Bindings::load(store, scope, request.include_retired)?;
+    let canonical = ctx.live(Live::Canonical);
+    let store = canonical.store();
+    let bindings = Bindings::load(&store, scope, request.include_retired)?;
     let implementations = bindings
         .implementations
         .into_iter()
@@ -35,8 +35,9 @@ pub(super) fn evidence(
         .filter(|binding| binding.rule_id == rule)
         .take(request.limit + 1)
         .collect::<Vec<_>>();
-    let mut runs = store
-        .list_verification_runs(scope)?
+    let mut runs = ctx
+        .live(Live::VerificationRuns)
+        .runs(scope)?
         .into_iter()
         .filter(|run| run.rule_id == rule)
         .collect::<Vec<_>>();
@@ -64,19 +65,19 @@ pub(super) fn evidence(
     let stale = request
         .base
         .map(|base| {
-            stale::disturbed(
-                repo,
-                scope,
-                base,
-                request.head,
-                std::slice::from_ref(&request.rule),
-                request.include_retired,
-            )
-            .map(|found| StaleEvidence {
-                base: found.base,
-                head: found.head,
-                sites: found.sites,
-            })
+            let graph = canonical.graph_evidence(scope, request.include_retired)?;
+            ctx.live(Live::Diff)
+                .disturbed(
+                    base,
+                    request.head,
+                    std::slice::from_ref(&request.rule),
+                    &graph,
+                )
+                .map(|found| StaleEvidence {
+                    base: found.base,
+                    head: found.head,
+                    sites: found.sites,
+                })
         })
         .transpose()?;
     Ok(EvidenceResult {

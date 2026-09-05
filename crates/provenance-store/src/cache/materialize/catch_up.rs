@@ -31,29 +31,37 @@ pub struct CatchUpReport {
 
 pub async fn catch_up_state(layout: &ProvenanceLayout) -> anyhow::Result<CatchUpReport> {
     let guard = publication::publication_guard(layout).await?;
-    catch_up_with_guard(&guard, layout).await
+    let pool = open_cache(layout).await?;
+    let report = catch_up_with_guard(&guard, &pool, layout).await;
+    // Close rather than drop. A dropped pool releases its file handles
+    // asynchronously, and on Windows a later delete of the database file
+    // races that release.
+    pool.close().await;
+    report
 }
 
-async fn catch_up_with_guard(
+/// One catch-up pass on the caller's pool, for a caller that holds the
+/// guard. The pool stays open for the caller.
+pub async fn catch_up_with_guard(
     guard: &publication::PublicationGuard,
+    pool: &sqlx::SqlitePool,
     layout: &ProvenanceLayout,
 ) -> anyhow::Result<CatchUpReport> {
-    let pool = open_cache(layout).await?;
     crate::test_probes::at("run_migrations_under_guard")?;
-    let migrations_applied = migrations::run_migrations(&pool, layout).await?;
+    let migrations_applied = migrations::run_migrations(pool, layout).await?;
     let stored: Option<(i64, String)> = sqlx::query_as(
         "SELECT serial, digest FROM projection_revision ORDER BY serial DESC LIMIT 1",
     )
-    .fetch_optional(&pool)
+    .fetch_optional(pool)
     .await?;
 
     // A database with no revision, or one whose schema just moved, is
     // rebuilt under the same guard.
     let Some((stored_serial, stored_digest)) = stored else {
-        return rebuild(guard, layout, &pool, migrations_applied).await;
+        return rebuild(guard, layout, pool, migrations_applied).await;
     };
     if !migrations_applied.is_empty() {
-        return rebuild(guard, layout, &pool, migrations_applied).await;
+        return rebuild(guard, layout, pool, migrations_applied).await;
     }
 
     let snapshot = publication::snapshot_state_under_guard(guard, layout)?;
@@ -70,7 +78,7 @@ async fn catch_up_with_guard(
         .map(|scope| scope.id.clone())
         .collect();
 
-    let (stored_units, mut content) = load_stored_digests(&pool).await?;
+    let (stored_units, mut content) = load_stored_digests(pool).await?;
     let mut report = CatchUpReport {
         serial: stored_serial,
         digest: stored_digest,
@@ -98,7 +106,6 @@ async fn catch_up_with_guard(
 
     if !changed {
         drop(tx);
-        pool.close().await;
         return Ok(report);
     }
 
@@ -118,7 +125,6 @@ async fn catch_up_with_guard(
     crate::test_probes::at("catch_up_before_commit")?;
     tx.commit().await?;
     crate::test_probes::at("catch_up_after_commit")?;
-    pool.close().await;
     Ok(report)
 }
 
@@ -259,7 +265,6 @@ async fn rebuild(
     )
     .fetch_one(pool)
     .await?;
-    pool.close().await;
     Ok(CatchUpReport {
         serial,
         digest,

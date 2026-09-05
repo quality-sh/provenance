@@ -10,6 +10,7 @@ use provenance_core::{
 
 mod differential;
 mod oracle;
+mod reader;
 mod stamp;
 
 fn sid(value: &str) -> StableId {
@@ -70,15 +71,20 @@ fn seeded_store() -> (tempfile::TempDir, StateStore, ScopeId) {
     (dir, store, scope)
 }
 
-#[test]
-fn get_answers_a_domain_and_a_boundary_by_id() {
-    let (_dir, store, scope) = seeded_store();
+/// The repository root of a seeded store, for the public operations.
+fn root_of(dir: &tempfile::TempDir) -> camino::Utf8PathBuf {
+    camino::Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap()
+}
+
+#[tokio::test]
+async fn get_answers_a_domain_and_a_boundary_by_id() {
+    let (dir, _store, scope) = seeded_store();
     for (kind, id, wire) in [
         (NodeType::Domain, "domain_payroll", "domain"),
         (NodeType::Boundary, "boundary_no_backpay", "boundary"),
     ] {
-        let answer = records::get(
-            &store,
+        let answer = super::get(
+            Some(root_of(&dir)),
             &scope,
             GetQuery {
                 protocol_version: Some(SDK_PROTOCOL_VERSION),
@@ -87,7 +93,9 @@ fn get_answers_a_domain_and_a_boundary_by_id() {
                 include_retired: false,
             },
         )
-        .unwrap();
+        .await
+        .unwrap()
+        .result;
         assert!(answer.found, "get must find the {wire} record");
         let node = serde_json::to_value(answer.node.unwrap()).unwrap();
         assert_eq!(node["node_type"], wire);
@@ -95,11 +103,11 @@ fn get_answers_a_domain_and_a_boundary_by_id() {
     }
 }
 
-#[test]
-fn search_reaches_domains_and_boundaries_by_kind_and_text() {
-    let (_dir, store, scope) = seeded_store();
-    let answer = records::search(
-        &store,
+#[tokio::test]
+async fn search_reaches_domains_and_boundaries_by_kind_and_text() {
+    let (dir, _store, scope) = seeded_store();
+    let answer = super::search(
+        Some(root_of(&dir)),
         &scope,
         SearchQuery {
             protocol_version: Some(SDK_PROTOCOL_VERSION),
@@ -109,7 +117,9 @@ fn search_reaches_domains_and_boundaries_by_kind_and_text() {
             include_retired: false,
         },
     )
-    .unwrap();
+    .await
+    .unwrap()
+    .result;
     let kinds: Vec<String> = answer
         .nodes
         .iter()
@@ -123,11 +133,11 @@ fn search_reaches_domains_and_boundaries_by_kind_and_text() {
     assert_eq!(kinds, ["domain", "boundary"]);
 }
 
-#[test]
-fn default_search_keeps_the_six_settled_kinds_under_protocol_five() {
-    let (_dir, store, scope) = seeded_store();
-    let answer = records::search(
-        &store,
+#[tokio::test]
+async fn default_search_keeps_the_six_settled_kinds_under_protocol_five() {
+    let (dir, _store, scope) = seeded_store();
+    let answer = super::search(
+        Some(root_of(&dir)),
         &scope,
         SearchQuery {
             protocol_version: Some(SDK_PROTOCOL_VERSION),
@@ -137,7 +147,9 @@ fn default_search_keeps_the_six_settled_kinds_under_protocol_five() {
             include_retired: false,
         },
     )
-    .unwrap();
+    .await
+    .unwrap()
+    .result;
     for node in &answer.nodes {
         let kind = node.node_type();
         assert!(

@@ -15,3 +15,4 @@ mod reporting_behavior;
 mod scope_locality_guard;
 mod traceability_behavior;
 mod unit_digest_behavior;
+mod wal_behavior;

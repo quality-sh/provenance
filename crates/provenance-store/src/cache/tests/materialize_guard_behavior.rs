@@ -1,23 +1,7 @@
 use super::super::*;
 use super::fixtures::*;
 use super::projection_stamp_behavior::seed_integration_shards;
-use fs2::FileExt;
-
-fn lock_is_held(layout: &crate::layout::ProvenanceLayout) -> bool {
-    let file = std::fs::OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .open(layout.publication_lock_path())
-        .unwrap();
-    if file.try_lock_exclusive().is_ok() {
-        let _ = fs2::FileExt::unlock(&file);
-        false
-    } else {
-        true
-    }
-}
+use crate::test_probes::publication_lock_is_held as lock_is_held;
 
 #[tokio::test]
 async fn materialization_holds_the_publication_lock_at_commit() {

@@ -20,6 +20,7 @@ use crate::state_store::{
 mod plan;
 pub mod queries;
 pub mod read_policy;
+pub mod reader;
 mod sites;
 pub mod stamp;
 

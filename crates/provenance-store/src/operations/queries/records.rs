@@ -1,3 +1,4 @@
+use crate::operations::reader::{Live, ReadContext};
 use crate::state_store::StateStore;
 use provenance_core::protocol::{
     ensure_limit, ensure_protocol_version, take_page, GetQuery, GetResult, GraphNode, SearchQuery,
@@ -83,13 +84,14 @@ pub(super) fn find<'a>(
 }
 
 pub(super) fn get(
-    store: &StateStore,
+    ctx: &ReadContext,
     scope: &ScopeId,
     request: GetQuery,
 ) -> anyhow::Result<GetResult> {
     ensure_protocol_version(request.protocol_version)?;
     let id = StableId::new(request.id)?;
-    let nodes = load(store, scope, request.include_retired)?;
+    let store = ctx.live(Live::Canonical).store();
+    let nodes = load(&store, scope, request.include_retired)?;
     let node = find(&nodes, Some(request.node_type), &id).cloned();
     Ok(GetResult {
         found: node.is_some(),
@@ -98,7 +100,7 @@ pub(super) fn get(
 }
 
 pub(super) fn search(
-    store: &StateStore,
+    ctx: &ReadContext,
     scope: &ScopeId,
     request: SearchQuery,
 ) -> anyhow::Result<SearchResult> {
@@ -120,7 +122,8 @@ pub(super) fn search(
             .map(|kind| rank(*kind))
             .collect::<Vec<_>>()
     };
-    let matched = load(store, scope, request.include_retired)?
+    let store = ctx.live(Live::Canonical).store();
+    let matched = load(&store, scope, request.include_retired)?
         .into_iter()
         .filter(|node| wanted.contains(&rank(node.node_type())))
         .filter(|node| {
