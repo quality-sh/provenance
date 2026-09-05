@@ -1,5 +1,4 @@
-use crate::state_store::StateStore;
-use camino::Utf8Path;
+use crate::operations::reader::{Live, ReadContext};
 use provenance_core::protocol::{
     ensure_limit, ensure_protocol_version, take_page, ResolveSymbolQuery, ResolveSymbolResult,
 };
@@ -16,8 +15,7 @@ use super::{bindings::Bindings, records};
 /// symbol only. A request that names a line therefore reads scanned sites,
 /// and a request that names only a file reads both.
 pub(super) fn resolve(
-    repo: &Utf8Path,
-    store: &StateStore,
+    ctx: &ReadContext,
     scope: &ScopeId,
     request: ResolveSymbolQuery,
 ) -> anyhow::Result<ResolveSymbolResult> {
@@ -25,8 +23,10 @@ pub(super) fn resolve(
     ensure_limit(request.limit)?;
     let file = &request.file;
     let symbol = request.symbol.as_deref();
-    let bindings = Bindings::load(store, scope, request.include_retired)?;
-    let scans = provenance_scanner::scan_path(repo)?;
+    let repo = ctx.repo();
+    let store = ctx.live(Live::Canonical).store();
+    let bindings = Bindings::load(&store, scope, request.include_retired)?;
+    let scans = ctx.live(Live::ScannedSites).scan_tree()?;
     let mut ids = BTreeSet::new();
     for site in source_sites(&scans) {
         if relative(repo, site.file_path()) == *file
@@ -50,7 +50,7 @@ pub(super) fn resolve(
             }
         }
     }
-    let nodes = records::load(store, scope, request.include_retired)?;
+    let nodes = records::load(&store, scope, request.include_retired)?;
     let matched = ids
         .into_iter()
         .filter_map(|id| {

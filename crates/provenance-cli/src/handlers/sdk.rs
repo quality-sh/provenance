@@ -10,7 +10,7 @@ mod check_statement;
 mod query;
 mod render;
 
-pub(super) fn handle(command: SdkCommand) -> anyhow::Result<()> {
+pub(super) async fn handle(command: SdkCommand) -> anyhow::Result<()> {
     match command {
         SdkCommand::CheckStatement { format } => check_statement::handle(format)?,
         SdkCommand::Info { repo, format } => {
@@ -76,15 +76,17 @@ pub(super) fn handle(command: SdkCommand) -> anyhow::Result<()> {
             let runs = operations::verification_runs(repo, &ScopeId::new(scope)?, rule.as_ref())?;
             output::print(format, &runs)?;
         }
-        SdkCommand::Get { query } => query::handle(query::Operation::Get, query)?,
-        SdkCommand::Search { query } => query::handle(query::Operation::Search, query)?,
-        SdkCommand::Neighbors { query } => query::handle(query::Operation::Neighbors, query)?,
-        SdkCommand::Trace { query } => query::handle(query::Operation::Trace, query)?,
-        SdkCommand::Impact { query } => query::handle(query::Operation::Impact, query)?,
-        SdkCommand::Evidence { query } => query::handle(query::Operation::Evidence, query)?,
-        SdkCommand::Stale { query } => query::handle(query::Operation::Stale, query)?,
+        SdkCommand::Get { query } => query::handle(query::Operation::Get, query).await?,
+        SdkCommand::Search { query } => query::handle(query::Operation::Search, query).await?,
+        SdkCommand::Neighbors { query } => {
+            query::handle(query::Operation::Neighbors, query).await?;
+        }
+        SdkCommand::Trace { query } => query::handle(query::Operation::Trace, query).await?,
+        SdkCommand::Impact { query } => query::handle(query::Operation::Impact, query).await?,
+        SdkCommand::Evidence { query } => query::handle(query::Operation::Evidence, query).await?,
+        SdkCommand::Stale { query } => query::handle(query::Operation::Stale, query).await?,
         SdkCommand::ResolveSymbol { query } => {
-            query::handle(query::Operation::ResolveSymbol, query)?;
+            query::handle(query::Operation::ResolveSymbol, query).await?;
         }
         SdkCommand::VerificationBindings {
             repo,

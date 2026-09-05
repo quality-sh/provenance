@@ -1,19 +1,21 @@
 //! The eight structured query operations.
 //!
 //! Every primitive is one named operation with typed parameters and a
-//! bounded answer. Each resolves its repository, reads state, and writes
-//! nothing.
+//! bounded answer. Each resolves its repository, reads through the reader
+//! entry under the default policy, and writes nothing. Every answer carries
+//! a stamp; before an operation moves onto the projection its stamp attests
+//! nothing and names `canonical` among its live words.
 
 use camino::Utf8PathBuf;
 use provenance_core::protocol::{
     EvidenceQuery, EvidenceResult, GetQuery, GetResult, ImpactQuery, ImpactResult, NeighborsQuery,
     NeighborsResult, ResolveSymbolQuery, ResolveSymbolResult, SearchQuery, SearchResult,
-    StaleQuery, StaleResult, TraceQuery, TraceResult,
+    StaleQuery, StaleResult, Stamped, TraceQuery, TraceResult,
 };
 use provenance_core::ScopeId;
 
-use crate::layout::ProvenanceLayout;
-use crate::state_store::StateStore;
+use super::read_policy::ReadPolicy;
+use super::reader::{self, ReadContext, ReadFuture};
 
 mod bindings;
 mod evidence;
@@ -26,80 +28,107 @@ mod walk;
 #[cfg(test)]
 mod tests;
 
-fn open(repo: Option<Utf8PathBuf>) -> anyhow::Result<(Utf8PathBuf, StateStore)> {
+async fn served<R: Send>(
+    repo: Option<Utf8PathBuf>,
+    scope: &ScopeId,
+    run: impl for<'c> FnOnce(&'c ReadContext) -> ReadFuture<'c, R> + Send,
+) -> anyhow::Result<Stamped<R>> {
     let repo = super::discover_repository(repo)?;
-    let store = StateStore::new(ProvenanceLayout::new(repo.clone()));
-    Ok((repo, store))
+    reader::answer(&repo, scope, ReadPolicy::default(), run).await
 }
 
-pub fn get(
+pub async fn get(
     repo: Option<Utf8PathBuf>,
     scope: &ScopeId,
     request: GetQuery,
-) -> anyhow::Result<GetResult> {
-    let (_, store) = open(repo)?;
-    records::get(&store, scope, request)
+) -> anyhow::Result<Stamped<GetResult>> {
+    let inner = scope.clone();
+    served(repo, scope, move |ctx| {
+        Box::pin(async move { records::get(ctx, &inner, request) })
+    })
+    .await
 }
 
-pub fn search(
+pub async fn search(
     repo: Option<Utf8PathBuf>,
     scope: &ScopeId,
     request: SearchQuery,
-) -> anyhow::Result<SearchResult> {
-    let (_, store) = open(repo)?;
-    records::search(&store, scope, request)
+) -> anyhow::Result<Stamped<SearchResult>> {
+    let inner = scope.clone();
+    served(repo, scope, move |ctx| {
+        Box::pin(async move { records::search(ctx, &inner, request) })
+    })
+    .await
 }
 
-pub fn neighbors(
+pub async fn neighbors(
     repo: Option<Utf8PathBuf>,
     scope: &ScopeId,
     request: NeighborsQuery,
-) -> anyhow::Result<NeighborsResult> {
-    let (_, store) = open(repo)?;
-    walk::neighbors(&store, scope, request)
+) -> anyhow::Result<Stamped<NeighborsResult>> {
+    let inner = scope.clone();
+    served(repo, scope, move |ctx| {
+        Box::pin(async move { walk::neighbors(ctx, &inner, request) })
+    })
+    .await
 }
 
-pub fn trace(
+pub async fn trace(
     repo: Option<Utf8PathBuf>,
     scope: &ScopeId,
     request: TraceQuery,
-) -> anyhow::Result<TraceResult> {
-    let (_, store) = open(repo)?;
-    walk::trace(&store, scope, request)
+) -> anyhow::Result<Stamped<TraceResult>> {
+    let inner = scope.clone();
+    served(repo, scope, move |ctx| {
+        Box::pin(async move { walk::trace(ctx, &inner, request) })
+    })
+    .await
 }
 
-pub fn impact(
+pub async fn impact(
     repo: Option<Utf8PathBuf>,
     scope: &ScopeId,
     request: ImpactQuery,
-) -> anyhow::Result<ImpactResult> {
-    let (repo, store) = open(repo)?;
-    impact::impact(&repo, &store, scope, request)
+) -> anyhow::Result<Stamped<ImpactResult>> {
+    let inner = scope.clone();
+    served(repo, scope, move |ctx| {
+        Box::pin(async move { impact::impact(ctx, &inner, request) })
+    })
+    .await
 }
 
-pub fn evidence(
+pub async fn evidence(
     repo: Option<Utf8PathBuf>,
     scope: &ScopeId,
     request: EvidenceQuery,
-) -> anyhow::Result<EvidenceResult> {
-    let (repo, store) = open(repo)?;
-    evidence::evidence(&repo, &store, scope, request)
+) -> anyhow::Result<Stamped<EvidenceResult>> {
+    let inner = scope.clone();
+    served(repo, scope, move |ctx| {
+        Box::pin(async move { evidence::evidence(ctx, &inner, request) })
+    })
+    .await
 }
 
-pub fn stale(
+pub async fn stale(
     repo: Option<Utf8PathBuf>,
     scope: &ScopeId,
     request: StaleQuery,
-) -> anyhow::Result<StaleResult> {
-    let (repo, _) = open(repo)?;
-    stale::stale(&repo, scope, request)
+) -> anyhow::Result<Stamped<StaleResult>> {
+    let inner = scope.clone();
+    served(repo, scope, move |ctx| {
+        Box::pin(async move { stale::stale(ctx, &inner, request) })
+    })
+    .await
 }
 
-pub fn resolve_symbol(
+pub async fn resolve_symbol(
     repo: Option<Utf8PathBuf>,
     scope: &ScopeId,
     request: ResolveSymbolQuery,
-) -> anyhow::Result<ResolveSymbolResult> {
-    let (repo, store) = open(repo)?;
-    symbols::resolve(&repo, &store, scope, request)
+) -> anyhow::Result<Stamped<ResolveSymbolResult>> {
+    let inner = scope.clone();
+    served(repo, scope, move |ctx| {
+        Box::pin(async move { symbols::resolve(ctx, &inner, request) })
+    })
+    .await
 }

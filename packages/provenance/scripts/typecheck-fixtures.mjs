@@ -21,6 +21,9 @@ assert.equal(built.status, 0, built.stdout + built.stderr);
 const valid = typecheck("valid");
 assert.equal(valid.status, 0, valid.stdout + valid.stderr);
 
+const queryEnvelope = typecheck("query-envelope");
+assert.equal(queryEnvelope.status, 0, queryEnvelope.stdout + queryEnvelope.stderr);
+
 const contextValid = typecheck("context-valid");
 assert.equal(contextValid.status, 0, contextValid.stdout + contextValid.stderr);
 

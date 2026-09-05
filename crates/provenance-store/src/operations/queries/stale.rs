@@ -1,76 +1,30 @@
-use crate::{cache, layout::ProvenanceLayout};
-use camino::Utf8Path;
+use crate::operations::reader::{Live, ReadContext};
 use provenance_core::coverage::{EvidenceDiffSite, EvidenceDiffState, EvidenceDiffSummary};
 use provenance_core::protocol::{
     ensure_limit, ensure_protocol_version, take_page, StaleQuery, StaleResult,
 };
 use provenance_core::ScopeId;
 
-use crate::stale::{gate, git};
-
 /// What a commit range did to the code carrying graph evidence.
 ///
 /// Stale is read from a diff, never guessed from the working tree, so every
-/// caller names a base. `head` defaults to the current commit.
-pub(super) struct Disturbed {
-    pub base: String,
-    pub head: String,
-    pub files_changed: usize,
-    pub sites: Vec<EvidenceDiffSite>,
-}
-
-pub(super) fn disturbed(
-    repo: &Utf8Path,
-    scope: &ScopeId,
-    base: String,
-    head: Option<String>,
-    rules: &[String],
-    include_retired: bool,
-) -> anyhow::Result<Disturbed> {
-    let (base, head) = git::resolve_range(
-        repo,
-        Some(base),
-        Some(head.unwrap_or_else(|| "HEAD".to_string())),
-        None,
-    )?;
-    let graph = cache::graph_evidence(
-        &ProvenanceLayout::new(repo.to_path_buf()),
-        scope,
-        include_retired,
-    )?;
-    let base_files = git::revision_files(repo, &base)?;
-    let head_files = git::revision_files(repo, &head)?;
-    let changes = git::changed_files(repo, &base, &head)?;
-    let report = gate::report(repo, base, head, base_files, head_files, &changes, &graph);
-    let sites = report
-        .sites
-        .into_iter()
-        .filter(|site| rules.is_empty() || rules.contains(&site.subject_id))
-        .filter(|site| site.state != EvidenceDiffState::Untouched)
-        .collect();
-    Ok(Disturbed {
-        base: report.base,
-        head: report.head,
-        files_changed: report.files_changed,
-        sites,
-    })
-}
-
+/// caller names a base. `head` defaults to the current commit. The graph
+/// evidence the diff is read against comes from canonical shards.
 pub(super) fn stale(
-    repo: &Utf8Path,
+    ctx: &ReadContext,
     scope: &ScopeId,
     request: StaleQuery,
 ) -> anyhow::Result<StaleResult> {
     ensure_protocol_version(request.protocol_version)?;
     ensure_limit(request.limit)?;
-    let found = disturbed(
-        repo,
-        scope,
-        request.base,
-        request.head,
-        &request.rules,
-        request.include_retired,
-    )?;
+    // The range resolves before the store is read, so a bad base is the
+    // error that surfaces.
+    let diff = ctx.live(Live::Diff);
+    let (base, head) = diff.resolve_range(request.base, request.head)?;
+    let graph = ctx
+        .live(Live::Canonical)
+        .graph_evidence(scope, request.include_retired)?;
+    let found = diff.disturbed(base, head, &request.rules, &graph)?;
     let summary = summarize(&found.sites);
     let (sites, has_more) = take_page(found.sites, request.limit);
     Ok(StaleResult {

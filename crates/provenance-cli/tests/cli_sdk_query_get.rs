@@ -30,6 +30,32 @@ fn get_returns_one_record_under_a_versioned_envelope() {
     );
 }
 
+/// The envelope carries the stamp beside the answer it was read with.
+#[test]
+fn get_carries_a_stamp_beside_the_answer() {
+    let directory = init_repo();
+    let repo = directory.path().to_str().unwrap();
+    let ids = apply_shared_rule(&directory);
+
+    let (ok, stdout, stderr) = fixtures::sdk_raw(
+        repo,
+        "get",
+        &json!({"node_type": "rule", "id": ids.rule.as_str()}),
+    );
+    assert!(ok, "{stderr}");
+    let answer: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let stamp = &answer["stamp"];
+    assert!(stamp["serial"].as_i64().unwrap() >= 1);
+    assert!(stamp["digest"].as_str().unwrap().starts_with("sha256:"));
+    assert!(!stamp["instance_id"].as_str().unwrap().is_empty());
+    assert!(stamp["derivation"].is_u64());
+    assert_eq!(stamp["policy"], "catch_up");
+    assert_eq!(stamp["attested"], json!([]));
+    assert_eq!(stamp["live"], json!(["canonical"]));
+    assert!(answer.get("freshness_error").is_none());
+    assert_eq!(answer["found"], true);
+}
+
 #[test]
 fn get_hides_a_retired_record_until_the_caller_asks_for_it() {
     let directory = init_repo();

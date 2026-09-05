@@ -10,6 +10,8 @@ use provenance_core::{
     SourceReference, SourceType, StableId, TopicStatus,
 };
 
+pub mod pinned_store;
+
 pub fn sid(value: &str) -> StableId {
     StableId::new(value).unwrap()
 }
@@ -225,6 +227,21 @@ fn seed_shaping_owners(store: &StateStore, scope: &ScopeId) {
         .unwrap();
 }
 
+/// Rewrites every record of a shard in place, past the writers' checks,
+/// as a hand edit would.
+pub fn rewrite_records(path: &camino::Utf8Path, mut change: impl FnMut(&mut serde_json::Value)) {
+    let rewritten: Vec<String> = std::fs::read_to_string(path)
+        .unwrap()
+        .lines()
+        .map(|line| {
+            let mut record: serde_json::Value = serde_json::from_str(line).unwrap();
+            change(&mut record);
+            record.to_string()
+        })
+        .collect();
+    std::fs::write(path, format!("{}\n", rewritten.join("\n"))).unwrap();
+}
+
 /// Appends one raw record to a shard, past the writers' checks: the gap
 /// policy reads state a hand edit can leave behind.
 pub fn append_record(path: &camino::Utf8Path, record: &serde_json::Value) {
@@ -272,6 +289,27 @@ pub fn create_requirement(
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,
+            origin_thread: None,
+            origin_message: None,
+        })
+        .unwrap();
+}
+
+/// An active rule refining one requirement and no resolution.
+pub fn create_rule_of(store: &StateStore, scope: &ScopeId, id: &str, requirement_id: &str) {
+    store
+        .create_rule(CreateRuleInput {
+            scope_id: scope.clone(),
+            id: sid(id),
+            name: None,
+            description: None,
+            requirement_ids: vec![sid(requirement_id)],
+            resolution_ids: Vec::new(),
+            statement: format!("{id} statement"),
+            status: RuleStatus::Active,
+            severity: RuleSeverity::High,
+            source_document: None,
+            source_section: None,
             origin_thread: None,
             origin_message: None,
         })

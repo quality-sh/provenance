@@ -208,10 +208,46 @@ export interface GraphNode {
   [field: string]: unknown;
 }
 
+/** The freshness step a read ran before it answered. */
+export type StampPolicy =
+  | "catch_up"
+  | "annotate_only"
+  | "refuse_stale"
+  | "catch_up_failed";
+
+/**
+ * What a stamp does not cover, from a closed list: canonical shards, a
+ * working-tree scan, the verification run file, or a commit range.
+ */
+export type LiveWord = "canonical" | "scanned_sites" | "verification_runs" | "diff";
+
+/**
+ * What a query answer reflects. `serial` and `digest` name the projection
+ * revision the rows came from and `instance_id` the projection instance;
+ * serials compare only within one instance. `attested` names the
+ * projection tables behind the answer; `live` names what the stamp does
+ * not cover. A stamp never implies freshness for anything it does not
+ * list.
+ */
+export interface Stamp {
+  serial: number;
+  digest: string;
+  instance_id: string;
+  /** The reader logic version; it moves when the same rows answer differently. */
+  derivation: number;
+  policy: StampPolicy;
+  attested: string[];
+  live: LiveWord[];
+}
+
 /** Every structured query answers under this envelope. */
 export interface QueryEnvelope {
   protocol_version: number;
   operation: string;
+  /** Absent only on an answer recorded before the stamp existed. */
+  stamp?: Stamp;
+  /** The failed freshness step's error, when `policy` is `catch_up_failed`. */
+  freshness_error?: string;
 }
 
 interface QueryRequest {
