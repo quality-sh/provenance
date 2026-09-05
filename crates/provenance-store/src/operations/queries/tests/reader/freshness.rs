@@ -125,19 +125,19 @@ async fn a_read_only_checkout_answers_at_its_serial() {
     let corpus = corpus::seeded_queries();
     let healthy = get_through(&corpus, ReadPolicy::default()).await.unwrap();
 
-    // A fresh read-only checkout holds no `-wal` or `-shm` file. The pool
-    // closed, so SQLite removes both; wait for that before locking the
-    // directory, or an existing writable `-shm` lets WAL open as usual.
+    // A fresh read-only checkout holds no `-wal` or `-shm` file. SQLite
+    // removes both when the last connection closes, but under load that
+    // lags, and a writable `-shm` left behind would let WAL open as usual
+    // and hide the case under test. Checkpoint, then remove what is left.
+    let pool = crate::cache::open_cache(&corpus.layout()).await.unwrap();
+    sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)")
+        .execute(&pool)
+        .await
+        .unwrap();
+    pool.close().await;
     let database = corpus.layout().cache_db_path();
-    let sidecars = [format!("{database}-wal"), format!("{database}-shm")];
-    let mut waited = 0;
-    while sidecars
-        .iter()
-        .any(|path| std::path::Path::new(path).exists())
-    {
-        assert!(waited < 100, "the WAL files must go when the pool closes");
-        std::thread::sleep(std::time::Duration::from_millis(50));
-        waited += 1;
+    for sidecar in [format!("{database}-wal"), format!("{database}-shm")] {
+        let _ = std::fs::remove_file(sidecar);
     }
 
     let cache = corpus.layout().cache_dir();

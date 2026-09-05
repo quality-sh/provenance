@@ -9,6 +9,7 @@ use provenance_core::{
 };
 
 mod differential;
+mod golden;
 mod oracle;
 mod reader;
 mod stamp;

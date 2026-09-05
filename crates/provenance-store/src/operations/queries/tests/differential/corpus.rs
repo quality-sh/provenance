@@ -37,6 +37,12 @@ impl Corpus {
     pub fn store(&self) -> StateStore {
         StateStore::new(self.layout())
     }
+
+    /// The frozen corpus of the golden test.
+    pub fn golden() -> Self {
+        let (dir, _layout, scope) = fixtures::golden::golden_layout();
+        Self::new("golden", dir, scope)
+    }
 }
 
 /// The seeded query store with a rule-bearing source file under two
@@ -69,7 +75,7 @@ pub fn cache_fixtures() -> Vec<Corpus> {
     let seeded = Corpus::new("cache_seeded", dir, scope);
     let (dir, _layout, scope) = fixtures::owner_row_layout();
     let owners = Corpus::new("cache_owner_rows", dir, scope);
-    vec![seeded, owners]
+    vec![seeded, owners, Corpus::golden()]
 }
 
 /// A copy of this repository's own canonical state.

@@ -28,7 +28,7 @@ const ADDITIVE_FIELDS: [&str; 7] = [
     "scan_cut",
 ];
 
-fn strip_additive(value: &mut Value) {
+pub fn strip_additive(value: &mut Value) {
     if let Some(map) = value.as_object_mut() {
         for field in ADDITIVE_FIELDS {
             map.remove(field);
@@ -60,15 +60,12 @@ fn oracle_answer(corpus: &Corpus, request: &Request, scans: &[FileScan]) -> Valu
     }
 }
 
-/// The served side: the executors through the reader. The freshness step
-/// stays out of the number: the corpus is caught up once, then every read
-/// runs under `annotate_only`. The scan comes from the preset the harness
-/// took before the clock started.
-async fn served_answer(corpus: &Corpus, request: &Request) -> Value {
+/// One request through the reader under the given policy, as a value; a
+/// refusal becomes `{"error": ..}` so both sides compare the same way.
+pub async fn served_value(corpus: &Corpus, request: &Request, policy: ReadPolicy) -> Value {
     use super::super::{evidence, impact, records, stale, symbols, walk};
     let scope = corpus.scope.clone();
     let request = request.clone();
-    let policy = ReadPolicy::with_freshness(FreshnessPolicy::AnnotateOnly);
     let served = reader::answer(&corpus.root, &corpus.scope, policy, move |ctx| {
         Box::pin(async move {
             Ok(match request {
@@ -84,10 +81,19 @@ async fn served_answer(corpus: &Corpus, request: &Request) -> Value {
         })
     })
     .await;
-    let mut answer = match served {
+    match served {
         Ok(stamped) => stamped.result,
         Err(error) => json!({ "error": error.to_string() }),
-    };
+    }
+}
+
+/// The served side: the executors through the reader. The freshness step
+/// stays out of the number: the corpus is caught up once, then every read
+/// runs under `annotate_only`. The scan comes from the preset the harness
+/// took before the clock started.
+async fn served_answer(corpus: &Corpus, request: &Request) -> Value {
+    let policy = ReadPolicy::with_freshness(FreshnessPolicy::AnnotateOnly);
+    let mut answer = served_value(corpus, request, policy).await;
     strip_additive(&mut answer);
     answer
 }
