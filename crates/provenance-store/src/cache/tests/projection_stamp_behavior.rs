@@ -67,7 +67,7 @@ fn projection_family_table_names_every_stored_family_once() {
     }
 }
 
-pub(super) fn seed_integration_shards(layout: &crate::layout::ProvenanceLayout, scope: &str) {
+pub fn seed_integration_shards(layout: &crate::layout::ProvenanceLayout, scope: &str) {
     let write = |path: camino::Utf8PathBuf, line: &str| {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, format!("{line}\n")).unwrap();

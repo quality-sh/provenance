@@ -8,6 +8,9 @@ use provenance_core::{
     Manifest, NodeType, RepoPathPrefix, RequirementStatus, ScopeId, StableId, SDK_PROTOCOL_VERSION,
 };
 
+mod differential;
+mod oracle;
+
 fn sid(value: &str) -> StableId {
     StableId::new(value).unwrap()
 }

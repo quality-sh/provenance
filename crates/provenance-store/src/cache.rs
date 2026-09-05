@@ -43,4 +43,4 @@ pub(crate) fn serde_name<T: serde::Serialize>(value: &T) -> anyhow::Result<Strin
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
