@@ -232,6 +232,22 @@ async fn by_ids_reads_past_the_bind_limit() {
     pool.close().await;
 }
 
+/// One record per id: an id that repeats across two chunks is still one
+/// row in the answer.
+#[tokio::test]
+async fn by_ids_reads_a_repeated_id_once_across_chunks() {
+    let store = TestStore::pinned();
+    let (pool, snapshot) = snapshot_of(&store).await;
+    let mut wanted: Vec<StableId> = (0..499).map(|n| sid(&format!("rule_none_{n}"))).collect();
+    wanted.push(sid("rule_overtime_001"));
+    wanted.push(sid("rule_overtime_001"));
+    wanted.push(sid("rule_penalty_001"));
+    let found = ids(&snapshot.table::<Rule>().by_ids(&wanted).await.unwrap());
+    assert_eq!(found, ["rule_overtime_001", "rule_penalty_001"]);
+    drop(snapshot);
+    pool.close().await;
+}
+
 #[tokio::test]
 async fn kind_of_reads_kinds_in_rank_order_and_skips_retired() {
     let store = TestStore::pinned();

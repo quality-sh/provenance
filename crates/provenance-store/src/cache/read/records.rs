@@ -47,12 +47,15 @@ impl<K: ProjectionRow> Table<'_, K> {
         row.as_ref().map(decode::<K>).transpose()
     }
 
-    /// The records with the given ids, in id order, retired or not. The
-    /// ids go to the database in chunks, since one statement binds a
-    /// bounded number of parameters.
+    /// The records with the given ids, one per id, in id order, retired or
+    /// not. The ids go to the database in chunks, since one statement
+    /// binds a bounded number of parameters; a repeated id is asked once.
     pub async fn by_ids(&self, ids: &[StableId]) -> anyhow::Result<Vec<K>> {
+        let mut wanted: Vec<&str> = ids.iter().map(StableId::as_str).collect();
+        wanted.sort_unstable();
+        wanted.dedup();
         let mut records: Vec<(String, K)> = Vec::new();
-        for chunk in ids.chunks(BIND_CHUNK) {
+        for chunk in wanted.chunks(BIND_CHUNK) {
             let marks = vec!["?"; chunk.len()].join(", ");
             let sql = format!(
                 "SELECT {} FROM {} WHERE scope_id = ? AND id IN ({marks})",
@@ -61,7 +64,7 @@ impl<K: ProjectionRow> Table<'_, K> {
             );
             let mut query = sqlx::query(&sql).bind(self.snapshot().scope().as_str());
             for id in chunk {
-                query = query.bind(id.as_str());
+                query = query.bind(*id);
             }
             let rows = {
                 let mut tx = self.snapshot().connection().await;
