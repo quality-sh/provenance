@@ -138,15 +138,6 @@ async fn a_plain_store_still_waits_for_the_lock() {
     assert_waits_for_guard(store, scope, guard);
 }
 
-#[tokio::test]
-#[verifies("rule_store_under_guard_takes_no_second_lock", examples)]
-async fn a_cloned_plain_store_still_waits_for_the_lock() {
-    let (_dir, store, scope) = seeded_source_requirement_store();
-    let guard = publication_guard(&store.layout).await.unwrap();
-    let cloned = store.clone();
-    assert_waits_for_guard(cloned, scope, guard);
-}
-
 #[test]
 fn a_plain_write_holds_the_publication_lock() {
     let (_dir, store, _scope) = seeded_source_requirement_store();

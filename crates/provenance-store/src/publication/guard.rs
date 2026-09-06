@@ -158,12 +158,16 @@ mod tests {
 
     #[tokio::test]
     #[verifies("rule_guarded_reads_use_guard_repository", examples)]
-    async fn snapshot_under_guard_takes_no_second_lock() {
+    async fn snapshot_under_guard_copies_the_guard_repository() {
         let (_dir, layout) = repo_layout();
         std::fs::write(layout.state_dir().join("probe.json"), b"{}").unwrap();
         let guard = publication_guard(&layout).await.unwrap();
         let snapshot = snapshot_state_under_guard(&guard).unwrap();
         assert!(snapshot.layout().state_dir().join("probe.json").exists());
+        assert!(
+            crate::test_probes::publication_lock_is_held(&layout),
+            "the publication guard must still be held after the copy"
+        );
     }
 
     #[test]
