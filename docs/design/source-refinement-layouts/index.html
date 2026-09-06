@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Source refinement — five layout proposals</title>
+<style>
+  :root{
+    --paper:#fbfaf6; --ink:#262622; --muted:#6d6d64; --hair:#ddd9cc; --accent:#8a4a2c;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --sans:"Seravek","Gill Sans","Segoe UI",Verdana,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.65 var(--serif)}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  a{color:var(--accent)}
+  .wrap{max-width:920px;margin:0 auto;padding:52px 24px 90px}
+  .top{font:11px var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}
+  h1{font:600 clamp(30px,4.6vw,44px)/1.12 var(--serif);letter-spacing:-.01em;margin:14px 0 14px}
+  .lede{font-size:18.5px;line-height:1.6;max-width:62ch}
+  .lede em{font-style:italic}
+  hr{border:none;border-top:2px solid var(--ink);margin:34px 0 8px}
+  h2{font:600 13px var(--sans);letter-spacing:.18em;text-transform:uppercase;margin:34px 0 12px}
+  p{max-width:70ch}
+  .conventions{border:1px solid var(--hair);border-radius:4px;background:#fff;padding:18px 22px;margin:18px 0 8px}
+  .conventions p{margin:6px 0;font-size:15px}
+  .pill{font:10.5px var(--sans);letter-spacing:.1em;text-transform:uppercase;border:1px solid currentColor;
+    border-radius:2px;padding:0 7px;white-space:nowrap}
+  .pill.ok{color:#3f6b48} .pill.id{color:var(--accent);border-style:dashed}
+  ol.props{list-style:none;margin:26px 0 0;padding:0}
+  ol.props li{margin:0 0 14px;border:1px solid var(--hair);border-radius:4px;background:#fff;
+    transition:box-shadow .15s ease}
+  ol.props li:hover{box-shadow:0 3px 14px rgba(60,50,30,.09)}
+  ol.props a{display:block;padding:20px 24px;text-decoration:none;color:inherit}
+  ol.props .no{font:italic 15px var(--serif);color:var(--accent)}
+  ol.props .name{font:600 21px var(--serif);margin:2px 0 4px}
+  ol.props .stance{font-size:14.5px;color:var(--muted);max-width:64ch}
+  ol.props .trade{font:12px var(--mono);color:var(--muted);margin-top:8px}
+  ol.props .trade b{letter-spacing:.08em;text-transform:uppercase;font-size:10px;color:var(--accent)}
+  .foot{margin-top:40px;font-size:13.5px;color:var(--muted)}
+  .foot code{font:12px var(--mono)}
+  @media (max-width:640px){ .wrap{padding:36px 18px 70px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="top">Provenance · design exploration · not an approved design</p>
+  <h1>Source refinement — five ways to see the structure take shape</h1>
+  <p class="lede">Five distinct, self-contained prototypes of the shared view accepted for source refinement:
+    <em>“During source refinement, a person can inspect the evolving system description alongside the
+    conversation.”</em> Each is a complete page with working interactions, and each demonstrates the same small
+    cast of records — so the five can be compared like for like. One designer (GLM-5.3-Flash, via OpenCode)
+    produced them as conversation moves for human reaction; none is a chosen direction, and nothing here is
+    decided.</p>
+
+  <h2>What is agreed, what is invented here</h2>
+  <div class="conventions">
+    <p><span class="pill ok">agreed</span>&nbsp; marks content recorded in the graph: the anchor requirement
+      (<em>source refinement organizes source material into an evolving system description</em>), the shared-view
+      requirement above it in this page, two approved decisions (the purpose, and showing the description beside
+      the conversation), the open question about a requirement page with collapsible sections, and the source —
+      the product discovery conversation of 4–6 September 2026 — with two verbatim passages: “It could be any
+      source. I am just giving a scenario.” and “The goal is structure.”</p>
+    <p><span class="pill id">illustrative</span>&nbsp; marks content minted for these prototypes only: one
+      sub-requirement, one proposed rule, the editing-behaviour question, and every sample discussion line.
+      A suggestion by the designer or an agent is never labelled as Ben’s decision. The rule is marked as a
+      rule may be marked in earnest: produced by no decision (none is required), with no implementation and no
+      verification.</p>
+    <p>Citations everywhere use the concept that exists today — a source plus a free-text clause. The designs
+      do not invent a universal passage locator; general anchoring and source versions stay with the separate
+      future shaping task. Every page carries a slim prototype banner, so the demonstration state is clear
+      outside the product flow.</p>
+  </div>
+
+  <h2>The five proposals</h2>
+  <ol class="props">
+    <li>
+      <a href="folio.html">
+        <span class="no">i.</span>
+        <div class="name">Folio — the standing document</div>
+        <div class="stance">The collapsible requirement document taken seriously: one requirement as the page
+          subject; sub-requirements, candidate rules, decisions, open questions and attached sources as its
+          numbered collapsible sections; discussion beside the page, bound to the selected record; inline
+          editing tried where the editing question lives.</div>
+        <div class="trade"><b>tradeoff</b> — collapsing hides the very evolution the view must expose; the
+          outline carries the load when sections close.</div>
+      </a>
+    </li>
+    <li>
+      <a href="atlas.html">
+        <span class="no">ii.</span>
+        <div class="name">Atlas — the constellation</div>
+        <div class="stance">The graph form, named in the accepted decision, worked through: records keep their
+          types and real relations — refines, resolves, spawns, cites — drawn as a selectable constellation.
+          An agreed-only mode dims everything invented. The document is derivable; the shape is primary.</div>
+        <div class="trade"><b>tradeoff</b> — reading rationale inside a side panel fragments prose, and the
+          layout must be tended as the graph grows.</div>
+      </a>
+    </li>
+    <li>
+      <a href="margin.html">
+        <span class="no">iii.</span>
+        <div class="name">Margin — manuscript and scholia</div>
+        <div class="stance">The description reads as one continuous text; provenance, status and the discussion
+          live in the margin beside the passage they concern. Nothing collapses — statement and dissent share
+          one glance, the most literal reading of “alongside the conversation”.</div>
+        <div class="trade"><b>tradeoff</b> — margins force short contributions and cannot nest; narrow screens
+          break the sideways glance.</div>
+      </a>
+    </li>
+    <li>
+      <a href="ledger.html">
+        <span class="no">iv.</span>
+        <div class="name">Ledger — the landing stream</div>
+        <div class="stance">Evolution-first: the primary object is the stream of landings, each entry pairing
+          the conversation that caused it with the structure that moved. The standing page is derived —
+          “as it stands now”, every line traced back to its entry. Steering is reacting to the pending entry.</div>
+        <div class="trade"><b>tradeoff</b> — newcomers read history before content; “what is true now” costs
+          one click and an act of assembly.</div>
+      </a>
+    </li>
+    <li>
+      <a href="trestle.html">
+        <span class="no">v.</span>
+        <div class="name">Trestle — the passage workbench</div>
+        <div class="stance">Citation as the spine: the source on the left, addressable passage by passage; the
+          forming description on the right; a citation in either direction is a live bridge between them. The
+          conversation docks under the passage it discusses.</div>
+        <div class="trade"><b>tradeoff</b> — needs well-segmented sources and gives each side less room;
+          finer anchoring stays deliberately out of scope.</div>
+      </a>
+    </li>
+  </ol>
+
+  <h2>Shared open questions the pages react to</h2>
+  <p>These are carried in the demos rather than hidden: should the first shared view be a requirement page
+    with collapsible sections or the graph form; what the editing behaviour is when the person and the agent
+    both change the page; and the fog the anchor requirement already carries — the minimum structure that
+    gives a product or engineering team useful direction is not yet clear. The demonstrations also show what
+    the ontology distinguishes: a rule can exist before implementation, and a decision is not required to
+    produce one.</p>
+
+  <h2>Practical notes</h2>
+  <p class="foot">Each page is a single HTML file with embedded CSS and JavaScript — no build step, no network
+    dependencies, system font stacks only. Open directly from disk or serve the folder statically. Interactions
+    (collapse, selection, contextual discussion, citation detail, local edits) run entirely in the page and
+    persist nothing; they demonstrate behaviour, not storage. Ben’s verbatim words appear only in the two
+    cited passages. The coordinating session owns graph tracking and ratification; these files change no graph
+    records, skills, or production code.</p>
+</div>
+</body>
+</html>

@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Proposal 4 · Ledger — the landing stream</title>
+<style>
+  :root{
+    --desk:#29221a; --manila:#f1e8d3; --manila-deep:#e9dec4; --card:#f7f0df;
+    --ink:#2b2416; --soft:#7c715a; --hair:#d6c9a8; --hair-strong:#bfb188;
+    --blue:#2c4a7c; --green:#3c6e4f; --red:#a33c30; --amber:#8a6a2c;
+    --serif:Georgia,"Times New Roman",serif;
+    --sans:"Verdana","Segoe UI",Geneva,sans-serif;
+    --mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--desk);color:var(--ink);font:15px/1.6 var(--sans);
+    background-image:repeating-linear-gradient(90deg, rgba(0,0,0,.14) 0 2px, transparent 2px 90px)}
+  :focus-visible{outline:2px solid var(--red);outline-offset:2px}
+  button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;padding:0}
+
+  .chrome{background:#171310;color:#cbbfa4;font:12px/1.4 var(--sans)}
+  .chrome .in{max-width:1380px;margin:0 auto;padding:7px 20px;display:flex;gap:14px;align-items:baseline;flex-wrap:wrap}
+  .chrome a{color:#fff;text-decoration:underline;text-underline-offset:2px}
+  .chrome .tag{border:1px solid #4a4033;padding:0 7px;border-radius:2px;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase}
+
+  header.page{max-width:1380px;margin:0 auto;padding:34px 20px 18px;display:flex;gap:24px;align-items:flex-end;flex-wrap:wrap}
+  header.page .titles{flex:1;min-width:300px;color:var(--manila)}
+  .kicker{font:11px var(--mono);letter-spacing:.2em;text-transform:uppercase;color:#c9a86a}
+  header.page h1{font:500 clamp(26px,3.4vw,38px)/1.15 var(--serif);margin:8px 0 6px;letter-spacing:.005em}
+  header.page .sub{color:#b3a78b;max-width:64ch;font-size:14px}
+  .views{display:flex;border:1px solid #5a4d3a;border-radius:3px;overflow:hidden}
+  .views button{padding:8px 18px;font:12px var(--mono);letter-spacing:.08em;color:#cbbfa4}
+  .views button[aria-pressed="true"]{background:var(--manila);color:var(--ink);font-weight:700}
+
+  .filters{max-width:1380px;margin:0 auto;padding:0 20px 14px;display:flex;gap:8px;flex-wrap:wrap}
+  .filters button{font:11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:#cbbfa4;
+    border:1px solid #5a4d3a;border-radius:20px;padding:4px 13px}
+  .filters button[aria-pressed="true"]{background:#c9a86a;border-color:#c9a86a;color:#241d12;font-weight:700}
+
+  .work{max-width:1380px;margin:0 auto;padding:6px 20px 80px;display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:30px;align-items:start}
+
+  /* ---------- stream ---------- */
+  .stream{position:relative;padding:8px 0 8px 34px}
+  .stream::before{content:"";position:absolute;left:11px;top:0;bottom:0;width:2px;background:#57493a}
+  .entry{position:relative;margin:0 0 16px}
+  .entry::before{content:"";position:absolute;left:-29px;top:22px;width:12px;height:12px;border-radius:50%;
+    background:var(--desk);border:2.5px solid #9c8a68}
+  .entry.pending::before{background:#c9a86a;border-color:#c9a86a}
+  .entry.entered-flash{animation:flash 1.6s ease}
+  @keyframes flash{0%{background:rgba(201,168,106,.28)}100%{background:transparent}}
+  .card{background:var(--manila);border:1px solid var(--hair-strong);border-radius:4px;
+    box-shadow:3px 4px 0 rgba(0,0,0,.28)}
+  .card.flash{animation:flash 1.6s ease}
+  .e-head{display:flex;width:100%;text-align:left;align-items:baseline;gap:12px;padding:13px 16px}
+  .when{font:11px var(--mono);color:var(--soft);min-width:74px;letter-spacing:.03em}
+  .stamp{font:10px var(--mono);letter-spacing:.14em;text-transform:uppercase;border:1.6px solid currentColor;
+    border-radius:2px;padding:1px 7px;transform:rotate(-1.6deg);white-space:nowrap}
+  .stamp.k-req{color:var(--blue)} .stamp.k-res{color:var(--green)} .stamp.k-rule{color:var(--red)}
+  .stamp.k-q{color:#6b5a34} .stamp.k-source{color:var(--amber)}
+  .stamp.proposed{border-style:dashed}
+  .e-title{font:16px/1.4 var(--serif);flex:1}
+  .e-title .t-status{font:11px var(--sans);color:var(--soft)}
+  .e-chev{color:var(--soft);transition:transform .18s ease;font-size:12px}
+  .e-head[aria-expanded="true"] .e-chev{transform:rotate(90deg)}
+  .e-body{display:none;border-top:1px dashed var(--hair-strong);padding:13px 16px 15px}
+  .e-body.open{display:block}
+  .e-body p.stmt{font:16px/1.55 var(--serif);color:var(--blue);margin:0 0 10px}
+  .f{font:12.5px/1.55 var(--sans);margin:5px 0;color:var(--soft)}
+  .f b{color:var(--ink);font:10px var(--mono);letter-spacing:.14em;text-transform:uppercase;margin-right:6px}
+  .f .cite{color:var(--amber);border-bottom:1px dotted var(--amber);font:12px var(--mono)}
+  .f .cite:hover{color:var(--red)}
+  .from{border-left:3px solid var(--hair-strong);padding:6px 10px;margin:10px 0;background:var(--card);font:13px/1.55 var(--sans)}
+  .from .who{font:10px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--soft)}
+  .from .who.sample::after{content:" · sample dialogue";color:var(--red);text-transform:none;letter-spacing:.05em;font-style:italic}
+  .from p{margin:2px 0 0}
+  .e-links{display:flex;gap:16px;margin-top:10px;flex-wrap:wrap}
+  .e-links button,.e-links a{font:11px var(--mono);letter-spacing:.06em;color:var(--blue);text-decoration:underline;text-underline-offset:3px}
+  .nowhere{font:11px var(--mono);color:var(--soft);font-style:italic}
+
+  /* pending entry */
+  .pending .card{border:2px dashed var(--red);background:var(--card)}
+  .pending-note{padding:12px 16px;border-top:1px dashed var(--hair-strong)}
+  .pending-note p{font:14px/1.6 var(--serif);margin:0 0 10px}
+  .pending-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .pa{font:12px var(--mono);letter-spacing:.06em;border-radius:3px;padding:6px 14px}
+  .pa.accept{border:1.6px solid var(--green);color:var(--green)}
+  .pa.accept:hover{background:rgba(60,110,79,.12)}
+  .pa.adjust{border:1.6px solid var(--red);color:var(--red)}
+  .pa.adjust:hover{background:rgba(163,60,48,.1)}
+  .pa:disabled{opacity:.45;cursor:default}
+  .pa-reset{font:11px var(--mono);color:var(--soft);text-decoration:underline;margin-left:auto}
+  .adjust-box{margin-top:10px}
+  .adjust-box textarea{width:100%;min-height:52px;font:14px/1.55 var(--serif);border:1px solid var(--hair-strong);
+    border-radius:3px;padding:8px 10px;background:#fffdf4;resize:vertical}
+  .verdict{font:12px var(--mono);margin-top:10px;padding:8px 12px;border-radius:3px;display:none}
+  .verdict.show{display:block}
+  .verdict.ok{background:rgba(60,110,79,.14);color:var(--green)}
+  .verdict.adj{background:rgba(163,60,48,.1);color:var(--red)}
+
+  /* now view */
+  .now{display:none;background:var(--manila);border:1px solid var(--hair-strong);border-radius:4px;
+    box-shadow:4px 5px 0 rgba(0,0,0,.28);padding:26px 30px 30px}
+  .now h2{font:500 26px/1.3 var(--serif);margin:2px 0 4px;color:var(--blue)}
+  .now .now-sub{font:12px var(--mono);color:var(--soft);margin-bottom:16px}
+  .now details{border-top:1px solid var(--hair);padding:10px 0}
+  .now details:last-of-type{border-bottom:1px solid var(--hair)}
+  .now summary{cursor:pointer;font:11px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--soft);
+    display:flex;gap:10px;align-items:baseline;list-style:none}
+  .now summary::-webkit-details-marker{display:none}
+  .now summary .n{color:var(--amber)}
+  .now summary:hover{color:var(--ink)}
+  .now .sec{padding:8px 0 4px 22px}
+  .now .rec{border-left:3px solid var(--hair-strong);padding:6px 12px;margin:8px 0;background:var(--card)}
+  .now .rec.illus{border-left-style:dashed}
+  .now .rec .rt{font:9.5px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--soft)}
+  .now .rec .rt.prop{color:var(--red)}
+  .now .rec p{font:15px/1.5 var(--serif);margin:3px 0;color:var(--blue)}
+  .now .rec .l{font:11.5px var(--sans);color:var(--soft);margin:2px 0}
+  .backref{font:10.5px var(--mono);color:var(--blue);text-decoration:underline;text-underline-offset:3px;margin-left:8px;white-space:nowrap}
+  .now-flash{animation:flash 1.6s ease}
+
+  /* ---------- session rail ---------- */
+  .rail{position:sticky;top:16px;background:var(--manila);border:1px solid var(--hair-strong);border-radius:4px;
+    box-shadow:3px 4px 0 rgba(0,0,0,.28);display:flex;flex-direction:column;max-height:calc(100vh - 32px)}
+  .rail .rhead{padding:13px 16px 10px;border-bottom:1px dashed var(--hair-strong)}
+  .rail .rhead .k{font:10px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--soft)}
+  .rail .rhead h2{font:16px var(--serif);margin:4px 0 0;color:var(--blue)}
+  .rail .msgs{overflow-y:auto;padding:12px 16px;flex:1}
+  .rmsg{margin:0 0 13px}
+  .rmsg .who{font:10px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--soft)}
+  .rmsg .who.sample::after{content:" · sample";color:var(--red);text-transform:none;letter-spacing:.05em;font-style:italic}
+  .rmsg p{font:13.5px/1.55 var(--sans);margin:2px 0 4px}
+  .rmsg .landed{font:10.5px var(--mono);color:var(--blue);text-decoration:underline;text-underline-offset:3px}
+  .rail form{border-top:1px dashed var(--hair-strong);padding:11px 16px 13px;background:var(--manila-deep)}
+  .rail textarea{width:100%;min-height:48px;font:13.5px/1.5 var(--sans);border:1px solid var(--hair-strong);
+    border-radius:3px;padding:7px 9px;background:#fffdf4;resize:vertical}
+  .rail .row{display:flex;justify-content:space-between;align-items:center;margin-top:7px}
+  .rail .hint{font:10.5px var(--mono);color:var(--soft)}
+  .rail button.go{font:11px var(--mono);letter-spacing:.08em;text-transform:uppercase;border:1.5px solid var(--blue);
+    color:var(--blue);border-radius:3px;padding:5px 13px}
+  .rail button.go:hover{background:rgba(44,74,124,.1)}
+
+  dialog{border:1px solid var(--hair-strong);border-radius:4px;background:var(--manila);color:var(--ink);
+    max-width:520px;width:calc(100vw - 48px);padding:0;box-shadow:0 18px 50px rgba(0,0,0,.5)}
+  dialog::backdrop{background:rgba(20,15,9,.7)}
+  .cite-card{padding:20px 24px 22px}
+  .cite-card .kind{font:10px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--amber)}
+  .cite-card h3{font:500 19px var(--serif);margin:6px 0 10px;color:var(--blue)}
+  .cite-card blockquote{margin:12px 0;border-left:3px solid var(--amber);padding:2px 0 2px 16px;font:17px/1.6 var(--serif);font-style:italic}
+  .cite-card .loc{font:11px var(--mono);color:var(--soft);border-top:1px dashed var(--hair-strong);padding-top:10px;margin-top:12px}
+  .cite-card .row{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:14px}
+  .cite-card .hint{font:11.5px var(--sans);font-style:italic;color:var(--soft)}
+  .cite-card button{font:12px var(--mono);border:1px solid var(--hair-strong);border-radius:3px;padding:5px 14px}
+
+  .about{max-width:1380px;margin:0 auto;padding:0 20px 60px}
+  .about details{border-top:2px solid #9c8a68;padding-top:14px;max-width:900px}
+  .about summary{font:12px var(--mono);letter-spacing:.14em;text-transform:uppercase;cursor:pointer;color:#cbbfa4}
+  .about .body{columns:2;column-gap:44px;font-size:13.5px;color:#b3a78b;margin-top:12px}
+  .about .body h3{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--manila);break-after:avoid}
+  .about .body p{margin:8px 0}
+
+  @media (max-width:1040px){
+    .work{grid-template-columns:1fr}
+    .rail{position:static;max-height:480px}
+    .about .body{columns:1}
+    .filters{display:none}
+  }
+</style>
+</head>
+<body>
+
+<div class="chrome">
+  <div class="in">
+    <span class="tag">Design exploration</span>
+    <span>Proposal 4 of 5 · <strong>Ledger</strong> — the landing stream</span>
+    <span>Static prototype. Nothing here writes to the graph; verdicts stay in this page.</span>
+    <a href="index.html">All five proposals</a>
+  </div>
+</div>
+
+<header class="page">
+  <div class="titles">
+    <p class="kicker">Source refinement · shared view</p>
+    <h1>The description is its change history</h1>
+    <p class="sub">What the conversation lands, the stream records: each entry is one landing — who said what,
+      and what structure moved. The standing page is derivable, one click away, every line traced back to the
+      entry that produced it. Steer by reacting to each landing as it happens.</p>
+  </div>
+  <div class="views" role="group" aria-label="View">
+    <button type="button" id="view-stream" aria-pressed="true">The stream</button>
+    <button type="button" id="view-now" aria-pressed="false">As it stands now</button>
+  </div>
+</header>
+
+<div class="filters" role="group" aria-label="Filter entries by record kind">
+  <button type="button" data-f="all" aria-pressed="true">All</button>
+  <button type="button" data-f="req" aria-pressed="false">Requirements</button>
+  <button type="button" data-f="res" aria-pressed="false">Decisions</button>
+  <button type="button" data-f="rule" aria-pressed="false">Rules</button>
+  <button type="button" data-f="q" aria-pressed="false">Questions</button>
+  <button type="button" data-f="source" aria-pressed="false">Sources</button>
+</div>
+
+<div class="work">
+
+  <!-- ================= stream ================= -->
+  <div class="stream" id="stream" aria-label="Landing stream">
+
+    <div class="entry" data-kind="source" data-entry="1">
+      <div class="card">
+        <button class="e-head" type="button" aria-expanded="false" aria-controls="eb1">
+          <span class="when">4 Sep</span>
+          <span class="stamp k-source">Source</span>
+          <span class="e-title">Product discovery conversation attached <span class="t-status">· agreed</span></span>
+          <span class="e-chev" aria-hidden="true">▶</span>
+        </button>
+        <div class="e-body" id="eb1">
+          <p class="stmt">Product discovery conversation, 4–6 September 2026 — Ben and a GLM-5.3-Flash session.</p>
+          <div class="f"><b>Passages</b> two verbatim: “It could be any source. I am just giving a scenario.”
+            <button class="cite" type="button" data-cite="p1">open</button> · “The goal is structure.”
+            <button class="cite" type="button" data-cite="p2">open</button></div>
+          <div class="from"><span class="who sample">Agent</span>
+            <p>Sample: attached as the ground the refinement works from.</p></div>
+          <div class="e-links"><span class="nowhere">stands now in: attachments</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="entry" data-kind="req" data-entry="2">
+      <div class="card">
+        <button class="e-head" type="button" aria-expanded="false" aria-controls="eb2">
+          <span class="when">5 Sep</span>
+          <span class="stamp k-req">Requirement</span>
+          <span class="e-title">Source refinement builds an evolving system description <span class="t-status">· agreed, discovery</span></span>
+          <span class="e-chev" aria-hidden="true">▶</span>
+        </button>
+        <div class="e-body" id="eb2">
+          <p class="stmt">Source refinement organizes source material into an evolving system description with the Provenance ontology.</p>
+          <div class="f"><b>Means</b> the session breaks a source into the existing record types; the description gives teams usable direction and keeps changing; development never waits for a finished specification.</div>
+          <div class="f"><b>Fog</b> the minimum useful structure is not yet clear; neither is the way the person sees and changes it.</div>
+          <div class="e-links"><button type="button" data-goto-now="now-anchor">see in the current page ↗</button></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="entry" data-kind="res" data-entry="3">
+      <div class="card">
+        <button class="e-head" type="button" aria-expanded="false" aria-controls="eb3">
+          <span class="when">5 Sep</span>
+          <span class="stamp k-res">Decision</span>
+          <span class="e-title">Structure evolving intent from source material <span class="t-status">· approved</span></span>
+          <span class="e-chev" aria-hidden="true">▶</span>
+        </button>
+        <div class="e-body" id="eb3">
+          <p class="stmt">Source refinement uses the Provenance ontology to describe current system intent for product and development work. The description can evolve as understanding changes.</p>
+          <div class="f"><b>Resolves</b> the parent requirement on product research traceability</div>
+          <div class="f"><b>Because</b> Ben wants informal material clear enough for teams to use — evolving, not a fixed sequence demanding a finished specification first.</div>
+          <div class="from"><span class="who sample">Ben</span><p>“The goal is structure.” — recorded in the current shaping discussion.
+            <button class="cite" type="button" data-cite="p2" style="margin-left:4px">open</button></p></div>
+          <div class="e-links"><span class="nowhere">stands now in: decisions</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="entry" data-kind="res" data-entry="4">
+      <div class="card">
+        <button class="e-head" type="button" aria-expanded="false" aria-controls="eb4">
+          <span class="when">6 Sep</span>
+          <span class="stamp k-res">Decision</span>
+          <span class="e-title">Show the system description during refinement <span class="t-status">· approved</span></span>
+          <span class="e-chev" aria-hidden="true">▶</span>
+        </button>
+        <div class="e-body" id="eb4">
+          <p class="stmt">During source refinement, a person can inspect the evolving system description alongside the conversation.</p>
+          <div class="f"><b>Resolves</b> Source refinement builds an evolving system description</div>
+          <div class="f"><b>Spawns</b> Refinement shows the evolving structure — the next entry</div>
+          <div class="f"><b>Left open</b> the display form: a graph or a collapsible document, page-as-subject, direct editing, sources as attachments — candidate details, none chosen.</div>
+          <div class="from"><span class="who sample">Ben</span><p>Accepted the shared view; suggested a graph, or a document with collapsible sections.</p></div>
+          <div class="e-links"><button type="button" data-goto-now="now-decisions">see in the current page ↗</button></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="entry" data-kind="req" data-entry="5">
+      <div class="card">
+        <button class="e-head" type="button" aria-expanded="false" aria-controls="eb5">
+          <span class="when">6 Sep</span>
+          <span class="stamp k-req">Requirement</span>
+          <span class="e-title">Refinement shows the evolving structure <span class="t-status">· agreed, discovery</span></span>
+          <span class="e-chev" aria-hidden="true">▶</span>
+        </button>
+        <div class="e-body" id="eb5">
+          <p class="stmt">During source refinement, a person can inspect the evolving system description alongside the conversation.</p>
+          <div class="f"><b>Refines</b> Source refinement builds an evolving system description</div>
+          <div class="f"><b>Spawned by</b> the approved decision above — a decision may spawn a requirement without ending it</div>
+          <div class="e-links"><button type="button" data-goto-now="now-anchor">see in the current page ↗</button></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="entry" data-kind="q" data-entry="6">
+      <div class="card">
+        <button class="e-head" type="button" aria-expanded="false" aria-controls="eb6">
+          <span class="when">6 Sep</span>
+          <span class="stamp k-q">Question</span>
+          <span class="e-title">Collapsible page — or a graph? <span class="t-status">· open, recorded</span></span>
+          <span class="e-chev" aria-hidden="true">▶</span>
+        </button>
+        <div class="e-body" id="eb6">
+          <p class="stmt">Should the first shared view use a requirement page with collapsible sections for its related records?</p>
+          <div class="f"><b>Open on</b> Refinement shows the evolving structure</div>
+          <div class="f"><b>Why it can close</b> both candidate forms now exist as prototypes — including this one — so the choice can be made against artifacts.</div>
+          <div class="e-links"><button type="button" data-goto-now="now-questions">see in the current page ↗</button></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="entry pending" data-kind="rule" data-entry="7">
+      <div class="card">
+        <button class="e-head" type="button" aria-expanded="true" aria-controls="eb7">
+          <span class="when">now · prototype</span>
+          <span class="stamp k-rule proposed">Rule · proposed</span>
+          <span class="e-title">Citations open the cited passage <span class="t-status">· illustrative, awaiting reaction</span></span>
+          <span class="e-chev" aria-hidden="true">▶</span>
+        </button>
+        <div class="e-body open" id="eb7">
+          <p class="stmt">Selecting a citation in the shared view shows the cited passage from its source without leaving the conversation.</p>
+          <div class="f"><b>Refines</b> Decisions appear in the shared view as they land — the companion illustrative sub-requirement</div>
+          <div class="f"><b>Produced by</b> no decision yet — none is required · <b>implementation / verification</b> none yet — ordinary for a rule</div>
+          <div class="f"><b>Grounded</b> “It could be any source. I am just giving a scenario.”
+            <button class="cite" type="button" data-cite="p1">open</button> — sources vary, so the view cannot special-case one format</div>
+          <div class="pending-note">
+            <p><strong>Illustrative — minted by this design exploration, not by the shaping session.</strong>
+              The stream exists so the reaction is one gesture: keep it, change it, or let it pass.</p>
+            <div class="pending-actions">
+              <button class="pa accept" type="button" id="pa-accept">Accept</button>
+              <button class="pa adjust" type="button" id="pa-adjust">Adjust</button>
+              <button class="pa-reset" type="button" id="pa-reset">reset prototype</button>
+            </div>
+            <div class="adjust-box" id="adjust-box" hidden>
+              <label for="adjust-text" style="font:10px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--soft)">What should change? (prototype only)</label>
+              <textarea id="adjust-text"></textarea>
+              <div class="pending-actions" style="margin-top:8px">
+                <button class="pa adjust" type="button" id="pa-record">Record reaction</button>
+              </div>
+            </div>
+            <div class="verdict ok" id="verdict" role="status"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="entry" data-kind="res" data-entry="end" style="margin-top:26px">
+      <span class="nowhere" style="margin-left:-18px">— the stream continues as the conversation does; no gate waits at the end —</span>
+    </div>
+  </div>
+
+  <!-- ================= as it stands now ================= -->
+  <div class="now" id="now" aria-label="The assembled description as it stands now">
+    <h2>Refinement shows the evolving structure</h2>
+    <p class="now-sub">assembled from the stream · every line traces back to its entry</p>
+
+    <details open>
+      <summary><span class="n">¶</span> Statement
+        <button class="backref" type="button" data-goto-entry="5">↩ entry 5</button></summary>
+      <div class="sec" id="now-anchor">
+        <p style="font:18px/1.6 var(--serif);color:var(--blue);margin:6px 0">During source refinement, a person
+          can inspect the evolving system description alongside the conversation.</p>
+        <p class="l" style="font-size:12.5px;color:var(--soft)">Agreed, discovery. Refines
+          <em>Source refinement builds an evolving system description</em>
+          <button class="backref" type="button" data-goto-entry="2">↩ entry 2</button>.
+          Editing behaviour remains to be shaped — see open questions.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary><span class="n">1</span> Sub-requirements
+        <button class="backref" type="button" data-goto-entry="7">↩ entry 7</button></summary>
+      <div class="sec" id="now-subreqs">
+        <div class="rec illus">
+          <span class="rt prop">illustrative · not in the graph</span>
+          <p>Decisions appear in the shared view as they land.</p>
+          <p class="l">Refines this requirement. Minted for this prototype; reaction pending in the stream.</p>
+        </div>
+      </div>
+    </details>
+
+    <details>
+      <summary><span class="n">2</span> Rules in question
+        <button class="backref" type="button" data-goto-entry="7">↩ entry 7</button></summary>
+      <div class="sec" id="now-rules">
+        <div class="rec illus">
+          <span class="rt prop">illustrative proposal</span>
+          <p>Selecting a citation shows the cited passage from its source without leaving the conversation.</p>
+          <p class="l">No decision produced it — none required. No implementation, no verification — ordinary for a rule.</p>
+        </div>
+      </div>
+    </details>
+
+    <details open>
+      <summary><span class="n">3</span> Decisions
+        <button class="backref" type="button" data-goto-entry="4">↩ entry 4</button></summary>
+      <div class="sec" id="now-decisions">
+        <div class="rec">
+          <span class="rt">approved</span>
+          <p>Show the system description during refinement.</p>
+          <p class="l">Resolves the anchor requirement; spawns this one. Left open: the display form.
+            <button class="backref" type="button" data-goto-entry="4">↩ entry 4</button></p>
+        </div>
+        <div class="rec">
+          <span class="rt">approved</span>
+          <p>Source refinement structures evolving intent from source material.</p>
+          <p class="l">The accepted purpose. <button class="backref" type="button" data-goto-entry="3">↩ entry 3</button></p>
+        </div>
+      </div>
+    </details>
+
+    <details open>
+      <summary><span class="n">4</span> Open questions
+        <button class="backref" type="button" data-goto-entry="6">↩ entry 6</button></summary>
+      <div class="sec" id="now-questions">
+        <div class="rec">
+          <span class="rt">open · recorded</span>
+          <p>Should the first shared view use a requirement page with collapsible sections for its related
+            records — or the graph?</p>
+          <p class="l">This page is the collapsible half; the stream is the ledger half. Both await disposition.
+            <button class="backref" type="button" data-goto-entry="6">↩ entry 6</button></p>
+        </div>
+        <div class="rec illus">
+          <span class="rt prop">raised by this exploration</span>
+          <p>When the person and the agent both edit the page, what does each see of the other’s edit?</p>
+        </div>
+        <div class="rec">
+          <span class="rt">fog on the anchor</span>
+          <p>The minimum structure that gives a team useful direction is not yet clear.</p>
+        </div>
+      </div>
+    </details>
+
+    <details open>
+      <summary><span class="n">5</span> Attachments
+        <button class="backref" type="button" data-goto-entry="1">↩ entry 1</button></summary>
+      <div class="sec" id="now-source">
+        <div class="rec">
+          <span class="rt">source · agreed</span>
+          <p>Product discovery conversation, 4–6 September 2026.</p>
+          <p class="l">“It could be any source. I am just giving a scenario.”
+            <button class="cite" type="button" data-cite="p1" style="font:inherit">open</button> ·
+            “The goal is structure.”
+            <button class="cite" type="button" data-cite="p2" style="font:inherit">open</button>
+            <button class="backref" type="button" data-goto-entry="1">↩ entry 1</button></p>
+        </div>
+      </div>
+    </details>
+  </div>
+
+  <!-- ================= session rail ================= -->
+  <aside class="rail" aria-label="The conversation driving the stream">
+    <div class="rhead">
+      <span class="k">Session · sample content</span>
+      <h2>The conversation, and where it landed</h2>
+    </div>
+    <div class="msgs" id="msgs">
+      <div class="rmsg">
+        <span class="who sample">Agent</span>
+        <p>Sample thread — each message links to the entry it produced, so the record of “why” is one click from the words.</p>
+      </div>
+      <div class="rmsg">
+        <span class="who sample">Ben</span>
+        <p>“The goal is structure.” — the recorded line that led to the purpose decision.</p>
+        <button class="landed" type="button" data-goto-entry="3">→ landed as entry 3</button>
+      </div>
+      <div class="rmsg">
+        <span class="who sample">Ben</span>
+        <p>Accepted the shared view; suggested a graph, or a document with collapsible sections.</p>
+        <button class="landed" type="button" data-goto-entry="4">→ landed as entry 4</button>
+      </div>
+      <div class="rmsg">
+        <span class="who sample">Agent</span>
+        <p>Illustrative: proposed the citation rule so the pending reaction at the head of the stream has something real to react to.</p>
+        <button class="landed" type="button" data-goto-entry="7">→ entry 7, awaiting reaction</button>
+      </div>
+    </div>
+    <form id="rail-form">
+      <textarea id="rail-input" aria-label="Add to the session (prototype only)" placeholder="Add to the session…"></textarea>
+      <div class="row">
+        <span class="hint">prototype only — nothing lands</span>
+        <button class="go" type="submit">Post</button>
+      </div>
+    </form>
+  </aside>
+</div>
+
+<div class="about">
+  <details>
+    <summary>About this proposal — stance, tradeoffs, what is agreed vs invented</summary>
+    <div class="body">
+      <h3>Stance</h3>
+      <p>Evolution-first. The primary object is the stream of landings: sources attached, requirements minted,
+        decisions approved, questions opened, rules proposed — each with the conversation that caused it. The
+        standing page is a derived view, assembled on demand, every line traced to its entry.</p>
+      <h3>Hypothesis</h3>
+      <p>Steerability comes from seeing what changed and reacting in the moment — the pending entry with
+        Accept / Adjust is the steering gesture. Trust grows because state never shifts silently.</p>
+      <h3>Tradeoffs</h3>
+      <p>A newcomer must read history before content, and “what is true now” costs one click plus assembly.
+        Dense streams need strong filters or they become a queue nobody reads.</p>
+      <h3>Agreed vs invented</h3>
+      <p>Entries 1–6 trace agreed graph events in date order (the two entries sharing one statement is real:
+        the decision resolved the anchor and spawned the requirement). Entry 7 and both illustrative records
+        are invented here; the Accept / Adjust verdicts live in this page only.</p>
+    </div>
+  </details>
+</div>
+
+<dialog id="cite-dialog" aria-labelledby="cite-title">
+  <div class="cite-card">
+    <span class="kind" id="cite-kind">Citation</span>
+    <h3 id="cite-title"></h3>
+    <blockquote id="cite-quote"></blockquote>
+    <p class="loc" id="cite-loc"></p>
+    <div class="row">
+      <span class="hint">Citation = source + free-text clause, as stored today. Finer passage anchoring is
+        separate future shaping work.</span>
+      <button type="button" id="cite-close">Close</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+(function () {
+  "use strict";
+  var $ = function (s, el) { return (el || document).querySelector(s); };
+  var $$ = function (s, el) { return Array.prototype.slice.call((el || document).querySelectorAll(s)); };
+
+  /* ---------- entry expand ---------- */
+  $$(".e-head").forEach(function (h) {
+    h.addEventListener("click", function () {
+      var open = h.getAttribute("aria-expanded") === "true";
+      h.setAttribute("aria-expanded", open ? "false" : "true");
+      document.getElementById(h.getAttribute("aria-controls")).classList.toggle("open", !open);
+    });
+  });
+
+  /* ---------- filters ---------- */
+  $$(".filters button").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var f = b.getAttribute("data-f");
+      $$(".filters button").forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+      $$(".entry").forEach(function (e) {
+        var kind = e.getAttribute("data-kind");
+        e.style.display = (f === "all" || kind === f) ? "" : "none";
+      });
+    });
+  });
+
+  /* ---------- views ---------- */
+  function show(view) {
+    var now = view === "now";
+    $("#view-stream").setAttribute("aria-pressed", now ? "false" : "true");
+    $("#view-now").setAttribute("aria-pressed", now ? "true" : "false");
+    $("#stream").style.display = now ? "none" : "";
+    $("#now").style.display = now ? "block" : "none";
+    $(".filters").style.display = now ? "none" : "";
+  }
+  $("#view-stream").addEventListener("click", function () { show("stream"); });
+  $("#view-now").addEventListener("click", function () { show("now"); });
+
+  function gotoEntry(n) {
+    show("stream");
+    var e = $('.entry[data-entry="' + n + '"]');
+    if (!e) return;
+    e.scrollIntoView({ behavior: "smooth", block: "center" });
+    var card = $(".card", e);
+    if (card) { card.classList.remove("flash"); void card.offsetWidth; card.classList.add("flash"); }
+  }
+  function gotoNow(id) {
+    show("now");
+    var t = document.getElementById(id);
+    if (!t) return;
+    var det = t.closest("details");
+    if (det) det.open = true;
+    t.scrollIntoView({ behavior: "smooth", block: "center" });
+    t.classList.remove("now-flash"); void t.offsetWidth; t.classList.add("now-flash");
+  }
+  $$("[data-goto-entry]").forEach(function (b) {
+    b.addEventListener("click", function (e) { e.preventDefault(); e.stopPropagation(); gotoEntry(b.getAttribute("data-goto-entry")); });
+  });
+  $$("[data-goto-now]").forEach(function (b) {
+    b.addEventListener("click", function (e) { e.stopPropagation(); gotoNow(b.getAttribute("data-goto-now")); });
+  });
+
+  /* ---------- pending verdicts (prototype-local) ---------- */
+  var initial = $("#eb7").innerHTML;
+  function verdict(cls, text) {
+    var v = $("#verdict");
+    v.className = "verdict " + cls + " show";
+    v.textContent = text;
+    $("#pa-accept").disabled = true;
+    $("#pa-adjust").disabled = true;
+  }
+  $("#pa-accept").addEventListener("click", function () {
+    verdict("ok", "Kept — in this prototype only. Nothing landed in the graph; the coordinating session owns tracking.");
+  });
+  $("#pa-adjust").addEventListener("click", function () {
+    $("#adjust-box").hidden = !$("#adjust-box").hidden;
+  });
+  $("#pa-record").addEventListener("click", function () {
+    var t = $("#adjust-text").value.trim();
+    if (!t) { $("#adjust-text").focus(); return; }
+    verdict("adj", "Reaction recorded in this prototype only: “" + t + "”. The illustrative rule stays marked as not accepted.");
+  });
+  $("#pa-reset").addEventListener("click", function () {
+    $("#eb7").innerHTML = initial;
+    bindPending();
+  });
+  function bindPending() {
+    $("#pa-accept").addEventListener("click", function () {
+      verdict("ok", "Kept — in this prototype only. Nothing landed in the graph; the coordinating session owns tracking.");
+    });
+    $("#pa-adjust").addEventListener("click", function () {
+      $("#adjust-box").hidden = !$("#adjust-box").hidden;
+    });
+    $("#pa-record").addEventListener("click", function () {
+      var t = $("#adjust-text").value.trim();
+      if (!t) { $("#adjust-text").focus(); return; }
+      verdict("adj", "Reaction recorded in this prototype only: “" + t + "”. The illustrative rule stays marked as not accepted.");
+    });
+    $("#pa-reset").addEventListener("click", function () {
+      $("#eb7").innerHTML = initial;
+      bindPending();
+    });
+  }
+
+  /* ---------- citations ---------- */
+  var citations = {
+    p1: { source: "Product discovery conversation, 4–6 September 2026", clause: "Ben, on the range of sources refinement must handle",
+          quote: "It could be any source. I am just giving a scenario.",
+          loc: "source: discovery conversation · msg_06cb67f84001G6VYStJvwwYRWQ" },
+    p2: { source: "Product discovery conversation, 4–6 September 2026", clause: "Ben, current shaping discussion",
+          quote: "The goal is structure.",
+          loc: "source: discovery conversation · current shaping thread" }
+  };
+  var dlg = $("#cite-dialog");
+  function openCitation(key) {
+    var c = citations[key]; if (!c) return;
+    $("#cite-kind").textContent = "Citation · " + c.clause;
+    $("#cite-title").textContent = c.source;
+    $("#cite-quote").textContent = "“" + c.quote + "”";
+    $("#cite-loc").textContent = c.loc;
+    if (typeof dlg.showModal === "function") dlg.showModal(); else dlg.setAttribute("open", "");
+  }
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-cite]");
+    if (b) openCitation(b.getAttribute("data-cite"));
+  });
+  $("#cite-close").addEventListener("click", function () { dlg.close(); });
+
+  /* ---------- rail composer ---------- */
+  $("#rail-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var ta = $("#rail-input");
+    var text = ta.value.trim();
+    if (!text) return;
+    var div = document.createElement("div");
+    div.className = "rmsg";
+    var who = document.createElement("span");
+    who.className = "who";
+    who.textContent = "You (this prototype)";
+    var p = document.createElement("p");
+    p.textContent = text;
+    var note = document.createElement("span");
+    note.className = "hint";
+    note.textContent = " · nothing lands from this prototype";
+    div.appendChild(who); div.appendChild(p); div.appendChild(note);
+    $("#msgs").appendChild(div);
+    ta.value = "";
+    $("#msgs").scrollTop = $("#msgs").scrollHeight;
+  });
+})();
+</script>
+</body>
+</html>

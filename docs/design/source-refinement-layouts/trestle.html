@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Proposal 5 · Trestle — the passage workbench</title>
+<style>
+  :root{
+    --bg:#eef0ec; --pane:#f7f8f5; --pane-deep:#e6e9e3; --line:#c9cec7; --line-strong:#aab1a7;
+    --ink:#1d2420; --muted:#68716a; --cobalt:#2b5cad; --cobalt-soft:rgba(43,92,173,.12);
+    --ok:#3f7a52; --warn:#8a6a2c;
+    --sans:"Candara",Corbel,"Segoe UI","Helvetica Neue",Arial,sans-serif;
+    --serif:Georgia,"Times New Roman",serif;
+    --mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 var(--sans)}
+  :focus-visible{outline:2px solid var(--cobalt);outline-offset:2px}
+  button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;padding:0}
+
+  .chrome{background:#20261f;color:#d8ddd2;font:12px/1.4 var(--sans)}
+  .chrome .in{max-width:1440px;margin:0 auto;padding:7px 20px;display:flex;gap:14px;align-items:baseline;flex-wrap:wrap}
+  .chrome a{color:#fff;text-decoration:underline;text-underline-offset:2px}
+  .chrome .tag{border:1px solid #47503f;padding:0 7px;border-radius:2px;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase}
+
+  header.page{max-width:1440px;margin:0 auto;padding:30px 20px 16px;display:flex;gap:24px;align-items:flex-end;flex-wrap:wrap}
+  header.page .titles{flex:1;min-width:300px}
+  .kicker{font:11px var(--mono);letter-spacing:.22em;text-transform:uppercase;color:var(--cobalt)}
+  header.page h1{font:500 28px/1.2 var(--serif);margin:8px 0 6px}
+  header.page .sub{color:var(--muted);max-width:68ch;font-size:14.5px}
+
+  .bench{max-width:1440px;margin:0 auto;padding:0 20px 70px;position:relative}
+  .panes{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:46px;align-items:start;position:relative}
+  svg.bridge{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:5}
+  svg.bridge path{fill:none;stroke:var(--cobalt);stroke-width:1.7}
+  svg.bridge circle{fill:var(--cobalt)}
+
+  .pane{background:var(--pane);border:1px solid var(--line);border-radius:5px;display:flex;flex-direction:column;
+    max-height:calc(100vh - 60px)}
+  .pane .phead{padding:13px 18px 11px;border-bottom:1px solid var(--line)}
+  .pane .phead .k{font:10px var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+  .pane .phead h2{font:500 17.5px var(--serif);margin:4px 0 0}
+  .pane .pbody{overflow-y:auto;flex:1}
+
+  /* ---------- source pane ---------- */
+  .passage{display:grid;grid-template-columns:34px minmax(0,1fr);padding:16px 18px 14px 10px;
+    border-bottom:1px solid var(--line);cursor:pointer;position:relative}
+  .passage:last-of-type{border-bottom:none}
+  .passage .pm{font:12px var(--mono);color:var(--muted);text-align:center;padding-top:2px}
+  .passage .pm .dot{display:block;width:9px;height:9px;border:1.6px solid var(--line-strong);border-radius:50%;
+    margin:4px auto 0;transition:all .15s ease}
+  .passage:hover{background:var(--pane-deep)}
+  .passage.sel{background:var(--cobalt-soft)}
+  .passage.sel .pm .dot{background:var(--cobalt);border-color:var(--cobalt)}
+  .passage.blockquote{font:16.5px/1.6 var(--serif)}
+  .passage .who{font:10.5px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-top:6px}
+  .passage .loc{font:10.5px var(--mono);color:var(--muted);margin-top:3px}
+  .passage .citedby{font:12px var(--sans);color:var(--muted);margin-top:8px;display:none}
+  .passage.sel .citedby{display:block}
+  .passage .citedby button{color:var(--cobalt);text-decoration:underline;text-underline-offset:3px;margin-right:10px}
+  .srcline{padding:10px 18px;font:11.5px var(--mono);color:var(--muted);border-bottom:1px solid var(--line);
+    background:var(--pane-deep)}
+  .passage-note{margin:0 18px 12px;padding:9px 12px;border:1px dashed var(--line-strong);border-radius:4px;
+    font:12px/1.55 var(--sans);color:var(--muted);background:var(--pane)}
+
+  /* chat dock */
+  .dock{border-top:1px solid var(--line);background:var(--pane-deep)}
+  .dock .dhead{padding:9px 18px 7px;font:10px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+  .dock .dhead b{color:var(--cobalt);font-weight:600}
+  .dock .dmsgs{max-height:130px;overflow-y:auto;padding:0 18px 8px}
+  .dmsg{margin:0 0 9px;font:13.5px/1.5 var(--sans)}
+  .dmsg .who{font:10px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+  .dmsg .who.sample::after{content:" · sample";color:var(--cobalt);text-transform:none;letter-spacing:.05em;font-style:italic}
+  .dmsg p{margin:2px 0 0}
+  .dock form{display:flex;gap:8px;padding:0 18px 14px}
+  .dock textarea{flex:1;min-height:40px;max-height:90px;font:13.5px/1.5 var(--sans);border:1px solid var(--line-strong);
+    border-radius:4px;padding:7px 10px;background:#fff;resize:vertical}
+  .dock button.go{align-self:flex-end;border:1.5px solid var(--cobalt);color:var(--cobalt);border-radius:4px;
+    padding:6px 14px;font:12px var(--mono);letter-spacing:.06em}
+  .dock button.go:hover{background:var(--cobalt);color:#fff}
+
+  /* ---------- description pane ---------- */
+  .rec{border-bottom:1px solid var(--line);padding:13px 18px}
+  .rec:last-of-type{border-bottom:none}
+  .rec-row{display:flex;gap:11px;align-items:flex-start;width:100%;text-align:left}
+  .glyph{font:10.5px var(--mono);letter-spacing:.05em;border:1.5px solid var(--line-strong);border-radius:3px;
+    min-width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;color:var(--muted);flex:none;margin-top:1px}
+  .rec.g-req .glyph{border-color:var(--ok);color:var(--ok)}
+  .rec.g-res .glyph{border-color:var(--warn);color:var(--warn)}
+  .rec.g-q .glyph{border-style:dashed}
+  .rec.illus{background:repeating-linear-gradient(-45deg,transparent 0 9px,rgba(43,92,173,.045) 9px 18px)}
+  .rec .t{font:500 15px/1.45 var(--serif)}
+  .rec .m{font:11px var(--mono);letter-spacing:.06em;color:var(--muted);margin-top:2px}
+  .rec .m .flag{color:var(--cobalt)}
+  .cite-chip{font:10.5px var(--mono);color:var(--cobalt);border:1px solid var(--cobalt);border-radius:3px;
+    padding:0 7px;margin:6px 6px 0 0;display:inline-block;transition:all .15s ease}
+  .cite-chip:hover,.cite-chip.hot{background:var(--cobalt);color:#fff}
+  .rec .chev{margin-left:auto;color:var(--muted);font-size:11px;transition:transform .16s ease;flex:none;padding-top:4px}
+  .rec .expandable[aria-expanded="true"] .chev{transform:rotate(90deg)}
+  .kids{display:none;border-left:2px solid var(--line);margin:10px 0 2px 11px;padding-left:14px}
+  .kids.open{display:block}
+  .kid{margin:0 0 12px}
+  .kid .kt{font:10px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  .kid .kt.prop{color:var(--cobalt)}
+  .kid p.stmt{font:14.5px/1.55 var(--serif);margin:3px 0 6px}
+  .kid .l{font:12px/1.5 var(--sans);color:var(--muted);margin:2px 0}
+  .kid textarea{width:100%;font:14px/1.5 var(--serif);border:1px solid var(--line-strong);border-radius:4px;
+    padding:7px 9px;background:#fff;resize:vertical}
+  .kid .editrow{display:flex;gap:8px;margin-top:6px;align-items:center;flex-wrap:wrap}
+  .editrow[hidden]{display:none!important}
+  .kid .eb{font:11px var(--mono);letter-spacing:.05em;border:1px solid var(--line-strong);border-radius:3px;padding:3px 10px;color:var(--muted)}
+  .kid .eb:hover{border-color:var(--cobalt);color:var(--cobalt)}
+  .kid .protolate{font:10.5px var(--mono);font-style:italic;color:var(--muted)}
+  .oq{border:1px dashed var(--line-strong);border-radius:4px;padding:9px 11px;margin:8px 0;background:#fff}
+  .oq .k{font:10px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--cobalt)}
+  .oq p{font:13.5px/1.5 var(--serif);margin:4px 0 0}
+  .rec.hotrow{background:var(--cobalt-soft)}
+
+  /* citation dialog */
+  dialog{border:1px solid var(--line-strong);border-radius:5px;background:var(--pane);color:var(--ink);
+    max-width:520px;width:calc(100vw - 48px);padding:0;box-shadow:0 18px 50px rgba(20,28,22,.3)}
+  dialog::backdrop{background:rgba(29,36,32,.5)}
+  .cite-card{padding:20px 24px 22px}
+  .cite-card .kind{font:10px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--cobalt)}
+  .cite-card h3{font:500 19px var(--serif);margin:6px 0 10px}
+  .cite-card blockquote{margin:12px 0;border-left:3px solid var(--cobalt);padding:2px 0 2px 16px;font:17px/1.6 var(--serif)}
+  .cite-card .loc{font:11px var(--mono);color:var(--muted);border-top:1px solid var(--line);padding-top:10px;margin-top:12px}
+  .cite-card .row{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:14px}
+  .cite-card .hint{font:11.5px var(--sans);font-style:italic;color:var(--muted)}
+  .cite-card button{border:1px solid var(--line-strong);border-radius:4px;padding:5px 14px;font:12px var(--mono)}
+
+  .about{max-width:1440px;margin:0 auto;padding:0 20px 60px}
+  .about details{border-top:2px solid var(--ink);padding-top:14px;max-width:900px}
+  .about summary{font:12px var(--mono);letter-spacing:.14em;text-transform:uppercase;cursor:pointer;color:var(--muted)}
+  .about .body{columns:2;column-gap:44px;font-size:13.5px;color:var(--muted);margin-top:12px}
+  .about .body h3{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink);break-after:avoid}
+  .about .body p{margin:8px 0}
+
+  @media (max-width:1020px){
+    .panes{grid-template-columns:1fr;gap:22px}
+    .pane{max-height:560px}
+    svg.bridge{display:none}
+    .about .body{columns:1}
+  }
+</style>
+</head>
+<body>
+
+<div class="chrome">
+  <div class="in">
+    <span class="tag">Design exploration</span>
+    <span>Proposal 5 of 5 · <strong>Trestle</strong> — the passage workbench</span>
+    <span>Static prototype. Nothing here writes to the graph; edits stay in this page.</span>
+    <a href="index.html">All five proposals</a>
+  </div>
+</div>
+
+<header class="page">
+  <div class="titles">
+    <p class="kicker">Source refinement · shared view</p>
+    <h1>Every claim keeps its passage</h1>
+    <p class="sub">The source sits on the left, readable and addressable. The forming description sits on the
+      right. A citation is a live bridge: choose it here, and the exact words light up there. The conversation
+      happens underneath the passage it is about.</p>
+  </div>
+</header>
+
+<div class="bench">
+  <div class="panes" id="panes">
+
+    <!-- ============ source ============ -->
+    <section class="pane" aria-label="The source under refinement">
+      <div class="phead">
+        <span class="k">The source under refinement</span>
+        <h2>Product discovery conversation, 4–6 September 2026</h2>
+      </div>
+      <div class="pbody" id="source-body">
+        <div class="srcline">Ben and a GLM-5.3-Flash session · sixty visible messages · this workbench shows the passages the description cites</div>
+
+        <div class="passage blockquote" data-passage="p1" tabindex="0" role="button"
+             aria-label="Passage one, select to see citing records">
+          <span class="pm">¶<span class="dot"></span></span>
+          <span>
+            “It could be any source. I am just giving a scenario.”
+            <span class="who">Ben</span>
+            <span class="loc">msg_06cb67f84001G6VYStJvwwYRWQ</span>
+            <span class="citedby">cited by:
+              <button type="button" data-flash="rec-anchor">the anchor requirement</button>
+              <button type="button" data-flash="rec-rule">the illustrative rule</button>
+            </span>
+          </span>
+        </div>
+
+        <div class="passage blockquote" data-passage="p2" tabindex="0" role="button"
+             aria-label="Passage two, select to see citing records">
+          <span class="pm">¶<span class="dot"></span></span>
+          <span>
+            “The goal is structure.”
+            <span class="who">Ben · current shaping discussion</span>
+            <span class="loc">locator: current shaping thread</span>
+            <span class="citedby">cited by:
+              <button type="button" data-flash="rec-anchor">the anchor requirement</button>
+              <button type="button" data-flash="rec-purpose">the purpose decision</button>
+            </span>
+          </span>
+        </div>
+
+        <div class="passage" data-passage="p0" tabindex="0" role="button"
+             aria-label="Passage three, paraphrase locator, select to see citing records">
+          <span class="pm">¶<span class="dot"></span></span>
+          <span>
+            <span style="font-style:italic;color:var(--muted)">Passage on feeling detached while the structure
+              takes shape out of view — paraphrase here; the transcript carries the words.</span>
+            <span class="who">Ben</span>
+            <span class="loc">msg_06c936af2001O1HQp6q6cfwPNs</span>
+            <span class="citedby">cited by:
+              <button type="button" data-flash="rec-shared">the shared-view requirement</button>
+            </span>
+          </span>
+        </div>
+
+        <div class="passage-note">A source, as stored today, is referenced by its id plus a free-text clause —
+          that clause is the “¶” you see. Finer passage anchoring and source-version handling are separate
+          future shaping work; nothing stronger is assumed here.</div>
+      </div>
+
+      <div class="dock">
+        <div class="dhead">Discussion · <b id="dock-context">the source as a whole</b> <span style="text-transform:none;letter-spacing:.04em">· sample dialogue</span></div>
+        <div class="dmsgs" id="dmsgs">
+          <div class="dmsg"><span class="who sample">Agent</span>
+            <p>Sample thread — docked under the passage being discussed; the context line follows your selection.</p></div>
+          <div class="dmsg"><span class="who sample">Ben</span>
+            <p>“The goal is structure.” — quoted here because the discussion sits under the passage it quotes.</p></div>
+        </div>
+        <form id="dock-form">
+          <textarea id="dock-input" aria-label="Add to the discussion (prototype only)" placeholder="Discuss the selected passage…"></textarea>
+          <button class="go" type="submit">Post</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- ============ description ============ -->
+    <section class="pane" aria-label="The forming description">
+      <div class="phead">
+        <span class="k">The forming description</span>
+        <h2>Six records, five real relations</h2>
+      </div>
+      <div class="pbody" id="desc-body">
+
+        <div class="rec g-req" id="rec-shared">
+          <button class="rec-row expandable" type="button" aria-expanded="true" aria-controls="kids-shared">
+            <span class="glyph">R</span>
+            <span style="flex:1">
+              <span class="t">Refinement shows the evolving structure</span>
+              <span class="m" style="display:block">requirement · agreed, discovery · refines the anchor</span>
+              <button class="cite-chip" type="button" data-cite-bridge="p0">¶ detachment</button>
+            </span>
+            <span class="chev" aria-hidden="true">▶</span>
+          </button>
+          <div class="kids open" id="kids-shared">
+            <div class="kid">
+              <div class="kt">candidate page · sections</div>
+              <p class="stmt">During source refinement, a person can inspect the evolving system description
+                alongside the conversation.</p>
+              <p class="l">The candidate collapsible requirement page — this outline is its compressed form.
+                The display form is exactly what the open questions below put to rest.</p>
+            </div>
+            <div class="kid" id="rec-subreq">
+              <div class="kt prop">sub-requirement · illustrative, not in the graph</div>
+              <p class="stmt" id="subreq-stmt">When a decision lands during refinement, the shared view shows
+                the new or changed record while the conversation continues.</p>
+              <div class="editrow">
+                <button class="eb" type="button" id="subreq-edit">edit</button>
+                <span class="protolate" id="subreq-note">prototype only — the real editing behaviour is an open question</span>
+              </div>
+              <div class="editrow" id="subreq-tools" hidden>
+                <button class="eb" type="button" id="subreq-keep">keep (prototype only)</button>
+                <button class="eb" type="button" id="subreq-restore">restore</button>
+              </div>
+              <p class="l">Refines this requirement.</p>
+            </div>
+            <div class="kid" id="rec-rule">
+              <div class="kt prop">rule · illustrative proposal — not an accepted decision</div>
+              <p class="stmt">Selecting a citation shows the cited passage from its source without leaving the
+                conversation.</p>
+              <button class="cite-chip" type="button" data-cite-bridge="p1">¶ one</button>
+              <p class="l">Refines the sub-requirement. No decision produced it — none is required. No
+                implementation, no verification — a rule may exist before either.</p>
+            </div>
+            <div class="kid">
+              <div class="oq">
+                <span class="k">open question · recorded in the graph</span>
+                <p>Should the first shared view use a requirement page with collapsible sections for its
+                  related records — or the graph?</p>
+              </div>
+              <div class="oq">
+                <span class="k">open question · raised by this exploration</span>
+                <p>When the person and the agent both edit the page, what does each see of the other’s edit?
+                  Try the edit above and judge.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="rec g-req" id="rec-anchor">
+          <button class="rec-row" type="button" data-select-row>
+            <span class="glyph">R</span>
+            <span style="flex:1">
+              <span class="t">Source refinement builds an evolving system description</span>
+              <span class="m" style="display:block">requirement · agreed, discovery · the anchor</span>
+              <button class="cite-chip" type="button" data-cite-bridge="p1">¶ one</button>
+              <button class="cite-chip" type="button" data-cite-bridge="p2">¶ two</button>
+            </span>
+          </button>
+        </div>
+
+        <div class="rec g-res" id="rec-sharedview-res">
+          <button class="rec-row" type="button" data-select-row>
+            <span class="glyph">D</span>
+            <span style="flex:1">
+              <span class="t">Show the system description during refinement</span>
+              <span class="m" style="display:block">decision · approved · resolves the anchor, spawned the shared view</span>
+            </span>
+          </button>
+        </div>
+
+        <div class="rec g-res" id="rec-purpose">
+          <button class="rec-row" type="button" data-select-row>
+            <span class="glyph">D</span>
+            <span style="flex:1">
+              <span class="t">Source refinement structures evolving intent from source material</span>
+              <span class="m" style="display:block">decision · approved · the accepted purpose</span>
+              <button class="cite-chip" type="button" data-cite-bridge="p2">¶ two</button>
+            </span>
+          </button>
+        </div>
+
+        <div class="rec g-q" id="rec-q">
+          <button class="rec-row" type="button" data-select-row>
+            <span class="glyph">Q</span>
+            <span style="flex:1">
+              <span class="t">Collapsible page — or a graph?</span>
+              <span class="m" style="display:block">open question · recorded · open on the shared view</span>
+            </span>
+          </button>
+        </div>
+
+        <div class="rec" id="rec-source">
+          <button class="rec-row" type="button" data-focus-source>
+            <span class="glyph">S</span>
+            <span style="flex:1">
+              <span class="t">Product discovery conversation</span>
+              <span class="m" style="display:block">source · agreed · three passages addressed here</span>
+            </span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <svg class="bridge" id="bridge" aria-hidden="true"></svg>
+  </div>
+</div>
+
+<div class="about">
+  <details>
+    <summary>About this proposal — stance, tradeoffs, what is agreed vs invented</summary>
+    <div class="body">
+      <h3>Stance</h3>
+      <p>The detachment Ben described is about provenance of structure: claims appear without their words.
+        This workbench keeps the source addressable and the description citable in both directions — every
+        record shows which passage it stands on, and every passage shows which records stand on it.</p>
+      <h3>Hypothesis</h3>
+      <p>Precise citation, using the existing source-plus-clause reference, is the cheapest strong answer to
+        “where did this come from”. The bridge gesture (choose one side, see the other) keeps orientation
+        without a graph to maintain.</p>
+      <h3>Tradeoffs</h3>
+      <p>Demands well-segmented sources; a long transcript crowds the pane. The two-pane split leaves less
+        room for either side, and relations beyond citation (refines, spawns) stay in the compressed outline
+        rather than a full picture. General passage anchoring beyond free-text clauses is deliberately out of
+        scope — separate future shaping work.</p>
+      <h3>Agreed vs invented</h3>
+      <p>Agreed: both requirements, both decisions, the recorded question, the source, and the two verbatim
+        passages with their locators; the detachment passage appears as an honest paraphrase. Invented: the
+        sub-requirement, the rule, sample discussion lines, and the editing question.</p>
+    </div>
+  </details>
+</div>
+
+<dialog id="cite-dialog" aria-labelledby="cite-title">
+  <div class="cite-card">
+    <span class="kind" id="cite-kind">Citation</span>
+    <h3 id="cite-title"></h3>
+    <blockquote id="cite-quote"></blockquote>
+    <p class="loc" id="cite-loc"></p>
+    <div class="row">
+      <span class="hint">Citation = source + free-text clause, as stored today. Finer passage anchoring is
+        separate future shaping work.</span>
+      <button type="button" id="cite-close">Close</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+(function () {
+  "use strict";
+  var $ = function (s, el) { return (el || document).querySelector(s); };
+  var $$ = function (s, el) { return Array.prototype.slice.call((el || document).querySelectorAll(s)); };
+
+  /* ---------- passages: select, cited-by, chat context ---------- */
+  var contextNames = { p1: "¶ one — “It could be any source…”", p2: "¶ two — “The goal is structure.”",
+                       p0: "¶ detachment — the paraphrase passage" };
+  var contextKeys = { p1: "p1", p2: "p2", p0: "p0" };
+
+  function selectPassage(key) {
+    $$(".passage").forEach(function (p) { p.classList.toggle("sel", p.getAttribute("data-passage") === key); });
+    $$(".cite-chip").forEach(function (c) { c.classList.toggle("hot", c.getAttribute("data-cite-bridge") === key); });
+    $("#dock-context").textContent = contextNames[key] || "the source as a whole";
+    var p = $('.passage[data-passage="' + key + '"]');
+    if (p) {
+      var r = p.getBoundingClientRect();
+      if (r.top < 80 || r.bottom > window.innerHeight - 200) {
+        p.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }
+  }
+  $$(".passage").forEach(function (p) {
+    p.addEventListener("click", function (e) {
+      if (e.target.closest("button")) return;
+      selectPassage(p.getAttribute("data-passage"));
+    });
+    p.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectPassage(p.getAttribute("data-passage")); }
+    });
+  });
+  $$("[data-flash]").forEach(function (b) {
+    b.addEventListener("click", function (e) {
+      e.stopPropagation();
+      var rec = document.getElementById(b.getAttribute("data-flash"));
+      if (!rec) return;
+      rec.scrollIntoView({ behavior: "smooth", block: "center" });
+      rec.classList.add("hotrow");
+      setTimeout(function () { rec.classList.remove("hotrow"); }, 1600);
+    });
+  });
+
+  /* ---------- citation bridge ---------- */
+  var bridge = $("#bridge");
+  var panes = $("#panes");
+  function clearBridge() {
+    while (bridge.firstChild) bridge.removeChild(bridge.firstChild);
+  }
+  function drawBridge(chip, passage) {
+    clearBridge();
+    if (window.innerWidth <= 1020) return; // panes stacked: highlight is enough
+    var wb = panes.getBoundingClientRect();
+    var r1 = chip.getBoundingClientRect();
+    var r2 = passage.getBoundingClientRect();
+    var x1 = r1.right - wb.left + 6, y1 = r1.top + r1.height / 2 - wb.top;
+    var x2 = r2.left - wb.left - 8, y2 = r2.top + 26 - wb.top;
+    var mid = (x1 + x2) / 2;
+    var path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", "M" + x1 + " " + y1 + " C " + mid + " " + y1 + ", " + mid + " " + y2 + ", " + x2 + " " + y2);
+    var dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    dot.setAttribute("cx", x2); dot.setAttribute("cy", y2); dot.setAttribute("r", 3.4);
+    bridge.appendChild(path); bridge.appendChild(dot);
+  }
+  function bridgeFrom(key, chipEl) {
+    var passage = $('.passage[data-passage="' + key + '"]');
+    if (!passage) return;
+    selectPassage(key);
+    drawBridge(chipEl || $('.cite-chip[data-cite-bridge="' + key + '"]'), passage);
+  }
+  $$("[data-cite-bridge]").forEach(function (chip) {
+    chip.addEventListener("click", function (e) {
+      e.stopPropagation();
+      bridgeFrom(chip.getAttribute("data-cite-bridge"), chip);
+    });
+  });
+  $$("[data-focus-source]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var pane = $("#source-body");
+      pane.scrollTop = 0;
+      selectPassage("p1");
+    });
+  });
+  window.addEventListener("resize", clearBridge);
+  $$(".pane .pbody").forEach(function (pb) { pb.addEventListener("scroll", clearBridge); });
+
+  /* ---------- dialog citations (from passage locators) ---------- */
+  var citations = {
+    p0: { source: "Product discovery conversation, 4–6 September 2026", clause: "Ben on feeling detached while structure takes shape out of view",
+          quote: "Paraphrase, not verbatim: Ben described losing sight of the structure as it forms. The transcript carries the passage; this workbench cites it by locator.",
+          loc: "source: discovery conversation · msg_06c936af2001O1HQp6q6cfwPNs" },
+    p1: { source: "Product discovery conversation, 4–6 September 2026", clause: "Ben, on the range of sources refinement must handle",
+          quote: "It could be any source. I am just giving a scenario.",
+          loc: "source: discovery conversation · msg_06cb67f84001G6VYStJvwwYRWQ" },
+    p2: { source: "Product discovery conversation, 4–6 September 2026", clause: "Ben, current shaping discussion",
+          quote: "The goal is structure.",
+          loc: "source: discovery conversation · current shaping thread" }
+  };
+  var dlg = $("#cite-dialog");
+  document.addEventListener("click", function (e) {
+    var pm = e.target.closest(".passage .loc");
+    if (pm) {
+      var key = pm.closest(".passage").getAttribute("data-passage");
+      var c = citations[key]; if (!c) return;
+      $("#cite-kind").textContent = "Citation · " + c.clause;
+      $("#cite-title").textContent = c.source;
+      $("#cite-quote").textContent = "“" + c.quote + "”";
+      $("#cite-loc").textContent = c.loc;
+      if (typeof dlg.showModal === "function") dlg.showModal(); else dlg.setAttribute("open", "");
+    }
+  });
+  $("#cite-close").addEventListener("click", function () { dlg.close(); });
+
+  /* ---------- sub-requirement demo edit ---------- */
+  var subreqOriginal = $("#subreq-stmt").textContent.trim();
+  $("#subreq-edit").addEventListener("click", function () {
+    var holder = $("#subreq-stmt");
+    if (holder.querySelector("textarea")) return;
+    var ta = document.createElement("textarea");
+    ta.value = subreqOriginal;
+    ta.rows = 3;
+    ta.setAttribute("aria-label", "Edit illustrative sub-requirement (prototype only)");
+    holder.textContent = "";
+    holder.appendChild(ta);
+    ta.focus();
+    $("#subreq-tools").hidden = false;
+    $("#subreq-edit").hidden = true;
+  });
+  $("#subreq-keep").addEventListener("click", function () {
+    var ta = $("#subreq-stmt textarea");
+    if (ta && ta.value.trim()) subreqOriginal = ta.value.trim();
+    finishEdit();
+  });
+  $("#subreq-restore").addEventListener("click", finishEdit);
+  function finishEdit() {
+    $("#subreq-stmt").textContent = subreqOriginal;
+    $("#subreq-tools").hidden = true;
+    $("#subreq-edit").hidden = false;
+  }
+
+  /* ---------- dock composer ---------- */
+  $("#dock-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var ta = $("#dock-input");
+    var text = ta.value.trim();
+    if (!text) return;
+    var div = document.createElement("div");
+    div.className = "dmsg";
+    var who = document.createElement("span");
+    who.className = "who";
+    who.textContent = "You (this prototype)";
+    var p = document.createElement("p");
+    p.textContent = text;
+    div.appendChild(who); div.appendChild(p);
+    $("#dmsgs").appendChild(div);
+    ta.value = "";
+    $("#dmsgs").scrollTop = $("#dmsgs").scrollHeight;
+  });
+
+  /* ---------- row selection feedback ---------- */
+  $$("[data-select-row]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var rec = b.closest(".rec");
+      $$(".rec").forEach(function (r) { if (r !== rec) r.classList.remove("hotrow"); });
+      rec.classList.toggle("hotrow");
+    });
+  });
+
+  selectPassage("p2");
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Proposal 3 · Margin — manuscript and scholia</title>
+<style>
+  :root{
+    --paper:#f1efe7; --ink:#212a20; --soft:#5d665a; --hair:#d7d3c4; --hair-strong:#bdb8a5;
+    --green:#2f5d46; --oxblood:#7c2e2e; --amber:#8a6a2c;
+    --serif:"Charter","Bitstream Charter","Sitka Text",Cambria,Georgia,serif;
+    --label:"Optima",Candara,"Segoe UI","Helvetica Neue",sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.7 var(--serif);
+    font-variant-numeric:oldstyle-nums}
+  :focus-visible{outline:2px solid var(--oxblood);outline-offset:2px}
+  button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;padding:0}
+
+  .chrome{background:#232b22;color:#d9dccf;font:12px/1.4 var(--label);letter-spacing:.03em}
+  .chrome .in{max-width:1180px;margin:0 auto;padding:7px 22px;display:flex;gap:14px;align-items:baseline;flex-wrap:wrap}
+  .chrome a{color:#fff;text-decoration:underline;text-underline-offset:2px}
+  .chrome .tag{border:1px solid #4b5446;padding:0 7px;border-radius:2px;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase}
+
+  /* running head */
+  .runhead{max-width:1180px;margin:0 auto;padding:26px 22px 10px;display:flex;justify-content:space-between;
+    gap:16px;font:11px var(--label);letter-spacing:.24em;text-transform:uppercase;color:var(--soft);
+    border-bottom:1px solid var(--hair-strong);flex-wrap:wrap}
+  .runhead .r{color:var(--oxblood)}
+
+  /* chapter head */
+  .chapter{max-width:1180px;margin:0 auto;padding:46px 22px 8px;text-align:center}
+  .chapter .over{font:11px var(--label);letter-spacing:.3em;text-transform:uppercase;color:var(--green)}
+  .chapter .over .flag{color:var(--oxblood)}
+  .chapter h1{font-size:clamp(28px,4vw,40px);font-weight:500;line-height:1.18;margin:14px auto 8px;max-width:22ch}
+  .chapter .fleuron{color:var(--green);font-size:20px;margin-top:6px}
+
+  .work{max-width:1180px;margin:0 auto;padding:26px 22px 40px}
+
+  /* one manuscript section = text + margin aligned on a shared row */
+  .sheet{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:40px;padding:18px 0 26px;
+    border-bottom:1px solid var(--hair)}
+  .sheet:last-of-type{border-bottom:none}
+  .text{min-width:0;max-width:66ch}
+  .text p{margin:0 0 16px}
+  .sheet h2{font:12px var(--label);letter-spacing:.26em;text-transform:uppercase;color:var(--green);
+    margin:6px 0 18px;font-weight:600}
+  .sheet h2 .no{color:var(--soft);margin-right:12px;font-style:italic;letter-spacing:.08em}
+  .opening::first-letter{float:left;font-size:74px;line-height:.82;padding:6px 10px 0 0;color:var(--green);font-weight:500}
+  .statement{font-size:21px;line-height:1.55;margin:4px 0 18px;padding-left:18px;border-left:3px solid var(--green);max-width:60ch}
+
+  /* anchor marks in the text */
+  .mark{font:12px var(--serif);color:var(--oxblood);vertical-align:super;line-height:0;padding:2px 3px;margin:0 1px}
+  .mark::before{content:"("}
+  .mark::after{content:")"}
+  .mark:hover,.mark.hot{color:#fff;background:var(--oxblood);border-radius:2px}
+  .text.lit .statement, .text.lit p.target{background:linear-gradient(transparent 55%, rgba(124,46,46,.14) 0)}
+  .cite{color:var(--oxblood);border-bottom:1px dotted var(--oxblood)}
+  .cite:hover{background:rgba(124,46,46,.08)}
+  .proposed{color:var(--oxblood);font:11px var(--label);letter-spacing:.18em;text-transform:uppercase;
+    border:1px dashed var(--oxblood);padding:1px 8px;border-radius:2px;white-space:nowrap}
+  .agreed{color:var(--green);font:11px var(--label);letter-spacing:.18em;text-transform:uppercase;
+    border:1px solid var(--green);padding:1px 8px;border-radius:2px;white-space:nowrap}
+
+  /* margin notes */
+  .notes{min-width:0}
+  .note{border-top:2px solid var(--hair-strong);padding:10px 2px 14px;margin-bottom:14px;
+    transition:background .2s ease}
+  .note.hot{background:rgba(124,46,46,.06);outline:1px solid rgba(124,46,46,.25);outline-offset:4px}
+  .note .k{display:block;font:10.5px var(--label);letter-spacing:.16em;text-transform:uppercase;color:var(--soft);margin-bottom:5px}
+  .note .k b{color:var(--green);font-weight:600}
+  .note .k .flag{color:var(--oxblood)}
+  .note p{font-size:13.5px;line-height:1.6;margin:0 0 8px;color:var(--ink)}
+  .note .small{font-size:12.5px;color:var(--soft)}
+  .note blockquote{margin:8px 0;padding:2px 0 2px 12px;border-left:2px solid var(--amber);
+    font-size:14px;line-height:1.55;font-style:italic}
+  .note .who{font:10.5px var(--label);letter-spacing:.14em;text-transform:uppercase;color:var(--green)}
+  .note .who.sample::after{content:" · sample";color:var(--oxblood);letter-spacing:.04em;text-transform:none;font-style:italic}
+  .scholion{margin:0 0 10px}
+  .note button.linkline{font:12.5px var(--serif);color:var(--oxblood);text-align:left}
+  .note button.linkline:hover{text-decoration:underline;text-underline-offset:2px}
+
+  /* margin composer */
+  .mcomp{border:1px dashed var(--hair-strong);border-radius:3px;padding:9px 10px;margin-top:6px;background:rgba(255,255,255,.45)}
+  .mcomp label{display:block;font:10px var(--label);letter-spacing:.14em;text-transform:uppercase;color:var(--soft);margin-bottom:5px}
+  .mcomp textarea{width:100%;min-height:44px;font:13px/1.5 var(--serif);border:1px solid var(--hair-strong);
+    border-radius:2px;padding:6px 8px;background:transparent;resize:vertical}
+  .mcomp .row{display:flex;justify-content:space-between;align-items:center;margin-top:6px}
+  .mcomp .hint{font:10.5px var(--label);font-style:italic;color:var(--soft)}
+  .mcomp button{font:11px var(--label);letter-spacing:.1em;text-transform:uppercase;color:var(--oxblood)}
+  .mcomp button:hover{text-decoration:underline}
+
+  /* citation dialog */
+  dialog{border:1px solid var(--hair-strong);border-radius:3px;background:var(--paper);color:var(--ink);
+    max-width:520px;width:calc(100vw - 48px);padding:0;box-shadow:0 16px 44px rgba(30,40,28,.28)}
+  dialog::backdrop{background:rgba(33,42,32,.45)}
+  .cite-card{padding:22px 26px 24px}
+  .cite-card .kind{font:10.5px var(--label);letter-spacing:.16em;text-transform:uppercase;color:var(--amber)}
+  .cite-card h3{font-size:19px;margin:6px 0 8px;font-weight:500}
+  .cite-card blockquote{margin:12px 0;border-left:3px solid var(--amber);padding:2px 0 2px 16px;font-size:17px;line-height:1.6;font-style:italic}
+  .cite-card .loc{font:11px var(--mono);color:var(--soft);border-top:1px dotted var(--hair-strong);padding-top:10px;margin-top:12px}
+  .cite-card .row{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:14px}
+  .cite-card .hint{font:12px var(--label);font-style:italic;color:var(--soft)}
+  .cite-card button{font:12px var(--label);letter-spacing:.08em;text-transform:uppercase;border:1px solid var(--hair-strong);border-radius:2px;padding:5px 13px}
+
+  /* about */
+  .about{max-width:1180px;margin:0 auto;padding:10px 22px 60px}
+  .about details{border-top:2px solid var(--ink);padding-top:14px;max-width:900px}
+  .about summary{font:12px var(--label);letter-spacing:.18em;text-transform:uppercase;cursor:pointer;color:var(--soft)}
+  .about .body{columns:2;column-gap:44px;font-size:14px;color:var(--soft);margin-top:12px}
+  .about .body h3{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink);break-after:avoid}
+  .about .body p{margin:8px 0}
+
+  @media (max-width:960px){
+    .sheet{grid-template-columns:1fr;gap:14px;padding-bottom:20px}
+    .notes{border-left:3px solid var(--hair-strong);padding-left:16px}
+    .about .body{columns:1}
+  }
+</style>
+</head>
+<body>
+
+<div class="chrome">
+  <div class="in">
+    <span class="tag">Design exploration</span>
+    <span>Proposal 3 of 5 · <strong>Margin</strong> — manuscript and scholia</span>
+    <span>Static prototype. Nothing here writes to the graph; notes stay in this page.</span>
+    <a href="index.html">All five proposals</a>
+  </div>
+</div>
+
+<div class="runhead">
+  <span>Reading copy — the shared view, as it stands</span>
+  <span class="r">Proposal 3 · Margin</span>
+</div>
+
+<div class="chapter">
+  <p class="over">Requirement <span class="flag">· agreed, discovery</span></p>
+  <h1>Refinement shows the evolving structure</h1>
+  <div class="fleuron" aria-hidden="true">❦</div>
+</div>
+
+<div class="work">
+
+  <!-- ================= opening ================= -->
+  <section class="sheet">
+    <div class="text" id="t-open">
+      <p class="opening">During source refinement, a person can inspect the evolving system description
+        alongside the conversation<button class="mark" type="button" data-mark="a" aria-label="Margin note a: status and citation">a</button>.
+        The requirement is agreed; what remains to be shaped is the display form and the editing behaviour.
+        This reading copy presents one candidate — a manuscript with the provenance kept in the margin —
+        so that the form itself can be argued with, line by line.</p>
+      <p>The point of the exercise was put plainly in the discussion:
+        “<span class="target" id="s-goal">The goal is structure.</span>”
+        <button class="mark" type="button" data-mark="b" aria-label="Margin note b: citation for the goal is structure">b</button>
+        Structure for its own sake is not the aim; the structure exists so that informal material becomes
+        something product and engineering teams can use while it keeps changing.</p>
+    </div>
+    <div class="notes">
+      <div class="note" data-note="a" id="note-a">
+        <span class="k"><b>Requirement</b> · agreed · discovery</span>
+        <p>Refines <em>Source refinement builds an evolving system description</em>; spawned by the approved
+          decision <em>Show the system description during refinement</em>.</p>
+        <p class="small">Ben described feeling detached when structure takes shape out of view —
+          <button class="linkline" type="button" data-cite="p0">the passage, by locator</button>.</p>
+        <div class="scholion">
+          <span class="who sample">Agent</span>
+          <p>Sample thread: landed here so the record and the argument about it share one place.</p>
+        </div>
+      </div>
+      <div class="note" data-note="b" id="note-b">
+        <span class="k"><b>Citation</b> · <span class="flag">free-text clause</span></span>
+        <blockquote>“The goal is structure.”</blockquote>
+        <p class="small">Ben, current shaping discussion, in the product discovery conversation.
+          <button class="linkline" type="button" data-cite="p2">Open the citation</button></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= decisions ================= -->
+  <section class="sheet">
+    <div class="text">
+      <h2><span class="no">i</span>Decisions so far</h2>
+      <p>Two decisions are approved. The first settled the purpose<button class="mark" type="button" data-mark="c" aria-label="Margin note c: the purpose decision">c</button>:
+        refinement uses the existing ontology — sources, requirements, decisions, rules — to describe current
+        intent for product and development work, and the description may keep changing. Nothing in the purpose
+        asks for a finished specification before development starts.</p>
+      <p>The second settled the shared view<button class="mark" type="button" data-mark="d" aria-label="Margin note d: the shared view decision">d</button>:
+        the person can inspect the evolving description alongside the conversation. It deliberately left the
+        display form open — a graph, or a document with collapsible sections — and named page-as-subject,
+        collapsible sections, direct editing, and sources-as-attachments as candidate details, none chosen.</p>
+    </div>
+    <div class="notes">
+      <div class="note" data-note="c" id="note-c">
+        <span class="k"><b>Decision</b> · approved</span>
+        <p><em>Source refinement structures evolving intent from source material.</em> Ben wants informal
+          material clear enough for teams to use — evolving over time, not a fixed sequence.</p>
+      </div>
+      <div class="note" data-note="d" id="note-d">
+        <span class="k"><b>Decision</b> · approved</span>
+        <p><em>Show the system description during source refinement.</em> Ben accepted the shared view and
+          suggested a graph, or a document with collapsible sections.</p>
+        <p class="small">This manuscript is the second of those two candidates, argued in the form Ben named.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= proposed here ================= -->
+  <section class="sheet">
+    <div class="text" id="t-prop">
+      <h2><span class="no">ii</span>What this copy proposes — illustrative</h2>
+      <p><span class="proposed">illustrative · not in the graph</span>&nbsp; One sub-requirement is drawn in to
+        make the shape concrete: decisions appear in the shared view as they land, without leaving the
+        conversation<button class="mark" type="button" data-mark="e" aria-label="Margin note e: the illustrative sub-requirement">e</button>.</p>
+      <p><span class="proposed">illustrative · not in the graph</span>&nbsp; And one rule in question:
+        selecting a citation shows the cited passage from its source, where the conversation can see it.
+        The rule exists before any implementation or verification, and before any decision produces it —
+        all three absences are ordinary for a rule<button class="mark" type="button" data-mark="f" aria-label="Margin note f: what a rule may lack">f</button>.
+        It is grounded in a source passage: sources vary, so the view cannot special-case one format
+        <button class="cite" type="button" data-cite="p1">“It could be any source. I am just giving a scenario.”</button>.</p>
+    </div>
+    <div class="notes">
+      <div class="note" data-note="e" id="note-e">
+        <span class="k"><b>Sub-requirement</b> · <span class="flag">illustrative</span></span>
+        <p><em>Decisions appear in the shared view as they land.</em> Refines this requirement; minted for this
+          prototype so the page has a child to show.</p>
+        <div class="scholion">
+          <span class="who sample">Agent</span>
+          <p>Sample thread: argue here, in the margin, before anything is minted in earnest.</p>
+        </div>
+      </div>
+      <div class="note" data-note="f" id="note-f">
+        <span class="k"><b>Rule</b> · <span class="flag">illustrative proposal</span></span>
+        <p><em>Selecting a citation shows the cited passage where the conversation can see it.</em></p>
+        <p class="small">Refines the sub-requirement above. Produced by no decision — none is required.
+          Implementation: none yet. Verification: none yet.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= open questions ================= -->
+  <section class="sheet">
+    <div class="text" id="t-open-q">
+      <h2><span class="no">iii</span>What is still open</h2>
+      <p>The recorded question<button class="mark" type="button" data-mark="g" aria-label="Margin note g: the recorded page-form question">g</button>
+        asks whether the first shared view should be a requirement page with collapsible sections for its
+        related records — or the graph. This copy is the first half of that question, written out in full.</p>
+      <p>The editing behaviour is open too<button class="mark" type="button" data-mark="h" aria-label="Margin note h: the editing question, raised by this exploration">h</button>.
+        When the person and the agent both change the page, what does each see of the other’s edit? The
+        accepted requirement names editing behaviour as still to be shaped; this prototype raises the
+        question rather than answering it.</p>
+      <p>And the fog the anchor requirement carries: the minimum structure that gives a team useful direction
+        is not yet clear. The margin, not the text, is where that kind of half-sharp unease belongs.</p>
+    </div>
+    <div class="notes">
+      <div class="note" data-note="g" id="note-g">
+        <span class="k"><b>Open question</b> · recorded in the graph</span>
+        <p>Should the first shared view use a requirement page with collapsible sections for its related
+          records?</p>
+        <p class="small">Both halves now exist as prototypes, so the question can be disposed against
+          artifacts.</p>
+      </div>
+      <div class="note" data-note="h" id="note-h">
+        <span class="k"><b>Open question</b> · <span class="flag">raised by this exploration</span></span>
+        <p>When both sides edit the page, what does each see of the other’s edit — and whose change wins
+          while the agent proposes?</p>
+        <div class="scholion">
+          <span class="who sample">Ben</span>
+          <p>Sample voice only, to show a margin argument: the recorded suggestion — graph, or collapsible
+            document — stands; nothing here is a new decision.</p>
+        </div>
+        <div class="mcomp">
+          <label for="mc-h">Add a scholion (prototype only)</label>
+          <textarea id="mc-h"></textarea>
+          <div class="row"><span class="hint">stays in this page</span><button type="button" data-post="thread-h">Post</button></div>
+        </div>
+        <div id="thread-h"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= the source ================= -->
+  <section class="sheet">
+    <div class="text" id="t-src">
+      <h2><span class="no">iv</span>The source, attached</h2>
+      <p><span class="agreed">source · agreed</span>&nbsp; Product discovery conversation, 4–6 September 2026 —
+        Ben and a GLM-5.3-Flash session. Sixty visible transcript messages; this copy quotes two in full and
+        cites the rest by locator only<button class="mark" type="button" data-mark="i" aria-label="Margin note i: who cites what">i</button>.</p>
+      <blockquote>“It could be any source. I am just giving a scenario.”
+        <button class="cite" type="button" data-cite="p1">passage one</button></blockquote>
+      <blockquote>“The goal is structure.”
+        <button class="cite" type="button" data-cite="p2">passage two</button></blockquote>
+    </div>
+    <div class="notes">
+      <div class="note" data-note="i" id="note-i">
+        <span class="k"><b>Cited by</b></span>
+        <p>Both agreed requirements cite this source. The illustrative rule cites passage one. A citation, as
+          stored today, is a source plus a free-text clause — nothing stronger is assumed, and finer passage
+          anchoring is separate future shaping work.</p>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="about">
+  <details>
+    <summary>About this proposal — stance, tradeoffs, what is agreed vs invented</summary>
+    <div class="body">
+      <h3>Stance</h3>
+      <p>The description reads like a text; the argument lives beside it. Every record keeps its margin:
+        status, citations, and the discussion attached to it, aligned to the passage it concerns. Nothing
+        collapses — the person sees statement and dissent at the same glance, which is what “alongside the
+        conversation” can mean at its most literal.</p>
+      <h3>Hypothesis</h3>
+      <p>Detachment shrinks when the distance between a claim and the conversation about it is a glance
+        sideways, not a mode switch or a click chain.</p>
+      <h3>Tradeoffs</h3>
+      <p>The margin forces short contributions and suits two participants, not six. Deep structure (children
+        of children) cannot nest in a margin, so hierarchy is expressed typographically — weaker than an
+        outline or a graph. Narrow screens break the sideways glance; notes drop below their passage.</p>
+      <h3>Agreed vs invented</h3>
+      <p>Agreed: both requirements, both decisions, the recorded page-form question, the source and its two
+        verbatim passages, the detachment locator. Invented: both illustrative records, the sample scholia,
+        and the editing question, marked where it appears.</p>
+    </div>
+  </details>
+</div>
+
+<dialog id="cite-dialog" aria-labelledby="cite-title">
+  <div class="cite-card">
+    <span class="kind" id="cite-kind">Citation</span>
+    <h3 id="cite-title"></h3>
+    <blockquote id="cite-quote"></blockquote>
+    <p class="loc" id="cite-loc"></p>
+    <div class="row">
+      <span class="hint">Citation = source + free-text clause, as stored today. Finer passage anchoring is
+        separate future shaping work.</span>
+      <button type="button" id="cite-close">Close</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+(function () {
+  "use strict";
+  var $ = function (s, el) { return (el || document).querySelector(s); };
+  var $$ = function (s, el) { return Array.prototype.slice.call((el || document).querySelectorAll(s)); };
+
+  /* ---- anchor marks <-> margin notes ---- */
+  function lightNote(key) {
+    $$(".note").forEach(function (n) { n.classList.toggle("hot", n.getAttribute("data-note") === key); });
+    $$(".mark").forEach(function (m) { m.classList.toggle("hot", m.getAttribute("data-mark") === key); });
+    var note = $('#note-' + key);
+    if (note) {
+      var r = note.getBoundingClientRect();
+      if (r.top < 0 || r.bottom > window.innerHeight) {
+        note.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+    }
+  }
+  $$(".mark").forEach(function (m) {
+    m.addEventListener("click", function () { lightNote(m.getAttribute("data-mark")); });
+    m.addEventListener("mouseenter", function () { lightNote(m.getAttribute("data-mark")); });
+  });
+  $$(".note").forEach(function (n) {
+    n.addEventListener("click", function (e) {
+      if (e.target.closest("button, textarea, input")) return;
+      var key = n.getAttribute("data-note");
+      var text = n.closest(".sheet").querySelector(".text");
+      $$(".text").forEach(function (t) { t.classList.remove("lit"); });
+      text.classList.add("lit");
+      lightNote(key);
+      setTimeout(function () { text.classList.remove("lit"); }, 1400);
+    });
+  });
+
+  /* ---- citations ---- */
+  var citations = {
+    p0: { source: "Product discovery conversation, 4–6 September 2026", clause: "Ben on feeling detached while structure takes shape out of view",
+          quote: "Paraphrase, not verbatim: Ben described losing sight of the structure as it forms. The transcript carries the passage; this copy cites it by locator.",
+          loc: "source: discovery conversation · msg_06c936af2001O1HQp6q6cfwPNs" },
+    p1: { source: "Product discovery conversation, 4–6 September 2026", clause: "Ben, on the range of sources refinement must handle",
+          quote: "It could be any source. I am just giving a scenario.",
+          loc: "source: discovery conversation · msg_06cb67f84001G6VYStJvwwYRWQ" },
+    p2: { source: "Product discovery conversation, 4–6 September 2026", clause: "Ben, current shaping discussion",
+          quote: "The goal is structure.",
+          loc: "source: discovery conversation · current shaping thread" }
+  };
+  var dlg = $("#cite-dialog");
+  function openCitation(key) {
+    var c = citations[key]; if (!c) return;
+    $("#cite-kind").textContent = "Citation · " + c.clause;
+    $("#cite-title").textContent = c.source;
+    $("#cite-quote").textContent = "“" + c.quote + "”";
+    $("#cite-loc").textContent = c.loc;
+    if (typeof dlg.showModal === "function") dlg.showModal(); else dlg.setAttribute("open", "");
+  }
+  $$("[data-cite]").forEach(function (b) {
+    b.addEventListener("click", function (e) { e.stopPropagation(); openCitation(b.getAttribute("data-cite")); });
+  });
+  $("#cite-close").addEventListener("click", function () { dlg.close(); });
+
+  /* ---- margin composer ---- */
+  var threads = { "thread-h": [] };
+  $$("[data-post]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var key = btn.getAttribute("data-post");
+      var ta = $("#" + key.replace("thread", "mc"));
+      var text = ta.value.trim();
+      if (!text) return;
+      var holder = $("#" + key);
+      var div = document.createElement("div");
+      div.className = "scholion";
+      var who = document.createElement("span");
+      who.className = "who";
+      who.textContent = "You (this prototype)";
+      var p = document.createElement("p");
+      p.textContent = text;
+      div.appendChild(who); div.appendChild(p);
+      holder.appendChild(div);
+      ta.value = "";
+    });
+  });
+})();
+</script>
+</body>
+</html>
