@@ -15,6 +15,10 @@ fn a_read_only_mount_answers_without_the_publication_lock() {
         .args(["--user", "--map-root-user", "--mount", "true"])
         .output();
     if !available.is_ok_and(|output| output.status.success()) {
+        eprintln!(
+            "SKIPPED a_read_only_mount_answers_without_the_publication_lock: unshare cannot make \
+             a private mount namespace here"
+        );
         return;
     }
     let repo = fixtures::init_repo();

@@ -33,15 +33,40 @@ impl Unit {
     }
 }
 
-/// Reads scope ids without the publication lock. Atomic manifest writes
-/// let an unlocked reader see one complete version of the file.
+/// Reads scope ids without the publication lock.
+///
+/// A manifest write renames the old file away before it renames the new one
+/// into place, so an unlocked reader sees one complete version or, for the
+/// width of those two renames, no file at all. A missing file is retried
+/// rather than refused; the bytes a read returns are always one whole version.
 pub fn scope_ids(state_dir: &Utf8Path) -> anyhow::Result<Vec<ScopeId>> {
     let path = state_dir.join("manifest.json");
-    let bytes = std::fs::read(&path).with_context(|| format!("read manifest {path}"))?;
+    let bytes = read_through_rename(&path)?;
     let manifest: Manifest =
         serde_json::from_slice(&bytes).with_context(|| format!("parse manifest {path}"))?;
     ensure_supported_schema_version("manifest", manifest.schema_version)?;
     Ok(manifest.scopes.into_iter().map(|scope| scope.id).collect())
+}
+
+/// How many times a lock-free manifest read waits out a rename window.
+const MANIFEST_READ_ATTEMPTS: u32 = 8;
+
+fn read_through_rename(path: &Utf8Path) -> anyhow::Result<Vec<u8>> {
+    for attempt in 1..=MANIFEST_READ_ATTEMPTS {
+        match std::fs::read(path) {
+            Ok(bytes) => return Ok(bytes),
+            Err(error)
+                if error.kind() == std::io::ErrorKind::NotFound
+                    && attempt < MANIFEST_READ_ATTEMPTS =>
+            {
+                std::thread::sleep(std::time::Duration::from_millis(u64::from(attempt) * 5));
+            }
+            Err(error) => {
+                return Err(anyhow::Error::new(error).context(format!("read manifest {path}")))
+            }
+        }
+    }
+    unreachable!("the loop returns on its last attempt")
 }
 
 /// Every unit a manifest names, global first, scopes sorted.

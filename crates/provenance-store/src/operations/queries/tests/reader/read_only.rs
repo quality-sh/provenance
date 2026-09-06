@@ -44,6 +44,10 @@ async fn read_only_answer(untakeable: bool) {
     let probe = store.layout().cache_dir().join("probe");
     if std::fs::write(&probe, b"").is_ok() {
         std::fs::remove_file(probe).unwrap();
+        eprintln!(
+            "SKIPPED read_only_answer: this user writes through mode 0o555, so the fixture cannot \
+             make the directory unwritable"
+        );
         return;
     }
     if untakeable {
@@ -140,6 +144,10 @@ async fn a_guard_directory_permission_failure_keeps_its_io_kind() {
     let probe = layout.provenance_dir().join("probe");
     if std::fs::write(&probe, b"").is_ok() {
         std::fs::remove_file(probe).unwrap();
+        eprintln!(
+            "SKIPPED a_guard_directory_permission_failure_keeps_its_io_kind: this user writes \
+             through mode 0o555, so the fixture cannot make the directory unwritable"
+        );
         return;
     }
     let error = crate::publication::publication_guard(&layout)
