@@ -151,3 +151,7 @@ The repository's explicit choices for query freshness and the source file scan l
 ## Freshness policy
 
 The requested action before a query answers from a stored projection. A command can override the repository's choice for one read.
+
+## Validation version
+
+The version of the validation rules used to build a projection. A version change requires every scope to pass validation again. It is independent of the read derivation version, which identifies how stored rows become answers.

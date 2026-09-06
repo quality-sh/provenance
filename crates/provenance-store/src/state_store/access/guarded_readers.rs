@@ -1,8 +1,8 @@
 use super::GuardedStore;
 use provenance_core::{
     AssertionRecord, Boundary, Contribution, DispositionRecord, Domain, ImplementationBinding,
-    Manifest, Message, ProposalCard, Question, Requirement, Resolution, Rule, ScopeId, Source,
-    SynthesisPacket, Thread, Topic, VerificationBinding,
+    Manifest, Message, ProposalCard, Question, Requirement, RequirementReview, Resolution, Rule,
+    ScopeId, Source, SynthesisPacket, Thread, Topic, VerificationBinding,
 };
 
 impl GuardedStore<'_> {
@@ -20,6 +20,13 @@ impl GuardedStore<'_> {
 
     pub fn list_requirements(&self, scope: &ScopeId) -> anyhow::Result<Vec<Requirement>> {
         self.store.list_requirements(scope)
+    }
+
+    pub fn list_requirement_reviews(
+        &self,
+        scope: &ScopeId,
+    ) -> anyhow::Result<Vec<RequirementReview>> {
+        self.store.list_requirement_reviews(scope)
     }
 
     pub fn list_domains(&self, scope: &ScopeId) -> anyhow::Result<Vec<Domain>> {

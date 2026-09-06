@@ -8,10 +8,8 @@ use provenance_macros::verifies;
 fn capability_refusals_hold_at_compile_time() {
     let cases = trybuild::TestCases::new();
     cases.compile_fail("tests/compile_fail/forged_guard.rs");
-    cases.compile_fail("tests/compile_fail/forged_snapshot_guard.rs");
     cases.compile_fail("tests/compile_fail/guarded_store_outlives_guard.rs");
     cases.compile_fail("tests/compile_fail/guarded_store_write.rs");
     cases.compile_fail("tests/compile_fail/guarded_store_wrong_repository.rs");
-    cases.compile_fail("tests/compile_fail/snapshot_wrong_repository.rs");
     cases.compile_fail("tests/compile_fail/read_after_stamp.rs");
 }

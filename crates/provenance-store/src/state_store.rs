@@ -112,10 +112,7 @@ impl StateStore {
     pub fn manifest(&self) -> anyhow::Result<Manifest> {
         self.with_repository_read(|| {
             crate::test_probes::record_read(&self.layout.manifest_path());
-            let manifest: Manifest =
-                serde_json::from_str(&std::fs::read_to_string(self.layout.manifest_path())?)?;
-            ensure_supported_schema_version("manifest", manifest.schema_version)?;
-            Ok(manifest)
+            manifest_from_bytes(&std::fs::read(self.layout.manifest_path())?)
         })
     }
 
@@ -384,6 +381,12 @@ pub fn serde_name<T: serde::Serialize>(value: &T) -> anyhow::Result<String> {
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("expected string enum serialization"))?
         .to_string())
+}
+
+pub(crate) fn manifest_from_bytes(bytes: &[u8]) -> anyhow::Result<Manifest> {
+    let manifest: Manifest = serde_json::from_slice(bytes)?;
+    ensure_supported_schema_version("manifest", manifest.schema_version)?;
+    Ok(manifest)
 }
 
 #[cfg(test)]

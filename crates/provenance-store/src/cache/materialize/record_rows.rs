@@ -64,14 +64,14 @@ fn bind<'q>(
 
 /// Writes the records of one kind or integration family. `search_text`
 /// is given for a kind table and absent for an integration table.
-pub(super) async fn load_kind<K: ProjectionRow>(
+pub(super) async fn load_kind<K: ProjectionRow + serde::de::DeserializeOwned>(
     tx: &mut Transaction<'_, Sqlite>,
-    records: Vec<K>,
+    bytes: &[u8],
     search_text: Option<&(dyn Fn(&K) -> String + Sync)>,
 ) -> anyhow::Result<u64> {
     let sql = insert_sql::<K>(search_text.is_some());
     let mut loaded = 0;
-    for record in records {
+    for record in serde_json::from_slice::<Vec<K>>(bytes)? {
         let mut query = sqlx::query(&sql);
         for value in record.row()? {
             query = bind(query, value);

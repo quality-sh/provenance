@@ -10,13 +10,10 @@
 //! holder can never run to release the lock. The one-command CLI cannot
 //! reach this. A served process must move synchronous publication sections
 //! to `spawn_blocking` or make them async first.
-//!
-//! Catch-up and rebuild read the snapshot layout. Their own
-//! lock sections take the snapshot's lock path, not the repository lock.
 
 use super::{
     prepare_import_transactions_dir, prepare_publication_lock, read_only,
-    recover_pending_publication, snapshot_state_unlocked, StateSnapshot,
+    recover_pending_publication,
 };
 use crate::layout::ProvenanceLayout;
 use anyhow::Context;
@@ -99,27 +96,12 @@ pub async fn publication_guard(layout: &ProvenanceLayout) -> anyhow::Result<Publ
     .map_err(|error| anyhow::anyhow!("publication guard acquisition failed: {error}"))?
 }
 
-/// Copies the state tree for a caller that holds the guard. Takes no lock.
-///
-/// ```compile_fail
-/// use provenance_store::layout::ProvenanceLayout;
-/// use provenance_store::publication::{snapshot_state_under_guard, PublicationGuard};
-/// let layout = ProvenanceLayout::new("repo");
-/// let forged = PublicationGuard { _lock: None, layout };
-/// let _ = snapshot_state_under_guard(&forged);
-/// ```
-pub fn snapshot_state_under_guard(guard: &PublicationGuard) -> anyhow::Result<StateSnapshot> {
-    snapshot_state_unlocked(guard.layout())
-}
-
 #[cfg(test)]
 mod tests {
     use crate::layout::ProvenanceLayout;
     use crate::publication::{
-        publication_guard, snapshot_state_under_guard, with_read_only_validation,
-        with_repository_publication,
+        publication_guard, with_read_only_validation, with_repository_publication,
     };
-    use provenance_macros::verifies;
     use std::sync::mpsc;
     use std::time::Duration;
 
@@ -155,20 +137,6 @@ mod tests {
             .recv_timeout(Duration::from_secs(5))
             .expect("the waiting write must proceed after the guard drops");
         waiter.join().unwrap().unwrap();
-    }
-
-    #[tokio::test]
-    #[verifies("rule_guarded_reads_use_guard_repository", examples)]
-    async fn snapshot_under_guard_copies_the_guard_repository() {
-        let (_dir, layout) = repo_layout();
-        std::fs::write(layout.state_dir().join("probe.json"), b"{}").unwrap();
-        let guard = publication_guard(&layout).await.unwrap();
-        let snapshot = snapshot_state_under_guard(&guard).unwrap();
-        assert!(snapshot.layout().state_dir().join("probe.json").exists());
-        assert!(
-            crate::test_probes::publication_lock_is_held(&layout),
-            "the publication guard must still be held after the copy"
-        );
     }
 
     #[test]

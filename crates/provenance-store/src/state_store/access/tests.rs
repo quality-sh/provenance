@@ -72,15 +72,7 @@ fn closed_families(store: &StateStore, scope: &ScopeId) -> anyhow::Result<Vec<se
 #[verifies("rule_store_under_guard_takes_no_second_lock", examples)]
 #[verifies("rule_guarded_reads_use_guard_repository", examples)]
 async fn a_store_under_the_guard_takes_no_second_lock() {
-    let root = camino::Utf8Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap();
-    let snapshot =
-        crate::publication::snapshot_state(&crate::layout::ProvenanceLayout::new(root)).unwrap();
-    let store = StateStore::new(snapshot.layout().clone());
-    let scope = ScopeId::new("default").unwrap();
+    let (_dir, store, scope) = seeded_source_requirement_store();
     let mut expected = read_families!(&store, &scope).unwrap();
     expected.extend(closed_families(&store, &scope).unwrap());
     let guard = publication_guard(&store.layout).await.unwrap();

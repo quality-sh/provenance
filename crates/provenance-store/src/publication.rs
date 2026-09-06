@@ -10,20 +10,9 @@ use std::io::Write;
 
 mod guard;
 mod read_only;
-pub use guard::{publication_guard, snapshot_state_under_guard, PublicationGuard};
+pub use guard::{publication_guard, PublicationGuard};
 
 pub use read_only::with_read_only_validation;
-
-pub struct StateSnapshot {
-    _directory: tempfile::TempDir,
-    layout: ProvenanceLayout,
-}
-
-impl StateSnapshot {
-    pub const fn layout(&self) -> &ProvenanceLayout {
-        &self.layout
-    }
-}
 
 thread_local! {
     static HELD_LOCKS: RefCell<BTreeSet<String>> = const { RefCell::new(BTreeSet::new()) };
@@ -398,41 +387,6 @@ pub fn sync_tree(path: &Utf8Path) -> anyhow::Result<()> {
         }
     }
     sync_directory(path)
-}
-
-pub fn snapshot_state(layout: &ProvenanceLayout) -> anyhow::Result<StateSnapshot> {
-    with_repository_publication(layout, || snapshot_state_unlocked(layout))
-}
-
-fn snapshot_state_unlocked(layout: &ProvenanceLayout) -> anyhow::Result<StateSnapshot> {
-    let directory = tempfile::tempdir()?;
-    let root = Utf8PathBuf::from_path_buf(directory.path().to_path_buf())
-        .map_err(|path| anyhow::anyhow!("snapshot path is not UTF-8: {}", path.display()))?;
-    let snapshot_layout = ProvenanceLayout::new(root);
-    copy_tree(&layout.state_dir(), &snapshot_layout.state_dir())?;
-    Ok(StateSnapshot {
-        _directory: directory,
-        layout: snapshot_layout,
-    })
-}
-
-fn copy_tree(source: &Utf8Path, destination: &Utf8Path) -> anyhow::Result<()> {
-    std::fs::create_dir_all(destination)?;
-    for entry in std::fs::read_dir(source)? {
-        let entry = entry?;
-        let source_child = Utf8PathBuf::from_path_buf(entry.path())
-            .map_err(|path| anyhow::anyhow!("state path is not UTF-8: {}", path.display()))?;
-        let destination_child = destination.join(entry.file_name().to_string_lossy().as_ref());
-        let file_type = std::fs::symlink_metadata(&source_child)?.file_type();
-        if file_type.is_dir() {
-            copy_tree(&source_child, &destination_child)?;
-        } else if file_type.is_file() {
-            std::fs::copy(source_child, destination_child)?;
-        } else {
-            anyhow::bail!("unsupported state entry: {source_child}");
-        }
-    }
-    Ok(())
 }
 
 impl crate::state_store::StateStore {

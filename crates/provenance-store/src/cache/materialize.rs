@@ -5,6 +5,7 @@ mod record_rows;
 mod relation_rows;
 mod stamp;
 mod units;
+mod validation;
 
 pub use catch_up::catch_up_with_guard;
 pub use catch_up::{catch_up_state, CatchUpReport};
@@ -12,7 +13,7 @@ pub use record_rows::SEARCH_TEXT;
 pub use units::{scope_ids, unit_digest, units_for, Unit};
 
 use super::{open_cache, MaterializeReport};
-use crate::{layout::ProvenanceLayout, migrations, publication, state_store::StateStore};
+use crate::{layout::ProvenanceLayout, migrations, publication};
 use sqlx::{Sqlite, Transaction};
 
 pub async fn materialize_empty_state(
@@ -41,19 +42,14 @@ pub async fn materialize_state(layout: &ProvenanceLayout) -> anyhow::Result<Mate
 
 /// The rebuild body for a caller that holds the guard.
 ///
-/// Snapshot, validation, migrations, and the commit all run under the
+/// Hashing, validation, migrations, and the commit all run under the
 /// guard. The serial is the stored serial plus one.
 pub(super) async fn materialize_with_guard(
     guard: &publication::PublicationGuard,
     layout: &ProvenanceLayout,
 ) -> anyhow::Result<MaterializeReport> {
-    let snapshot = publication::snapshot_state_under_guard(guard)?;
-    let store = StateStore::new(snapshot.layout().clone());
-    let manifest = store.manifest()?;
-    for scope in &manifest.scopes {
-        store.validate_ideation_scope(&scope.id)?;
-        store.validate_graph_scope(&scope.id)?;
-    }
+    let mut reader = validation::UnitReader::new(guard);
+    let (manifest, global_digest) = reader.global(None)?;
     let pool = open_cache(layout).await?;
     crate::test_probes::at("run_migrations_under_guard")?;
     let migrations_applied = migrations::run_migrations(&pool, layout).await?;
@@ -64,26 +60,33 @@ pub(super) async fn materialize_with_guard(
     let mut tx = pool.begin().await?;
     clear_cache(&mut tx).await?;
 
+    stamp::upsert_unit_row(&mut tx, "global", &global_digest).await?;
     let mut records_loaded = 0;
-    for scope in &manifest.scopes {
-        for family in super::ProjectionFamily::ALL {
-            records_loaded += family_rows::load_rows(&mut tx, &store, family, &scope.id).await?;
-        }
-        relation_rows::load_rows(&mut tx, &store, &scope.id).await?;
-    }
-    let scope_ids: Vec<_> = manifest
+    let scopes: Vec<_> = manifest
         .scopes
         .iter()
         .map(|scope| scope.id.clone())
         .collect();
-    stamp::write_stamp(
-        &mut tx,
-        &store,
-        snapshot.layout(),
-        &scope_ids,
-        stored_serial + 1,
-    )
-    .await?;
+    for unit in units::units_for(&scopes) {
+        let Unit::Scope(scope) = &unit else { continue };
+        let digest = reader.hash(&unit)?;
+        let (records, digest) = reader.scope(scope, digest)?;
+        for records in &records.families {
+            records_loaded +=
+                family_rows::load_rows(&mut tx, records.family, &records.bytes).await?;
+            stamp::upsert_content_row(
+                &mut tx,
+                scope.as_str(),
+                records.family.family_name(),
+                &crate::canonical_digest::digest(&records.bytes),
+                i64::try_from(records.count)?,
+            )
+            .await?;
+        }
+        relation_rows::load_rows(&mut tx, &records.relations, scope).await?;
+        stamp::upsert_unit_row(&mut tx, &unit.name(), &digest).await?;
+    }
+    stamp::write_stamp(&mut tx, stored_serial + 1).await?;
     crate::test_probes::at("materialize_before_commit")?;
     tx.commit().await?;
     crate::test_probes::at("materialize_after_commit")?;
@@ -96,9 +99,15 @@ pub(super) async fn materialize_with_guard(
 }
 
 async fn clear_cache(tx: &mut Transaction<'_, Sqlite>) -> anyhow::Result<()> {
-    sqlx::query("DELETE FROM relations")
-        .execute(&mut **tx)
-        .await?;
+    for table in [
+        "relations",
+        "projection_family_digests",
+        "projection_unit_digests",
+    ] {
+        sqlx::query(&format!("DELETE FROM {table}"))
+            .execute(&mut **tx)
+            .await?;
+    }
     for family in super::ProjectionFamily::ALL {
         sqlx::query(&format!("DELETE FROM {}", family.family_name()))
             .execute(&mut **tx)

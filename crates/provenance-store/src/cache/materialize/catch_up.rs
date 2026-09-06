@@ -5,11 +5,9 @@
 //! nothing commits no revision.
 
 use super::units::{self, Unit};
-use super::{family_rows, relation_rows, stamp};
+use super::{family_rows, relation_rows, stamp, validation};
 use crate::cache::{open_cache, revision_digest_from_stored_rows, ProjectionFamily};
-use crate::{
-    canonical_digest, layout::ProvenanceLayout, migrations, publication, state_store::StateStore,
-};
+use crate::{canonical_digest, layout::ProvenanceLayout, migrations, publication};
 use provenance_core::ScopeId;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -23,6 +21,7 @@ pub struct CatchUpReport {
     pub digest: String,
     pub rebuilt: bool,
     pub revision_committed: bool,
+    /// Units scanned. Verification hashes do not add units.
     pub units_hashed: u64,
     pub families_rederived: u64,
     pub rows_written: u64,
@@ -61,25 +60,18 @@ pub async fn catch_up_with_guard(
     let Some((stored_serial, stored_digest)) = stored else {
         return rebuild(guard, layout, pool, migrations_applied).await;
     };
-    if !migrations_applied.is_empty() {
+    if !migrations_applied.is_empty() || validation::version_changed(pool).await? {
         return rebuild(guard, layout, pool, migrations_applied).await;
     }
 
-    let snapshot = publication::snapshot_state_under_guard(guard)?;
-    let store = StateStore::new(snapshot.layout().clone());
-    let manifest = store.manifest()?;
-    // The same validation as a rebuild. A refusal commits nothing.
-    for scope in &manifest.scopes {
-        store.validate_ideation_scope(&scope.id)?;
-        store.validate_graph_scope(&scope.id)?;
-    }
+    let (stored_units, mut content) = load_stored_digests(pool).await?;
+    let mut reader = validation::UnitReader::new(guard);
+    let (manifest, global_digest) = reader.global(stored_units.get("global"))?;
     let scope_ids: Vec<ScopeId> = manifest
         .scopes
         .iter()
         .map(|scope| scope.id.clone())
         .collect();
-
-    let (stored_units, mut content) = load_stored_digests(pool).await?;
     let mut report = CatchUpReport {
         serial: stored_serial,
         digest: stored_digest,
@@ -94,16 +86,22 @@ pub async fn catch_up_with_guard(
 
     let live = units::units_for(&scope_ids);
     let mut changed = remove_departed_scopes(&mut tx, &stored_units, &live, &mut content).await?;
-    let state_dir = snapshot.layout().state_dir();
+    if stored_units.get("global") != Some(&global_digest) {
+        changed = true;
+        stamp::upsert_unit_row(&mut tx, "global", &global_digest).await?;
+    }
     for unit in &live {
-        let digest = hash_unit(&mut report, &state_dir, unit)?;
+        let Unit::Scope(scope) = unit else { continue };
+        let digest = reader.hash(unit)?;
         if stored_units.get(&unit.name()) == Some(&digest) {
             continue;
         }
+        let (records, digest) = reader.scope(scope, digest)?;
         changed = true;
-        apply_unit_change(&mut tx, &store, unit, &mut content, &mut report).await?;
+        rederive_scope(&mut tx, &records, scope, &mut content, &mut report).await?;
         stamp::upsert_unit_row(&mut tx, &unit.name(), &digest).await?;
     }
+    report.units_hashed = reader.units_hashed;
 
     if !changed {
         drop(tx);
@@ -184,23 +182,6 @@ async fn remove_departed_scopes(
     Ok(departed)
 }
 
-/// No family derives from the global unit, so its change only moves the
-/// unit digest. A scope unit re-derives the scope's families by content
-/// digest.
-async fn apply_unit_change(
-    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
-    store: &StateStore,
-    unit: &Unit,
-    content: &mut BTreeMap<ContentKey, ContentValue>,
-    report: &mut CatchUpReport,
-) -> anyhow::Result<()> {
-    match unit {
-        Unit::Global => {}
-        Unit::Scope(scope) => rederive_scope(tx, store, scope, content, report).await?,
-    }
-    Ok(())
-}
-
 /// The families whose records declare relations.
 const RELATION_OWNERS: [ProjectionFamily; 7] = [
     ProjectionFamily::Sources,
@@ -212,46 +193,38 @@ const RELATION_OWNERS: [ProjectionFamily; 7] = [
     ProjectionFamily::Boundaries,
 ];
 
-/// Parses every family of the scope again and rewrites only the families
+/// Rewrites only the parsed families
 /// whose content digest moved; the scope's relation rows follow whenever
 /// an owner family did.
 async fn rederive_scope(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
-    store: &StateStore,
+    records: &validation::ScopeRecords,
     scope: &ScopeId,
     content: &mut BTreeMap<ContentKey, ContentValue>,
     report: &mut CatchUpReport,
 ) -> anyhow::Result<()> {
     let mut owner_moved = false;
-    for family in ProjectionFamily::ALL {
-        let (bytes, count) = family.canonical_records(store, scope)?;
-        let fresh = (canonical_digest::digest(&bytes), i64::try_from(count)?);
+    for records in &records.families {
+        let family = records.family;
+        let fresh = (
+            canonical_digest::digest(&records.bytes),
+            i64::try_from(records.count)?,
+        );
         let key = (scope.as_str().to_string(), family.family_name().to_string());
         if content.get(&key) == Some(&fresh) {
             continue;
         }
         family_rows::delete_rows(tx, family, scope).await?;
-        report.rows_written += family_rows::load_rows(tx, store, family, scope).await?;
+        report.rows_written += family_rows::load_rows(tx, family, &records.bytes).await?;
         report.families_rederived += 1;
         owner_moved |= RELATION_OWNERS.contains(&family);
         content.insert(key, fresh);
     }
     if owner_moved {
         relation_rows::delete_rows(tx, scope).await?;
-        relation_rows::load_rows(tx, store, scope).await?;
+        relation_rows::load_rows(tx, &records.relations, scope).await?;
     }
     Ok(())
-}
-
-/// Every unit hash goes through here, so `units_hashed` counts real hashes.
-fn hash_unit(
-    report: &mut CatchUpReport,
-    state_dir: &camino::Utf8Path,
-    unit: &Unit,
-) -> anyhow::Result<String> {
-    report.units_hashed += 1;
-    crate::test_probes::at("catch_up_unit_hashed")?;
-    units::unit_digest(state_dir, unit)
 }
 
 async fn rebuild(

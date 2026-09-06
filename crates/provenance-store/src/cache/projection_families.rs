@@ -6,7 +6,7 @@
 //! invalidation together. A family without a row cannot be stored or
 //! stamped.
 
-use crate::state_store::StateStore;
+use crate::state_store::{GuardedStore, StateStore};
 #[cfg(test)]
 use crate::{layout::ProvenanceLayout, shards};
 #[cfg(test)]
@@ -41,6 +41,62 @@ pub enum ProjectionFamily {
     ImplementationBindings,
     VerificationBindings,
     RequirementReviews,
+}
+
+macro_rules! canonical_records {
+    ($name:ident, $store:ty) => {
+        /// The family's records as canonical bytes, sorted by canonical id, with
+        /// the record count. Content comes from the canonical shards through the
+        /// state store; bytes come from the one canonical writer.
+        pub(crate) fn $name(
+            self,
+            store: &$store,
+            scope: &ScopeId,
+        ) -> anyhow::Result<(Vec<u8>, u64)> {
+            match self {
+                Self::Sources => sorted_bytes(store.list_sources(scope)?, |r| r.id.as_str()),
+                Self::Domains => sorted_bytes(store.list_domains(scope)?, |r| r.id.as_str()),
+                Self::Requirements => {
+                    sorted_bytes(store.list_requirements(scope)?, |r| r.id.as_str())
+                }
+                Self::Boundaries => sorted_bytes(store.list_boundaries(scope)?, |r| r.id.as_str()),
+                Self::Topics => sorted_bytes(store.list_topics(scope)?, |r| r.id.as_str()),
+                Self::Questions => sorted_bytes(store.list_questions(scope)?, |r| r.id.as_str()),
+                Self::Resolutions => {
+                    sorted_bytes(store.list_resolutions(scope)?, |r| r.id.as_str())
+                }
+                Self::Rules => sorted_bytes(store.list_rules(scope)?, |r| r.id.as_str()),
+                Self::Threads => sorted_bytes(store.list_threads(scope)?, |r| r.id.as_str()),
+                Self::Messages => sorted_bytes(store.list_messages(scope)?, |r| r.id.as_str()),
+                Self::Contributions => {
+                    sorted_bytes(store.list_contributions(scope)?, |r| r.id.as_str())
+                }
+                Self::SynthesisPackets => {
+                    sorted_bytes(store.list_synthesis_packets(scope)?, |r| r.id.as_str())
+                }
+                Self::ProposalCards => {
+                    sorted_bytes(store.list_proposal_cards(scope)?, |r| r.id.as_str())
+                }
+                Self::AssertionRecords => {
+                    sorted_bytes(store.list_assertion_records(scope)?, |r| r.id.as_str())
+                }
+                Self::Dispositions => {
+                    sorted_bytes(store.list_dispositions(scope)?, |r| r.id.as_str())
+                }
+                Self::ImplementationBindings => {
+                    sorted_bytes(store.list_implementation_bindings(scope)?, |r| {
+                        r.id.as_str()
+                    })
+                }
+                Self::VerificationBindings => {
+                    sorted_bytes(store.list_verification_bindings(scope)?, |r| r.id.as_str())
+                }
+                Self::RequirementReviews => {
+                    sorted_bytes(store.list_requirement_reviews(scope)?, |r| r.id.as_str())
+                }
+            }
+        }
+    };
 }
 
 impl ProjectionFamily {
@@ -114,51 +170,8 @@ impl ProjectionFamily {
         }
     }
 
-    /// The family's records as canonical bytes, sorted by canonical id, with
-    /// the record count. Content comes from the canonical shards through the
-    /// state store; bytes come from the one canonical writer.
-    pub(crate) fn canonical_records(
-        self,
-        store: &StateStore,
-        scope: &ScopeId,
-    ) -> anyhow::Result<(Vec<u8>, u64)> {
-        match self {
-            Self::Sources => sorted_bytes(store.list_sources(scope)?, |r| r.id.as_str()),
-            Self::Domains => sorted_bytes(store.list_domains(scope)?, |r| r.id.as_str()),
-            Self::Requirements => sorted_bytes(store.list_requirements(scope)?, |r| r.id.as_str()),
-            Self::Boundaries => sorted_bytes(store.list_boundaries(scope)?, |r| r.id.as_str()),
-            Self::Topics => sorted_bytes(store.list_topics(scope)?, |r| r.id.as_str()),
-            Self::Questions => sorted_bytes(store.list_questions(scope)?, |r| r.id.as_str()),
-            Self::Resolutions => sorted_bytes(store.list_resolutions(scope)?, |r| r.id.as_str()),
-            Self::Rules => sorted_bytes(store.list_rules(scope)?, |r| r.id.as_str()),
-            Self::Threads => sorted_bytes(store.list_threads(scope)?, |r| r.id.as_str()),
-            Self::Messages => sorted_bytes(store.list_messages(scope)?, |r| r.id.as_str()),
-            Self::Contributions => {
-                sorted_bytes(store.list_contributions(scope)?, |r| r.id.as_str())
-            }
-            Self::SynthesisPackets => {
-                sorted_bytes(store.list_synthesis_packets(scope)?, |r| r.id.as_str())
-            }
-            Self::ProposalCards => {
-                sorted_bytes(store.list_proposal_cards(scope)?, |r| r.id.as_str())
-            }
-            Self::AssertionRecords => {
-                sorted_bytes(store.list_assertion_records(scope)?, |r| r.id.as_str())
-            }
-            Self::Dispositions => sorted_bytes(store.list_dispositions(scope)?, |r| r.id.as_str()),
-            Self::ImplementationBindings => {
-                sorted_bytes(store.list_implementation_bindings(scope)?, |r| {
-                    r.id.as_str()
-                })
-            }
-            Self::VerificationBindings => {
-                sorted_bytes(store.list_verification_bindings(scope)?, |r| r.id.as_str())
-            }
-            Self::RequirementReviews => {
-                sorted_bytes(store.list_requirement_reviews(scope)?, |r| r.id.as_str())
-            }
-        }
-    }
+    canonical_records!(canonical_records, StateStore);
+    canonical_records!(guarded_records, GuardedStore<'_>);
 }
 
 fn sorted_bytes<T: serde::Serialize>(

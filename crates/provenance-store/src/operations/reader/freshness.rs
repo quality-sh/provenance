@@ -91,7 +91,7 @@ async fn stored(layout: &ProvenanceLayout, error: anyhow::Error) -> anyhow::Resu
     })
 }
 
-/// Under `annotate_only` a database behind on migrations refuses: no
+/// Under `annotate_only` a database behind on migrations or validation refuses: no
 /// freshness step will bring it forward. A file with no migration table
 /// at all is behind too. So is a half-migrated file: a migration commits
 /// and forgets the family digests, and the rebuild that refills the
@@ -119,6 +119,13 @@ async fn ensure_current_schema(pool: &SqlitePool, layout: &ProvenanceLayout) -> 
         .iter()
         .any(|id| id == migrations::LATEST_MIGRATION_ID)
     {
+        return Err(behind.into());
+    }
+    let validation: Option<i64> =
+        sqlx::query_scalar("SELECT version FROM projection_validation WHERE only_row = 1")
+            .fetch_optional(pool)
+            .await?;
+    if validation.is_none_or(|version| version < i64::from(crate::VALIDATION_VERSION)) {
         return Err(behind.into());
     }
     let half_migrated: bool = sqlx::query_scalar(

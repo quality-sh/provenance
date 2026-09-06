@@ -260,3 +260,61 @@ async fn a_projection_with_no_scope_is_not_half_migrated() {
     assert!(!answer.result.found, "the scope is gone with its rows");
     assert_eq!(answer.stamp.policy, StampPolicy::AnnotateOnly);
 }
+
+#[tokio::test]
+#[verifies("rule_validation_version_move_rebuilds_the_projection", examples)]
+async fn annotate_only_refuses_a_projection_from_an_older_validator() {
+    let store = test_stores::seeded_queries();
+    get_through(&store, ReadPolicy::default()).await.unwrap();
+    let pool = open_cache(&store.layout()).await.unwrap();
+    crate::cache::tests::validation_version_behavior::rewind_validation(&pool).await;
+    pool.close().await;
+    let result = get_through(
+        &store,
+        ReadPolicy::with_freshness(FreshnessPolicy::AnnotateOnly),
+    )
+    .await;
+    assert!(
+        result.is_err(),
+        "older validation answered as current: {result:?}"
+    );
+    let error = result.unwrap_err();
+    assert!(
+        matches!(
+            error.downcast_ref::<crate::operations::reader::ReadRefusal>(),
+            Some(crate::operations::reader::ReadRefusal::SchemaBehind { .. })
+        ),
+        "{error}"
+    );
+}
+
+#[tokio::test]
+#[verifies("rule_catch_up_stores_the_digest_of_parsed_bytes", examples)]
+async fn a_retry_that_runs_out_answers_catch_up_failed() {
+    let store = test_stores::seeded_queries();
+    let before = get_through(&store, ReadPolicy::default()).await.unwrap();
+    let path = crate::shards::requirements_path(&store.layout(), &store.scope);
+    crate::cache::tests::fixtures::rewrite_records(&path, |r| r["statement"] = "First edit".into());
+    let mut attempt = 0;
+    crate::test_probes::arm("catch_up_before_parse", move || {
+        attempt += 1;
+        crate::cache::tests::fixtures::rewrite_records(&path, |r| {
+            r["statement"] = format!("Edit {attempt}").into();
+        });
+        Ok(())
+    });
+    let result = get_through(&store, ReadPolicy::default()).await;
+    crate::test_probes::disarm("catch_up_before_parse");
+    let answer = result.unwrap();
+    assert_eq!(answer.stamp.policy, StampPolicy::CatchUpFailed);
+    assert_eq!(answer.stamp.serial, before.stamp.serial);
+    assert_eq!(answer.stamp.digest, before.stamp.digest);
+    assert_eq!(
+        serde_json::to_value(answer.result).unwrap(),
+        serde_json::to_value(before.result).unwrap()
+    );
+    assert!(answer
+        .freshness_error
+        .unwrap()
+        .contains("canonical state changed during catch-up under scope:default"));
+}
