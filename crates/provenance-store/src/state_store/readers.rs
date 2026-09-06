@@ -1,4 +1,4 @@
-use super::{DispositionRecord, Message, ProvenanceLayout, ScopeId};
+use super::{DispositionRecord, Message, ProvenanceLayout, ScopeId, StateStore};
 use crate::shards;
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
@@ -180,8 +180,11 @@ fn read_records<T: DeserializeOwned>(
 
 const fn leave_as_written(_value: &mut serde_json::Value) {}
 
-pub(super) fn read_jsonl<T: DeserializeOwned>(path: &Utf8Path) -> anyhow::Result<Vec<T>> {
-    crate::publication::with_state_path_access(path, || read_jsonl_unlocked(path))
+pub(super) fn read_jsonl<T: DeserializeOwned>(
+    store: &StateStore,
+    path: &Utf8Path,
+) -> anyhow::Result<Vec<T>> {
+    store.state_path_access(path, || read_jsonl_unlocked(path))
 }
 
 fn read_jsonl_unlocked<T: DeserializeOwned>(path: &Utf8Path) -> anyhow::Result<Vec<T>> {
@@ -189,9 +192,10 @@ fn read_jsonl_unlocked<T: DeserializeOwned>(path: &Utf8Path) -> anyhow::Result<V
 }
 
 pub(super) fn read_ideation_landings<T: DeserializeOwned>(
+    store: &StateStore,
     path: &Utf8Path,
 ) -> anyhow::Result<Vec<T>> {
-    crate::publication::with_state_path_access(path, || {
+    store.state_path_access(path, || {
         read_records(
             path,
             Fields::Open,
@@ -201,8 +205,11 @@ pub(super) fn read_ideation_landings<T: DeserializeOwned>(
     })
 }
 
-pub(super) fn read_legacy_dispositions(path: &Utf8Path) -> anyhow::Result<Vec<DispositionRecord>> {
-    crate::publication::with_state_path_access(path, || read_legacy_dispositions_unlocked(path))
+pub(super) fn read_legacy_dispositions(
+    store: &StateStore,
+    path: &Utf8Path,
+) -> anyhow::Result<Vec<DispositionRecord>> {
+    store.state_path_access(path, || read_legacy_dispositions_unlocked(path))
 }
 
 fn read_legacy_dispositions_unlocked(path: &Utf8Path) -> anyhow::Result<Vec<DispositionRecord>> {
@@ -246,8 +253,11 @@ fn rename_key(object: &mut serde_json::Map<String, serde_json::Value>, old: &str
     }
 }
 
-pub(super) fn read_jsonl_closed<T: DeserializeOwned>(path: &Utf8Path) -> anyhow::Result<Vec<T>> {
-    crate::publication::with_state_path_access(path, || read_jsonl_closed_unlocked(path))
+pub(super) fn read_jsonl_closed<T: DeserializeOwned>(
+    store: &StateStore,
+    path: &Utf8Path,
+) -> anyhow::Result<Vec<T>> {
+    store.state_path_access(path, || read_jsonl_closed_unlocked(path))
 }
 
 fn read_jsonl_closed_unlocked<T: DeserializeOwned>(path: &Utf8Path) -> anyhow::Result<Vec<T>> {
@@ -303,10 +313,11 @@ fn read_jsonl_shards<T: DeserializeOwned>(
 }
 
 pub(super) fn read_message_shards(
+    store: &StateStore,
     layout: &ProvenanceLayout,
     scope: &ScopeId,
 ) -> anyhow::Result<Vec<Message>> {
-    crate::publication::with_repository_publication(layout, || {
+    store.state_path_access(&shards::threads_path(layout, scope), || {
         read_jsonl_shards(message_shard_paths(layout, scope)?, "message")
     })
 }

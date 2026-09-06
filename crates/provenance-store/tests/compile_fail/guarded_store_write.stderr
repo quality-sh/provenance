@@ -1,0 +1,11 @@
+error[E0599]: no method named `set_requirement_fog` found for struct `GuardedStore<'g>` in the current scope
+ --> tests/compile_fail/guarded_store_write.rs:7:19
+  |
+7 |     let _ = store.set_requirement_fog(scope, id, Some("Changed".into()));
+  |                   ^^^^^^^^^^^^^^^^^^^
+  |
+help: there is a method `list_requirements` with a similar name, but with different arguments
+ --> src/state_store/access/guarded_readers.rs
+  |
+  |     pub fn list_requirements(&self, scope: &ScopeId) -> anyhow::Result<Vec<Requirement>> {
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

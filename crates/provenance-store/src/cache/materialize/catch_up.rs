@@ -65,7 +65,7 @@ pub async fn catch_up_with_guard(
         return rebuild(guard, layout, pool, migrations_applied).await;
     }
 
-    let snapshot = publication::snapshot_state_under_guard(guard, layout)?;
+    let snapshot = publication::snapshot_state_under_guard(guard)?;
     let store = StateStore::new(snapshot.layout().clone());
     let manifest = store.manifest()?;
     // The same validation as a rebuild. A refusal commits nothing.

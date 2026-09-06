@@ -434,32 +434,7 @@ fn copy_tree(source: &Utf8Path, destination: &Utf8Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub(crate) fn with_state_path_access<R>(
-    path: &Utf8Path,
-    operation: impl FnOnce() -> anyhow::Result<R>,
-) -> anyhow::Result<R> {
-    crate::test_probes::record_read(path);
-    let Some(state_dir) = path.ancestors().find(|ancestor| {
-        ancestor.file_name() == Some("state")
-            && ancestor.parent().and_then(Utf8Path::file_name) == Some(".provenance")
-    }) else {
-        return operation();
-    };
-    let root = state_dir
-        .parent()
-        .and_then(Utf8Path::parent)
-        .ok_or_else(|| anyhow::anyhow!("state path has no repository root"))?;
-    with_repository_publication(&ProvenanceLayout::new(root), operation)
-}
-
 impl crate::state_store::StateStore {
-    pub fn with_repository_publication<R>(
-        &self,
-        operation: impl FnOnce() -> anyhow::Result<R>,
-    ) -> anyhow::Result<R> {
-        with_repository_publication(&self.layout, operation)
-    }
-
     pub(crate) fn mutate_jsonl_records<T, R>(
         &self,
         path: &Utf8Path,

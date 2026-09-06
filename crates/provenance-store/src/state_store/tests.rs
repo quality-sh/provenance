@@ -44,7 +44,7 @@ fn seeded_requirement_store() -> (tempfile::TempDir, StateStore, ScopeId) {
     (dir, store, scope)
 }
 
-fn seeded_source_requirement_store() -> (tempfile::TempDir, StateStore, ScopeId) {
+pub(super) fn seeded_source_requirement_store() -> (tempfile::TempDir, StateStore, ScopeId) {
     let (dir, store, scope) = seeded_requirement_store();
     store
         .create_source(CreateSourceInput {
