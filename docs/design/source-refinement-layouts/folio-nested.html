@@ -104,11 +104,19 @@
   .depth{font:9.5px var(--mono);color:var(--mauve);opacity:.75;align-self:center}
   .kind{font:12.5px var(--ui);color:var(--mauve);white-space:nowrap}
   .kind .st{color:var(--gold)} .kind .illus{color:var(--rose)}
+  /* record titles step down with structural depth, like H1→H2→H3…;
+     readable floor at L5. Content width stays constant — size only. */
   .head .t{font:600 19px/1.3 var(--display);flex:1 1 260px;min-width:200px;color:var(--ink)}
+  details.card.d1 > summary .head .t{font-size:26px}
+  details.card.d2 > summary .head .t{font-size:22px}
+  details.card.d3 > summary .head .t{font-size:19px}
+  details.card.d4 > summary .head .t{font-size:17px}
+  details.card.d5 > summary .head .t{font-size:16px}
+  /* statements hold one steady document size so deep records stay readable */
   .chev{color:var(--mauve);font-size:10px;transition:transform .16s ease;align-self:center}
   details[open] > summary .chev{transform:rotate(90deg)}
   .body{padding:0}
-  .statement{font:500 19px/1.45 var(--display);margin:0 0 8px;max-width:62ch;color:var(--ink)}
+  .statement{font:500 18px/1.45 var(--display);margin:0 0 8px;max-width:62ch;color:var(--ink)}
   .rel{font:12.5px/1.7 var(--ui);color:var(--mauve);margin:3px 0}
   .rel b{color:var(--ink);font-weight:600}
   .rel-link{font:600 12.5px var(--ui);color:var(--ink);border-bottom:1px dotted var(--line)}
@@ -225,6 +233,9 @@
     .work{grid-template-columns:1fr;gap:22px}
     .outline{position:static;max-height:none}
     .head .t{min-width:120px}
+    details.card.d1 > summary .head .t{font-size:23px}
+    details.card.d2 > summary .head .t{font-size:20px}
+    details.card.d3 > summary .head .t{font-size:18px}
     .about .body{columns:1}
   }
 </style>
@@ -303,7 +314,7 @@
     <p class="crumbs" id="crumbs" aria-live="polite"></p>
 
     <!-- ============ ROOT REQUIREMENT ============ -->
-    <details class="card g-req" id="rec_root" data-record="req_root" data-path="req_root" data-kind="requirement" open>
+    <details class="card g-req d1" id="rec_root" data-record="req_root" data-path="req_root" data-kind="requirement" open>
       <summary>
         <div class="head">
           <span class="glyph">R</span>
@@ -325,7 +336,7 @@
           <span class="group-label">Resolved by · each Resolution nests what it produced</span>
 
           <!-- ============ D1 ============ -->
-          <details class="card g-res" id="rec_res_exposes" data-record="res_exposes" data-path="req_root,res_exposes" data-kind="resolution" open>
+          <details class="card g-res d2" id="rec_res_exposes" data-record="res_exposes" data-path="req_root,res_exposes" data-kind="resolution" open>
             <summary>
               <div class="head">
                 <span class="glyph">Res</span>
@@ -351,7 +362,7 @@
                 <span class="group-label">Spawned requirement · refines the requirement above through this Resolution</span>
 
                 <!-- ============ R2 (spawned) ============ -->
-                <details class="card g-req" id="rec_req_shows" data-record="req_shows" data-path="req_root,res_exposes,req_shows" data-kind="requirement" open>
+                <details class="card g-req d3" id="rec_req_shows" data-record="req_shows" data-path="req_root,res_exposes,req_shows" data-kind="requirement" open>
                   <summary>
                     <div class="head">
                       <span class="glyph">R</span>
@@ -373,7 +384,7 @@
                       <span class="group-label">Resolved by</span>
 
                       <!-- ============ D2 ============ -->
-                      <details class="card g-res" id="rec_res_edits" data-record="res_edits" data-path="req_root,res_exposes,req_shows,res_edits" data-kind="resolution">
+                      <details class="card g-res d4" id="rec_res_edits" data-record="res_edits" data-path="req_root,res_exposes,req_shows,res_edits" data-kind="resolution">
                         <summary>
                           <div class="head">
                             <span class="glyph">Res</span>
@@ -392,7 +403,7 @@
                             <span class="group-label">Spawned requirement</span>
 
                             <!-- ============ R3 (leaf, editable) ============ -->
-                            <details class="card g-req" id="rec_req_edits" data-record="req_edits" data-path="req_root,res_exposes,req_shows,res_edits,req_edits" data-kind="requirement">
+                            <details class="card g-req d5" id="rec_req_edits" data-record="req_edits" data-path="req_root,res_exposes,req_shows,res_edits,req_edits" data-kind="requirement">
                               <summary>
                                 <div class="head">
                                   <span class="glyph">R</span>
@@ -437,7 +448,7 @@
                       </details>
 
                       <!-- ============ D3 ============ -->
-                      <details class="card g-res" id="rec_res_reuse" data-record="res_reuse" data-path="req_root,res_exposes,req_shows,res_reuse" data-kind="resolution">
+                      <details class="card g-res d4" id="rec_res_reuse" data-record="res_reuse" data-path="req_root,res_exposes,req_shows,res_reuse" data-kind="resolution">
                         <summary>
                           <div class="head">
                             <span class="glyph">Res</span>
@@ -460,7 +471,7 @@
                       <span class="group-label">Rules on this requirement · <span class="why">no producing Resolution — none is required</span></span>
 
                       <!-- ============ illustrative rule, directly on the requirement ============ -->
-                      <details class="card g-rule" id="rec_rule_citation" data-record="rule_citation" data-path="req_root,res_exposes,req_shows,rule_citation" data-kind="rule">
+                      <details class="card g-rule d4" id="rec_rule_citation" data-record="rule_citation" data-path="req_root,res_exposes,req_shows,rule_citation" data-kind="rule">
                         <summary>
                           <div class="head">
                             <span class="glyph">Rule</span>
@@ -493,7 +504,7 @@
                       <span class="group-label">Topic anchored here · carries its questions</span>
 
                       <!-- ============ topic + questions ============ -->
-                      <details class="card g-topic" id="rec_topic_form" data-record="topic_form" data-path="req_root,res_exposes,req_shows,topic_form" data-kind="topic">
+                      <details class="card g-topic d4" id="rec_topic_form" data-record="topic_form" data-path="req_root,res_exposes,req_shows,topic_form" data-kind="topic">
                         <summary>
                           <div class="head">
                             <span class="glyph">T</span>
@@ -506,7 +517,7 @@
                           <div class="kids">
                             <span class="group-label">Questions · a question links to its resolving Resolution; it never owns one</span>
 
-                            <details class="card g-q" id="rec_q_page" data-record="q_page" data-path="req_root,res_exposes,req_shows,topic_form,q_page" data-kind="question">
+                            <details class="card g-q d5" id="rec_q_page" data-record="q_page" data-path="req_root,res_exposes,req_shows,topic_form,q_page" data-kind="question">
                               <summary>
                                 <div class="head">
                                   <span class="glyph">Q</span>
@@ -523,7 +534,7 @@
                               </div>
                             </details>
 
-                            <details class="card g-q" id="rec_q_version" data-record="q_version" data-path="req_root,res_exposes,req_shows,topic_form,q_version" data-kind="question">
+                            <details class="card g-q d5" id="rec_q_version" data-record="q_version" data-path="req_root,res_exposes,req_shows,topic_form,q_version" data-kind="question">
                               <summary>
                                 <div class="head">
                                   <span class="glyph">Q</span>
@@ -550,7 +561,7 @@
           </details>
 
           <!-- ============ D4 ============ -->
-          <details class="card g-res" id="rec_res_agenda" data-record="res_agenda" data-path="req_root,res_agenda" data-kind="resolution">
+          <details class="card g-res d2" id="rec_res_agenda" data-record="res_agenda" data-path="req_root,res_agenda" data-kind="resolution">
             <summary>
               <div class="head">
                 <span class="glyph">Res</span>
@@ -568,7 +579,7 @@
               <div class="kids">
                 <span class="group-label">Spawned requirement</span>
 
-                <details class="card g-req" id="rec_req_agenda" data-record="req_agenda" data-path="req_root,res_agenda,req_agenda" data-kind="requirement">
+                <details class="card g-req d3" id="rec_req_agenda" data-record="req_agenda" data-path="req_root,res_agenda,req_agenda" data-kind="requirement">
                   <summary>
                     <div class="head">
                       <span class="glyph">R</span>
@@ -591,7 +602,7 @@
           </details>
 
           <!-- ============ D5 ============ -->
-          <details class="card g-res" id="rec_res_agent" data-record="res_agent" data-path="req_root,res_agent" data-kind="resolution">
+          <details class="card g-res d2" id="rec_res_agent" data-record="res_agent" data-path="req_root,res_agent" data-kind="resolution">
             <summary>
               <div class="head">
                 <span class="glyph">Res</span>
@@ -609,7 +620,7 @@
               <div class="kids">
                 <span class="group-label">Spawned requirement</span>
 
-                <details class="card g-req" id="rec_req_agent" data-record="req_agent" data-path="req_root,res_agent,req_agent" data-kind="requirement">
+                <details class="card g-req d3" id="rec_req_agent" data-record="req_agent" data-path="req_root,res_agent,req_agent" data-kind="requirement">
                   <summary>
                     <div class="head">
                       <span class="glyph">R</span>
@@ -632,7 +643,7 @@
           <span class="group-label">Sources this work cites · attached, with the local edit demonstration</span>
 
           <!-- ============ source attachments ============ -->
-          <details class="card g-topic" id="rec_src_discovery" data-record="src_discovery" data-path="req_root,src_discovery" data-kind="source" open>
+          <details class="card g-topic d2" id="rec_src_discovery" data-record="src_discovery" data-path="req_root,src_discovery" data-kind="source" open>
             <summary>
               <div class="head">
                 <span class="glyph">S</span>
@@ -663,7 +674,7 @@
             </div>
           </details>
 
-          <details class="card g-topic" id="rec_src_session" data-record="src_session" data-path="req_root,src_session" data-kind="source">
+          <details class="card g-topic d2" id="rec_src_session" data-record="src_session" data-path="req_root,src_session" data-kind="source">
             <summary>
               <div class="head">
                 <span class="glyph">S</span>
@@ -743,8 +754,9 @@
         prototype-local and reversible by reload.</p>
       <h3>Type at document scale (proposal for review)</h3>
       <p>Correction applied: the hero treatment no longer runs through the working document. Cormorant
-        Garamond is now display type only — the page title, record titles, and each record’s statement.
-        Everything read for length (fields, threads, notes, controls, outline) uses a humanist UI face at
+        Garamond is now display type only — the page title, record titles, and each record’s statement —
+        with record titles stepping down by structural depth (26px at the root to 16px at the deepest, one
+        steady size for statements). Everything read for length (fields, threads, notes, controls, outline) uses a humanist UI face at
         12–15px with normal letter-spacing; Fragment Mono is reserved for technical micro-text — depth
         markers, the breadcrumb, message locators. Secondary text is lifted to a lighter lavender for
         contrast, and competing borders are reduced to one divider per record plus the panel and inputs.
