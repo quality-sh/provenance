@@ -19,7 +19,11 @@ The three integration tables (`implementation_bindings`,
 same way. A derive on each type writes the column list, the insert, and
 the row decoder, so a new field cannot reach one side without the other.
 The `relations` table holds one row per (owner, relation, target),
-derived from the owner kinds' reference fields.
+derived from the owner kinds' reference fields. Ideation targets and
+thread parents do not enter it. The gate for that later change: the
+write-time target check is merged, `provenance gaps` is clean on the
+repository's own state, and the owner has named the relation, since the
+relation vocabulary in `docs/cli.md` is closed.
 
 Each materialization stores a revision stamp beside the rows: a monotonic
 serial, a projection digest, and a projection instance id. The digest
