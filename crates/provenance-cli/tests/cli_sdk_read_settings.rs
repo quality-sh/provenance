@@ -168,7 +168,7 @@ fn a_flag_cannot_hide_invalid_settings() {
 }
 
 #[test]
-fn refuse_stale_reaches_the_reserved_policy_and_bad_flag_words_refuse() {
+fn refuse_stale_requires_a_projection_and_bad_flag_words_refuse() {
     let repo = fixtures::init_repo();
     let path = repo.path().to_str().unwrap();
     let output = fixtures::provenance()
@@ -177,7 +177,7 @@ fn refuse_stale_reaches_the_reserved_policy_and_bad_flag_words_refuse() {
         .output()
         .unwrap();
     assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("reserved and not implemented"));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("provenance materialize"));
     for word in ["fast", "catch_up_failed"] {
         let output = fixtures::provenance()
             .args(["sdk", "get", "--repo", path, "--freshness", word])

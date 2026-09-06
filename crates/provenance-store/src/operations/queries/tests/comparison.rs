@@ -67,10 +67,21 @@ fn baseline_answer(store: &TestStore, request: &Request) -> Option<Value> {
 /// One request through the reader under the given policy, as a value; a
 /// refusal becomes `{"error": ..}` so both sides compare the same way.
 pub async fn served_value(store: &TestStore, request: &Request, policy: ReadPolicy) -> Value {
+    match served_stamped(store, request, policy).await {
+        Ok(stamped) => stamped.result,
+        Err(error) => json!({ "error": error.to_string() }),
+    }
+}
+
+pub async fn served_stamped(
+    store: &TestStore,
+    request: &Request,
+    policy: ReadPolicy,
+) -> anyhow::Result<provenance_core::protocol::Stamped<Value>> {
     use super::super::{evidence, impact, records, stale, symbols, walk};
     let scope = store.scope.clone();
     let request = request.clone();
-    let served = reader::answer(&store.root, &store.scope, policy, move |ctx| {
+    reader::answer(&store.root, &store.scope, policy, move |ctx| {
         Box::pin(async move {
             Ok(match request {
                 Request::Get(query) => settle(records::get(ctx, query).await),
@@ -84,11 +95,7 @@ pub async fn served_value(store: &TestStore, request: &Request, policy: ReadPoli
             })
         })
     })
-    .await;
-    match served {
-        Ok(stamped) => stamped.result,
-        Err(error) => json!({ "error": error.to_string() }),
-    }
+    .await
 }
 
 /// The served side: the operations through the reader. The freshness step

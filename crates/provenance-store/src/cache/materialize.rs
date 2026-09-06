@@ -10,7 +10,7 @@ mod validation;
 pub use catch_up::catch_up_with_guard;
 pub use catch_up::{catch_up_state, CatchUpReport};
 pub use record_rows::SEARCH_TEXT;
-pub use units::{scope_ids, unit_digest, units_for, Unit};
+pub use units::{scope_ids, unit_digest, units_for, Unit, UnitHashError};
 
 use super::{open_cache, MaterializeReport};
 use crate::{layout::ProvenanceLayout, migrations, publication};

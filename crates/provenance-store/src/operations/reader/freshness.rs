@@ -5,9 +5,9 @@
 //! database holds a revision, the read goes on at the stored serial with
 //! the policy word `catch_up_failed` and the error text beside the answer.
 //! `annotate_only` takes no guard and refuses an absent database.
-//! `refuse_stale` is reserved and not implemented yet.
+//! `refuse_stale` hashes canonical units and refuses any digest change.
 
-use super::ReadRefusal;
+use super::{ReadRefusal, ReadSnapshot};
 use crate::cache::{catch_up_with_guard, open_cache, open_existing_cache, open_immutable_cache};
 use crate::layout::ProvenanceLayout;
 use crate::migrations;
@@ -19,18 +19,21 @@ use sqlx::SqlitePool;
 
 pub(super) struct Freshness {
     pub pool: SqlitePool,
+    pub snapshot: Option<ReadSnapshot>,
     pub policy: StampPolicy,
     pub error: Option<String>,
 }
 
 pub(super) async fn run(
     layout: &ProvenanceLayout,
+    scope: &provenance_core::ScopeId,
     policy: FreshnessPolicy,
 ) -> anyhow::Result<Freshness> {
     match policy {
         FreshnessPolicy::CatchUp => match catch_up(layout).await {
             Ok(pool) => Ok(Freshness {
                 pool,
+                snapshot: None,
                 policy: StampPolicy::CatchUp,
                 error: None,
             }),
@@ -46,11 +49,12 @@ pub(super) async fn run(
             }
             Ok(Freshness {
                 pool,
+                snapshot: None,
                 policy: StampPolicy::AnnotateOnly,
                 error: None,
             })
         }
-        FreshnessPolicy::RefuseStale => Err(ReadRefusal::RefuseStaleUnimplemented.into()),
+        FreshnessPolicy::RefuseStale => super::refuse_stale::run(layout, scope).await,
     }
 }
 
@@ -86,6 +90,7 @@ async fn stored(layout: &ProvenanceLayout, error: anyhow::Error) -> anyhow::Resu
         })?;
     Ok(Freshness {
         pool,
+        snapshot: None,
         policy: StampPolicy::CatchUpFailed,
         error: Some(text),
     })
@@ -100,7 +105,10 @@ async fn stored(layout: &ProvenanceLayout, error: anyhow::Error) -> anyhow::Resu
 /// one per scope, so a manifest that names no scope has none to lose and
 /// is not read as that window.
 #[rule("rule_annotate_only_refuses_a_half_migrated_projection")]
-async fn ensure_current_schema(pool: &SqlitePool, layout: &ProvenanceLayout) -> anyhow::Result<()> {
+pub(super) async fn ensure_current_schema(
+    pool: &SqlitePool,
+    layout: &ProvenanceLayout,
+) -> anyhow::Result<()> {
     let behind = ReadRefusal::SchemaBehind {
         database: layout.cache_db_path(),
     };
@@ -151,7 +159,7 @@ pub fn is_missing_table(error: &sqlx::Error) -> bool {
     }
 }
 
-fn no_projection(layout: &ProvenanceLayout, error: &anyhow::Error) -> anyhow::Error {
+pub(super) fn no_projection(layout: &ProvenanceLayout, error: &anyhow::Error) -> anyhow::Error {
     ReadRefusal::NoProjection {
         database: layout.cache_db_path(),
         because: format!(" ({error:#})"),
