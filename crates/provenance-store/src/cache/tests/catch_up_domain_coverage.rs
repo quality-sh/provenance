@@ -135,12 +135,11 @@ async fn a_live_edit_racing_the_rebuild_baseline_is_caught_by_the_next_catch_up(
     let live_path = crate::shards::requirements_path(&layout, &scope);
     let edited = std::fs::read_to_string(&live_path)
         .unwrap()
-        .replace("Overtime", "Edited between snapshot and stamp");
+        .replace("Overtime", "Edited before the stamp");
     assert_ne!(edited, std::fs::read_to_string(&live_path).unwrap());
 
-    // After the rebuild snapshots canonical state, a writer rewrites the
-    // live shard. The stored digests must describe the bytes the rows came
-    // from, so the next pass sees the difference.
+    // An unlocked editor changes the shard after the rebuild loads its rows.
+    // The stored digests must still identify the loaded bytes.
     crate::test_probes::arm("stamp_before_unit_digests", move || {
         std::fs::write(&live_path, &edited).unwrap();
         Ok(())
