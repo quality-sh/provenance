@@ -140,6 +140,83 @@ on Unix. A Linux test also uses an isolated read-only mount when user and
 mount namespaces are available. The tests do not reproduce these
 permissions on Windows.
 
+## Long-running server handoff
+
+Each call needs a new `ReadContext`. It holds one transaction at one serial
+and is consumed by `stamp::seal`. A server must not keep a context between
+calls: an open transaction retains its WAL snapshot and prevents a complete
+checkpoint. These are the criteria from section J of the W5 release gate
+plan, revision 3.
+
+1. **Entry.** All eight functions in
+   `crates/provenance-store/src/operations/queries.rs` accept an explicit
+   `ReadPolicy`. For each call, load `Settings::load` from
+   `.provenance/settings.json`, then call `ReadPolicy::resolve` once with
+   those settings and the request's optional freshness override. Pass the
+   resolved policy to the operation. Settings errors refuse before a read.
+2. **Cost.** `cache::catch_up_state` refreshes the projection independently
+   of a query. A server can use `annotate_only` between scheduled refreshes
+   to avoid the per-call freshness hash. Pool open and query costs remain.
+   `cache/tests/in_place_behavior.rs::an_unchanged_pass_parses_no_shard_but_the_manifest`
+   checks that an unchanged catch-up reads no shard other than the manifest.
+   The remaining freshness cost includes hashing all state bytes, the guard,
+   and the pool open. Section C.1 of the plan records the repository and
+   synthetic-tree costs before the in-place change. The release procedure
+   in [release.md](release.md) records the new measurements.
+3. **Refusal: pending stage K.3.** This tree returns
+   `ReadRefusal::RefuseStaleUnimplemented`. The required typed stale refusal
+   must include the stored serial and digest and the moved units. The
+   `1wh-w5-refuse-stale` change supplies that behavior and its tests.
+   The release cannot claim this criterion until that change is included.
+4. **Process state.** `ReadFuture` is `Send`. The mutable probe state in
+   `test_probes.rs` exists only under `cfg(test)`. Held publication access
+   belongs to each `StateStore` (`state_store/access.rs`), with no shared
+   process-wide set. The source scan
+   `tests/read_process_state.rs::operations_do_not_change_the_process_environment`
+   rejects environment mutation names throughout `operations.rs` and
+   `operations/`, including imports under another name.
+5. **Blocking sections.** Publication guard acquisition runs on the
+   blocking pool (`publication/guard.rs::publication_guard`). The table
+   below names synchronous work that remains on runtime workers. Moving
+   this work to `spawn_blocking` is the first server task, outside W5.
+6. **Concurrency: simultaneous close remains open.** Each `reader::answer` opens a separate pool with one
+   connection (`cache.rs::connect`) and a separate snapshot. Catch-up calls
+   serialize on the publication file lock. The test
+   `operations/queries/tests/concurrent.rs::concurrent_answers_finish_and_remove_the_wal_files`
+   starts two answers over one store and keeps both snapshots open at a
+   barrier. Both return the stored record count at the same serial. The
+   second answer waits for the first to close; after both complete, the
+   -wal and -shm files are absent. This proves that snapshots can overlap,
+   but does not prove cleanup when their pools close together.
+   `answers_that_close_together_remove_the_wal_files` in the same file
+   checks that case. It is ignored because repeated runs found a remaining
+   -wal file. Criterion 6 remains incomplete until the reader's pool-close
+   path handles this case and the test runs without `--ignored`.
+7. **Discovery.** `queries::served` calls `discover_repository` for each
+   call. A server supplies a fixed absolute repository path through the
+   `Option<Utf8PathBuf>` argument of each operation. It need not change
+   the process working directory.
+8. **Contract.** `packages/provenance/src/protocol.ts` defines `Stamp`,
+   `QueryEnvelope`, the four evidence-list `has_more` flags, and `scan_cut`.
+   A server preserves these fields and `freshness_error`. Until the contract
+   layer defines a refusal envelope, a refusal is error text, with the
+   stage K.3 stale details still pending on this tree.
+
+Paths in this table are relative to `crates/provenance-store/src/`.
+The hash estimates are from plan section C.1 and are not release limits.
+
+| Section | Where | What it blocks |
+|---|---|---|
+| In-place hash of every unit under the guard | `cache/materialize/catch_up.rs::catch_up_with_guard`, through `validation.rs::UnitReader` and `units.rs` in the same directory | A runtime worker while hashing all state bytes under the guard: about 2 ms for this repository, about 100 ms at 38 MB in the plan's measurements |
+| Validation and parse of a changed scope under the guard | `cache/materialize/validation.rs::UnitReader::scope`; `UnitReader::global` validates all scopes when the global unit changes | A runtime worker during validation and parse; unchanged scopes skip this work unless the global unit changes |
+| `LiveHandle::graph_evidence` | `operations/reader/live.rs`, through `cache/health.rs::graph_evidence` | A runtime worker waiting in `flock` while another holder has the publication lock |
+| Reads through `LiveHandle::store()` | `operations/reader/live.rs`, through `state_store/access.rs` | A runtime worker waiting in `flock` for each read through the plain store |
+| `LiveHandle::runs` | `operations/reader/live.rs`, through `StateStore::list_verification_runs` | A runtime worker waiting on the verification run file's lock |
+
+The live scan and git methods in `operations/reader/live.rs` also perform
+synchronous work. The server must account for these costs when it moves
+live reads off runtime workers.
+
 ## What each family's derivation reads
 
 | Family | Derivation | Files read |
