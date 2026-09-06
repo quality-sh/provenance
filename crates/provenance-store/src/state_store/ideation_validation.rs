@@ -34,17 +34,18 @@ impl StateStore {
         disposition_actor_ids: &[String],
     ) -> anyhow::Result<()> {
         let mut contributions: Vec<Contribution> =
-            read_jsonl(&shards::contributions_path(&self.layout, scope))?;
+            read_jsonl(self, &shards::contributions_path(&self.layout, scope))?;
         let mut synthesis_packets: Vec<SynthesisPacket> =
-            read_jsonl(&shards::synthesis_packets_path(&self.layout, scope))?;
+            read_jsonl(self, &shards::synthesis_packets_path(&self.layout, scope))?;
         let direct_proposals: Vec<ProposalCard> =
-            read_jsonl(&shards::proposal_cards_path(&self.layout, scope))?;
+            read_jsonl(self, &shards::proposal_cards_path(&self.layout, scope))?;
         let direct_assertions: Vec<AssertionRecord> =
-            read_jsonl(&shards::assertion_records_path(&self.layout, scope))?;
+            read_jsonl(self, &shards::assertion_records_path(&self.layout, scope))?;
         let mut assertions_in_order = direct_assertions.clone();
         let mut direct_dispositions: Vec<DispositionRecord> =
-            read_jsonl(&shards::dispositions_path(&self.layout, scope))?;
+            read_jsonl(self, &shards::dispositions_path(&self.layout, scope))?;
         let legacy_dispositions = read_legacy_dispositions(
+            self,
             &shards::legacy_promotion_decisions_path(&self.layout, scope),
         )?;
         direct_dispositions.extend(legacy_dispositions.iter().cloned());

@@ -11,7 +11,7 @@
 //! reach this. A served process must move synchronous publication sections
 //! to `spawn_blocking` or make them async first.
 //!
-//! Readers called under a held guard use the snapshot layout. Their own
+//! Catch-up and rebuild read the snapshot layout. Their own
 //! lock sections take the snapshot's lock path, not the repository lock.
 
 use super::{
@@ -83,14 +83,6 @@ pub async fn publication_guard(layout: &ProvenanceLayout) -> anyhow::Result<Publ
 }
 
 /// Copies the state tree for a caller that holds the guard. Takes no lock.
-///
-/// ```compile_fail
-/// use provenance_store::layout::ProvenanceLayout;
-/// use provenance_store::publication::{snapshot_state_under_guard, PublicationGuard};
-/// let layout = ProvenanceLayout::new("repo");
-/// let forged = PublicationGuard { _lock: None };
-/// let _ = snapshot_state_under_guard(&forged, &layout);
-/// ```
 pub fn snapshot_state_under_guard(
     _guard: &PublicationGuard,
     layout: &ProvenanceLayout,

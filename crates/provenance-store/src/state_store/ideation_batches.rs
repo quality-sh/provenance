@@ -22,7 +22,7 @@ impl StateStore {
         &self,
         scope: &ScopeId,
     ) -> anyhow::Result<Vec<IdeationLandingBatch>> {
-        read_ideation_landings(&shards::ideation_landings_path(&self.layout, scope))
+        read_ideation_landings(self, &shards::ideation_landings_path(&self.layout, scope))
     }
 
     pub fn land_ideation_batch(

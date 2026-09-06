@@ -84,3 +84,5 @@ mod typed_adoption;
 mod typed_references;
 mod typed_statement_feedback;
 mod verification_bindings;
+
+mod under_guard;
