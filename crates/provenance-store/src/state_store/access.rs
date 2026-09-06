@@ -4,23 +4,16 @@ use crate::publication::{with_repository_publication, PublicationGuard};
 use camino::Utf8Path;
 use provenance_macros::rule;
 use std::marker::PhantomData;
-use std::ops::Deref;
 
-/// A store that uses a publication guard for the lifetime of its reads.
-///
-/// Writes use the ordinary publication lock path and wait for a held lock.
-/// To write after reading, clone the store and release the guard first.
+mod guarded_readers;
+
+#[cfg(test)]
+mod tests;
+
+/// A read-only store that borrows its repository publication guard.
 pub struct GuardedStore<'g> {
     store: StateStore,
     _guard: PhantomData<&'g PublicationGuard>,
-}
-
-impl Deref for GuardedStore<'_> {
-    type Target = StateStore;
-
-    fn deref(&self) -> &Self::Target {
-        &self.store
-    }
 }
 
 impl Clone for StateStore {
@@ -69,8 +62,7 @@ impl StateStore {
         self.publication_access(&ProvenanceLayout::new(root), operation)
     }
 
-    /// Uses the ordinary publication lock path for writes, including guarded stores.
-    #[rule("rule_guarded_store_writes_take_publication_lock")]
+    /// Uses the publication lock for writes.
     pub fn with_repository_publication<R>(
         &self,
         operation: impl FnOnce() -> anyhow::Result<R>,
