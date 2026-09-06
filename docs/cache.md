@@ -36,9 +36,8 @@ one instance. The database can be deleted and rebuilt with
 ## Catch-up
 
 Catch-up is the steady-state refresh. It keeps no journal. A pass runs
-under the publication guard on a snapshot of canonical state. It runs the
-same aggregate validator a rebuild runs, and a refusal commits nothing.
-It then hashes the complete canonical bytes of each hash unit. There is
+under the publication guard and reads canonical state in place. It
+hashes the complete canonical bytes of each hash unit. There is
 one unit per manifest scope, which is the scope's directory, and one
 global unit, which is every regular canonical file under `state/` outside
 `scopes/`: the manifest and the dictionary. A unit
@@ -46,14 +45,30 @@ digest frames the relative path and the bytes of every file in sorted
 path order. It ignores the temporary `.tmp*` files an interrupted atomic
 write leaves beside a shard.
 
-An unchanged unit is not parsed. A changed scope unit parses that scope's
-families again and rewrites only the families whose content digest moved.
-A changed global unit updates its digest row; no family derives from it. A
-changed scope unit also reloads the scope's `relations` rows for each owner
+When both the global unit and a scope are unchanged, that scope is not
+parsed or validated. The pass lists scopes from the exact manifest bytes
+used in the global hash. A changed scope runs both the graph and ideation
+validators and parses its families. Only families whose content digest moved are
+rewritten. A changed global unit validates every scope and updates its
+digest row. No family derives from the global unit. A changed scope unit also reloads the scope's `relations` rows for each owner
 kind whose family moved. A departed scope loses its rows in the eighteen
 tables, its `relations` rows, and its digest rows. A new scope loads. The projection keeps the content
 digest and record count for each family and scope, so the revision digest
 is reassembled from stored rows without parsing a shard.
+
+After parsing a changed unit, the pass hashes it again. If the two hashes
+match, the pass can use the parsed records and their digest. If an editor
+that does not take the lock changes the bytes, the pass retries the unit.
+After three failed attempts, the pass refuses and commits nothing. A read
+then answers at the stored serial with `catch_up_failed` and the error
+`canonical state changed during catch-up under <unit>`. A rebuild uses the
+same hash, parse, and hash-again step in place.
+
+A rebuild records `VALIDATION_VERSION` in `projection_validation`. A
+catch-up pass rebuilds when the stored version differs from this build's
+version, or when no version is stored. Validator changes that need to check
+existing scopes increase this constant. `provenance materialize` and
+`provenance check` always validate every scope.
 
 A pass that changes rows, digests, or the unit set commits them together
 with one new revision in one transaction. The new serial is the stored
@@ -71,7 +86,7 @@ asserting each one lies inside the hashed units.
 Every projection write, rebuild and catch-up alike, holds an owned
 publication guard. The lock belongs to an open file description rather
 than a thread, acquisition waits on the blocking pool, and the guard stays
-held from snapshot through commit. No canonical publication can
+held from the first hash through commit. No canonical publication can
 interleave with a projection write.
 
 ## Read path
@@ -79,8 +94,9 @@ interleave with a projection write.
 A query read takes the guard for its freshness step only. Under the
 default `catch_up` policy it opens the pool inside the guard, runs one
 catch-up pass, and drops the guard; under `annotate_only` it takes no
-guard and refuses a database that is absent, behind on migrations, or
-half-migrated (a revision beside no family digests). It then answers
+guard and refuses a database that is absent, behind on migrations or
+validation version, or half-migrated (a revision beside no family digests).
+It then answers
 from a snapshot pinned inside one `SQLite` read transaction, whose first
 read is the stored revision, so every row read later is at that serial.
 The database runs in WAL mode, so a reader never blocks a writer and a
@@ -111,8 +127,8 @@ global unit.
 
 Migrations are applied transactionally and record applied versions in
 SQLite. Materialization runs the same lifecycle aggregate validator used
-by direct writes, swarm landing, import, and `check` before clearing or
-loading cache tables.
+by direct writes, swarm landing, import, and `check`. A failed validation
+commits no projection rows.
 
 Typed SDK verification runs are also derived cache data, stored as JSONL under
 `.provenance/cache/scopes/<scope>/verification-runs.jsonl`. They record local

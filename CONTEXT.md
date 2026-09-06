@@ -143,3 +143,7 @@ Acceptance recorded when a human action resolves the relevant problem and produc
 ## Frozen legacy terminal
 
 A pre-lifecycle proposal row whose terminal definition is covered by the compiled, versioned shipped-v1 fingerprint. It remains readable but cannot be asserted, disposed again, replaced, or used as authority for new lifecycle ingress.
+
+## Validation version
+
+The version of the validation rules used to build a projection. A version change requires every scope to pass validation again. It is independent of the read derivation version, which identifies how stored rows become answers.

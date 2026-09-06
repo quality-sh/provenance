@@ -54,7 +54,7 @@ pub enum ReadRefusal {
     },
     #[error("the refuse_stale freshness policy is reserved and not implemented")]
     RefuseStaleUnimplemented,
-    #[error("the projection in {database} is behind on migrations; run `provenance materialize`")]
+    #[error("the projection in {database} is behind on migrations or validation; run `provenance materialize`")]
     SchemaBehind { database: Utf8PathBuf },
     #[error("the projection in {database} holds a revision but no family digests, so its tables were never reloaded after a migration; run `provenance materialize`")]
     HalfMigrated { database: Utf8PathBuf },

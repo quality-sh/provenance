@@ -5,13 +5,16 @@
 //! own: it is rebuilt whenever an owner family of the scope is.
 
 use crate::cache::serde_name;
-use crate::state_store::StateStore;
+use crate::state_store::GuardedStore;
 use provenance_core::model::relations::{link_rows_of, rows_of, RelationRow};
 use provenance_core::{NodeType, ScopeId};
 use sqlx::{Sqlite, Transaction};
 
 /// The rows of one scope, in the order the declarations list them.
-fn scope_rows(store: &StateStore, scope: &ScopeId) -> anyhow::Result<Vec<RelationRow>> {
+pub(super) fn scope_rows(
+    store: &GuardedStore<'_>,
+    scope: &ScopeId,
+) -> anyhow::Result<Vec<RelationRow>> {
     let mut rows = rows_of(&store.list_sources(scope)?);
     rows.extend(rows_of(&store.list_requirements(scope)?));
     rows.extend(rows_of(&store.list_resolutions(scope)?));
@@ -50,10 +53,10 @@ pub(super) async fn delete_rows(
 /// family and no report.
 pub(super) async fn load_rows(
     tx: &mut Transaction<'_, Sqlite>,
-    store: &StateStore,
+    rows: &[RelationRow],
     scope: &ScopeId,
 ) -> anyhow::Result<()> {
-    for row in scope_rows(store, scope)? {
+    for row in rows {
         sqlx::query(
             "INSERT OR IGNORE INTO relations (scope_id, owner_type, owner_id, relation, target_type, target_id) VALUES (?, ?, ?, ?, ?, ?)",
         )

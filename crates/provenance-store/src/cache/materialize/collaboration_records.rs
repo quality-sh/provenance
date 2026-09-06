@@ -1,14 +1,16 @@
-use crate::{cache::serde_name, state_store::StateStore};
-use provenance_core::ScopeId;
+use crate::cache::serde_name;
+use provenance_core::{
+    AssertionRecord, Contribution, DispositionRecord, Message, ProposalCard, SynthesisPacket,
+    Thread,
+};
 use sqlx::{Sqlite, Transaction};
 
 pub(super) async fn load_threads(
     tx: &mut Transaction<'_, Sqlite>,
-    store: &StateStore,
-    scope: &ScopeId,
+    bytes: &[u8],
 ) -> anyhow::Result<u64> {
     let mut loaded = 0;
-    for thread in store.list_threads(scope)? {
+    for thread in serde_json::from_slice::<Vec<Thread>>(bytes)? {
         sqlx::query("INSERT INTO threads (scope_id, id, parent_type, parent_id, status, created_at) VALUES (?, ?, ?, ?, ?, ?)")
             .bind(thread.scope_id.as_str()).bind(thread.id.as_str())
             .bind(serde_name(&thread.parent.node_type)?).bind(thread.parent.node_id.as_str())
@@ -21,11 +23,10 @@ pub(super) async fn load_threads(
 
 pub(super) async fn load_messages(
     tx: &mut Transaction<'_, Sqlite>,
-    store: &StateStore,
-    scope: &ScopeId,
+    bytes: &[u8],
 ) -> anyhow::Result<u64> {
     let mut loaded = 0;
-    for message in store.list_messages(scope)? {
+    for message in serde_json::from_slice::<Vec<Message>>(bytes)? {
         sqlx::query("INSERT INTO messages (scope_id, id, thread_id, role, body, created_at, ai_metadata) VALUES (?, ?, ?, ?, ?, ?, ?)")
             .bind(message.scope_id.as_str()).bind(message.id.as_str()).bind(message.thread_id.as_str())
             .bind(serde_name(&message.role)?).bind(message.body).bind(message.created_at)
@@ -38,11 +39,10 @@ pub(super) async fn load_messages(
 
 pub(super) async fn load_contributions(
     tx: &mut Transaction<'_, Sqlite>,
-    store: &StateStore,
-    scope: &ScopeId,
+    bytes: &[u8],
 ) -> anyhow::Result<u64> {
     let mut loaded = 0;
-    for contribution in store.list_contributions(scope)? {
+    for contribution in serde_json::from_slice::<Vec<Contribution>>(bytes)? {
         sqlx::query("INSERT INTO contributions (scope_id, id, target_type, target_id, participant_slot, stance, strongest_finding, uncertainty, payload) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
             .bind(contribution.scope_id.as_str()).bind(contribution.id.as_str())
             .bind(serde_name(&contribution.target.artifact_type)?)
@@ -57,11 +57,10 @@ pub(super) async fn load_contributions(
 
 pub(super) async fn load_synthesis_packets(
     tx: &mut Transaction<'_, Sqlite>,
-    store: &StateStore,
-    scope: &ScopeId,
+    bytes: &[u8],
 ) -> anyhow::Result<u64> {
     let mut loaded = 0;
-    for packet in store.list_synthesis_packets(scope)? {
+    for packet in serde_json::from_slice::<Vec<SynthesisPacket>>(bytes)? {
         sqlx::query("INSERT INTO synthesis_packets (scope_id, id, target_type, target_id, summary, payload) VALUES (?, ?, ?, ?, ?, ?)")
             .bind(packet.scope_id.as_str()).bind(packet.id.as_str())
             .bind(serde_name(&packet.target.artifact_type)?).bind(packet.target.artifact_id.as_str())
@@ -74,11 +73,10 @@ pub(super) async fn load_synthesis_packets(
 
 pub(super) async fn load_assertion_records(
     tx: &mut Transaction<'_, Sqlite>,
-    store: &StateStore,
-    scope: &ScopeId,
+    bytes: &[u8],
 ) -> anyhow::Result<u64> {
     let mut loaded = 0;
-    for assertion in store.list_assertion_records(scope)? {
+    for assertion in serde_json::from_slice::<Vec<AssertionRecord>>(bytes)? {
         sqlx::query("INSERT INTO assertion_records (scope_id, id, proposal_id, synthesis_packet_id, supporting_claim_ids, payload) VALUES (?, ?, ?, ?, ?, ?)")
             .bind(assertion.scope_id.as_str()).bind(assertion.id.as_str())
             .bind(assertion.proposal_id.as_str()).bind(assertion.synthesis_packet_id.as_str())
@@ -91,11 +89,10 @@ pub(super) async fn load_assertion_records(
 
 pub(super) async fn load_proposal_cards(
     tx: &mut Transaction<'_, Sqlite>,
-    store: &StateStore,
-    scope: &ScopeId,
+    bytes: &[u8],
 ) -> anyhow::Result<u64> {
     let mut loaded = 0;
-    for proposal in store.list_proposal_cards(scope)? {
+    for proposal in serde_json::from_slice::<Vec<ProposalCard>>(bytes)? {
         sqlx::query("INSERT INTO proposal_cards (scope_id, id, proposal_key, proposal_type, title, summary, confidence, target_type, target_id, traceability, builds_on, promotion_state, duplicate_of, superseded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
             .bind(proposal.scope_id.as_str()).bind(proposal.id.as_str()).bind(&proposal.proposal_key)
             .bind(serde_name(&proposal.proposal_type)?).bind(&proposal.title).bind(&proposal.summary)
@@ -114,11 +111,10 @@ pub(super) async fn load_proposal_cards(
 
 pub(super) async fn load_dispositions(
     tx: &mut Transaction<'_, Sqlite>,
-    store: &StateStore,
-    scope: &ScopeId,
+    bytes: &[u8],
 ) -> anyhow::Result<u64> {
     let mut loaded = 0;
-    for disposition in store.list_dispositions(scope)? {
+    for disposition in serde_json::from_slice::<Vec<DispositionRecord>>(bytes)? {
         sqlx::query("INSERT INTO dispositions (scope_id, id, proposal_id, decision, rationale, actor, canonical_artifact, external_action) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
             .bind(disposition.scope_id.as_str()).bind(disposition.id.as_str()).bind(disposition.proposal_id.as_str())
             .bind(serde_name(&disposition.decision)?).bind(&disposition.rationale)

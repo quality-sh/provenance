@@ -9,9 +9,11 @@ use super::collaboration_records;
 use super::record_rows::{kind_search, load_kind};
 use crate::cache::quoted;
 use crate::cache::ProjectionFamily;
-use crate::state_store::StateStore;
 use provenance_core::protocol::GraphNode;
-use provenance_core::ScopeId;
+use provenance_core::{
+    Boundary, Domain, ImplementationBinding, Question, Requirement, RequirementReview, Resolution,
+    Rule, ScopeId, Source, Topic, VerificationBinding,
+};
 use sqlx::{Sqlite, Transaction};
 
 pub(super) async fn delete_rows(
@@ -31,68 +33,65 @@ pub(super) async fn delete_rows(
 
 pub(super) async fn load_rows(
     tx: &mut Transaction<'_, Sqlite>,
-    store: &StateStore,
     family: ProjectionFamily,
-    scope: &ScopeId,
+    bytes: &[u8],
 ) -> anyhow::Result<u64> {
     match family {
         ProjectionFamily::Sources => {
             let search = kind_search(GraphNode::Source);
-            load_kind(tx, store.list_sources(scope)?, Some(&search)).await
+            load_kind::<Source>(tx, bytes, Some(&search)).await
         }
         ProjectionFamily::Domains => {
             let search = kind_search(GraphNode::Domain);
-            load_kind(tx, store.list_domains(scope)?, Some(&search)).await
+            load_kind::<Domain>(tx, bytes, Some(&search)).await
         }
         ProjectionFamily::Requirements => {
             let search = kind_search(GraphNode::Requirement);
-            load_kind(tx, store.list_requirements(scope)?, Some(&search)).await
+            load_kind::<Requirement>(tx, bytes, Some(&search)).await
         }
         ProjectionFamily::Boundaries => {
             let search = kind_search(GraphNode::Boundary);
-            load_kind(tx, store.list_boundaries(scope)?, Some(&search)).await
+            load_kind::<Boundary>(tx, bytes, Some(&search)).await
         }
         ProjectionFamily::Topics => {
             let search = kind_search(GraphNode::Topic);
-            load_kind(tx, store.list_topics(scope)?, Some(&search)).await
+            load_kind::<Topic>(tx, bytes, Some(&search)).await
         }
         ProjectionFamily::Questions => {
             let search = kind_search(GraphNode::Question);
-            load_kind(tx, store.list_questions(scope)?, Some(&search)).await
+            load_kind::<Question>(tx, bytes, Some(&search)).await
         }
         ProjectionFamily::Resolutions => {
             let search = kind_search(GraphNode::Resolution);
-            load_kind(tx, store.list_resolutions(scope)?, Some(&search)).await
+            load_kind::<Resolution>(tx, bytes, Some(&search)).await
         }
         ProjectionFamily::Rules => {
             let search = kind_search(GraphNode::Rule);
-            load_kind(tx, store.list_rules(scope)?, Some(&search)).await
+            load_kind::<Rule>(tx, bytes, Some(&search)).await
         }
-        ProjectionFamily::Threads => collaboration_records::load_threads(tx, store, scope).await,
-        ProjectionFamily::Messages => collaboration_records::load_messages(tx, store, scope).await,
+        ProjectionFamily::Threads => collaboration_records::load_threads(tx, bytes).await,
+        ProjectionFamily::Messages => collaboration_records::load_messages(tx, bytes).await,
         ProjectionFamily::Contributions => {
-            collaboration_records::load_contributions(tx, store, scope).await
+            collaboration_records::load_contributions(tx, bytes).await
         }
         ProjectionFamily::SynthesisPackets => {
-            collaboration_records::load_synthesis_packets(tx, store, scope).await
+            collaboration_records::load_synthesis_packets(tx, bytes).await
         }
         ProjectionFamily::AssertionRecords => {
-            collaboration_records::load_assertion_records(tx, store, scope).await
+            collaboration_records::load_assertion_records(tx, bytes).await
         }
         ProjectionFamily::ProposalCards => {
-            collaboration_records::load_proposal_cards(tx, store, scope).await
+            collaboration_records::load_proposal_cards(tx, bytes).await
         }
-        ProjectionFamily::Dispositions => {
-            collaboration_records::load_dispositions(tx, store, scope).await
-        }
+        ProjectionFamily::Dispositions => collaboration_records::load_dispositions(tx, bytes).await,
         ProjectionFamily::ImplementationBindings => {
-            load_kind(tx, store.list_implementation_bindings(scope)?, None).await
+            load_kind::<ImplementationBinding>(tx, bytes, None).await
         }
         ProjectionFamily::VerificationBindings => {
-            load_kind(tx, store.list_verification_bindings(scope)?, None).await
+            load_kind::<VerificationBinding>(tx, bytes, None).await
         }
         ProjectionFamily::RequirementReviews => {
-            load_kind(tx, store.list_requirement_reviews(scope)?, None).await
+            load_kind::<RequirementReview>(tx, bytes, None).await
         }
     }
 }

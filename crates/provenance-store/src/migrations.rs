@@ -25,9 +25,10 @@ pub const FAMILY_CONTENT_DIGEST_MIGRATION_ID: &str = "019";
 pub const UNIT_DIGESTS_MIGRATION_ID: &str = "020";
 pub const RELATIONS_TABLE_MIGRATION_ID: &str = "021";
 pub const RECORD_COLUMNS_MIGRATION_ID: &str = "022";
+pub const VALIDATION_VERSION_MIGRATION_ID: &str = "023";
 /// The last migration `run_migrations` applies. A reader under
 /// `annotate_only` refuses a database that lacks it.
-pub const LATEST_MIGRATION_ID: &str = RECORD_COLUMNS_MIGRATION_ID;
+pub const LATEST_MIGRATION_ID: &str = VALIDATION_VERSION_MIGRATION_ID;
 const INITIAL_SQL: &str = include_str!("../migrations/001_initial_cache.sql");
 const SOURCE_REQUIREMENT_SQL: &str =
     include_str!("../migrations/002_sources_requirements_edges.sql");
@@ -57,6 +58,7 @@ const FAMILY_CONTENT_DIGEST_SQL: &str = include_str!("../migrations/019_family_c
 const UNIT_DIGESTS_SQL: &str = include_str!("../migrations/020_unit_digests.sql");
 const RELATIONS_TABLE_SQL: &str = include_str!("../migrations/021_relations_table.sql");
 const RECORD_COLUMNS_SQL: &str = include_str!("../migrations/022_record_columns.sql");
+const VALIDATION_VERSION_SQL: &str = include_str!("../migrations/023_projection_validation.sql");
 
 pub async fn run_migrations(
     pool: &SqlitePool,
@@ -112,6 +114,7 @@ pub async fn run_migrations(
         (UNIT_DIGESTS_MIGRATION_ID, UNIT_DIGESTS_SQL),
         (RELATIONS_TABLE_MIGRATION_ID, RELATIONS_TABLE_SQL),
         (RECORD_COLUMNS_MIGRATION_ID, RECORD_COLUMNS_SQL),
+        (VALIDATION_VERSION_MIGRATION_ID, VALIDATION_VERSION_SQL),
     ] {
         let already_applied: Option<String> =
             sqlx::query_scalar("SELECT id FROM _schema_migrations WHERE id = ?")
@@ -217,7 +220,7 @@ mod tests {
             run_migrations(&pool, &layout).await.unwrap(),
             vec![
                 "001", "002", "003", "004", "005", "006", "007", "008", "009", "010", "011", "012",
-                "013", "014", "015", "016", "017", "018", "019", "020", "021", "022"
+                "013", "014", "015", "016", "017", "018", "019", "020", "021", "022", "023"
             ]
         );
         assert!(run_migrations(&pool, &layout).await.unwrap().is_empty());
@@ -229,7 +232,7 @@ mod tests {
             applied_migrations(&pool).await.unwrap(),
             vec![
                 "001", "002", "003", "004", "005", "006", "007", "008", "009", "010", "011", "012",
-                "013", "014", "015", "016", "017", "018", "019", "020", "021", "022"
+                "013", "014", "015", "016", "017", "018", "019", "020", "021", "022", "023"
             ]
         );
     }

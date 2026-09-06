@@ -43,6 +43,14 @@ pub fn units_for(scopes: &[ScopeId]) -> Vec<Unit> {
 
 /// The digest of one unit's canonical bytes under `state_dir`.
 pub fn unit_digest(state_dir: &Utf8Path, unit: &Unit) -> anyhow::Result<String> {
+    digest_with(state_dir, unit, |_, _| {})
+}
+
+pub(super) fn digest_with(
+    state_dir: &Utf8Path,
+    unit: &Unit,
+    mut retain: impl FnMut(&Utf8Path, &[u8]),
+) -> anyhow::Result<String> {
     let mut files = Vec::new();
     match unit {
         Unit::Global => collect(state_dir, state_dir, true, &mut files)?,
@@ -57,6 +65,7 @@ pub fn unit_digest(state_dir: &Utf8Path, unit: &Unit) -> anyhow::Result<String> 
     let mut framed = Vec::new();
     for (relative, path) in files {
         let bytes = std::fs::read(&path)?;
+        retain(&path, &bytes);
         framed.extend_from_slice(relative.as_bytes());
         framed.push(0);
         framed.extend_from_slice(&(bytes.len() as u64).to_le_bytes());
@@ -80,6 +89,10 @@ fn collect(
     if !dir.is_dir() {
         return Ok(());
     }
+    anyhow::ensure!(
+        !std::fs::symlink_metadata(dir)?.file_type().is_symlink(),
+        "unsupported state entry: {dir}"
+    );
     for entry in std::fs::read_dir(dir)? {
         let entry = entry?;
         let path = Utf8PathBuf::from_path_buf(entry.path())
@@ -100,6 +113,8 @@ fn collect(
                 .collect::<Vec<_>>()
                 .join("/");
             out.push((relative, path));
+        } else if !file_type.is_file() {
+            anyhow::bail!("unsupported state entry: {path}");
         }
     }
     Ok(())
