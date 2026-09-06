@@ -4,6 +4,8 @@
 
 mod freshness;
 mod guard;
+#[cfg(unix)]
+mod read_only;
 
 use super::comparison::requests;
 use super::comparison::test_stores::{self, TestStore};

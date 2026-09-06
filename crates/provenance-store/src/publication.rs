@@ -91,8 +91,8 @@ fn prepare_publication_lock(layout: &ProvenanceLayout) -> anyhow::Result<()> {
 
 /// Resolves `path`, keeping the failure message that names what the path was.
 fn canonical_utf8(path: &Utf8Path, description: &str) -> anyhow::Result<Utf8PathBuf> {
-    let resolved = std::fs::canonicalize(path)
-        .map_err(|error| anyhow::anyhow!("resolve {description} {path}: {error}"))?;
+    let resolved =
+        std::fs::canonicalize(path).with_context(|| format!("resolve {description} {path}"))?;
     Utf8PathBuf::from_path_buf(resolved)
         .map_err(|path| anyhow::anyhow!("{description} is not UTF-8: {}", path.display()))
 }
@@ -110,10 +110,11 @@ fn create_real_directory(path: &Utf8Path) -> anyhow::Result<()> {
         Ok(_) => {}
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             if let Err(error) = std::fs::create_dir(path) {
-                anyhow::ensure!(
-                    error.kind() == std::io::ErrorKind::AlreadyExists,
-                    "failed to create publication lock directory {path}: {error}"
-                );
+                if error.kind() != std::io::ErrorKind::AlreadyExists {
+                    return Err(error).with_context(|| {
+                        format!("failed to create publication lock directory {path}")
+                    });
+                }
             }
         }
         Err(error) => return Err(error.into()),

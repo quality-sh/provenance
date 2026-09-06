@@ -101,6 +101,26 @@ default is 5000 source files. Unknown keys and invalid values cause a typed
 settings refusal, with no answer. A settings edit changes no state digest.
 The stamp names the policy that ran; `scan_cut` reports a scan limit reached.
 
+A checkout whose cache directory this process cannot write can still read
+its stored projection. WAL needs a writable `-shm` file beside the database.
+A finished read removes the `-wal` and `-shm` files, so the reader opens the
+database as an immutable image after a permission failure. SQLite then
+reads the file without a lock. Other open errors do not select this fallback.
+The scope list comes from an unlocked read of `manifest.json`, which is
+written atomically. A lock file that cannot be opened for writing does not
+prevent this schema check.
+
+Under `catch_up`, the stamp says `catch_up_failed` and `freshness_error`
+names the failed step. This word remains the policy outcome for a failed
+catch-up step. Under `annotate_only`, the policy word is unchanged. The
+answer is at the serial the file holds. Both `PermissionDenied` and
+`ReadOnlyFilesystem` are permission failures. The immutable open is shared
+by policies; stage K.3 adds the unlocked hash decision for `refuse_stale`,
+which currently refuses as unimplemented. These permission fixtures run
+on Unix. A Linux test also uses an isolated read-only mount when user and
+mount namespaces are available. The tests do not reproduce these
+permissions on Windows.
+
 ## What each family's derivation reads
 
 | Family | Derivation | Files read |
