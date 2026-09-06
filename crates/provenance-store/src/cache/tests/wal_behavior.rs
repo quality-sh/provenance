@@ -6,6 +6,7 @@
 use super::super::*;
 use super::fixtures::*;
 use crate::layout::ProvenanceLayout;
+use crate::operations::read_policy::ReadPolicy;
 use provenance_core::protocol::{GetQuery, SDK_PROTOCOL_VERSION};
 use provenance_core::NodeType;
 use provenance_macros::verifies;
@@ -36,6 +37,7 @@ async fn a_completed_read_leaves_no_wal_files() {
         let answer = crate::operations::queries::get(
             root.clone(),
             &scope,
+            ReadPolicy::default(),
             GetQuery {
                 protocol_version: Some(SDK_PROTOCOL_VERSION),
                 node_type: NodeType::Requirement,

@@ -68,23 +68,34 @@ async fn graph_stamps(store: &TestStore) -> Vec<(&'static str, Stamp)> {
     vec![
         (
             "get",
-            queries::get(repo(), scope, get_query("req_overtime"))
-                .await
-                .unwrap()
-                .stamp,
+            queries::get(
+                repo(),
+                scope,
+                ReadPolicy::default(),
+                get_query("req_overtime"),
+            )
+            .await
+            .unwrap()
+            .stamp,
         ),
         (
             "search",
-            queries::search(repo(), scope, requests::search("pay", Vec::new()))
-                .await
-                .unwrap()
-                .stamp,
+            queries::search(
+                repo(),
+                scope,
+                ReadPolicy::default(),
+                requests::search("pay", Vec::new()),
+            )
+            .await
+            .unwrap()
+            .stamp,
         ),
         (
             "neighbors",
             queries::neighbors(
                 repo(),
                 scope,
+                ReadPolicy::default(),
                 requests::neighbors("req_overtime", false, 10),
             )
             .await
@@ -93,10 +104,15 @@ async fn graph_stamps(store: &TestStore) -> Vec<(&'static str, Stamp)> {
         ),
         (
             "trace",
-            queries::trace(repo(), scope, requests::trace("req_overtime", false, 10))
-                .await
-                .unwrap()
-                .stamp,
+            queries::trace(
+                repo(),
+                scope,
+                ReadPolicy::default(),
+                requests::trace("req_overtime", false, 10),
+            )
+            .await
+            .unwrap()
+            .stamp,
         ),
     ]
 }
@@ -113,6 +129,7 @@ async fn evidence_stamps(store: &TestStore, base: &str) -> Vec<(&'static str, St
             queries::impact(
                 repo(),
                 scope,
+                ReadPolicy::default(),
                 ImpactQuery {
                     protocol_version: version,
                     id: "req_overtime".into(),
@@ -130,6 +147,7 @@ async fn evidence_stamps(store: &TestStore, base: &str) -> Vec<(&'static str, St
             queries::evidence(
                 repo(),
                 scope,
+                ReadPolicy::default(),
                 requests::evidence("rule_overtime", Some(base.to_string())),
             )
             .await
@@ -141,6 +159,7 @@ async fn evidence_stamps(store: &TestStore, base: &str) -> Vec<(&'static str, St
             queries::stale(
                 repo(),
                 scope,
+                ReadPolicy::default(),
                 StaleQuery {
                     protocol_version: version,
                     base: base.to_string(),
@@ -159,6 +178,7 @@ async fn evidence_stamps(store: &TestStore, base: &str) -> Vec<(&'static str, St
             queries::resolve_symbol(
                 repo(),
                 scope,
+                ReadPolicy::default(),
                 ResolveSymbolQuery {
                     protocol_version: version,
                     file: "src/pay.rs".into(),
@@ -248,6 +268,7 @@ async fn evidence_without_a_base_lists_no_diff() {
     let answer = queries::evidence(
         Some(store.root.clone()),
         &store.scope,
+        ReadPolicy::default(),
         requests::evidence("rule_overtime", None),
     )
     .await
@@ -330,6 +351,7 @@ async fn a_bad_base_is_refused_before_the_store_is_read() {
     let refused = queries::stale(
         Some(store.root.clone()),
         &store.scope,
+        ReadPolicy::default(),
         StaleQuery {
             protocol_version: Some(SDK_PROTOCOL_VERSION),
             base: "no_such_commit".into(),
@@ -346,6 +368,7 @@ async fn a_bad_base_is_refused_before_the_store_is_read() {
     let refused = queries::evidence(
         Some(store.root.clone()),
         &store.scope,
+        ReadPolicy::default(),
         requests::evidence("rule_overtime", Some("no_such_commit".into())),
     )
     .await

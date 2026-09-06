@@ -22,42 +22,48 @@ pub(super) enum Operation {
 /// Every primitive is one named operation with typed parameters read from
 /// stdin, and every answer carries the protocol version that produced it.
 pub(super) async fn handle(operation: Operation, args: QueryArgs) -> anyhow::Result<()> {
-    let repo = Some(provenance_store::operations::discover_repository(
-        args.repo,
-    )?);
+    let root = provenance_store::operations::discover_repository(args.repo)?;
+    let settings = provenance_store::settings::Settings::load(
+        &provenance_store::layout::ProvenanceLayout::new(root.clone()),
+    )?;
+    let policy =
+        provenance_store::operations::read_policy::ReadPolicy::resolve(&settings, args.freshness);
+    let repo = Some(root);
     let scope = ScopeId::new(args.scope)?;
     let format = args.format;
     match operation {
         Operation::Get => {
-            let result = queries::get(repo, &scope, super::read_stdin_json()?).await?;
+            let result = queries::get(repo, &scope, policy, super::read_stdin_json()?).await?;
             output::print(format, &QueryResponse::new("get", result))
         }
         Operation::Search => {
-            let result = queries::search(repo, &scope, super::read_stdin_json()?).await?;
+            let result = queries::search(repo, &scope, policy, super::read_stdin_json()?).await?;
             output::print(format, &QueryResponse::new("search", result))
         }
         Operation::Neighbors => {
-            let result = queries::neighbors(repo, &scope, super::read_stdin_json()?).await?;
+            let result =
+                queries::neighbors(repo, &scope, policy, super::read_stdin_json()?).await?;
             output::print(format, &QueryResponse::new("neighbors", result))
         }
         Operation::Trace => {
-            let result = queries::trace(repo, &scope, super::read_stdin_json()?).await?;
+            let result = queries::trace(repo, &scope, policy, super::read_stdin_json()?).await?;
             output::print(format, &QueryResponse::new("trace", result))
         }
         Operation::Impact => {
-            let result = queries::impact(repo, &scope, super::read_stdin_json()?).await?;
+            let result = queries::impact(repo, &scope, policy, super::read_stdin_json()?).await?;
             output::print(format, &QueryResponse::new("impact", result))
         }
         Operation::Evidence => {
-            let result = queries::evidence(repo, &scope, super::read_stdin_json()?).await?;
+            let result = queries::evidence(repo, &scope, policy, super::read_stdin_json()?).await?;
             output::print(format, &QueryResponse::new("evidence", result))
         }
         Operation::Stale => {
-            let result = queries::stale(repo, &scope, super::read_stdin_json()?).await?;
+            let result = queries::stale(repo, &scope, policy, super::read_stdin_json()?).await?;
             output::print(format, &QueryResponse::new("stale", result))
         }
         Operation::ResolveSymbol => {
-            let result = queries::resolve_symbol(repo, &scope, super::read_stdin_json()?).await?;
+            let result =
+                queries::resolve_symbol(repo, &scope, policy, super::read_stdin_json()?).await?;
             output::print(format, &QueryResponse::new("resolve-symbol", result))
         }
     }

@@ -92,6 +92,15 @@ file, git) only through a handle that records its word in `live`. A
 failed freshness step answers at the stored serial with the policy word
 `catch_up_failed` and the error text beside the answer.
 
+The settings in `.provenance/settings.json` survive a cache delete. The
+file is tracked beside `state/` and `cache/`. Each query loads
+`read.freshness_policy` and `read.scan_limit` before it opens the projection.
+The `--freshness` flag takes precedence over the file; the file takes
+precedence over `catch_up`. There is no environment variable. The scan
+default is 5000 source files. Unknown keys and invalid values cause a typed
+settings refusal, with no answer. A settings edit changes no state digest.
+The stamp names the policy that ran; `scan_cut` reports a scan limit reached.
+
 ## What each family's derivation reads
 
 | Family | Derivation | Files read |

@@ -3,6 +3,7 @@
 use super::comparison::requests;
 use super::comparison::test_stores::TestStore;
 use crate::operations::queries;
+use crate::operations::read_policy::ReadPolicy;
 use provenance_core::NodeType;
 use provenance_macros::verifies;
 
@@ -15,9 +16,14 @@ async fn search_visits_kinds_in_rank_order_and_stops_at_the_limit() {
     let store = TestStore::pinned();
     let mut request = requests::search("overtime", Vec::new());
     request.limit = 2;
-    let answer = queries::search(Some(store.root.clone()), &store.scope, request)
-        .await
-        .unwrap();
+    let answer = queries::search(
+        Some(store.root.clone()),
+        &store.scope,
+        ReadPolicy::default(),
+        request,
+    )
+    .await
+    .unwrap();
     let ids: Vec<&str> = answer
         .result
         .nodes
@@ -48,6 +54,7 @@ async fn trace_stops_at_the_limit_and_says_has_more() {
     let answer = queries::trace(
         Some(store.root.clone()),
         &store.scope,
+        ReadPolicy::default(),
         requests::trace("req_top", false, 2),
     )
     .await

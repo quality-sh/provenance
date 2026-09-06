@@ -69,9 +69,14 @@ async fn a_scanner_annotation_moves_impact_and_not_the_stamp() {
             .map(|site| site.file.to_string())
             .collect()
     };
-    let first = queries::impact(Some(store.root.clone()), &store.scope, request())
-        .await
-        .unwrap();
+    let first = queries::impact(
+        Some(store.root.clone()),
+        &store.scope,
+        ReadPolicy::default(),
+        request(),
+    )
+    .await
+    .unwrap();
     assert_eq!(sites(&first.result), ["src/pay.rs"]);
 
     std::fs::write(
@@ -79,9 +84,14 @@ async fn a_scanner_annotation_moves_impact_and_not_the_stamp() {
         "#[rule(\"rule_overtime\")]\nfn more() {}\n",
     )
     .unwrap();
-    let second = queries::impact(Some(store.root.clone()), &store.scope, request())
-        .await
-        .unwrap();
+    let second = queries::impact(
+        Some(store.root.clone()),
+        &store.scope,
+        ReadPolicy::default(),
+        request(),
+    )
+    .await
+    .unwrap();
     assert_eq!(sites(&second.result), ["src/more.rs", "src/pay.rs"]);
     assert_same_revision(&first.stamp, &second.stamp);
     assert_eq!(second.stamp.live, ["scanned_sites"]);
@@ -91,9 +101,14 @@ async fn a_scanner_annotation_moves_impact_and_not_the_stamp() {
 async fn an_appended_run_moves_evidence_and_not_the_stamp() {
     let store = store_with_rule();
     let request = || requests::evidence("rule_overtime", None);
-    let first = queries::evidence(Some(store.root.clone()), &store.scope, request())
-        .await
-        .unwrap();
+    let first = queries::evidence(
+        Some(store.root.clone()),
+        &store.scope,
+        ReadPolicy::default(),
+        request(),
+    )
+    .await
+    .unwrap();
     assert!(first.result.verification_runs.is_empty());
     assert!(first.result.latest_verification_run.is_none());
 
@@ -110,9 +125,14 @@ async fn an_appended_run_moves_evidence_and_not_the_stamp() {
             "started_at": 7,
         }),
     );
-    let second = queries::evidence(Some(store.root.clone()), &store.scope, request())
-        .await
-        .unwrap();
+    let second = queries::evidence(
+        Some(store.root.clone()),
+        &store.scope,
+        ReadPolicy::default(),
+        request(),
+    )
+    .await
+    .unwrap();
     assert_eq!(second.result.verification_runs.len(), 1);
     assert_eq!(
         second
@@ -137,9 +157,14 @@ async fn a_commit_touching_a_bound_file_moves_evidence_and_not_the_stamp() {
         "src/pay.rs",
     );
     let request = || requests::evidence("rule_cited", Some(base.clone()));
-    let first = queries::evidence(Some(store.root.clone()), &store.scope, request())
-        .await
-        .unwrap();
+    let first = queries::evidence(
+        Some(store.root.clone()),
+        &store.scope,
+        ReadPolicy::default(),
+        request(),
+    )
+    .await
+    .unwrap();
     let states = |answer: &provenance_core::protocol::EvidenceResult| -> Vec<String> {
         answer
             .stale
@@ -157,9 +182,14 @@ async fn a_commit_touching_a_bound_file_moves_evidence_and_not_the_stamp() {
 
     std::fs::remove_file(store.root.join("src/pay.rs")).unwrap();
     git_commit(&store.root, "remove the cited file").expect("a commit");
-    let second = queries::evidence(Some(store.root.clone()), &store.scope, request())
-        .await
-        .unwrap();
+    let second = queries::evidence(
+        Some(store.root.clone()),
+        &store.scope,
+        ReadPolicy::default(),
+        request(),
+    )
+    .await
+    .unwrap();
     assert_ne!(
         second.result.stale.as_ref().unwrap().head,
         first.result.stale.as_ref().unwrap().head

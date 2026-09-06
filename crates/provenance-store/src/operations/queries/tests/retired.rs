@@ -5,6 +5,7 @@
 use super::comparison::requests;
 use super::comparison::test_stores::TestStore;
 use crate::operations::queries;
+use crate::operations::read_policy::ReadPolicy;
 use provenance_core::protocol::{Direction, GetQuery, TracedNode, SDK_PROTOCOL_VERSION};
 use provenance_core::NodeType;
 use provenance_macros::verifies;
@@ -25,6 +26,7 @@ async fn get_reads_a_retired_record_only_when_asked() {
     let hidden = queries::get(
         Some(store.root.clone()),
         &store.scope,
+        ReadPolicy::default(),
         get("req_old_overtime", false),
     )
     .await
@@ -40,6 +42,7 @@ async fn get_reads_a_retired_record_only_when_asked() {
     let shown = queries::get(
         Some(store.root.clone()),
         &store.scope,
+        ReadPolicy::default(),
         get("req_old_overtime", true),
     )
     .await
@@ -58,9 +61,14 @@ async fn a_retired_origin_still_answers_its_live_in_neighbours() {
     let store = TestStore::pinned();
     let mut request = requests::neighbors("req_right", false, 50);
     request.node_type = Some(NodeType::Requirement);
-    let answer = queries::neighbors(Some(store.root.clone()), &store.scope, request)
-        .await
-        .unwrap();
+    let answer = queries::neighbors(
+        Some(store.root.clone()),
+        &store.scope,
+        ReadPolicy::default(),
+        request,
+    )
+    .await
+    .unwrap();
     let labels: Vec<(&str, Direction, &str)> = answer
         .result
         .neighbors
@@ -91,9 +99,14 @@ async fn a_diamond_over_a_retired_node_answers_as_today() {
         request.direction = Direction::Out;
         request
     };
-    let active = queries::trace(Some(store.root.clone()), &store.scope, request(false))
-        .await
-        .unwrap();
+    let active = queries::trace(
+        Some(store.root.clone()),
+        &store.scope,
+        ReadPolicy::default(),
+        request(false),
+    )
+    .await
+    .unwrap();
     assert_eq!(
         traced(&active.result.nodes),
         [(1, "req_left"), (1, "domain_payroll"), (2, "req_top")]
@@ -102,9 +115,14 @@ async fn a_diamond_over_a_retired_node_answers_as_today() {
         active.stamp.attested,
         ["domains", "relations", "requirements", "sources"]
     );
-    let all = queries::trace(Some(store.root.clone()), &store.scope, request(true))
-        .await
-        .unwrap();
+    let all = queries::trace(
+        Some(store.root.clone()),
+        &store.scope,
+        ReadPolicy::default(),
+        request(true),
+    )
+    .await
+    .unwrap();
     assert_eq!(
         traced(&all.result.nodes),
         [

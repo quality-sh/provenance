@@ -9,6 +9,9 @@ pub struct QueryArgs {
     pub repo: Option<Utf8PathBuf>,
     #[arg(long, default_value = "default")]
     pub scope: String,
+    /// Freshness policy: `catch_up`, `annotate_only`, or `refuse_stale`.
+    #[arg(long, value_parser = parse_freshness)]
+    pub freshness: Option<provenance_store::operations::read_policy::FreshnessPolicy>,
     #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
     pub format: OutputFormat,
 }
@@ -125,4 +128,11 @@ pub enum SdkCommand {
         #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
         format: OutputFormat,
     },
+}
+
+fn parse_freshness(
+    value: &str,
+) -> Result<provenance_store::operations::read_policy::FreshnessPolicy, String> {
+    serde_json::from_value(serde_json::Value::String(value.to_owned()))
+        .map_err(|_| "must be one of catch_up, annotate_only, refuse_stale".to_owned())
 }

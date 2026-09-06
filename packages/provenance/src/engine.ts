@@ -1,3 +1,4 @@
+import type { StampPolicy } from "./protocol.js";
 import { spawn } from "node:child_process";
 import { resolveEnginePath } from "./engine-path.js";
 
@@ -21,10 +22,11 @@ export async function invokeEngine<Result>(
   settings: EngineSettings,
   command: string,
   input?: unknown,
+  freshness?: Exclude<StampPolicy, "catch_up_failed">,
 ): Promise<Result> {
   const engine = resolveEnginePath(settings.engine);
   await compatibleEngine(settings, engine);
-  return invoke<Result>(settings, engine, command, input);
+  return invoke<Result>(settings, engine, command, input, freshness);
 }
 
 // @provenance rule: rule_sdk_protocol_handshake
@@ -49,6 +51,7 @@ async function invoke<Result>(
   engine: string,
   command: string,
   input?: unknown,
+  freshness?: Exclude<StampPolicy, "catch_up_failed">,
 ): Promise<Result> {
   const args = ["sdk", command];
   if (settings.repository !== undefined) {
@@ -56,6 +59,9 @@ async function invoke<Result>(
   }
   if (command !== "info") {
     args.push("--scope", settings.scope);
+  }
+  if (freshness !== undefined) {
+    args.push("--freshness", freshness);
   }
   args.push("--format", "json");
   const child = spawn(

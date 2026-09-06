@@ -135,8 +135,32 @@ the reader logic version, which moves when the same rows answer differently.
 projection up to date under the publication lock before the read;
 `annotate_only`, which answers at the stored revision; or `catch_up_failed`,
 when the step refused and the answer is at the stored revision with the error
-text in `freshness_error`. The commands run `catch_up`; no flag selects a
-policy yet, and the `read.freshness_policy` setting is reserved for that.
+text in `freshness_error`.
+
+The eight query commands read `.provenance/settings.json` on every call.
+This tracked JSON file accepts `read.freshness_policy` and `read.scan_limit`:
+
+```json
+{
+  "read": {
+    "freshness_policy": "catch_up",
+    "scan_limit": 5000
+  }
+}
+```
+
+Both keys are optional. A missing file uses the defaults. `--freshness` accepts
+`catch_up`, `annotate_only`, or `refuse_stale`. The flag takes precedence over
+the file, and the file takes precedence over the default `catch_up`. No
+environment variable selects a policy. `refuse_stale` is accepted as a setting
+and flag but refuses as unimplemented until W5 stage K.3.
+
+`read.scan_limit` is a whole number of at least 1. Its default is 5000 source
+files; it has no flag or request field. An invalid value, an unknown key at
+either level, or an unreadable file causes a settings refusal before a query
+opens the projection. The error names the path and, for an invalid setting,
+the key and permitted values. No answer or `freshness_error` accompanies it.
+
 `attested` names the projection tables behind the answer. `live` names what
 the stamp does not cover, from a closed list: `canonical` (canonical shards),
 `scanned_sites` (a scan of the working tree), `verification_runs` (the run

@@ -5,6 +5,7 @@
 use super::{root_of, seeded_store};
 use crate::cache::tests::fixtures::append_record;
 use crate::layout::ProvenanceLayout;
+use crate::operations::read_policy::ReadPolicy;
 use provenance_core::protocol::GetQuery;
 use provenance_core::{NodeType, SDK_PROTOCOL_VERSION, SUPPORTED_SCHEMA_VERSION};
 use provenance_macros::verifies;
@@ -30,6 +31,7 @@ async fn a_read_over_an_old_dangling_target_still_answers() {
     let answer = crate::operations::queries::get(
         Some(root_of(&dir)),
         &scope,
+        ReadPolicy::default(),
         GetQuery {
             protocol_version: Some(SDK_PROTOCOL_VERSION),
             node_type: NodeType::Requirement,

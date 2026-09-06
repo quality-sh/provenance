@@ -143,3 +143,11 @@ Acceptance recorded when a human action resolves the relevant problem and produc
 ## Frozen legacy terminal
 
 A pre-lifecycle proposal row whose terminal definition is covered by the compiled, versioned shipped-v1 fingerprint. It remains readable but cannot be asserted, disposed again, replaced, or used as authority for new lifecycle ingress.
+
+## Read settings
+
+The repository's explicit choices for query freshness and the source file scan limit. An invalid choice prevents the read.
+
+## Freshness policy
+
+The requested action before a query answers from a stored projection. A command can override the repository's choice for one read.

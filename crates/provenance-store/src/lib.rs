@@ -10,6 +10,7 @@ pub mod merge;
 pub mod migrations;
 pub mod operations;
 pub mod publication;
+pub mod settings;
 pub mod shards;
 pub mod stale;
 pub mod state_store;
