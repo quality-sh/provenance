@@ -30,4 +30,5 @@
 {"schema_version":2,"scope_id":"default","id":"thread_requirement_req_source_refinement_for_product_work","parent":{"node_type":"requirement","node_id":"req_source_refinement_for_product_work"},"status":"active","created_at":1}
 {"schema_version":2,"scope_id":"default","id":"thread_requirement_req_ste_local_dictionary_acquisition","parent":{"node_type":"requirement","node_id":"req_ste_local_dictionary_acquisition"},"status":"active","created_at":1}
 {"schema_version":2,"scope_id":"default","id":"thread_requirement_req_ste_syntax_checked_before_graph_write","parent":{"node_type":"requirement","node_id":"req_ste_syntax_checked_before_graph_write"},"status":"active","created_at":1}
+{"schema_version":2,"scope_id":"default","id":"thread_requirement_req_team_review_uses_repository_artifacts","parent":{"node_type":"requirement","node_id":"req_team_review_uses_repository_artifacts"},"status":"active","created_at":1}
 {"schema_version":2,"scope_id":"default","id":"thread_requirement_req_wiki_homepage_entry_mode","parent":{"node_type":"requirement","node_id":"req_wiki_homepage_entry_mode"},"status":"active","created_at":1}
