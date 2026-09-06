@@ -129,6 +129,16 @@
   .editable{cursor:text;width:100%}
   .editable:hover{text-decoration:underline;text-decoration-style:dotted;text-underline-offset:5px;
     text-decoration-color:var(--mauve)}
+  .editable.viewing-before{cursor:default;color:var(--soft);font-style:italic}
+  .editable.viewing-before:hover{text-decoration:none}
+  /* Before/After viewing switch: exactly two states, purely visual —
+     it never cancels, reverts or mutates the saved edit. */
+  .ba{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin:0 0 8px}
+  .ba-label{font:600 11.5px var(--ui);color:var(--mauve)}
+  .ba-btn{font:11.5px var(--ui);border:1px solid var(--line);border-radius:3px;padding:2px 10px;color:var(--soft)}
+  .ba-btn:hover{color:var(--ink);border-color:rgba(224,222,244,.3)}
+  .ba-btn[aria-pressed="true"]{color:var(--rose);border-color:var(--rose);background:rgba(235,111,146,.07)}
+  .ba-caption{font:11.5px/1.5 var(--ui);color:var(--mauve);flex:1 1 320px;min-width:240px}
   .field-edit{cursor:text;font:14px/1.6 var(--ui);color:var(--soft)}
   .field-edit:hover{text-decoration:underline;text-decoration-style:dotted;text-underline-offset:4px;
     text-decoration-color:var(--mauve)}
@@ -393,6 +403,13 @@
                               </summary>
                               <div class="body">
                                 <div id="stmt-wrap">
+                                  <div class="ba" role="group" aria-label="Saved change viewing state — Before or After (prototype only)">
+                                    <span class="ba-label">Saved change</span>
+                                    <button type="button" class="ba-btn" id="ba-before" aria-pressed="false">Before</button>
+                                    <button type="button" class="ba-btn" id="ba-after" aria-pressed="true">After</button>
+                                    <span class="ba-caption">Before = the working version this change replaced — prototype
+                                      example, not graph content. Switching views never reverts the saved edit.</span>
+                                  </div>
                                   <button type="button" class="statement editable" id="stmt-field"
                                     title="Click to edit — Markdown supported (prototype only)">The shared view permits
                                     direct editing of source content and structured graph records.</button>
@@ -409,8 +426,8 @@
                                 </div>
                                 <p class="rel">refines <b>Refinement shows the evolving structure</b> · spawned by
                                   <b>Direct editing of source content and records</b></p>
-                                <p class="rel">Editing here is the demonstration: click the statement above to change it
-                            in place.</p>
+                                <p class="rel">Editing here is the demonstration: click the statement above to change it in place —
+                            the Saved change switch above shows Before and After without reverting anything.</p>
                                 <p class="field"><b>Touches</b> both kinds of content: the original source text and
                                   the structured records — try the source edit on the discovery conversation below.</p>
                               </div>
@@ -716,8 +733,12 @@
       <p>Existing records: click an editable field to change it in place — no modal. Free text edits as
         Markdown (the editor uses a monospace input as the Markdown cue); constrained fields, like lifecycle
         status, become dropdowns with the real closed vocabularies; relationship targets open a fuzzy search
-        restricted to compatible records — the Rule here can only target Requirements. Two states only: Before
-        exists inside the editor (Esc or Cancel), normal viewing is After; no diff mode. Creating a new item
+        restricted to compatible records — the Rule here can only target Requirements. Change viewing has
+        exactly two states — Before and After — on the statement of “Direct editing of sources and records”:
+        Before shows the working version the change replaced, After shows the result, and After is the normal
+        viewing state. The switch is purely visual; it never cancels or reverts the saved edit. Editing itself
+        stays separate: Keep commits the typed text and rotates the prior version into Before, Cancel discards
+        the draft. No third state and no diff mode. Creating a new item
         would open an editable dialog before the page changes — not demonstrated here. Everything is
         prototype-local and reversible by reload.</p>
       <h3>Type at document scale (proposal for review)</h3>
@@ -1059,13 +1080,57 @@
     }, 2600);
   }
 
-  inlineEditor({
-    field: $("#stmt-field"), box: $("#stmt-editor"), input: $("#stmt-input"),
-    keep: $("#stmt-keep"), cancel: $("#stmt-cancel"), note: $("#stmt-note"),
-    noteText: "Kept in this prototype only — reload restores it.",
-    get: function () { return $("#stmt-field").textContent; },
-    set: function (v) { $("#stmt-field").textContent = v; }
+  /* Saved statement change: exactly two viewing states, Before and After.
+     Normal viewing is After. The switch is purely visual — switching never
+     cancels, reverts or mutates the saved edit. Editing (Keep/Cancel) is a
+     separate concern: Keep commits the typed text and rotates the previous
+     version into Before; Cancel discards the draft. */
+  var stmtAfter = "The shared view permits direct editing of source content and structured graph records.";
+  var stmtBefore = "The shared view lets the person edit both the original source text and the structured records while the conversation keeps going.";
+  var stmtView = "after";
+  function renderStmt() {
+    var f = $("#stmt-field");
+    f.textContent = (stmtView === "before") ? stmtBefore : stmtAfter;
+    f.classList.toggle("viewing-before", stmtView === "before");
+    $("#ba-before").setAttribute("aria-pressed", stmtView === "before" ? "true" : "false");
+    $("#ba-after").setAttribute("aria-pressed", stmtView === "after" ? "true" : "false");
+  }
+  $("#stmt-field").addEventListener("click", function () {
+    if (stmtView === "before") {
+      flash($("#stmt-note"), "Viewing the version before this change — switch to After to edit.");
+      return;
+    }
+    $("#stmt-input").value = stmtAfter;
+    $("#stmt-field").hidden = true;
+    $("#stmt-editor").hidden = false;
+    $("#stmt-input").focus();
   });
+  function stmtClose() {
+    $("#stmt-editor").hidden = true;
+    $("#stmt-field").hidden = false;
+  }
+  $("#stmt-keep").addEventListener("click", function () {
+    var v = $("#stmt-input").value.trim();
+    if (v) { stmtBefore = stmtAfter; stmtAfter = v; }
+    stmtClose();
+    stmtView = "after";
+    renderStmt();
+    flash($("#stmt-note"), "Kept in this prototype only — reload restores it.");
+  });
+  $("#stmt-cancel").addEventListener("click", function () {
+    $("#stmt-input").value = stmtAfter;
+    stmtClose();
+  });
+  $("#stmt-input").addEventListener("keydown", function (e) {
+    if (e.key === "Escape") { e.preventDefault(); $("#stmt-input").value = stmtAfter; stmtClose(); }
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      $("#stmt-keep").click();
+    }
+  });
+  $("#ba-before").addEventListener("click", function () { stmtView = "before"; renderStmt(); });
+  $("#ba-after").addEventListener("click", function () { stmtView = "after"; renderStmt(); });
+  renderStmt();
 
   inlineEditor({
     field: $("#src-notes-field"), box: $("#src-editor"), input: $("#src-input"),
