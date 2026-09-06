@@ -35,7 +35,7 @@ pub async fn catch_up_state(layout: &ProvenanceLayout) -> anyhow::Result<CatchUp
     // Close rather than drop. A dropped pool releases its file handles
     // asynchronously, and on Windows a later delete of the database file
     // races that release.
-    pool.close().await;
+    crate::cache::close_cache(&pool).await;
     report
 }
 

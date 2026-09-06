@@ -117,6 +117,10 @@ default is 5000 source files. Unknown keys and invalid values cause a typed
 settings refusal, with no answer. A settings edit changes no state digest.
 The stamp names the policy that ran; `scan_cut` reports a scan limit reached.
 
+A completed read waits until the cache pool has no connections. A connection
+that returns during shutdown is closed before the answer leaves the process.
+SQLite can then finish the checkpoint and remove the -wal and -shm files.
+
 A checkout whose cache directory this process cannot write can still read
 its stored projection. WAL needs a writable `-shm` file beside the database.
 A finished read removes the `-wal` and `-shm` files, so the reader opens the
@@ -137,8 +141,10 @@ answer is at the serial the file holds. Both `PermissionDenied` and
 by policies; stage K.3 adds the unlocked hash decision for `refuse_stale`,
 which currently refuses as unimplemented. These permission fixtures run
 on Unix. A Linux test also uses an isolated read-only mount when user and
-mount namespaces are available. The tests do not reproduce these
-permissions on Windows.
+mount namespaces are available. It checks the mount options and attempts
+file creation and a database write open before either read. If the mount
+cannot prevent writes, the test prints a skip reason. The tests do not
+reproduce these permissions on Windows.
 
 ## Long-running server handoff
 

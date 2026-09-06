@@ -168,3 +168,60 @@ async fn a_second_opener_survives_the_wal_switch() {
     pool.close().await;
     assert!(child.wait().unwrap().success());
 }
+
+#[tokio::test]
+#[verifies("rule_completed_read_leaves_no_wal_files", examples)]
+async fn closing_waits_for_a_connection_already_returning_to_the_pool() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+    use tokio::sync::Notify;
+
+    let (_dir, layout, _scope) = empty_layout();
+    std::fs::create_dir_all(layout.cache_dir()).unwrap();
+    let pause_return = Arc::new(AtomicBool::new(false));
+    let returning = Arc::new(Notify::new());
+    let resume = Arc::new(Notify::new());
+    let pool = SqlitePoolOptions::new()
+        .max_connections(1)
+        .after_release({
+            let pause_return = Arc::clone(&pause_return);
+            let returning = Arc::clone(&returning);
+            let resume = Arc::clone(&resume);
+            move |_, _| {
+                let pause_return = Arc::clone(&pause_return);
+                let returning = Arc::clone(&returning);
+                let resume = Arc::clone(&resume);
+                Box::pin(async move {
+                    if pause_return.swap(false, Ordering::SeqCst) {
+                        returning.notify_one();
+                        resume.notified().await;
+                    }
+                    Ok(true)
+                })
+            }
+        })
+        .connect_with(cache_options(&layout).unwrap().create_if_missing(true))
+        .await
+        .unwrap();
+    let mut connection = pool.acquire().await.unwrap();
+    sqlx::query("CREATE TABLE probe (x INTEGER)")
+        .execute(&mut *connection)
+        .await
+        .unwrap();
+    pause_return.store(true, Ordering::SeqCst);
+    drop(connection);
+    tokio::time::timeout(Duration::from_secs(5), returning.notified())
+        .await
+        .expect("the connection must start its return");
+
+    tokio::time::timeout(Duration::from_secs(5), async {
+        tokio::join!(close_cache(&pool), async {
+            pool.close_event().await;
+            resume.notify_one();
+        });
+    })
+    .await
+    .expect("closing must wait for the returning connection without blocking it");
+    assert_eq!(pool.size(), 0, "closing left a connection in the pool");
+    assert_eq!(wal_files(&layout), Vec::<String>::new());
+}
