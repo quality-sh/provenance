@@ -54,6 +54,7 @@ fn read_families(store: &StateStore, scope: &ScopeId) -> anyhow::Result<Vec<serd
 
 #[tokio::test]
 #[verifies("rule_store_under_guard_takes_no_second_lock", examples)]
+#[verifies("rule_guarded_reads_use_guard_repository", examples)]
 async fn a_store_under_the_guard_takes_no_second_lock() {
     let root = camino::Utf8Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -68,7 +69,7 @@ async fn a_store_under_the_guard_takes_no_second_lock() {
     let guard = publication_guard(&store.layout).await.unwrap();
     let (sender, receiver) = mpsc::channel();
     let reader = std::thread::spawn(move || {
-        let guarded = StateStore::under_guard(&guard, store.layout.clone());
+        let guarded = StateStore::under_guard(&guard);
         let records = read_families(&guarded, &scope);
         sender
             .send((records, publication_lock_is_held(&store.layout)))
@@ -122,6 +123,32 @@ async fn a_plain_store_still_waits_for_the_lock() {
 async fn a_cloned_store_locks_again() {
     let (_dir, store, scope) = seeded_source_requirement_store();
     let guard = publication_guard(&store.layout).await.unwrap();
-    let cloned = StateStore::under_guard(&guard, store.layout.clone()).clone();
+    let cloned = StateStore::under_guard(&guard).clone();
     assert_waits_for_guard(cloned, scope, guard);
+}
+
+#[test]
+#[verifies("rule_guarded_store_writes_take_publication_lock", examples)]
+fn a_guarded_write_holds_the_publication_lock() {
+    let (_dir, store, _scope) = seeded_source_requirement_store();
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    // Validation can supply a guard without a lock. Leave that context before writing.
+    let guard = crate::publication::with_read_only_validation(&store.layout, || {
+        runtime.block_on(publication_guard(&store.layout))
+    })
+    .unwrap();
+    assert!(!publication_lock_is_held(&store.layout));
+    let guarded = StateStore::under_guard(&guard);
+    let path = store.layout.state_dir().join("write_probe.jsonl");
+    guarded
+        .mutate_jsonl_records(&path, |records: &mut Vec<String>| {
+            assert!(
+                publication_lock_is_held(&store.layout),
+                "a guarded write must hold the repository publication lock"
+            );
+            records.push("written".into());
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(std::fs::read_to_string(path).unwrap(), "\"written\"\n");
 }

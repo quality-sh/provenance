@@ -5,7 +5,7 @@ error[E0597]: `guard` does not live long enough
   |         ----- borrow later stored here
 7 |         let guard = publication_guard(&layout).await.unwrap();
   |             ----- binding `guard` declared here
-8 |         StateStore::under_guard(&guard, layout)
+8 |         StateStore::under_guard(&guard)
   |                                 ^^^^^^ borrowed value does not live long enough
 9 |     };
   |     - `guard` dropped here while still borrowed

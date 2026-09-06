@@ -124,7 +124,7 @@ impl StateStore {
         scope_id: &ScopeId,
         input: TypedSpecInput,
     ) -> anyhow::Result<TypedSpecResult> {
-        self.with_repository_publication(|| {
+        self.with_repository_read(|| {
             self.reconcile_typed_spec(scope_id, input, ReconcileMode::Plan)
         })
     }

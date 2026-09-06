@@ -47,7 +47,7 @@ pub(super) async fn materialize_with_guard(
     guard: &publication::PublicationGuard,
     layout: &ProvenanceLayout,
 ) -> anyhow::Result<MaterializeReport> {
-    let snapshot = publication::snapshot_state_under_guard(guard, layout)?;
+    let snapshot = publication::snapshot_state_under_guard(guard)?;
     let store = StateStore::new(snapshot.layout().clone());
     let manifest = store.manifest()?;
     for scope in &manifest.scopes {

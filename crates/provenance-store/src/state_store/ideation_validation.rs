@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 
 impl StateStore {
     pub fn validate_ideation_scope(&self, scope: &ScopeId) -> anyhow::Result<()> {
-        self.with_repository_publication(|| {
+        self.with_repository_read(|| {
             let manifest = self.manifest()?;
             self.validate_ideation_scope_snapshot(scope, &manifest.disposition_actor_ids)
         })
@@ -23,7 +23,7 @@ impl StateStore {
         scope: &ScopeId,
         disposition_actor_ids: &[String],
     ) -> anyhow::Result<()> {
-        self.with_repository_publication(|| {
+        self.with_repository_read(|| {
             self.validate_ideation_scope_snapshot(scope, disposition_actor_ids)
         })
     }

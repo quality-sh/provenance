@@ -7,6 +7,9 @@ use std::marker::PhantomData;
 use std::ops::Deref;
 
 /// A store that uses a publication guard for the lifetime of its reads.
+///
+/// Writes use the ordinary publication lock path and wait for a held lock.
+/// To write after reading, clone the store and release the guard first.
 pub struct GuardedStore<'g> {
     store: StateStore,
     _guard: PhantomData<&'g PublicationGuard>,
@@ -27,23 +30,20 @@ impl Clone for StateStore {
 }
 
 impl StateStore {
-    /// Reads through a held guard. The layout must name the repository that the guard protects.
+    /// Reads the repository of a held publication guard without a second lock.
     ///
     /// ```compile_fail
     /// use provenance_store::layout::ProvenanceLayout;
     /// use provenance_store::publication::PublicationGuard;
     /// use provenance_store::state_store::StateStore;
     /// let layout = ProvenanceLayout::new("repo");
-    /// let forged = PublicationGuard { _lock: None };
-    /// let _ = StateStore::under_guard(&forged, layout);
+    /// let forged = PublicationGuard { _lock: None, layout };
+    /// let _ = StateStore::under_guard(&forged);
     /// ```
-    pub const fn under_guard(
-        _guard: &PublicationGuard,
-        layout: ProvenanceLayout,
-    ) -> GuardedStore<'_> {
+    pub fn under_guard(guard: &PublicationGuard) -> GuardedStore<'_> {
         GuardedStore {
             store: Self {
-                layout,
+                layout: guard.layout().clone(),
                 access: Access::Held,
             },
             _guard: PhantomData,
@@ -69,7 +69,16 @@ impl StateStore {
         self.publication_access(&ProvenanceLayout::new(root), operation)
     }
 
+    /// Uses the ordinary publication lock path for writes, including guarded stores.
+    #[rule("rule_guarded_store_writes_take_publication_lock")]
     pub fn with_repository_publication<R>(
+        &self,
+        operation: impl FnOnce() -> anyhow::Result<R>,
+    ) -> anyhow::Result<R> {
+        with_repository_publication(&self.layout, operation)
+    }
+
+    pub(super) fn with_repository_read<R>(
         &self,
         operation: impl FnOnce() -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {

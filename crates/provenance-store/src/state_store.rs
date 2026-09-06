@@ -110,7 +110,7 @@ impl StateStore {
         }
     }
     pub fn manifest(&self) -> anyhow::Result<Manifest> {
-        self.with_repository_publication(|| {
+        self.with_repository_read(|| {
             crate::test_probes::record_read(&self.layout.manifest_path());
             let manifest: Manifest =
                 serde_json::from_str(&std::fs::read_to_string(self.layout.manifest_path())?)?;
@@ -123,7 +123,7 @@ impl StateStore {
         &self,
         scope: &ScopeId,
     ) -> anyhow::Result<(SchemaVersion, Option<Scope>)> {
-        self.with_repository_publication(|| {
+        self.with_repository_read(|| {
             let manifest: ManifestProjection =
                 deserialize_closed(&std::fs::read_to_string(self.layout.manifest_path())?)?;
             let selected = manifest
@@ -139,7 +139,7 @@ impl StateStore {
     }
 
     pub fn list_scope_directories(&self) -> anyhow::Result<Vec<String>> {
-        self.with_repository_publication(|| {
+        self.with_repository_read(|| {
             let scopes_dir = self.layout.scopes_dir();
             if !scopes_dir.exists() {
                 return Ok(Vec::new());
@@ -280,7 +280,7 @@ impl StateStore {
         scope: &ScopeId,
         after_direct_read: impl FnOnce() -> anyhow::Result<()>,
     ) -> anyhow::Result<Vec<Contribution>> {
-        self.with_repository_publication(|| {
+        self.with_repository_read(|| {
             let mut records = read_jsonl(self, &shards::contributions_path(&self.layout, scope))?;
             after_direct_read()?;
             for batch in self.list_ideation_landings(scope)? {
@@ -292,7 +292,7 @@ impl StateStore {
         })
     }
     pub fn list_synthesis_packets(&self, scope: &ScopeId) -> anyhow::Result<Vec<SynthesisPacket>> {
-        self.with_repository_publication(|| {
+        self.with_repository_read(|| {
             let mut records =
                 read_jsonl(self, &shards::synthesis_packets_path(&self.layout, scope))?;
             for batch in self.list_ideation_landings(scope)? {
@@ -319,7 +319,7 @@ impl StateStore {
         disposition_actor_ids: Option<&[String]>,
         after_validation: impl FnOnce() -> anyhow::Result<()>,
     ) -> anyhow::Result<Vec<ProposalCard>> {
-        self.with_repository_publication(|| {
+        self.with_repository_read(|| {
             if let Some(disposition_actor_ids) = disposition_actor_ids {
                 self.validate_ideation_scope_with_actor_ids(scope, disposition_actor_ids)?;
             } else {
@@ -344,7 +344,7 @@ impl StateStore {
         })
     }
     pub fn list_proposal_definitions(&self, scope: &ScopeId) -> anyhow::Result<Vec<ProposalCard>> {
-        self.with_repository_publication(|| {
+        self.with_repository_read(|| {
             let mut records = read_jsonl(self, &shards::proposal_cards_path(&self.layout, scope))?;
             for batch in self.list_ideation_landings(scope)? {
                 overlay_records(&mut records, batch.proposals, |record| record.id.as_str());
@@ -353,7 +353,7 @@ impl StateStore {
         })
     }
     pub fn list_dispositions(&self, scope: &ScopeId) -> anyhow::Result<Vec<DispositionRecord>> {
-        self.with_repository_publication(|| {
+        self.with_repository_read(|| {
             let mut records = read_jsonl(self, &shards::dispositions_path(&self.layout, scope))?;
             records.extend(read_legacy_dispositions(
                 self,
@@ -368,7 +368,7 @@ impl StateStore {
         })
     }
     pub fn list_assertion_records(&self, scope: &ScopeId) -> anyhow::Result<Vec<AssertionRecord>> {
-        self.with_repository_publication(|| {
+        self.with_repository_read(|| {
             let mut records =
                 read_jsonl(self, &shards::assertion_records_path(&self.layout, scope))?;
             for batch in self.list_ideation_landings(scope)? {
