@@ -14,7 +14,6 @@ async fn concurrent_answers_finish_and_remove_the_wal_files() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[ignore = "concurrent pool closes can leave a -wal file; reader changes are outside K.4"]
 #[verifies("rule_completed_read_leaves_no_wal_files", examples)]
 async fn answers_that_close_together_remove_the_wal_files() {
     assert_concurrent_answers(true).await;
