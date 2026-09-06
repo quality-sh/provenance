@@ -171,6 +171,8 @@ pub fn compute_for(
         threads: &[],
         domains,
         boundaries: &[],
+        contributions: &[],
+        synthesis_packets: &[],
     })
 }
 

@@ -46,6 +46,7 @@ impl StateStore {
         for claim in &material_claims {
             validate_optional_confidence_score(claim.confidence)?;
         }
+        self.ensure_contribution_target(&scope_id, &id, &target)?;
         let contribution = Contribution {
             schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: scope_id.clone(),
@@ -159,6 +160,7 @@ impl StateStore {
             suggested_artifacts,
             required_human_decisions,
         } = input;
+        self.ensure_synthesis_target(&scope_id, &id, &target)?;
         let synthesis_packet = SynthesisPacket {
             schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: scope_id.clone(),

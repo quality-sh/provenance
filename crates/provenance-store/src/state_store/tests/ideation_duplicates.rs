@@ -1,4 +1,4 @@
-use super::initialized_store;
+use super::{initialized_store, seeded_requirement_store};
 use crate::state_store::IdeationLandingBatch;
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
@@ -25,7 +25,7 @@ fn exact_duplicate_proposal_id_is_rejected_at_batch_ingress() {
 
 #[test]
 fn exact_duplicate_assertion_id_is_rejected_at_batch_ingress() {
-    let (_dir, store, scope) = initialized_store();
+    let (_dir, store, scope) = seeded_requirement_store();
     let initial = asserted_batch();
     store
         .land_ideation_batch(&scope, initial.clone(), false)
@@ -92,7 +92,7 @@ fn asserted_batch() -> IdeationLandingBatch {
     serde_json::from_value(serde_json::json!({
         "contributions": [{
             "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "contribution_a",
-            "target": {"artifact_type": "requirement", "artifact_id": "req_a"},
+            "target": {"artifact_type": "requirement", "artifact_id": "req_overtime"},
             "participant_slot": "reviewer", "stance": "support", "strongest_finding": "Observed",
             "evidence_references": [{"reference_id": "evidence_a", "evidence_type": "source", "summary": "Pinned"}],
             "material_claims": [{"claim_id": "claim_a", "statement": "Observed", "evidence_type": "source", "evidence_reference_ids": ["evidence_a"]}],
@@ -101,7 +101,7 @@ fn asserted_batch() -> IdeationLandingBatch {
         }],
         "synthesis_packets": [{
             "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "synthesis_a",
-            "target": {"artifact_type": "requirement", "artifact_id": "req_a"}, "summary": "Adjudicated",
+            "target": {"artifact_type": "requirement", "artifact_id": "req_overtime"}, "summary": "Adjudicated",
             "consensus": [], "contested_claims": [], "minority_objections": [], "evidence_gaps": [],
             "unsupported_speculation": [], "open_questions": [],
             "suggested_artifacts": [{"proposal_id": "proposal_a", "proposal_key": "proposal-a", "proposal_type": "requirement_candidate", "summary": "Candidate", "origin_participant_slots": ["reviewer"]}],
@@ -124,7 +124,7 @@ fn proposal() -> serde_json::Value {
         "proposal_key": "proposal-a", "proposal_type": "requirement_candidate",
         "title": "Candidate", "summary": "Candidate",
         "traceability": {
-            "target": {"artifact_type": "requirement", "artifact_id": "req_a"},
+            "target": {"artifact_type": "requirement", "artifact_id": "req_overtime"},
             "source_ids": [], "evidence_references": [], "supporting_claim_ids": ["claim_a"]
         },
         "promotion_state": "proposed"

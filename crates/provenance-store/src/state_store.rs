@@ -2,6 +2,7 @@ mod canonical_artifacts;
 mod domain_writers;
 mod graph_validation;
 mod ideation_batches;
+mod ideation_targets;
 mod ideation_writers;
 mod implementation_bindings;
 mod inputs;

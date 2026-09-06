@@ -1,7 +1,6 @@
 use super::index::CheckIndex;
 use provenance_core::{
-    ArtifactLink, ArtifactLinkTargetType, IdeationTarget, IdeationTargetType, NodeType, ScopeId,
-    StableId,
+    ArtifactLink, ArtifactLinkTargetType, IdeationTarget, NodeType, ScopeId, StableId,
 };
 
 pub(super) fn check_origin_references(
@@ -69,7 +68,7 @@ pub(super) fn check_ideation_target(
         scope_id,
         owner,
         "target",
-        ideation_target_type_name(target.artifact_type),
+        node_type_name(NodeType::from(target.artifact_type)),
         &target.artifact_id,
     );
 }
@@ -110,17 +109,5 @@ const fn artifact_link_target_name(target_type: ArtifactLinkTargetType) -> &'sta
         ArtifactLinkTargetType::Requirement => "requirement",
         ArtifactLinkTargetType::Resolution => "resolution",
         ArtifactLinkTargetType::Rule => "rule",
-    }
-}
-
-const fn ideation_target_type_name(target_type: IdeationTargetType) -> &'static str {
-    match target_type {
-        IdeationTargetType::Source => "source",
-        IdeationTargetType::Requirement => "requirement",
-        IdeationTargetType::Resolution => "resolution",
-        IdeationTargetType::Rule => "rule",
-        IdeationTargetType::Topic => "topic",
-        IdeationTargetType::Question => "question",
-        IdeationTargetType::Domain => "domain",
     }
 }

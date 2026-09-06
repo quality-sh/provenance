@@ -35,7 +35,8 @@ fn assert_ideation_target_type_array_is_exhaustive(value: IdeationTargetType) {
         | IdeationTargetType::Rule
         | IdeationTargetType::Topic
         | IdeationTargetType::Question
-        | IdeationTargetType::Domain => {}
+        | IdeationTargetType::Domain
+        | IdeationTargetType::Boundary => {}
     }
 }
 

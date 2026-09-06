@@ -49,6 +49,7 @@ impl StateStore {
         self.mutate_jsonl_records(&path, |landings: &mut Vec<IdeationLandingBatch>| {
             let mut contributions = self.list_contributions(scope)?;
             let mut synthesis_packets = self.list_synthesis_packets(scope)?;
+            self.ensure_batch_targets_exist(scope, &contributions, &synthesis_packets, &incoming)?;
             let mut proposals = self.list_proposal_definitions(scope)?;
             let mut assertions = self.list_assertion_records(scope)?;
             let mut dispositions = self.list_dispositions(scope)?;

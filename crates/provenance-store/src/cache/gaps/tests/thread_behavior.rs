@@ -18,6 +18,8 @@ fn gaps_with(
         threads,
         domains,
         boundaries: &[],
+        contributions: &[],
+        synthesis_packets: &[],
     })
 }
 

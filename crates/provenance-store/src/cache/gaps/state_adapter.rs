@@ -1,7 +1,8 @@
 use super::{compute_gaps, graph_query::GapGraph, model::GapItem};
 use crate::{layout::ProvenanceLayout, state_store::StateStore};
 use provenance_core::{
-    Boundary, Question, Requirement, Resolution, Rule, ScopeId, Source, Thread, Topic,
+    Boundary, Contribution, IdeationTarget, NodeType, Question, Requirement, Resolution, Rule,
+    ScopeId, Source, SynthesisPacket, Thread, Topic,
 };
 use std::collections::BTreeSet;
 
@@ -29,6 +30,8 @@ pub(in crate::cache) struct GraphRecords {
     pub(in crate::cache) threads: Vec<Thread>,
     pub(in crate::cache) domains: Vec<provenance_core::Domain>,
     pub(in crate::cache) boundaries: Vec<provenance_core::Boundary>,
+    pub(in crate::cache) contributions: Vec<Contribution>,
+    pub(in crate::cache) synthesis_packets: Vec<SynthesisPacket>,
 }
 
 impl GraphRecords {
@@ -38,6 +41,8 @@ impl GraphRecords {
     /// boundaries of a retired requirement. A reference from a live record
     /// to a retired record is dropped too: `check` reads the unfiltered
     /// lists and resolves it, so the gap report must not call it dangling.
+    /// A contribution or synthesis packet whose target retired leaves on
+    /// the same terms.
     pub(in crate::cache) fn load(scope: &ScopeId, store: &StateStore) -> anyhow::Result<Self> {
         let mut sources = store.list_sources(scope)?;
         let mut requirements = store.list_requirements(scope)?;
@@ -46,9 +51,12 @@ impl GraphRecords {
         let mut topics = store.list_topics(scope)?;
         let mut questions = store.list_questions(scope)?;
         let mut boundaries = store.list_boundaries(scope)?;
+        let mut contributions = store.list_contributions(scope)?;
+        let mut synthesis_packets = store.list_synthesis_packets(scope)?;
         let retired_sources = retired_ids(&sources, |record| (&record.id, record.retired));
         let retired_requirements =
             retired_ids(&requirements, |record| (&record.id, record.retired));
+        let retired_rules = retired_ids(&rules, |record| (&record.id, record.retired));
         let retired_resolutions = resolutions
             .iter()
             .filter(|resolution| {
@@ -81,17 +89,28 @@ impl GraphRecords {
         questions.retain(|record| !retired_questions.contains(record.id.as_str()));
         // A boundary's requirement is a required reference, so it cannot be
         // emptied; the boundary leaves with its requirement, like a topic.
-        boundaries.retain(|record| !retired_requirements.contains(record.requirement_id.as_str()));
+        let retired_boundaries = boundaries
+            .iter()
+            .filter(|record| retired_requirements.contains(record.requirement_id.as_str()))
+            .map(|record| record.id.as_str().to_string())
+            .collect::<BTreeSet<_>>();
+        boundaries.retain(|record| !retired_boundaries.contains(record.id.as_str()));
         let retired = RetiredNodes {
             sources: retired_sources,
             requirements: retired_requirements,
             resolutions: retired_resolutions,
+            rules: retired_rules,
+            topics: retired_topics,
+            questions: retired_questions,
+            boundaries: retired_boundaries,
         };
         scrub_sources(&retired, &mut sources);
         scrub_requirements(&retired, &mut requirements);
         scrub_resolutions(&retired, &mut resolutions);
         scrub_rules(&retired, &mut rules);
         scrub_boundaries(&retired, &mut boundaries);
+        contributions.retain(|record| !retired.holds_target(&record.target));
+        synthesis_packets.retain(|record| !retired.holds_target(&record.target));
         Ok(Self {
             sources,
             requirements,
@@ -102,6 +121,8 @@ impl GraphRecords {
             threads: store.list_threads(scope)?,
             domains: store.list_domains(scope)?,
             boundaries,
+            contributions,
+            synthesis_packets,
         })
     }
 
@@ -117,6 +138,8 @@ impl GraphRecords {
             threads: &self.threads,
             domains: &self.domains,
             boundaries: &self.boundaries,
+            contributions: &self.contributions,
+            synthesis_packets: &self.synthesis_packets,
         }
     }
 }
@@ -139,6 +162,28 @@ struct RetiredNodes {
     sources: BTreeSet<String>,
     requirements: BTreeSet<String>,
     resolutions: BTreeSet<String>,
+    rules: BTreeSet<String>,
+    topics: BTreeSet<String>,
+    questions: BTreeSet<String>,
+    boundaries: BTreeSet<String>,
+}
+
+impl RetiredNodes {
+    /// True when an ideation target names a record that left as retired.
+    /// A domain cannot retire.
+    fn holds_target(&self, target: &IdeationTarget) -> bool {
+        let id = target.artifact_id.as_str();
+        match NodeType::from(target.artifact_type) {
+            NodeType::Source => self.sources.contains(id),
+            NodeType::Requirement => self.requirements.contains(id),
+            NodeType::Resolution => self.resolutions.contains(id),
+            NodeType::Rule => self.rules.contains(id),
+            NodeType::Topic => self.topics.contains(id),
+            NodeType::Question => self.questions.contains(id),
+            NodeType::Boundary => self.boundaries.contains(id),
+            NodeType::Domain => false,
+        }
+    }
 }
 
 fn scrub_sources(retired: &RetiredNodes, sources: &mut [Source]) {

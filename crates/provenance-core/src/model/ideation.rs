@@ -7,6 +7,7 @@ pub(super) mod lifecycle;
 pub(super) mod proposals;
 pub(super) mod synthesis;
 
+use super::graph::NodeType;
 use super::ids::StableId;
 use super::parsing::normalize_enum_value;
 
@@ -26,6 +27,8 @@ pub enum IdeationTargetType {
     Question,
     #[serde(rename = "domain")]
     Domain,
+    #[serde(rename = "boundary")]
+    Boundary,
 }
 
 impl IdeationTargetType {
@@ -38,9 +41,27 @@ impl IdeationTargetType {
             "topic" => Ok(Self::Topic),
             "question" => Ok(Self::Question),
             "domain" => Ok(Self::Domain),
+            "boundary" => Ok(Self::Boundary),
             _ => anyhow::bail!(
-                "target type must be source, requirement, resolution, rule, topic, question, or domain"
+                "target type must be source, requirement, resolution, rule, topic, question, \
+                 domain, or boundary"
             ),
+        }
+    }
+}
+
+/// An ideation target names a graph record; this is the kind it names.
+impl From<IdeationTargetType> for NodeType {
+    fn from(target_type: IdeationTargetType) -> Self {
+        match target_type {
+            IdeationTargetType::Source => Self::Source,
+            IdeationTargetType::Requirement => Self::Requirement,
+            IdeationTargetType::Resolution => Self::Resolution,
+            IdeationTargetType::Rule => Self::Rule,
+            IdeationTargetType::Topic => Self::Topic,
+            IdeationTargetType::Question => Self::Question,
+            IdeationTargetType::Domain => Self::Domain,
+            IdeationTargetType::Boundary => Self::Boundary,
         }
     }
 }

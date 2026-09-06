@@ -31,6 +31,17 @@ duplicates; `refines`, `depends_on`, and `supersedes` refuse a cycle at write.
 | question | `resolution_id` | resolution | optional | single |
 | question | `contradicts` | requirement | optional | single |
 
+A contribution or synthesis packet carries a `target` (`artifact_type`,
+`artifact_id`) that names one record of any of the eight kinds above, boundary
+included. The target is not a relation row: it is not in the table above and
+does not enter the projection's `relations` table. A new contribution or
+synthesis packet must name a record that exists in its scope, or the write is
+refused; a target at a retired record is accepted, as every other writer
+accepts a reference to one. A stored target that names no record is reported
+by `provenance gaps` as a dangling reference (`contribution <id> target points
+at missing <kind> <id>`), and `provenance check` names it as one too. Neither
+refuses anything else: reads, catch-up, and later writes go through.
+
 A contradiction is a question: `topic_id` and `requirement_id` name one side,
 `contradicts` the other. It is settled when the question carries a
 `resolution_id` or either requirement lists the other in `supersedes`. A
