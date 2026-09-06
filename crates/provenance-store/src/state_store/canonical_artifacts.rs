@@ -106,8 +106,8 @@ impl CanonicalArtifactIndex {
     }
 
     /// A new contribution or synthesis packet names a record that exists in
-    /// its scope, of any of the eight kinds. Only the four ideation writers
-    /// call this; a read never does.
+    /// its scope, of any of the eight kinds. Only the ideation writers call
+    /// this, the direct ones and the landed batch; a read never does.
     #[rule("rule_new_ideation_target_names_a_record")]
     pub(super) fn ensure_target_exists(&self, target: &IdeationTarget) -> anyhow::Result<()> {
         let kind = NodeType::from(target.artifact_type);
