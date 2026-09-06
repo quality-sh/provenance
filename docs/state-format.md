@@ -36,9 +36,11 @@ A contribution or synthesis packet carries a `target` (`artifact_type`,
 included. The target is not a relation row: it is not in the table above and
 does not enter the projection's `relations` table. A new contribution or
 synthesis packet must name a record that exists in its scope, or the write is
-refused. A stored target that names no record is reported by `provenance gaps`
-as a dangling reference (`contribution <id> target points at missing <kind>
-<id>`) and refuses nothing: reads, catch-up, and later writes go through.
+refused; a target at a retired record is accepted, as every other writer
+accepts a reference to one. A stored target that names no record is reported
+by `provenance gaps` as a dangling reference (`contribution <id> target points
+at missing <kind> <id>`), and `provenance check` names it as one too. Neither
+refuses anything else: reads, catch-up, and later writes go through.
 
 A contradiction is a question: `topic_id` and `requirement_id` name one side,
 `contradicts` the other. It is settled when the question carries a
