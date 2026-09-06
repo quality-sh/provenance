@@ -4,6 +4,7 @@ mod catch_up_domain_coverage;
 mod catch_up_migration_behavior;
 mod catch_up_serial_behavior;
 mod catch_up_validation_behavior;
+mod close_order_behavior;
 pub mod fixtures;
 mod frontier_behavior;
 mod gap_rule_behavior;

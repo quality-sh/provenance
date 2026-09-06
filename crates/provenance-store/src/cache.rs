@@ -29,8 +29,14 @@ use fs2::FileExt;
 use provenance_macros::rule;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 use sqlx::{ConnectOptions, SqlitePool};
+use std::fs::{File, OpenOptions};
+use std::io::ErrorKind;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
+
+/// How often a close retries the close lock while another close holds it.
+const CLOSE_LOCK_RETRY: Duration = Duration::from_millis(1);
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct MaterializeReport {
@@ -146,6 +152,25 @@ async fn connect(
 
 /// Closes every cache connection before a read returns, so `SQLite` can remove
 /// the -wal and -shm files when the last connection closes.
+///
+/// Two closes at the same moment can each fail their exclusive-lock attempt
+/// before the other releases its shared lock, and both then skip cleanup.
+/// The per-database close lock orders closes across independent pools, and
+/// the lock belongs to a detached close task rather than to the caller:
+///
+/// - The wait for the lock is a non-blocking attempt on the calling worker,
+///   retried after a sleep. Publication waiters can occupy every blocking
+///   worker while this read still holds the publication guard, so a lock
+///   wait that needed a blocking worker could never run.
+/// - A reader cancelled mid-close, or one that panics there, cannot release
+///   the lock early. The close task owns the lock and finishes the close
+///   after the reader is gone, so the order does not depend on the reader's
+///   future.
+/// - The lock is released only after the pool holds no connection, which is
+///   after the physical `SQLite` teardown has finished.
+///
+/// Never lock the database through another file descriptor: closing it can
+/// release `SQLite`'s process-owned POSIX locks on active connections.
 #[rule("rule_completed_read_leaves_no_wal_files")]
 pub(crate) async fn close_cache(pool: &SqlitePool) -> anyhow::Result<()> {
     let options = pool.connect_options();
@@ -154,37 +179,72 @@ pub(crate) async fn close_cache(pool: &SqlitePool) -> anyhow::Result<()> {
         .to_url_lossy()
         .query_pairs()
         .any(|(key, value)| key == "immutable" && value == "true");
-    let lock = if immutable {
-        Ok(None)
-    } else {
-        let path = options.get_filename().with_extension("db.close.lock");
-        tokio::task::spawn_blocking(move || {
-            let file = std::fs::OpenOptions::new()
-                .read(true)
-                .write(true)
-                .create(true)
-                .truncate(false)
-                .open(&path)
-                .with_context(|| format!("open cache close lock {}", path.display()))?;
-            file.lock_exclusive()
-                .with_context(|| format!("acquire cache close lock {}", path.display()))?;
-            Ok(Some(file))
-        })
+    if immutable {
+        close_until_empty(pool).await;
+        return Ok(());
+    }
+    let path = options.get_filename().with_extension("db.close.lock");
+    tokio::spawn(close_in_order(pool.clone(), path))
         .await
-        .context("cache close lock task failed")
-        .and_then(std::convert::identity)
+        .context("cache close task failed")?
+}
+
+/// Closes one pool under the database's close lock.
+///
+/// The task owns the lock file, so the caller's future can end before the
+/// physical teardown does without giving up the close order. A lock that
+/// cannot be acquired is reported after the pool closes.
+async fn close_in_order(pool: SqlitePool, path: PathBuf) -> anyhow::Result<()> {
+    let lock = match acquire_close_lock(&path).await {
+        Ok(lock) => lock,
+        Err(error) => {
+            close_until_empty(&pool).await;
+            return Err(error);
+        }
     };
-    // Both SQLite closes can fail their exclusive-lock attempt before either
-    // releases its shared lock. Keep the separate file lock until all handles
-    // close. Never lock the database through another file descriptor: closing
-    // it can release SQLite's process-owned POSIX locks on active connections.
+    close_until_empty(&pool).await;
+    drop(lock);
+    Ok(())
+}
+
+/// Opens the close lock file and waits until this close holds it.
+///
+/// Every attempt is a non-blocking `flock` that returns at once, so waiting
+/// for the lock never occupies a blocking worker; publication waiters can
+/// hold them all while this close waits.
+async fn acquire_close_lock(path: &Path) -> anyhow::Result<File> {
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(path)
+        .with_context(|| format!("open cache close lock {}", path.display()))?;
+    while let Err(error) = file.try_lock_exclusive() {
+        if error.kind() != ErrorKind::WouldBlock {
+            return Err(anyhow::Error::new(error)
+                .context(format!("acquire cache close lock {}", path.display())));
+        }
+        tokio::time::sleep(CLOSE_LOCK_RETRY).await;
+    }
+    Ok(file)
+}
+
+/// Closes the pool and waits until it holds no connection.
+///
+/// `SQLx 0.8` can return from close with a connection that reached the idle
+/// queue after its last drain; the closed pool cannot grow. A pool with no
+/// connection has dropped every connection state, which is the moment the
+/// last `SQLite` handle is gone, so the close lock is held over the whole
+/// physical teardown.
+async fn close_until_empty(pool: &SqlitePool) {
     loop {
-        // SQLx 0.8 can return from close with a connection that reached the
-        // idle queue after its last drain. The closed pool cannot grow.
+        // Both SQLite closes can fail their exclusive-lock attempt before
+        // either releases its shared lock. The close lock keeps this close
+        // alone with the database.
         pool.close().await;
         if pool.size() == 0 {
-            // Drain the pool even if lock acquisition failed, then report it.
-            return lock.map(drop);
+            return;
         }
     }
 }
