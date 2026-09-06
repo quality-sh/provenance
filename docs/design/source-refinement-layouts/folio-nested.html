@@ -9,7 +9,7 @@
      Style: current Provenance web identity (provenance.sh), tuned for a
      working document. Deliberate split: Cormorant Garamond is DISPLAY type
      (page title, record titles, statements). Everything read for length —
-     fields, threads, notes, controls, outline — is a humanist UI face at
+     fields, threads, notes, controls — is a humanist UI face at
      readable sizes with normal letter-spacing. Fragment Mono only for
      technical micro-text (depth markers, breadcrumb, message locators).
      Tokens from src/theme.stylex.ts; secondary text lifted to --soft for
@@ -63,24 +63,9 @@
   .masthead .rule{border-top:1px solid var(--line);margin-top:16px}
 
   .work{max-width:1500px;margin:0 auto;padding:18px 20px 60px;display:grid;
-    grid-template-columns:250px minmax(0,1fr) 330px;gap:32px;align-items:start;
+    grid-template-columns:minmax(0,1fr) 330px;gap:32px;align-items:start;
     animation:rise .55s ease both}
   @keyframes rise{from{opacity:.35;transform:translateY(14px)}to{opacity:1;transform:none}}
-
-  /* ---------- nested outline ---------- */
-  .outline{position:sticky;top:16px;max-height:calc(100vh - 32px);overflow-y:auto}
-  .outline h2{font:600 11px var(--ui);color:var(--mauve);margin:0 0 8px}
-  .outline .tools{display:flex;gap:8px;margin:0 0 14px;flex-wrap:wrap}
-  .tree{list-style:none;margin:0;padding:0}
-  .tree ul{list-style:none;margin:0;padding-left:12px;border-left:1px solid var(--line-soft)}
-  .tree button{display:block;width:100%;text-align:left;font:12.5px/1.5 var(--ui);padding:3px 8px;color:var(--soft)}
-  .tree button:hover{color:var(--ink)}
-  .tree button[aria-current="true"]{color:var(--rose);box-shadow:inset 2px 0 0 var(--rose);background:rgba(235,111,146,.05)}
-  .tree .g{font:600 10.5px var(--ui);margin-right:7px}
-  .tree .g.req{color:var(--rosegold)} .tree .g.res{color:var(--gold)} .tree .g.rule{color:var(--rose)}
-  .tree .g.topic{color:var(--mauve)}
-  .legend{margin-top:18px;padding-top:12px;font:12px/1.7 var(--ui);color:var(--soft)}
-  .legend b{color:var(--ink);font-weight:600}
 
   /* ---------- breadcrumb ---------- */
   .crumbs{font:11px var(--mono);color:var(--mauve);margin:0 0 12px;min-height:18px}
@@ -225,13 +210,9 @@
   .about h3{font:600 12.5px var(--ui);color:var(--ink);break-after:avoid;margin:10px 0 2px}
   .about p{margin:7px 0}
 
-  @media (max-width:1240px){
-    .work{grid-template-columns:230px minmax(0,1fr)}
-    .panel{grid-column:1 / -1;position:static;max-height:460px}
-  }
   @media (max-width:840px){
     .work{grid-template-columns:1fr;gap:22px}
-    .outline{position:static;max-height:none}
+    .panel{position:static;max-height:460px}
     .head .t{min-width:120px}
     details.card.d1 > summary .head .t{font-size:23px}
     details.card.d2 > summary .head .t{font-size:20px}
@@ -260,54 +241,6 @@
 </header>
 
 <div class="work">
-
-  <!-- ================= outline ================= -->
-  <nav class="outline" aria-label="Nested outline">
-    <h2>Outline</h2>
-    <div class="tools">
-      <button class="btn" id="expand-all" type="button">Expand all</button>
-      <button class="btn" id="collapse-all" type="button">Collapse all</button>
-    </div>
-    <ul class="tree" id="tree">
-      <li><button type="button" data-goto="req_root"><span class="g req">Req</span>Source refinement for product work</button>
-        <ul>
-          <li><button type="button" data-goto="res_exposes"><span class="g res">Res</span>Show the system description</button>
-            <ul>
-              <li><button type="button" data-goto="req_shows"><span class="g req">Req</span>Refinement shows the evolving structure</button>
-                <ul>
-                  <li><button type="button" data-goto="res_edits"><span class="g res">Res</span>Direct editing of sources and records</button>
-                    <ul>
-                      <li><button type="button" data-goto="req_edits"><span class="g req">Req</span>Direct editing of sources and records</button></li>
-                    </ul>
-                  </li>
-                  <li><button type="button" data-goto="res_reuse"><span class="g res">Res</span>Reuse threads, questions, lifecycles</button></li>
-                  <li><button type="button" data-goto="rule_citation"><span class="g rule">Rule</span>Citations open the cited passage</button></li>
-                  <li><button type="button" data-goto="topic_form"><span class="g topic">T</span>Topic — the shared view’s form</button></li>
-                </ul>
-              </li>
-            </ul>
-          </li>
-          <li><button type="button" data-goto="res_agenda"><span class="g res">Res</span>A visible discussion agenda</button>
-            <ul>
-              <li><button type="button" data-goto="req_agenda"><span class="g req">Req</span>The session tracks a discussion agenda</button></li>
-            </ul>
-          </li>
-          <li><button type="button" data-goto="res_agent"><span class="g res">Res</span>Agent leads with grounded questions</button>
-            <ul>
-              <li><button type="button" data-goto="req_agent"><span class="g req">Req</span>The agent shapes with product context</button></li>
-            </ul>
-          </li>
-          <li><button type="button" data-goto="src_discovery"><span class="g topic">S</span>Source — discovery conversation</button></li>
-          <li><button type="button" data-goto="src_session"><span class="g topic">S</span>Source — the ongoing session</button></li>
-        </ul>
-      </li>
-    </ul>
-    <div class="legend">
-      <b>Req</b> requirement · <b>Res</b> Resolution · <b>Rule</b> rule · <b>T</b> topic · <b>S</b> source<br>
-      Nesting follows creation: a Resolution sits under the requirement it resolves; a spawned requirement
-      nests under its Resolution; a rule with no producing Resolution nests directly on its requirement.
-    </div>
-  </nav>
 
   <!-- ================= the recursive document ================= -->
   <main class="doc" aria-label="Nested requirement document">
@@ -756,7 +689,7 @@
       <p>Correction applied: the hero treatment no longer runs through the working document. Cormorant
         Garamond is now display type only — the page title, record titles, and each record’s statement —
         with record titles stepping down by structural depth (26px at the root to 16px at the deepest, one
-        steady size for statements). Everything read for length (fields, threads, notes, controls, outline) uses a humanist UI face at
+        steady size for statements). Everything read for length (fields, threads, notes, controls) uses a humanist UI face at
         12–15px with normal letter-spacing; Fragment Mono is reserved for technical micro-text — depth
         markers, the breadcrumb, message locators. Secondary text is lifted to a lighter lavender for
         contrast, and competing borders are reduced to one divider per record plus the panel and inputs.
@@ -989,14 +922,6 @@
       }
       select(id);
     }
-  });
-
-  /* expand / collapse all */
-  $("#expand-all").addEventListener("click", function () {
-    $$("details.card").forEach(function (d) { d.open = true; });
-  });
-  $("#collapse-all").addEventListener("click", function () {
-    $$("details.card").forEach(function (d, i) { d.open = i === 0; });
   });
 
   /* composer: writes into the selected record's own thread */
