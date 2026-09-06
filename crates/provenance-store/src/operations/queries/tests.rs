@@ -205,3 +205,5 @@ fn load_orders_new_kinds_after_every_settled_kind() {
         [NodeType::Requirement, NodeType::Domain, NodeType::Boundary]
     );
 }
+
+mod eight_readers;
