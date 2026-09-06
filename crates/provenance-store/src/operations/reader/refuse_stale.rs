@@ -4,7 +4,7 @@ use super::freshness::{self, Freshness};
 use super::{ReadRefusal, ReadSnapshot};
 use crate::cache::{scope_ids, unit_digest, units_for};
 use crate::layout::ProvenanceLayout;
-use crate::publication::publication_guard;
+use crate::publication::{publication_guard, publication_read_guard};
 use provenance_core::protocol::StampPolicy;
 use provenance_core::ScopeId;
 use provenance_macros::rule;
@@ -30,8 +30,10 @@ pub(super) fn describe_moved(moved: &[MovedUnit]) -> String {
 #[rule("rule_refuse_stale_writes_no_revision")]
 pub(super) async fn run(layout: &ProvenanceLayout, scope: &ScopeId) -> anyhow::Result<Freshness> {
     let guard = match publication_guard(layout).await {
-        Ok(guard) => Some(guard),
-        Err(error) if freshness::permission_failure(layout, &error) => None,
+        Ok(guard) => guard,
+        Err(error) if freshness::permission_failure(layout, &error) => {
+            publication_read_guard(layout).await?
+        }
         Err(error) => return Err(error),
     };
     let pool = freshness::open_stored(layout)

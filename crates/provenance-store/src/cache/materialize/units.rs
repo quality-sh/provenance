@@ -88,6 +88,41 @@ pub(super) fn digest_with(
     unit: &Unit,
     mut retain: impl FnMut(&Utf8Path, &[u8]),
 ) -> Result<String, UnitHashError> {
+    let files = unit_files(state_dir, unit)?;
+    crate::test_probes::at("unit_files_collected")
+        .map_err(|error| UnitHashError::at(state_dir, error))?;
+    let mut framed = Vec::new();
+    for (relative, path) in &files {
+        let bytes = std::fs::read(path).map_err(|error| UnitHashError::at(path, error))?;
+        retain(path, &bytes);
+        framed.extend_from_slice(relative.as_bytes());
+        framed.push(0);
+        framed.extend_from_slice(&(bytes.len() as u64).to_le_bytes());
+        framed.extend_from_slice(&bytes);
+    }
+    let after = unit_files(state_dir, unit)?;
+    if files != after {
+        let changed = files
+            .iter()
+            .find(|entry| after.binary_search(entry).is_err())
+            .or_else(|| {
+                after
+                    .iter()
+                    .find(|entry| files.binary_search(entry).is_err())
+            })
+            .expect("different file lists have a changed entry");
+        return Err(UnitHashError::at(
+            &changed.1,
+            anyhow::anyhow!("canonical file list changed during hashing"),
+        ));
+    }
+    Ok(crate::canonical_digest::digest(&framed))
+}
+
+fn unit_files(
+    state_dir: &Utf8Path,
+    unit: &Unit,
+) -> Result<Vec<(String, Utf8PathBuf)>, UnitHashError> {
     let mut files = Vec::new();
     match unit {
         Unit::Global => collect(state_dir, state_dir, true, &mut files)?,
@@ -101,18 +136,7 @@ pub(super) fn digest_with(
         }
     }
     files.sort();
-    crate::test_probes::at("unit_files_collected")
-        .map_err(|error| UnitHashError::at(state_dir, error))?;
-    let mut framed = Vec::new();
-    for (relative, path) in files {
-        let bytes = std::fs::read(&path).map_err(|error| UnitHashError::at(&path, error))?;
-        retain(&path, &bytes);
-        framed.extend_from_slice(relative.as_bytes());
-        framed.push(0);
-        framed.extend_from_slice(&(bytes.len() as u64).to_le_bytes());
-        framed.extend_from_slice(&bytes);
-    }
-    Ok(crate::canonical_digest::digest(&framed))
+    Ok(files)
 }
 
 /// An atomic write stages a `.tmp*` file beside the shard. A crash can
@@ -187,3 +211,6 @@ impl UnitHashError {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -379,3 +379,6 @@ async fn a_bad_base_is_refused_before_the_store_is_read() {
     let text = format!("{refused:#}");
     assert!(text.contains("rev-parse"), "{text}");
 }
+
+#[cfg(unix)]
+mod hash_races;

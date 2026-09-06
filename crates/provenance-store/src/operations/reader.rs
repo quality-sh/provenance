@@ -54,7 +54,7 @@ pub enum ReadRefusal {
         database: Utf8PathBuf,
         because: String,
     },
-    #[error("refuse_stale: the projection in {database} at serial {serial} (digest {digest}, instance {instance_id}) is behind canonical state; moved: {}. Read under catch_up or run `provenance materialize`.", refuse_stale::describe_moved(.moved))]
+    #[error("refuse_stale: the projection in {} at serial {serial} (digest {digest}, instance {instance_id}) is behind canonical state; moved: {}. Read under catch_up or run `provenance materialize`.", one_line(.database.as_str()), refuse_stale::describe_moved(.moved))]
     Stale {
         database: Utf8PathBuf,
         serial: i64,
@@ -62,7 +62,7 @@ pub enum ReadRefusal {
         instance_id: String,
         moved: Vec<MovedUnit>,
     },
-    #[error("refuse_stale: cannot hash {unit} at {path}: {error}")]
+    #[error("refuse_stale: cannot hash {unit} at {}: {}", one_line(.path.as_str()), one_line(.error))]
     UnitUnreadable {
         unit: String,
         path: Utf8PathBuf,
@@ -72,6 +72,10 @@ pub enum ReadRefusal {
     SchemaBehind { database: Utf8PathBuf },
     #[error("the projection in {database} holds a revision but no family digests, so its tables were never reloaded after a migration; run `provenance materialize`")]
     HalfMigrated { database: Utf8PathBuf },
+}
+
+fn one_line(text: &str) -> String {
+    text.replace('\r', "\\r").replace('\n', "\\n")
 }
 
 /// Everything one read may reach: the pinned snapshot and the live parts.

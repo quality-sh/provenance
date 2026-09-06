@@ -10,6 +10,7 @@ use std::io::Write;
 
 mod guard;
 mod read_only;
+pub(crate) use guard::publication_read_guard;
 pub use guard::{publication_guard, PublicationGuard};
 
 pub use read_only::with_read_only_validation;

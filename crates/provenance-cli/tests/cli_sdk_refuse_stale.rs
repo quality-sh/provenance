@@ -39,3 +39,26 @@ fn refuse_stale_prints_one_error_line_to_stderr_and_exits_one() {
         "{text}"
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn refusal_escapes_repository_line_breaks() {
+    let repo = fixtures::init_repo();
+    let parent = tempfile::tempdir().unwrap();
+    let root = parent.path().join("line\nbreak\rrepo");
+    std::fs::rename(repo.path(), &root).unwrap();
+    let path = root.to_str().unwrap();
+    let request = json!({"node_type": "requirement", "id": "req_missing"});
+    fixtures::sdk(path, "get", &request);
+    std::fs::write(root.join(".provenance/state/change.txt"), "changed").unwrap();
+    let output = fixtures::provenance()
+        .args(["sdk", "get", "--repo", path, "--freshness", "refuse_stale"])
+        .write_stdin(request.to_string())
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty());
+    let text = String::from_utf8(output.stderr).unwrap();
+    assert_eq!(text.lines().count(), 1, "{text}");
+    assert!(text.contains("line\\nbreak\\rrepo"), "{text}");
+}
