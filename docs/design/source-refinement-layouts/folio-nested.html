@@ -6,11 +6,14 @@
 <title>Folio, nested — source refinement for product work</title>
 <style>
   /* ------------------------------------------------------------------
-     Style: current Provenance web identity (provenance.sh)
-     tokens from src/theme.stylex.ts; type from src/styles.css:
-     black ground, lavender ink, rose / rose-gold / gold accents,
-     Cormorant Garamond + Fragment Mono, fine low-contrast rules.
-     Fonts: OFL, bundled in fonts/ with their licenses; local() first.
+     Style: current Provenance web identity (provenance.sh), tuned for a
+     working document. Deliberate split: Cormorant Garamond is DISPLAY type
+     (page title, record titles, statements). Everything read for length —
+     fields, threads, notes, controls, outline — is a humanist UI face at
+     readable sizes with normal letter-spacing. Fragment Mono only for
+     technical micro-text (depth markers, breadcrumb, message locators).
+     Tokens from src/theme.stylex.ts; secondary text lifted to --soft for
+     contrast. Borders reduced to: one divider per record, panel, inputs.
      ------------------------------------------------------------------ */
   @font-face{
     font-family:"Cormorant Garamond";
@@ -28,35 +31,35 @@
     font-weight:400; font-style:normal; font-display:swap;
   }
   :root{
-    --bg:#000000; --ink:#e0def4; --mauve:#908caa; --muted:#525252;
+    --bg:#000000; --ink:#e0def4; --soft:#b7b2cc; --mauve:#908caa; --muted:#525252;
     --rose:#eb6f92; --rosegold:#ebbcba; --gold:#c4a56a;
     --line:rgba(224,222,244,.14); --line-soft:rgba(224,222,244,.08);
-    --serif:"Cormorant Garamond",Georgia,"Times New Roman",serif;
+    --display:"Cormorant Garamond",Georgia,"Times New Roman",serif;
+    --ui:"Seravek","Gill Sans","Cantarell","Avenir Next","Segoe UI",Verdana,sans-serif;
     --mono:"Fragment Mono",ui-monospace,Menlo,Consolas,monospace;
   }
   *{box-sizing:border-box}
   html{scroll-behavior:smooth}
   @media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto} *{animation:none!important;transition:none!important} }
-  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 var(--serif);-webkit-font-smoothing:antialiased}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 var(--ui);-webkit-font-smoothing:antialiased}
   ::selection{background:var(--rose);color:var(--bg)}
-  :focus-visible{outline:1px solid var(--rosegold);outline-offset:2px}
-  button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;padding:0}
+  :focus-visible{outline:2px solid var(--rosegold);outline-offset:2px}
+  button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;padding:0;text-align:left}
   a{color:var(--mauve);text-decoration:underline;text-decoration-color:rgba(224,222,244,.25);text-underline-offset:3px;
-    transition:color .3s ease}
+    transition:color .25s ease}
   a:hover{color:var(--rosegold)}
 
-  /* the one prototype banner, in the site's topbar manner */
-  .chrome{background:rgba(0,0,0,.88);border-bottom:1px solid var(--line);color:var(--mauve);
-    font:11px/1.4 var(--mono);letter-spacing:.02em}
+  /* the one prototype banner */
+  .chrome{background:rgba(0,0,0,.88);border-bottom:1px solid var(--line);color:var(--mauve);font:12px/1.5 var(--ui)}
   .chrome .in{max-width:1500px;margin:0 auto;padding:9px 20px;display:flex;gap:16px;align-items:baseline;flex-wrap:wrap}
-  .chrome .tag{border:1px solid var(--line);padding:1px 8px;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink)}
-  .chrome strong{color:var(--rosegold);font-weight:400}
+  .chrome .tag{border:1px solid var(--line);padding:1px 8px;font-size:11px;color:var(--ink)}
+  .chrome strong{color:var(--rosegold);font-weight:600}
 
   /* compact header */
   .masthead{max-width:1500px;margin:0 auto;padding:26px 20px 0}
-  .kicker{font:10px var(--mono);letter-spacing:.22em;text-transform:uppercase;color:var(--mauve)}
-  .masthead h1{font:600 clamp(28px,3.2vw,38px)/1.15 var(--serif);margin:10px 0 6px;letter-spacing:.01em}
-  .masthead .sub{color:var(--mauve);font-size:16.5px;max-width:76ch;margin:0;font-style:italic}
+  .kicker{font:12px var(--ui);letter-spacing:.04em;color:var(--mauve)}
+  .masthead h1{font:600 clamp(30px,3.4vw,40px)/1.12 var(--display);margin:10px 0 6px;letter-spacing:.01em}
+  .masthead .sub{color:var(--soft);font-size:15.5px;max-width:76ch;margin:0}
   .masthead .rule{border-top:1px solid var(--line);margin-top:16px}
 
   .work{max-width:1500px;margin:0 auto;padding:18px 20px 60px;display:grid;
@@ -65,141 +68,143 @@
   @keyframes rise{from{opacity:.35;transform:translateY(14px)}to{opacity:1;transform:none}}
 
   /* ---------- nested outline ---------- */
-  .outline{position:sticky;top:16px;font-family:var(--mono);max-height:calc(100vh - 32px);overflow-y:auto}
-  .outline h2{font:10px var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--mauve);margin:0 0 8px;font-weight:400}
+  .outline{position:sticky;top:16px;max-height:calc(100vh - 32px);overflow-y:auto}
+  .outline h2{font:600 11px var(--ui);color:var(--mauve);margin:0 0 8px}
   .outline .tools{display:flex;gap:8px;margin:0 0 14px;flex-wrap:wrap}
-  .btn{font:10.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--line);border-radius:2px;
-    padding:4px 10px;color:var(--mauve);transition:color .25s ease,border-color .25s ease}
-  .btn:hover{color:var(--rosegold);border-color:var(--rosegold)}
   .tree{list-style:none;margin:0;padding:0}
-  .tree ul{list-style:none;margin:0;padding-left:11px;border-left:1px solid var(--line-soft)}
-  .tree button{display:block;width:100%;text-align:left;font:11.5px/1.5 var(--mono);padding:3.5px 8px;color:var(--mauve);
-    transition:color .25s ease}
+  .tree ul{list-style:none;margin:0;padding-left:12px;border-left:1px solid var(--line-soft)}
+  .tree button{display:block;width:100%;text-align:left;font:12.5px/1.5 var(--ui);padding:3px 8px;color:var(--soft)}
   .tree button:hover{color:var(--ink)}
   .tree button[aria-current="true"]{color:var(--rose);box-shadow:inset 2px 0 0 var(--rose);background:rgba(235,111,146,.05)}
-  .tree .g{font:9px var(--mono);letter-spacing:.08em;text-transform:uppercase;margin-right:7px}
+  .tree .g{font:600 10.5px var(--ui);margin-right:7px}
   .tree .g.req{color:var(--rosegold)} .tree .g.res{color:var(--gold)} .tree .g.rule{color:var(--rose)}
   .tree .g.topic{color:var(--mauve)}
-  .legend{margin-top:18px;border-top:1px solid var(--line);padding-top:12px;font:11px/1.75 var(--mono);color:var(--mauve)}
-  .legend b{color:var(--ink);font-weight:400}
+  .legend{margin-top:18px;padding-top:12px;font:12px/1.7 var(--ui);color:var(--soft)}
+  .legend b{color:var(--ink);font-weight:600}
 
   /* ---------- breadcrumb ---------- */
-  .crumbs{font:11px var(--mono);letter-spacing:.02em;color:var(--muted);margin:0 0 12px;min-height:18px}
+  .crumbs{font:11px var(--mono);color:var(--mauve);margin:0 0 12px;min-height:18px}
   .crumbs button{font:inherit;color:var(--mauve)}
   .crumbs button:hover{color:var(--rosegold)}
   .crumbs .sep{margin:0 7px;color:var(--muted)}
 
-  /* ---------- recursive record cards ---------- */
+  /* ---------- records: one stable column, hierarchy without indentation ---------- */
   .doc{min-width:0}
-  /* one stable column: records are full-width sections, not boxes-in-boxes.
-     hierarchy comes from headers, depth markers, type ticks and dividers —
-     never from cumulative indentation. */
-  details.card{margin:0 0 16px;padding-bottom:14px;border-bottom:1px solid var(--line-soft);
-    background:transparent}
+  details.card{margin:0 0 16px;padding-bottom:14px;border-bottom:1px solid var(--line-soft);background:transparent}
   details.card:hover{background:rgba(224,222,244,.02)}
-  details.card > summary{border-left:2px solid transparent}
-  .g-req > summary{border-left-color:rgba(235,188,186,.4)}
-  .g-res > summary{border-left-color:rgba(196,165,106,.45)}
-  .g-rule > summary{border-left-color:rgba(235,111,146,.5)}
-  .g-topic > summary,.g-q > summary{border-left-color:rgba(144,140,170,.4)}
   details.card.sel{background:rgba(235,111,146,.045)}
   summary{cursor:pointer;list-style:none}
   summary::-webkit-details-marker{display:none}
-  .head{display:flex;align-items:baseline;gap:10px;padding:10px 0 8px;flex-wrap:wrap;
-    border-bottom:1px solid var(--line-soft);margin-bottom:10px}
-  .head:focus-visible{outline:1px solid var(--rosegold);outline-offset:-2px}
-  .glyph{font:10px var(--mono);letter-spacing:.05em;border:1px solid currentColor;border-radius:2px;
-    padding:0 5px;height:21px;display:inline-flex;align-items:center;justify-content:center;flex:none;align-self:center}
-  .depth{font:9px var(--mono);letter-spacing:.1em;color:var(--mauve);opacity:.75;align-self:center}
+  .head{display:flex;align-items:baseline;gap:10px;padding:10px 0 6px;flex-wrap:wrap}
+  .head:focus-visible{outline:2px solid var(--rosegold);outline-offset:-2px}
+  .glyph{font:600 10.5px var(--ui);border:1px solid currentColor;border-radius:3px;
+    padding:1px 6px;height:21px;display:inline-flex;align-items:center;flex:none;align-self:center}
   .g-req .glyph{color:var(--rosegold)} .g-res .glyph{color:var(--gold)}
   .g-rule .glyph{color:var(--rose)} .g-topic .glyph{color:var(--mauve)} .g-q .glyph{color:var(--mauve)}
-  .kind{font:9.5px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--mauve);white-space:nowrap}
-  .kind .st{color:var(--gold)} .kind .st.ap{color:var(--gold)}
-  .kind .illus{color:var(--rose)}
-  .head .t{font:600 18px/1.3 var(--serif);flex:1 1 260px;min-width:200px;color:var(--ink)}
+  .depth{font:9.5px var(--mono);color:var(--mauve);opacity:.75;align-self:center}
+  .kind{font:12.5px var(--ui);color:var(--mauve);white-space:nowrap}
+  .kind .st{color:var(--gold)} .kind .illus{color:var(--rose)}
+  .head .t{font:600 19px/1.3 var(--display);flex:1 1 260px;min-width:200px;color:var(--ink)}
   .chev{color:var(--mauve);font-size:10px;transition:transform .16s ease;align-self:center}
   details[open] > summary .chev{transform:rotate(90deg)}
   .body{padding:0}
-  .statement{font:500 18.5px/1.5 var(--serif);margin:0 0 8px;max-width:66ch;color:var(--ink)}
-  .rel{font:9.5px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--mauve);margin:3px 0;line-height:1.9}
-  .rel b{color:var(--ink);font-weight:400}
-  .field{font:14.5px/1.6 var(--serif);color:var(--mauve);margin:6px 0;max-width:70ch}
-  .field b{font:9.5px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink);margin-right:6px;font-weight:400}
-  .note{font:italic 14.5px/1.6 var(--serif);color:var(--mauve);margin:8px 0;max-width:70ch}
+  .statement{font:500 19px/1.45 var(--display);margin:0 0 8px;max-width:62ch;color:var(--ink)}
+  .rel{font:12.5px/1.7 var(--ui);color:var(--mauve);margin:3px 0}
+  .rel b{color:var(--ink);font-weight:600}
+  .rel-link{font:600 12.5px var(--ui);color:var(--ink);border-bottom:1px dotted var(--line)}
+  .rel-link:hover{color:var(--rosegold);border-bottom-color:var(--rosegold)}
+  .field{font:14px/1.6 var(--ui);color:var(--soft);margin:6px 0;max-width:72ch}
+  .field b{font:600 12px var(--ui);color:var(--ink);margin-right:8px}
+  .note{font:13.5px/1.6 var(--ui);color:var(--soft);margin:8px 0;max-width:72ch}
 
   .kids{margin:6px 0 0;display:flex;flex-direction:column;gap:14px}
-  .kids .group-label{font:9.5px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--mauve);margin:2px 0 -4px}
-  .kids .group-label .why{color:var(--rose);text-transform:none;letter-spacing:.03em}
+  .kids .group-label{font:600 12.5px var(--ui);color:var(--mauve);margin:2px 0 -6px}
+  .kids .group-label .why{color:var(--rose);font-weight:400}
 
-  .cites{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 2px}
-  .cite{font:10.5px var(--mono);color:var(--gold);border:1px solid rgba(196,165,106,.4);border-radius:2px;padding:1.5px 8px;
-    transition:background .25s ease}
-  .cite:hover{background:rgba(196,165,106,.1)}
+  .cites{display:flex;gap:14px;flex-wrap:wrap;margin:4px 0 2px}
+  .cite{font:12.5px var(--ui);color:var(--gold)}
+  .cite:hover{color:var(--rosegold)}
 
-  .edit-demo{border:1px dashed var(--line);border-radius:2px;padding:10px 12px;margin:8px 0;max-width:66ch}
-  .edit-demo label{display:block;font:10px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--mauve);margin-bottom:5px}
-  .edit-demo textarea{width:100%;font:16px/1.55 var(--serif);border:1px solid var(--line);border-radius:2px;
-    padding:7px 9px;background:var(--bg);color:var(--ink);resize:vertical;min-height:52px}
-  .edit-demo textarea:focus{outline:none;border-color:var(--rosegold)}
-  .edit-demo .row{display:flex;gap:8px;align-items:center;margin-top:7px;flex-wrap:wrap}
-  .editrow{display:flex;gap:8px;align-items:center;margin-top:7px;flex-wrap:wrap}
+  /* ---------- click-to-edit (existing records: no modal) ---------- */
+  .editable{cursor:text;width:100%}
+  .editable:hover{text-decoration:underline;text-decoration-style:dotted;text-underline-offset:5px;
+    text-decoration-color:var(--mauve)}
+  .field-edit{cursor:text;font:14px/1.6 var(--ui);color:var(--soft)}
+  .field-edit:hover{text-decoration:underline;text-decoration-style:dotted;text-underline-offset:4px;
+    text-decoration-color:var(--mauve)}
+  .editor{margin:8px 0;max-width:62ch}
+  .editor textarea,.fuzzy input{width:100%;font:13px/1.55 var(--mono);border:1px solid var(--line);border-radius:3px;
+    padding:8px 10px;background:var(--bg);color:var(--ink);resize:vertical}
+  .editor textarea{min-height:64px}
+  .editor textarea:focus,.fuzzy input:focus{outline:none;border-color:var(--rosegold)}
+  .hint{font:11.5px/1.5 var(--ui);color:var(--mauve);margin-top:4px}
+  .editrow{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
   .editrow[hidden]{display:none!important}
-  .eb{font:10.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--line);border-radius:2px;
-    padding:3px 10px;color:var(--mauve);transition:color .25s ease,border-color .25s ease}
-  .eb:hover{border-color:var(--rosegold);color:var(--rosegold)}
-  .protolate{font:italic 13px var(--serif);color:var(--mauve)}
+  .btn{font:12.5px var(--ui);border:1px solid var(--line);border-radius:3px;padding:4px 12px;color:var(--ink)}
+  .btn:hover{border-color:var(--rosegold);color:var(--rosegold)}
+  .protolate{font:11.5px var(--ui);color:var(--mauve)}
+
+  /* structured field: dropdown with the real lifecycle words */
+  .status-select{font:12.5px var(--ui);color:var(--gold);background:transparent;border:1px solid var(--line);
+    border-radius:3px;padding:0 4px}
+  .status-select option{background:var(--bg);color:var(--ink)}
+
+  /* relationship placement: fuzzy search over compatible targets */
+  .fuzzy{margin:6px 0;max-width:440px}
+  .fuzzy-list{border:1px solid var(--line);border-radius:3px;margin-top:6px;max-height:180px;overflow-y:auto}
+  .fuzzy-list button{display:block;width:100%;padding:6px 10px;font:13px var(--ui);color:var(--soft)}
+  .fuzzy-list button:hover{background:rgba(224,222,244,.05);color:var(--ink)}
+  .fuzzy-empty{padding:6px 10px;font:12px var(--ui);color:var(--mauve)}
 
   /* ---------- thread panel ---------- */
   .panel{position:sticky;top:16px;border:1px solid var(--line);border-radius:2px;
     display:flex;flex-direction:column;max-height:calc(100vh - 32px)}
   .panel .phead{padding:12px 15px 10px;border-bottom:1px solid var(--line)}
   .panel .phead .kind{display:block;margin-bottom:4px}
-  .panel .phead h2{margin:0;font:600 17px/1.35 var(--serif);color:var(--ink)}
+  .panel .phead h2{margin:0;font:600 18px/1.3 var(--display);color:var(--ink)}
   .panel .pcrumb{font:10px var(--mono);color:var(--mauve);margin-top:5px;word-break:break-word}
   .msgs{padding:4px 15px;overflow-y:auto;flex:1}
   .msg{margin:11px 0}
-  .msg .who{font:9.5px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--mauve)}
-  .msg .who.sample::after{content:" · sample";color:var(--rose);letter-spacing:.04em;text-transform:none}
-  .msg p{margin:3px 0 0;font:14.5px/1.6 var(--serif);color:var(--ink)}
+  .msg .who{font:600 11px var(--ui);color:var(--mauve)}
+  .msg .who.sample::after{content:" · sample";color:var(--rose);font-weight:400}
+  .msg p{margin:3px 0 0;font:14px/1.6 var(--ui);color:var(--soft)}
   .composer{border-top:1px solid var(--line);padding:11px 15px 13px}
-  .composer label{display:block;font:10px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--mauve);margin-bottom:5px}
-  .composer textarea{width:100%;min-height:52px;font:14.5px/1.55 var(--serif);border:1px solid var(--line);
-    border-radius:2px;padding:7px 9px;background:var(--bg);color:var(--ink);resize:vertical}
+  .composer label{display:block;font:11px var(--ui);color:var(--mauve);margin-bottom:5px}
+  .composer textarea{width:100%;min-height:52px;font:14px/1.55 var(--ui);border:1px solid var(--line);
+    border-radius:3px;padding:7px 9px;background:var(--bg);color:var(--ink);resize:vertical}
   .composer textarea:focus{outline:none;border-color:var(--rosegold)}
   .composer .row{display:flex;justify-content:space-between;align-items:center;margin-top:7px;gap:8px;flex-wrap:wrap}
-  .composer .note{font:10px var(--mono);color:var(--mauve);font-style:normal}
+  .composer .note{font:11.5px var(--ui);color:var(--mauve)}
   .composer .actions{display:flex;gap:8px}
 
   /* ---------- sources ---------- */
-  .source-card{border:1px solid var(--line);border-left:2px solid var(--gold);border-radius:2px;
-    padding:12px 15px;margin:0 0 10px}
-  .source-card h3{margin:2px 0 4px;font:600 16px var(--serif);color:var(--ink)}
+  .source-card{border-left:2px solid var(--gold);padding:4px 0 4px 15px;margin:0 0 10px}
+  .source-card h3{margin:2px 0 4px;font:600 17px var(--display);color:var(--ink)}
   .source-card .passage{border-left:1px solid var(--line);padding:2px 0 2px 12px;margin:9px 0;
-    font:italic 16.5px/1.55 var(--serif);color:var(--ink)}
-  .source-card .passage .loc{display:block;font:10px var(--mono);font-style:normal;color:var(--mauve);margin-top:3px}
+    font:italic 17px/1.5 var(--display);color:var(--ink)}
+  .source-card .passage .loc{display:block;font:10.5px var(--mono);font-style:normal;color:var(--mauve);margin-top:3px}
 
   /* ---------- citation dialog ---------- */
   dialog{border:1px solid var(--line);border-radius:2px;background:var(--bg);color:var(--ink);
     max-width:520px;width:calc(100vw - 48px);padding:0;box-shadow:0 18px 50px rgba(0,0,0,.8)}
   dialog::backdrop{background:rgba(0,0,0,.7)}
   .cite-card{padding:20px 24px 22px}
-  .cite-card .kind{font:10px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--gold)}
-  .cite-card h3{margin:6px 0 10px;font-size:19px;font-weight:600}
-  .cite-card blockquote{margin:12px 0;border-left:2px solid var(--gold);padding:2px 0 2px 15px;font:italic 17px/1.55 var(--serif)}
-  .cite-card .loc{font:10.5px var(--mono);color:var(--mauve);border-top:1px solid var(--line-soft);padding-top:10px;margin-top:12px}
+  .cite-card .kind{font:12px var(--ui);color:var(--gold)}
+  .cite-card h3{margin:6px 0 10px;font:600 21px var(--display)}
+  .cite-card blockquote{margin:12px 0;border-left:2px solid var(--gold);padding:2px 0 2px 15px;font:italic 17px/1.5 var(--display)}
+  .cite-card .loc{font:11px var(--mono);color:var(--mauve);border-top:1px solid var(--line-soft);padding-top:10px;margin-top:12px}
   .cite-card .row{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:14px}
-  .cite-card .hint{font:italic 13px var(--serif);color:var(--mauve)}
-  .cite-card button{font:10.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--line);
-    border-radius:2px;padding:4px 13px;color:var(--mauve)}
+  .cite-card .hint{font:13px var(--ui);color:var(--soft)}
+  .cite-card button{font:12.5px var(--ui);border:1px solid var(--line);border-radius:3px;padding:4px 13px;color:var(--ink)}
   .cite-card button:hover{color:var(--rosegold);border-color:var(--rosegold)}
 
   /* ---------- about ---------- */
   .about{max-width:1500px;margin:0 auto;padding:0 20px 56px}
   .about details{border-top:1px solid var(--line);padding-top:12px;max-width:940px}
-  .about summary{font:11px var(--mono);letter-spacing:.14em;text-transform:uppercase;cursor:pointer;color:var(--mauve)}
+  .about summary{font:600 12.5px var(--ui);cursor:pointer;color:var(--mauve)}
   .about summary:hover{color:var(--rosegold)}
-  .about .body{columns:2;column-gap:44px;font:14.5px/1.65 var(--serif);color:var(--mauve);margin-top:10px}
-  .about h3{font:10px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink);break-after:avoid;font-weight:400}
+  .about .body{columns:2;column-gap:44px;font:14px/1.65 var(--ui);color:var(--soft);margin-top:10px}
+  .about h3{font:600 12.5px var(--ui);color:var(--ink);break-after:avoid;margin:10px 0 2px}
   .about p{margin:7px 0}
 
   @media (max-width:1240px){
@@ -340,7 +345,7 @@
                   <summary>
                     <div class="head">
                       <span class="glyph">R</span>
-                      <span class="depth">L3</span><span class="kind">requirement · <span class="st">discovery</span></span>
+                      <span class="depth">L3</span><span class="kind">requirement · <select id="status-select" class="status-select" aria-label="Requirement lifecycle status (prototype only)"><option>active</option><option selected>discovery</option><option>refinement</option><option>resolved</option></select><span id="status-note" class="protolate" style="margin-left:8px"></span></span>
                       <span class="t">Refinement shows the evolving structure</span>
                       <span class="chev" aria-hidden="true">▶</span>
                     </div>
@@ -387,20 +392,25 @@
                                 </div>
                               </summary>
                               <div class="body">
-                                <div id="stmt_edits">
-                                  <p class="statement">The shared view permits direct editing of source content
-                                    and structured graph records.</p>
+                                <div id="stmt-wrap">
+                                  <button type="button" class="statement editable" id="stmt-field"
+                                    title="Click to edit — Markdown supported (prototype only)">The shared view permits
+                                    direct editing of source content and structured graph records.</button>
+                                  <div class="editor" id="stmt-editor" hidden>
+                                    <textarea id="stmt-input" rows="3"
+                                      aria-label="Edit statement — Markdown, prototype only"></textarea>
+                                    <div class="hint">Markdown — **bold**, _italic_, lists · Esc cancel · Ctrl+Enter keep</div>
+                                    <div class="editrow">
+                                      <button class="btn" type="button" id="stmt-keep">Keep</button>
+                                      <button class="btn" type="button" id="stmt-cancel">Cancel</button>
+                                      <span class="protolate" id="stmt-note">prototype only — how edits version remains open</span>
+                                    </div>
+                                  </div>
                                 </div>
                                 <p class="rel">refines <b>Refinement shows the evolving structure</b> · spawned by
                                   <b>Direct editing of source content and records</b></p>
-                                <div class="editrow">
-                                  <button class="eb" type="button" id="stmt-edit">try an edit</button>
-                                  <span class="protolate" id="stmt-note">prototype only — how edits version, and what happens to citations of an edited passage, remain open questions</span>
-                                </div>
-                                <div class="editrow" id="stmt-tools" hidden>
-                                  <button class="eb" type="button" id="stmt-keep">keep (prototype only)</button>
-                                  <button class="eb" type="button" id="stmt-restore">restore</button>
-                                </div>
+                                <p class="rel">Editing here is the demonstration: click the statement above to change it
+                            in place.</p>
                                 <p class="field"><b>Touches</b> both kinds of content: the original source text and
                                   the structured records — try the source edit on the discovery conversation below.</p>
                               </div>
@@ -445,8 +455,15 @@
                         <div class="body">
                           <p class="statement">Selecting a citation in the shared view shows the cited passage from
                             its source without leaving the conversation.</p>
-                          <p class="rel">refines <b>Refinement shows the evolving structure</b> · produced by
-                            <b>no Resolution — none is required</b></p>
+                          <p class="rel">Refines <button type="button" class="rel-link" id="rule-refines-btn"
+                            title="Change target — fuzzy search, Requirements only">Refinement shows the evolving structure</button>
+                            · produced by <b>no Resolution — none is required</b></p>
+                          <div class="fuzzy" id="rule-fuzzy" hidden>
+                            <input type="text" id="rule-fuzzy-input" placeholder="Filter Requirements…"
+                              aria-label="Fuzzy-search compatible targets (Requirements only, prototype only)">
+                            <div class="fuzzy-list" id="rule-fuzzy-list"></div>
+                            <div class="hint">Compatible targets: Requirements this Rule can refine · Esc closes</div>
+                          </div>
                           <div class="field"><b>State</b> A rule may exist before implementation, before
                             verification, and before any Resolution produces it — all three absences shown here are
                             ordinary. Minted for this prototype; not an accepted obligation.</div>
@@ -614,17 +631,16 @@
                 <span class="loc">Ben · msg_06cb67f84001G6VYStJvwwYRWQ — supports the collaborative breakdown of any source</span></div>
               <div class="passage">“The goal is structure.”
                 <span class="loc">Ben · current shaping discussion</span></div>
-              <div class="field"><b>Notes</b> <span id="src-notes-text">Two passages carry verbatim quotes; the remaining citations go by message locator.</span></div>
-              <div class="editrow">
-                <button class="eb" type="button" id="src-edit">edit source notes</button>
-                <span class="protolate">prototype only — the source itself is not modified; see the open versioning question</span>
-              </div>
-              <div class="edit-demo" id="src-demo" hidden>
-                <label for="src-notes-input">Source notes (prototype only)</label>
-                <textarea id="src-notes-input" rows="2"></textarea>
-                <div class="row">
-                  <button class="eb" type="button" id="src-keep">keep (prototype only)</button>
-                  <button class="eb" type="button" id="src-restore">restore</button>
+              <div class="field"><b>Notes</b> <button type="button" class="field-edit" id="src-notes-field"
+                title="Click to edit — Markdown supported (prototype only)">Two passages carry verbatim quotes;
+                the remaining citations go by message locator.</button></div>
+              <div class="editor" id="src-editor" hidden>
+                <textarea id="src-input" rows="2" aria-label="Edit source notes — Markdown, prototype only"></textarea>
+                <div class="hint">Markdown supported · Esc cancel · Ctrl+Enter keep</div>
+                <div class="editrow">
+                  <button class="btn" type="button" id="src-keep">Keep</button>
+                  <button class="btn" type="button" id="src-cancel">Cancel</button>
+                  <span class="protolate" id="src-note">prototype only — the source itself is not modified; see the open versioning question</span>
                 </div>
               </div>
             </div>
@@ -696,6 +712,22 @@
         the refinement named on the record. A requirement resolved by two Resolutions (the shared view, by the
         editing and reuse Resolutions) lists both. The alternative — repeating the record under every parent —
         would duplicate it; nothing here is duplicated.</p>
+      <h3>Editing model (selected by Ben)</h3>
+      <p>Existing records: click an editable field to change it in place — no modal. Free text edits as
+        Markdown (the editor uses a monospace input as the Markdown cue); constrained fields, like lifecycle
+        status, become dropdowns with the real closed vocabularies; relationship targets open a fuzzy search
+        restricted to compatible records — the Rule here can only target Requirements. Two states only: Before
+        exists inside the editor (Esc or Cancel), normal viewing is After; no diff mode. Creating a new item
+        would open an editable dialog before the page changes — not demonstrated here. Everything is
+        prototype-local and reversible by reload.</p>
+      <h3>Type at document scale (proposal for review)</h3>
+      <p>Correction applied: the hero treatment no longer runs through the working document. Cormorant
+        Garamond is now display type only — the page title, record titles, and each record’s statement.
+        Everything read for length (fields, threads, notes, controls, outline) uses a humanist UI face at
+        12–15px with normal letter-spacing; Fragment Mono is reserved for technical micro-text — depth
+        markers, the breadcrumb, message locators. Secondary text is lifted to a lighter lavender for
+        contrast, and competing borders are reduced to one divider per record plus the panel and inputs.
+        This split is this prototype’s proposal for visual review.</p>
       <h3>Style provenance</h3>
       <p>Identity from the current Provenance web: black ground, lavender ink, rose, rose-gold and gold accents,
         fine low-contrast rules, Cormorant Garamond with Fragment Mono. The marketing hero, background animation
@@ -986,58 +1018,131 @@
   });
   $("#cite-close").addEventListener("click", function () { dlg.close(); });
 
-  /* statement edit (record) — prototype only */
-  var stmtOriginal = $("#stmt_edits").querySelector(".statement").textContent.trim();
-  function bindStmt() {
-    $("#stmt-edit").addEventListener("click", function () {
-      var holder = $("#stmt_edits");
-      if (holder.querySelector("textarea")) return;
-      var ta = document.createElement("textarea");
-      ta.value = stmtOriginal;
-      ta.rows = 3;
-      ta.setAttribute("aria-label", "Edit requirement statement (prototype only)");
-      holder.innerHTML = "";
-      holder.appendChild(ta);
-      ta.focus();
-      $("#stmt-tools").hidden = false;
-      $("#stmt-edit").hidden = true;
+  /* ---------- click-to-edit for existing records (no modal) ----------
+     Free text: click the field, edit as Markdown, Esc/Cancel = Before,
+     Keep/Ctrl+Enter = After. Normal viewing is always the After state;
+     there is no separate diff or changes view. Nothing persists. */
+  function inlineEditor(cfg) {
+    var base = cfg.get();
+    function open() {
+      cfg.input.value = cfg.get();
+      cfg.field.hidden = true;
+      cfg.box.hidden = false;
+      cfg.input.focus();
+    }
+    function close() {
+      cfg.box.hidden = true;
+      cfg.field.hidden = false;
+    }
+    function keep() {
+      var v = cfg.input.value.trim();
+      if (v) { cfg.set(v); base = v; }
+      close();
+      flash(cfg.note, cfg.noteText);
+    }
+    function cancel() { cfg.input.value = base; close(); }
+    cfg.field.addEventListener("click", open);
+    cfg.keep.addEventListener("click", keep);
+    cfg.cancel.addEventListener("click", cancel);
+    cfg.input.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") { e.preventDefault(); cancel(); }
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); keep(); }
     });
-    $("#stmt-keep").addEventListener("click", function () {
-      var ta = $("#stmt_edits textarea");
-      if (ta && ta.value.trim()) stmtOriginal = ta.value.trim();
-      finishStmt();
-    });
-    $("#stmt-restore").addEventListener("click", finishStmt);
   }
-  function finishStmt() {
-    $("#stmt_edits").innerHTML = '<p class="statement"></p>';
-    $("#stmt_edits .statement").textContent = stmtOriginal;
-    $("#stmt-tools").hidden = true;
-    $("#stmt-edit").hidden = false;
+  var flashTimers = {};
+  function flash(el, text) {
+    if (!el) return;
+    if (flashTimers[el.id]) clearTimeout(flashTimers[el.id]);
+    el.textContent = text;
+    flashTimers[el.id] = setTimeout(function () {
+      el.textContent = "";
+    }, 2600);
   }
-  bindStmt();
 
-  /* source notes edit (source content) — prototype only */
-  var srcOriginal = $("#src-notes-text").textContent;
-  $("#src-edit").addEventListener("click", function () {
-    var demo = $("#src-demo");
-    if (!demo.hidden) return;
-    $("#src-notes-input").value = srcOriginal;
-    demo.hidden = false;
-    $("#src-edit").hidden = true;
-    $("#src-notes-input").focus();
+  inlineEditor({
+    field: $("#stmt-field"), box: $("#stmt-editor"), input: $("#stmt-input"),
+    keep: $("#stmt-keep"), cancel: $("#stmt-cancel"), note: $("#stmt-note"),
+    noteText: "Kept in this prototype only — reload restores it.",
+    get: function () { return $("#stmt-field").textContent; },
+    set: function (v) { $("#stmt-field").textContent = v; }
   });
-  $("#src-keep").addEventListener("click", function () {
-    var v = $("#src-notes-input").value.trim();
-    if (v) srcOriginal = v;
-    finishSrc();
+
+  inlineEditor({
+    field: $("#src-notes-field"), box: $("#src-editor"), input: $("#src-input"),
+    keep: $("#src-keep"), cancel: $("#src-cancel"), note: $("#src-note"),
+    noteText: "Kept in this prototype only — the stored source is untouched.",
+    get: function () { return $("#src-notes-field").textContent; },
+    set: function (v) { $("#src-notes-field").textContent = v; }
   });
-  $("#src-restore").addEventListener("click", finishSrc);
-  function finishSrc() {
-    $("#src-notes-text").textContent = srcOriginal;
-    $("#src-demo").hidden = true;
-    $("#src-edit").hidden = false;
+
+  /* structured field: lifecycle dropdown (real Requirement statuses only) */
+  $("#status-select").addEventListener("change", function () {
+    flash($("#status-note"), "shown in this prototype only — the graph is unchanged");
+  });
+
+  /* relationship placement: fuzzy search over compatible targets (Requirements) */
+  var refineTargets = [
+    { id: "req_root", title: "Source refinement for product work" },
+    { id: "req_shows", title: "Refinement shows the evolving structure" },
+    { id: "req_edits", title: "Direct editing of sources and records" },
+    { id: "req_agenda", title: "The session tracks a discussion agenda" },
+    { id: "req_agent", title: "The agent shapes with product context" }
+  ];
+  function fuzzyMatch(query, text) {
+    var q = query.toLowerCase(), t = text.toLowerCase();
+    if (!q) return 0;
+    var ti = 0, score = 0, qn = 0;
+    for (var i = 0; i < q.length; i++) {
+      var found = t.indexOf(q[i], ti);
+      if (found === -1) return -1;
+      score += (found === ti) ? 0 : 1;
+      ti = found + 1;
+      qn++;
+    }
+    return score;
   }
+  var currentRefines = "Refinement shows the evolving structure";
+  function renderFuzzy(query) {
+    var list = $("#rule-fuzzy-list");
+    list.innerHTML = "";
+    var hits = refineTargets
+      .map(function (t) { return { t: t, score: fuzzyMatch(query, t.title) }; })
+      .filter(function (h) { return h.score >= 0 && h.t.title !== currentRefines; })
+      .sort(function (a, b) { return a.score - b.score; });
+    if (!hits.length) {
+      var empty = document.createElement("div");
+      empty.className = "fuzzy-empty";
+      empty.textContent = "No compatible Requirements match.";
+      list.appendChild(empty);
+      return;
+    }
+    hits.forEach(function (h) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.textContent = h.t.title;
+      b.addEventListener("click", function () {
+        currentRefines = h.t.title;
+        $("#rule-refines-btn").textContent = h.t.title;
+        $("#rule-fuzzy").hidden = true;
+      });
+      list.appendChild(b);
+    });
+  }
+  $("#rule-refines-btn").addEventListener("click", function () {
+    var box = $("#rule-fuzzy");
+    box.hidden = !box.hidden;
+    if (!box.hidden) {
+      $("#rule-fuzzy-input").value = "";
+      renderFuzzy("");
+      $("#rule-fuzzy-input").focus();
+    }
+  });
+  $("#rule-fuzzy-input").addEventListener("input", function () {
+    renderFuzzy(this.value);
+  });
+  $("#rule-fuzzy-input").addEventListener("keydown", function (e) {
+    if (e.key === "Escape") { e.preventDefault(); $("#rule-fuzzy").hidden = true; }
+  });
 
   select("req_root");
 })();
