@@ -4,7 +4,8 @@
 
 use super::seeded_requirement_store;
 use crate::state_store::{
-    CreateContributionInput, CreateDomainInput, CreateSynthesisPacketInput, StateStore,
+    CreateBoundaryInput, CreateContributionInput, CreateDomainInput, CreateSynthesisPacketInput,
+    StateStore,
 };
 use provenance_core::{
     ContributionStance, IdeationTarget, IdeationTargetType, ScopeId, StableId, UncertaintyLevel,
@@ -23,11 +24,7 @@ fn target(kind: IdeationTargetType, id: &str) -> IdeationTarget {
     }
 }
 
-pub(super) fn contribution_on(
-    scope: &ScopeId,
-    id: &str,
-    target: IdeationTarget,
-) -> CreateContributionInput {
+fn contribution_on(scope: &ScopeId, id: &str, target: IdeationTarget) -> CreateContributionInput {
     CreateContributionInput {
         scope_id: scope.clone(),
         id: sid(id),
@@ -50,11 +47,7 @@ pub(super) fn contribution_on(
     }
 }
 
-pub(super) fn synthesis_on(
-    scope: &ScopeId,
-    id: &str,
-    target: IdeationTarget,
-) -> CreateSynthesisPacketInput {
+fn synthesis_on(scope: &ScopeId, id: &str, target: IdeationTarget) -> CreateSynthesisPacketInput {
     CreateSynthesisPacketInput {
         scope_id: scope.clone(),
         id: sid(id),
@@ -129,6 +122,43 @@ fn a_synthesis_packet_naming_a_missing_target_is_refused() {
         "upsert refuses too: {error}"
     );
     assert!(store.list_synthesis_packets(&scope).unwrap().is_empty());
+}
+
+#[test]
+#[verifies("rule_new_ideation_target_names_a_record", examples)]
+fn a_boundary_target_is_checked_like_the_other_kinds() {
+    let (_dir, store, scope) = seeded_requirement_store();
+    store
+        .create_boundary(CreateBoundaryInput {
+            scope_id: scope.clone(),
+            id: sid("boundary_no_backpay"),
+            requirement_id: sid("req_overtime"),
+            statement: "Back pay is out of scope".into(),
+            source_ref: None,
+        })
+        .unwrap();
+    let present = target(IdeationTargetType::Boundary, "boundary_no_backpay");
+    store
+        .create_contribution(contribution_on(&scope, "contrib_a", present.clone()))
+        .unwrap();
+    store
+        .create_synthesis_packet(synthesis_on(&scope, "synth_a", present))
+        .unwrap();
+
+    let missing = target(IdeationTargetType::Boundary, "boundary_gone");
+    let error = store
+        .create_contribution(contribution_on(&scope, "contrib_b", missing.clone()))
+        .unwrap_err()
+        .to_string();
+    assert!(
+        error.contains("boundary boundary_gone"),
+        "the refusal names the missing boundary: {error}"
+    );
+    let error = store
+        .create_synthesis_packet(synthesis_on(&scope, "synth_b", missing))
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("boundary boundary_gone"), "{error}");
 }
 
 #[test]

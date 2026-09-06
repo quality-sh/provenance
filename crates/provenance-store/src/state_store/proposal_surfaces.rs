@@ -164,5 +164,6 @@ const fn target_sort_key(target: &IdeationTarget) -> u8 {
         IdeationTargetType::Topic => 4,
         IdeationTargetType::Question => 5,
         IdeationTargetType::Domain => 6,
+        IdeationTargetType::Boundary => 7,
     }
 }

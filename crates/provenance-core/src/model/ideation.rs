@@ -27,6 +27,8 @@ pub enum IdeationTargetType {
     Question,
     #[serde(rename = "domain")]
     Domain,
+    #[serde(rename = "boundary")]
+    Boundary,
 }
 
 impl IdeationTargetType {
@@ -39,8 +41,10 @@ impl IdeationTargetType {
             "topic" => Ok(Self::Topic),
             "question" => Ok(Self::Question),
             "domain" => Ok(Self::Domain),
+            "boundary" => Ok(Self::Boundary),
             _ => anyhow::bail!(
-                "target type must be source, requirement, resolution, rule, topic, question, or domain"
+                "target type must be source, requirement, resolution, rule, topic, question, \
+                 domain, or boundary"
             ),
         }
     }
@@ -57,6 +61,7 @@ impl From<IdeationTargetType> for NodeType {
             IdeationTargetType::Topic => Self::Topic,
             IdeationTargetType::Question => Self::Question,
             IdeationTargetType::Domain => Self::Domain,
+            IdeationTargetType::Boundary => Self::Boundary,
         }
     }
 }

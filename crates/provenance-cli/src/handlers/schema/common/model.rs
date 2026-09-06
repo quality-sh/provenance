@@ -6,7 +6,7 @@ use provenance_core::{
 };
 use serde::Serialize;
 
-pub(in crate::handlers::schema) const IDEATION_TARGET_TYPES: [IdeationTargetType; 7] = [
+pub(in crate::handlers::schema) const IDEATION_TARGET_TYPES: [IdeationTargetType; 8] = [
     IdeationTargetType::Source,
     IdeationTargetType::Requirement,
     IdeationTargetType::Resolution,
@@ -14,6 +14,7 @@ pub(in crate::handlers::schema) const IDEATION_TARGET_TYPES: [IdeationTargetType
     IdeationTargetType::Topic,
     IdeationTargetType::Question,
     IdeationTargetType::Domain,
+    IdeationTargetType::Boundary,
 ];
 
 // Schema generation needs this concrete replica of the evidence domain that

@@ -335,6 +335,8 @@ pub(super) fn compute_state_gaps(state: &ScopeExport) -> Vec<GapItem> {
         threads: &state.threads,
         domains: &state.domains,
         boundaries: &state.boundaries,
+        contributions: &state.contributions,
+        synthesis_packets: &state.synthesis_packets,
     })
 }
 
