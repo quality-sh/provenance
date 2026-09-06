@@ -1,5 +1,6 @@
 use super::records;
 use crate::layout::ProvenanceLayout;
+use crate::operations::read_policy::ReadPolicy;
 use crate::state_store::{
     CreateBoundaryInput, CreateDomainInput, CreateRequirementInput, StateStore,
 };
@@ -97,6 +98,7 @@ async fn get_answers_a_domain_and_a_boundary_by_id() {
         let answer = super::get(
             Some(root_of(&dir)),
             &scope,
+            ReadPolicy::default(),
             GetQuery {
                 protocol_version: Some(SDK_PROTOCOL_VERSION),
                 node_type: kind,
@@ -120,6 +122,7 @@ async fn search_reaches_domains_and_boundaries_by_kind_and_text() {
     let answer = super::search(
         Some(root_of(&dir)),
         &scope,
+        ReadPolicy::default(),
         SearchQuery {
             protocol_version: Some(SDK_PROTOCOL_VERSION),
             text: "pay".into(),
@@ -150,6 +153,7 @@ async fn default_search_keeps_the_six_settled_kinds_under_protocol_five() {
     let answer = super::search(
         Some(root_of(&dir)),
         &scope,
+        ReadPolicy::default(),
         SearchQuery {
             protocol_version: Some(SDK_PROTOCOL_VERSION),
             text: "pay".into(),

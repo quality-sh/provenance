@@ -13,7 +13,6 @@ use crate::layout::ProvenanceLayout;
 use crate::migrations;
 use crate::operations::read_policy::FreshnessPolicy;
 use crate::publication::publication_guard;
-use crate::state_store::StateStore;
 use provenance_core::protocol::StampPolicy;
 use provenance_macros::rule;
 use sqlx::SqlitePool;
@@ -38,11 +37,11 @@ pub(super) async fn run(
             Err(error) => stored(layout, error).await,
         },
         FreshnessPolicy::AnnotateOnly => {
-            let pool = open_existing_cache(layout)
+            let pool = open_stored(layout)
                 .await
                 .map_err(|error| no_projection(layout, &error))?;
             if let Err(error) = ensure_current_schema(&pool, layout).await {
-                pool.close().await;
+                crate::cache::close_cache(&pool).await;
                 return Err(error);
             }
             Ok(Freshness {
@@ -65,7 +64,7 @@ async fn catch_up(layout: &ProvenanceLayout) -> anyhow::Result<SqlitePool> {
     let guard = publication_guard(layout).await?;
     let pool = open_cache(layout).await?;
     if let Err(error) = catch_up_with_guard(&guard, &pool, layout).await {
-        pool.close().await;
+        crate::cache::close_cache(&pool).await;
         return Err(error);
     }
     drop(guard);
@@ -79,15 +78,12 @@ async fn catch_up(layout: &ProvenanceLayout) -> anyhow::Result<SqlitePool> {
 #[rule("rule_failed_freshness_answers_at_stored_serial")]
 async fn stored(layout: &ProvenanceLayout, error: anyhow::Error) -> anyhow::Result<Freshness> {
     let text = format!("{error:#}");
-    let pool = match open_existing_cache(layout).await {
-        Ok(pool) => pool,
-        Err(_) => open_immutable_cache(layout)
-            .await
-            .map_err(|_| ReadRefusal::NoProjection {
-                database: layout.cache_db_path(),
-                because: format!(" (catch-up failed: {text})"),
-            })?,
-    };
+    let pool = open_stored(layout)
+        .await
+        .map_err(|_| ReadRefusal::NoProjection {
+            database: layout.cache_db_path(),
+            because: format!(" (catch-up failed: {text})"),
+        })?;
     Ok(Freshness {
         pool,
         policy: StampPolicy::CatchUpFailed,
@@ -138,12 +134,7 @@ async fn ensure_current_schema(pool: &SqlitePool, layout: &ProvenanceLayout) -> 
     )
     .fetch_one(pool)
     .await?;
-    if half_migrated
-        && !StateStore::new(layout.clone())
-            .manifest()?
-            .scopes
-            .is_empty()
-    {
+    if half_migrated && !crate::cache::scope_ids(&layout.state_dir())?.is_empty() {
         return Err(ReadRefusal::HalfMigrated {
             database: layout.cache_db_path(),
         }
@@ -166,4 +157,50 @@ fn no_projection(layout: &ProvenanceLayout, error: &anyhow::Error) -> anyhow::Er
         because: format!(" ({error:#})"),
     }
     .into()
+}
+
+/// A permission failure selects an immutable image of the stored projection.
+#[rule("rule_read_only_checkout_answers_as_an_immutable_image")]
+pub(super) async fn open_stored(layout: &ProvenanceLayout) -> anyhow::Result<SqlitePool> {
+    match open_existing_cache(layout).await {
+        Ok(pool) => Ok(pool),
+        Err(error) if permission_failure(layout, &error) => open_immutable_cache(layout).await,
+        Err(error) => Err(error),
+    }
+}
+
+pub(super) fn permission_failure(layout: &ProvenanceLayout, error: &anyhow::Error) -> bool {
+    if error.chain().any(|source| {
+        source
+            .downcast_ref::<std::io::Error>()
+            .is_some_and(|error| {
+                matches!(
+                    error.kind(),
+                    std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::ReadOnlyFilesystem
+                )
+            })
+    }) {
+        return true;
+    }
+    // SQLite omits the OS error. PERM and the permission-specific READONLY
+    // codes identify access failures. CANTOPEN and IOERR_SHMOPEN need an
+    // OS check because a missing database can also produce CANTOPEN.
+    let code = error
+        .downcast_ref::<sqlx::Error>()
+        .and_then(sqlx::Error::as_database_error)
+        .and_then(sqlx::error::DatabaseError::code);
+    match code.as_deref() {
+        Some("3" | "8" | "520" | "1544") => true,
+        Some("14" | "4618") => std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(layout.cache_db_path())
+            .is_err_and(|error| {
+                matches!(
+                    error.kind(),
+                    std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::ReadOnlyFilesystem
+                )
+            }),
+        _ => false,
+    }
 }

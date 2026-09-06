@@ -16,6 +16,7 @@ use super::{
     recover_pending_publication,
 };
 use crate::layout::ProvenanceLayout;
+use anyhow::Context;
 use camino::Utf8Path;
 use fs2::FileExt;
 use provenance_macros::rule;
@@ -38,9 +39,9 @@ impl LockedPublicationFile {
             .create(true)
             .truncate(false)
             .open(path)
-            .map_err(|error| anyhow::anyhow!("open publication lock {path}: {error}"))?;
+            .with_context(|| format!("open publication lock {path}"))?;
         file.lock_exclusive()
-            .map_err(|error| anyhow::anyhow!("acquire publication lock {path}: {error}"))?;
+            .with_context(|| format!("acquire publication lock {path}"))?;
         Ok(Self { file })
     }
 }

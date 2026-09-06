@@ -6,6 +6,7 @@ use super::comparison::requests;
 use super::comparison::test_stores::TestStore;
 use crate::cache::tests::fixtures::{create_rule_of, pinned_store::mark_retired};
 use crate::operations::queries;
+use crate::operations::read_policy::ReadPolicy;
 use crate::shards;
 use provenance_core::protocol::{Direction, Neighbor};
 
@@ -36,6 +37,7 @@ async fn neighbors_keep_the_rank_id_declaration_direction_order() {
     let answer = queries::neighbors(
         Some(store.root.clone()),
         &store.scope,
+        ReadPolicy::default(),
         requests::neighbors("req_penalty", false, 50),
     )
     .await
@@ -76,11 +78,16 @@ async fn survivors_keep_their_order_when_records_are_inserted_and_retired() {
     let store = TestStore::pinned();
     let request = || requests::neighbors("req_overtime", false, 50);
     let before = labels(
-        &queries::neighbors(Some(store.root.clone()), &store.scope, request())
-            .await
-            .unwrap()
-            .result
-            .neighbors,
+        &queries::neighbors(
+            Some(store.root.clone()),
+            &store.scope,
+            ReadPolicy::default(),
+            request(),
+        )
+        .await
+        .unwrap()
+        .result
+        .neighbors,
     );
     assert!(before.contains(&into("requirement_ids", "rule_over_005")));
 
@@ -95,11 +102,16 @@ async fn survivors_keep_their_order_when_records_are_inserted_and_retired() {
         "rule_over_005",
     );
     let after = labels(
-        &queries::neighbors(Some(store.root.clone()), &store.scope, request())
-            .await
-            .unwrap()
-            .result
-            .neighbors,
+        &queries::neighbors(
+            Some(store.root.clone()),
+            &store.scope,
+            ReadPolicy::default(),
+            request(),
+        )
+        .await
+        .unwrap()
+        .result
+        .neighbors,
     );
     let survivors: Vec<_> = after
         .iter()

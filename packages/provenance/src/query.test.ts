@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, } from "node:child_process";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,6 +17,7 @@ import {
   resolveSymbol,
   search,
   source,
+  stale,
   trace,
 } from "./index.js";
 
@@ -99,3 +100,29 @@ test(
   "structured queries return the engine's bounded answers unchanged",
   readsTheEnginesBoundedAnswers,
 );
+
+test("a query freshness option overrides the repository setting", async () => {
+  const repo = repository();
+  configure({ engine, repository: repo, scope: "default", owner: "spec://freshness" });
+  const request = { node_type: "requirement" as const, id: "req_missing" };
+  await get(request);
+  writeFileSync(join(repo, ".provenance/settings.json"), JSON.stringify({ read: { freshness_policy: "catch_up" } }));
+  execFileSync("git", ["init", "--quiet", repo]);
+  execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.com",
+    "-c", "core.hooksPath=/dev/null", "commit", "--allow-empty", "--quiet", "-m", "Initialize test repository"], { cwd: repo });
+  const options = { freshness: "annotate_only" as const };
+  const queries = [
+    () => get(request, options),
+    () => search({ text: "missing" }, options),
+    () => neighbors({ id: "req_missing" }, options),
+    () => trace({ id: "req_missing" }, options),
+    () => impact({ id: "req_missing" }, options),
+    () => evidence({ rule: "rule_missing" }, options),
+    () => stale({ base: "HEAD", head: "HEAD" }, options),
+    () => resolveSymbol({ file: "missing.rs" }, options),
+  ];
+  for (const query of queries) {
+    const answer = await query();
+    assert.equal(answer.stamp?.policy, "annotate_only");
+  }
+});

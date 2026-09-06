@@ -5,6 +5,7 @@
 use super::comparison::requests;
 use super::comparison::test_stores::TestStore;
 use crate::operations::queries;
+use crate::operations::read_policy::ReadPolicy;
 use provenance_macros::verifies;
 
 /// `rule_overtime_001` has two active implementation bindings and a
@@ -17,10 +18,15 @@ async fn evidence_reports_which_list_was_cut() {
     let store = TestStore::pinned();
     let mut request = requests::evidence("rule_overtime_001", None);
     request.limit = 2;
-    let answer = queries::evidence(Some(store.root.clone()), &store.scope, request.clone())
-        .await
-        .unwrap()
-        .result;
+    let answer = queries::evidence(
+        Some(store.root.clone()),
+        &store.scope,
+        ReadPolicy::default(),
+        request.clone(),
+    )
+    .await
+    .unwrap()
+    .result;
     assert_eq!(answer.implementation_bindings.len(), 2);
     assert!(!answer.implementation_bindings_has_more);
     assert_eq!(answer.verification_bindings.len(), 2);
@@ -32,10 +38,15 @@ async fn evidence_reports_which_list_was_cut() {
     assert!(answer.has_more, "the top-level flag is the OR of the four");
 
     request.include_retired = true;
-    let with_retired = queries::evidence(Some(store.root.clone()), &store.scope, request)
-        .await
-        .unwrap()
-        .result;
+    let with_retired = queries::evidence(
+        Some(store.root.clone()),
+        &store.scope,
+        ReadPolicy::default(),
+        request,
+    )
+    .await
+    .unwrap()
+    .result;
     assert!(with_retired.implementation_bindings_has_more);
     assert_eq!(with_retired.implementation_bindings.len(), 2);
 }
@@ -49,6 +60,7 @@ async fn a_cleared_review_is_not_open() {
     let answer = queries::evidence(
         Some(store.root.clone()),
         &store.scope,
+        ReadPolicy::default(),
         requests::evidence("rule_overtime_001", None),
     )
     .await

@@ -109,6 +109,7 @@ async fn resolve_symbol_on_an_unscanned_extension_answers_bindings_only() {
     let answer = queries::resolve_symbol(
         Some(store.root.clone()),
         &store.scope,
+        ReadPolicy::default(),
         resolve("docs/pay.md", None),
     )
     .await
@@ -133,6 +134,7 @@ async fn resolve_symbol_on_a_missing_file_answers_bindings_only() {
     let answer = queries::resolve_symbol(
         Some(store.root.clone()),
         &store.scope,
+        ReadPolicy::default(),
         resolve("src/gone.rs", None),
     )
     .await
@@ -168,10 +170,14 @@ async fn resolve_symbol_scans_only_a_repository_relative_path() {
         (climbing.as_str(), Vec::new()),
         ("src/../src/pay.rs", Vec::new()),
     ] {
-        let answer =
-            queries::resolve_symbol(Some(store.root.clone()), &store.scope, resolve(file, None))
-                .await
-                .unwrap();
+        let answer = queries::resolve_symbol(
+            Some(store.root.clone()),
+            &store.scope,
+            ReadPolicy::default(),
+            resolve(file, None),
+        )
+        .await
+        .unwrap();
         assert_eq!(
             rule_ids(&answer.result.rules),
             expected,
@@ -180,6 +186,7 @@ async fn resolve_symbol_scans_only_a_repository_relative_path() {
         let with_line = queries::resolve_symbol(
             Some(store.root.clone()),
             &store.scope,
+            ReadPolicy::default(),
             resolve(file, Some(1)),
         )
         .await

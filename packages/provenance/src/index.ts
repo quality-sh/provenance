@@ -25,6 +25,7 @@ import type {
   ResolveSymbolResponse,
   SearchRequest,
   SearchResponse,
+  StampPolicy,
   StaleRequest,
   StaleResponse,
   TraceRequest,
@@ -282,41 +283,43 @@ export async function plan(
   );
 }
 
-// Structured queries. Each one sends its request to the engine and returns
-// the answer unchanged: traversal, filtering, and paging all happen in Rust.
-
-export async function get(request: GetRequest): Promise<GetResponse> {
-  return invokeEngine<GetResponse>(engineSettings(), "get", request);
+export interface QueryOptions {
+  freshness?: Exclude<StampPolicy, "catch_up_failed">;
 }
 
-export async function search(request: SearchRequest): Promise<SearchResponse> {
-  return invokeEngine<SearchResponse>(engineSettings(), "search", request);
+export async function get(request: GetRequest, options?: QueryOptions): Promise<GetResponse> {
+  return invokeEngine<GetResponse>(engineSettings(), "get", request, options?.freshness);
 }
 
-export async function neighbors(request: NeighborsRequest): Promise<NeighborsResponse> {
-  return invokeEngine<NeighborsResponse>(engineSettings(), "neighbors", request);
+export async function search(request: SearchRequest, options?: QueryOptions): Promise<SearchResponse> {
+  return invokeEngine<SearchResponse>(engineSettings(), "search", request, options?.freshness);
 }
 
-export async function trace(request: TraceRequest): Promise<TraceResponse> {
-  return invokeEngine<TraceResponse>(engineSettings(), "trace", request);
+export async function neighbors(request: NeighborsRequest, options?: QueryOptions): Promise<NeighborsResponse> {
+  return invokeEngine<NeighborsResponse>(engineSettings(), "neighbors", request, options?.freshness);
 }
 
-export async function impact(request: ImpactRequest): Promise<ImpactResponse> {
-  return invokeEngine<ImpactResponse>(engineSettings(), "impact", request);
+export async function trace(request: TraceRequest, options?: QueryOptions): Promise<TraceResponse> {
+  return invokeEngine<TraceResponse>(engineSettings(), "trace", request, options?.freshness);
 }
 
-export async function evidence(request: EvidenceRequest): Promise<EvidenceResponse> {
-  return invokeEngine<EvidenceResponse>(engineSettings(), "evidence", request);
+export async function impact(request: ImpactRequest, options?: QueryOptions): Promise<ImpactResponse> {
+  return invokeEngine<ImpactResponse>(engineSettings(), "impact", request, options?.freshness);
 }
 
-export async function stale(request: StaleRequest): Promise<StaleResponse> {
-  return invokeEngine<StaleResponse>(engineSettings(), "stale", request);
+export async function evidence(request: EvidenceRequest, options?: QueryOptions): Promise<EvidenceResponse> {
+  return invokeEngine<EvidenceResponse>(engineSettings(), "evidence", request, options?.freshness);
+}
+
+export async function stale(request: StaleRequest, options?: QueryOptions): Promise<StaleResponse> {
+  return invokeEngine<StaleResponse>(engineSettings(), "stale", request, options?.freshness);
 }
 
 export async function resolveSymbol(
   request: ResolveSymbolRequest,
+  options?: QueryOptions,
 ): Promise<ResolveSymbolResponse> {
-  return invokeEngine<ResolveSymbolResponse>(engineSettings(), "resolve-symbol", request);
+  return invokeEngine<ResolveSymbolResponse>(engineSettings(), "resolve-symbol", request, options?.freshness);
 }
 
 class DeclaredHandle implements SourceHandle {

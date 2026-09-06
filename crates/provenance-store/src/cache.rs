@@ -13,7 +13,7 @@ pub use health::*;
 pub use impact::*;
 pub(crate) use materialize::catch_up_with_guard;
 pub use materialize::{
-    catch_up_state, materialize_empty_state, materialize_state, unit_digest, units_for,
+    catch_up_state, materialize_empty_state, materialize_state, scope_ids, unit_digest, units_for,
     CatchUpReport, Unit,
 };
 pub use prime::*;
@@ -123,8 +123,7 @@ fn cache_options(layout: &ProvenanceLayout) -> anyhow::Result<SqliteConnectOptio
 /// `close` the two `sqlite3_close` calls overlap on two worker threads.
 /// The last of them cannot take the exclusive lock, and `SQLite` then skips
 /// the checkpoint that removes the `-wal` and `-shm` files. A pool of one
-/// closes once, and the files go with it.
-#[rule("rule_completed_read_leaves_no_wal_files")]
+/// closes one connection at a time. `close_cache` waits for that close.
 async fn connect(
     options: SqliteConnectOptions,
     retry: WalSwitchRetry,
@@ -142,6 +141,20 @@ async fn connect(
                 tokio::time::sleep(retry.pause).await;
             }
             Err(error) => return Err(error.into()),
+        }
+    }
+}
+
+/// Closes every cache connection before a read returns, so `SQLite` can remove
+/// the -wal and -shm files when the last connection closes.
+#[rule("rule_completed_read_leaves_no_wal_files")]
+pub(crate) async fn close_cache(pool: &SqlitePool) {
+    loop {
+        // SQLx 0.8 can return from close with a connection that reached the
+        // idle queue after its last drain. The closed pool cannot grow.
+        pool.close().await;
+        if pool.size() == 0 {
+            return;
         }
     }
 }

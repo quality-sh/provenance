@@ -29,6 +29,7 @@ async fn a_resolution_reaches_the_rules_that_name_it_only() {
     let answer = queries::impact(
         Some(store.root.clone()),
         &store.scope,
+        ReadPolicy::default(),
         query("res_overtime"),
     )
     .await

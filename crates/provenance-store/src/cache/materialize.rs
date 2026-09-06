@@ -10,7 +10,7 @@ mod validation;
 pub use catch_up::catch_up_with_guard;
 pub use catch_up::{catch_up_state, CatchUpReport};
 pub use record_rows::SEARCH_TEXT;
-pub use units::{unit_digest, units_for, Unit};
+pub use units::{scope_ids, unit_digest, units_for, Unit};
 
 use super::{open_cache, MaterializeReport};
 use crate::{layout::ProvenanceLayout, migrations, publication};
@@ -28,7 +28,7 @@ pub async fn materialize_empty_state(
     // Close rather than drop. A dropped pool releases its file handles
     // asynchronously, and on Windows a later delete of the database file
     // races that release.
-    pool.close().await;
+    crate::cache::close_cache(&pool).await;
     Ok(MaterializeReport {
         records_loaded: 0,
         migrations_applied,
@@ -90,7 +90,7 @@ pub(super) async fn materialize_with_guard(
     crate::test_probes::at("materialize_before_commit")?;
     tx.commit().await?;
     crate::test_probes::at("materialize_after_commit")?;
-    pool.close().await;
+    crate::cache::close_cache(&pool).await;
 
     Ok(MaterializeReport {
         records_loaded,
