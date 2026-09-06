@@ -130,7 +130,7 @@ pub async fn answer<R: Send>(
     let snapshot = match ReadSnapshot::open(&fresh.pool, scope).await {
         Ok(Some(snapshot)) => snapshot,
         Ok(None) => {
-            crate::cache::close_cache(&fresh.pool).await;
+            crate::cache::close_cache(&fresh.pool).await?;
             return Err(ReadRefusal::NoProjection {
                 database: layout.cache_db_path(),
                 because: fresh
@@ -142,14 +142,14 @@ pub async fn answer<R: Send>(
             .into());
         }
         Err(error) => {
-            crate::cache::close_cache(&fresh.pool).await;
+            crate::cache::close_cache(&fresh.pool).await?;
             return Err(error);
         }
     };
     let context = ReadContext::new(snapshot, repo, policy.scan_limit);
     let result = run(&context).await;
     let stamp = stamp::seal(context, fresh.policy);
-    crate::cache::close_cache(&fresh.pool).await;
+    crate::cache::close_cache(&fresh.pool).await?;
     Ok(Stamped {
         result: result?,
         stamp,

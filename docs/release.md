@@ -74,15 +74,18 @@ median of five passes. Run the command once, rather than repeat it to select
 a faster result.
 
 Compare each operation's served summary row and `catch_up_ms` with the same
-row in the previous release's notes. A row fails only when **both** conditions
-hold: it is more than twice the previous value, and it is more than 5 ms
-above that value. A failed row sends the release back until the cause is
+row in the previous release's notes. If those notes have no comparable row,
+record the missing prior row and use the current row as the reference for
+the next release. A missing prior row is not a regression.
+A row fails only when **both** conditions hold: it is more than twice the
+previous value, and it is more than 5 ms above that value. A failed row sends the release back until the cause is
 named in the notes or fixed. Do not push the version tag before this check
 passes or the notes name the cause.
 
 Record `scan_ms` and `rebuild_ms`, but do not gate them. Scan time depends on
-the checkout's file count. The rebuild measurement includes the test binary's
-first SQLite open.
+the checkout's file count. The rebuild measurement includes preparation of
+a fresh database for this store. Earlier report sections have already
+opened SQLite databases.
 
 For the first release, use these reference rows from section F.2 of the W5
 release gate plan, revision 3. They were measured in a release build at

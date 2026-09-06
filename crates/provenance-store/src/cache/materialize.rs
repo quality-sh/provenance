@@ -28,7 +28,7 @@ pub async fn materialize_empty_state(
     // Close rather than drop. A dropped pool releases its file handles
     // asynchronously, and on Windows a later delete of the database file
     // races that release.
-    crate::cache::close_cache(&pool).await;
+    crate::cache::close_cache(&pool).await?;
     Ok(MaterializeReport {
         records_loaded: 0,
         migrations_applied,
@@ -90,7 +90,7 @@ pub(super) async fn materialize_with_guard(
     crate::test_probes::at("materialize_before_commit")?;
     tx.commit().await?;
     crate::test_probes::at("materialize_after_commit")?;
-    crate::cache::close_cache(&pool).await;
+    crate::cache::close_cache(&pool).await?;
 
     Ok(MaterializeReport {
         records_loaded,

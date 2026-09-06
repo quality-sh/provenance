@@ -182,22 +182,27 @@ plan, revision 3.
    rejects environment mutation names throughout `operations.rs` and
    `operations/`, including imports under another name.
 5. **Blocking sections.** Publication guard acquisition runs on the
-   blocking pool (`publication/guard.rs::publication_guard`). The table
+   blocking pool (`publication/guard.rs::publication_guard`). Cache close
+   lock acquisition also runs on that pool (`cache.rs::close_cache`). The table
    below names synchronous work that remains on runtime workers. Moving
    this work to `spawn_blocking` is the first server task, outside W5.
-6. **Concurrency: simultaneous close remains open.** Each `reader::answer` opens a separate pool with one
-   connection (`cache.rs::connect`) and a separate snapshot. Catch-up calls
-   serialize on the publication file lock. The test
-   `operations/queries/tests/concurrent.rs::concurrent_answers_finish_and_remove_the_wal_files`
-   starts two answers over one store and keeps both snapshots open at a
-   barrier. Both return the stored record count at the same serial. The
-   second answer waits for the first to close; after both complete, the
-   -wal and -shm files are absent. This proves that snapshots can overlap,
-   but does not prove cleanup when their pools close together.
-   `answers_that_close_together_remove_the_wal_files` in the same file
-   checks that case. It is ignored because repeated runs found a remaining
-   -wal file. Criterion 6 remains incomplete until the reader's pool-close
-   path handles this case and the test runs without `--ignored`.
+6. **Concurrency and cleanup.** Each `reader::answer` opens a separate pool
+   with one connection (`cache.rs::connect`) and a separate snapshot.
+   Catch-up calls serialize on the publication file lock. The tests in
+   `operations/queries/tests/concurrent.rs` keep both snapshots open at a
+   barrier and check that both answers return the stored record count at
+   the same serial. `concurrent_answers_finish_and_remove_the_wal_files`
+   orders the closes. `answers_that_close_together_remove_the_wal_files`
+   starts both closes together. Both tests run in the default suite and
+   check that the -wal and -shm files are absent after both answers finish.
+   `close_cache` holds `provenance.db.close.lock` in the cache directory
+   until its pool is empty. This orders closes across independent pools.
+   Without that order, both SQLite closes can fail to get an exclusive
+   database lock before either releases its shared lock, so both skip
+   cleanup. The lock file stays in place for other callers. It is separate
+   from the publication lock and contains no records. Immutable reads do
+   not create or acquire it. A close lock failure returns an error after
+   the pool closes.
 7. **Discovery.** `queries::served` calls `discover_repository` for each
    call. A server supplies a fixed absolute repository path through the
    `Option<Utf8PathBuf>` argument of each operation. It need not change
@@ -214,14 +219,19 @@ The hash estimates are from plan section C.1 and are not release limits.
 | Section | Where | What it blocks |
 |---|---|---|
 | In-place hash of every unit under the guard | `cache/materialize/catch_up.rs::catch_up_with_guard`, through `validation.rs::UnitReader` and `units.rs` in the same directory | A runtime worker while hashing all state bytes under the guard: about 2 ms for this repository, about 100 ms at 38 MB in the plan's measurements |
-| Validation and parse of a changed scope under the guard | `cache/materialize/validation.rs::UnitReader::scope`; `UnitReader::global` validates all scopes when the global unit changes | A runtime worker during validation and parse; unchanged scopes skip this work unless the global unit changes |
-| `LiveHandle::graph_evidence` | `operations/reader/live.rs`, through `cache/health.rs::graph_evidence` | A runtime worker waiting in `flock` while another holder has the publication lock |
-| Reads through `LiveHandle::store()` | `operations/reader/live.rs`, through `state_store/access.rs` | A runtime worker waiting in `flock` for each read through the plain store |
-| `LiveHandle::runs` | `operations/reader/live.rs`, through `StateStore::list_verification_runs` | A runtime worker waiting on the verification run file's lock |
+| Validation and parse of a changed scope under the guard | `cache/materialize/validation.rs::UnitReader::scope`; `UnitReader::global` validates all scopes when the global unit changes | A runtime worker during validation and parse; an unchanged scope skips this work only in an incremental pass with an unchanged global unit |
+| Full rebuild under the guard | `cache/materialize/catch_up.rs::catch_up_with_guard` and `rebuild` | A runtime worker during hashing, validation, and parse of all scopes when there is no stored revision, a migration was applied, or the validation version changed; unchanged canonical bytes do not skip this work |
+| Manifest read retries without the guard | `operations/reader/freshness.rs::ensure_current_schema`, through `cache/materialize/units.rs::scope_ids` and `read_through_rename` | A runtime worker during synchronous file reads and parse; an absent manifest causes seven sleeps of 5, 10, 15, 20, 25, 30, and 35 ms before the eighth attempt, for 140 ms of sleep |
+| Settings read for each request | `settings.rs::Settings::load`, called by the CLI handler or server before the query | The calling thread during the synchronous read and parse of `.provenance/settings.json` |
+| Repository discovery for each query | `operations/queries.rs::served`, through `operations.rs::discover_repository` and `canonical_repository` | A runtime worker during synchronous filesystem checks and path canonicalization while locating the repository |
+| `LiveHandle::graph_evidence` | `operations/reader/live.rs`, through `cache/health.rs::graph_evidence` | A runtime worker waiting in `flock` while another holder has the publication lock, then during canonical file reads and parse |
+| Reads through `LiveHandle::store()` | `operations/reader/live.rs`, through `state_store/access.rs` | A runtime worker waiting in `flock` for canonical reads through the plain store, then during synchronous file reads and parse |
+| `LiveHandle::runs` | `operations/reader/live.rs`, through `StateStore::list_verification_runs` | A runtime worker waiting on the verification run file's lock, then during the file read and parse |
+| Live source scans | `operations/reader/live.rs::LiveHandle::scan_tree` and `scan_file` | A runtime worker during synchronous directory traversal, source file reads, and scans |
+| Live git reads | `operations/reader/live.rs::LiveHandle::resolve_range` and `disturbed`, through `stale/git.rs` | A runtime worker while git subprocesses run and their output is parsed |
 
-The live scan and git methods in `operations/reader/live.rs` also perform
-synchronous work. The server must account for these costs when it moves
-live reads off runtime workers.
+The server must account for these costs when it moves live reads off
+runtime workers.
 
 ## What each family's derivation reads
 

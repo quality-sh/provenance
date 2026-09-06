@@ -24,9 +24,11 @@ pub use projection_families::ProjectionFamily;
 pub use traceability::*;
 
 use crate::layout::ProvenanceLayout;
+use anyhow::Context;
+use fs2::FileExt;
 use provenance_macros::rule;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
-use sqlx::SqlitePool;
+use sqlx::{ConnectOptions, SqlitePool};
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -118,12 +120,9 @@ fn cache_options(layout: &ProvenanceLayout) -> anyhow::Result<SqliteConnectOptio
 ///
 /// The pool holds one connection. Every caller reads and writes one
 /// statement at a time, so one is enough, and it keeps the close clean:
-/// sqlx returns a dropped connection through a spawned task, so a pool
-/// that may grow opens a second connection for the next statement, and at
-/// `close` the two `sqlite3_close` calls overlap on two worker threads.
-/// The last of them cannot take the exclusive lock, and `SQLite` then skips
-/// the checkpoint that removes the `-wal` and `-shm` files. A pool of one
-/// closes one connection at a time. `close_cache` waits for that close.
+/// `SQLx` returns a dropped connection through a spawned task. A pool that
+/// can grow can thus close two connections at once. `close_cache` orders
+/// closes across pools; the limit of one also prevents overlap within a pool.
 async fn connect(
     options: SqliteConnectOptions,
     retry: WalSwitchRetry,
@@ -148,13 +147,44 @@ async fn connect(
 /// Closes every cache connection before a read returns, so `SQLite` can remove
 /// the -wal and -shm files when the last connection closes.
 #[rule("rule_completed_read_leaves_no_wal_files")]
-pub(crate) async fn close_cache(pool: &SqlitePool) {
+pub(crate) async fn close_cache(pool: &SqlitePool) -> anyhow::Result<()> {
+    let options = pool.connect_options();
+    // Immutable reads do not use the -wal and -shm files or need a lock file.
+    let immutable = options
+        .to_url_lossy()
+        .query_pairs()
+        .any(|(key, value)| key == "immutable" && value == "true");
+    let lock = if immutable {
+        Ok(None)
+    } else {
+        let path = options.get_filename().with_extension("db.close.lock");
+        tokio::task::spawn_blocking(move || {
+            let file = std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .truncate(false)
+                .open(&path)
+                .with_context(|| format!("open cache close lock {}", path.display()))?;
+            file.lock_exclusive()
+                .with_context(|| format!("acquire cache close lock {}", path.display()))?;
+            Ok(Some(file))
+        })
+        .await
+        .context("cache close lock task failed")
+        .and_then(std::convert::identity)
+    };
+    // Both SQLite closes can fail their exclusive-lock attempt before either
+    // releases its shared lock. Keep the separate file lock until all handles
+    // close. Never lock the database through another file descriptor: closing
+    // it can release SQLite's process-owned POSIX locks on active connections.
     loop {
         // SQLx 0.8 can return from close with a connection that reached the
         // idle queue after its last drain. The closed pool cannot grow.
         pool.close().await;
         if pool.size() == 0 {
-            return;
+            // Drain the pool even if lock acquisition failed, then report it.
+            return lock.map(drop);
         }
     }
 }

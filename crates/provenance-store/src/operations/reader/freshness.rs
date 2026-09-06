@@ -41,7 +41,7 @@ pub(super) async fn run(
                 .await
                 .map_err(|error| no_projection(layout, &error))?;
             if let Err(error) = ensure_current_schema(&pool, layout).await {
-                crate::cache::close_cache(&pool).await;
+                crate::cache::close_cache(&pool).await?;
                 return Err(error);
             }
             Ok(Freshness {
@@ -64,7 +64,7 @@ async fn catch_up(layout: &ProvenanceLayout) -> anyhow::Result<SqlitePool> {
     let guard = publication_guard(layout).await?;
     let pool = open_cache(layout).await?;
     if let Err(error) = catch_up_with_guard(&guard, &pool, layout).await {
-        crate::cache::close_cache(&pool).await;
+        crate::cache::close_cache(&pool).await?;
         return Err(error);
     }
     drop(guard);
