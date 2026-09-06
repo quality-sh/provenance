@@ -85,7 +85,7 @@ impl PublicationAttempt {
 
 async fn publication_between_units(add_scope: bool) {
     let store = test_stores::seeded_queries();
-    let before = get_through(&store, ReadPolicy::default()).await.unwrap();
+    get_through(&store, ReadPolicy::default()).await.unwrap();
     let shard = crate::shards::requirements_path(&store.layout(), &store.scope);
     let original = std::fs::read(&shard).unwrap();
     if !add_scope {
@@ -132,40 +132,31 @@ async fn publication_between_units(add_scope: bool) {
     assert!(
         matches!(next.downcast_ref::<ReadRefusal>(), Some(ReadRefusal::Stale { moved, .. }) if moved.iter().any(|unit| unit.unit == "global"))
     );
+    assert!(
+        !attempt.blocked.load(Ordering::SeqCst),
+        "the permission fallback must test the completed publication without a lock"
+    );
+    let error =
+        result.expect_err("the projection was stale at every instant, but the read answered");
+    assert!(
+        matches!(error.downcast_ref::<ReadRefusal>(), Some(ReadRefusal::Stale { moved, .. }) if moved.iter().any(|unit| unit.unit == "global")),
+        "{error:#}"
+    );
     if add_scope {
         assert!(
-            attempt.blocked.load(Ordering::SeqCst),
-            "publication during unlocked hash returned an answer"
+            matches!(error.downcast_ref::<ReadRefusal>(), Some(ReadRefusal::Stale { moved, .. }) if moved.iter().any(|unit| unit.unit == "scope:new_scope")),
+            "{error:#}"
         );
-        let after = result.unwrap();
-        assert_eq!(after.stamp.serial, before.stamp.serial);
-        assert_eq!(after.stamp.digest, before.stamp.digest);
-        assert_eq!(
-            serde_json::to_value(after.result).unwrap(),
-            serde_json::to_value(before.result).unwrap()
-        );
-        assert!(
-            matches!(next.downcast_ref::<ReadRefusal>(), Some(ReadRefusal::Stale { moved, .. }) if moved.iter().any(|unit| unit.unit == "scope:new_scope"))
-        );
-    } else {
-        assert!(
-            result.is_err(),
-            "the projection was stale at every instant, but the read answered"
-        );
-        assert!(
-            matches!(result.unwrap_err().downcast_ref::<ReadRefusal>(), Some(ReadRefusal::Stale { moved, .. }) if moved[0].unit == "scope:default")
-        );
-        assert!(attempt.blocked.load(Ordering::SeqCst));
     }
 }
 
 #[tokio::test]
-async fn publication_cannot_add_a_scope_between_unit_hashes() {
+async fn a_scope_added_between_unit_hashes_refuses() {
     publication_between_units(true).await;
 }
 
 #[tokio::test]
-async fn publication_cannot_restore_a_scope_after_the_global_hash() {
+async fn a_scope_restored_after_the_global_hash_refuses() {
     publication_between_units(false).await;
 }
 
@@ -225,25 +216,36 @@ fn unreadable_refusal_escapes_line_breaks_and_keeps_the_path() {
 }
 
 #[tokio::test]
-async fn a_read_only_hash_refuses_without_a_readable_publication_lock() {
+async fn a_read_only_hash_answers_without_a_readable_publication_lock() {
     let store = test_stores::seeded_queries();
     get_through(&store, ReadPolicy::default()).await.unwrap();
     let _restore = super::read_only::lock_untakeable(&store);
     let path = store.layout().publication_lock_path();
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o000)).unwrap();
     if std::fs::File::open(&path).is_ok() {
-        eprintln!("SKIPPED a_read_only_hash_refuses_without_a_readable_publication_lock: lock permissions do not bind");
+        eprintln!("SKIPPED a_read_only_hash_answers_without_a_readable_publication_lock: lock permissions do not bind");
         return;
     }
     let result = get_through(&store, policy()).await;
-    assert!(result.is_err(), "hash answered without a publication lock");
+    assert!(result.unwrap().result.found);
 }
 
 #[tokio::test]
-async fn a_read_only_hash_refuses_a_pending_publication() {
+async fn a_read_only_hash_refuses_stale_state_with_a_pending_publication() {
     let store = test_stores::seeded_queries();
     get_through(&store, ReadPolicy::default()).await.unwrap();
-    std::fs::write(store.layout().publication_marker_path(), b"{}").unwrap();
+    let transaction = store.layout().import_transactions_dir().join("pending");
+    std::fs::create_dir(&transaction).unwrap();
+    crate::publication::write_publication_marker(
+        &store.layout(),
+        &transaction,
+        crate::publication::PublicationPhase::Prepared,
+    )
+    .unwrap();
+    let shard = crate::shards::requirements_path(&store.layout(), &store.scope);
+    crate::cache::tests::fixtures::rewrite_records(&shard, |record| {
+        record["statement"] = "Changed before the read".into();
+    });
     let _restore = super::read_only::lock_untakeable(&store);
     let error = crate::publication::publication_guard(&store.layout())
         .await
@@ -255,14 +257,70 @@ async fn a_read_only_hash_refuses_a_pending_publication() {
         != Some(std::io::ErrorKind::PermissionDenied)
     {
         eprintln!(
-            "SKIPPED a_read_only_hash_refuses_a_pending_publication: lock permissions do not bind"
+            "SKIPPED a_read_only_hash_refuses_stale_state_with_a_pending_publication: lock permissions do not bind"
         );
         return;
     }
     let result = get_through(&store, policy()).await;
-    let error = result.expect_err("hash answered during a pending publication");
+    let error = result.expect_err("hash answered from stale state with a pending publication");
     assert!(
-        error.to_string().contains("pending publication"),
+        matches!(error.downcast_ref::<ReadRefusal>(), Some(ReadRefusal::Stale { moved, .. }) if moved[0].unit == "scope:default"),
         "{error:#}"
+    );
+}
+
+#[tokio::test]
+async fn a_publication_after_the_unlocked_hash_keeps_the_checked_answer() {
+    let store = test_stores::seeded_queries();
+    let before = get_through(&store, ReadPolicy::default()).await.unwrap();
+    let bytes = std::fs::read(store.layout().cache_db_path()).unwrap();
+    let _restore = super::read_only::lock_untakeable(&store);
+    let guard = crate::publication::publication_guard(&store.layout()).await;
+    if guard.is_ok() {
+        eprintln!("SKIPPED publication after unlocked hash: lock permissions do not bind");
+        return;
+    }
+    assert_eq!(
+        guard
+            .err()
+            .unwrap()
+            .downcast_ref::<std::io::Error>()
+            .unwrap()
+            .kind(),
+        std::io::ErrorKind::PermissionDenied
+    );
+    let layout = store.layout();
+    let scope = store.scope.clone();
+    crate::test_probes::arm("refuse_stale_after_hash", move || {
+        std::fs::set_permissions(
+            layout.publication_lock_path(),
+            std::fs::Permissions::from_mode(0o644),
+        )?;
+        // The writer can publish canonical files. The database stays read-only.
+        crate::publication::with_repository_publication(&layout, || {
+            let path = crate::shards::requirements_path(&layout, &scope);
+            crate::cache::tests::fixtures::rewrite_records(&path, |record| {
+                record["statement"] = "Changed after the freshness check".into();
+            });
+            Ok(())
+        })
+    });
+    let result = get_through(&store, policy()).await;
+    crate::test_probes::disarm("refuse_stale_after_hash");
+    let after = result.unwrap();
+    assert_eq!(after.stamp.serial, before.stamp.serial);
+    assert_eq!(after.stamp.digest, before.stamp.digest);
+    assert_eq!(
+        serde_json::to_value(after.result).unwrap(),
+        serde_json::to_value(before.result).unwrap()
+    );
+    let error = get_through(&store, policy()).await.unwrap_err();
+    assert!(
+        matches!(error.downcast_ref::<ReadRefusal>(), Some(ReadRefusal::Stale { moved, .. }) if moved[0].unit == "scope:default"),
+        "{error:#}"
+    );
+    assert_eq!(
+        std::fs::read(store.layout().cache_db_path()).unwrap(),
+        bytes
     );
 }

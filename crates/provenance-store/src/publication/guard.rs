@@ -95,30 +95,6 @@ pub async fn publication_guard(layout: &ProvenanceLayout) -> anyhow::Result<Publ
     .map_err(|error| anyhow::anyhow!("publication guard acquisition failed: {error}"))?
 }
 
-/// Holds a shared lock without writing the lock file or running recovery.
-/// A pending publication must be recovered by a writer before this read.
-pub async fn publication_read_guard(layout: &ProvenanceLayout) -> anyhow::Result<PublicationGuard> {
-    let layout = layout.clone();
-    tokio::task::spawn_blocking(move || {
-        let path = layout.publication_lock_path();
-        let file = File::open(&path)
-            .with_context(|| format!("refuse_stale: open publication lock for reading {path}"))?;
-        fs2::FileExt::lock_shared(&file)
-            .with_context(|| format!("refuse_stale: acquire shared publication lock {path}"))?;
-        let lock = LockedPublicationFile { file };
-        anyhow::ensure!(
-            !layout.publication_marker_path().try_exists()?,
-            "refuse_stale: pending publication requires recovery; run `provenance materialize`"
-        );
-        Ok(PublicationGuard {
-            _lock: Some(lock),
-            layout,
-        })
-    })
-    .await
-    .map_err(|error| anyhow::anyhow!("publication read guard acquisition failed: {error}"))?
-}
-
 #[cfg(test)]
 mod tests {
     use crate::layout::ProvenanceLayout;
