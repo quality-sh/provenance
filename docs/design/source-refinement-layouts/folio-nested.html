@@ -72,7 +72,7 @@
     padding:4px 10px;color:var(--mauve);transition:color .25s ease,border-color .25s ease}
   .btn:hover{color:var(--rosegold);border-color:var(--rosegold)}
   .tree{list-style:none;margin:0;padding:0}
-  .tree ul{list-style:none;margin:0;padding-left:14px;border-left:1px solid var(--line-soft)}
+  .tree ul{list-style:none;margin:0;padding-left:11px;border-left:1px solid var(--line-soft)}
   .tree button{display:block;width:100%;text-align:left;font:11.5px/1.5 var(--mono);padding:3.5px 8px;color:var(--mauve);
     transition:color .25s ease}
   .tree button:hover{color:var(--ink)}
@@ -91,15 +91,26 @@
 
   /* ---------- recursive record cards ---------- */
   .doc{min-width:0}
-  details.card{margin:0 0 10px;border:1px solid var(--line);border-radius:2px;background:var(--bg);
-    transition:border-color .25s ease}
-  details.card:hover{border-color:rgba(224,222,244,.24)}
+  /* one stable column: records are full-width sections, not boxes-in-boxes.
+     hierarchy comes from headers, depth markers, type ticks and dividers —
+     never from cumulative indentation. */
+  details.card{margin:0 0 16px;padding-bottom:14px;border-bottom:1px solid var(--line-soft);
+    background:transparent}
+  details.card:hover{background:rgba(224,222,244,.02)}
+  details.card > summary{border-left:2px solid transparent}
+  .g-req > summary{border-left-color:rgba(235,188,186,.4)}
+  .g-res > summary{border-left-color:rgba(196,165,106,.45)}
+  .g-rule > summary{border-left-color:rgba(235,111,146,.5)}
+  .g-topic > summary,.g-q > summary{border-left-color:rgba(144,140,170,.4)}
+  details.card.sel{background:rgba(235,111,146,.045)}
   summary{cursor:pointer;list-style:none}
   summary::-webkit-details-marker{display:none}
-  .head{display:flex;align-items:baseline;gap:10px;padding:11px 14px;flex-wrap:wrap}
+  .head{display:flex;align-items:baseline;gap:10px;padding:10px 0 8px;flex-wrap:wrap;
+    border-bottom:1px solid var(--line-soft);margin-bottom:10px}
   .head:focus-visible{outline:1px solid var(--rosegold);outline-offset:-2px}
   .glyph{font:10px var(--mono);letter-spacing:.05em;border:1px solid currentColor;border-radius:2px;
-    min-width:21px;height:21px;display:inline-flex;align-items:center;justify-content:center;flex:none;align-self:center}
+    padding:0 5px;height:21px;display:inline-flex;align-items:center;justify-content:center;flex:none;align-self:center}
+  .depth{font:9px var(--mono);letter-spacing:.1em;color:var(--mauve);opacity:.75;align-self:center}
   .g-req .glyph{color:var(--rosegold)} .g-res .glyph{color:var(--gold)}
   .g-rule .glyph{color:var(--rose)} .g-topic .glyph{color:var(--mauve)} .g-q .glyph{color:var(--mauve)}
   .kind{font:9.5px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--mauve);white-space:nowrap}
@@ -108,7 +119,7 @@
   .head .t{font:600 18px/1.3 var(--serif);flex:1 1 260px;min-width:200px;color:var(--ink)}
   .chev{color:var(--mauve);font-size:10px;transition:transform .16s ease;align-self:center}
   details[open] > summary .chev{transform:rotate(90deg)}
-  .body{border-top:1px solid var(--line-soft);padding:12px 16px 14px 16px}
+  .body{padding:0}
   .statement{font:500 18.5px/1.5 var(--serif);margin:0 0 8px;max-width:66ch;color:var(--ink)}
   .rel{font:9.5px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--mauve);margin:3px 0;line-height:1.9}
   .rel b{color:var(--ink);font-weight:400}
@@ -116,7 +127,7 @@
   .field b{font:9.5px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink);margin-right:6px;font-weight:400}
   .note{font:italic 14.5px/1.6 var(--serif);color:var(--mauve);margin:8px 0;max-width:70ch}
 
-  .kids{margin:12px 0 2px;padding-left:14px;border-left:1px solid var(--line);display:flex;flex-direction:column;gap:10px}
+  .kids{margin:6px 0 0;display:flex;flex-direction:column;gap:14px}
   .kids .group-label{font:9.5px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--mauve);margin:2px 0 -4px}
   .kids .group-label .why{color:var(--rose);text-transform:none;letter-spacing:.03em}
 
@@ -217,8 +228,8 @@
 <header class="masthead">
   <p class="kicker">Source refinement · shared view · second iteration</p>
   <h1>Source refinement for product work</h1>
-  <p class="sub">One requirement, its decisions, what each decision produced, and the requirements those
-    decisions spawned — nested the way the records actually relate. Select any record to read its own thread.</p>
+  <p class="sub">One requirement, its Resolutions, what each Resolution produced, and the requirements those
+    Resolutions spawned — nested the way the records actually relate. Select any record to read its own thread.</p>
   <div class="rule" role="presentation"></div>
 </header>
 
@@ -232,32 +243,32 @@
       <button class="btn" id="collapse-all" type="button">Collapse all</button>
     </div>
     <ul class="tree" id="tree">
-      <li><button type="button" data-goto="req_root"><span class="g req">R</span>Source refinement for product work</button>
+      <li><button type="button" data-goto="req_root"><span class="g req">Req</span>Source refinement for product work</button>
         <ul>
-          <li><button type="button" data-goto="res_exposes"><span class="g res">D</span>Show the system description</button>
+          <li><button type="button" data-goto="res_exposes"><span class="g res">Res</span>Show the system description</button>
             <ul>
-              <li><button type="button" data-goto="req_shows"><span class="g req">R</span>Refinement shows the evolving structure</button>
+              <li><button type="button" data-goto="req_shows"><span class="g req">Req</span>Refinement shows the evolving structure</button>
                 <ul>
-                  <li><button type="button" data-goto="res_edits"><span class="g res">D</span>Direct editing of sources and records</button>
+                  <li><button type="button" data-goto="res_edits"><span class="g res">Res</span>Direct editing of sources and records</button>
                     <ul>
-                      <li><button type="button" data-goto="req_edits"><span class="g req">R</span>Direct editing of sources and records</button></li>
+                      <li><button type="button" data-goto="req_edits"><span class="g req">Req</span>Direct editing of sources and records</button></li>
                     </ul>
                   </li>
-                  <li><button type="button" data-goto="res_reuse"><span class="g res">D</span>Reuse threads, questions, lifecycles</button></li>
-                  <li><button type="button" data-goto="rule_citation"><span class="g rule">Ru</span>Citations open the cited passage</button></li>
+                  <li><button type="button" data-goto="res_reuse"><span class="g res">Res</span>Reuse threads, questions, lifecycles</button></li>
+                  <li><button type="button" data-goto="rule_citation"><span class="g rule">Rule</span>Citations open the cited passage</button></li>
                   <li><button type="button" data-goto="topic_form"><span class="g topic">T</span>Topic — the shared view’s form</button></li>
                 </ul>
               </li>
             </ul>
           </li>
-          <li><button type="button" data-goto="res_agenda"><span class="g res">D</span>A visible discussion agenda</button>
+          <li><button type="button" data-goto="res_agenda"><span class="g res">Res</span>A visible discussion agenda</button>
             <ul>
-              <li><button type="button" data-goto="req_agenda"><span class="g req">R</span>The session tracks a discussion agenda</button></li>
+              <li><button type="button" data-goto="req_agenda"><span class="g req">Req</span>The session tracks a discussion agenda</button></li>
             </ul>
           </li>
-          <li><button type="button" data-goto="res_agent"><span class="g res">D</span>Agent leads with grounded questions</button>
+          <li><button type="button" data-goto="res_agent"><span class="g res">Res</span>Agent leads with grounded questions</button>
             <ul>
-              <li><button type="button" data-goto="req_agent"><span class="g req">R</span>The agent shapes with product context</button></li>
+              <li><button type="button" data-goto="req_agent"><span class="g req">Req</span>The agent shapes with product context</button></li>
             </ul>
           </li>
           <li><button type="button" data-goto="src_discovery"><span class="g topic">S</span>Source — discovery conversation</button></li>
@@ -266,9 +277,9 @@
       </li>
     </ul>
     <div class="legend">
-      <b>R</b> requirement · <b>D</b> decision · <b>Ru</b> rule · <b>T</b> topic · <b>S</b> source<br>
-      Nesting follows creation: a decision sits under the requirement it resolves; a spawned requirement
-      nests under its decision; a rule with no producing decision nests directly on its requirement.
+      <b>Req</b> requirement · <b>Res</b> Resolution · <b>Rule</b> rule · <b>T</b> topic · <b>S</b> source<br>
+      Nesting follows creation: a Resolution sits under the requirement it resolves; a spawned requirement
+      nests under its Resolution; a rule with no producing Resolution nests directly on its requirement.
     </div>
   </nav>
 
@@ -281,7 +292,7 @@
       <summary>
         <div class="head">
           <span class="glyph">R</span>
-          <span class="kind">requirement · <span class="st">discovery</span></span>
+          <span class="depth">L1</span><span class="kind">requirement · <span class="st">discovery</span></span>
           <span class="t">Source refinement for product work</span>
           <span class="chev" aria-hidden="true">▶</span>
         </div>
@@ -296,14 +307,14 @@
           and engineering usable direction and keeps changing. Development never waits for a finished specification.</p>
 
         <div class="kids">
-          <span class="group-label">Resolved by · each decision nests what it produced</span>
+          <span class="group-label">Resolved by · each Resolution nests what it produced</span>
 
           <!-- ============ D1 ============ -->
           <details class="card g-res" id="rec_res_exposes" data-record="res_exposes" data-path="req_root,res_exposes" data-kind="resolution" open>
             <summary>
               <div class="head">
-                <span class="glyph">D</span>
-                <span class="kind">decision · <span class="st ap">approved</span></span>
+                <span class="glyph">Res</span>
+                <span class="depth">L2</span><span class="kind">Resolution · <span class="st ap">approved</span></span>
                 <span class="t">Show the system description during refinement</span>
                 <span class="chev" aria-hidden="true">▶</span>
               </div>
@@ -322,14 +333,14 @@
               </div>
 
               <div class="kids">
-                <span class="group-label">Spawned requirement · refines the requirement above through this decision</span>
+                <span class="group-label">Spawned requirement · refines the requirement above through this Resolution</span>
 
                 <!-- ============ R2 (spawned) ============ -->
                 <details class="card g-req" id="rec_req_shows" data-record="req_shows" data-path="req_root,res_exposes,req_shows" data-kind="requirement" open>
                   <summary>
                     <div class="head">
                       <span class="glyph">R</span>
-                      <span class="kind">requirement · <span class="st">discovery</span></span>
+                      <span class="depth">L3</span><span class="kind">requirement · <span class="st">discovery</span></span>
                       <span class="t">Refinement shows the evolving structure</span>
                       <span class="chev" aria-hidden="true">▶</span>
                     </div>
@@ -350,8 +361,8 @@
                       <details class="card g-res" id="rec_res_edits" data-record="res_edits" data-path="req_root,res_exposes,req_shows,res_edits" data-kind="resolution">
                         <summary>
                           <div class="head">
-                            <span class="glyph">D</span>
-                            <span class="kind">decision · <span class="st ap">approved</span></span>
+                            <span class="glyph">Res</span>
+                            <span class="depth">L4</span><span class="kind">Resolution · <span class="st ap">approved</span></span>
                             <span class="t">Direct editing of source content and records</span>
                             <span class="chev" aria-hidden="true">▶</span>
                           </div>
@@ -370,7 +381,7 @@
                               <summary>
                                 <div class="head">
                                   <span class="glyph">R</span>
-                                  <span class="kind">requirement · <span class="st">discovery</span></span>
+                                  <span class="depth">L5</span><span class="kind">requirement · <span class="st">discovery</span></span>
                                   <span class="t">Direct editing of sources and records</span>
                                   <span class="chev" aria-hidden="true">▶</span>
                                 </div>
@@ -402,8 +413,8 @@
                       <details class="card g-res" id="rec_res_reuse" data-record="res_reuse" data-path="req_root,res_exposes,req_shows,res_reuse" data-kind="resolution">
                         <summary>
                           <div class="head">
-                            <span class="glyph">D</span>
-                            <span class="kind">decision · <span class="st ap">approved</span></span>
+                            <span class="glyph">Res</span>
+                            <span class="depth">L4</span><span class="kind">Resolution · <span class="st ap">approved</span></span>
                             <span class="t">Reuse threads, questions, lifecycles</span>
                             <span class="chev" aria-hidden="true">▶</span>
                           </div>
@@ -411,7 +422,7 @@
                         <div class="body">
                           <p class="statement">The shared view uses existing Provenance threads, questions and
                             record lifecycles.</p>
-                          <p class="note">This decision spawned no requirement — a decision need not produce one.
+                          <p class="note">This Resolution spawned no requirement — a Resolution need not spawn one.
                             The threads you see beside this page are the existing threads it points at.</p>
                           <div class="cites">
                             <button class="cite" type="button" data-cite="p2">cites · the ongoing session</button>
@@ -419,14 +430,14 @@
                         </div>
                       </details>
 
-                      <span class="group-label">Rules on this requirement · <span class="why">no producing decision — none is required</span></span>
+                      <span class="group-label">Rules on this requirement · <span class="why">no producing Resolution — none is required</span></span>
 
                       <!-- ============ illustrative rule, directly on the requirement ============ -->
                       <details class="card g-rule" id="rec_rule_citation" data-record="rule_citation" data-path="req_root,res_exposes,req_shows,rule_citation" data-kind="rule">
                         <summary>
                           <div class="head">
-                            <span class="glyph">Ru</span>
-                            <span class="kind">rule · <span class="illus">illustrative</span></span>
+                            <span class="glyph">Rule</span>
+                            <span class="depth">L4</span><span class="kind">rule · <span class="illus">illustrative</span></span>
                             <span class="t">Citations open the cited passage</span>
                             <span class="chev" aria-hidden="true">▶</span>
                           </div>
@@ -435,9 +446,9 @@
                           <p class="statement">Selecting a citation in the shared view shows the cited passage from
                             its source without leaving the conversation.</p>
                           <p class="rel">refines <b>Refinement shows the evolving structure</b> · produced by
-                            <b>no decision — none is required</b></p>
+                            <b>no Resolution — none is required</b></p>
                           <div class="field"><b>State</b> A rule may exist before implementation, before
-                            verification, and before any decision produces it — all three absences shown here are
+                            verification, and before any Resolution produces it — all three absences shown here are
                             ordinary. Minted for this prototype; not an accepted obligation.</div>
                           <div class="cites">
                             <button class="cite" type="button" data-cite="p1">cites · discovery conversation, “any source”</button>
@@ -452,20 +463,20 @@
                         <summary>
                           <div class="head">
                             <span class="glyph">T</span>
-                            <span class="kind">topic · open</span>
+                            <span class="depth">L4</span><span class="kind">topic · open</span>
                             <span class="t">The shared view’s form</span>
                             <span class="chev" aria-hidden="true">▶</span>
                           </div>
                         </summary>
                         <div class="body">
                           <div class="kids">
-                            <span class="group-label">Questions · a question links to its resolving decision; it never owns one</span>
+                            <span class="group-label">Questions · a question links to its resolving Resolution; it never owns one</span>
 
                             <details class="card g-q" id="rec_q_page" data-record="q_page" data-path="req_root,res_exposes,req_shows,topic_form,q_page" data-kind="question">
                               <summary>
                                 <div class="head">
                                   <span class="glyph">Q</span>
-                                  <span class="kind">question · open</span>
+                                  <span class="depth">L5</span><span class="kind">question · open</span>
                                   <span class="t">Requirement page with collapsible sections — or a graph?</span>
                                   <span class="chev" aria-hidden="true">▶</span>
                                 </div>
@@ -482,7 +493,7 @@
                               <summary>
                                 <div class="head">
                                   <span class="glyph">Q</span>
-                                  <span class="kind">question · <span class="illus">raised in the ongoing session</span></span>
+                                  <span class="depth">L5</span><span class="kind">question · <span class="illus">raised in the ongoing session</span></span>
                                   <span class="t">What happens to citations when a source passage is edited?</span>
                                   <span class="chev" aria-hidden="true">▶</span>
                                 </div>
@@ -508,8 +519,8 @@
           <details class="card g-res" id="rec_res_agenda" data-record="res_agenda" data-path="req_root,res_agenda" data-kind="resolution">
             <summary>
               <div class="head">
-                <span class="glyph">D</span>
-                <span class="kind">decision · <span class="st ap">approved</span></span>
+                <span class="glyph">Res</span>
+                <span class="depth">L2</span><span class="kind">Resolution · <span class="st ap">approved</span></span>
                 <span class="t">A visible discussion agenda</span>
                 <span class="chev" aria-hidden="true">▶</span>
               </div>
@@ -527,7 +538,7 @@
                   <summary>
                     <div class="head">
                       <span class="glyph">R</span>
-                      <span class="kind">requirement · <span class="st">discovery</span></span>
+                      <span class="depth">L3</span><span class="kind">requirement · <span class="st">discovery</span></span>
                       <span class="t">The session tracks a discussion agenda</span>
                       <span class="chev" aria-hidden="true">▶</span>
                     </div>
@@ -537,7 +548,7 @@
                       derived from the source material.</p>
                     <p class="rel">refines <b>Source refinement for product work</b> · spawned by
                       <b>A visible discussion agenda</b></p>
-                    <p class="note">Its own decisions and rules would nest here as the work continues — the same
+                    <p class="note">Its own Resolutions and rules would nest here as the work continues — the same
                       pattern as its siblings above.</p>
                   </div>
                 </details>
@@ -549,8 +560,8 @@
           <details class="card g-res" id="rec_res_agent" data-record="res_agent" data-path="req_root,res_agent" data-kind="resolution">
             <summary>
               <div class="head">
-                <span class="glyph">D</span>
-                <span class="kind">decision · <span class="st ap">approved</span></span>
+                <span class="glyph">Res</span>
+                <span class="depth">L2</span><span class="kind">Resolution · <span class="st ap">approved</span></span>
                 <span class="t">Agent leads with grounded questions</span>
                 <span class="chev" aria-hidden="true">▶</span>
               </div>
@@ -568,7 +579,7 @@
                   <summary>
                     <div class="head">
                       <span class="glyph">R</span>
-                      <span class="kind">requirement · <span class="st">discovery</span></span>
+                      <span class="depth">L3</span><span class="kind">requirement · <span class="st">discovery</span></span>
                       <span class="t">The agent shapes with product context</span>
                       <span class="chev" aria-hidden="true">▶</span>
                     </div>
@@ -591,7 +602,7 @@
             <summary>
               <div class="head">
                 <span class="glyph">S</span>
-                <span class="kind">source · project artifact</span>
+                <span class="depth">L2</span><span class="kind">source · project artifact</span>
                 <span class="t">Product discovery conversation, 4–6 September 2026</span>
                 <span class="chev" aria-hidden="true">▶</span>
               </div>
@@ -623,16 +634,16 @@
             <summary>
               <div class="head">
                 <span class="glyph">S</span>
-                <span class="kind">source · this ongoing session — not the original transcript</span>
+                <span class="depth">L2</span><span class="kind">source · this ongoing session — not the original transcript</span>
                 <span class="t">Source refinement shaping session, September 2026</span>
                 <span class="chev" aria-hidden="true">▶</span>
               </div>
             </summary>
             <div class="body">
-              <p class="field"><b>Carries</b> the decisions above and their spawned requirements, as ratified by
+              <p class="field"><b>Carries</b> the Resolutions above and their spawned requirements, as ratified by
                 Ben in this session with the coordinating agent.</p>
               <p class="field"><b>Distinct from</b> the discovery conversation: the original transcript motivated
-                the work; the decisions on this page were made afterwards, here. Labels on each record keep the
+                the work; the Resolutions on this page were made afterwards, here. Labels on each record keep the
                 two apart.</p>
             </div>
           </details>
@@ -670,20 +681,20 @@
       <h3>The correction</h3>
       <p>Ben accepted Folio’s document direction and corrected its structure: Provenance already knows what
         creates what, so the page must nest. The flat buckets are gone. A requirement’s document now holds its
-        decisions; each decision holds what it produced and the requirement it spawned; that spawned requirement
-        holds its own decisions and rules in turn — the creation chain, legible as indentation.</p>
+        Resolutions; each Resolution holds what it produced and the requirement it spawned; that spawned requirement
+        holds its own Resolutions and rules in turn — the creation chain, legible as indentation.</p>
       <h3>The relations shown</h3>
-      <p>Requirement → refines one requirement, spawned by one decision, cites sources. Decision → resolves one
+      <p>Requirement → refines one requirement, spawned by one Resolution, cites sources. Resolution → resolves one
         or more requirements, spawns requirements, produces rules. Rule → refines one or more requirements; its
-        producing decisions are optional, so a rule with none nests directly on its requirement. Topic → anchored
+        producing Resolutions are optional, so a rule with none nests directly on its requirement. Topic → anchored
         at its requirement; questions belong to the topic and to the requirement, and link to a resolving
-        decision without owning it.</p>
+        Resolution without owning it.</p>
       <h3>Design assumption (labelled, not decided)</h3>
       <p>When a record has more than one parent, this page nests it once, in its creation chain, and shows its
         other relations as labelled reference lines (“refines … · spawned by …”). Here the shared-view
-        requirement both refines the root and was spawned by its decision — it nests under that decision, with
-        the refinement named on the record. A requirement resolved by two decisions (the shared view, by the
-        editing and reuse decisions) lists both. The alternative — repeating the record under every parent —
+        requirement both refines the root and was spawned by its Resolution — it nests under that Resolution, with
+        the refinement named on the record. A requirement resolved by two Resolutions (the shared view, by the
+        editing and reuse Resolutions) lists both. The alternative — repeating the record under every parent —
         would duplicate it; nothing here is duplicated.</p>
       <h3>Style provenance</h3>
       <p>Identity from the current Provenance web: black ground, lavender ink, rose, rose-gold and gold accents,
@@ -691,11 +702,11 @@
         and copy stay out of the editor. Both faces are SIL Open Font License; the bundled copies sit in
         fonts/ beside this file with their licenses, so the page still works offline.</p>
       <h3>Agreed vs invented</h3>
-      <p>Agreed, from the coordinator: the root requirement, the five approved decisions, the four spawned or
+      <p>Agreed, from the coordinator: the root requirement, the five approved Resolutions, the four spawned or
         refined requirements, their statements and the page-form question. Invented for this prototype: the
         illustrative rule, both sample threads, the topic’s second question (source-edit versioning), the
         projection rule above, and every local edit. The original discovery conversation supports the root; the
-        decisions cite this ongoing session, and the record labels keep the two sources apart.</p>
+        Resolutions cite this ongoing session, and the record labels keep the two sources apart.</p>
     </div>
   </details>
 </div>
@@ -726,25 +737,25 @@
       title: "Source refinement for product work",
       thread: [
         { who: "Agent", sample: true, text: "Sample: this thread belongs to the root requirement only. Select a nested record and this panel follows it — comments never leak between records." },
-        { who: "Ben", sample: true, text: "Recorded suggestion, from the approved decision: a graph, or a document with collapsible sections." }
+        { who: "Ben", sample: true, text: "Recorded suggestion, from the approved Resolution: a graph, or a document with collapsible sections." }
       ]
     },
     res_exposes: {
-      kind: "decision · approved · resolves the root",
+      kind: "Resolution · approved · resolves the root",
       title: "Show the system description during refinement",
       thread: [
-        { who: "Agent", sample: true, text: "Sample: the decision’s own thread. Its spawned requirement has a separate one below it." }
+        { who: "Agent", sample: true, text: "Sample: the Resolution’s own thread. Its spawned requirement has a separate one below it." }
       ]
     },
     req_shows: {
       kind: "requirement · discovery",
       title: "Refinement shows the evolving structure",
       thread: [
-        { who: "Agent", sample: true, text: "Sample: two decisions resolve this requirement, and the illustrative rule sits directly on it — no decision produced it, none is required." }
+        { who: "Agent", sample: true, text: "Sample: two Resolutions resolve this requirement, and the illustrative rule sits directly on it — no Resolution produced it, none is required." }
       ]
     },
     res_edits: {
-      kind: "decision · approved",
+      kind: "Resolution · approved",
       title: "Direct editing of source content and records",
       thread: [
         { who: "Ben", sample: true, text: "Recorded in the ongoing session: the shared view permits direct editing of source content and structured graph records." },
@@ -755,21 +766,21 @@
       kind: "requirement · discovery",
       title: "Direct editing of sources and records",
       thread: [
-        { who: "Agent", sample: true, text: "Sample: the leaf of the deepest chain — root, decision, requirement, decision, requirement. Try its statement edit." }
+        { who: "Agent", sample: true, text: "Sample: the leaf of the deepest chain — root, Resolution, requirement, Resolution, requirement. Try its statement edit." }
       ]
     },
     res_reuse: {
-      kind: "decision · approved",
+      kind: "Resolution · approved",
       title: "Reuse threads, questions, lifecycles",
       thread: [
-        { who: "Agent", sample: true, text: "Sample: this decision spawned no requirement — the panel and composer here are the existing threads it points at." }
+        { who: "Agent", sample: true, text: "Sample: this Resolution spawned no requirement — the panel and composer here are the existing threads it points at." }
       ]
     },
     rule_citation: {
       kind: "rule · illustrative — not in the graph",
       title: "Citations open the cited passage",
       thread: [
-        { who: "Agent", sample: true, text: "Sample: illustrative only. Refines the shared-view requirement directly; no producing decision, no implementation, no verification." }
+        { who: "Agent", sample: true, text: "Sample: illustrative only. Refines the shared-view requirement directly; no producing Resolution, no implementation, no verification." }
       ]
     },
     topic_form: {
@@ -790,28 +801,28 @@
       kind: "question · raised in the ongoing session",
       title: "What happens to citations when a source passage is edited?",
       thread: [
-        { who: "Agent", sample: true, text: "Sample: open. A question links to its resolving decision once one exists — it never owns one." }
+        { who: "Agent", sample: true, text: "Sample: open. A question links to its resolving Resolution once one exists — it never owns one." }
       ]
     },
     res_agenda: {
-      kind: "decision · approved",
+      kind: "Resolution · approved",
       title: "A visible discussion agenda",
       thread: [
-        { who: "Agent", sample: true, text: "Sample: sibling decision of the shared-view chain — same parent requirement, separate creation chain." }
+        { who: "Agent", sample: true, text: "Sample: sibling Resolution of the shared-view chain — same parent requirement, separate creation chain." }
       ]
     },
     req_agenda: {
       kind: "requirement · discovery",
       title: "The session tracks a discussion agenda",
       thread: [
-        { who: "Agent", sample: true, text: "Sample: its own decisions will nest here as work continues." }
+        { who: "Agent", sample: true, text: "Sample: its own Resolutions will nest here as work continues." }
       ]
     },
     res_agent: {
-      kind: "decision · approved",
+      kind: "Resolution · approved",
       title: "Agent leads with grounded questions",
       thread: [
-        { who: "Agent", sample: true, text: "Sample: the agent’s guiding questions come from the source and the product context, per the decision." }
+        { who: "Agent", sample: true, text: "Sample: the agent’s guiding questions come from the source and the product context, per the Resolution." }
       ]
     },
     req_agent: {
@@ -825,14 +836,14 @@
       kind: "source · project artifact",
       title: "Product discovery conversation, 4–6 September 2026",
       thread: [
-        { who: "Agent", sample: true, text: "Sample: the original transcript. It motivated the work; the decisions on this page were made later, in the ongoing session." }
+        { who: "Agent", sample: true, text: "Sample: the original transcript. It motivated the work; the Resolutions on this page were made later, in the ongoing session." }
       ]
     },
     src_session: {
       kind: "source · this ongoing session",
       title: "Source refinement shaping session, September 2026",
       thread: [
-        { who: "Agent", sample: true, text: "Sample: labelled so the transcript and the session’s decisions stay distinct." }
+        { who: "Agent", sample: true, text: "Sample: labelled so the transcript and the session’s Resolutions stay distinct." }
       ]
     }
   };
@@ -845,6 +856,9 @@
   function select(id) {
     if (!records[id]) return;
     selectedId = id;
+    $$(".card.sel").forEach(function (c) { c.classList.remove("sel"); });
+    var cardEl = document.querySelector("[data-record='" + id + "']");
+    if (cardEl) cardEl.classList.add("sel");
     var rec = records[id];
     $("#p-kind").textContent = rec.kind;
     $("#p-title").textContent = rec.title;
@@ -953,7 +967,7 @@
           quote: "It could be any source. I am just giving a scenario.",
           loc: "source: discovery conversation · msg_06cb67f84001G6VYStJvwwYRWQ" },
     p2: { source: "Source refinement shaping session, September 2026", clause: "This ongoing session with the coordinating agent — decided after the original transcript",
-          quote: "The shared-view acceptance and the editing, reuse, agenda and agent-guidance decisions recorded on this page.",
+          quote: "The shared-view acceptance and the editing, reuse, agenda and agent-guidance Resolutions recorded on this page.",
           loc: "source: ongoing session · not part of the original discovery transcript" }
   };
   var dlg = $("#cite-dialog");
