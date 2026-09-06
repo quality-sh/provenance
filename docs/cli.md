@@ -152,8 +152,12 @@ This tracked JSON file accepts `read.freshness_policy` and `read.scan_limit`:
 Both keys are optional. A missing file uses the defaults. `--freshness` accepts
 `catch_up`, `annotate_only`, or `refuse_stale`. The flag takes precedence over
 the file, and the file takes precedence over the default `catch_up`. No
-environment variable selects a policy. `refuse_stale` is accepted as a setting
-and flag but refuses as unimplemented until W5 stage K.3.
+environment variable selects a policy. `refuse_stale` hashes canonical units
+without updating the projection. It answers at the stored serial when all unit
+digests match. Otherwise, it prints a typed Rust error to stderr and exits 1.
+The error names the stored serial, revision digest, instance id, and each moved
+unit with its stored and live digests. A unit that cannot be hashed also refuses.
+Read under `catch_up` or run `provenance materialize` to update the projection.
 
 `read.scan_limit` is a whole number of at least 1. Its default is 5000 source
 files; it has no flag or request field. An invalid value, an unknown key at

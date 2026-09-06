@@ -134,8 +134,13 @@ names the failed step. This word remains the policy outcome for a failed
 catch-up step. Under `annotate_only`, the policy word is unchanged. The
 answer is at the serial the file holds. Both `PermissionDenied` and
 `ReadOnlyFilesystem` are permission failures. The immutable open is shared
-by policies; stage K.3 adds the unlocked hash decision for `refuse_stale`,
-which currently refuses as unimplemented. These permission fixtures run
+by all three policies. Under `refuse_stale`, a permission failure on the
+publication guard selects an unlocked hash over the same scope list. A changed
+or unreadable unit refuses. Other guard failures refuse with their error.
+The policy writes no revision and answers from the transaction used to check
+the stored digests. Like `annotate_only`, it refuses an absent projection,
+old migrations or validation, and a half-migrated projection.
+These permission fixtures run
 on Unix. A Linux test also uses an isolated read-only mount when user and
 mount namespaces are available. The tests do not reproduce these
 permissions on Windows.
