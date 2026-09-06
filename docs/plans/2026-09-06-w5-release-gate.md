@@ -1,4 +1,4 @@
-# W5 release gate: implementation plan (revision 2)
+# W5 release gate: implementation plan (revision 3)
 
 Bead `provenance-1wh.3`. Read at `03a935c` (W3 fully merged: PRs 192, 193, 194, 195, 196). Every `path:line` below
 was counted there. This document is the W5 charter of the approved W3 plan, section M, worked out against the
@@ -10,7 +10,9 @@ readers-threading PR and an in-place PR (C.2.2, K.1a, K.1b); the read-only cases
 and a fixture that makes the lock untakeable (G.1, I); the 500-line gate is named as already live (B); the
 rebuild numbers are re-measured and labelled (C.1); the validators-on-changed-units change is paired with a
 validation version that routes to a rebuild (C.2.7); the refusal carries the stored digest (G.2); the rules name
-their parent requirement (C.3, E.3, G.2, I, K.2).
+their parent requirement (C.3, E.3, G.2, I, K.2). Revision 3 corrects five points after the approval of revision 2: the
+atomic manifest write citation (G.1), the permission-kind test for the unlocked path (G.1, I), the validation
+version check in `ensure_current_schema` (K.1b), the median for `catch_up_ms` (K.4), and the requirement count (E.3).
 
 Settled and not reopened: no pagination and no cursors anywhere (`res_query_answers_stop_at_the_limit`,
 `boundary_query_answers_do_not_page`); the scan limit is a configured default, not a request field; the timing
@@ -372,7 +374,7 @@ Tests: `an_absent_settings_file_means_the_defaults`, `a_settings_file_sets_the_p
 `the_freshness_flag_wins_over_the_settings_file` (CLI), `the_stamp_names_the_policy_the_flag_chose` (CLI).
 
 Rules: `rule_invalid_read_setting_is_a_typed_refusal`, `rule_freshness_flag_wins_over_the_settings_file`. No
-requirement in the default scope speaks of settings or configuration (the 102 requirements were read at
+requirement in the default scope speaks of settings or configuration (the 69 requirements in the shard were read at
 `03a935c`; the nearest, `req_query_answers_carry_a_freshness_stamp`, is about the stamp, not about how a policy
 is chosen). K.2 therefore creates one requirement record, `req_read_settings_are_explicit_and_checked`, domain
 `domain_cli`, statement in the shape of the grounded-writing skill: "A read's freshness policy and scan limit
@@ -450,14 +452,18 @@ no freshness step will run to fix them. `ReadRefusal::RefuseStaleUnimplemented` 
 The scope list comes from a lock-free manifest read, `units::scope_ids(state_dir)` (new): it reads
 `manifest.json` bytes, parses the core `Manifest` type, and checks the schema version, without a `StateStore`.
 The hash step needs scope ids and bytes, not records, and the manifest is written atomically (a `.tmp*` file
-then a rename, `units.rs:68-72`), so an unlocked read sees one whole version of it. Today the only manifest read
+then `sync_all` then a rename, `crates/provenance-cli/src/atomic_file.rs:162-215`), so an unlocked read sees one
+whole version of it. Today the only manifest read
 locks (`state_store.rs:99-107`), which is why revision 1 had no lock-free path.
 
 When the guard cannot be taken because of a permission error (`.provenance/cache/locks` not creatable, or the
 lock file not openable read-write: `prepare_publication_lock`, `publication.rs:69-90`;
 `LockedPublicationFile::acquire`, `guard.rs:33-47`), the hash runs unlocked with the same scope list. A
 publication landing during an unlocked hash can only make a unit differ from its stored digest, so a torn read
-refuses and never answers stale. Any other guard error refuses with that error.
+refuses and never answers stale. Any other guard error refuses with that error. Two things decide "permission
+error", and K.2 owns both: the guard wraps each `io::Error` into an `anyhow` string today (`guard.rs:43,45`,
+`publication.rs:113-117`), which loses the kind, so the kind is matched before the wrap (or carried on a typed
+guard error); and a read-only mount reports `ReadOnlyFilesystem`, not `PermissionDenied`, so both kinds count.
 
 A unit that cannot be hashed (an unreadable shard, a shard that vanishes mid-walk) refuses with
 `ReadRefusal::UnitUnreadable { unit, path, error }`. Under `catch_up` the same I/O error is a failed freshness
@@ -524,7 +530,8 @@ Two defects go with it. Under `annotate_only` a read-only checkout refuses as `N
 open error maps to that refusal (`freshness.rs:41-43`). And `ensure_current_schema` reads the manifest through a
 locking store (`freshness.rs:135-136`), so on a checkout where the lock cannot be taken it fails at the lock
 before any fallback is reached; it moves onto the lock-free `units::scope_ids` of G.1. After W5 every policy
-falls back to the immutable open when the ordinary open fails for a permission reason, keeps its own policy word
+falls back to the immutable open when the ordinary open fails for a permission reason (`PermissionDenied` or
+`ReadOnlyFilesystem`, matched on the `io::Error` kind before any `anyhow` wrap, as in G.1), keeps its own policy word
 (no freshness step failed under `annotate_only`; `refuse_stale` decides through an unlocked hash, G.1), and
 `catch_up` keeps stamping `catch_up_failed` with the permission error in `freshness_error`, as today
 (`a_read_only_checkout_answers_at_its_serial`, `reader/freshness.rs:106`).
@@ -619,8 +626,11 @@ three K.1a tests of C.3. File cap: `readers.rs` (356) gains one argument per fun
 
 *K.1b, branch `1wh-w5-in-place-catch-up`: the rest of section C.* Steps: in-place hashing with the hash, parse,
 hash-again step; validators on changed units and on every scope after a global change; the rebuild in place;
-delete the snapshot machinery; `VALIDATION_VERSION` and migration 023; `docs/cache.md:38-47` says the pass reads
-the tree in place. Byte identity: pinned answers unchanged; the three comparison tests green. File cap:
+delete the snapshot machinery; `VALIDATION_VERSION` and migration 023, and `ensure_current_schema`
+(`freshness.rs:106-145`) refuses a stored validation version behind `VALIDATION_VERSION` the way it refuses a
+migration behind `LATEST_MIGRATION_ID`, so `annotate_only` and `refuse_stale` never answer as current from a
+projection an older validator built; `docs/cache.md:38-47` says the pass reads the tree in place. Byte identity:
+pinned answers unchanged; the three comparison tests green. File cap:
 `catch_up.rs` (279) grows by about 60 lines; the validation step goes in `materialize/validation.rs` (new) if
 `catch_up.rs` passes 400. Rules: the four K.1b rules of C.3.
 
@@ -657,7 +667,10 @@ The rows for `repository_state` go into the GitHub Release body after the workfl
 "Timing (release build, `<commit>`)". The criterion, within the ruling that this is hand-run and never CI: each
 operation's served summary row and `catch_up_ms` over `repository_state` are compared to the same rows in the
 previous release's notes; a row that is more than twice the previous value and more than 5 ms above it sends the
-release back until the cause is named in the notes or fixed. `scan_ms` and `rebuild_ms` are recorded and not
+release back until the cause is named in the notes or fixed. The summary rows are already medians over five
+timed runs (`timing.rs:10,16-19`); `catch_up_ms` is one sample per run (`comparison.rs:107-115`), and the 76.6 ms
+outlier in C.1 shows one sample would send a release back on noise, so the test takes that row as the median of
+five passes too, and the checklist runs the command once. `scan_ms` and `rebuild_ms` are recorded and not
 gated: the scan depends on the checkout's file count, and the rebuild row holds the test binary's first SQLite
 open (C.1). For the first release the reference rows are the ones in F.2 (get 1.0 ms, search 1.7 ms, unchanged
 pass 21.8 ms), taken at `03a935c` before K.1b, so the first comparison also shows what item 2 bought.
