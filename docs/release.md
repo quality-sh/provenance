@@ -51,6 +51,60 @@ tag the release:
 cargo package --workspace --locked
 ```
 
+- [ ] On the release commit, run the timing report command below once. Compare
+  the `repository_state` rows with the previous release's notes, meet the
+  criterion below, and prepare the rows and any cause explanation for the
+  release notes before tagging.
+
+Run this command by hand in Bash, from the repository root, after all W5
+release-gate changes are included. It builds and runs the ignored timing
+report in release mode. It is never a continuous-integration gate, and it
+needs no new Cargo task.
+
+```bash
+set -o pipefail
+CARGO_BUILD_JOBS=3 cargo test -p provenance-store --release -- --ignored timing_comparison_rows --nocapture \
+  | rg 'summary|_ms' > /tmp/timing-$(git rev-parse --short HEAD).txt
+```
+
+Keep the report section headed `repository_state`. Each operation's served
+summary is the median across its cases; each case is the median of five
+timed runs after a warm-up. The unchanged `catch_up_ms` row is also the
+median of five passes. Run the command once, rather than repeat it to select
+a faster result.
+
+Compare each operation's served summary row and `catch_up_ms` with the same
+row in the previous release's notes. A row fails only when **both** conditions
+hold: it is more than twice the previous value, and it is more than 5 ms
+above that value. A failed row sends the release back until the cause is
+named in the notes or fixed. Do not push the version tag before this check
+passes or the notes name the cause.
+
+Record `scan_ms` and `rebuild_ms`, but do not gate them. Scan time depends on
+the checkout's file count. The rebuild measurement includes the test binary's
+first SQLite open.
+
+For the first release, use these reference rows from section F.2 of the W5
+release gate plan, revision 3. They were measured in a release build at
+`03a935c`, before the in-place catch-up change.
+
+| Repository state row | Reference ms | Use |
+|---|---|---|
+| `get` served summary (24 cases) | 1.0 | Compare |
+| `search` served summary (4 cases) | 1.7 | Compare |
+| Unchanged `catch_up_ms` | 21.8 | Compare |
+| `scan_ms` | 0.1 | Report only |
+| `rebuild_ms` | 144 | Report only |
+
+Section F.2 gives no reference for the other operations. Record their first
+served summaries as references for the next release; do not invent a prior
+value. The later W5 comparison-test removal supplies timing rows for all
+eight operations. That change must be included before this release check.
+
+After the `Release` workflow generates the notes, add the `repository_state`
+rows and any cause explanation to the GitHub Release body under
+`Timing (release build, <commit>)`, with the full release commit id.
+
 Tag and push the release commit:
 
 ```sh

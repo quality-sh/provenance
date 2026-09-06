@@ -147,7 +147,15 @@ async fn assert_agreement(store: TestStore) {
 
 /// Times every case with a baseline over one store and prints the rows.
 async fn print_timings(store: TestStore) {
-    let (rebuild_ms, catch_up_ms) = prepare(&store).await;
+    let (rebuild_ms, _) = prepare(&store).await;
+    let layout = store.layout();
+    let mut catch_up_samples = Vec::new();
+    for _ in 0..timing::RUNS {
+        let started = Instant::now();
+        crate::cache::catch_up_state(&layout).await.unwrap();
+        catch_up_samples.push(timing::elapsed_ms(started));
+    }
+    let catch_up_ms = timing::median(&mut catch_up_samples);
     let started = Instant::now();
     provenance_scanner::scan_path(&store.root).unwrap();
     let scan_ms = timing::elapsed_ms(started);
