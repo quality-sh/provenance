@@ -1,85 +1,11 @@
 use crate::operations::reader::ReadContext;
-#[cfg(test)]
-use provenance_core::protocol::GraphNode;
 use provenance_core::protocol::{
     ensure_limit, ensure_protocol_version, take_page, GetQuery, GetResult, SearchQuery,
     SearchResult,
 };
-#[cfg(test)]
-use provenance_core::ScopeId;
 use provenance_core::{NodeType, StableId};
 
 use super::nodes;
-
-/// Loads every canonical record a query can name, in one settled order.
-///
-/// Active views leave retired records out. The order is node type then
-/// canonical ID, so two runs over the same state answer the same bytes.
-/// No operation reads canonical records any more; the comparison tests
-/// still do, until the baseline goes.
-#[cfg(test)]
-pub(super) fn load(
-    store: &crate::state_store::StateStore,
-    scope: &ScopeId,
-    include_retired: bool,
-) -> anyhow::Result<Vec<GraphNode>> {
-    let mut nodes = Vec::new();
-    nodes.extend(
-        store
-            .list_sources(scope)?
-            .into_iter()
-            .map(|record| GraphNode::Source(Box::new(record))),
-    );
-    nodes.extend(
-        store
-            .list_requirements(scope)?
-            .into_iter()
-            .map(|record| GraphNode::Requirement(Box::new(record))),
-    );
-    nodes.extend(
-        store
-            .list_resolutions(scope)?
-            .into_iter()
-            .map(|record| GraphNode::Resolution(Box::new(record))),
-    );
-    nodes.extend(
-        store
-            .list_rules(scope)?
-            .into_iter()
-            .map(|record| GraphNode::Rule(Box::new(record))),
-    );
-    nodes.extend(
-        store
-            .list_topics(scope)?
-            .into_iter()
-            .map(|record| GraphNode::Topic(Box::new(record))),
-    );
-    nodes.extend(
-        store
-            .list_questions(scope)?
-            .into_iter()
-            .map(|record| GraphNode::Question(Box::new(record))),
-    );
-    nodes.extend(
-        store
-            .list_domains(scope)?
-            .into_iter()
-            .map(|record| GraphNode::Domain(Box::new(record))),
-    );
-    nodes.extend(
-        store
-            .list_boundaries(scope)?
-            .into_iter()
-            .map(|record| GraphNode::Boundary(Box::new(record))),
-    );
-    nodes.retain(|node| include_retired || !node.retired());
-    nodes.sort_by(|left, right| {
-        rank(left.node_type())
-            .cmp(&rank(right.node_type()))
-            .then_with(|| left.id().as_str().cmp(right.id().as_str()))
-    });
-    Ok(nodes)
-}
 
 pub(super) async fn get(ctx: &ReadContext, request: GetQuery) -> anyhow::Result<GetResult> {
     ensure_protocol_version(request.protocol_version)?;
