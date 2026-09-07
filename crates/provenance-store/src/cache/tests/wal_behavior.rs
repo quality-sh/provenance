@@ -215,10 +215,11 @@ async fn closing_waits_for_a_connection_already_returning_to_the_pool() {
         .expect("the connection must start its return");
 
     tokio::time::timeout(Duration::from_secs(5), async {
-        tokio::join!(close_cache(&pool), async {
+        let (closed, ()) = tokio::join!(close_cache(&pool), async {
             pool.close_event().await;
             resume.notify_one();
         });
+        closed.unwrap();
     })
     .await
     .expect("closing must wait for the returning connection without blocking it");

@@ -156,6 +156,105 @@ file creation and a database write open before either read. If the mount
 cannot prevent writes, the test prints a skip reason. The tests do not
 reproduce these permissions on Windows.
 
+## Long-running server handoff
+
+Each call needs a new `ReadContext`. It holds one transaction at one serial
+and is consumed by `stamp::seal`. A server must not keep a context between
+calls: an open transaction retains its WAL snapshot and prevents a complete
+checkpoint. These are the criteria from section J of the W5 release gate
+plan, revision 3.
+
+1. **Entry.** All eight functions in
+   `crates/provenance-store/src/operations/queries.rs` accept an explicit
+   `ReadPolicy`. For each call, load `Settings::load` from
+   `.provenance/settings.json`, then call `ReadPolicy::resolve` once with
+   those settings and the request's optional freshness override. Pass the
+   resolved policy to the operation. Settings errors refuse before a read.
+2. **Cost.** `cache::catch_up_state` refreshes the projection independently
+   of a query. A server can use `annotate_only` between scheduled refreshes
+   to avoid the per-call freshness hash. Pool open and query costs remain.
+   `cache/tests/in_place_behavior.rs::an_unchanged_pass_parses_no_shard_but_the_manifest`
+   checks that an unchanged catch-up reads no shard other than the manifest.
+   The remaining freshness cost includes hashing all state bytes, the guard,
+   and the pool open. Section C.1 of the plan records the repository and
+   synthetic-tree costs before the in-place change. The release procedure
+   in [release.md](release.md) records the new measurements.
+3. **Refusal: pending stage K.3.** This tree returns
+   `ReadRefusal::RefuseStaleUnimplemented`. The required typed stale refusal
+   must include the stored serial and digest and the moved units. The
+   `1wh-w5-refuse-stale` change supplies that behavior and its tests.
+   The release cannot claim this criterion until that change is included.
+4. **Process state.** `ReadFuture` is `Send`. The mutable probe state in
+   `test_probes.rs` exists only under `cfg(test)`. Held publication access
+   belongs to each `StateStore` (`state_store/access.rs`), with no shared
+   process-wide set. The source scan
+   `tests/read_process_state.rs::operations_do_not_change_the_process_environment`
+   rejects environment mutation names throughout `operations.rs` and
+   `operations/`, including imports under another name.
+5. **Blocking sections.** Publication guard acquisition runs on the
+   blocking pool (`publication/guard.rs::publication_guard`). The close
+   lock never runs there: publication waiters can occupy every blocking
+   worker while the closing read still holds the publication guard, so a
+   close lock wait that needed a worker could never run. Each close lock
+   attempt is a non-blocking `flock` on a runtime worker
+   (`cache.rs::acquire_close_lock`), retried after a 1 ms sleep. The table
+   below names synchronous work that remains on runtime workers. Moving
+   this work to `spawn_blocking` is the first server task, outside W5.
+6. **Concurrency and cleanup.** Each `reader::answer` opens a separate pool
+   with one connection (`cache.rs::connect`) and a separate snapshot.
+   Catch-up calls serialize on the publication file lock. The tests in
+   `operations/queries/tests/concurrent.rs` keep both snapshots open at a
+   barrier and check that both answers return the stored record count at
+   the same serial. `concurrent_answers_finish_and_remove_the_wal_files`
+   orders the closes. `answers_that_close_together_remove_the_wal_files`
+   starts both closes together. Both tests run in the default suite and
+   check that the -wal and -shm files are absent after both answers finish.
+   `close_cache` closes the pool under `provenance.db.close.lock` in the
+   cache directory and holds that lock until the pool holds no connection,
+   which is after the physical SQLite teardown has finished. This orders
+   closes across independent pools. Without that order, both SQLite closes
+   can fail to get an exclusive database lock before either releases its
+   shared lock, so both skip cleanup. The lock file stays in place for
+   other callers. It is separate from the publication lock and contains no
+   records. Immutable reads do not create or acquire it. A close lock
+   failure returns an error after the pool closes.
+   The lock belongs to a detached close task, not to the reader: a read
+   cancelled mid-close, or one that panics there, cannot release the lock
+   before its teardown finishes, so the order holds in both cases
+   (`cache/tests/close_order_behavior.rs`). The close itself waits for the
+   lock by retrying a non-blocking attempt every 1 ms, so the wait never
+   needs a blocking worker and cannot deadlock behind publication waiters.
+7. **Discovery.** `queries::served` calls `discover_repository` for each
+   call. A server supplies a fixed absolute repository path through the
+   `Option<Utf8PathBuf>` argument of each operation. It need not change
+   the process working directory.
+8. **Contract.** `packages/provenance/src/protocol.ts` defines `Stamp`,
+   `QueryEnvelope`, the four evidence-list `has_more` flags, and `scan_cut`.
+   A server preserves these fields and `freshness_error`. Until the contract
+   layer defines a refusal envelope, a refusal is error text, with the
+   stage K.3 stale details still pending on this tree.
+
+Paths in this table are relative to `crates/provenance-store/src/`.
+The hash estimates are from plan section C.1 and are not release limits.
+
+| Section | Where | What it blocks |
+|---|---|---|
+| In-place hash of every unit under the guard | `cache/materialize/catch_up.rs::catch_up_with_guard`, through `validation.rs::UnitReader` and `units.rs` in the same directory | A runtime worker while hashing all state bytes under the guard: about 2 ms for this repository, about 100 ms at 38 MB in the plan's measurements |
+| Validation and parse of a changed scope under the guard | `cache/materialize/validation.rs::UnitReader::scope`; `UnitReader::global` validates all scopes when the global unit changes | A runtime worker during validation and parse; an unchanged scope skips this work only in an incremental pass with an unchanged global unit |
+| Full rebuild under the guard | `cache/materialize/catch_up.rs::catch_up_with_guard` and `rebuild` | A runtime worker during hashing, validation, and parse of all scopes when there is no stored revision, a migration was applied, or the validation version changed; unchanged canonical bytes do not skip this work |
+| Manifest read retries without the guard | `operations/reader/freshness.rs::ensure_current_schema`, through `cache/materialize/units.rs::scope_ids` and `read_through_rename` | A runtime worker during synchronous file reads and parse; an absent manifest causes seven sleeps of 5, 10, 15, 20, 25, 30, and 35 ms before the eighth attempt, for 140 ms of sleep |
+| Settings read for each request | `settings.rs::Settings::load`, called by the CLI handler or server before the query | The calling thread during the synchronous read and parse of `.provenance/settings.json` |
+| Repository discovery for each query | `operations/queries.rs::served`, through `operations.rs::discover_repository` and `canonical_repository` | A runtime worker during synchronous filesystem checks and path canonicalization while locating the repository |
+| `LiveHandle::graph_evidence` | `operations/reader/live.rs`, through `cache/health.rs::graph_evidence` | A runtime worker waiting in `flock` while another holder has the publication lock, then during canonical file reads and parse |
+| Reads through `LiveHandle::store()` | `operations/reader/live.rs`, through `state_store/access.rs` | A runtime worker waiting in `flock` for canonical reads through the plain store, then during synchronous file reads and parse |
+| `LiveHandle::runs` | `operations/reader/live.rs`, through `StateStore::list_verification_runs` | A runtime worker waiting on the verification run file's lock, then during the file read and parse |
+| Close lock attempt for each cache close | `cache.rs::close_cache`, through `acquire_close_lock` | A runtime worker during the open of the lock file and one non-blocking `flock` attempt; a held lock is retried after a 1 ms sleep on a runtime timer, never on a blocking worker |
+| Live source scans | `operations/reader/live.rs::LiveHandle::scan_tree` and `scan_file` | A runtime worker during synchronous directory traversal, source file reads, and scans |
+| Live git reads | `operations/reader/live.rs::LiveHandle::resolve_range` and `disturbed`, through `stale/git.rs` | A runtime worker while git subprocesses run and their output is parsed |
+
+The server must account for these costs when it moves live reads off
+runtime workers.
+
 ## What each family's derivation reads
 
 | Family | Derivation | Files read |

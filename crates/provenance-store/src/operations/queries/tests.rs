@@ -11,6 +11,7 @@ use provenance_core::{
 
 mod baseline;
 mod comparison;
+mod concurrent;
 mod dangling_targets;
 mod evidence;
 mod front_equivalence;
@@ -204,3 +205,5 @@ fn load_orders_new_kinds_after_every_settled_kind() {
         [NodeType::Requirement, NodeType::Domain, NodeType::Boundary]
     );
 }
+
+mod eight_readers;
