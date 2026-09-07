@@ -16,10 +16,12 @@
 
 mod freshness;
 mod live;
+mod refuse_stale;
 mod snapshot;
 
 pub(crate) use freshness::is_missing_table;
 pub use live::{Disturbed, Live, LiveHandle};
+pub use refuse_stale::MovedUnit;
 pub use snapshot::{ReadSnapshot, Relations, Table};
 
 /// The projection readers that run over the handles: the fetched relation
@@ -52,12 +54,28 @@ pub enum ReadRefusal {
         database: Utf8PathBuf,
         because: String,
     },
-    #[error("the refuse_stale freshness policy is reserved and not implemented")]
-    RefuseStaleUnimplemented,
+    #[error("refuse_stale: the projection in {} at serial {serial} (digest {digest}, instance {instance_id}) is behind canonical state; moved: {}. Read under catch_up or run `provenance materialize`.", one_line(.database.as_str()), refuse_stale::describe_moved(.moved))]
+    Stale {
+        database: Utf8PathBuf,
+        serial: i64,
+        digest: String,
+        instance_id: String,
+        moved: Vec<MovedUnit>,
+    },
+    #[error("refuse_stale: cannot hash {unit} at {}: {}", one_line(.path.as_str()), one_line(.error))]
+    UnitUnreadable {
+        unit: String,
+        path: Utf8PathBuf,
+        error: String,
+    },
     #[error("the projection in {database} is behind on migrations or validation; run `provenance materialize`")]
     SchemaBehind { database: Utf8PathBuf },
     #[error("the projection in {database} holds a revision but no family digests, so its tables were never reloaded after a migration; run `provenance materialize`")]
     HalfMigrated { database: Utf8PathBuf },
+}
+
+fn one_line(text: &str) -> String {
+    text.replace('\r', "\\r").replace('\n', "\\n")
 }
 
 /// Everything one read may reach: the pinned snapshot and the live parts.
@@ -126,8 +144,12 @@ pub async fn answer<R: Send>(
     run: impl for<'c> FnOnce(&'c ReadContext) -> ReadFuture<'c, R> + Send,
 ) -> anyhow::Result<Stamped<R>> {
     let layout = ProvenanceLayout::new(repo.to_path_buf());
-    let fresh = freshness::run(&layout, policy.freshness).await?;
-    let snapshot = match ReadSnapshot::open(&fresh.pool, scope).await {
+    let fresh = freshness::run(&layout, scope, policy.freshness).await?;
+    let opened = match fresh.snapshot {
+        Some(snapshot) => Ok(Some(snapshot)),
+        None => ReadSnapshot::open(&fresh.pool, scope).await,
+    };
+    let snapshot = match opened {
         Ok(Some(snapshot)) => snapshot,
         Ok(None) => {
             crate::cache::close_cache(&fresh.pool).await;

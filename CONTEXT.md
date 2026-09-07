@@ -155,3 +155,11 @@ The requested action before a query answers from a stored projection. A command 
 ## Validation version
 
 The version of the validation rules used to build a projection. A version change requires every scope to pass validation again. It is independent of the read derivation version, which identifies how stored rows become answers.
+
+## Hash unit
+
+A group of canonical files with one stored digest. Each manifest scope has one unit. The global unit contains the files outside the scopes directory.
+
+## Moved unit
+
+A hash unit whose live digest differs from its stored digest. A new unit has no stored digest. A departed unit has no live digest.

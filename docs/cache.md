@@ -43,7 +43,9 @@ global unit, which is every regular canonical file under `state/` outside
 `scopes/`: the manifest and the dictionary. A unit
 digest frames the relative path and the bytes of every file in sorted
 path order. It ignores the temporary `.tmp*` files an interrupted atomic
-write leaves beside a shard.
+write leaves beside a shard. After reading the bytes, the hash lists the
+files again. A changed file list fails the hash and names an added or removed
+path. Catch-up and `refuse_stale` use this same check.
 
 When both the global unit and a scope are unchanged, that scope is not
 parsed or validated. The pass lists scopes from the exact manifest bytes
@@ -138,8 +140,16 @@ names the failed step. This word remains the policy outcome for a failed
 catch-up step. Under `annotate_only`, the policy word is unchanged. The
 answer is at the serial the file holds. Both `PermissionDenied` and
 `ReadOnlyFilesystem` are permission failures. The immutable open is shared
-by policies; stage K.3 adds the unlocked hash decision for `refuse_stale`,
-which currently refuses as unimplemented. These permission fixtures run
+by all three policies. Under `refuse_stale`, a permission failure on the
+publication guard selects a shared lock on the existing lock file, opened for
+reading. This lock excludes publication from before the scope list is read
+until all unit hashes are complete. If the shared lock cannot be taken, or a
+publication awaits recovery, the read refuses. A changed or unreadable unit
+also refuses. Other guard failures refuse with their error.
+The policy writes no revision and answers from the transaction used to check
+the stored digests. Like `annotate_only`, it refuses an absent projection,
+old migrations or validation, and a half-migrated projection.
+These permission fixtures run
 on Unix. A Linux test also uses an isolated read-only mount when user and
 mount namespaces are available. It checks the mount options and attempts
 file creation and a database write open before either read. If the mount

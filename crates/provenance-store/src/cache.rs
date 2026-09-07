@@ -14,7 +14,7 @@ pub use impact::*;
 pub(crate) use materialize::catch_up_with_guard;
 pub use materialize::{
     catch_up_state, materialize_empty_state, materialize_state, scope_ids, unit_digest, units_for,
-    CatchUpReport, Unit,
+    CatchUpReport, Unit, UnitHashError,
 };
 pub use prime::*;
 pub use projection_digest::{

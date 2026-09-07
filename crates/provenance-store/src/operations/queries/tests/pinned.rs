@@ -56,7 +56,7 @@ fn resolve(file: &str, symbol: Option<&str>, line: Option<usize>) -> Request {
 
 /// The fixed request set. `base` is the store's first commit, whose id
 /// is fixed by the store's fixed author and dates.
-fn request_set(base: &str) -> Vec<Request> {
+pub(super) fn request_set(base: &str) -> Vec<Request> {
     let mut set = vec![
         get(NodeType::Domain, "domain_payroll", false),
         get(NodeType::Source, "source_schads", false),

@@ -22,8 +22,7 @@ use fs2::FileExt;
 use provenance_macros::rule;
 use std::fs::{File, OpenOptions};
 
-/// An exclusive advisory lock on an open publication lock file. Released on
-/// drop.
+/// An advisory lock on an open publication lock file. Released on drop.
 pub(super) struct LockedPublicationFile {
     file: File,
 }
@@ -55,7 +54,7 @@ impl Drop for LockedPublicationFile {
 /// A held publication lock.
 ///
 /// Under read-only validation the guard holds no lock. The private fields
-/// mean only [`publication_guard`] can build one.
+/// restrict construction to this module.
 pub struct PublicationGuard {
     _lock: Option<LockedPublicationFile>,
     layout: ProvenanceLayout,

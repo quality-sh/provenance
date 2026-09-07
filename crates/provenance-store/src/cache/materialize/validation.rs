@@ -102,7 +102,7 @@ fn validate(store: &GuardedStore<'_>, scope: &ScopeId) -> anyhow::Result<()> {
 fn hash(state_dir: &Utf8Path, unit: &units::Unit, hashes: &mut u64) -> anyhow::Result<String> {
     *hashes += 1;
     crate::test_probes::at("catch_up_unit_hashed")?;
-    units::unit_digest(state_dir, unit)
+    Ok(units::unit_digest(state_dir, unit)?)
 }
 
 /// A parsed unit is used only when its hashes before and after parsing match.

@@ -6,6 +6,7 @@ mod freshness;
 mod guard;
 #[cfg(unix)]
 mod read_only;
+mod refuse_stale;
 
 use super::comparison::requests;
 use super::comparison::test_stores::{self, TestStore};
@@ -378,3 +379,6 @@ async fn a_bad_base_is_refused_before_the_store_is_read() {
     let text = format!("{refused:#}");
     assert!(text.contains("rev-parse"), "{text}");
 }
+
+#[cfg(unix)]
+mod hash_races;
