@@ -1,8 +1,10 @@
-//! The request set the comparison tests run over one store, derived from the
-//! records the store holds so every kind and every operation gets a case.
+//! The request set the comparison tests run over one store, derived from
+//! the records the store answers with, so every kind and every operation
+//! gets a case.
 
 use super::test_stores::TestStore;
-use crate::operations::queries::tests::baseline::records;
+use crate::operations::queries;
+use crate::operations::read_policy::{FreshnessPolicy, ReadPolicy};
 use provenance_core::protocol::{
     Direction, EvidenceQuery, GetQuery, GraphNode, ImpactQuery, NeighborsQuery, ResolveSymbolQuery,
     SearchQuery, StaleQuery, TraceQuery, SDK_PROTOCOL_VERSION,
@@ -11,6 +13,19 @@ use provenance_core::NodeType;
 
 /// How many records of each kind the set names.
 const PER_KIND: usize = 3;
+
+/// One needle per kind that meets every id the repositories name, so a
+/// served search over the kind alone answers its records in id order.
+const SAMPLE_NEEDLE: [(NodeType, &str); 8] = [
+    (NodeType::Source, "source"),
+    (NodeType::Requirement, "req"),
+    (NodeType::Resolution, "res"),
+    (NodeType::Rule, "rule"),
+    (NodeType::Topic, "top"),
+    (NodeType::Question, "q"),
+    (NodeType::Domain, "domain"),
+    (NodeType::Boundary, "boundary"),
+];
 
 #[derive(Debug, Clone)]
 pub enum Request {
@@ -64,33 +79,20 @@ fn kind_word(kind: NodeType) -> String {
 }
 
 /// Up to `PER_KIND` records of each kind, in the served order, retired
-/// ones included.
-fn sampled(nodes: &[GraphNode]) -> Vec<&GraphNode> {
-    let mut picked = Vec::new();
-    for kind in [
-        NodeType::Source,
-        NodeType::Requirement,
-        NodeType::Resolution,
-        NodeType::Rule,
-        NodeType::Topic,
-        NodeType::Question,
-        NodeType::Domain,
-        NodeType::Boundary,
-    ] {
-        picked.extend(
-            nodes
-                .iter()
-                .filter(|node| node.node_type() == kind)
-                .take(PER_KIND),
-        );
+/// ones included: one served search per kind, under `annotate_only`
+/// because the caller has already caught the projection up.
+pub async fn for_store(store: &TestStore) -> Vec<Request> {
+    let policy = ReadPolicy::with_freshness(FreshnessPolicy::AnnotateOnly);
+    let mut sample: Vec<GraphNode> = Vec::new();
+    for (kind, needle) in SAMPLE_NEEDLE {
+        let mut query = search(needle, vec![kind]);
+        query.include_retired = true;
+        query.limit = PER_KIND;
+        let answer = queries::search(Some(store.root.clone()), &store.scope, policy, query)
+            .await
+            .unwrap();
+        sample.extend(answer.result.nodes);
     }
-    picked
-}
-
-pub fn for_store(store: &TestStore) -> Vec<Request> {
-    let state = store.state_store();
-    let nodes = records::load(&state, &store.scope, true).unwrap();
-    let sample = sampled(&nodes);
     let mut requests = Vec::new();
     for node in &sample {
         let id = node.id().as_str().to_string();
@@ -146,6 +148,7 @@ pub fn for_store(store: &TestStore) -> Vec<Request> {
             limit: 50,
         }));
     }
+    let state = store.state_store();
     let mut files: Vec<String> = state
         .list_implementation_bindings(&store.scope)
         .unwrap()

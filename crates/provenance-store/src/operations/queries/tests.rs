@@ -9,7 +9,6 @@ use provenance_core::{
     Manifest, NodeType, RepoPathPrefix, RequirementStatus, ScopeId, StableId, SDK_PROTOCOL_VERSION,
 };
 
-mod baseline;
 mod comparison;
 mod concurrent;
 mod dangling_targets;
@@ -192,17 +191,49 @@ fn rank_appends_the_new_kinds_after_the_six_settled_positions() {
     }
 }
 
-#[test]
-fn load_orders_new_kinds_after_every_settled_kind() {
-    let (_dir, store, scope) = seeded_store();
-    let nodes = records::load(&store, &scope, false).unwrap();
-    let order: Vec<NodeType> = nodes
+/// The served search visits kinds in rank order, so a request naming
+/// every kind answers every settled kind before the appended ones. It
+/// serves the order the whole-graph load used to pin.
+#[tokio::test]
+async fn search_answers_new_kinds_after_every_settled_kind() {
+    let (dir, _store, scope) = seeded_store();
+    let answer = super::search(
+        Some(root_of(&dir)),
+        &scope,
+        ReadPolicy::default(),
+        SearchQuery {
+            protocol_version: Some(SDK_PROTOCOL_VERSION),
+            text: "a".into(),
+            node_types: vec![
+                NodeType::Source,
+                NodeType::Requirement,
+                NodeType::Resolution,
+                NodeType::Rule,
+                NodeType::Topic,
+                NodeType::Question,
+                NodeType::Domain,
+                NodeType::Boundary,
+            ],
+            limit: 10,
+            include_retired: false,
+        },
+    )
+    .await
+    .unwrap()
+    .result;
+    let order: Vec<(NodeType, &str)> = answer
+        .nodes
         .iter()
-        .map(provenance_core::protocol::GraphNode::node_type)
+        .map(|node| (node.node_type(), node.id().as_str()))
         .collect();
     assert_eq!(
         order,
-        [NodeType::Requirement, NodeType::Domain, NodeType::Boundary]
+        [
+            (NodeType::Requirement, "req_overtime"),
+            (NodeType::Domain, "domain_payroll"),
+            (NodeType::Boundary, "boundary_no_backpay"),
+        ],
+        "the appended kinds answer after every settled kind"
     );
 }
 

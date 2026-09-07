@@ -1,4 +1,4 @@
-//! Wall-time rows for the baseline and the served side of one case.
+//! Wall-time rows for the served side of one case.
 //!
 //! The rows are a report, not a gate: the ignored `timing_comparison_rows` test
 //! prints them when someone asks for the numbers, and nothing asserts on
@@ -21,31 +21,15 @@ pub fn median(samples: &mut [f64]) -> f64 {
 pub struct Row {
     pub operation: &'static str,
     pub request: String,
-    pub baseline_ms: f64,
     pub served_ms: f64,
-}
-
-fn ratio(baseline_ms: f64, served_ms: f64) -> f64 {
-    if baseline_ms > 0.0 {
-        served_ms / baseline_ms
-    } else {
-        f64::INFINITY
-    }
 }
 
 /// One row per case, one summary row per operation (the medians over its
 /// cases), then the scan, rebuild, and steady-state catch-up times.
 pub fn print_rows(store: &str, rows: &[Row], scan_ms: f64, rebuild_ms: f64, catch_up_ms: f64) {
-    println!("Timing comparison over {store}: operation request baseline_ms served_ms ratio");
+    println!("Timing over {store}: operation request served_ms");
     for row in rows {
-        println!(
-            "{} {} {:.1} {:.1} {:.2}",
-            row.operation,
-            row.request,
-            row.baseline_ms,
-            row.served_ms,
-            ratio(row.baseline_ms, row.served_ms)
-        );
+        println!("{} {} {:.1}", row.operation, row.request, row.served_ms);
     }
     let mut operations: Vec<&'static str> = Vec::new();
     for row in rows {
@@ -54,21 +38,12 @@ pub fn print_rows(store: &str, rows: &[Row], scan_ms: f64, rebuild_ms: f64, catc
         }
     }
     for operation in operations {
-        let mut baseline: Vec<f64> = rows
-            .iter()
-            .filter(|row| row.operation == operation)
-            .map(|row| row.baseline_ms)
-            .collect();
         let mut served: Vec<f64> = rows
             .iter()
             .filter(|row| row.operation == operation)
             .map(|row| row.served_ms)
             .collect();
-        let (baseline, served) = (median(&mut baseline), median(&mut served));
-        println!(
-            "{operation} summary {baseline:.1} {served:.1} {:.2}",
-            ratio(baseline, served)
-        );
+        println!("{operation} summary {:.1}", median(&mut served));
     }
     println!("scan_ms {scan_ms:.1}");
     println!("rebuild_ms {rebuild_ms:.1}");

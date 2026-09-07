@@ -1,9 +1,12 @@
-//! Runs each served operation that still has a baseline copy (`get`,
-//! `search`, `stale`) against that copy over the same store and asserts
-//! the answers agree; the other operations lost their copies when they
-//! moved onto the projection, and the pinned answers file holds their
-//! bytes. One ignored test times both sides over every store and prints
-//! the rows; it is a report, not a gate:
+//! The served operations over the test stores, and the timing report.
+//!
+//! The baselines are gone. The pinned answers file holds the bytes the
+//! `get`, `search`, and `stale` answers must keep; the count test
+//! compares the projection with the canonical readers over this
+//! repository's own state; and the every-operation check answers all
+//! eight operations over that store. One ignored test times the served
+//! side over every store and prints the rows; it is a report, not a
+//! gate:
 //!
 //! `cargo test -p provenance-store --release -- --ignored timing_comparison_rows --nocapture`
 
@@ -11,16 +14,21 @@ pub mod requests;
 pub mod test_stores;
 mod timing;
 
-use super::baseline;
+use crate::cache::{catch_up_state, open_cache};
 use crate::operations::read_policy::{FreshnessPolicy, ReadPolicy};
-use crate::operations::reader;
+use crate::operations::reader::{self, ReadSnapshot};
+use provenance_core::model::ProjectionRow;
+use provenance_core::{
+    Boundary, Domain, ImplementationBinding, Question, Requirement, RequirementReview, Resolution,
+    Rule, Source, Topic, VerificationBinding,
+};
 use requests::Request;
 use serde_json::{json, Value};
 use std::time::Instant;
 use test_stores::TestStore;
 
-/// Fields the served side adds beside the answer; the baseline has them
-/// at their defaults.
+/// Fields the served answer carries beside the answer bytes; the pinned
+/// answers file holds the answers without them.
 const ADDITIVE_FIELDS: [&str; 7] = [
     "stamp",
     "freshness_error",
@@ -46,26 +54,8 @@ fn settle<T: serde::Serialize>(answer: anyhow::Result<T>) -> Value {
     }
 }
 
-/// The baseline side, for the operations that still have one.
-fn baseline_answer(store: &TestStore, request: &Request) -> Option<Value> {
-    let state = store.state_store();
-    let (repo, scope) = (store.root.as_path(), &store.scope);
-    let mut answer = match request.clone() {
-        Request::Get(query) => settle(baseline::records::get(&state, scope, query)),
-        Request::Search(query) => settle(baseline::records::search(&state, scope, query)),
-        Request::Stale(query) => settle(baseline::stale::stale(repo, scope, query)),
-        Request::Neighbors(_)
-        | Request::Trace(_)
-        | Request::Impact(_)
-        | Request::Evidence(_)
-        | Request::ResolveSymbol(_) => return None,
-    };
-    strip_additive(&mut answer);
-    Some(answer)
-}
-
 /// One request through the reader under the given policy, as a value; a
-/// refusal becomes `{"error": ..}` so both sides compare the same way.
+/// refusal becomes `{"error": ..}` so the pinned file compares one way.
 pub async fn served_value(store: &TestStore, request: &Request, policy: ReadPolicy) -> Value {
     match served_stamped(store, request, policy).await {
         Ok(stamped) => stamped.result,
@@ -114,52 +104,26 @@ async fn served_answer(store: &TestStore, request: &Request) -> Value {
 async fn prepare(store: &TestStore) -> (f64, f64) {
     let layout = store.layout();
     let started = Instant::now();
-    crate::cache::catch_up_state(&layout).await.unwrap();
+    catch_up_state(&layout).await.unwrap();
     let rebuild_ms = timing::elapsed_ms(started);
     // The steady-state pass, which every read under `catch_up` pays.
     let started = Instant::now();
-    crate::cache::catch_up_state(&layout).await.unwrap();
+    catch_up_state(&layout).await.unwrap();
     let catch_up_ms = timing::elapsed_ms(started);
     let scans = provenance_scanner::scan_path(&store.root).unwrap();
     crate::test_probes::set_test_scan(Some(scans));
     (rebuild_ms, catch_up_ms)
 }
 
-async fn assert_agreement(store: TestStore) {
-    prepare(&store).await;
-    let requests = requests::for_store(&store);
-    let mut compared = 0;
-    for request in &requests {
-        let Some(baseline) = baseline_answer(&store, request) else {
-            continue;
-        };
-        let served = served_answer(&store, request).await;
-        assert_eq!(
-            baseline,
-            served,
-            "{} {} over {} must answer as the baseline does",
-            request.operation(),
-            request.describe(),
-            store.name
-        );
-        compared += 1;
-    }
-    assert!(
-        compared >= 4,
-        "{}: the request set must cover the operations with a baseline",
-        store.name
-    );
-    crate::test_probes::set_test_scan(None);
-}
-
-/// Times every case with a baseline over one store and prints the rows.
+/// Times every case in the request set over one store and prints the
+/// rows.
 async fn print_timings(store: TestStore) {
     let (rebuild_ms, _) = prepare(&store).await;
     let layout = store.layout();
     let mut catch_up_samples = Vec::new();
     for _ in 0..timing::RUNS {
         let started = Instant::now();
-        crate::cache::catch_up_state(&layout).await.unwrap();
+        catch_up_state(&layout).await.unwrap();
         catch_up_samples.push(timing::elapsed_ms(started));
     }
     let catch_up_ms = timing::median(&mut catch_up_samples);
@@ -167,17 +131,10 @@ async fn print_timings(store: TestStore) {
     provenance_scanner::scan_path(&store.root).unwrap();
     let scan_ms = timing::elapsed_ms(started);
     let mut rows = Vec::new();
-    for request in &requests::for_store(&store) {
-        if baseline_answer(&store, request).is_none() {
-            continue;
-        }
+    for request in &requests::for_store(&store).await {
         served_answer(&store, request).await;
-        let mut baseline_samples = Vec::new();
         let mut served_samples = Vec::new();
         for _ in 0..timing::RUNS {
-            let started = Instant::now();
-            baseline_answer(&store, request);
-            baseline_samples.push(timing::elapsed_ms(started));
             let started = Instant::now();
             served_answer(&store, request).await;
             served_samples.push(timing::elapsed_ms(started));
@@ -185,7 +142,6 @@ async fn print_timings(store: TestStore) {
         rows.push(timing::Row {
             operation: request.operation(),
             request: request.describe(),
-            baseline_ms: timing::median(&mut baseline_samples),
             served_ms: timing::median(&mut served_samples),
         });
     }
@@ -193,24 +149,103 @@ async fn print_timings(store: TestStore) {
     timing::print_rows(store.name, &rows, scan_ms, rebuild_ms, catch_up_ms);
 }
 
+/// Every operation answers with a stamp over a copy of this repository's
+/// own state. `stale` and the diff half of `evidence` need a commit
+/// range, so the copy gets one; when git is not on the path the test
+/// says it skipped.
 #[tokio::test]
-async fn served_answers_match_the_baseline_over_the_seeded_query_store() {
-    assert_agreement(test_stores::seeded_queries()).await;
-}
-
-#[tokio::test]
-async fn served_answers_match_the_baseline_over_the_cache_fixtures() {
-    for store in test_stores::cache_fixtures() {
-        assert_agreement(store).await;
+async fn every_operation_answers_over_the_repository_state() {
+    let mut store = test_stores::repository_state();
+    let Some(base) = test_stores::git_commit(&store.root, "state") else {
+        println!("skipped: git is not on the path, so the stale cases cannot be built");
+        return;
+    };
+    store.base_commit = Some(base);
+    prepare(&store).await;
+    let policy = ReadPolicy::with_freshness(FreshnessPolicy::AnnotateOnly);
+    let mut answered: Vec<&'static str> = Vec::new();
+    for request in &requests::for_store(&store).await {
+        let operation = request.operation();
+        let answer = served_stamped(&store, request, policy)
+            .await
+            .unwrap_or_else(|error| {
+                panic!("{operation} {} must answer: {error}", request.describe())
+            });
+        assert!(
+            answer.freshness_error.is_none(),
+            "{operation} must answer without a freshness error, got {:?}",
+            answer.freshness_error
+        );
+        assert!(
+            !answer.stamp.digest.is_empty(),
+            "{operation} must stamp its answer"
+        );
+        if !answered.contains(&operation) {
+            answered.push(operation);
+        }
     }
+    crate::test_probes::set_test_scan(None);
+    assert_eq!(
+        answered.len(),
+        8,
+        "every operation must appear in the request set, got {answered:?}"
+    );
 }
 
+/// The one comparison against canonical bytes over a store of real size:
+/// for every kind and integration table, the projection holds exactly the
+/// rows the canonical reader lists over a copy of this repository's own
+/// state, retired records included.
 #[tokio::test]
-async fn served_answers_match_the_baseline_over_the_repository_state() {
-    assert_agreement(test_stores::repository_state()).await;
+async fn projection_counts_match_canonical_over_the_repository_state() {
+    let store = test_stores::repository_state();
+    let state = store.state_store();
+    let scope = &store.scope;
+    catch_up_state(&store.layout()).await.unwrap();
+    let pool = open_cache(&store.layout()).await.unwrap();
+    let snapshot = reader::ReadSnapshot::open(&pool, scope)
+        .await
+        .unwrap()
+        .expect("a revision");
+    assert_count::<Source>(&snapshot, state.list_sources(scope).unwrap().len()).await;
+    assert_count::<Requirement>(&snapshot, state.list_requirements(scope).unwrap().len()).await;
+    assert_count::<Resolution>(&snapshot, state.list_resolutions(scope).unwrap().len()).await;
+    assert_count::<Rule>(&snapshot, state.list_rules(scope).unwrap().len()).await;
+    assert_count::<Topic>(&snapshot, state.list_topics(scope).unwrap().len()).await;
+    assert_count::<Question>(&snapshot, state.list_questions(scope).unwrap().len()).await;
+    assert_count::<Domain>(&snapshot, state.list_domains(scope).unwrap().len()).await;
+    assert_count::<Boundary>(&snapshot, state.list_boundaries(scope).unwrap().len()).await;
+    assert_count::<ImplementationBinding>(
+        &snapshot,
+        state.list_implementation_bindings(scope).unwrap().len(),
+    )
+    .await;
+    assert_count::<VerificationBinding>(
+        &snapshot,
+        state.list_verification_bindings(scope).unwrap().len(),
+    )
+    .await;
+    assert_count::<RequirementReview>(
+        &snapshot,
+        state.list_requirement_reviews(scope).unwrap().len(),
+    )
+    .await;
+    drop(snapshot);
+    pool.close().await;
 }
 
-/// The timing comparison report over every store. Run it by hand:
+async fn assert_count<K: ProjectionRow>(snapshot: &ReadSnapshot, canonical: usize) {
+    let counted = snapshot.table::<K>().count().await.unwrap();
+    let canonical = i64::try_from(canonical).expect("a row count fits an i64");
+    assert_eq!(
+        counted,
+        canonical,
+        "{}: the projection must hold every canonical row, retired included",
+        K::TABLE
+    );
+}
+
+/// The timing report over every store. Run it by hand:
 /// `cargo test -p provenance-store --release -- --ignored timing_comparison_rows --nocapture`
 #[tokio::test]
 #[ignore = "a report, not a gate; run by hand with --ignored"]
