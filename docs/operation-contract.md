@@ -9,7 +9,8 @@ The catalog contains `check-statement`, `info`, `get`, `search`, `neighbors`,
 `trace`, `impact`, `resolve-symbol`, `evidence`, `stale`, `verification-runs`,
 `verification-bindings`, `plan`, `apply`, `begin-verification`,
 `complete-verification`, `create-source`, `create-requirement`,
-`create-resolution`, `create-rule`, and `add-source-reference`. The statement
+`create-resolution`, `create-rule`, `add-source-reference`, `list-threads`,
+`list-messages`, and `post-thread-message`. The statement
 handler returns the existing ASD-STE100 analyzer report. A finding is a successful report result.
 The operation does not open a repository, load settings, or use a dictionary.
 
@@ -133,6 +134,31 @@ edit history, content journal, or new persisted relationship is added. All
 repository listeners remain explicit isolated fixtures pending production
 access control.
 
+## Existing discussions
+
+`list-threads` and `list-messages` use the selected repository and scope with a
+`null` request. They return the complete native record arrays in native order.
+MCP wraps each array in `result`, as it does for the other list operations.
+
+`post-thread-message` accepts the existing `scope_id`, `parent`, `role`, and
+`body` fields. The request scope must equal the authorized context scope.
+The result contains the existing `thread` and `message` records. A parent can
+be a Source, Requirement, Resolution, Rule, Topic, or Question. Domain and
+Boundary parents remain unsupported. Native posting does not require the
+parent record to exist. Message role is record data, not caller authority.
+
+Posting selects the canonical active Thread and archives its active siblings.
+If no active Thread exists, it creates a new Thread and retains terminal
+history. Body text is preserved, but a blank body is refused. Thread and
+Message IDs, timestamps, fields, and storage paths retain native behavior.
+The Thread is published before the Message; a failure after that first
+publication reports `uncertain_write`, including a Message shard read failure.
+
+These operations add no separate reply groups, message membership, resolve or
+reopen action, new parent kind, or proposal association. Native CLI and Rust
+calls remain direct and do not need an HTTP server. Generated SDKs only call
+an existing host and do not start or manage it.
+
 ## Write failures and task ownership
 
 Protocol, access, and known validation refusals occur before intended graph
@@ -215,6 +241,7 @@ node tools/operation-codegen/test-clients.mjs records
 node tools/operation-codegen/test-clients.mjs evidence
 node tools/operation-codegen/test-clients.mjs writes
 node tools/operation-codegen/test-clients.mjs creation
+node tools/operation-codegen/test-clients.mjs discussions
 ```
 
 The adapters bound request bodies and concurrent work. Blocking operation work
@@ -225,7 +252,8 @@ started work. Shutdown stops admission and joins started work.
 
 The operation protocol advances from 6 to 7. The TypeScript SDK uses the
 generated HTTP client for the original sixteen operations. The generated client
-also exposes the five creation and attachment operations. Configure `endpoint`,
+also exposes five creation and attachment operations and three discussion operations.
+Configure `endpoint`,
 `bearer`, `repositoryId`, and `scope`; configure `localRoot` separately when
 converting local implementation or verification paths. The SDK rejects the old
 implicit repository/subprocess configuration. Both HTTP clients validate

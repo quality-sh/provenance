@@ -45,7 +45,9 @@ async fn real_mcp_preserves_each_registered_read_and_full_http_stamp() {
             "evidence",
             "stale",
             "verification-runs",
-            "verification-bindings"
+            "verification-bindings",
+            "list-threads",
+            "list-messages"
         ]
     );
     let mut requests = vec![(

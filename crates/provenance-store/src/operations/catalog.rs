@@ -3,6 +3,7 @@
 mod authoring;
 mod context;
 mod creation;
+mod discussions;
 mod entry;
 mod evidence;
 mod failures;
@@ -19,7 +20,9 @@ pub use context::{
 };
 pub use creation::{
     AddSourceReference, CreateRequirement, CreateResolution, CreateRule, CreateSource,
+    PostThreadMessage,
 };
+pub use discussions::{ListMessages, ListThreads};
 pub use entry::{Operation, OperationFuture, WireSchema};
 pub use invoke::{invoke, invoke_typed, invoke_with};
 #[cfg(feature = "schema")]

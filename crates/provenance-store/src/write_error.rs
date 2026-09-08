@@ -10,6 +10,8 @@ pub enum WriteFailure {
     AlreadyExists,
     InvalidCommitPin,
     ScopeMismatch,
+    EmptyMessageBody,
+    UnsupportedThreadParent,
     StatementInvalid {
         report: provenance_ste100::Report,
     },

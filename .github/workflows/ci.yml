@@ -620,6 +620,7 @@ jobs:
       - run: node tools/operation-codegen/test-clients.mjs evidence
       - run: node tools/operation-codegen/test-clients.mjs writes
       - run: node tools/operation-codegen/test-clients.mjs creation
+      - run: node tools/operation-codegen/test-clients.mjs discussions
       - run: git diff --exit-code
 
   repository-file-access:

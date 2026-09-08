@@ -98,5 +98,8 @@ pub(super) fn entries() -> Vec<Entry> {
         register::<super::Stale>(),
         register::<super::VerificationRuns>(),
         register::<super::VerificationBindings>(),
+        register::<super::ListThreads>(),
+        register::<super::ListMessages>(),
+        register::<super::PostThreadMessage>(),
     ]
 }

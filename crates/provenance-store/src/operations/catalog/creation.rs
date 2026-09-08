@@ -76,3 +76,12 @@ creation!(
     add_source_reference,
     [GraphStorage]
 );
+
+creation!(
+    PostThreadMessage,
+    "post-thread-message",
+    crate::state_store::PostMessageInput,
+    crate::state_store::PostMessageResult,
+    post_thread_message,
+    [GraphStorage]
+);

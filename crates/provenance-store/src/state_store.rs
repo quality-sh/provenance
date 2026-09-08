@@ -97,6 +97,7 @@ pub struct IdeationLandingBatch {
 }
 
 #[derive(Debug, serde::Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct PostMessageResult {
     pub thread: Thread,
     pub message: Message,

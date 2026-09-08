@@ -163,6 +163,11 @@ fn baseline_operations_have_one_registered_contract_each() {
         names,
         [
             "check-statement",
+            "create-source",
+            "create-requirement",
+            "create-rule",
+            "create-resolution",
+            "add-source-reference",
             "plan",
             "apply",
             "begin-verification",
@@ -177,7 +182,10 @@ fn baseline_operations_have_one_registered_contract_each() {
             "evidence",
             "stale",
             "verification-runs",
-            "verification-bindings"
+            "verification-bindings",
+            "list-threads",
+            "list-messages",
+            "post-thread-message"
         ]
     );
 }

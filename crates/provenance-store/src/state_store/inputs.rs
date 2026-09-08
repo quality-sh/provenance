@@ -285,6 +285,8 @@ pub struct CompleteVerificationInput {
     pub error: Option<String>,
 }
 
+#[derive(Debug, serde::Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct PostMessageInput {
     pub scope_id: ScopeId,
     pub parent: ThreadParent,

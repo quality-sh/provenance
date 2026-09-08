@@ -48,8 +48,11 @@ fn operation_names_and_failure_statuses_are_explicit() {
             "get",
             "impact",
             "info",
+            "list-messages",
+            "list-threads",
             "neighbors",
             "plan",
+            "post-thread-message",
             "resolve-symbol",
             "search",
             "stale",
@@ -81,7 +84,12 @@ fn operation_names_and_failure_statuses_are_explicit() {
 #[test]
 fn mcp_list_outputs_wrap_the_complete_http_array() {
     let (document, mcp) = provenance_codegen::documents();
-    for name in ["verification-bindings", "verification-runs"] {
+    for name in [
+        "verification-bindings",
+        "verification-runs",
+        "list-threads",
+        "list-messages",
+    ] {
         let tool = mcp["tools"]
             .as_array()
             .unwrap()
@@ -128,6 +136,7 @@ fn mutation_classification_comes_from_the_catalog() {
                 "create-resolution",
                 "create-rule",
                 "add-source-reference",
+                "post-thread-message",
             ]
             .iter()
             .any(|name| path.ends_with(&format!("/{name}")));

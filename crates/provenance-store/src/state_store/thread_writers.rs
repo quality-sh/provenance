@@ -1,5 +1,6 @@
 use super::{serde_name, PostMessageInput, PostMessageResult, StateStore};
 use crate::shards;
+use crate::write_error::{publication_started, SourceFailure, WriteFailure};
 use provenance_core::{
     Message, NodeType, StableId, Thread, ThreadStatus, SUPPORTED_SCHEMA_VERSION,
 };
@@ -19,7 +20,11 @@ impl StateStore {
             role,
             body,
         } = input;
-        anyhow::ensure!(!body.trim().is_empty(), "message body must not be empty");
+        crate::write_error::ensure!(
+            EmptyMessageBody,
+            !body.trim().is_empty(),
+            "message body must not be empty"
+        );
         match parent.node_type {
             NodeType::Source
             | NodeType::Requirement
@@ -27,11 +32,16 @@ impl StateStore {
             | NodeType::Rule
             | NodeType::Topic
             | NodeType::Question => {}
-            NodeType::Domain | NodeType::Boundary => anyhow::bail!(
-                "thread parent kind `{}` is not supported; threads attach to a source, \
+            NodeType::Domain | NodeType::Boundary => {
+                return Err(SourceFailure::wrap(
+                    WriteFailure::UnsupportedThreadParent,
+                    anyhow::anyhow!(
+                        "thread parent kind `{}` is not supported; threads attach to a source, \
                  requirement, resolution, rule, topic, or question",
-                serde_name(&parent.node_type)?
-            ),
+                        serde_name(&parent.node_type)?
+                    ),
+                ))
+            }
         }
         let threads_path = shards::threads_path(&self.layout, &scope_id);
         let thread = self.mutate_jsonl_records(&threads_path, |threads: &mut Vec<Thread>| {
@@ -72,8 +82,8 @@ impl StateStore {
         })?;
 
         let messages_path = shards::messages_path(&self.layout, &scope_id);
-        let message =
-            self.mutate_jsonl_records(&messages_path, |messages: &mut Vec<Message>| {
+        let message = self
+            .mutate_jsonl_records(&messages_path, |messages: &mut Vec<Message>| {
                 let created_at = messages
                     .iter()
                     .map(|message| message.created_at)
@@ -97,7 +107,8 @@ impl StateStore {
                         .then(a.id.as_str().cmp(b.id.as_str()))
                 });
                 Ok(message)
-            })?;
+            })
+            .map_err(publication_started)?;
         Ok(PostMessageResult { thread, message })
     }
 }
