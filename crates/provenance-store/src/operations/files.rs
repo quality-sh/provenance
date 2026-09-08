@@ -10,7 +10,8 @@ mod tests;
 #[cfg(unix)]
 #[path = "files/unix.rs"]
 mod unix;
-#[cfg(any(windows, all(test, unix)))]
+// The Linux test harness uses O_PATH, which is not available on macOS.
+#[cfg(any(windows, all(test, target_os = "linux")))]
 #[path = "files/windows.rs"]
 mod windows;
 #[cfg(unix)]

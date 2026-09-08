@@ -59,13 +59,33 @@ fn ste_download_client_carries_no_quic_transport() {
     let root_manifest = fs::read_to_string(workspace.join("Cargo.toml")).unwrap();
     let cli_manifest =
         fs::read_to_string(workspace.join("crates/provenance-cli/Cargo.toml")).unwrap();
-    let lock = fs::read_to_string(workspace.join("Cargo.lock")).unwrap();
 
     assert!(root_manifest.contains("ureq ="));
     assert!(cli_manifest.contains("ureq.workspace = true"));
     assert!(!root_manifest.contains("reqwest ="));
     assert!(!cli_manifest.contains("reqwest.workspace = true"));
-    assert!(!lock.contains("name = \"quinn-proto\""));
+    let dependencies = Command::new(env!("CARGO"))
+        .args([
+            "tree",
+            "--locked",
+            "--offline",
+            "-p",
+            "provenance-cli",
+            "--edges",
+            "normal",
+            "--prefix",
+            "none",
+        ])
+        .current_dir(&workspace)
+        .output()
+        .expect("read the CLI runtime dependency graph");
+    assert!(
+        dependencies.status.success(),
+        "{}",
+        String::from_utf8_lossy(&dependencies.stderr)
+    );
+    let graph = String::from_utf8(dependencies.stdout).unwrap();
+    assert!(!graph.lines().any(|line| line.starts_with("quinn-proto ")));
 }
 
 #[test]

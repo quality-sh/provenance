@@ -61,14 +61,11 @@ fn nofollow_traversal_refuses_replaced_ancestors_and_special_files() {
         root.open_file(Utf8Path::new("src/sentinel.rs")),
         Err(FileAccessRefusal::Denied)
     ));
-    rustix::fs::mknodat(
-        rustix::fs::CWD,
-        path.join("pipe.rs").as_str(),
-        rustix::fs::FileType::Fifo,
-        rustix::fs::Mode::RUSR,
-        0,
-    )
-    .unwrap();
+    assert!(std::process::Command::new("mkfifo")
+        .arg(path.join("pipe.rs"))
+        .status()
+        .unwrap()
+        .success());
     assert!(matches!(
         root.open_file(Utf8Path::new("pipe.rs")),
         Err(FileAccessRefusal::Denied)
