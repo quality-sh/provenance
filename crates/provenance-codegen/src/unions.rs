@@ -6,14 +6,21 @@ pub fn normalize(value: &mut Value, root: &Value) {
     match value {
         Value::Object(map) => {
             if let Some(branches) = map.get("anyOf").and_then(Value::as_array) {
-                let mut seen = BTreeSet::new();
-                let disjoint = branches.iter().all(|branch| {
-                    tags(branch, root, 0)
-                        .is_some_and(|values| values.into_iter().all(|tag| seen.insert(tag)))
-                });
-                if disjoint {
-                    let branches = map.remove("anyOf").unwrap();
-                    map.insert("oneOf".into(), branches);
+                let expanded = branches
+                    .iter()
+                    .map(|branch| alternatives(branch, root, 0))
+                    .collect::<Option<Vec<_>>>();
+                if let Some(expanded) = expanded {
+                    let mut unique = Vec::new();
+                    for branch in expanded.into_iter().flatten() {
+                        if !unique.contains(&branch) {
+                            unique.push(branch);
+                        }
+                    }
+                    if !unique.is_empty() && disjoint(&unique, root) {
+                        map.remove("anyOf");
+                        map.insert("oneOf".into(), Value::Array(unique));
+                    }
                 }
             }
             for child in map.values_mut() {
@@ -27,6 +34,43 @@ pub fn normalize(value: &mut Value, root: &Value) {
         }
         _ => {}
     }
+}
+
+fn disjoint(branches: &[Value], root: &Value) -> bool {
+    let mut seen = BTreeSet::new();
+    branches.iter().all(|branch| {
+        tags(branch, root, 0).is_some_and(|values| values.into_iter().all(|tag| seen.insert(tag)))
+    })
+}
+
+fn alternatives(value: &Value, root: &Value, depth: usize) -> Option<Vec<Value>> {
+    if depth > 32 {
+        return None;
+    }
+    if value == &Value::Bool(false) {
+        return Some(Vec::new());
+    }
+    if value.as_object()?.len() == 1 {
+        if let Some(reference) = value.get("$ref").and_then(Value::as_str) {
+            return alternatives(root.pointer(reference.strip_prefix('#')?)?, root, depth + 1);
+        }
+    }
+    if let Some(branches) = value.get("oneOf").and_then(Value::as_array) {
+        if !disjoint(branches, root) {
+            return None;
+        }
+        // Union-only objects can expand without dropping sibling constraints.
+        if value.as_object()?.len() != 1 {
+            return None;
+        }
+        return branches
+            .iter()
+            .map(|branch| alternatives(branch, root, depth + 1))
+            .collect::<Option<Vec<_>>>()
+            .map(|parts| parts.into_iter().flatten().collect());
+    }
+    tags(value, root, depth)?;
+    Some(vec![value.clone()])
 }
 
 fn tags(value: &Value, root: &Value, depth: usize) -> Option<BTreeSet<String>> {
@@ -87,6 +131,22 @@ mod tests {
         assert_eq!(schema, json!({"oneOf":branches}));
     }
     #[test]
+    fn identical_shared_tag_branches_can_be_deduplicated() {
+        let common = branch("common");
+        let handler = branch("handler");
+        let shared = branch("uncertain_write");
+        let mut schema = json!({"anyOf":[{"oneOf":[common,shared]},{"oneOf":[handler,shared]}]});
+        let root = schema.clone();
+        super::normalize(&mut schema, &root);
+        let actual = schema["oneOf"]
+            .as_array()
+            .expect("exclusive deduplicated union");
+        assert_eq!(actual.len(), 3);
+        for expected in [common, handler, shared] {
+            assert!(actual.contains(&expected));
+        }
+    }
+    #[test]
     fn tags_without_object_type_do_not_prove_exclusivity() {
         let mut first = branch("first");
         let mut second = branch("second");
@@ -103,8 +163,10 @@ mod tests {
         assert_eq!(schema, original);
     }
     #[test]
-    fn overlapping_tags_keep_the_original_union_semantics() {
-        let original = json!({"anyOf":[branch("common"),branch("common")]});
+    fn different_overlapping_shapes_keep_the_original_union_semantics() {
+        let mut second = branch("common");
+        second["properties"]["detail"] = json!({"type":"string"});
+        let original = json!({"anyOf":[branch("common"),second]});
         let mut schema = original.clone();
         super::normalize(&mut schema, &original);
         assert_eq!(schema, original);

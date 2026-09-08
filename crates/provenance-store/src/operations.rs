@@ -26,6 +26,7 @@ pub mod read_policy;
 pub mod reader;
 mod sites;
 pub mod stamp;
+pub use crate::write_error;
 
 pub use plan::{AffectedRule, ReviewReason, RuleEvidence, TypedSpecPlan};
 
@@ -100,7 +101,12 @@ pub fn begin_verification(
 ) -> anyhow::Result<provenance_core::VerificationRun> {
     let repo = discover_repository(repo)?;
     input.method = provenance_scanner::Verification::from_str(&input.method)
-        .map_err(anyhow::Error::msg)?
+        .map_err(|error| {
+            write_error::SourceFailure::wrap(
+                write_error::WriteFailure::InvalidVerificationTarget,
+                anyhow::Error::msg(error),
+            )
+        })?
         .to_string();
     normalize_verification_context(&repo, &mut input)?;
     StateStore::new(ProvenanceLayout::new(repo)).begin_verification(scope, input)
@@ -155,10 +161,12 @@ fn normalize_verification_context(
     repo: &Utf8Path,
     input: &mut BeginVerificationInput,
 ) -> anyhow::Result<()> {
-    let file = input
-        .file
-        .as_ref()
-        .ok_or_else(|| anyhow::anyhow!("file is required for a durable verification binding"))?;
+    let file = input.file.as_ref().ok_or_else(|| {
+        write_error::SourceFailure::wrap(
+            write_error::WriteFailure::InvalidVerificationTarget,
+            anyhow::anyhow!("file is required for a durable verification binding"),
+        )
+    })?;
     let relative = files::native_relative(repo, file)?;
     let root = files::RepositoryFiles::open(repo)?;
     let _opened = root.open_file(&relative)?;
@@ -220,3 +228,6 @@ fn clean_file_commit(repo: &Utf8Path, file: &Utf8Path) -> Option<String> {
     }
     Some(String::from_utf8(head.stdout).ok()?.trim().to_string())
 }
+
+#[cfg(test)]
+mod write_tests;

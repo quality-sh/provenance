@@ -3,9 +3,10 @@ import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
-import openapiTS, { astToString } from 'openapi-typescript';
+import { typescriptFiles } from './typescript.mjs';
+import { responseSchemas } from './validators.mjs';
 import { compareTrees } from './inventory.mjs';
-import { rustClientFiles, typescriptClient } from './templates.mjs';
+import { rustClientFiles } from './templates.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 function run(command, args) {
@@ -22,10 +23,10 @@ try {
   const openapiPath = join(temporary, directories[0], 'openapi.json');
   const document = JSON.parse(await readFile(openapiPath, 'utf8'));
   const tsDir = join(temporary, directories[1]);
-  await writeFile(join(tsDir, 'schema.ts'), astToString(await openapiTS(document, { defaultNonNullable: false })));
-  await writeFile(join(tsDir, 'client.ts'), typescriptClient(document));
+  for (const [path, source] of Object.entries(await typescriptFiles(document))) await writeFile(join(tsDir, path), source);
   const rustDir = join(temporary, directories[2]);
   run(generator, ['rust', openapiPath, rustDir]);
+  await writeFile(join(rustDir, 'responses.json'), JSON.stringify({ components: document.components, response_schemas: responseSchemas(document) }) + '\n');
   const clientFiles = rustClientFiles(document);
   for (const [path, source] of Object.entries(clientFiles)) {
     await mkdir(dirname(join(rustDir, path)), { recursive: true });

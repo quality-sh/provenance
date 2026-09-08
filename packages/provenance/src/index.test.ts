@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
+import { startFixtureHost } from "../scripts/fixture-host.js";
+import { recordingHost } from "./http-recorder.test-helper.js";
+import { OperationError } from "./client.js";
 import { STATE_SCHEMA_VERSION } from "./protocol.js";
 
 import {
@@ -16,7 +19,7 @@ import {
   source,
 } from "./index.js";
 const engine = fileURLToPath(
-  new URL("../../../target/debug/provenance", import.meta.url),
+  new URL(`../../../target/debug/provenance${process.platform === "win32" ? ".exe" : ""}`, import.meta.url),
 );
 
 // Captured from Bun 1.3.14 running `test("...", () => rule.verify(key, callback))`
@@ -39,25 +42,36 @@ function whileStackIs<T>(stack: string, call: () => T): T {
   }
 }
 
-function repository(): string {
-  const repo = mkdtempSync(join(tmpdir(), "provenance-ts-sdk-"));
-  execFileSync(engine, [
-    "init",
-    "--path",
-    repo,
-    "--scope",
-    "default",
-    "--path-prefix",
-    ".",
-  ]);
-  return repo;
+function localFiles(t: TestContext): string {
+  const root = mkdtempSync(join(tmpdir(), "provenance-ts-sdk-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  for (const directory of ["tests", "src"]) {
+    mkdirSync(join(root, directory));
+    writeFileSync(join(root, directory, "share-links.test.ts"), "// Real verification fixture.\n");
+  }
+  return root;
 }
 
-function declareFixture(repo: string) {
+async function repository(t: TestContext) {
+  const repo = localFiles(t);
+  execFileSync(engine, ["init", "--path", repo, "--scope", "default", "--path-prefix", "."], { stdio: "pipe" });
+  const host = await startFixtureHost({ root: repo, repositoryId: "index-fixture" });
+  t.after(() => host.close());
+  return {
+    repo,
+    settings: {
+      endpoint: host.environment.PROVENANCE_ENDPOINT,
+      bearer: host.environment.PROVENANCE_TOKEN,
+      repositoryId: host.environment.PROVENANCE_REPOSITORY_ID,
+      localRoot: repo,
+      scope: "default",
+    },
+  };
+}
+
+function declareFixture(settings: Parameters<typeof configure>[0]) {
   configure({
-    engine,
-    repository: repo,
-    scope: "default",
+    ...settings,
     owner: "spec://typescript/share-links",
     verificationOwner: "ci://node-test",
   });
@@ -85,66 +99,9 @@ function engineJson(repo: string, args: string[]): unknown {
   );
 }
 
-function recordingEngine(responses: Readonly<Record<string, unknown>> = {}): {
-  engine: string;
-  requests: () => Array<{ command: string; args: string[]; input: unknown }>;
-} {
-  const directory = mkdtempSync(join(tmpdir(), "provenance-recording-engine-"));
-  const executable = join(directory, "engine.mjs");
-  const log = join(directory, "requests.jsonl");
-  writeFileSync(
-    executable,
-    `#!/usr/bin/env node
-import { appendFileSync, readFileSync } from "node:fs";
-const command = process.argv[3];
-const args = process.argv.slice(2);
-const responses = ${JSON.stringify(responses)};
-const source = readFileSync(0, "utf8");
-const input = source === "" ? undefined : JSON.parse(source);
-appendFileSync(${JSON.stringify(log)}, JSON.stringify({ command, args, input }) + "\\n");
-if (Object.hasOwn(responses, command)) {
-  process.stdout.write(JSON.stringify(responses[command]));
-} else if (command === "info") {
-  process.stdout.write(JSON.stringify({
-    engine_version: "0.1.0",
-    protocol_version: 7,
-    state_schema_version: ${STATE_SCHEMA_VERSION},
-    repository: "/project",
-  }));
-} else if (command === "begin-verification") {
-  process.stdout.write(JSON.stringify({
-    id: "run_" + input.key,
-    binding_id: "verification_binding_" + input.key,
-    rule_id: "rule_expiry",
-    status: "running",
-    commit: "0123456789abcdef",
-    file: input.file,
-    symbol: input.symbol,
-  }));
-} else {
-  process.stdout.write(JSON.stringify({
-    id: input.run,
-    binding_id: "verification_binding_completed",
-    rule_id: "rule_expiry",
-    status: input.status,
-  }));
-}
-`,
-  );
-  chmodSync(executable, 0o755);
-  return {
-    engine: executable,
-    requests: () =>
-      (existsSync(log) ? readFileSync(log, "utf8") : "")
-        .trim()
-        .split("\n")
-        .filter(Boolean)
-        .map((line) => JSON.parse(line) as { command: string; args: string[]; input: unknown }),
-  };
-}
 
-test("the callback option-object Requirement keeps an explicit ID", async () => {
-  const recorder = recordingEngine({
+test("the callback option-object Requirement keeps an explicit ID", async (t) => {
+  const recorder = await recordingHost({
     apply: {
       declared_by: "spec://typescript/callback-requirement-id",
       created: 1,
@@ -156,8 +113,10 @@ test("the callback option-object Requirement keeps an explicit ID", async () => 
       resources: [],
     },
   });
+  t.after(() => recorder.close());
   configure({
-    engine: recorder.engine,
+    ...recorder.settings,
+    localRoot: localFiles(t),
     owner: "spec://typescript/callback-requirement-id",
   });
   const spec = defineSpec("callback-requirement-id", ({ requirement }) => ({
@@ -176,9 +135,10 @@ test("the callback option-object Requirement keeps an explicit ID", async () => 
   );
 });
 
-test("verify sends the same durable binding key on repeated runs", async () => {
-  const recorder = recordingEngine();
-  configure({ engine: recorder.engine, repository: repository() });
+test("verify sends the same durable binding key on repeated runs", async (t) => {
+  const recorder = await recordingHost();
+  t.after(() => recorder.close());
+  configure({ ...recorder.settings, localRoot: localFiles(t) });
   const spec = defineSpec("share-links", ({ requirement }) => {
     const sharing = requirement("sharing", {
       statement: "Users can securely share documentation",
@@ -226,9 +186,10 @@ test("verify sends the same durable binding key on repeated runs", async () => {
   ]);
 });
 
-test("verify sends distinct durable binding keys from one test file", async () => {
-  const recorder = recordingEngine();
-  configure({ engine: recorder.engine, repository: repository() });
+test("verify sends distinct durable binding keys from one test file", async (t) => {
+  const recorder = await recordingHost();
+  t.after(() => recorder.close());
+  configure({ ...recorder.settings, localRoot: localFiles(t) });
   const spec = defineSpec("share-links", ({ requirement }) => {
     const sharing = requirement("sharing", {
       statement: "Users can securely share documentation",
@@ -253,8 +214,8 @@ test("verify sends distinct durable binding keys from one test file", async () =
   assert.deepEqual(keys, ["maximum-expiry", "expired-link"]);
 });
 
-test("plan sends the finalized spec to the read-only engine command", async () => {
-  const recorder = recordingEngine({
+test("plan sends the finalized spec to the read-only HTTP operation", async (t) => {
+  const recorder = await recordingHost({
     info: {
       engine_version: "0.1.0",
       protocol_version: 7,
@@ -273,7 +234,8 @@ test("plan sends the finalized spec to the read-only engine command", async () =
       affected_rules: [],
     },
   });
-  configure({ engine: recorder.engine, repository: repository() });
+  t.after(() => recorder.close());
+  configure({ ...recorder.settings, localRoot: localFiles(t) });
   const spec = defineSpec("share-links", ({ requirement }) => {
     const sharing = requirement("sharing", {
       statement: "Users can securely share documentation",
@@ -288,8 +250,8 @@ test("plan sends the finalized spec to the read-only engine command", async () =
   const result = await plan(spec);
 
   assert.equal(result.updated, 1);
-  assert.deepEqual(recorder.requests().map(({ command }) => command), ["info", "plan"]);
-  assert.deepEqual((recorder.requests()[1]?.input as { rules: unknown[] }).rules, [
+  assert.deepEqual(recorder.requests().map(({ command }) => command), ["plan"]);
+  assert.deepEqual((recorder.requests()[0]?.input as { rules: unknown[] }).rules, [
     {
       key: "expiry",
       requirement: "sharing",
@@ -298,9 +260,9 @@ test("plan sends the finalized spec to the read-only engine command", async () =
   ]);
 });
 
-test("typed declarations reconcile to canonical Provenance records", async () => {
-  const repo = repository();
-  const { expiry, sharing } = declareFixture(repo);
+test("typed declarations reconcile to canonical Provenance records", async (t) => {
+  const { repo, settings } = await repository(t);
+  const { expiry, sharing } = declareFixture(settings);
 
   const result = await apply();
 
@@ -319,9 +281,9 @@ test("typed declarations reconcile to canonical Provenance records", async () =>
   assert.equal(rule.declared_by, "spec://typescript/share-links");
 });
 
-test("requirement source order stays unchanged after apply", async () => {
-  const repo = repository();
-  configure({ engine, repository: repo, owner: "spec://typescript/source-order" });
+test("requirement source order stays unchanged after apply", async (t) => {
+  const { repo, settings } = await repository(t);
+  configure({ ...settings, owner: "spec://typescript/source-order" });
   const spec = defineSpec("source-order", ({ source, requirement }) => {
     const policy = source("z-policy", {
       kind: "document",
@@ -351,11 +313,10 @@ test("requirement source order stays unchanged after apply", async () => {
   assert.equal(result.unchanged, 4);
 });
 
-test("omitted declarations retire and later reactivate with the same ids", async () => {
-  const repo = repository();
+test("omitted declarations retire and later reactivate with the same ids", async (t) => {
+  const { repo, settings } = await repository(t);
   configure({
-    engine,
-    repository: repo,
+    ...settings,
     owner: "spec://typescript/retirement",
   });
   const full = defineSpec("retirement", ({ requirement }) => {
@@ -382,11 +343,10 @@ test("omitted declarations retire and later reactivate with the same ids", async
   assert.deepEqual(reactivated.resources.map(({ id }) => id).sort(), ids);
 });
 
-test("equal local rule keys under different requirements reconcile separately", async () => {
-  const repo = repository();
+test("equal local rule keys under different requirements reconcile separately", async (t) => {
+  const { repo, settings } = await repository(t);
   configure({
-    engine,
-    repository: repo,
+    ...settings,
     owner: "spec://typescript/lifecycles",
   });
   const sharing = requirement("sharing", {
@@ -408,7 +368,7 @@ test("equal local rule keys under different requirements reconcile separately", 
 });
 
 test("defineSpec finalizes pure builders into immutable hierarchical handles", () => {
-  configure({ engine: "/engine/must/not/start" });
+  configure({ endpoint: "http://127.0.0.1:0", repositoryId: "pure-builders" });
   let escapedRequirement: { rule(key: string, options: unknown): unknown } | undefined;
   const spec = defineSpec("lifecycles", ({ requirement }) => {
     const sharing = requirement("sharing", {
@@ -451,11 +411,10 @@ test("defineSpec finalizes pure builders into immutable hierarchical handles", (
   );
 });
 
-test("immutable rule handles verify through an applied declaration address", async () => {
-  const repo = repository();
+test("immutable rule handles verify through an applied declaration address", async (t) => {
+  const { repo, settings } = await repository(t);
   configure({
-    engine,
-    repository: repo,
+    ...settings,
     owner: "spec://typescript",
     verificationOwner: "ci://node-test",
   });
@@ -478,7 +437,7 @@ test("immutable rule handles verify through an applied declaration address", asy
       },
       { file: "tests/share-links.test.ts" },
     ),
-    /has not been applied/i,
+    (error) => error instanceof OperationError && error.failure.error.kind === "invalid_verification_target",
   );
   assert.equal(called, false);
   assert.equal("id" in spec.handles.expiry, false);
@@ -504,9 +463,9 @@ test("immutable rule handles verify through an applied declaration address", asy
   assert.equal(runs.at(-1)?.file, "tests/share-links.test.ts");
 });
 
-test("reapplying an address reuses the canonical id already assigned by Rust", async () => {
-  const repo = repository();
-  configure({ engine, repository: repo, owner: "spec://typescript" });
+test("reapplying an address reuses the canonical id already assigned by Rust", async (t) => {
+  const { repo, settings } = await repository(t);
+  configure({ ...settings, owner: "spec://typescript" });
   const declared = (id?: string) =>
     defineSpec("share-links", ({ requirement }) => {
       const sharing = requirement("sharing", {
@@ -529,9 +488,9 @@ test("reapplying an address reuses the canonical id already assigned by Rust", a
   assert.equal(second.created, 0);
 });
 
-test("verify records a passed Node callback against the imported rule", async () => {
-  const repo = repository();
-  const { expiry } = declareFixture(repo);
+test("verify records a passed Node callback against the imported rule", async (t) => {
+  const { repo, settings } = await repository(t);
+  const { expiry } = declareFixture(settings);
 
   let called = false;
   await expiry.verify(
@@ -556,9 +515,9 @@ test("verify records a passed Node callback against the imported rule", async ()
   assert.equal(runs.at(-1)?.file, "tests/share-links.test.ts");
 });
 
-test("verify records a failed callback and rethrows the original error", async () => {
-  const repo = repository();
-  const { expiry } = declareFixture(repo);
+test("verify records a failed callback and rethrows the original error", async (t) => {
+  const { repo, settings } = await repository(t);
+  const { expiry } = declareFixture(settings);
   await apply();
   const failure = new Error("expiry assertion failed");
 
@@ -599,16 +558,17 @@ function shareLinksSpec() {
 }
 
 function beginVerification(
-  requests: Array<{ command: string; args: string[]; input: unknown }>,
+  requests: Array<{ command: string; input: unknown }>,
 ): Array<{ file?: string }> {
   return requests
     .filter(({ command }) => command === "begin-verification")
     .map(({ input }) => input as { file?: string });
 }
 
-test("verify names import.meta when the runtime hides the calling file", async () => {
-  const recorder = recordingEngine();
-  configure({ engine: recorder.engine, repository: repository() });
+test("verify names import.meta when the runtime hides the calling file", async (t) => {
+  const recorder = await recordingHost();
+  t.after(() => recorder.close());
+  configure({ ...recorder.settings, localRoot: localFiles(t) });
   const spec = shareLinksSpec();
   let called = false;
 
@@ -624,9 +584,10 @@ test("verify names import.meta when the runtime hides the calling file", async (
   assert.deepEqual(beginVerification(recorder.requests()), []);
 });
 
-test("verify fails before applying when the stack holds no frames", async () => {
-  const recorder = recordingEngine();
-  configure({ engine: recorder.engine, repository: repository() });
+test("verify fails before applying when the stack holds no frames", async (t) => {
+  const recorder = await recordingHost();
+  t.after(() => recorder.close());
+  configure({ ...recorder.settings, localRoot: localFiles(t) });
   const sharing = requirement("sharing", {
     statement: "Users can securely share documentation",
   });
@@ -644,9 +605,10 @@ test("verify fails before applying when the stack holds no frames", async () => 
   assert.deepEqual(recorder.requests().map(({ command }) => command), []);
 });
 
-test("verify accepts import.meta as the file the test runs in", async () => {
-  const recorder = recordingEngine();
-  configure({ engine: recorder.engine, repository: repository() });
+test("verify accepts import.meta as the file the test runs in", async (t) => {
+  const recorder = await recordingHost();
+  t.after(() => recorder.close());
+  configure({ ...recorder.settings, localRoot: fileURLToPath(new URL(".", import.meta.url)) });
   const spec = shareLinksSpec();
 
   await whileStackIs(bunTailCallStack, () =>
@@ -655,13 +617,14 @@ test("verify accepts import.meta as the file the test runs in", async () => {
 
   assert.deepEqual(
     beginVerification(recorder.requests()).map(({ file }) => file),
-    [fileURLToPath(import.meta.url)],
+    ["index.test.js"],
   );
 });
 
-test("verify prefers the module URL over Bun's bare file name", async () => {
-  const recorder = recordingEngine();
-  configure({ engine: recorder.engine, repository: repository() });
+test("verify prefers the module URL over Bun's bare file name", async (t) => {
+  const recorder = await recordingHost();
+  t.after(() => recorder.close());
+  configure({ ...recorder.settings, localRoot: fileURLToPath(new URL(".", import.meta.url)) });
   const spec = shareLinksSpec();
   // Bun's import.meta carries `url` alongside a `file` holding the file name alone.
   const bunImportMeta = { url: import.meta.url, file: "index.test.js" };
@@ -672,13 +635,14 @@ test("verify prefers the module URL over Bun's bare file name", async () => {
 
   assert.deepEqual(
     beginVerification(recorder.requests()).map(({ file }) => file),
-    [fileURLToPath(import.meta.url)],
+    ["index.test.js"],
   );
 });
 
-test("verify accepts a module URL as the stated file", async () => {
-  const recorder = recordingEngine();
-  configure({ engine: recorder.engine, repository: repository() });
+test("verify accepts a module URL as the stated file", async (t) => {
+  const recorder = await recordingHost();
+  t.after(() => recorder.close());
+  configure({ ...recorder.settings, localRoot: fileURLToPath(new URL(".", import.meta.url)) });
   const spec = shareLinksSpec();
 
   await whileStackIs(bunTailCallStack, () =>
@@ -690,6 +654,6 @@ test("verify accepts a module URL as the stated file", async () => {
 
   assert.deepEqual(
     beginVerification(recorder.requests()).map(({ file }) => file),
-    [fileURLToPath(import.meta.url)],
+    ["index.test.js"],
   );
 });

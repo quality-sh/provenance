@@ -12,6 +12,7 @@ use provenance_core::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExecutionNeed {
     GraphStorage,
+    Dictionary,
     RepositoryFiles,
     Git,
     RunStorage,
@@ -93,11 +94,27 @@ impl PreparedContext {
     pub(super) fn graph(self) -> Result<PreparedRead, OperationFailure> {
         self.read.ok_or(OperationFailure::UnavailableNeeds)
     }
+    pub(super) const fn validate_kind(&self, kind: ContextKind) -> Result<(), OperationFailure> {
+        let valid = match kind {
+            ContextKind::DataFree => {
+                self.repository.is_none() && self.scope.is_none() && self.read.is_none()
+            }
+            ContextKind::Repository => self.repository.is_some(),
+            ContextKind::Scope => self.scope.is_some(),
+            ContextKind::Scoped => self.read.is_some(),
+        };
+        if valid {
+            Ok(())
+        } else {
+            Err(OperationFailure::UnavailableNeeds)
+        }
+    }
     pub(super) fn prepare(self, needs: ExecutionNeeds) -> Result<Self, OperationFailure> {
         if needs.iter().all(|need| match need {
-            ExecutionNeed::GraphStorage | ExecutionNeed::Git | ExecutionNeed::RunStorage => {
-                self.repository.is_some()
-            }
+            ExecutionNeed::Dictionary
+            | ExecutionNeed::GraphStorage
+            | ExecutionNeed::Git
+            | ExecutionNeed::RunStorage => self.repository.is_some(),
             ExecutionNeed::ProjectionMaintenance => self.read.is_some(),
             ExecutionNeed::RepositoryFiles => self.repository.is_some() && cfg!(any(unix, windows)),
         }) {

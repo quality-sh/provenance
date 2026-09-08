@@ -10,15 +10,23 @@ impl HttpClient {
             .json(call)
             .send()
             .await
-            .map_err(Error::Transport)?;
+            .map_err(|cause| runtime::connection("evidence", false, cause))?;
         let status = response.status();
+        let value = runtime::read_json(response, "evidence", false).await?;
         if !status.is_success() {
-            let failure: EvidenceFailureOutput = response.json().await.map_err(Error::Transport)?;
+            runtime::validate(&value, "EvidenceFailureOutput", "evidence", false)?;
+            let uncertain = runtime::uncertain_kind(&value, false);
+            let failure: EvidenceFailureOutput = runtime::decode(value, "evidence", false)?;
+            let failure = OperationFailure::Evidence(Box::new(failure));
+            if uncertain {
+                return Err(runtime::uncertain("evidence", failure));
+            }
             return Err(Error::Operation {
                 status: status.as_u16(),
-                failure: OperationFailure::Evidence(Box::new(failure)),
+                failure,
             });
         }
-        response.json().await.map_err(Error::Transport)
+        runtime::validate(&value, "EvidenceSuccessOutput", "evidence", false)?;
+        runtime::decode(value, "evidence", false)
     }
 }

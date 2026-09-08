@@ -23,7 +23,7 @@ fn statement_documents_have_named_operation_and_closed_call_schema() {
 }
 
 #[test]
-fn twelve_operation_names_and_failure_statuses_are_explicit() {
+fn sixteen_operation_names_and_failure_statuses_are_explicit() {
     let (document, mcp) = provenance_codegen::documents();
     let mut names = mcp["tools"]
         .as_array()
@@ -35,12 +35,16 @@ fn twelve_operation_names_and_failure_statuses_are_explicit() {
     assert_eq!(
         names,
         [
+            "apply",
+            "begin-verification",
             "check-statement",
+            "complete-verification",
             "evidence",
             "get",
             "impact",
             "info",
             "neighbors",
+            "plan",
             "resolve-symbol",
             "search",
             "stale",
@@ -102,5 +106,18 @@ fn mcp_list_outputs_wrap_the_complete_http_array() {
                 .unwrap()["type"],
             "array"
         );
+    }
+}
+
+#[test]
+fn mutation_classification_comes_from_the_catalog() {
+    let (document, _) = provenance_codegen::documents();
+    for (path, route) in document["paths"].as_object().unwrap() {
+        if let Some(operation) = route.get("post") {
+            let expected = ["apply", "begin-verification", "complete-verification"]
+                .iter()
+                .any(|name| path.ends_with(&format!("/{name}")));
+            assert_eq!(operation["x-operation-mutates"], expected, "{path}");
+        }
     }
 }

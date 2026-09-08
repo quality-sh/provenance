@@ -21,6 +21,7 @@ pub trait Operation: Send + Sync + 'static {
     type Success: Serialize + WireSchema + Send + 'static;
     type Failure: std::error::Error + Serialize + WireSchema + Send + 'static;
     const NAME: &'static str;
+    const MUTATES: bool = false;
     const CONTEXT: super::ContextKind = super::ContextKind::DataFree;
     const FAILURE_STATUSES: &'static [u16] = &[];
     fn failure_status(_: &Self::Failure) -> u16 {
@@ -55,6 +56,7 @@ pub(super) struct RepositoryCall<R, C> {
 
 pub(super) struct Entry {
     pub name: &'static str,
+    pub mutates: bool,
     pub invoke: fn(
         Value,
         std::sync::Arc<dyn super::ContextResolver>,
@@ -66,6 +68,7 @@ pub(super) struct Entry {
 fn register<O: Operation>() -> Entry {
     Entry {
         name: O::NAME,
+        mutates: O::MUTATES,
         invoke: super::invoke::invoke_resolved::<O>,
         #[cfg(feature = "schema")]
         definition: super::schema::definition::<O>,
@@ -75,6 +78,10 @@ fn register<O: Operation>() -> Entry {
 pub(super) fn entries() -> Vec<Entry> {
     vec![
         register::<super::CheckStatement>(),
+        register::<super::Plan>(),
+        register::<super::Apply>(),
+        register::<super::BeginVerification>(),
+        register::<super::CompleteVerification>(),
         register::<super::Info>(),
         register::<super::Get>(),
         register::<super::Search>(),

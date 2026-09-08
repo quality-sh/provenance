@@ -41,6 +41,7 @@ cargo test -p provenance-http-client
 node tools/operation-codegen/test-clients.mjs statements
 node tools/operation-codegen/test-clients.mjs records
 node tools/operation-codegen/test-clients.mjs evidence
+node tools/operation-codegen/test-clients.mjs writes
 node tools/operation-codegen/generate.mjs --check
 ```
 
@@ -73,3 +74,25 @@ and explicit default helpers (`missing_const_for_fn`, `derivable_impls`,
 `default_trait_access`). Models with more than three declared Boolean fields
 retain those wire fields with a local `struct_excessive_bools` allowance.
 Handwritten code keeps the normal workspace lint settings.
+
+Response validators compile from the same OpenAPI components. TypeScript pins
+Ajv 8.20.0, ajv-formats 3.0.1 and esbuild 0.25.11 to emit standalone browser ESM;
+there is no runtime compiler or schema download. The Rust runtime pins jsonschema
+0.18.3 without default network features, rejects external resolvers explicitly,
+and compiles validators once into a shared cache. Required nullable fields are
+validated before concrete deserialization. Metadata uses the generated shape
+with its version const removed only for compatibility classification, then checks
+the supported version explicitly.
+
+The TypeScript tool adapter moves reference conjunctions into allOf while keeping
+sibling constraints at their evaluation scope. This preserves tagged graph-node
+narrowing that the pinned tool otherwise drops. The authoritative OpenAPI and
+runtime validation schemas remain unchanged. The Rust union adapter deduplicates
+identical tagged alternatives only after proving object-only disjoint tags.
+
+The catalog mutation annotation drives response-loss classification in both
+clients. Malformed success or refusal after a write, interrupted connections,
+and validated uncertain/internal write outcomes remain uncertain. Response bodies
+are bounded to 16 MiB, and public error messages do not include raw bodies.
+The write fixture checks plan without mutation, apply, verification completion,
+ownership and completion refusals, and persisted records on an isolated host.

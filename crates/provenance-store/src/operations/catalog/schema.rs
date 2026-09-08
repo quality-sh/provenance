@@ -15,6 +15,7 @@ use serde_json::{json, Value};
 #[derive(Clone)]
 pub struct Definition {
     pub name: &'static str,
+    pub mutates: bool,
     pub http_statuses: Vec<u16>,
     pub request_schema: Value,
     pub success_schema: Value,
@@ -69,6 +70,7 @@ pub(super) fn definition<O: Operation>() -> Definition {
     failure["properties"]["operation"] = json!({"type":"string","const":O::NAME});
     Definition {
         name: O::NAME,
+        mutates: O::MUTATES,
         http_statuses: [400, 401, 403, 404, 500, 503]
             .into_iter()
             .chain(O::FAILURE_STATUSES.iter().copied())

@@ -33,6 +33,7 @@ pub struct FixtureAccess {
     token: String,
     authority: String,
     denied_operations: BTreeSet<String>,
+    writes: bool,
 }
 impl FixtureAccess {
     pub fn new(
@@ -76,7 +77,13 @@ impl FixtureAccess {
             token: token.to_owned(),
             authority: authority.to_owned(),
             denied_operations: BTreeSet::new(),
+            writes: false,
         })
+    }
+    #[must_use]
+    pub const fn allow_writes(mut self) -> Self {
+        self.writes = true;
+        self
     }
     #[must_use]
     pub fn deny_operation(mut self, operation: &str) -> Self {
@@ -85,6 +92,7 @@ impl FixtureAccess {
     }
     pub(crate) fn permits_operation(&self, operation: &str) -> bool {
         !self.denied_operations.contains(operation)
+            && (self.writes || !provenance_store::operations::catalog::mutates(operation))
     }
     pub(crate) fn authenticate(
         &self,

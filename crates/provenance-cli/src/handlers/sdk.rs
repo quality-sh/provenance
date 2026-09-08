@@ -2,10 +2,10 @@ use std::io::Read as _;
 
 use crate::cli::sdk::SdkCommand;
 use crate::output;
-use provenance_core::ScopeId;
 use provenance_store::operations;
 use provenance_store::state_store::{BeginVerificationInput, CompleteVerificationInput};
 
+mod authoring;
 mod check_statement;
 mod query;
 mod render;
@@ -22,9 +22,9 @@ pub(super) async fn handle(command: SdkCommand) -> anyhow::Result<()> {
             scope,
             format,
         } => {
-            let repo = Some(operations::discover_repository(repo)?);
+            let repo = operations::discover_repository(repo)?;
             let input = read_stdin_json()?;
-            let plan = operations::plan(repo, &ScopeId::new(scope)?, input)?;
+            let plan = authoring::invoke::<operations::catalog::Plan>(repo, scope, input).await?;
             match format {
                 output::OutputFormat::Json | output::OutputFormat::Jsonl => {
                     output::print(format, &plan)?;
@@ -41,9 +41,10 @@ pub(super) async fn handle(command: SdkCommand) -> anyhow::Result<()> {
             scope,
             format,
         } => {
-            let repo = Some(operations::discover_repository(repo)?);
+            let repo = operations::discover_repository(repo)?;
             let input = read_stdin_json()?;
-            let result = operations::apply(repo, &ScopeId::new(scope)?, input)?;
+            let result =
+                authoring::invoke::<operations::catalog::Apply>(repo, scope, input).await?;
             output::print(format, &result)?;
         }
         SdkCommand::BeginVerification {
@@ -51,9 +52,11 @@ pub(super) async fn handle(command: SdkCommand) -> anyhow::Result<()> {
             scope,
             format,
         } => {
-            let repo = Some(operations::discover_repository(repo)?);
+            let repo = operations::discover_repository(repo)?;
             let input = read_stdin_json::<BeginVerificationInput>()?;
-            let run = operations::begin_verification(repo, ScopeId::new(scope)?, input)?;
+            let run =
+                authoring::invoke::<operations::catalog::BeginVerification>(repo, scope, input)
+                    .await?;
             output::print(format, &run)?;
         }
         SdkCommand::CompleteVerification {
@@ -61,9 +64,11 @@ pub(super) async fn handle(command: SdkCommand) -> anyhow::Result<()> {
             scope,
             format,
         } => {
-            let repo = Some(operations::discover_repository(repo)?);
+            let repo = operations::discover_repository(repo)?;
             let input = read_stdin_json::<CompleteVerificationInput>()?;
-            let run = operations::complete_verification(repo, &ScopeId::new(scope)?, input)?;
+            let run =
+                authoring::invoke::<operations::catalog::CompleteVerification>(repo, scope, input)
+                    .await?;
             output::print(format, &run)?;
         }
         SdkCommand::VerificationRuns {

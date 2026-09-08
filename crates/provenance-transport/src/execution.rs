@@ -29,7 +29,7 @@ impl Execution {
         }
     }
 
-    pub async fn run<F>(&self, work: F) -> Result<Value, FailureEnvelope>
+    pub async fn run<F>(&self, operation: &str, work: F) -> Result<Value, FailureEnvelope>
     where
         F: FnOnce() -> Result<Value, FailureEnvelope> + Send + 'static,
     {
@@ -56,8 +56,14 @@ impl Execution {
             drop(closed);
             task
         };
-        task.await
-            .map_err(|_| FailureEnvelope::new(None, OperationFailure::Internal))?
+        task.await.map_err(|_| {
+            let failure = if provenance_store::operations::catalog::mutates(operation) {
+                OperationFailure::UncertainWrite
+            } else {
+                OperationFailure::Internal
+            };
+            FailureEnvelope::new(Some(operation), failure)
+        })?
     }
 
     pub async fn shutdown(&self) {
@@ -78,6 +84,10 @@ fn unavailable() -> FailureEnvelope {
     FailureEnvelope::new(None, OperationFailure::UnavailableNeeds)
 }
 
+#[cfg(all(test, feature = "test-fixture"))]
+#[path = "execution/publication_tests.rs"]
+mod publication_tests;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -93,7 +103,7 @@ mod tests {
         let work_barrier = barrier.clone();
         let call = tokio::spawn(async move {
             worker
-                .run(move || {
+                .run("apply", move || {
                     started.send(()).unwrap();
                     work_barrier.wait();
                     Ok(Value::Null)
@@ -102,7 +112,7 @@ mod tests {
         });
         ready.await.unwrap();
         let refused = execution
-            .run(|| panic!("Rejected work must not run"))
+            .run("apply", || panic!("Rejected work must not run"))
             .await
             .unwrap_err();
         assert_eq!(
@@ -126,7 +136,7 @@ mod tests {
         let worker = execution.clone();
         let caller = tokio::spawn(async move {
             worker
-                .run(move || {
+                .run("apply", move || {
                     started.send(()).unwrap();
                     work_barrier.wait();
                     finished.send(()).unwrap();
@@ -150,6 +160,18 @@ mod tests {
             .unwrap();
         closing.await.unwrap();
         done.await.unwrap();
-        assert!(execution.run(|| Ok(Value::Null)).await.is_err());
+        assert!(execution.run("apply", || Ok(Value::Null)).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn a_panicked_read_task_retains_the_internal_failure_kind() {
+        let execution = Execution::default();
+        let error = execution
+            .run("get", || panic!("injected read task failure"))
+            .await
+            .unwrap_err();
+        execution.shutdown().await;
+        assert_eq!(error.error, serde_json::json!({"kind":"internal"}));
+        assert_eq!(error.operation.as_deref(), Some("get"));
     }
 }

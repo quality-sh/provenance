@@ -23,4 +23,6 @@ pub enum EvidenceFailureOutputOperationFailure {
     UnavailableNeeds,
     #[serde(rename = "internal")]
     Internal,
+    #[serde(rename = "uncertain_write")]
+    UncertainWrite,
 }

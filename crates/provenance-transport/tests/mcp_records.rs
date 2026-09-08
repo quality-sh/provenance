@@ -34,6 +34,7 @@ async fn real_mcp_preserves_each_registered_read_and_full_http_stamp() {
             .collect::<Vec<_>>(),
         [
             "check-statement",
+            "plan",
             "info",
             "get",
             "search",

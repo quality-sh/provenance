@@ -156,6 +156,1875 @@
     {
       "inputSchema": {
         "$defs": {
+          "DeclarationAddress": {
+            "description": "One owner-local path to a language-authored declaration.",
+            "items": {
+              "pattern": "\\S",
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "RepositoryScope": {
+            "additionalProperties": false,
+            "description": "Scope selection for operations that do not use projection freshness.",
+            "properties": {
+              "repository": {
+                "type": "string"
+              },
+              "scope": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "repository",
+              "scope"
+            ],
+            "type": "object"
+          },
+          "TypedAdoptionTarget": {
+            "additionalProperties": false,
+            "description": "One exact declaration identity that may transition from unowned to owned.",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/TypedDeclarationKind"
+              }
+            },
+            "required": [
+              "kind",
+              "id"
+            ],
+            "type": "object"
+          },
+          "TypedDeclarationKind": {
+            "enum": [
+              "source",
+              "requirement",
+              "rule"
+            ],
+            "type": "string"
+          },
+          "TypedImplementationInput": {
+            "additionalProperties": false,
+            "properties": {
+              "file": {
+                "type": "string"
+              },
+              "symbol": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "file",
+              "symbol"
+            ],
+            "type": "object"
+          },
+          "TypedRequirementInput": {
+            "additionalProperties": false,
+            "properties": {
+              "depends_on": {
+                "description": "Keys of requirements in the same document this one depends on.",
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "key": {
+                "type": "string"
+              },
+              "refines": {
+                "description": "The key of the requirement in the same document this one refines.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sources": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "spawned_by": {
+                "description": "The canonical id of the resolution this requirement came out of.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "statement": {
+                "type": "string"
+              },
+              "supersedes": {
+                "description": "Keys of older requirements in the same document this one replaces.",
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "key",
+              "statement"
+            ],
+            "type": "object"
+          },
+          "TypedRuleInput": {
+            "additionalProperties": false,
+            "properties": {
+              "address": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/DeclarationAddress"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "implementation": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/TypedImplementationInput"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "key": {
+                "type": "string"
+              },
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "requirement": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "requirements": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "resolution_ids": {
+                "description": "Canonical ids of the resolutions that produced this rule.",
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              },
+              "statement": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "statement"
+            ],
+            "type": "object"
+          },
+          "TypedSourceInput": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "key": {
+                "type": "string"
+              },
+              "kind": {
+                "description": "Semantic validation accepts supported Source type names and the linear, github, and jira aliases.",
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "reference": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "supersedes": {
+                "description": "Keys of older sources in the same document this one replaces.",
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              },
+              "url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "key",
+              "name",
+              "kind"
+            ],
+            "type": "object"
+          },
+          "TypedSpecInput": {
+            "additionalProperties": false,
+            "description": "One language-authored desired-state document.\n\nSerialization skips absent optional fields, so a decode and encode\nround trip preserves every present field and every omission.",
+            "properties": {
+              "adopt_unowned": {
+                "items": {
+                  "$ref": "#/$defs/TypedAdoptionTarget"
+                },
+                "type": "array"
+              },
+              "declared_by": {
+                "type": "string"
+              },
+              "requirements": {
+                "items": {
+                  "$ref": "#/$defs/TypedRequirementInput"
+                },
+                "type": "array"
+              },
+              "rules": {
+                "items": {
+                  "$ref": "#/$defs/TypedRuleInput"
+                },
+                "type": "array"
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sources": {
+                "items": {
+                  "$ref": "#/$defs/TypedSourceInput"
+                },
+                "type": "array"
+              },
+              "spec": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "schema_version",
+              "spec",
+              "declared_by"
+            ],
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "call": {
+            "additionalProperties": false,
+            "properties": {
+              "context": {
+                "$ref": "#/$defs/RepositoryScope"
+              },
+              "request": {
+                "$ref": "#/$defs/TypedSpecInput"
+              }
+            },
+            "required": [
+              "context",
+              "request"
+            ],
+            "title": "RepositoryCall",
+            "type": "object"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "call"
+        ],
+        "type": "object"
+      },
+      "name": "plan",
+      "outputSchema": {
+        "$defs": {
+          "AffectedRule": {
+            "description": "One Rule a change reaches, with the code that stands behind it.",
+            "properties": {
+              "evidence": {
+                "$ref": "#/$defs/RuleEvidence"
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "implementations": {
+                "items": {
+                  "$ref": "#/$defs/ImplementationSite"
+                },
+                "type": "array"
+              },
+              "verifications": {
+                "items": {
+                  "$ref": "#/$defs/VerificationSite"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "implementations",
+              "verifications",
+              "evidence"
+            ],
+            "type": "object"
+          },
+          "DeclarationAddress": {
+            "description": "One owner-local path to a language-authored declaration.",
+            "items": {
+              "pattern": "\\S",
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "FindingKind": {
+            "description": "The disposition of a finding.",
+            "enum": [
+              "violation"
+            ],
+            "type": "string"
+          },
+          "ImplementationBinding": {
+            "description": "One canonical primary implementation relationship from an exported\nproduction symbol to a Rule.",
+            "properties": {
+              "declared_by": {
+                "type": "string"
+              },
+              "file": {
+                "type": "string"
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "retired": {
+                "type": "boolean"
+              },
+              "rule_id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              },
+              "symbol": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "schema_version",
+              "scope_id",
+              "id",
+              "rule_id",
+              "declared_by",
+              "file",
+              "symbol"
+            ],
+            "type": "object"
+          },
+          "ImplementationSite": {
+            "description": "Where a Rule is implemented.",
+            "properties": {
+              "file": {
+                "type": "string"
+              },
+              "line": {
+                "format": "uint",
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "symbol": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "file"
+            ],
+            "type": "object"
+          },
+          "ReconcileState": {
+            "enum": [
+              "created",
+              "updated",
+              "moved",
+              "retired",
+              "conflict",
+              "unchanged"
+            ],
+            "type": "string"
+          },
+          "ReconciledResource": {
+            "properties": {
+              "address": {
+                "$ref": "#/$defs/DeclarationAddress"
+              },
+              "changes": {
+                "items": {
+                  "$ref": "#/$defs/TypedFieldChange"
+                },
+                "type": "array"
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "key": {
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/TypedResourceKind"
+              },
+              "parent": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "state": {
+                "$ref": "#/$defs/ReconcileState"
+              }
+            },
+            "required": [
+              "kind",
+              "key",
+              "address",
+              "id",
+              "state"
+            ],
+            "type": "object"
+          },
+          "ReviewReason": {
+            "description": "One restated Requirement that put this Rule's evidence up for review.",
+            "properties": {
+              "after": {
+                "type": "string"
+              },
+              "before": {
+                "type": "string"
+              },
+              "changed_at": {
+                "format": "int64",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "field": {
+                "type": "string"
+              },
+              "requirement": {
+                "$ref": "#/$defs/StableId"
+              }
+            },
+            "required": [
+              "requirement",
+              "field",
+              "before",
+              "after"
+            ],
+            "type": "object"
+          },
+          "RuleEvidence": {
+            "description": "What the current state of a Rule's evidence asks a reader to do.",
+            "properties": {
+              "reasons": {
+                "items": {
+                  "$ref": "#/$defs/ReviewReason"
+                },
+                "type": "array"
+              },
+              "review_required": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "review_required"
+            ],
+            "type": "object"
+          },
+          "RuleNumber": {
+            "description": "An ASD-STE100 Issue 9 rule implemented by this analyzer.",
+            "enum": [
+              "1.1",
+              "4.2",
+              "6.3",
+              "6.6",
+              "8.1"
+            ],
+            "type": "string"
+          },
+          "ScopeId": {
+            "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          },
+          "Span": {
+            "description": "A half-open UTF-8 byte range in the analyzed text.",
+            "properties": {
+              "end": {
+                "format": "uint",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "start": {
+                "format": "uint",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "start",
+              "end"
+            ],
+            "type": "object"
+          },
+          "StableId": {
+            "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          },
+          "Standard": {
+            "description": "The authority used by the analyzer.",
+            "enum": [
+              "ASD-STE100"
+            ],
+            "type": "string"
+          },
+          "StandardIssue": {
+            "const": 9,
+            "description": "The fixed issue of the standard used by the analyzer.",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "TypedFieldChange": {
+            "properties": {
+              "after": true,
+              "before": true,
+              "field": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "field",
+              "before",
+              "after"
+            ],
+            "type": "object"
+          },
+          "TypedResourceKind": {
+            "enum": [
+              "source",
+              "requirement",
+              "rule"
+            ],
+            "type": "string"
+          },
+          "TypedSpecDiagnostic": {
+            "description": "One ASD-STE100 violation attached to its typed declaration site.",
+            "properties": {
+              "address": {
+                "$ref": "#/$defs/DeclarationAddress"
+              },
+              "disposition": {
+                "$ref": "#/$defs/FindingKind"
+              },
+              "field": {
+                "type": "string"
+              },
+              "issue": {
+                "$ref": "#/$defs/StandardIssue"
+              },
+              "message": {
+                "type": "string"
+              },
+              "resource_kind": {
+                "$ref": "#/$defs/TypedResourceKind"
+              },
+              "rule": {
+                "$ref": "#/$defs/RuleNumber"
+              },
+              "span": {
+                "$ref": "#/$defs/Span"
+              },
+              "standard": {
+                "$ref": "#/$defs/Standard"
+              }
+            },
+            "required": [
+              "address",
+              "resource_kind",
+              "field",
+              "standard",
+              "issue",
+              "rule",
+              "disposition",
+              "span",
+              "message"
+            ],
+            "type": "object"
+          },
+          "VerificationSite": {
+            "description": "Where a Rule is verified, and how.",
+            "properties": {
+              "declared_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "file": {
+                "type": "string"
+              },
+              "key": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "line": {
+                "format": "uint",
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "method": {
+                "type": "string"
+              },
+              "symbol": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "method",
+              "file"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "One planned reconciliation with its affected Rules and their evidence.\n\n`TypedSpecPlan` flattens `TypedSpecResult`, so `TypedSpecResult` must\nnever gain `deny_unknown_fields`.",
+        "properties": {
+          "affected_rules": {
+            "items": {
+              "$ref": "#/$defs/AffectedRule"
+            },
+            "type": "array"
+          },
+          "conflicts": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "created": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "declared_by": {
+            "type": "string"
+          },
+          "diagnostics": {
+            "items": {
+              "$ref": "#/$defs/TypedSpecDiagnostic"
+            },
+            "type": "array"
+          },
+          "implementation_bindings": {
+            "items": {
+              "$ref": "#/$defs/ImplementationBinding"
+            },
+            "type": "array"
+          },
+          "moved": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "resources": {
+            "items": {
+              "$ref": "#/$defs/ReconciledResource"
+            },
+            "type": "array"
+          },
+          "retired": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "unchanged": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "updated": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "declared_by",
+          "created",
+          "updated",
+          "moved",
+          "retired",
+          "conflicts",
+          "unchanged",
+          "resources",
+          "affected_rules"
+        ],
+        "title": "TypedSpecPlan",
+        "type": "object"
+      }
+    },
+    {
+      "inputSchema": {
+        "$defs": {
+          "DeclarationAddress": {
+            "description": "One owner-local path to a language-authored declaration.",
+            "items": {
+              "pattern": "\\S",
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "RepositoryScope": {
+            "additionalProperties": false,
+            "description": "Scope selection for operations that do not use projection freshness.",
+            "properties": {
+              "repository": {
+                "type": "string"
+              },
+              "scope": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "repository",
+              "scope"
+            ],
+            "type": "object"
+          },
+          "TypedAdoptionTarget": {
+            "additionalProperties": false,
+            "description": "One exact declaration identity that may transition from unowned to owned.",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/TypedDeclarationKind"
+              }
+            },
+            "required": [
+              "kind",
+              "id"
+            ],
+            "type": "object"
+          },
+          "TypedDeclarationKind": {
+            "enum": [
+              "source",
+              "requirement",
+              "rule"
+            ],
+            "type": "string"
+          },
+          "TypedImplementationInput": {
+            "additionalProperties": false,
+            "properties": {
+              "file": {
+                "type": "string"
+              },
+              "symbol": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "file",
+              "symbol"
+            ],
+            "type": "object"
+          },
+          "TypedRequirementInput": {
+            "additionalProperties": false,
+            "properties": {
+              "depends_on": {
+                "description": "Keys of requirements in the same document this one depends on.",
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "key": {
+                "type": "string"
+              },
+              "refines": {
+                "description": "The key of the requirement in the same document this one refines.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sources": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "spawned_by": {
+                "description": "The canonical id of the resolution this requirement came out of.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "statement": {
+                "type": "string"
+              },
+              "supersedes": {
+                "description": "Keys of older requirements in the same document this one replaces.",
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "key",
+              "statement"
+            ],
+            "type": "object"
+          },
+          "TypedRuleInput": {
+            "additionalProperties": false,
+            "properties": {
+              "address": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/DeclarationAddress"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "implementation": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/TypedImplementationInput"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "key": {
+                "type": "string"
+              },
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "requirement": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "requirements": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "resolution_ids": {
+                "description": "Canonical ids of the resolutions that produced this rule.",
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              },
+              "statement": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "statement"
+            ],
+            "type": "object"
+          },
+          "TypedSourceInput": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "key": {
+                "type": "string"
+              },
+              "kind": {
+                "description": "Semantic validation accepts supported Source type names and the linear, github, and jira aliases.",
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "reference": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "supersedes": {
+                "description": "Keys of older sources in the same document this one replaces.",
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              },
+              "url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "key",
+              "name",
+              "kind"
+            ],
+            "type": "object"
+          },
+          "TypedSpecInput": {
+            "additionalProperties": false,
+            "description": "One language-authored desired-state document.\n\nSerialization skips absent optional fields, so a decode and encode\nround trip preserves every present field and every omission.",
+            "properties": {
+              "adopt_unowned": {
+                "items": {
+                  "$ref": "#/$defs/TypedAdoptionTarget"
+                },
+                "type": "array"
+              },
+              "declared_by": {
+                "type": "string"
+              },
+              "requirements": {
+                "items": {
+                  "$ref": "#/$defs/TypedRequirementInput"
+                },
+                "type": "array"
+              },
+              "rules": {
+                "items": {
+                  "$ref": "#/$defs/TypedRuleInput"
+                },
+                "type": "array"
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sources": {
+                "items": {
+                  "$ref": "#/$defs/TypedSourceInput"
+                },
+                "type": "array"
+              },
+              "spec": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "schema_version",
+              "spec",
+              "declared_by"
+            ],
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "call": {
+            "additionalProperties": false,
+            "properties": {
+              "context": {
+                "$ref": "#/$defs/RepositoryScope"
+              },
+              "request": {
+                "$ref": "#/$defs/TypedSpecInput"
+              }
+            },
+            "required": [
+              "context",
+              "request"
+            ],
+            "title": "RepositoryCall",
+            "type": "object"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "call"
+        ],
+        "type": "object"
+      },
+      "name": "apply",
+      "outputSchema": {
+        "$defs": {
+          "DeclarationAddress": {
+            "description": "One owner-local path to a language-authored declaration.",
+            "items": {
+              "pattern": "\\S",
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "FindingKind": {
+            "description": "The disposition of a finding.",
+            "enum": [
+              "violation"
+            ],
+            "type": "string"
+          },
+          "ImplementationBinding": {
+            "description": "One canonical primary implementation relationship from an exported\nproduction symbol to a Rule.",
+            "properties": {
+              "declared_by": {
+                "type": "string"
+              },
+              "file": {
+                "type": "string"
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "retired": {
+                "type": "boolean"
+              },
+              "rule_id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              },
+              "symbol": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "schema_version",
+              "scope_id",
+              "id",
+              "rule_id",
+              "declared_by",
+              "file",
+              "symbol"
+            ],
+            "type": "object"
+          },
+          "ReconcileState": {
+            "enum": [
+              "created",
+              "updated",
+              "moved",
+              "retired",
+              "conflict",
+              "unchanged"
+            ],
+            "type": "string"
+          },
+          "ReconciledResource": {
+            "properties": {
+              "address": {
+                "$ref": "#/$defs/DeclarationAddress"
+              },
+              "changes": {
+                "items": {
+                  "$ref": "#/$defs/TypedFieldChange"
+                },
+                "type": "array"
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "key": {
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/TypedResourceKind"
+              },
+              "parent": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "state": {
+                "$ref": "#/$defs/ReconcileState"
+              }
+            },
+            "required": [
+              "kind",
+              "key",
+              "address",
+              "id",
+              "state"
+            ],
+            "type": "object"
+          },
+          "RuleNumber": {
+            "description": "An ASD-STE100 Issue 9 rule implemented by this analyzer.",
+            "enum": [
+              "1.1",
+              "4.2",
+              "6.3",
+              "6.6",
+              "8.1"
+            ],
+            "type": "string"
+          },
+          "ScopeId": {
+            "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          },
+          "Span": {
+            "description": "A half-open UTF-8 byte range in the analyzed text.",
+            "properties": {
+              "end": {
+                "format": "uint",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "start": {
+                "format": "uint",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "start",
+              "end"
+            ],
+            "type": "object"
+          },
+          "StableId": {
+            "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          },
+          "Standard": {
+            "description": "The authority used by the analyzer.",
+            "enum": [
+              "ASD-STE100"
+            ],
+            "type": "string"
+          },
+          "StandardIssue": {
+            "const": 9,
+            "description": "The fixed issue of the standard used by the analyzer.",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "TypedFieldChange": {
+            "properties": {
+              "after": true,
+              "before": true,
+              "field": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "field",
+              "before",
+              "after"
+            ],
+            "type": "object"
+          },
+          "TypedResourceKind": {
+            "enum": [
+              "source",
+              "requirement",
+              "rule"
+            ],
+            "type": "string"
+          },
+          "TypedSpecDiagnostic": {
+            "description": "One ASD-STE100 violation attached to its typed declaration site.",
+            "properties": {
+              "address": {
+                "$ref": "#/$defs/DeclarationAddress"
+              },
+              "disposition": {
+                "$ref": "#/$defs/FindingKind"
+              },
+              "field": {
+                "type": "string"
+              },
+              "issue": {
+                "$ref": "#/$defs/StandardIssue"
+              },
+              "message": {
+                "type": "string"
+              },
+              "resource_kind": {
+                "$ref": "#/$defs/TypedResourceKind"
+              },
+              "rule": {
+                "$ref": "#/$defs/RuleNumber"
+              },
+              "span": {
+                "$ref": "#/$defs/Span"
+              },
+              "standard": {
+                "$ref": "#/$defs/Standard"
+              }
+            },
+            "required": [
+              "address",
+              "resource_kind",
+              "field",
+              "standard",
+              "issue",
+              "rule",
+              "disposition",
+              "span",
+              "message"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "conflicts": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "created": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "declared_by": {
+            "type": "string"
+          },
+          "diagnostics": {
+            "items": {
+              "$ref": "#/$defs/TypedSpecDiagnostic"
+            },
+            "type": "array"
+          },
+          "implementation_bindings": {
+            "items": {
+              "$ref": "#/$defs/ImplementationBinding"
+            },
+            "type": "array"
+          },
+          "moved": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "resources": {
+            "items": {
+              "$ref": "#/$defs/ReconciledResource"
+            },
+            "type": "array"
+          },
+          "retired": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "unchanged": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "updated": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "declared_by",
+          "created",
+          "updated",
+          "moved",
+          "retired",
+          "conflicts",
+          "unchanged",
+          "resources"
+        ],
+        "title": "TypedSpecResult",
+        "type": "object"
+      }
+    },
+    {
+      "inputSchema": {
+        "$defs": {
+          "BeginVerificationInput": {
+            "additionalProperties": false,
+            "properties": {
+              "commit": {
+                "default": null,
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "declaration": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/DeclarationReferenceInput"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "declared_by": {
+                "type": "string"
+              },
+              "file": {
+                "default": null,
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "key": {
+                "type": "string"
+              },
+              "method": {
+                "description": "Semantic validation accepts examples, property, conformance, construction, exhaustion, and proof.",
+                "type": "string"
+              },
+              "rule": {
+                "default": null,
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "symbol": {
+                "default": null,
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "key",
+              "method",
+              "declared_by"
+            ],
+            "type": "object"
+          },
+          "DeclarationAddress": {
+            "description": "One owner-local path to a language-authored declaration.",
+            "items": {
+              "pattern": "\\S",
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "DeclarationReferenceInput": {
+            "additionalProperties": false,
+            "properties": {
+              "address": {
+                "$ref": "#/$defs/DeclarationAddress"
+              },
+              "declared_by": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "declared_by",
+              "address"
+            ],
+            "type": "object"
+          },
+          "RepositoryScope": {
+            "additionalProperties": false,
+            "description": "Scope selection for operations that do not use projection freshness.",
+            "properties": {
+              "repository": {
+                "type": "string"
+              },
+              "scope": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "repository",
+              "scope"
+            ],
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "call": {
+            "additionalProperties": false,
+            "properties": {
+              "context": {
+                "$ref": "#/$defs/RepositoryScope"
+              },
+              "request": {
+                "$ref": "#/$defs/BeginVerificationInput"
+              }
+            },
+            "required": [
+              "context",
+              "request"
+            ],
+            "title": "RepositoryCall",
+            "type": "object"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "call"
+        ],
+        "type": "object"
+      },
+      "name": "begin-verification",
+      "outputSchema": {
+        "$defs": {
+          "ScopeId": {
+            "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          },
+          "StableId": {
+            "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          },
+          "VerificationRunStatus": {
+            "description": "The lifecycle state of one callback-backed verification run.",
+            "enum": [
+              "running",
+              "passed",
+              "failed"
+            ],
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "Volatile evidence from one language-owned verification callback.\n\nRuns live in Provenance's derived cache rather than canonical state: a\nlocal test run must not dirty the repository. `rule_id` is the join back\nto the canonical graph.",
+        "properties": {
+          "binding_id": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/StableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "commit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "completed_at": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "declared_by": {
+            "type": "string"
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "file": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/$defs/StableId"
+          },
+          "method": {
+            "type": "string"
+          },
+          "rule_id": {
+            "$ref": "#/$defs/StableId"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/$defs/ScopeId"
+          },
+          "started_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/$defs/VerificationRunStatus"
+          },
+          "symbol": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "rule_id",
+          "method",
+          "declared_by",
+          "status",
+          "started_at"
+        ],
+        "title": "VerificationRun",
+        "type": "object"
+      }
+    },
+    {
+      "inputSchema": {
+        "$defs": {
+          "CompleteVerificationInput": {
+            "additionalProperties": false,
+            "properties": {
+              "error": {
+                "default": null,
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "run": {
+                "type": "string"
+              },
+              "status": {
+                "description": "Semantic validation accepts passed or failed.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "run",
+              "status"
+            ],
+            "type": "object"
+          },
+          "RepositoryScope": {
+            "additionalProperties": false,
+            "description": "Scope selection for operations that do not use projection freshness.",
+            "properties": {
+              "repository": {
+                "type": "string"
+              },
+              "scope": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "repository",
+              "scope"
+            ],
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "call": {
+            "additionalProperties": false,
+            "properties": {
+              "context": {
+                "$ref": "#/$defs/RepositoryScope"
+              },
+              "request": {
+                "$ref": "#/$defs/CompleteVerificationInput"
+              }
+            },
+            "required": [
+              "context",
+              "request"
+            ],
+            "title": "RepositoryCall",
+            "type": "object"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "call"
+        ],
+        "type": "object"
+      },
+      "name": "complete-verification",
+      "outputSchema": {
+        "$defs": {
+          "ScopeId": {
+            "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          },
+          "StableId": {
+            "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          },
+          "VerificationRunStatus": {
+            "description": "The lifecycle state of one callback-backed verification run.",
+            "enum": [
+              "running",
+              "passed",
+              "failed"
+            ],
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "Volatile evidence from one language-owned verification callback.\n\nRuns live in Provenance's derived cache rather than canonical state: a\nlocal test run must not dirty the repository. `rule_id` is the join back\nto the canonical graph.",
+        "properties": {
+          "binding_id": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/StableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "commit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "completed_at": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "declared_by": {
+            "type": "string"
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "file": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/$defs/StableId"
+          },
+          "method": {
+            "type": "string"
+          },
+          "rule_id": {
+            "$ref": "#/$defs/StableId"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/$defs/ScopeId"
+          },
+          "started_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/$defs/VerificationRunStatus"
+          },
+          "symbol": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "rule_id",
+          "method",
+          "declared_by",
+          "status",
+          "started_at"
+        ],
+        "title": "VerificationRun",
+        "type": "object"
+      }
+    },
+    {
+      "inputSchema": {
+        "$defs": {
           "InfoRequest": {
             "additionalProperties": false,
             "type": "object"

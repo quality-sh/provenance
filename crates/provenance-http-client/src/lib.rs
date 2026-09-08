@@ -12,4 +12,6 @@ pub mod types {
 mod client {
     include!("generated/client.rs");
 }
-pub use client::{Error, HttpClient, OperationFailure, PROTOCOL_VERSION};
+mod runtime;
+pub use client::{HttpClient, OperationFailure, PROTOCOL_VERSION};
+pub use runtime::{Error, ResponseFailure, MAX_RESPONSE_BYTES};

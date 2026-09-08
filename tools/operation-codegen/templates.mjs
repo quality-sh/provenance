@@ -1,37 +1,47 @@
 export function typescriptClient(document) {
   const version = document['x-protocol-version'];
-  const methods = Object.entries(document.paths).filter(([, route]) => route.post).map(([path, route]) => {
+  const routes = Object.entries(document.paths).filter(([, route]) => route.post);
+  const failureTypes = [...new Set(routes.map(([, route]) => route.post.responses['400'].content['application/json'].schema.$ref.split('/').at(-1)))];
+  const methods = routes.map(([path, route]) => {
     const op = route.post;
     const request = op.requestBody.content['application/json'].schema.$ref.split('/').at(-1);
     const success = op.responses['200'].content['application/json'].schema.$ref.split('/').at(-1);
     const failure = op.responses['400'].content['application/json'].schema.$ref.split('/').at(-1);
+    const mutates = op['x-operation-mutates'] === true;
     return `  async ${op.operationId}(call: components['schemas']['${request}']): Promise<components['schemas']['${success}']> {
-    const response = await this.fetcher(this.baseUrl + '${path}', {
-      method: 'POST', redirect: 'error', headers: { 'content-type': 'application/json' }, body: JSON.stringify(call),
-    });
-    if (!response.ok) throw new OperationError(response.status, await response.json() as components['schemas']['${failure}']);
-    return await response.json() as components['schemas']['${success}'];
+    const body = JSON.stringify(call);
+    const response = await send(this.fetcher, this.baseUrl + '${path}', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body,
+    }, '${op.operationId}', ${mutates});
+    const value = await readJson(response, '${op.operationId}', ${mutates});
+    if (!response.ok) {
+      checked(value, validate.${failure}, '${op.operationId}', ${mutates});
+      const failure = value as components['schemas']['${failure}'];
+      if (failure.error.kind === 'uncertain_write' || (${mutates} && ['internal', 'write_failed'].includes(failure.error.kind))) throw new UncertainWriteError('${op.operationId}', undefined, failure);
+      throw new OperationError(response.status, failure);
+    }
+    checked(value, validate.${success}, '${op.operationId}', ${mutates});
+    return value as components['schemas']['${success}'];
   }`;
   }).join('\n');
-  const failureTypes = [...new Set(Object.values(document.paths).filter(route => route.post).map(route => route.post.responses['400'].content['application/json'].schema.$ref.split('/').at(-1)))];
   return `// Generated from OpenAPI. Do not edit.
 import type { components } from './schema.js';
+import * as validate from './validators.mjs';
+import { send, readJson, checked, ConnectionError, OperationError, UncertainWriteError, ProtocolMismatchError } from './runtime.js';
+export { ConnectionError, MalformedResponseError, OperationError, UncertainWriteError, ProtocolMismatchError, MAX_RESPONSE_BYTES } from './runtime.js';
 export type { components } from './schema.js';
 export const PROTOCOL_VERSION = ${version};
-export class ProtocolMismatchError extends Error {
-  constructor(readonly requested: number, readonly supported: number) { super('Incompatible operation protocol'); }
-}
 export type OperationFailure = ${failureTypes.map(name => `components['schemas']['${name}']`).join(' | ')};
-export class OperationError extends Error {
-  constructor(readonly status: number, readonly failure: OperationFailure) { super('Operation refused'); }
-}
 export class HttpClient {
   private constructor(private readonly baseUrl: string, private readonly fetcher: typeof fetch) {}
   static async connectWithBearer(baseUrl: string, bearer: string, fetcher: typeof fetch = fetch): Promise<HttpClient> {
+    const origin = new URL(baseUrl).origin;
     const authenticated: typeof fetch = (input, init) => {
+      const target = input instanceof Request ? input.url : input.toString();
+      if (new URL(target).origin !== origin) throw new Error('Cross-origin credential request refused');
       const headers = new Headers(init?.headers);
       headers.set('authorization', 'Bearer ' + bearer);
-      return fetcher(input, { ...init, headers });
+      return fetcher(input, { ...init, headers, redirect: 'error' });
     };
     return HttpClient.connect(baseUrl, authenticated);
   }
@@ -39,9 +49,11 @@ export class HttpClient {
     const url = new URL(baseUrl);
     if (!['http:', 'https:'].includes(url.protocol) || url.search || url.hash || url.username || url.password) throw new Error('Invalid HTTP host URL');
     const client = new HttpClient(baseUrl.replace(/\\/$/, ''), fetcher);
-    const response = await fetcher(client.baseUrl + '/metadata', { redirect: 'error' });
-    if (!response.ok) throw new Error('Cannot read engine metadata: ' + response.status);
-    const metadata = await response.json() as { engine_version: string; protocol_version: number };
+    const response = await send(fetcher, client.baseUrl + '/metadata', {}, 'metadata', false);
+    if (!response.ok) { await response.body?.cancel(); throw new ConnectionError(); }
+    const value = await readJson(response, 'metadata', false);
+    checked(value, validate.MetadataOutput, 'metadata', false);
+    const metadata = value as { protocol_version: number };
     if (metadata.protocol_version !== PROTOCOL_VERSION) throw new ProtocolMismatchError(PROTOCOL_VERSION, metadata.protocol_version);
     return client;
   }
@@ -65,17 +77,24 @@ export function rustClientFiles(document) {
     const failure = op.responses['400'].content['application/json'].schema.$ref.split('/').at(-1);
     const variant = op.operationId[0].toUpperCase() + op.operationId.slice(1);
     const method = op.operationId.replace(/[A-Z]/g, c => '_' + c.toLowerCase());
+    const mutates = op['x-operation-mutates'] === true;
     return [`operations/${method}.rs`, `// Generated from OpenAPI. Do not edit.
 impl HttpClient {
     pub async fn ${method}(&self, call: &${request}) -> Result<${success}, Error> {
         let response = self.http.post(format!("{}${path}", self.base_url))
-            .json(call).send().await.map_err(Error::Transport)?;
+            .json(call).send().await.map_err(|cause| runtime::connection("${method}", ${mutates}, cause))?;
         let status = response.status();
+        let value = runtime::read_json(response, "${method}", ${mutates}).await?;
         if !status.is_success() {
-            let failure: ${failure} = response.json().await.map_err(Error::Transport)?;
-            return Err(Error::Operation { status: status.as_u16(), failure: OperationFailure::${variant}(Box::new(failure)) });
+            runtime::validate(&value, "${failure}", "${method}", ${mutates})?;
+            let uncertain = runtime::uncertain_kind(&value, ${mutates});
+            let failure: ${failure} = runtime::decode(value, "${method}", ${mutates})?;
+            let failure = OperationFailure::${variant}(Box::new(failure));
+            if uncertain { return Err(runtime::uncertain("${method}", failure)); }
+            return Err(Error::Operation { status: status.as_u16(), failure });
         }
-        response.json().await.map_err(Error::Transport)
+        runtime::validate(&value, "${success}", "${method}", ${mutates})?;
+        runtime::decode(value, "${method}", ${mutates})
     }
 }
 `];
@@ -88,26 +107,12 @@ impl HttpClient {
   }).join('\n');
   const connection = `// Generated from OpenAPI. Do not edit.
 use crate::types::{${[...imports].sort().join(', ')}};
+use crate::{runtime, Error};
 pub const PROTOCOL_VERSION: u32 = ${version};
 #[derive(Debug, serde::Serialize)]
 #[serde(untagged)]
 pub enum OperationFailure {
 ${failureVariants}
-}
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error("invalid HTTP host URL")]
-    InvalidUrl,
-    #[error("invalid bearer credential format")]
-    InvalidCredentials,
-    #[error("HTTP transport failed: {0}")]
-    Transport(reqwest::Error),
-    #[error("metadata request failed with status {0}")]
-    MetadataStatus(u16),
-    #[error("incompatible operation protocol: expected {expected}, received {received}")]
-    ProtocolMismatch { expected: u32, received: u32 },
-    #[error("operation refused with status {status}")]
-    Operation { status: u16, failure: OperationFailure },
 }
 #[derive(serde::Deserialize)]
 struct Metadata { protocol_version: u32 }
@@ -130,10 +135,12 @@ impl HttpClient {
         if !matches!(url.scheme(), "http" | "https") || url.query().is_some() || url.fragment().is_some()
             || !url.username().is_empty() || url.password().is_some() { return Err(Error::InvalidUrl); }
         let client = Self { base_url: base_url.trim_end_matches('/').to_owned(),
-            http: reqwest::Client::builder().default_headers(headers).retry(reqwest::retry::never()).redirect(reqwest::redirect::Policy::none()).build().map_err(Error::Transport)? };
-        let response = client.http.get(format!("{}/metadata", client.base_url)).send().await.map_err(Error::Transport)?;
-        if !response.status().is_success() { return Err(Error::MetadataStatus(response.status().as_u16())); }
-        let metadata: Metadata = response.json().await.map_err(Error::Transport)?;
+            http: reqwest::Client::builder().default_headers(headers).retry(reqwest::retry::never()).redirect(reqwest::redirect::Policy::none()).build().map_err(|cause| runtime::connection("metadata", false, cause))? };
+        let response = client.http.get(format!("{}/metadata", client.base_url)).send().await.map_err(|cause| runtime::connection("metadata", false, cause))?;
+        if !response.status().is_success() { return Err(runtime::metadata_status()); }
+        let value = runtime::read_json(response, "metadata", false).await?;
+        runtime::validate(&value, "MetadataOutput", "metadata", false)?;
+        let metadata: Metadata = runtime::decode(value, "metadata", false)?;
         if metadata.protocol_version != PROTOCOL_VERSION {
             return Err(Error::ProtocolMismatch { expected: PROTOCOL_VERSION, received: metadata.protocol_version });
         }

@@ -1,0 +1,21 @@
+// Generated from OpenAPI. Do not edit.
+include!("../models/ApplyFailureOutput.rs");
+include!("../models/ApplyFailureOutputDeclarationAddress.rs");
+include!("../models/ApplyFailureOutputDeclarationAddressItem.rs");
+include!("../models/ApplyFailureOutputFindingKind.rs");
+include!("../models/ApplyFailureOutputInvalidInputReason.rs");
+include!("../models/ApplyFailureOutputOperation.rs");
+include!("../models/ApplyFailureOutputOperationError.rs");
+include!("../models/ApplyFailureOutputOperationFailure.rs");
+include!("../models/ApplyFailureOutputProtocolVersion.rs");
+include!("../models/ApplyFailureOutputReconcileState.rs");
+include!("../models/ApplyFailureOutputReconciledResource.rs");
+include!("../models/ApplyFailureOutputRuleNumber.rs");
+include!("../models/ApplyFailureOutputSpan.rs");
+include!("../models/ApplyFailureOutputStableId.rs");
+include!("../models/ApplyFailureOutputStandard.rs");
+include!("../models/ApplyFailureOutputStandardIssue.rs");
+include!("../models/ApplyFailureOutputTypedFieldChange.rs");
+include!("../models/ApplyFailureOutputTypedResourceKind.rs");
+include!("../models/ApplyFailureOutputTypedSpecDiagnostic.rs");
+include!("../models/ApplyFailureOutputWriteFailure.rs");

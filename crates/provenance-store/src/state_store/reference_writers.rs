@@ -85,7 +85,8 @@ impl StateStore {
             NodeType::Domain => self.list_domains(scope_id)?.iter().any(|r| &r.id == id),
             NodeType::Boundary => self.list_boundaries(scope_id)?.iter().any(|r| &r.id == id),
         };
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            MissingReference,
             exists,
             "{} {} does not exist ({})",
             kind_word(kind),

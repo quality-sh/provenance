@@ -1,51 +1,41 @@
 // Generated from OpenAPI. Do not edit.
 use crate::types::{
-    CheckStatementFailureOutput, CheckStatementRequestInput, CheckStatementSuccessOutput,
-    EvidenceFailureOutput, EvidenceRequestInput, EvidenceSuccessOutput, GetFailureOutput,
-    GetRequestInput, GetSuccessOutput, ImpactFailureOutput, ImpactRequestInput,
-    ImpactSuccessOutput, InfoFailureOutput, InfoRequestInput, InfoSuccessOutput,
-    NeighborsFailureOutput, NeighborsRequestInput, NeighborsSuccessOutput,
-    ResolveSymbolFailureOutput, ResolveSymbolRequestInput, ResolveSymbolSuccessOutput,
-    SearchFailureOutput, SearchRequestInput, SearchSuccessOutput, StaleFailureOutput,
-    StaleRequestInput, StaleSuccessOutput, TraceFailureOutput, TraceRequestInput,
-    TraceSuccessOutput, VerificationBindingsFailureOutput, VerificationBindingsRequestInput,
-    VerificationBindingsSuccessOutput, VerificationRunsFailureOutput, VerificationRunsRequestInput,
-    VerificationRunsSuccessOutput,
+    ApplyFailureOutput, ApplyRequestInput, ApplySuccessOutput, BeginVerificationFailureOutput,
+    BeginVerificationRequestInput, BeginVerificationSuccessOutput, CheckStatementFailureOutput,
+    CheckStatementRequestInput, CheckStatementSuccessOutput, CompleteVerificationFailureOutput,
+    CompleteVerificationRequestInput, CompleteVerificationSuccessOutput, EvidenceFailureOutput,
+    EvidenceRequestInput, EvidenceSuccessOutput, GetFailureOutput, GetRequestInput,
+    GetSuccessOutput, ImpactFailureOutput, ImpactRequestInput, ImpactSuccessOutput,
+    InfoFailureOutput, InfoRequestInput, InfoSuccessOutput, NeighborsFailureOutput,
+    NeighborsRequestInput, NeighborsSuccessOutput, PlanFailureOutput, PlanRequestInput,
+    PlanSuccessOutput, ResolveSymbolFailureOutput, ResolveSymbolRequestInput,
+    ResolveSymbolSuccessOutput, SearchFailureOutput, SearchRequestInput, SearchSuccessOutput,
+    StaleFailureOutput, StaleRequestInput, StaleSuccessOutput, TraceFailureOutput,
+    TraceRequestInput, TraceSuccessOutput, VerificationBindingsFailureOutput,
+    VerificationBindingsRequestInput, VerificationBindingsSuccessOutput,
+    VerificationRunsFailureOutput, VerificationRunsRequestInput, VerificationRunsSuccessOutput,
 };
+use crate::{runtime, Error};
 pub const PROTOCOL_VERSION: u32 = 7;
 #[derive(Debug, serde::Serialize)]
 #[serde(untagged)]
 pub enum OperationFailure {
+    Apply(Box<ApplyFailureOutput>),
+    BeginVerification(Box<BeginVerificationFailureOutput>),
     CheckStatement(Box<CheckStatementFailureOutput>),
+    CompleteVerification(Box<CompleteVerificationFailureOutput>),
     Evidence(Box<EvidenceFailureOutput>),
     Get(Box<GetFailureOutput>),
     Impact(Box<ImpactFailureOutput>),
     Info(Box<InfoFailureOutput>),
     Neighbors(Box<NeighborsFailureOutput>),
+    Plan(Box<PlanFailureOutput>),
     ResolveSymbol(Box<ResolveSymbolFailureOutput>),
     Search(Box<SearchFailureOutput>),
     Stale(Box<StaleFailureOutput>),
     Trace(Box<TraceFailureOutput>),
     VerificationBindings(Box<VerificationBindingsFailureOutput>),
     VerificationRuns(Box<VerificationRunsFailureOutput>),
-}
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error("invalid HTTP host URL")]
-    InvalidUrl,
-    #[error("invalid bearer credential format")]
-    InvalidCredentials,
-    #[error("HTTP transport failed: {0}")]
-    Transport(reqwest::Error),
-    #[error("metadata request failed with status {0}")]
-    MetadataStatus(u16),
-    #[error("incompatible operation protocol: expected {expected}, received {received}")]
-    ProtocolMismatch { expected: u32, received: u32 },
-    #[error("operation refused with status {status}")]
-    Operation {
-        status: u16,
-        failure: OperationFailure,
-    },
 }
 #[derive(serde::Deserialize)]
 struct Metadata {
@@ -88,18 +78,20 @@ impl HttpClient {
                 .retry(reqwest::retry::never())
                 .redirect(reqwest::redirect::Policy::none())
                 .build()
-                .map_err(Error::Transport)?,
+                .map_err(|cause| runtime::connection("metadata", false, cause))?,
         };
         let response = client
             .http
             .get(format!("{}/metadata", client.base_url))
             .send()
             .await
-            .map_err(Error::Transport)?;
+            .map_err(|cause| runtime::connection("metadata", false, cause))?;
         if !response.status().is_success() {
-            return Err(Error::MetadataStatus(response.status().as_u16()));
+            return Err(runtime::metadata_status());
         }
-        let metadata: Metadata = response.json().await.map_err(Error::Transport)?;
+        let value = runtime::read_json(response, "metadata", false).await?;
+        runtime::validate(&value, "MetadataOutput", "metadata", false)?;
+        let metadata: Metadata = runtime::decode(value, "metadata", false)?;
         if metadata.protocol_version != PROTOCOL_VERSION {
             return Err(Error::ProtocolMismatch {
                 expected: PROTOCOL_VERSION,
@@ -109,12 +101,16 @@ impl HttpClient {
         Ok(client)
     }
 }
+include!("operations/apply.rs");
+include!("operations/begin_verification.rs");
 include!("operations/check_statement.rs");
+include!("operations/complete_verification.rs");
 include!("operations/evidence.rs");
 include!("operations/get.rs");
 include!("operations/impact.rs");
 include!("operations/info.rs");
 include!("operations/neighbors.rs");
+include!("operations/plan.rs");
 include!("operations/resolve_symbol.rs");
 include!("operations/search.rs");
 include!("operations/stale.rs");

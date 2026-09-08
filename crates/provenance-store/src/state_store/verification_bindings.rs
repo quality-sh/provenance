@@ -16,13 +16,23 @@ impl StateStore {
         &self,
         input: MaterializeVerificationBindingInput,
     ) -> anyhow::Result<VerificationBinding> {
-        anyhow::ensure!(!input.key.trim().is_empty(), "key must not be empty");
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            InvalidVerificationTarget,
+            !input.key.trim().is_empty(),
+            "key must not be empty"
+        );
+        crate::write_error::ensure!(
+            InvalidVerificationTarget,
             !input.declared_by.trim().is_empty(),
             "declared_by must not be empty"
         );
-        anyhow::ensure!(!input.file.as_str().is_empty(), "file must not be empty");
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            InvalidVerificationTarget,
+            !input.file.as_str().is_empty(),
+            "file must not be empty"
+        );
+        crate::write_error::ensure!(
+            InvalidVerificationTarget,
             !input.file.as_str().contains('\\')
                 && !input.file.is_absolute()
                 && !input.file.components().any(|part| {
@@ -36,9 +46,14 @@ impl StateStore {
             "file must be a repository-relative path"
         );
         if let Some(symbol) = &input.symbol {
-            anyhow::ensure!(!symbol.trim().is_empty(), "symbol must not be empty");
+            crate::write_error::ensure!(
+                InvalidVerificationTarget,
+                !symbol.trim().is_empty(),
+                "symbol must not be empty"
+            );
         }
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            InvalidVerificationTarget,
             self.list_rules(&input.scope_id)?
                 .iter()
                 .any(|rule| rule.id == input.rule_id),

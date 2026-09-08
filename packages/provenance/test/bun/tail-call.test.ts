@@ -1,63 +1,47 @@
-// Bun regression coverage for the calling frame Bun eliminates. Node keeps that
-// frame, so this shape only reproduces under Bun: `npm run test:bun`.
-import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
+// Bun removes the caller frame for the tail position below. Node does not.
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-
+import { fileURLToPath } from "node:url";
 import { expect, test } from "bun:test";
+import { startFixtureHost } from "../../scripts/fixture-host.js";
 
-import { STATE_SCHEMA_VERSION } from "../../src/protocol.js";
+const cli = fileURLToPath(new URL(`../../../../target/debug/provenance${process.platform === "win32" ? ".exe" : ""}`, import.meta.url));
+const sdk = new URL("../../dist/index.js", import.meta.url).href;
 
-// Answers the protocol handshake and reports every other request on stderr.
-function reportingEngine(): string {
-  const executable = join(mkdtempSync(join(tmpdir(), "provenance-bun-engine-")), "engine.mjs");
-  writeFileSync(
-    executable,
-    `#!/usr/bin/env node
-import { readFileSync } from "node:fs";
-const command = process.argv[3];
-if (command === "info") {
-  process.stdout.write(JSON.stringify({
-    engine_version: "0.1.0",
-    protocol_version: 7,
-    state_schema_version: ${STATE_SCHEMA_VERSION},
-    repository: "/project",
-  }));
-} else {
-  process.stderr.write("ENGINE " + command + " " + readFileSync(0, "utf8"));
-  process.exit(3);
-}
-`,
-  );
-  chmodSync(executable, 0o755);
-  return executable;
-}
-
-function runCase(statedFile: boolean): string {
-  const result = Bun.spawnSync({
-    cmd: [process.execPath, "test", "./tail-call-case.ts"],
-    cwd: import.meta.dir,
-    env: {
-      ...process.env,
-      PROVENANCE_TEST_ENGINE: reportingEngine(),
-      PROVENANCE_STATED_FILE: statedFile ? "1" : "0",
-    },
-  });
-  return result.stdout.toString() + result.stderr.toString();
+async function runCase(statedFile: boolean) {
+  const root = mkdtempSync(join(tmpdir(), "provenance-bun-tail-call-"));
+  try {
+    execFileSync(cli, ["--quiet", "init", "--path", root, "--scope", "default", "--path-prefix", "."], { stdio: "pipe" });
+    const source = readFileSync(new URL("./tail-call-case.ts", import.meta.url), "utf8");
+    writeFileSync(join(root, "tail-call-case.ts"), source.replace("../../dist/index.js", sdk));
+    const fixture = await startFixtureHost({ root, repositoryId: "bun-tail-call" });
+    let output;
+    try {
+      const result = Bun.spawnSync({
+        cmd: [process.execPath, "test", "./tail-call-case.ts"],
+        cwd: root,
+        env: { ...process.env, ...fixture.environment, PROVENANCE_STATED_FILE: statedFile ? "1" : "0" },
+      });
+      output = result.stdout.toString() + result.stderr.toString();
+      if (statedFile && result.exitCode !== 0) throw new Error(output);
+    } finally { await fixture.close(); }
+    const runs = JSON.parse(execFileSync(cli, ["sdk", "verification-runs", "--repo", root, "--scope", "default", "--format", "json"], { encoding: "utf8" }));
+    return { output, runs };
+  } finally { rmSync(root, { recursive: true, force: true }); }
 }
 
-test("a verify call Bun cannot place says which file to state", () => {
-  const output = runCase(false);
-
+test("a verify call Bun cannot place says which file to state", async () => {
+  const { output, runs } = await runCase(false);
   expect(output).toContain("import.meta.path");
   expect(output).toContain("share-link-expiry");
-  expect(output).not.toContain("ENGINE begin-verification");
+  expect(runs).toHaveLength(0);
 });
 
-test("import.meta states the file Bun cannot report", () => {
-  const output = runCase(true);
-
+test("import.meta states the real file and completes verification through HTTP", async () => {
+  const { output, runs } = await runCase(true);
   expect(output).not.toContain("import.meta.path");
-  expect(output).toContain("ENGINE begin-verification");
-  expect(output).toContain(`"file":"${join(import.meta.dir, "tail-call-case.ts")}"`);
+  expect(runs).toHaveLength(1);
+  expect(runs[0].status).toBe("passed");
 });

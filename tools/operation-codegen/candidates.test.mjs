@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import openapiTS, { astToString } from 'openapi-typescript';
+import { typescriptSchema } from './typescript-schema.mjs';
 
 const root = resolve(import.meta.dirname, '../..');
 function run(command, args, cwd = root) {
@@ -16,7 +17,7 @@ test('pinned generators retain actual production null, omission, flat, tagged, a
   const temporary = await mkdtemp(join(tmpdir(), 'operation-candidates-'));
   try {
     const document = JSON.parse(await readFile(join(root, 'contracts/operations/fixtures.openapi.json'), 'utf8'));
-    const source = astToString(await openapiTS(document, { defaultNonNullable: false }));
+    const source = astToString(await openapiTS(typescriptSchema(document), { defaultNonNullable: false }));
     assert.doesNotMatch(source, /\bany\b/);
     await writeFile(join(temporary, 'schema.ts'), source);
     await writeFile(join(temporary, 'assertions.ts'), `import type { components } from './schema';
@@ -41,7 +42,7 @@ const node: Schemas['GraphNodeOutput']['node_type'] = 'invented';
 `);
     run(process.execPath, [join(root, 'tools/operation-codegen/node_modules/typescript/bin/tsc'), '--strict', '--noEmit', '--skipLibCheck', '--target', 'es2022', join(temporary, 'assertions.ts')]);
     await mkdir(join(temporary, 'client'), { recursive: true });
-    for (const name of ['client.ts', 'schema.ts']) await writeFile(join(temporary, 'client', name), await readFile(join(root, 'packages/provenance/src/generated', name)));
+    for (const name of ['client.ts', 'schema.ts', 'runtime.ts', 'validators.mjs', 'validators.d.mts']) await writeFile(join(temporary, 'client', name), await readFile(join(root, 'packages/provenance/src/generated', name)));
     await writeFile(join(temporary, 'client', 'assertions.ts'), `import { HttpClient, type OperationFailure, type components } from './client';
 declare const client: HttpClient;
 client.info({context:{repository:'first'},request:{}});
@@ -63,6 +64,9 @@ client.get({context:{repository:'first'},request:{node_type:'rule',id:'rule_shar
 client.info({context:{repository:'first',scope:'default'},request:{}});
 type Assert<T extends true> = T;
 type Closed = Assert<'invented' extends OperationFailure['error']['kind'] ? false : true>;
+declare const node: NonNullable<components['schemas']['GetSuccessOutput']['node']>;
+if (node.node_type === 'rule') { const statement: string = node.statement; }
+if (node.node_type === 'source') { const kind: components['schemas']['GetSuccessOutputSourceType'] = node.source_type; }
 type StatementSubset = Assert<'stale' extends components['schemas']['CheckStatementFailureOutput']['error']['kind'] ? false : true>;
 function facts(failure: OperationFailure): string | undefined {
   if (failure.operation === 'get' && failure.error.kind === 'stale') return failure.error.moved[0]?.stored;

@@ -87,11 +87,12 @@ pub fn documents() -> (Value, Value) {
         let mut responses = Map::new();
         responses.insert("200".into(), json!({"description":"Operation result", "content":{"application/json":{"schema":success}}}));
         for status in definition.http_statuses {
-            responses.insert(status.to_string(), json!({"description":"Operation refused", "content":{"application/json":{"schema":failure}}}));
+            responses.insert(status.to_string(), json!({"description":"Operation failed or was refused", "content":{"application/json":{"schema":failure}}}));
         }
         paths.insert(format!("/v{version}/operations/{}", definition.name), json!({
             "post": {
                 "operationId": method,
+                "x-operation-mutates": definition.mutates,
                 "requestBody": {"required":true,"content":{"application/json":{"schema": request}}},
                 "responses": responses
             }

@@ -1,10 +1,12 @@
+import { recordingHost } from "./http-recorder.test-helper.js";
+import { fixtureSettings } from "./http-fixture.test-helper.js";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import test from "node:test";
+import test, { after } from "node:test";
 import { STATE_SCHEMA_VERSION } from "./protocol.js";
 
 import {
@@ -95,51 +97,11 @@ function seedResolution(repo: string): void {
   ]);
 }
 
-function recordingEngine(): {
-  engine: string;
-  requests: () => Array<{ command: string; input: unknown }>;
-} {
-  const directory = mkdtempSync(join(tmpdir(), "provenance-fluent-recorder-"));
-  const executable = join(directory, "engine.mjs");
-  const log = join(directory, "requests.jsonl");
-  writeFileSync(
-    executable,
-    `#!/usr/bin/env node
-import { appendFileSync, readFileSync } from "node:fs";
-const command = process.argv[3];
-const source = readFileSync(0, "utf8");
-const input = source === "" ? undefined : JSON.parse(source);
-appendFileSync(${JSON.stringify(log)}, JSON.stringify({ command, input }) + "\\n");
-if (command === "info") process.stdout.write(JSON.stringify({
-  engine_version: "0.1.0", protocol_version: 7, state_schema_version: ${STATE_SCHEMA_VERSION}, repository: "/project"
-}));
-else process.stdout.write(JSON.stringify({
-  declared_by: "spec://typescript", created: 0, updated: 0, moved: 0,
-  retired: 0, conflicts: 0, unchanged: 0,
-  resources: [], affected_rules: []
-}));
-`,
-  );
-  chmodSync(executable, 0o755);
-  return {
-    engine: executable,
-    requests: () => {
-      try {
-        return readFileSync(log, "utf8")
-          .trim()
-          .split("\n")
-          .filter(Boolean)
-          .map((line) => JSON.parse(line) as { command: string; input: unknown });
-      } catch {
-        return [];
-      }
-    },
-  };
-}
 
-test("fluent declarations and their finalized handles are immutable", () => {
-  const recorder = recordingEngine();
-  configure({ engine: recorder.engine });
+test("fluent declarations and their finalized handles are immutable", async () => {
+  const recorder = await recordingHost();
+  after(() => recorder.close());
+  configure({ ...recorder.settings, localRoot: fileURLToPath(new URL("../../..", import.meta.url)) });
   const sourceDraft = source("policy");
   const policy = sourceDraft.document("docs/policy.md");
   const ruleDraft = rule("expiry");
@@ -193,8 +155,9 @@ test("exported classes bind without construction or runtime inspection", () => {
 });
 
 test("top-level fluent declarations author source names and Requirement descriptions", async () => {
-  const recorder = recordingEngine();
-  configure({ engine: recorder.engine, owner: "spec://typescript/fluent-metadata" });
+  const recorder = await recordingHost();
+  after(() => recorder.close());
+  configure({ ...recorder.settings, localRoot: fileURLToPath(new URL("../../..", import.meta.url)), owner: "spec://typescript/fluent-metadata" });
   const policyDraft = source("policy");
   const policyDocument = policyDraft.document("docs/policy.md");
   const namedPolicy = policyDocument.name("Security policy");
@@ -247,8 +210,9 @@ test("top-level fluent declarations author source names and Requirement descript
 });
 
 test("top-level fluent Requirements serialize an immutable explicit ID", async () => {
-  const recorder = recordingEngine();
-  configure({ engine: recorder.engine, owner: "spec://typescript/requirement-id" });
+  const recorder = await recordingHost();
+  after(() => recorder.close());
+  configure({ ...recorder.settings, localRoot: fileURLToPath(new URL("../../..", import.meta.url)), owner: "spec://typescript/requirement-id" });
   const draft = requirement("canonical");
   const identified = draft.id("req_existing");
   const stated = identified.statement("The canonical Requirement keeps its identity");
@@ -270,8 +234,9 @@ test("top-level fluent Requirements serialize an immutable explicit ID", async (
 });
 
 test("top-level fluent declarations serialize exact unowned adoption targets", async () => {
-  const recorder = recordingEngine();
-  configure({ engine: recorder.engine, owner: "spec://typescript/adoption" });
+  const recorder = await recordingHost();
+  after(() => recorder.close());
+  configure({ ...recorder.settings, localRoot: fileURLToPath(new URL("../../..", import.meta.url)), owner: "spec://typescript/adoption" });
   const policyDraft = source("policy");
   const policy = policyDraft
     .adoptUnowned("source_existing")
@@ -310,8 +275,9 @@ test("top-level fluent declarations serialize exact unowned adoption targets", a
 });
 
 test("build collects Sources referenced by Requirements", async () => {
-  const recorder = recordingEngine();
-  configure({ engine: recorder.engine, owner: "spec://typescript/collected-source" });
+  const recorder = await recordingHost();
+  after(() => recorder.close());
+  configure({ ...recorder.settings, localRoot: fileURLToPath(new URL("../../..", import.meta.url)), owner: "spec://typescript/collected-source" });
   const spec = defineSpec("collected-source")
     .requirements(
       requirement("sharing")
@@ -336,8 +302,9 @@ test("build collects Sources referenced by Requirements", async () => {
 });
 
 test("a fluent Source declares a supported non-document kind", async () => {
-  const recorder = recordingEngine();
-  configure({ engine: recorder.engine, owner: "spec://typescript/source-kind" });
+  const recorder = await recordingHost();
+  after(() => recorder.close());
+  configure({ ...recorder.settings, localRoot: fileURLToPath(new URL("../../..", import.meta.url)), owner: "spec://typescript/source-kind" });
   const spec = defineSpec("source-kind")
     .requirements(
       requirement("intake")
@@ -360,8 +327,9 @@ test("a fluent Source declares a supported non-document kind", async () => {
 });
 
 test("document stays the short form of the document kind", async () => {
-  const recorder = recordingEngine();
-  configure({ engine: recorder.engine, owner: "spec://typescript/source-kind-document" });
+  const recorder = await recordingHost();
+  after(() => recorder.close());
+  configure({ ...recorder.settings, localRoot: fileURLToPath(new URL("../../..", import.meta.url)), owner: "spec://typescript/source-kind-document" });
   const spec = defineSpec("source-kind-document")
     .requirements(
       requirement("intake")
@@ -402,7 +370,7 @@ test("built fluent specs expose direct typed semantic handles", () => {
 
 test("direct nested Rule handles apply and verify through the Rust engine", async () => {
   const repo = repository();
-  configure({ engine, repository: repo, owner: "spec://typescript/direct-verification" });
+  configure({ ...await fixtureSettings(repo), owner: "spec://typescript/direct-verification" });
   const spec = defineSpec("direct-verification")
     .requirements(
       requirement("sharing")
@@ -444,7 +412,7 @@ test("direct nested Rule handles apply and verify through the Rust engine", asyn
 
 test("a preferred fluent spec collects linked Sources and exposes its typed Rule", async () => {
   const repo = repository();
-  configure({ engine, repository: repo, owner: "spec://typescript/preferred" });
+  configure({ ...await fixtureSettings(repo), owner: "spec://typescript/preferred" });
   const shareLinks = defineSpec("share-links")
     .requirements(
       requirement("sharing")
@@ -479,7 +447,7 @@ test("a preferred fluent spec collects linked Sources and exposes its typed Rule
 
 test("one shared Rule materializes once and refines both Requirements", async () => {
   const repo = repository();
-  configure({ engine, repository: repo, owner: "spec://typescript/shared" });
+  configure({ ...await fixtureSettings(repo), owner: "spec://typescript/shared" });
   const policy = source("access-policy").document("docs/access-policy.md");
   const expiry = rule("expiry").statement("Authenticated access expires");
   const sharing = requirement("sharing")
@@ -511,7 +479,7 @@ test("one shared Rule materializes once and refines both Requirements", async ()
 
 test("distinct local Rules may reuse a key under unrelated Requirements", async () => {
   const repo = repository();
-  configure({ engine, repository: repo, owner: "spec://typescript/local" });
+  configure({ ...await fixtureSettings(repo), owner: "spec://typescript/local" });
   const shareExpiry = rule("expiry").statement("Share links expire within 30 days");
   const sessionExpiry = rule("expiry").statement("Sessions expire within 24 hours");
   const sharing = requirement("sharing").statement("Shares are time bounded").rules(shareExpiry);
@@ -534,7 +502,7 @@ test("distinct local Rules may reuse a key under unrelated Requirements", async 
 
 test("an explicit Rule id resolves an ambiguous local-to-shared merge", async () => {
   const repo = repository();
-  configure({ engine, repository: repo, owner: "spec://typescript/merge" });
+  configure({ ...await fixtureSettings(repo), owner: "spec://typescript/merge" });
   const sharing = requirement("sharing")
     .statement("Shares are time bounded")
     .rules(rule("expiry").statement("Share links expire"));
@@ -594,7 +562,7 @@ test("the callback defineSpec form remains compatible", () => {
 
 test("relation fields on fluent declarations reach the written records", async () => {
   const repo = repository();
-  configure({ engine, repository: repo, owner: "spec://typescript/fluent-relations" });
+  configure({ ...await fixtureSettings(repo), owner: "spec://typescript/fluent-relations" });
   seedResolution(repo);
   const older = source("policy-2024").document("docs/policy-2024.md");
   const policy = source("policy").document("docs/policy.md").supersedes(older);

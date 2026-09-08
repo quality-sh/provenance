@@ -1,5 +1,6 @@
 //! Typed operation dispatch shared by native and network callers.
 
+mod authoring;
 mod context;
 mod entry;
 mod evidence;
@@ -10,6 +11,7 @@ mod records;
 mod schema;
 mod statement;
 
+pub use authoring::{Apply, BeginVerification, CompleteVerification, Plan};
 pub use context::{
     ContextKind, ContextResolver, ExecutionNeed, ExecutionNeeds, PreparedContext, PreparedRead,
     PreparedRepository, PreparedScope, RequestedContext,
@@ -33,3 +35,9 @@ pub fn contains(operation: &str) -> bool {
 pub use evidence::{
     Evidence, Impact, ResolveSymbol, Stale, VerificationBindings, VerificationRuns,
 };
+
+pub fn mutates(operation: &str) -> bool {
+    entry::entries()
+        .iter()
+        .any(|entry| entry.name == operation && entry.mutates)
+}

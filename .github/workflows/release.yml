@@ -206,6 +206,7 @@ jobs:
             provenance-ste100 \
             provenance-store \
             provenance-sdk \
+            provenance-http-client \
             provenance-cli
           do
             bash .github/scripts/publish-cargo-if-missing.sh \

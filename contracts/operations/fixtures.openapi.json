@@ -3528,6 +3528,7 @@
             "type": "string"
           },
           "kind": {
+            "description": "Semantic validation accepts supported Source type names and the linear, github, and jira aliases.",
             "type": "string"
           },
           "name": {

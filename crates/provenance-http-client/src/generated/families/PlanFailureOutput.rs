@@ -1,0 +1,21 @@
+// Generated from OpenAPI. Do not edit.
+include!("../models/PlanFailureOutput.rs");
+include!("../models/PlanFailureOutputDeclarationAddress.rs");
+include!("../models/PlanFailureOutputDeclarationAddressItem.rs");
+include!("../models/PlanFailureOutputFindingKind.rs");
+include!("../models/PlanFailureOutputInvalidInputReason.rs");
+include!("../models/PlanFailureOutputOperation.rs");
+include!("../models/PlanFailureOutputOperationError.rs");
+include!("../models/PlanFailureOutputOperationFailure.rs");
+include!("../models/PlanFailureOutputProtocolVersion.rs");
+include!("../models/PlanFailureOutputReconcileState.rs");
+include!("../models/PlanFailureOutputReconciledResource.rs");
+include!("../models/PlanFailureOutputRuleNumber.rs");
+include!("../models/PlanFailureOutputSpan.rs");
+include!("../models/PlanFailureOutputStableId.rs");
+include!("../models/PlanFailureOutputStandard.rs");
+include!("../models/PlanFailureOutputStandardIssue.rs");
+include!("../models/PlanFailureOutputTypedFieldChange.rs");
+include!("../models/PlanFailureOutputTypedResourceKind.rs");
+include!("../models/PlanFailureOutputTypedSpecDiagnostic.rs");
+include!("../models/PlanFailureOutputWriteFailure.rs");

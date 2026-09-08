@@ -38,3 +38,8 @@ required-features = ["test-fixture"]
 name = "records-host-fixture"
 path = "src/bin/records-host-fixture.rs"
 required-features = ["test-fixture"]
+
+[[bin]]
+name = "existing-root-host-fixture"
+path = "src/bin/existing-root-host-fixture.rs"
+required-features = ["test-fixture"]

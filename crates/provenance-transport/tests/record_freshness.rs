@@ -70,6 +70,7 @@ async fn overlapping_scopes_and_annotate_only_keep_the_selected_value() {
 
 #[tokio::test]
 async fn schema_and_partial_migration_refusals_have_distinct_safe_kinds() {
+    use sqlx::Connection;
     for (sql, expected) in [
         (
             "UPDATE projection_validation SET version = 0",
@@ -83,11 +84,13 @@ async fn schema_and_partial_migration_refusals_have_distinct_safe_kinds() {
             call(&host, "get", get_call("first", "default")).await.0,
             200
         );
-        let pool = provenance_store::cache::open_cache(&repo.layout)
+        let options =
+            sqlx::sqlite::SqliteConnectOptions::new().filename(repo.layout.cache_db_path());
+        let mut connection = sqlx::SqliteConnection::connect_with(&options)
             .await
             .unwrap();
-        sqlx::query(sql).execute(&pool).await.unwrap();
-        pool.close().await;
+        sqlx::query(sql).execute(&mut connection).await.unwrap();
+        connection.close().await.unwrap();
         let mut request = get_call("first", "default");
         request["context"]["freshness"] = json!("annotate_only");
         let (status, refusal) = call(&host, "get", request).await;

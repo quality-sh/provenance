@@ -9,19 +9,25 @@ import ts from 'typescript';
 import { checkStatements } from './test-statements.mjs';
 import { checkRecords } from './test-records.mjs';
 import { checkEvidence } from './test-evidence.mjs';
+import { checkWrites } from './test-writes.mjs';
 
 const family = process.argv[2];
-const checks = { statements: checkStatements, records: checkRecords, evidence: checkEvidence };
-if (!checks[family]) throw new Error('Expected statements, records, or evidence');
+const checks = { statements: checkStatements, records: checkRecords, evidence: checkEvidence, writes: checkWrites };
+if (!checks[family]) throw new Error('Expected statements, records, evidence, or writes');
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 function run(args, env = process.env) {
   const child = spawnSync('cargo', args, { cwd: root, env, stdio: 'inherit' });
   if (child.status !== 0) throw new Error(`cargo ${args.join(' ')} failed`);
 }
-const binary = family === 'statements' ? 'statement-host-fixture' : 'records-host-fixture';
+const binary = family === 'writes' ? 'existing-root-host-fixture' : family === 'statements' ? 'statement-host-fixture' : 'records-host-fixture';
 run(['build', '--locked', '-p', 'provenance-transport', '--features', 'test-fixture', '--bin', binary]);
 const temporary = await mkdtemp(join(tmpdir(), 'provenance-clients-'));
-const host = spawn(join(root, 'target/debug', binary), [], { cwd: temporary, stdio: ['pipe', 'pipe', 'inherit'] });
+if (family === 'writes') {
+  const result = spawnSync(join(root, 'target/debug/provenance'), ['init', '--path', temporary, '--scope', 'default', '--path-prefix', '.'], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  await writeFile(join(temporary, 'check.rs'), 'fn check() {}\n');
+}
+const host = spawn(join(root, 'target/debug', binary), [], { cwd: temporary, env: { ...process.env, PROVENANCE_FIXTURE_ROOT: temporary, PROVENANCE_FIXTURE_REPOSITORY_ID: 'fixture', PROVENANCE_FIXTURE_SCOPE: 'default', PROVENANCE_FIXTURE_TOKEN: 'fixture-secret' }, stdio: ['pipe', 'pipe', 'inherit'] });
 try {
   const firstLine = await new Promise((resolve, reject) => {
     let output = '';
@@ -32,11 +38,15 @@ try {
       if (output.includes('\n')) { clearTimeout(timeout); resolve(output.split('\n')[0].trim()); }
     });
   });
-  const fixture = family === 'statements' ? { url: firstLine } : JSON.parse(firstLine);
-  const source = await readFile(join(root, 'packages/provenance/src/generated/client.ts'), 'utf8');
-  const script = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText;
-  await writeFile(join(temporary, 'client.mjs'), script);
-  const module = await import(join(temporary, 'client.mjs'));
+  const fixture = family === 'statements' ? { url: firstLine } : { ...JSON.parse(firstLine), root: temporary };
+  await writeFile(join(temporary, 'package.json'), '{"type":"module"}');
+  for (const name of ['client', 'runtime']) {
+    const source = await readFile(join(root, `packages/provenance/src/generated/${name}.ts`), 'utf8');
+    const script = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText;
+    await writeFile(join(temporary, `${name}.js`), script);
+  }
+  await writeFile(join(temporary, 'validators.mjs'), await readFile(join(root, 'packages/provenance/src/generated/validators.mjs')));
+  const module = await import(join(temporary, 'client.js'));
   await checks[family](module, fixture);
   run(['test', '--locked', '-p', 'provenance-http-client', '--test', family, '--', '--ignored'], {
     ...process.env, PROVENANCE_TEST_HOST: fixture.url, PROVENANCE_RECORDS_FIXTURE: JSON.stringify(fixture),

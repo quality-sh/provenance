@@ -154,7 +154,7 @@ async fn declared_handler_fields_cannot_disappear_during_erasure() {
 
 #[cfg(feature = "schema")]
 #[test]
-fn record_reads_have_one_registered_contract_each() {
+fn baseline_operations_have_one_registered_contract_each() {
     let names: Vec<_> = super::definitions()
         .into_iter()
         .map(|entry| entry.name)
@@ -163,6 +163,10 @@ fn record_reads_have_one_registered_contract_each() {
         names,
         [
             "check-statement",
+            "plan",
+            "apply",
+            "begin-verification",
+            "complete-verification",
             "info",
             "get",
             "search",

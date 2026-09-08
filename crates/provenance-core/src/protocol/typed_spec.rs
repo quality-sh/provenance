@@ -58,6 +58,7 @@ pub struct TypedSourceInput {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     pub name: String,
+    /// Semantic validation accepts supported Source type names and the linear, github, and jira aliases.
     pub kind: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,

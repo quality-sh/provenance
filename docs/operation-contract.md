@@ -7,7 +7,8 @@ The native Rust SDK remains available.
 
 The catalog contains `check-statement`, `info`, `get`, `search`, `neighbors`,
 `trace`, `impact`, `resolve-symbol`, `evidence`, `stale`, `verification-runs`,
-and `verification-bindings`. The statement handler returns the
+`verification-bindings`, `plan`, `apply`, `begin-verification`, and
+`complete-verification`. The statement handler returns the
 existing ASD-STE100 analyzer report. A finding is a successful report result.
 The operation does not open a repository, load settings, or use a dictionary.
 
@@ -83,6 +84,52 @@ stamp with `policy: "catch_up_failed"`, adds
 failed stage; it does not infer a more specific cause from private error text.
 No diagnostic projection changes or invents a stamp.
 
+## Authoring and verification
+
+`plan` and `apply` accept the existing typed declaration document. Their context
+contains the configured repository identifier and scope, without freshness:
+
+```json
+{"context":{"repository":"first","scope":"default"},"request":{"schema_version":2,"spec":"example","declared_by":"spec://example","requirements":[{"key":"saved","statement":"The request preserves the saved graph."}]}}
+```
+
+`plan` returns proposed changes and ownership conflicts. `apply` publishes the
+declarations and their required relationships. Both use the same identity,
+adoption, source-alias, and statement checks as native authoring. A string field
+does not permit an unknown source kind or verification method; the shared
+handler also validates these values.
+
+`begin-verification` materializes the durable binding, creates a running run,
+and clears the applicable Requirement reviews. `complete-verification` records
+the passed or failed result. These operations have the same context as `apply`.
+The local callback stays in the SDK; it never crosses the wire. A host commit
+pin identifies host file state and does not attest remote callback execution.
+
+Implementation and verification files use portable repository-relative paths.
+The host uses the held-file checks described in
+[repository evidence access](operation-file-access.md). A caller path grants
+no access. Local SDK file inference must use a separately configured local root.
+
+## Write failures and task ownership
+
+Protocol, access, and known validation refusals occur before intended graph
+publication. Validation can still follow cache or recovery maintenance; a
+refusal does not promise that no filesystem byte changed. The wire retains
+typed ownership conflicts and statement diagnostics. Native callers retain
+their detailed diagnostics.
+
+`apply` can replace several shards. A verification start can publish a binding,
+a run, and review changes. The publication lock does not provide rollback.
+After publication starts, an error reports `uncertain_write`; inspect saved
+state before another submission. This includes a write task that panics after
+it starts. An unclassified failure before publication uses `write_failed`.
+Neither error is a validation refusal or a promise of crash-atomic writes.
+
+The execution task owns started work through caller disconnection. Shutdown
+closes admission and waits for that work. A lost or malformed response can
+leave a client unable to tell whether a write completed. Clients must report
+that uncertainty and must not retry a mutation automatically.
+
 ## Fixture access
 
 Repository host construction is available only with the `test-fixture`
@@ -129,13 +176,15 @@ Generated Rust files obey the repository's 500-line limit.
 
 ## Development host
 
-The listeners are isolated test fixtures. It is not a production
-repository host. The client test runner starts the fixture explicitly, waits
+The listeners are isolated test fixtures. The client test runner starts each
+fixture explicitly, waits
 for its selected loopback address, runs both clients, and stops the fixture.
 
 ```sh
 node tools/operation-codegen/test-clients.mjs statements
 node tools/operation-codegen/test-clients.mjs records
+node tools/operation-codegen/test-clients.mjs evidence
+node tools/operation-codegen/test-clients.mjs writes
 ```
 
 The adapters bound request bodies and concurrent work. Blocking operation work
@@ -144,9 +193,18 @@ started work. Shutdown stops admission and joins started work.
 
 ## Compatibility
 
-The operation protocol advances from 6 to 7. The existing TypeScript transport
-and fixtures use 7 during the staged migration. This does not release the new
-SDK or remove package-supplied engine installation.
+The operation protocol advances from 6 to 7. The TypeScript SDK uses the
+generated HTTP client for all sixteen operations. Configure `endpoint`,
+`bearer`, `repositoryId`, and `scope`; configure `localRoot` separately when
+converting local implementation or verification paths. The SDK rejects the old
+implicit repository/subprocess configuration. Both HTTP clients validate
+responses against the generated contract and report an uncertain write when
+they lose a mutation response or cannot decode it. They never replay the write.
+
+Package installation still supplies the native engine and binary shim. Packed
+tests connect explicitly to a source-checkout fixture host; they do not prove a
+production repository host is available from the installed package. The host
+configuration and access milestones must pass before releasing this migration.
 
 The operation-protocol change does not change legacy disposition grants or
 consume their migration window. The later `provenance-cvs` release owns that

@@ -221,6 +221,7 @@ pub struct BeginVerificationInput {
     #[serde(default)]
     pub declaration: Option<DeclarationReferenceInput>,
     pub key: String,
+    /// Semantic validation accepts examples, property, conformance, construction, exhaustion, and proof.
     pub method: String,
     pub declared_by: String,
     #[serde(default)]
@@ -263,6 +264,7 @@ pub struct DeclarationReferenceInput {
 #[serde(deny_unknown_fields)]
 pub struct CompleteVerificationInput {
     pub run: String,
+    /// Semantic validation accepts passed or failed.
     pub status: String,
     #[serde(default)]
     pub error: Option<String>,

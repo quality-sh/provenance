@@ -14,5 +14,5 @@ test('each method preserves its own failure family in both clients', async () =>
   const rust = Object.values(rustClientFiles(document)).join('\n');
   assert.match(ts, /export type OperationFailure =[^;]*GraphFailure/s);
   assert.match(rust, /pub enum OperationFailure[\s\S]*ReadGraph\(.*GraphFailure/);
-  assert.match(rust, /failure: OperationFailure::ReadGraph/);
+  assert.match(rust, /let failure = OperationFailure::ReadGraph/);
 });

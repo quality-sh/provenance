@@ -100,10 +100,14 @@ impl StatementHost {
         let runtime = tokio::runtime::Handle::current();
         let access: Arc<dyn provenance_store::operations::catalog::ContextResolver> =
             self.access.clone();
+        let dispatched_operation = operation.clone();
         self.execution
-            .run(move || {
+            .run(&operation, move || {
                 runtime.block_on(provenance_store::operations::catalog::invoke_with(
-                    &operation, version, call, access,
+                    &dispatched_operation,
+                    version,
+                    call,
+                    access,
                 ))
             })
             .await

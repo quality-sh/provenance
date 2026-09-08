@@ -1,19 +1,28 @@
 // Generated from OpenAPI. Do not edit.
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
-#[serde(untagged)]
+#[serde(tag = "kind")]
 pub enum CheckStatementFailureOutputOperationError {
-    OperationFailure(CheckStatementFailureOutputOperationFailure),
-    StatementFailure(CheckStatementFailureOutputStatementFailure),
-}
-impl ::std::convert::From<CheckStatementFailureOutputOperationFailure>
-for CheckStatementFailureOutputOperationError {
-    fn from(value: CheckStatementFailureOutputOperationFailure) -> Self {
-        Self::OperationFailure(value)
-    }
-}
-impl ::std::convert::From<CheckStatementFailureOutputStatementFailure>
-for CheckStatementFailureOutputOperationError {
-    fn from(value: CheckStatementFailureOutputStatementFailure) -> Self {
-        Self::StatementFailure(value)
-    }
+    #[serde(rename = "invalid_input")]
+    InvalidInput {
+        field: ::std::option::Option<::std::string::String>,
+        reason: CheckStatementFailureOutputInvalidInputReason,
+    },
+    #[serde(rename = "protocol_mismatch")]
+    ProtocolMismatch { requested: u32, supported: u32 },
+    #[serde(rename = "unknown_operation")]
+    UnknownOperation,
+    #[serde(rename = "unauthenticated")]
+    Unauthenticated,
+    #[serde(rename = "access_denied")]
+    AccessDenied,
+    #[serde(rename = "unknown_target")]
+    UnknownTarget,
+    #[serde(rename = "unknown_scope")]
+    UnknownScope,
+    #[serde(rename = "unavailable_needs")]
+    UnavailableNeeds,
+    #[serde(rename = "internal")]
+    Internal,
+    #[serde(rename = "uncertain_write")]
+    UncertainWrite,
 }

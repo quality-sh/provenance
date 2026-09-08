@@ -102,12 +102,33 @@ fn desired_bindings(
             let rule_id = graph.rule_ids[&address].clone();
             validate_target(&implementation.file, &implementation.symbol)?;
             if let Some(record) = existing.iter().find(|record| record.rule_id == rule_id) {
-                anyhow::ensure!(
-                    record.declared_by == graph.owner,
-                    "rule `{}` implementation is owned by `{}`",
-                    rule_id.as_str(),
-                    record.declared_by
-                );
+                if record.declared_by != graph.owner {
+                    use crate::write_error::{SourceFailure, WriteFailure};
+                    return Err(SourceFailure::wrap(
+                        WriteFailure::OwnershipConflict {
+                            conflicts: vec![super::ReconciledResource {
+                                kind: super::TypedResourceKind::Rule,
+                                key: rule.key.clone(),
+                                parent: provenance_core::authoring::addresses::local_parent(
+                                    &address,
+                                ),
+                                address,
+                                id: rule_id,
+                                state: super::ReconcileState::Conflict,
+                                changes: vec![TypedFieldChange {
+                                    field: "implementation.declared_by".into(),
+                                    before: record.declared_by.clone().into(),
+                                    after: graph.owner.into(),
+                                }],
+                            }],
+                        },
+                        anyhow::anyhow!(
+                            "rule `{}` implementation is owned by `{}`",
+                            record.rule_id.as_str(),
+                            record.declared_by
+                        ),
+                    ));
+                }
             }
             Ok(ImplementationBinding {
                 schema_version: SUPPORTED_SCHEMA_VERSION,
@@ -223,11 +244,13 @@ fn record_change(
 }
 
 fn validate_target(file: &camino::Utf8Path, symbol: &str) -> anyhow::Result<()> {
-    anyhow::ensure!(
+    crate::write_error::ensure!(
+        InvalidDeclaration,
         !file.as_str().is_empty(),
         "implementation file must not be empty"
     );
-    anyhow::ensure!(
+    crate::write_error::ensure!(
+        InvalidDeclaration,
         !file.as_str().contains('\\')
             && !file.is_absolute()
             && !file.components().any(|part| {
@@ -240,7 +263,8 @@ fn validate_target(file: &camino::Utf8Path, symbol: &str) -> anyhow::Result<()> 
             }),
         "implementation file must be a repository-relative path"
     );
-    anyhow::ensure!(
+    crate::write_error::ensure!(
+        InvalidDeclaration,
         !symbol.trim().is_empty(),
         "implementation symbol must not be empty"
     );

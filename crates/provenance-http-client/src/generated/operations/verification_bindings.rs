@@ -13,16 +13,34 @@ impl HttpClient {
             .json(call)
             .send()
             .await
-            .map_err(Error::Transport)?;
+            .map_err(|cause| runtime::connection("verification_bindings", false, cause))?;
         let status = response.status();
+        let value = runtime::read_json(response, "verification_bindings", false).await?;
         if !status.is_success() {
+            runtime::validate(
+                &value,
+                "VerificationBindingsFailureOutput",
+                "verification_bindings",
+                false,
+            )?;
+            let uncertain = runtime::uncertain_kind(&value, false);
             let failure: VerificationBindingsFailureOutput =
-                response.json().await.map_err(Error::Transport)?;
+                runtime::decode(value, "verification_bindings", false)?;
+            let failure = OperationFailure::VerificationBindings(Box::new(failure));
+            if uncertain {
+                return Err(runtime::uncertain("verification_bindings", failure));
+            }
             return Err(Error::Operation {
                 status: status.as_u16(),
-                failure: OperationFailure::VerificationBindings(Box::new(failure)),
+                failure,
             });
         }
-        response.json().await.map_err(Error::Transport)
+        runtime::validate(
+            &value,
+            "VerificationBindingsSuccessOutput",
+            "verification_bindings",
+            false,
+        )?;
+        runtime::decode(value, "verification_bindings", false)
     }
 }

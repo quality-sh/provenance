@@ -15,6 +15,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v7/operations/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["apply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v7/operations/begin-verification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["beginVerification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v7/operations/check-statement": {
         parameters: {
             query?: never;
@@ -25,6 +57,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["checkStatement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v7/operations/complete-verification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["completeVerification"];
         delete?: never;
         options?: never;
         head?: never;
@@ -105,6 +153,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["neighbors"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v7/operations/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["plan"];
         delete?: never;
         options?: never;
         head?: never;
@@ -212,6 +276,573 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /** FailureEnvelope */
+        ApplyFailureOutput: {
+            error: components["schemas"]["ApplyFailureOutputOperationError"];
+            /** @constant */
+            operation?: "apply";
+            /** @constant */
+            protocol_version: 7;
+        };
+        /** @description One owner-local path to a language-authored declaration. */
+        ApplyFailureOutputDeclarationAddress: string[];
+        /**
+         * @description The disposition of a finding.
+         * @enum {string}
+         */
+        ApplyFailureOutputFindingKind: "violation";
+        /** @enum {string} */
+        ApplyFailureOutputInvalidInputReason: "required" | "invalid_value" | "malformed_json" | "unknown_field" | "too_large";
+        /** @description Keeps the handler's native error separate from preparation failure. */
+        ApplyFailureOutputOperationError: components["schemas"]["ApplyFailureOutputOperationFailure"] | components["schemas"]["ApplyFailureOutputWriteFailure"];
+        ApplyFailureOutputOperationFailure: {
+            field: string | null;
+            /** @constant */
+            kind: "invalid_input";
+            reason: components["schemas"]["ApplyFailureOutputInvalidInputReason"];
+        } | {
+            /** @constant */
+            kind: "protocol_mismatch";
+            /** Format: uint32 */
+            requested: number;
+            /** Format: uint32 */
+            supported: number;
+        } | {
+            /** @constant */
+            kind: "unknown_operation";
+        } | {
+            /** @constant */
+            kind: "unauthenticated";
+        } | {
+            /** @constant */
+            kind: "access_denied";
+        } | {
+            /** @constant */
+            kind: "unknown_target";
+        } | {
+            /** @constant */
+            kind: "unknown_scope";
+        } | {
+            /** @constant */
+            kind: "unavailable_needs";
+        } | {
+            /** @constant */
+            kind: "internal";
+        } | {
+            /** @constant */
+            kind: "uncertain_write";
+        };
+        /** @enum {string} */
+        ApplyFailureOutputReconcileState: "created" | "updated" | "moved" | "retired" | "conflict" | "unchanged";
+        ApplyFailureOutputReconciledResource: {
+            address: components["schemas"]["ApplyFailureOutputDeclarationAddress"];
+            changes?: components["schemas"]["ApplyFailureOutputTypedFieldChange"][];
+            id: components["schemas"]["ApplyFailureOutputStableId"];
+            key: string;
+            kind: components["schemas"]["ApplyFailureOutputTypedResourceKind"];
+            parent?: string | null;
+            state: components["schemas"]["ApplyFailureOutputReconcileState"];
+        };
+        /**
+         * @description An ASD-STE100 Issue 9 rule implemented by this analyzer.
+         * @enum {string}
+         */
+        ApplyFailureOutputRuleNumber: "1.1" | "4.2" | "6.3" | "6.6" | "8.1";
+        /** @description A half-open UTF-8 byte range in the analyzed text. */
+        ApplyFailureOutputSpan: {
+            /** Format: uint */
+            end: number;
+            /** Format: uint */
+            start: number;
+        };
+        /**
+         * @description A stable artifact id. The inner `String` is private and `new` is the only
+         *     way in, so every `StableId` in existence satisfies [`is_well_formed_id`].
+         */
+        ApplyFailureOutputStableId: string;
+        /**
+         * @description The authority used by the analyzer.
+         * @enum {string}
+         */
+        ApplyFailureOutputStandard: "ASD-STE100";
+        /**
+         * Format: uint8
+         * @description The fixed issue of the standard used by the analyzer.
+         * @constant
+         */
+        ApplyFailureOutputStandardIssue: 9;
+        ApplyFailureOutputTypedFieldChange: {
+            after: unknown;
+            before: unknown;
+            field: string;
+        };
+        /** @enum {string} */
+        ApplyFailureOutputTypedResourceKind: "source" | "requirement" | "rule";
+        /** @description One ASD-STE100 violation attached to its typed declaration site. */
+        ApplyFailureOutputTypedSpecDiagnostic: {
+            address: components["schemas"]["ApplyFailureOutputDeclarationAddress"];
+            disposition: components["schemas"]["ApplyFailureOutputFindingKind"];
+            field: string;
+            issue: components["schemas"]["ApplyFailureOutputStandardIssue"];
+            message: string;
+            resource_kind: components["schemas"]["ApplyFailureOutputTypedResourceKind"];
+            rule: components["schemas"]["ApplyFailureOutputRuleNumber"];
+            span: components["schemas"]["ApplyFailureOutputSpan"];
+            standard: components["schemas"]["ApplyFailureOutputStandard"];
+        };
+        ApplyFailureOutputWriteFailure: {
+            /** @constant */
+            kind: "schema_version";
+        } | {
+            /** @constant */
+            kind: "invalid_declaration";
+        } | {
+            conflicts: components["schemas"]["ApplyFailureOutputReconciledResource"][];
+            /** @constant */
+            kind: "ownership_conflict";
+        } | {
+            /** @constant */
+            kind: "missing_reference";
+        } | {
+            diagnostics: components["schemas"]["ApplyFailureOutputTypedSpecDiagnostic"][];
+            /** @constant */
+            kind: "statement_rejected";
+        } | {
+            /** @constant */
+            kind: "invalid_verification_target";
+        } | {
+            /** @constant */
+            kind: "retired_rule";
+        } | {
+            /** @constant */
+            kind: "invalid_completion";
+        } | {
+            /** @constant */
+            kind: "already_complete";
+        } | {
+            /** @constant */
+            kind: "file_access_denied";
+        } | {
+            /** @constant */
+            kind: "file_unavailable";
+        } | {
+            /** @constant */
+            kind: "write_failed";
+        } | {
+            /** @constant */
+            kind: "uncertain_write";
+        };
+        /** RepositoryCall */
+        ApplyRequestInput: {
+            context: components["schemas"]["ApplyRequestInputRepositoryScope"];
+            request: components["schemas"]["ApplyRequestInputTypedSpecInput"];
+        };
+        /** @description One owner-local path to a language-authored declaration. */
+        ApplyRequestInputDeclarationAddress: string[];
+        /** @description Scope selection for operations that do not use projection freshness. */
+        ApplyRequestInputRepositoryScope: {
+            repository: string;
+            scope: string;
+        };
+        /** @description One exact declaration identity that may transition from unowned to owned. */
+        ApplyRequestInputTypedAdoptionTarget: {
+            id: string;
+            kind: components["schemas"]["ApplyRequestInputTypedDeclarationKind"];
+        };
+        /** @enum {string} */
+        ApplyRequestInputTypedDeclarationKind: "source" | "requirement" | "rule";
+        ApplyRequestInputTypedImplementationInput: {
+            file: string;
+            symbol: string;
+        };
+        ApplyRequestInputTypedRequirementInput: {
+            /** @description Keys of requirements in the same document this one depends on. */
+            depends_on?: string[] | null;
+            description?: string | null;
+            id?: string | null;
+            key: string;
+            /** @description The key of the requirement in the same document this one refines. */
+            refines?: string | null;
+            sources?: string[];
+            /** @description The canonical id of the resolution this requirement came out of. */
+            spawned_by?: string | null;
+            statement: string;
+            /** @description Keys of older requirements in the same document this one replaces. */
+            supersedes?: string[] | null;
+        };
+        ApplyRequestInputTypedRuleInput: {
+            address?: components["schemas"]["ApplyRequestInputDeclarationAddress"] | null;
+            description?: string | null;
+            id?: string | null;
+            implementation?: components["schemas"]["ApplyRequestInputTypedImplementationInput"] | null;
+            key: string;
+            name?: string | null;
+            requirement?: string | null;
+            requirements?: string[];
+            /** @description Canonical ids of the resolutions that produced this rule. */
+            resolution_ids?: string[] | null;
+            statement: string;
+        };
+        ApplyRequestInputTypedSourceInput: {
+            id?: string | null;
+            key: string;
+            /** @description Semantic validation accepts supported Source type names and the linear, github, and jira aliases. */
+            kind: string;
+            name: string;
+            reference?: string | null;
+            /** @description Keys of older sources in the same document this one replaces. */
+            supersedes?: string[] | null;
+            url?: string | null;
+        };
+        /**
+         * @description One language-authored desired-state document.
+         *
+         *     Serialization skips absent optional fields, so a decode and encode
+         *     round trip preserves every present field and every omission.
+         */
+        ApplyRequestInputTypedSpecInput: {
+            adopt_unowned?: components["schemas"]["ApplyRequestInputTypedAdoptionTarget"][];
+            declared_by: string;
+            requirements?: components["schemas"]["ApplyRequestInputTypedRequirementInput"][];
+            rules?: components["schemas"]["ApplyRequestInputTypedRuleInput"][];
+            /** Format: uint32 */
+            schema_version: number;
+            sources?: components["schemas"]["ApplyRequestInputTypedSourceInput"][];
+            spec: string;
+        };
+        /** TypedSpecResult */
+        ApplySuccessOutput: {
+            /** Format: uint */
+            conflicts: number;
+            /** Format: uint */
+            created: number;
+            declared_by: string;
+            diagnostics?: components["schemas"]["ApplySuccessOutputTypedSpecDiagnostic"][];
+            implementation_bindings?: components["schemas"]["ApplySuccessOutputImplementationBinding"][];
+            /** Format: uint */
+            moved: number;
+            resources: components["schemas"]["ApplySuccessOutputReconciledResource"][];
+            /** Format: uint */
+            retired: number;
+            /** Format: uint */
+            unchanged: number;
+            /** Format: uint */
+            updated: number;
+        };
+        /** @description One owner-local path to a language-authored declaration. */
+        ApplySuccessOutputDeclarationAddress: string[];
+        /**
+         * @description The disposition of a finding.
+         * @enum {string}
+         */
+        ApplySuccessOutputFindingKind: "violation";
+        /**
+         * @description One canonical primary implementation relationship from an exported
+         *     production symbol to a Rule.
+         */
+        ApplySuccessOutputImplementationBinding: {
+            declared_by: string;
+            file: string;
+            id: components["schemas"]["ApplySuccessOutputStableId"];
+            retired?: boolean;
+            rule_id: components["schemas"]["ApplySuccessOutputStableId"];
+            /** Format: uint32 */
+            schema_version: number;
+            scope_id: components["schemas"]["ApplySuccessOutputScopeId"];
+            symbol: string;
+        };
+        /** @enum {string} */
+        ApplySuccessOutputReconcileState: "created" | "updated" | "moved" | "retired" | "conflict" | "unchanged";
+        ApplySuccessOutputReconciledResource: {
+            address: components["schemas"]["ApplySuccessOutputDeclarationAddress"];
+            changes?: components["schemas"]["ApplySuccessOutputTypedFieldChange"][];
+            id: components["schemas"]["ApplySuccessOutputStableId"];
+            key: string;
+            kind: components["schemas"]["ApplySuccessOutputTypedResourceKind"];
+            parent?: string | null;
+            state: components["schemas"]["ApplySuccessOutputReconcileState"];
+        };
+        /**
+         * @description An ASD-STE100 Issue 9 rule implemented by this analyzer.
+         * @enum {string}
+         */
+        ApplySuccessOutputRuleNumber: "1.1" | "4.2" | "6.3" | "6.6" | "8.1";
+        /**
+         * @description A scope id. The inner `String` is private and `new` is the only way in, so
+         *     every `ScopeId` in existence satisfies [`is_well_formed_id`].
+         */
+        ApplySuccessOutputScopeId: string;
+        /** @description A half-open UTF-8 byte range in the analyzed text. */
+        ApplySuccessOutputSpan: {
+            /** Format: uint */
+            end: number;
+            /** Format: uint */
+            start: number;
+        };
+        /**
+         * @description A stable artifact id. The inner `String` is private and `new` is the only
+         *     way in, so every `StableId` in existence satisfies [`is_well_formed_id`].
+         */
+        ApplySuccessOutputStableId: string;
+        /**
+         * @description The authority used by the analyzer.
+         * @enum {string}
+         */
+        ApplySuccessOutputStandard: "ASD-STE100";
+        /**
+         * Format: uint8
+         * @description The fixed issue of the standard used by the analyzer.
+         * @constant
+         */
+        ApplySuccessOutputStandardIssue: 9;
+        ApplySuccessOutputTypedFieldChange: {
+            after: unknown;
+            before: unknown;
+            field: string;
+        };
+        /** @enum {string} */
+        ApplySuccessOutputTypedResourceKind: "source" | "requirement" | "rule";
+        /** @description One ASD-STE100 violation attached to its typed declaration site. */
+        ApplySuccessOutputTypedSpecDiagnostic: {
+            address: components["schemas"]["ApplySuccessOutputDeclarationAddress"];
+            disposition: components["schemas"]["ApplySuccessOutputFindingKind"];
+            field: string;
+            issue: components["schemas"]["ApplySuccessOutputStandardIssue"];
+            message: string;
+            resource_kind: components["schemas"]["ApplySuccessOutputTypedResourceKind"];
+            rule: components["schemas"]["ApplySuccessOutputRuleNumber"];
+            span: components["schemas"]["ApplySuccessOutputSpan"];
+            standard: components["schemas"]["ApplySuccessOutputStandard"];
+        };
+        /** FailureEnvelope */
+        BeginVerificationFailureOutput: {
+            error: components["schemas"]["BeginVerificationFailureOutputOperationError"];
+            /** @constant */
+            operation?: "begin-verification";
+            /** @constant */
+            protocol_version: 7;
+        };
+        /** @description One owner-local path to a language-authored declaration. */
+        BeginVerificationFailureOutputDeclarationAddress: string[];
+        /**
+         * @description The disposition of a finding.
+         * @enum {string}
+         */
+        BeginVerificationFailureOutputFindingKind: "violation";
+        /** @enum {string} */
+        BeginVerificationFailureOutputInvalidInputReason: "required" | "invalid_value" | "malformed_json" | "unknown_field" | "too_large";
+        /** @description Keeps the handler's native error separate from preparation failure. */
+        BeginVerificationFailureOutputOperationError: components["schemas"]["BeginVerificationFailureOutputOperationFailure"] | components["schemas"]["BeginVerificationFailureOutputWriteFailure"];
+        BeginVerificationFailureOutputOperationFailure: {
+            field: string | null;
+            /** @constant */
+            kind: "invalid_input";
+            reason: components["schemas"]["BeginVerificationFailureOutputInvalidInputReason"];
+        } | {
+            /** @constant */
+            kind: "protocol_mismatch";
+            /** Format: uint32 */
+            requested: number;
+            /** Format: uint32 */
+            supported: number;
+        } | {
+            /** @constant */
+            kind: "unknown_operation";
+        } | {
+            /** @constant */
+            kind: "unauthenticated";
+        } | {
+            /** @constant */
+            kind: "access_denied";
+        } | {
+            /** @constant */
+            kind: "unknown_target";
+        } | {
+            /** @constant */
+            kind: "unknown_scope";
+        } | {
+            /** @constant */
+            kind: "unavailable_needs";
+        } | {
+            /** @constant */
+            kind: "internal";
+        } | {
+            /** @constant */
+            kind: "uncertain_write";
+        };
+        /** @enum {string} */
+        BeginVerificationFailureOutputReconcileState: "created" | "updated" | "moved" | "retired" | "conflict" | "unchanged";
+        BeginVerificationFailureOutputReconciledResource: {
+            address: components["schemas"]["BeginVerificationFailureOutputDeclarationAddress"];
+            changes?: components["schemas"]["BeginVerificationFailureOutputTypedFieldChange"][];
+            id: components["schemas"]["BeginVerificationFailureOutputStableId"];
+            key: string;
+            kind: components["schemas"]["BeginVerificationFailureOutputTypedResourceKind"];
+            parent?: string | null;
+            state: components["schemas"]["BeginVerificationFailureOutputReconcileState"];
+        };
+        /**
+         * @description An ASD-STE100 Issue 9 rule implemented by this analyzer.
+         * @enum {string}
+         */
+        BeginVerificationFailureOutputRuleNumber: "1.1" | "4.2" | "6.3" | "6.6" | "8.1";
+        /** @description A half-open UTF-8 byte range in the analyzed text. */
+        BeginVerificationFailureOutputSpan: {
+            /** Format: uint */
+            end: number;
+            /** Format: uint */
+            start: number;
+        };
+        /**
+         * @description A stable artifact id. The inner `String` is private and `new` is the only
+         *     way in, so every `StableId` in existence satisfies [`is_well_formed_id`].
+         */
+        BeginVerificationFailureOutputStableId: string;
+        /**
+         * @description The authority used by the analyzer.
+         * @enum {string}
+         */
+        BeginVerificationFailureOutputStandard: "ASD-STE100";
+        /**
+         * Format: uint8
+         * @description The fixed issue of the standard used by the analyzer.
+         * @constant
+         */
+        BeginVerificationFailureOutputStandardIssue: 9;
+        BeginVerificationFailureOutputTypedFieldChange: {
+            after: unknown;
+            before: unknown;
+            field: string;
+        };
+        /** @enum {string} */
+        BeginVerificationFailureOutputTypedResourceKind: "source" | "requirement" | "rule";
+        /** @description One ASD-STE100 violation attached to its typed declaration site. */
+        BeginVerificationFailureOutputTypedSpecDiagnostic: {
+            address: components["schemas"]["BeginVerificationFailureOutputDeclarationAddress"];
+            disposition: components["schemas"]["BeginVerificationFailureOutputFindingKind"];
+            field: string;
+            issue: components["schemas"]["BeginVerificationFailureOutputStandardIssue"];
+            message: string;
+            resource_kind: components["schemas"]["BeginVerificationFailureOutputTypedResourceKind"];
+            rule: components["schemas"]["BeginVerificationFailureOutputRuleNumber"];
+            span: components["schemas"]["BeginVerificationFailureOutputSpan"];
+            standard: components["schemas"]["BeginVerificationFailureOutputStandard"];
+        };
+        BeginVerificationFailureOutputWriteFailure: {
+            /** @constant */
+            kind: "schema_version";
+        } | {
+            /** @constant */
+            kind: "invalid_declaration";
+        } | {
+            conflicts: components["schemas"]["BeginVerificationFailureOutputReconciledResource"][];
+            /** @constant */
+            kind: "ownership_conflict";
+        } | {
+            /** @constant */
+            kind: "missing_reference";
+        } | {
+            diagnostics: components["schemas"]["BeginVerificationFailureOutputTypedSpecDiagnostic"][];
+            /** @constant */
+            kind: "statement_rejected";
+        } | {
+            /** @constant */
+            kind: "invalid_verification_target";
+        } | {
+            /** @constant */
+            kind: "retired_rule";
+        } | {
+            /** @constant */
+            kind: "invalid_completion";
+        } | {
+            /** @constant */
+            kind: "already_complete";
+        } | {
+            /** @constant */
+            kind: "file_access_denied";
+        } | {
+            /** @constant */
+            kind: "file_unavailable";
+        } | {
+            /** @constant */
+            kind: "write_failed";
+        } | {
+            /** @constant */
+            kind: "uncertain_write";
+        };
+        /** RepositoryCall */
+        BeginVerificationRequestInput: {
+            context: components["schemas"]["BeginVerificationRequestInputRepositoryScope"];
+            request: components["schemas"]["BeginVerificationRequestInputBeginVerificationInput"];
+        };
+        BeginVerificationRequestInputBeginVerificationInput: {
+            /** @default null */
+            commit?: string | null;
+            declaration?: components["schemas"]["BeginVerificationRequestInputDeclarationReferenceInput"] | null;
+            declared_by: string;
+            /** @default null */
+            file?: string | null;
+            key: string;
+            /** @description Semantic validation accepts examples, property, conformance, construction, exhaustion, and proof. */
+            method: string;
+            /** @default null */
+            rule?: string | null;
+            /** @default null */
+            symbol?: string | null;
+        };
+        /** @description One owner-local path to a language-authored declaration. */
+        BeginVerificationRequestInputDeclarationAddress: string[];
+        BeginVerificationRequestInputDeclarationReferenceInput: {
+            address: components["schemas"]["BeginVerificationRequestInputDeclarationAddress"];
+            declared_by: string;
+        };
+        /** @description Scope selection for operations that do not use projection freshness. */
+        BeginVerificationRequestInputRepositoryScope: {
+            repository: string;
+            scope: string;
+        };
+        /**
+         * VerificationRun
+         * @description Volatile evidence from one language-owned verification callback.
+         *
+         *     Runs live in Provenance's derived cache rather than canonical state: a
+         *     local test run must not dirty the repository. `rule_id` is the join back
+         *     to the canonical graph.
+         */
+        BeginVerificationSuccessOutput: {
+            binding_id?: components["schemas"]["BeginVerificationSuccessOutputStableId"] | null;
+            commit?: string | null;
+            /** Format: int64 */
+            completed_at?: number | null;
+            declared_by: string;
+            error?: string | null;
+            file?: string | null;
+            id: components["schemas"]["BeginVerificationSuccessOutputStableId"];
+            method: string;
+            rule_id: components["schemas"]["BeginVerificationSuccessOutputStableId"];
+            /** Format: uint32 */
+            schema_version: number;
+            scope_id: components["schemas"]["BeginVerificationSuccessOutputScopeId"];
+            /** Format: int64 */
+            started_at: number;
+            status: components["schemas"]["BeginVerificationSuccessOutputVerificationRunStatus"];
+            symbol?: string | null;
+        };
+        /**
+         * @description A scope id. The inner `String` is private and `new` is the only way in, so
+         *     every `ScopeId` in existence satisfies [`is_well_formed_id`].
+         */
+        BeginVerificationSuccessOutputScopeId: string;
+        /**
+         * @description A stable artifact id. The inner `String` is private and `new` is the only
+         *     way in, so every `StableId` in existence satisfies [`is_well_formed_id`].
+         */
+        BeginVerificationSuccessOutputStableId: string;
+        /**
+         * @description The lifecycle state of one callback-backed verification run.
+         * @enum {string}
+         */
+        BeginVerificationSuccessOutputVerificationRunStatus: "running" | "passed" | "failed";
+        /** FailureEnvelope */
         CheckStatementFailureOutput: {
             error: components["schemas"]["CheckStatementFailureOutputOperationError"];
             /** @constant */
@@ -256,6 +887,9 @@ export interface components {
         } | {
             /** @constant */
             kind: "internal";
+        } | {
+            /** @constant */
+            kind: "uncertain_write";
         };
         CheckStatementFailureOutputStatementFailure: never;
         /** DataFreeCall */
@@ -312,6 +946,221 @@ export interface components {
          */
         CheckStatementSuccessOutputStandardIssue: 9;
         /** FailureEnvelope */
+        CompleteVerificationFailureOutput: {
+            error: components["schemas"]["CompleteVerificationFailureOutputOperationError"];
+            /** @constant */
+            operation?: "complete-verification";
+            /** @constant */
+            protocol_version: 7;
+        };
+        /** @description One owner-local path to a language-authored declaration. */
+        CompleteVerificationFailureOutputDeclarationAddress: string[];
+        /**
+         * @description The disposition of a finding.
+         * @enum {string}
+         */
+        CompleteVerificationFailureOutputFindingKind: "violation";
+        /** @enum {string} */
+        CompleteVerificationFailureOutputInvalidInputReason: "required" | "invalid_value" | "malformed_json" | "unknown_field" | "too_large";
+        /** @description Keeps the handler's native error separate from preparation failure. */
+        CompleteVerificationFailureOutputOperationError: components["schemas"]["CompleteVerificationFailureOutputOperationFailure"] | components["schemas"]["CompleteVerificationFailureOutputWriteFailure"];
+        CompleteVerificationFailureOutputOperationFailure: {
+            field: string | null;
+            /** @constant */
+            kind: "invalid_input";
+            reason: components["schemas"]["CompleteVerificationFailureOutputInvalidInputReason"];
+        } | {
+            /** @constant */
+            kind: "protocol_mismatch";
+            /** Format: uint32 */
+            requested: number;
+            /** Format: uint32 */
+            supported: number;
+        } | {
+            /** @constant */
+            kind: "unknown_operation";
+        } | {
+            /** @constant */
+            kind: "unauthenticated";
+        } | {
+            /** @constant */
+            kind: "access_denied";
+        } | {
+            /** @constant */
+            kind: "unknown_target";
+        } | {
+            /** @constant */
+            kind: "unknown_scope";
+        } | {
+            /** @constant */
+            kind: "unavailable_needs";
+        } | {
+            /** @constant */
+            kind: "internal";
+        } | {
+            /** @constant */
+            kind: "uncertain_write";
+        };
+        /** @enum {string} */
+        CompleteVerificationFailureOutputReconcileState: "created" | "updated" | "moved" | "retired" | "conflict" | "unchanged";
+        CompleteVerificationFailureOutputReconciledResource: {
+            address: components["schemas"]["CompleteVerificationFailureOutputDeclarationAddress"];
+            changes?: components["schemas"]["CompleteVerificationFailureOutputTypedFieldChange"][];
+            id: components["schemas"]["CompleteVerificationFailureOutputStableId"];
+            key: string;
+            kind: components["schemas"]["CompleteVerificationFailureOutputTypedResourceKind"];
+            parent?: string | null;
+            state: components["schemas"]["CompleteVerificationFailureOutputReconcileState"];
+        };
+        /**
+         * @description An ASD-STE100 Issue 9 rule implemented by this analyzer.
+         * @enum {string}
+         */
+        CompleteVerificationFailureOutputRuleNumber: "1.1" | "4.2" | "6.3" | "6.6" | "8.1";
+        /** @description A half-open UTF-8 byte range in the analyzed text. */
+        CompleteVerificationFailureOutputSpan: {
+            /** Format: uint */
+            end: number;
+            /** Format: uint */
+            start: number;
+        };
+        /**
+         * @description A stable artifact id. The inner `String` is private and `new` is the only
+         *     way in, so every `StableId` in existence satisfies [`is_well_formed_id`].
+         */
+        CompleteVerificationFailureOutputStableId: string;
+        /**
+         * @description The authority used by the analyzer.
+         * @enum {string}
+         */
+        CompleteVerificationFailureOutputStandard: "ASD-STE100";
+        /**
+         * Format: uint8
+         * @description The fixed issue of the standard used by the analyzer.
+         * @constant
+         */
+        CompleteVerificationFailureOutputStandardIssue: 9;
+        CompleteVerificationFailureOutputTypedFieldChange: {
+            after: unknown;
+            before: unknown;
+            field: string;
+        };
+        /** @enum {string} */
+        CompleteVerificationFailureOutputTypedResourceKind: "source" | "requirement" | "rule";
+        /** @description One ASD-STE100 violation attached to its typed declaration site. */
+        CompleteVerificationFailureOutputTypedSpecDiagnostic: {
+            address: components["schemas"]["CompleteVerificationFailureOutputDeclarationAddress"];
+            disposition: components["schemas"]["CompleteVerificationFailureOutputFindingKind"];
+            field: string;
+            issue: components["schemas"]["CompleteVerificationFailureOutputStandardIssue"];
+            message: string;
+            resource_kind: components["schemas"]["CompleteVerificationFailureOutputTypedResourceKind"];
+            rule: components["schemas"]["CompleteVerificationFailureOutputRuleNumber"];
+            span: components["schemas"]["CompleteVerificationFailureOutputSpan"];
+            standard: components["schemas"]["CompleteVerificationFailureOutputStandard"];
+        };
+        CompleteVerificationFailureOutputWriteFailure: {
+            /** @constant */
+            kind: "schema_version";
+        } | {
+            /** @constant */
+            kind: "invalid_declaration";
+        } | {
+            conflicts: components["schemas"]["CompleteVerificationFailureOutputReconciledResource"][];
+            /** @constant */
+            kind: "ownership_conflict";
+        } | {
+            /** @constant */
+            kind: "missing_reference";
+        } | {
+            diagnostics: components["schemas"]["CompleteVerificationFailureOutputTypedSpecDiagnostic"][];
+            /** @constant */
+            kind: "statement_rejected";
+        } | {
+            /** @constant */
+            kind: "invalid_verification_target";
+        } | {
+            /** @constant */
+            kind: "retired_rule";
+        } | {
+            /** @constant */
+            kind: "invalid_completion";
+        } | {
+            /** @constant */
+            kind: "already_complete";
+        } | {
+            /** @constant */
+            kind: "file_access_denied";
+        } | {
+            /** @constant */
+            kind: "file_unavailable";
+        } | {
+            /** @constant */
+            kind: "write_failed";
+        } | {
+            /** @constant */
+            kind: "uncertain_write";
+        };
+        /** RepositoryCall */
+        CompleteVerificationRequestInput: {
+            context: components["schemas"]["CompleteVerificationRequestInputRepositoryScope"];
+            request: components["schemas"]["CompleteVerificationRequestInputCompleteVerificationInput"];
+        };
+        CompleteVerificationRequestInputCompleteVerificationInput: {
+            /** @default null */
+            error?: string | null;
+            run: string;
+            /** @description Semantic validation accepts passed or failed. */
+            status: string;
+        };
+        /** @description Scope selection for operations that do not use projection freshness. */
+        CompleteVerificationRequestInputRepositoryScope: {
+            repository: string;
+            scope: string;
+        };
+        /**
+         * VerificationRun
+         * @description Volatile evidence from one language-owned verification callback.
+         *
+         *     Runs live in Provenance's derived cache rather than canonical state: a
+         *     local test run must not dirty the repository. `rule_id` is the join back
+         *     to the canonical graph.
+         */
+        CompleteVerificationSuccessOutput: {
+            binding_id?: components["schemas"]["CompleteVerificationSuccessOutputStableId"] | null;
+            commit?: string | null;
+            /** Format: int64 */
+            completed_at?: number | null;
+            declared_by: string;
+            error?: string | null;
+            file?: string | null;
+            id: components["schemas"]["CompleteVerificationSuccessOutputStableId"];
+            method: string;
+            rule_id: components["schemas"]["CompleteVerificationSuccessOutputStableId"];
+            /** Format: uint32 */
+            schema_version: number;
+            scope_id: components["schemas"]["CompleteVerificationSuccessOutputScopeId"];
+            /** Format: int64 */
+            started_at: number;
+            status: components["schemas"]["CompleteVerificationSuccessOutputVerificationRunStatus"];
+            symbol?: string | null;
+        };
+        /**
+         * @description A scope id. The inner `String` is private and `new` is the only way in, so
+         *     every `ScopeId` in existence satisfies [`is_well_formed_id`].
+         */
+        CompleteVerificationSuccessOutputScopeId: string;
+        /**
+         * @description A stable artifact id. The inner `String` is private and `new` is the only
+         *     way in, so every `StableId` in existence satisfies [`is_well_formed_id`].
+         */
+        CompleteVerificationSuccessOutputStableId: string;
+        /**
+         * @description The lifecycle state of one callback-backed verification run.
+         * @enum {string}
+         */
+        CompleteVerificationSuccessOutputVerificationRunStatus: "running" | "passed" | "failed";
+        /** FailureEnvelope */
         EvidenceFailureOutput: {
             error: components["schemas"]["EvidenceFailureOutputOperationError"];
             /** @constant */
@@ -361,6 +1210,9 @@ export interface components {
         } | {
             /** @constant */
             kind: "internal";
+        } | {
+            /** @constant */
+            kind: "uncertain_write";
         };
         EvidenceFailureOutputReadFailure: {
             /** @constant */
@@ -691,6 +1543,9 @@ export interface components {
         } | {
             /** @constant */
             kind: "internal";
+        } | {
+            /** @constant */
+            kind: "uncertain_write";
         };
         GetFailureOutputReadFailure: {
             /** @constant */
@@ -814,7 +1669,31 @@ export interface components {
          *     never invents a second vocabulary for a Requirement or a Rule. The
          *     `node_type` tag is the same word a relation row uses for its endpoints.
          */
-        GetSuccessOutputGraphNode: components["schemas"]["GetSuccessOutputSource"] | components["schemas"]["GetSuccessOutputRequirement"] | components["schemas"]["GetSuccessOutputResolution"] | components["schemas"]["GetSuccessOutputRule"] | components["schemas"]["GetSuccessOutputTopic"] | components["schemas"]["GetSuccessOutputQuestion"] | components["schemas"]["GetSuccessOutputDomain"] | components["schemas"]["GetSuccessOutputBoundary"];
+        GetSuccessOutputGraphNode: ({
+            /** @constant */
+            node_type: "source";
+        } & components["schemas"]["GetSuccessOutputSource"]) | ({
+            /** @constant */
+            node_type: "requirement";
+        } & components["schemas"]["GetSuccessOutputRequirement"]) | ({
+            /** @constant */
+            node_type: "resolution";
+        } & components["schemas"]["GetSuccessOutputResolution"]) | ({
+            /** @constant */
+            node_type: "rule";
+        } & components["schemas"]["GetSuccessOutputRule"]) | ({
+            /** @constant */
+            node_type: "topic";
+        } & components["schemas"]["GetSuccessOutputTopic"]) | ({
+            /** @constant */
+            node_type: "question";
+        } & components["schemas"]["GetSuccessOutputQuestion"]) | ({
+            /** @constant */
+            node_type: "domain";
+        } & components["schemas"]["GetSuccessOutputDomain"]) | ({
+            /** @constant */
+            node_type: "boundary";
+        } & components["schemas"]["GetSuccessOutputBoundary"]);
         GetSuccessOutputQuestion: {
             answer?: string | null;
             /** Format: int64 */
@@ -1057,6 +1936,9 @@ export interface components {
         } | {
             /** @constant */
             kind: "internal";
+        } | {
+            /** @constant */
+            kind: "uncertain_write";
         };
         ImpactFailureOutputReadFailure: {
             /** @constant */
@@ -1270,6 +2152,9 @@ export interface components {
         } | {
             /** @constant */
             kind: "internal";
+        } | {
+            /** @constant */
+            kind: "uncertain_write";
         };
         InfoFailureOutputReadFailure: {
             /** @constant */
@@ -1385,6 +2270,9 @@ export interface components {
         } | {
             /** @constant */
             kind: "internal";
+        } | {
+            /** @constant */
+            kind: "uncertain_write";
         };
         NeighborsFailureOutputReadFailure: {
             /** @constant */
@@ -1539,7 +2427,31 @@ export interface components {
          *     never invents a second vocabulary for a Requirement or a Rule. The
          *     `node_type` tag is the same word a relation row uses for its endpoints.
          */
-        NeighborsSuccessOutputGraphNode: components["schemas"]["NeighborsSuccessOutputSource"] | components["schemas"]["NeighborsSuccessOutputRequirement"] | components["schemas"]["NeighborsSuccessOutputResolution"] | components["schemas"]["NeighborsSuccessOutputRule"] | components["schemas"]["NeighborsSuccessOutputTopic"] | components["schemas"]["NeighborsSuccessOutputQuestion"] | components["schemas"]["NeighborsSuccessOutputDomain"] | components["schemas"]["NeighborsSuccessOutputBoundary"];
+        NeighborsSuccessOutputGraphNode: ({
+            /** @constant */
+            node_type: "source";
+        } & components["schemas"]["NeighborsSuccessOutputSource"]) | ({
+            /** @constant */
+            node_type: "requirement";
+        } & components["schemas"]["NeighborsSuccessOutputRequirement"]) | ({
+            /** @constant */
+            node_type: "resolution";
+        } & components["schemas"]["NeighborsSuccessOutputResolution"]) | ({
+            /** @constant */
+            node_type: "rule";
+        } & components["schemas"]["NeighborsSuccessOutputRule"]) | ({
+            /** @constant */
+            node_type: "topic";
+        } & components["schemas"]["NeighborsSuccessOutputTopic"]) | ({
+            /** @constant */
+            node_type: "question";
+        } & components["schemas"]["NeighborsSuccessOutputQuestion"]) | ({
+            /** @constant */
+            node_type: "domain";
+        } & components["schemas"]["NeighborsSuccessOutputDomain"]) | ({
+            /** @constant */
+            node_type: "boundary";
+        } & components["schemas"]["NeighborsSuccessOutputBoundary"]);
         /** @description One record reached in a single hop, with the relation that reached it. */
         NeighborsSuccessOutputNeighbor: {
             direction: components["schemas"]["NeighborsSuccessOutputDirection"];
@@ -1739,6 +2651,389 @@ export interface components {
         /** @enum {string} */
         NeighborsSuccessOutputTopicStatus: "open" | "explored" | "closed";
         /** FailureEnvelope */
+        PlanFailureOutput: {
+            error: components["schemas"]["PlanFailureOutputOperationError"];
+            /** @constant */
+            operation?: "plan";
+            /** @constant */
+            protocol_version: 7;
+        };
+        /** @description One owner-local path to a language-authored declaration. */
+        PlanFailureOutputDeclarationAddress: string[];
+        /**
+         * @description The disposition of a finding.
+         * @enum {string}
+         */
+        PlanFailureOutputFindingKind: "violation";
+        /** @enum {string} */
+        PlanFailureOutputInvalidInputReason: "required" | "invalid_value" | "malformed_json" | "unknown_field" | "too_large";
+        /** @description Keeps the handler's native error separate from preparation failure. */
+        PlanFailureOutputOperationError: components["schemas"]["PlanFailureOutputOperationFailure"] | components["schemas"]["PlanFailureOutputWriteFailure"];
+        PlanFailureOutputOperationFailure: {
+            field: string | null;
+            /** @constant */
+            kind: "invalid_input";
+            reason: components["schemas"]["PlanFailureOutputInvalidInputReason"];
+        } | {
+            /** @constant */
+            kind: "protocol_mismatch";
+            /** Format: uint32 */
+            requested: number;
+            /** Format: uint32 */
+            supported: number;
+        } | {
+            /** @constant */
+            kind: "unknown_operation";
+        } | {
+            /** @constant */
+            kind: "unauthenticated";
+        } | {
+            /** @constant */
+            kind: "access_denied";
+        } | {
+            /** @constant */
+            kind: "unknown_target";
+        } | {
+            /** @constant */
+            kind: "unknown_scope";
+        } | {
+            /** @constant */
+            kind: "unavailable_needs";
+        } | {
+            /** @constant */
+            kind: "internal";
+        } | {
+            /** @constant */
+            kind: "uncertain_write";
+        };
+        /** @enum {string} */
+        PlanFailureOutputReconcileState: "created" | "updated" | "moved" | "retired" | "conflict" | "unchanged";
+        PlanFailureOutputReconciledResource: {
+            address: components["schemas"]["PlanFailureOutputDeclarationAddress"];
+            changes?: components["schemas"]["PlanFailureOutputTypedFieldChange"][];
+            id: components["schemas"]["PlanFailureOutputStableId"];
+            key: string;
+            kind: components["schemas"]["PlanFailureOutputTypedResourceKind"];
+            parent?: string | null;
+            state: components["schemas"]["PlanFailureOutputReconcileState"];
+        };
+        /**
+         * @description An ASD-STE100 Issue 9 rule implemented by this analyzer.
+         * @enum {string}
+         */
+        PlanFailureOutputRuleNumber: "1.1" | "4.2" | "6.3" | "6.6" | "8.1";
+        /** @description A half-open UTF-8 byte range in the analyzed text. */
+        PlanFailureOutputSpan: {
+            /** Format: uint */
+            end: number;
+            /** Format: uint */
+            start: number;
+        };
+        /**
+         * @description A stable artifact id. The inner `String` is private and `new` is the only
+         *     way in, so every `StableId` in existence satisfies [`is_well_formed_id`].
+         */
+        PlanFailureOutputStableId: string;
+        /**
+         * @description The authority used by the analyzer.
+         * @enum {string}
+         */
+        PlanFailureOutputStandard: "ASD-STE100";
+        /**
+         * Format: uint8
+         * @description The fixed issue of the standard used by the analyzer.
+         * @constant
+         */
+        PlanFailureOutputStandardIssue: 9;
+        PlanFailureOutputTypedFieldChange: {
+            after: unknown;
+            before: unknown;
+            field: string;
+        };
+        /** @enum {string} */
+        PlanFailureOutputTypedResourceKind: "source" | "requirement" | "rule";
+        /** @description One ASD-STE100 violation attached to its typed declaration site. */
+        PlanFailureOutputTypedSpecDiagnostic: {
+            address: components["schemas"]["PlanFailureOutputDeclarationAddress"];
+            disposition: components["schemas"]["PlanFailureOutputFindingKind"];
+            field: string;
+            issue: components["schemas"]["PlanFailureOutputStandardIssue"];
+            message: string;
+            resource_kind: components["schemas"]["PlanFailureOutputTypedResourceKind"];
+            rule: components["schemas"]["PlanFailureOutputRuleNumber"];
+            span: components["schemas"]["PlanFailureOutputSpan"];
+            standard: components["schemas"]["PlanFailureOutputStandard"];
+        };
+        PlanFailureOutputWriteFailure: {
+            /** @constant */
+            kind: "schema_version";
+        } | {
+            /** @constant */
+            kind: "invalid_declaration";
+        } | {
+            conflicts: components["schemas"]["PlanFailureOutputReconciledResource"][];
+            /** @constant */
+            kind: "ownership_conflict";
+        } | {
+            /** @constant */
+            kind: "missing_reference";
+        } | {
+            diagnostics: components["schemas"]["PlanFailureOutputTypedSpecDiagnostic"][];
+            /** @constant */
+            kind: "statement_rejected";
+        } | {
+            /** @constant */
+            kind: "invalid_verification_target";
+        } | {
+            /** @constant */
+            kind: "retired_rule";
+        } | {
+            /** @constant */
+            kind: "invalid_completion";
+        } | {
+            /** @constant */
+            kind: "already_complete";
+        } | {
+            /** @constant */
+            kind: "file_access_denied";
+        } | {
+            /** @constant */
+            kind: "file_unavailable";
+        } | {
+            /** @constant */
+            kind: "write_failed";
+        } | {
+            /** @constant */
+            kind: "uncertain_write";
+        };
+        /** RepositoryCall */
+        PlanRequestInput: {
+            context: components["schemas"]["PlanRequestInputRepositoryScope"];
+            request: components["schemas"]["PlanRequestInputTypedSpecInput"];
+        };
+        /** @description One owner-local path to a language-authored declaration. */
+        PlanRequestInputDeclarationAddress: string[];
+        /** @description Scope selection for operations that do not use projection freshness. */
+        PlanRequestInputRepositoryScope: {
+            repository: string;
+            scope: string;
+        };
+        /** @description One exact declaration identity that may transition from unowned to owned. */
+        PlanRequestInputTypedAdoptionTarget: {
+            id: string;
+            kind: components["schemas"]["PlanRequestInputTypedDeclarationKind"];
+        };
+        /** @enum {string} */
+        PlanRequestInputTypedDeclarationKind: "source" | "requirement" | "rule";
+        PlanRequestInputTypedImplementationInput: {
+            file: string;
+            symbol: string;
+        };
+        PlanRequestInputTypedRequirementInput: {
+            /** @description Keys of requirements in the same document this one depends on. */
+            depends_on?: string[] | null;
+            description?: string | null;
+            id?: string | null;
+            key: string;
+            /** @description The key of the requirement in the same document this one refines. */
+            refines?: string | null;
+            sources?: string[];
+            /** @description The canonical id of the resolution this requirement came out of. */
+            spawned_by?: string | null;
+            statement: string;
+            /** @description Keys of older requirements in the same document this one replaces. */
+            supersedes?: string[] | null;
+        };
+        PlanRequestInputTypedRuleInput: {
+            address?: components["schemas"]["PlanRequestInputDeclarationAddress"] | null;
+            description?: string | null;
+            id?: string | null;
+            implementation?: components["schemas"]["PlanRequestInputTypedImplementationInput"] | null;
+            key: string;
+            name?: string | null;
+            requirement?: string | null;
+            requirements?: string[];
+            /** @description Canonical ids of the resolutions that produced this rule. */
+            resolution_ids?: string[] | null;
+            statement: string;
+        };
+        PlanRequestInputTypedSourceInput: {
+            id?: string | null;
+            key: string;
+            /** @description Semantic validation accepts supported Source type names and the linear, github, and jira aliases. */
+            kind: string;
+            name: string;
+            reference?: string | null;
+            /** @description Keys of older sources in the same document this one replaces. */
+            supersedes?: string[] | null;
+            url?: string | null;
+        };
+        /**
+         * @description One language-authored desired-state document.
+         *
+         *     Serialization skips absent optional fields, so a decode and encode
+         *     round trip preserves every present field and every omission.
+         */
+        PlanRequestInputTypedSpecInput: {
+            adopt_unowned?: components["schemas"]["PlanRequestInputTypedAdoptionTarget"][];
+            declared_by: string;
+            requirements?: components["schemas"]["PlanRequestInputTypedRequirementInput"][];
+            rules?: components["schemas"]["PlanRequestInputTypedRuleInput"][];
+            /** Format: uint32 */
+            schema_version: number;
+            sources?: components["schemas"]["PlanRequestInputTypedSourceInput"][];
+            spec: string;
+        };
+        /**
+         * TypedSpecPlan
+         * @description One planned reconciliation with its affected Rules and their evidence.
+         *
+         *     `TypedSpecPlan` flattens `TypedSpecResult`, so `TypedSpecResult` must
+         *     never gain `deny_unknown_fields`.
+         */
+        PlanSuccessOutput: {
+            affected_rules: components["schemas"]["PlanSuccessOutputAffectedRule"][];
+            /** Format: uint */
+            conflicts: number;
+            /** Format: uint */
+            created: number;
+            declared_by: string;
+            diagnostics?: components["schemas"]["PlanSuccessOutputTypedSpecDiagnostic"][];
+            implementation_bindings?: components["schemas"]["PlanSuccessOutputImplementationBinding"][];
+            /** Format: uint */
+            moved: number;
+            resources: components["schemas"]["PlanSuccessOutputReconciledResource"][];
+            /** Format: uint */
+            retired: number;
+            /** Format: uint */
+            unchanged: number;
+            /** Format: uint */
+            updated: number;
+        };
+        /** @description One Rule a change reaches, with the code that stands behind it. */
+        PlanSuccessOutputAffectedRule: {
+            evidence: components["schemas"]["PlanSuccessOutputRuleEvidence"];
+            id: components["schemas"]["PlanSuccessOutputStableId"];
+            implementations: components["schemas"]["PlanSuccessOutputImplementationSite"][];
+            verifications: components["schemas"]["PlanSuccessOutputVerificationSite"][];
+        };
+        /** @description One owner-local path to a language-authored declaration. */
+        PlanSuccessOutputDeclarationAddress: string[];
+        /**
+         * @description The disposition of a finding.
+         * @enum {string}
+         */
+        PlanSuccessOutputFindingKind: "violation";
+        /**
+         * @description One canonical primary implementation relationship from an exported
+         *     production symbol to a Rule.
+         */
+        PlanSuccessOutputImplementationBinding: {
+            declared_by: string;
+            file: string;
+            id: components["schemas"]["PlanSuccessOutputStableId"];
+            retired?: boolean;
+            rule_id: components["schemas"]["PlanSuccessOutputStableId"];
+            /** Format: uint32 */
+            schema_version: number;
+            scope_id: components["schemas"]["PlanSuccessOutputScopeId"];
+            symbol: string;
+        };
+        /** @description Where a Rule is implemented. */
+        PlanSuccessOutputImplementationSite: {
+            file: string;
+            /** Format: uint */
+            line?: number | null;
+            symbol?: string | null;
+        };
+        /** @enum {string} */
+        PlanSuccessOutputReconcileState: "created" | "updated" | "moved" | "retired" | "conflict" | "unchanged";
+        PlanSuccessOutputReconciledResource: {
+            address: components["schemas"]["PlanSuccessOutputDeclarationAddress"];
+            changes?: components["schemas"]["PlanSuccessOutputTypedFieldChange"][];
+            id: components["schemas"]["PlanSuccessOutputStableId"];
+            key: string;
+            kind: components["schemas"]["PlanSuccessOutputTypedResourceKind"];
+            parent?: string | null;
+            state: components["schemas"]["PlanSuccessOutputReconcileState"];
+        };
+        /** @description One restated Requirement that put this Rule's evidence up for review. */
+        PlanSuccessOutputReviewReason: {
+            after: string;
+            before: string;
+            /** Format: int64 */
+            changed_at?: number | null;
+            field: string;
+            requirement: components["schemas"]["PlanSuccessOutputStableId"];
+        };
+        /** @description What the current state of a Rule's evidence asks a reader to do. */
+        PlanSuccessOutputRuleEvidence: {
+            reasons?: components["schemas"]["PlanSuccessOutputReviewReason"][];
+            review_required: boolean;
+        };
+        /**
+         * @description An ASD-STE100 Issue 9 rule implemented by this analyzer.
+         * @enum {string}
+         */
+        PlanSuccessOutputRuleNumber: "1.1" | "4.2" | "6.3" | "6.6" | "8.1";
+        /**
+         * @description A scope id. The inner `String` is private and `new` is the only way in, so
+         *     every `ScopeId` in existence satisfies [`is_well_formed_id`].
+         */
+        PlanSuccessOutputScopeId: string;
+        /** @description A half-open UTF-8 byte range in the analyzed text. */
+        PlanSuccessOutputSpan: {
+            /** Format: uint */
+            end: number;
+            /** Format: uint */
+            start: number;
+        };
+        /**
+         * @description A stable artifact id. The inner `String` is private and `new` is the only
+         *     way in, so every `StableId` in existence satisfies [`is_well_formed_id`].
+         */
+        PlanSuccessOutputStableId: string;
+        /**
+         * @description The authority used by the analyzer.
+         * @enum {string}
+         */
+        PlanSuccessOutputStandard: "ASD-STE100";
+        /**
+         * Format: uint8
+         * @description The fixed issue of the standard used by the analyzer.
+         * @constant
+         */
+        PlanSuccessOutputStandardIssue: 9;
+        PlanSuccessOutputTypedFieldChange: {
+            after: unknown;
+            before: unknown;
+            field: string;
+        };
+        /** @enum {string} */
+        PlanSuccessOutputTypedResourceKind: "source" | "requirement" | "rule";
+        /** @description One ASD-STE100 violation attached to its typed declaration site. */
+        PlanSuccessOutputTypedSpecDiagnostic: {
+            address: components["schemas"]["PlanSuccessOutputDeclarationAddress"];
+            disposition: components["schemas"]["PlanSuccessOutputFindingKind"];
+            field: string;
+            issue: components["schemas"]["PlanSuccessOutputStandardIssue"];
+            message: string;
+            resource_kind: components["schemas"]["PlanSuccessOutputTypedResourceKind"];
+            rule: components["schemas"]["PlanSuccessOutputRuleNumber"];
+            span: components["schemas"]["PlanSuccessOutputSpan"];
+            standard: components["schemas"]["PlanSuccessOutputStandard"];
+        };
+        /** @description Where a Rule is verified, and how. */
+        PlanSuccessOutputVerificationSite: {
+            declared_by?: string | null;
+            file: string;
+            key?: string | null;
+            /** Format: uint */
+            line?: number | null;
+            method: string;
+            symbol?: string | null;
+        };
+        /** FailureEnvelope */
         ResolveSymbolFailureOutput: {
             error: components["schemas"]["ResolveSymbolFailureOutputOperationError"];
             /** @constant */
@@ -1788,6 +3083,9 @@ export interface components {
         } | {
             /** @constant */
             kind: "internal";
+        } | {
+            /** @constant */
+            kind: "uncertain_write";
         };
         ResolveSymbolFailureOutputReadFailure: {
             /** @constant */
@@ -1924,7 +3222,31 @@ export interface components {
          *     never invents a second vocabulary for a Requirement or a Rule. The
          *     `node_type` tag is the same word a relation row uses for its endpoints.
          */
-        ResolveSymbolSuccessOutputGraphNode: components["schemas"]["ResolveSymbolSuccessOutputSource"] | components["schemas"]["ResolveSymbolSuccessOutputRequirement"] | components["schemas"]["ResolveSymbolSuccessOutputResolution"] | components["schemas"]["ResolveSymbolSuccessOutputRule"] | components["schemas"]["ResolveSymbolSuccessOutputTopic"] | components["schemas"]["ResolveSymbolSuccessOutputQuestion"] | components["schemas"]["ResolveSymbolSuccessOutputDomain"] | components["schemas"]["ResolveSymbolSuccessOutputBoundary"];
+        ResolveSymbolSuccessOutputGraphNode: ({
+            /** @constant */
+            node_type: "source";
+        } & components["schemas"]["ResolveSymbolSuccessOutputSource"]) | ({
+            /** @constant */
+            node_type: "requirement";
+        } & components["schemas"]["ResolveSymbolSuccessOutputRequirement"]) | ({
+            /** @constant */
+            node_type: "resolution";
+        } & components["schemas"]["ResolveSymbolSuccessOutputResolution"]) | ({
+            /** @constant */
+            node_type: "rule";
+        } & components["schemas"]["ResolveSymbolSuccessOutputRule"]) | ({
+            /** @constant */
+            node_type: "topic";
+        } & components["schemas"]["ResolveSymbolSuccessOutputTopic"]) | ({
+            /** @constant */
+            node_type: "question";
+        } & components["schemas"]["ResolveSymbolSuccessOutputQuestion"]) | ({
+            /** @constant */
+            node_type: "domain";
+        } & components["schemas"]["ResolveSymbolSuccessOutputDomain"]) | ({
+            /** @constant */
+            node_type: "boundary";
+        } & components["schemas"]["ResolveSymbolSuccessOutputBoundary"]);
         ResolveSymbolSuccessOutputQuestion: {
             answer?: string | null;
             /** Format: int64 */
@@ -2167,6 +3489,9 @@ export interface components {
         } | {
             /** @constant */
             kind: "internal";
+        } | {
+            /** @constant */
+            kind: "uncertain_write";
         };
         SearchFailureOutputReadFailure: {
             /** @constant */
@@ -2298,7 +3623,31 @@ export interface components {
          *     never invents a second vocabulary for a Requirement or a Rule. The
          *     `node_type` tag is the same word a relation row uses for its endpoints.
          */
-        SearchSuccessOutputGraphNode: components["schemas"]["SearchSuccessOutputSource"] | components["schemas"]["SearchSuccessOutputRequirement"] | components["schemas"]["SearchSuccessOutputResolution"] | components["schemas"]["SearchSuccessOutputRule"] | components["schemas"]["SearchSuccessOutputTopic"] | components["schemas"]["SearchSuccessOutputQuestion"] | components["schemas"]["SearchSuccessOutputDomain"] | components["schemas"]["SearchSuccessOutputBoundary"];
+        SearchSuccessOutputGraphNode: ({
+            /** @constant */
+            node_type: "source";
+        } & components["schemas"]["SearchSuccessOutputSource"]) | ({
+            /** @constant */
+            node_type: "requirement";
+        } & components["schemas"]["SearchSuccessOutputRequirement"]) | ({
+            /** @constant */
+            node_type: "resolution";
+        } & components["schemas"]["SearchSuccessOutputResolution"]) | ({
+            /** @constant */
+            node_type: "rule";
+        } & components["schemas"]["SearchSuccessOutputRule"]) | ({
+            /** @constant */
+            node_type: "topic";
+        } & components["schemas"]["SearchSuccessOutputTopic"]) | ({
+            /** @constant */
+            node_type: "question";
+        } & components["schemas"]["SearchSuccessOutputQuestion"]) | ({
+            /** @constant */
+            node_type: "domain";
+        } & components["schemas"]["SearchSuccessOutputDomain"]) | ({
+            /** @constant */
+            node_type: "boundary";
+        } & components["schemas"]["SearchSuccessOutputBoundary"]);
         SearchSuccessOutputQuestion: {
             answer?: string | null;
             /** Format: int64 */
@@ -2541,6 +3890,9 @@ export interface components {
         } | {
             /** @constant */
             kind: "internal";
+        } | {
+            /** @constant */
+            kind: "uncertain_write";
         };
         StaleFailureOutputReadFailure: {
             /** @constant */
@@ -2760,6 +4112,9 @@ export interface components {
         } | {
             /** @constant */
             kind: "internal";
+        } | {
+            /** @constant */
+            kind: "uncertain_write";
         };
         TraceFailureOutputReadFailure: {
             /** @constant */
@@ -2912,7 +4267,31 @@ export interface components {
          *     never invents a second vocabulary for a Requirement or a Rule. The
          *     `node_type` tag is the same word a relation row uses for its endpoints.
          */
-        TraceSuccessOutputGraphNode: components["schemas"]["TraceSuccessOutputSource"] | components["schemas"]["TraceSuccessOutputRequirement"] | components["schemas"]["TraceSuccessOutputResolution"] | components["schemas"]["TraceSuccessOutputRule"] | components["schemas"]["TraceSuccessOutputTopic"] | components["schemas"]["TraceSuccessOutputQuestion"] | components["schemas"]["TraceSuccessOutputDomain"] | components["schemas"]["TraceSuccessOutputBoundary"];
+        TraceSuccessOutputGraphNode: ({
+            /** @constant */
+            node_type: "source";
+        } & components["schemas"]["TraceSuccessOutputSource"]) | ({
+            /** @constant */
+            node_type: "requirement";
+        } & components["schemas"]["TraceSuccessOutputRequirement"]) | ({
+            /** @constant */
+            node_type: "resolution";
+        } & components["schemas"]["TraceSuccessOutputResolution"]) | ({
+            /** @constant */
+            node_type: "rule";
+        } & components["schemas"]["TraceSuccessOutputRule"]) | ({
+            /** @constant */
+            node_type: "topic";
+        } & components["schemas"]["TraceSuccessOutputTopic"]) | ({
+            /** @constant */
+            node_type: "question";
+        } & components["schemas"]["TraceSuccessOutputQuestion"]) | ({
+            /** @constant */
+            node_type: "domain";
+        } & components["schemas"]["TraceSuccessOutputDomain"]) | ({
+            /** @constant */
+            node_type: "boundary";
+        } & components["schemas"]["TraceSuccessOutputBoundary"]);
         TraceSuccessOutputQuestion: {
             answer?: string | null;
             /** Format: int64 */
@@ -3161,6 +4540,9 @@ export interface components {
         } | {
             /** @constant */
             kind: "internal";
+        } | {
+            /** @constant */
+            kind: "uncertain_write";
         };
         VerificationBindingsFailureOutputReadFailure: {
             /** @constant */
@@ -3300,6 +4682,9 @@ export interface components {
         } | {
             /** @constant */
             kind: "internal";
+        } | {
+            /** @constant */
+            kind: "uncertain_write";
         };
         VerificationRunsFailureOutputReadFailure: {
             /** @constant */
@@ -3430,6 +4815,180 @@ export interface operations {
             };
         };
     };
+    apply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplyRequestInput"];
+            };
+        };
+        responses: {
+            /** @description Operation result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplySuccessOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplyFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplyFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplyFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplyFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplyFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplyFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplyFailureOutput"];
+                };
+            };
+        };
+    };
+    beginVerification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BeginVerificationRequestInput"];
+            };
+        };
+        responses: {
+            /** @description Operation result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BeginVerificationSuccessOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BeginVerificationFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BeginVerificationFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BeginVerificationFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BeginVerificationFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BeginVerificationFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BeginVerificationFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BeginVerificationFailureOutput"];
+                };
+            };
+        };
+    };
     checkStatement: {
         parameters: {
             query?: never;
@@ -3452,7 +5011,7 @@ export interface operations {
                     "application/json": components["schemas"]["CheckStatementSuccessOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -3461,7 +5020,7 @@ export interface operations {
                     "application/json": components["schemas"]["CheckStatementFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -3470,7 +5029,7 @@ export interface operations {
                     "application/json": components["schemas"]["CheckStatementFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3479,7 +5038,7 @@ export interface operations {
                     "application/json": components["schemas"]["CheckStatementFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3488,7 +5047,7 @@ export interface operations {
                     "application/json": components["schemas"]["CheckStatementFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             500: {
                 headers: {
                     [name: string]: unknown;
@@ -3497,13 +5056,100 @@ export interface operations {
                     "application/json": components["schemas"]["CheckStatementFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["CheckStatementFailureOutput"];
+                };
+            };
+        };
+    };
+    completeVerification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompleteVerificationRequestInput"];
+            };
+        };
+        responses: {
+            /** @description Operation result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompleteVerificationSuccessOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompleteVerificationFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompleteVerificationFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompleteVerificationFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompleteVerificationFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompleteVerificationFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompleteVerificationFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompleteVerificationFailureOutput"];
                 };
             };
         };
@@ -3530,7 +5176,7 @@ export interface operations {
                     "application/json": components["schemas"]["EvidenceSuccessOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -3539,7 +5185,7 @@ export interface operations {
                     "application/json": components["schemas"]["EvidenceFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -3548,7 +5194,7 @@ export interface operations {
                     "application/json": components["schemas"]["EvidenceFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3557,7 +5203,7 @@ export interface operations {
                     "application/json": components["schemas"]["EvidenceFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3566,7 +5212,7 @@ export interface operations {
                     "application/json": components["schemas"]["EvidenceFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -3575,7 +5221,7 @@ export interface operations {
                     "application/json": components["schemas"]["EvidenceFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             500: {
                 headers: {
                     [name: string]: unknown;
@@ -3584,7 +5230,7 @@ export interface operations {
                     "application/json": components["schemas"]["EvidenceFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -3617,7 +5263,7 @@ export interface operations {
                     "application/json": components["schemas"]["GetSuccessOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -3626,7 +5272,7 @@ export interface operations {
                     "application/json": components["schemas"]["GetFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -3635,7 +5281,7 @@ export interface operations {
                     "application/json": components["schemas"]["GetFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3644,7 +5290,7 @@ export interface operations {
                     "application/json": components["schemas"]["GetFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3653,7 +5299,7 @@ export interface operations {
                     "application/json": components["schemas"]["GetFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -3662,7 +5308,7 @@ export interface operations {
                     "application/json": components["schemas"]["GetFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             500: {
                 headers: {
                     [name: string]: unknown;
@@ -3671,7 +5317,7 @@ export interface operations {
                     "application/json": components["schemas"]["GetFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -3704,7 +5350,7 @@ export interface operations {
                     "application/json": components["schemas"]["ImpactSuccessOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -3713,7 +5359,7 @@ export interface operations {
                     "application/json": components["schemas"]["ImpactFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -3722,7 +5368,7 @@ export interface operations {
                     "application/json": components["schemas"]["ImpactFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3731,7 +5377,7 @@ export interface operations {
                     "application/json": components["schemas"]["ImpactFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3740,7 +5386,7 @@ export interface operations {
                     "application/json": components["schemas"]["ImpactFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -3749,7 +5395,7 @@ export interface operations {
                     "application/json": components["schemas"]["ImpactFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             500: {
                 headers: {
                     [name: string]: unknown;
@@ -3758,7 +5404,7 @@ export interface operations {
                     "application/json": components["schemas"]["ImpactFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -3791,7 +5437,7 @@ export interface operations {
                     "application/json": components["schemas"]["InfoSuccessOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -3800,7 +5446,7 @@ export interface operations {
                     "application/json": components["schemas"]["InfoFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -3809,7 +5455,7 @@ export interface operations {
                     "application/json": components["schemas"]["InfoFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3818,7 +5464,7 @@ export interface operations {
                     "application/json": components["schemas"]["InfoFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3827,7 +5473,7 @@ export interface operations {
                     "application/json": components["schemas"]["InfoFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             500: {
                 headers: {
                     [name: string]: unknown;
@@ -3836,7 +5482,7 @@ export interface operations {
                     "application/json": components["schemas"]["InfoFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -3869,7 +5515,7 @@ export interface operations {
                     "application/json": components["schemas"]["NeighborsSuccessOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -3878,7 +5524,7 @@ export interface operations {
                     "application/json": components["schemas"]["NeighborsFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -3887,7 +5533,7 @@ export interface operations {
                     "application/json": components["schemas"]["NeighborsFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3896,7 +5542,7 @@ export interface operations {
                     "application/json": components["schemas"]["NeighborsFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3905,7 +5551,7 @@ export interface operations {
                     "application/json": components["schemas"]["NeighborsFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -3914,7 +5560,7 @@ export interface operations {
                     "application/json": components["schemas"]["NeighborsFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             500: {
                 headers: {
                     [name: string]: unknown;
@@ -3923,13 +5569,100 @@ export interface operations {
                     "application/json": components["schemas"]["NeighborsFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["NeighborsFailureOutput"];
+                };
+            };
+        };
+    };
+    plan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanRequestInput"];
+            };
+        };
+        responses: {
+            /** @description Operation result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanSuccessOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanFailureOutput"];
                 };
             };
         };
@@ -3956,7 +5689,7 @@ export interface operations {
                     "application/json": components["schemas"]["ResolveSymbolSuccessOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -3965,7 +5698,7 @@ export interface operations {
                     "application/json": components["schemas"]["ResolveSymbolFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -3974,7 +5707,7 @@ export interface operations {
                     "application/json": components["schemas"]["ResolveSymbolFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3983,7 +5716,7 @@ export interface operations {
                     "application/json": components["schemas"]["ResolveSymbolFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3992,7 +5725,7 @@ export interface operations {
                     "application/json": components["schemas"]["ResolveSymbolFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4001,7 +5734,7 @@ export interface operations {
                     "application/json": components["schemas"]["ResolveSymbolFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             500: {
                 headers: {
                     [name: string]: unknown;
@@ -4010,7 +5743,7 @@ export interface operations {
                     "application/json": components["schemas"]["ResolveSymbolFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -4043,7 +5776,7 @@ export interface operations {
                     "application/json": components["schemas"]["SearchSuccessOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -4052,7 +5785,7 @@ export interface operations {
                     "application/json": components["schemas"]["SearchFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -4061,7 +5794,7 @@ export interface operations {
                     "application/json": components["schemas"]["SearchFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4070,7 +5803,7 @@ export interface operations {
                     "application/json": components["schemas"]["SearchFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4079,7 +5812,7 @@ export interface operations {
                     "application/json": components["schemas"]["SearchFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4088,7 +5821,7 @@ export interface operations {
                     "application/json": components["schemas"]["SearchFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             500: {
                 headers: {
                     [name: string]: unknown;
@@ -4097,7 +5830,7 @@ export interface operations {
                     "application/json": components["schemas"]["SearchFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -4130,7 +5863,7 @@ export interface operations {
                     "application/json": components["schemas"]["StaleSuccessOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -4139,7 +5872,7 @@ export interface operations {
                     "application/json": components["schemas"]["StaleFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -4148,7 +5881,7 @@ export interface operations {
                     "application/json": components["schemas"]["StaleFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4157,7 +5890,7 @@ export interface operations {
                     "application/json": components["schemas"]["StaleFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4166,7 +5899,7 @@ export interface operations {
                     "application/json": components["schemas"]["StaleFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4175,7 +5908,7 @@ export interface operations {
                     "application/json": components["schemas"]["StaleFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             500: {
                 headers: {
                     [name: string]: unknown;
@@ -4184,7 +5917,7 @@ export interface operations {
                     "application/json": components["schemas"]["StaleFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -4217,7 +5950,7 @@ export interface operations {
                     "application/json": components["schemas"]["TraceSuccessOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -4226,7 +5959,7 @@ export interface operations {
                     "application/json": components["schemas"]["TraceFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -4235,7 +5968,7 @@ export interface operations {
                     "application/json": components["schemas"]["TraceFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4244,7 +5977,7 @@ export interface operations {
                     "application/json": components["schemas"]["TraceFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4253,7 +5986,7 @@ export interface operations {
                     "application/json": components["schemas"]["TraceFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4262,7 +5995,7 @@ export interface operations {
                     "application/json": components["schemas"]["TraceFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             500: {
                 headers: {
                     [name: string]: unknown;
@@ -4271,7 +6004,7 @@ export interface operations {
                     "application/json": components["schemas"]["TraceFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -4304,7 +6037,7 @@ export interface operations {
                     "application/json": components["schemas"]["VerificationBindingsSuccessOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -4313,7 +6046,7 @@ export interface operations {
                     "application/json": components["schemas"]["VerificationBindingsFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -4322,7 +6055,7 @@ export interface operations {
                     "application/json": components["schemas"]["VerificationBindingsFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4331,7 +6064,7 @@ export interface operations {
                     "application/json": components["schemas"]["VerificationBindingsFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4340,7 +6073,7 @@ export interface operations {
                     "application/json": components["schemas"]["VerificationBindingsFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             500: {
                 headers: {
                     [name: string]: unknown;
@@ -4349,7 +6082,7 @@ export interface operations {
                     "application/json": components["schemas"]["VerificationBindingsFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -4382,7 +6115,7 @@ export interface operations {
                     "application/json": components["schemas"]["VerificationRunsSuccessOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -4391,7 +6124,7 @@ export interface operations {
                     "application/json": components["schemas"]["VerificationRunsFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -4400,7 +6133,7 @@ export interface operations {
                     "application/json": components["schemas"]["VerificationRunsFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4409,7 +6142,7 @@ export interface operations {
                     "application/json": components["schemas"]["VerificationRunsFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4418,7 +6151,7 @@ export interface operations {
                     "application/json": components["schemas"]["VerificationRunsFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             500: {
                 headers: {
                     [name: string]: unknown;
@@ -4427,7 +6160,7 @@ export interface operations {
                     "application/json": components["schemas"]["VerificationRunsFailureOutput"];
                 };
             };
-            /** @description Operation refused */
+            /** @description Operation failed or was refused */
             503: {
                 headers: {
                     [name: string]: unknown;

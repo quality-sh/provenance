@@ -23,4 +23,6 @@ pub enum ImpactFailureOutputOperationFailure {
     UnavailableNeeds,
     #[serde(rename = "internal")]
     Internal,
+    #[serde(rename = "uncertain_write")]
+    UncertainWrite,
 }

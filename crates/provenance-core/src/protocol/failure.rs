@@ -39,6 +39,8 @@ pub enum OperationFailure {
     UnavailableNeeds,
     #[error("internal operation failure")]
     Internal,
+    #[error("write outcome is uncertain; inspect saved state before another submission")]
+    UncertainWrite,
 }
 
 impl OperationFailure {
@@ -49,7 +51,7 @@ impl OperationFailure {
             Self::Unauthenticated => 401,
             Self::AccessDenied => 403,
             Self::UnavailableNeeds => 503,
-            Self::Internal => 500,
+            Self::Internal | Self::UncertainWrite => 500,
         }
     }
 }
@@ -87,7 +89,7 @@ pub enum OperationError<F> {
 
 /// Exact declared failure payload after dispatch, with private response status.
 #[derive(Debug, Serialize, thiserror::Error)]
-#[error("operation refused")]
+#[error("operation failed")]
 pub struct ErasedFailure {
     pub protocol_version: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
