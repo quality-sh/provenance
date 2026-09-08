@@ -14,10 +14,10 @@ async fn relation_rows(layout: &ProvenanceLayout) -> Vec<RelationRow> {
         "SELECT owner_type, owner_id, relation, target_type, target_id FROM relations \
          ORDER BY owner_type, owner_id, relation, target_id",
     )
-    .fetch_all(&pool)
+    .fetch_all(pool.pool())
     .await
     .unwrap();
-    pool.close().await;
+    pool.close().await.unwrap();
     rows
 }
 

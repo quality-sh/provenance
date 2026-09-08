@@ -11,17 +11,17 @@ async fn the_stamp_carries_the_stored_instance_id() {
     materialize_state(&layout).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
     let instance_id: String = sqlx::query_scalar("SELECT instance_id FROM projection_instance")
-        .fetch_one(&pool)
+        .fetch_one(pool.pool())
         .await
         .unwrap();
     let (serial, digest): (i64, String) = sqlx::query_as(
         "SELECT serial, digest FROM projection_revision ORDER BY serial DESC LIMIT 1",
     )
-    .fetch_one(&pool)
+    .fetch_one(pool.pool())
     .await
     .unwrap();
 
-    let mut connection = pool.acquire().await.unwrap();
+    let mut connection = pool.pool().acquire().await.unwrap();
     let stored = stamp::stored_revision(&mut connection)
         .await
         .unwrap()
@@ -40,7 +40,7 @@ async fn an_empty_database_holds_no_revision() {
         .await
         .unwrap();
     let pool = open_cache(&layout).await.unwrap();
-    let mut connection = pool.acquire().await.unwrap();
+    let mut connection = pool.pool().acquire().await.unwrap();
     assert!(stamp::stored_revision(&mut connection)
         .await
         .unwrap()

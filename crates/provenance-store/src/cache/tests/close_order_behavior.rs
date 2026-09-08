@@ -7,10 +7,10 @@
 use super::super::*;
 use super::fixtures::empty_layout;
 use super::wal_behavior::wal_files;
+use crate::cache::CacheConnection;
 use crate::layout::ProvenanceLayout;
 use crate::operations::read_policy::ReadPolicy;
 use fs2::FileExt;
-use sqlx::SqlitePool;
 use std::fs::{File, OpenOptions};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
@@ -176,7 +176,7 @@ impl Drop for PauseOnDrop {
 /// dropping the connection state, before the `SQLite` handle drops, so the
 /// destructor of this handler pauses the teardown at that exact point and
 /// reports that the pause has begun.
-async fn pause_physical_close(pool: &SqlitePool) -> (Release, oneshot::Receiver<()>) {
+async fn pause_physical_close(pool: &CacheConnection) -> (Release, oneshot::Receiver<()>) {
     let gate = Arc::new((Mutex::new(false), Condvar::new()));
     let (signal, started) = oneshot::channel();
     let pause = PauseOnDrop {
@@ -184,6 +184,7 @@ async fn pause_physical_close(pool: &SqlitePool) -> (Release, oneshot::Receiver<
         gate: Arc::clone(&gate),
     };
     let mut connection = pool
+        .pool()
         .acquire()
         .await
         .expect("the pool must hand out a connection");
@@ -202,21 +203,23 @@ async fn pause_physical_close(pool: &SqlitePool) -> (Release, oneshot::Receiver<
 
 /// Two pools over one database, each holding one open connection, so the
 /// second close has teardown of its own to order behind the first.
-async fn two_pools_over_one_database(layout: &ProvenanceLayout) -> (SqlitePool, SqlitePool) {
+async fn two_pools_over_one_database(
+    layout: &ProvenanceLayout,
+) -> (CacheConnection, CacheConnection) {
     let first = open_cache(layout).await.expect("the first pool must open");
     sqlx::query("CREATE TABLE sample(value INTEGER)")
-        .execute(&first)
+        .execute(first.pool())
         .await
         .expect("the table must create");
     sqlx::query("INSERT INTO sample VALUES (1)")
-        .execute(&first)
+        .execute(first.pool())
         .await
         .expect("the row must insert");
     let second = open_cache(layout)
         .await
         .expect("the second pool must open over the same database");
     sqlx::query("SELECT * FROM sample")
-        .fetch_all(&second)
+        .fetch_all(second.pool())
         .await
         .expect("the second pool must read");
     (first, second)
@@ -272,7 +275,8 @@ async fn a_reader_cancelled_mid_close_keeps_the_close_order() {
     let (first, second) = two_pools_over_one_database(&layout).await;
     let (release, started) = pause_physical_close(&first).await;
     let task = tokio::spawn(async move {
-        close_cache(&first)
+        first
+            .close()
             .await
             .expect("the close must succeed once the paused teardown resumes");
     });
@@ -294,7 +298,7 @@ async fn a_reader_cancelled_mid_close_keeps_the_close_order() {
         outside.try_lock_exclusive().is_err(),
         "a cancelled reader must not release the close lock before its teardown finishes"
     );
-    let passing_close = tokio::time::timeout(BLOCKED_CLOSE_PROOF, close_cache(&second)).await;
+    let passing_close = tokio::time::timeout(BLOCKED_CLOSE_PROOF, second.close()).await;
     assert!(
         passing_close.is_err(),
         "no close may pass the close that owns the lock"
@@ -314,7 +318,7 @@ async fn a_reader_panicking_mid_close_keeps_the_close_order() {
     let (panic_tx, panic_rx) = oneshot::channel::<()>();
     let task = tokio::spawn(async move {
         tokio::select! {
-            result = close_cache(&first) => {
+            result = first.close() => {
                 result.expect("the close must succeed once the paused teardown resumes");
             }
             _ = panic_rx => panic!("the reader panics while its close is pending"),
@@ -343,7 +347,7 @@ async fn a_reader_panicking_mid_close_keeps_the_close_order() {
         outside.try_lock_exclusive().is_err(),
         "a panicking reader must not release the close lock before its teardown finishes"
     );
-    let passing_close = tokio::time::timeout(BLOCKED_CLOSE_PROOF, close_cache(&second)).await;
+    let passing_close = tokio::time::timeout(BLOCKED_CLOSE_PROOF, second.close()).await;
     assert!(
         passing_close.is_err(),
         "no close may pass the close that owns the lock"

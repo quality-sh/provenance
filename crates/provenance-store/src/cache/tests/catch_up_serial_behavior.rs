@@ -59,21 +59,21 @@ async fn a_pass_that_changes_nothing_commits_no_revision() {
     let (_dir, layout, _scope) = seeded_layout();
     materialize_state(&layout).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
-    let before = latest_revision(&pool).await;
-    let revisions_before = revision_count(&pool).await;
-    pool.close().await;
+    let before = latest_revision(pool.pool()).await;
+    let revisions_before = revision_count(pool.pool()).await;
+    pool.close().await.unwrap();
 
     let report = catch_up_state(&layout).await.unwrap();
     assert_eq!(report.rows_written, 0);
 
     let pool = open_cache(&layout).await.unwrap();
     assert_eq!(
-        latest_revision(&pool).await,
+        latest_revision(pool.pool()).await,
         before,
         "a no-op pass keeps serial and digest"
     );
     assert_eq!(
-        revision_count(&pool).await,
+        revision_count(pool.pool()).await,
         revisions_before,
         "a no-op pass commits no revision row"
     );
@@ -84,8 +84,8 @@ async fn a_writer_commit_reaches_the_projection_on_the_next_pass() {
     let (_dir, layout, scope) = seeded_layout();
     materialize_state(&layout).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
-    let (serial_before, _) = latest_revision(&pool).await;
-    pool.close().await;
+    let (serial_before, _) = latest_revision(pool.pool()).await;
+    pool.close().await.unwrap();
 
     let store = StateStore::new(layout.clone());
     create_source(&store, &scope, "source_after_stamp");
@@ -136,8 +136,8 @@ async fn a_crash_after_commit_leaves_consistent_state_and_the_next_pass_finds_no
     assert!(error.to_string().contains("injected crash"), "{error}");
 
     let pool = open_cache(&layout).await.unwrap();
-    let (committed_serial, _) = latest_revision(&pool).await;
-    pool.close().await;
+    let (committed_serial, _) = latest_revision(pool.pool()).await;
+    pool.close().await.unwrap();
 
     let report = catch_up_state(&layout).await.unwrap();
     assert_eq!(
@@ -153,8 +153,8 @@ async fn a_crash_before_commit_leaves_the_previous_stamp_readable() {
     let (_dir, layout, scope) = seeded_layout();
     materialize_state(&layout).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
-    let before = latest_revision(&pool).await;
-    pool.close().await;
+    let before = latest_revision(pool.pool()).await;
+    pool.close().await.unwrap();
     let store = StateStore::new(layout.clone());
     create_source(&store, &scope, "source_uncommitted");
 
@@ -164,8 +164,12 @@ async fn a_crash_before_commit_leaves_the_previous_stamp_readable() {
     assert!(error.to_string().contains("injected crash"), "{error}");
 
     let pool = open_cache(&layout).await.unwrap();
-    assert_eq!(latest_revision(&pool).await, before, "the old stamp stands");
-    pool.close().await;
+    assert_eq!(
+        latest_revision(pool.pool()).await,
+        before,
+        "the old stamp stands"
+    );
+    pool.close().await.unwrap();
     let report = catch_up_state(&layout).await.unwrap();
     assert_eq!(report.serial, before.0 + 1);
     assert_catch_up_equals_rebuild(&layout).await;
@@ -188,12 +192,12 @@ async fn a_concurrent_rebuild_and_catch_up_yield_one_serial_progression() {
     let pool = open_cache(&layout).await.unwrap();
     let serials: Vec<i64> =
         sqlx::query_scalar("SELECT serial FROM projection_revision ORDER BY serial")
-            .fetch_all(&pool)
+            .fetch_all(pool.pool())
             .await
             .unwrap();
     let expected: Vec<i64> = (1..=i64::try_from(serials.len()).unwrap()).collect();
     assert_eq!(serials, expected, "one gapless, duplicate-free progression");
-    pool.close().await;
+    pool.close().await.unwrap();
     assert_catch_up_equals_rebuild(&layout).await;
 }
 
@@ -205,9 +209,9 @@ async fn total_cache_loss_restarts_the_serial_at_one_in_a_fresh_instance() {
     create_source(&store, &scope, "source_second_serial");
     catch_up_state(&layout).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
-    let (serial, digest) = latest_revision(&pool).await;
-    let first_instance = instance_id(&pool).await;
-    pool.close().await;
+    let (serial, digest) = latest_revision(pool.pool()).await;
+    let first_instance = instance_id(pool.pool()).await;
+    pool.close().await.unwrap();
     assert_eq!(serial, 2);
 
     std::fs::remove_dir_all(layout.cache_dir()).unwrap();
@@ -217,7 +221,7 @@ async fn total_cache_loss_restarts_the_serial_at_one_in_a_fresh_instance() {
     assert_eq!(report.serial, 1, "a fresh instance starts at one");
     assert_eq!(report.digest, digest, "same canonical bytes, same digest");
     let pool = open_cache(&layout).await.unwrap();
-    assert_ne!(instance_id(&pool).await, first_instance);
+    assert_ne!(instance_id(pool.pool()).await, first_instance);
 }
 
 #[tokio::test]
@@ -228,8 +232,8 @@ async fn a_lost_database_with_canonical_state_intact_rebuilds_at_one() {
     create_source(&store, &scope, "source_survives_db_loss");
     catch_up_state(&layout).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
-    let (serial_before_loss, _) = latest_revision(&pool).await;
-    pool.close().await;
+    let (serial_before_loss, _) = latest_revision(pool.pool()).await;
+    pool.close().await.unwrap();
     assert_eq!(serial_before_loss, 2, "two revisions before the loss");
 
     remove_database_file(&layout);

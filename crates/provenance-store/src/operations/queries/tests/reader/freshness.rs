@@ -209,10 +209,10 @@ async fn annotate_only_refuses_a_half_migrated_database() {
     let pool = open_cache(&store.layout()).await.unwrap();
     sqlx::query("DELETE FROM _schema_migrations WHERE id = ?")
         .bind(crate::migrations::RECORD_COLUMNS_MIGRATION_ID)
-        .execute(&pool)
+        .execute(pool.pool())
         .await
         .unwrap();
-    pool.close().await;
+    pool.close().await.unwrap();
     crate::test_probes::crash_at("catch_up_after_migrations");
     let crashed = catch_up_state(&store.layout()).await.unwrap_err();
     crate::test_probes::disarm("catch_up_after_migrations");
@@ -267,8 +267,8 @@ async fn annotate_only_refuses_a_projection_from_an_older_validator() {
     let store = test_stores::seeded_queries();
     get_through(&store, ReadPolicy::default()).await.unwrap();
     let pool = open_cache(&store.layout()).await.unwrap();
-    crate::cache::tests::validation_version_behavior::rewind_validation(&pool).await;
-    pool.close().await;
+    crate::cache::tests::validation_version_behavior::rewind_validation(pool.pool()).await;
+    pool.close().await.unwrap();
     let result = get_through(
         &store,
         ReadPolicy::with_freshness(FreshnessPolicy::AnnotateOnly),

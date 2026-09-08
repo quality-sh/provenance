@@ -28,7 +28,10 @@ async fn migration_creates_the_projection_stamp_and_family_tables() {
     materialize_empty_state(&layout).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
     for table in PROJECTION_TABLES {
-        assert!(table_exists(&pool, table).await, "missing table {table}");
+        assert!(
+            table_exists(pool.pool(), table).await,
+            "missing table {table}"
+        );
     }
 }
 
@@ -111,7 +114,7 @@ async fn materialization_loads_binding_and_review_families_into_their_tables() {
             "SELECT id FROM {table} WHERE scope_id = ? AND rule_id = 'rule_schads_pay_001'"
         ))
         .bind(scope.as_str())
-        .fetch_optional(&pool)
+        .fetch_optional(pool.pool())
         .await
         .unwrap();
         assert_eq!(found.as_deref(), Some(id), "missing row in {table}");
@@ -139,7 +142,7 @@ async fn materialization_stores_a_revision_stamp_with_instance_identity() {
     materialize_state(&layout).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
 
-    let (serial, digest, instance) = stamp(&pool).await;
+    let (serial, digest, instance) = stamp(pool.pool()).await;
     assert_eq!(serial, 1);
     assert!(
         digest.starts_with("sha256:") && digest.len() == 71,
@@ -154,7 +157,7 @@ async fn materialization_stores_a_revision_stamp_with_instance_identity() {
     let rows: Vec<(String, String, String, i64)> = sqlx::query_as(
         "SELECT scope_id, family, content_digest, record_count FROM projection_family_digests ORDER BY family, scope_id",
     )
-    .fetch_all(&pool)
+    .fetch_all(pool.pool())
     .await
     .unwrap();
     assert_eq!(rows.len(), 18, "one row per family for the one scope");
@@ -182,12 +185,12 @@ async fn rematerialization_of_unchanged_state_keeps_digest_and_instance_and_adva
     seed_integration_shards(&layout, scope.as_str());
     materialize_state(&layout).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
-    let (first_serial, first_digest, first_instance) = stamp(&pool).await;
+    let (first_serial, first_digest, first_instance) = stamp(pool.pool()).await;
     drop(pool);
 
     materialize_state(&layout).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
-    let (second_serial, second_digest, second_instance) = stamp(&pool).await;
+    let (second_serial, second_digest, second_instance) = stamp(pool.pool()).await;
 
     assert!(second_serial > first_serial, "serials only move forward");
     assert_eq!(first_digest, second_digest);
@@ -232,8 +235,8 @@ async fn identical_repositories_agree_on_digest_but_never_on_instance() {
 
     let pool_a = open_cache(&layout_a).await.unwrap();
     let pool_b = open_cache(&layout_b).await.unwrap();
-    let (_, digest_a, instance_a) = stamp(&pool_a).await;
-    let (_, digest_b, instance_b) = stamp(&pool_b).await;
+    let (_, digest_a, instance_a) = stamp(pool_a.pool()).await;
+    let (_, digest_b, instance_b) = stamp(pool_b.pool()).await;
 
     assert_eq!(digest_a, digest_b, "same canonical state, same digest");
     assert_ne!(instance_a, instance_b, "each database is its own instance");
@@ -245,11 +248,11 @@ async fn empty_state_materialization_stores_no_revision_and_no_instance() {
     materialize_empty_state(&layout).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
     let revisions: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM projection_revision")
-        .fetch_one(&pool)
+        .fetch_one(pool.pool())
         .await
         .unwrap();
     let instances: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM projection_instance")
-        .fetch_one(&pool)
+        .fetch_one(pool.pool())
         .await
         .unwrap();
     assert_eq!(revisions, 0);

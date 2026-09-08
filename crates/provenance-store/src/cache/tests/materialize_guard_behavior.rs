@@ -89,13 +89,13 @@ async fn stamp_rows_carry_content_digests_that_rebuild_the_revision_digest() {
 
     let stored_digest: String =
         sqlx::query_scalar("SELECT digest FROM projection_revision ORDER BY serial DESC LIMIT 1")
-            .fetch_one(&pool)
+            .fetch_one(pool.pool())
             .await
             .unwrap();
     let rows: Vec<(String, String, String, i64)> = sqlx::query_as(
         "SELECT scope_id, family, content_digest, record_count FROM projection_family_digests",
     )
-    .fetch_all(&pool)
+    .fetch_all(pool.pool())
     .await
     .unwrap();
     assert_eq!(rows.len(), 18);

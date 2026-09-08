@@ -7,6 +7,7 @@ mod catch_up_validation_behavior;
 mod close_cancellation;
 mod close_order_behavior;
 mod close_progress;
+mod completion_behavior;
 pub mod fixtures;
 mod frontier_behavior;
 mod gap_rule_behavior;

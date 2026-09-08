@@ -203,7 +203,7 @@ async fn projection_counts_match_canonical_over_the_repository_state() {
     let scope = &store.scope;
     catch_up_state(&store.layout()).await.unwrap();
     let pool = open_cache(&store.layout()).await.unwrap();
-    let snapshot = reader::ReadSnapshot::open(&pool, scope)
+    let snapshot = reader::ReadSnapshot::open(pool.pool(), scope)
         .await
         .unwrap()
         .expect("a revision");
@@ -231,7 +231,7 @@ async fn projection_counts_match_canonical_over_the_repository_state() {
     )
     .await;
     drop(snapshot);
-    pool.close().await;
+    pool.close().await.unwrap();
 }
 
 async fn assert_count<K: ProjectionRow>(snapshot: &ReadSnapshot, canonical: usize) {
