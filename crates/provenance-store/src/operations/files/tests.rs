@@ -2,6 +2,12 @@ use super::*;
 #[cfg(unix)]
 use std::io::Read;
 
+#[cfg(unix)]
+fn physical_tempdir() -> tempfile::TempDir {
+    // The selected test root must not inherit system aliases such as /var on macOS.
+    tempfile::tempdir_in(std::env::temp_dir().canonicalize().unwrap()).unwrap()
+}
+
 #[test]
 fn portable_relative_identity_rejects_all_escape_forms() {
     for name in [
@@ -23,7 +29,7 @@ fn portable_relative_identity_rejects_all_escape_forms() {
 #[cfg(unix)]
 #[test]
 fn opened_file_stays_bound_after_path_and_root_replacement() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = physical_tempdir();
     let repo = Utf8Path::from_path(dir.path()).unwrap().join("repo");
     std::fs::create_dir(&repo).unwrap();
     std::fs::write(repo.join("safe.rs"), "safe").unwrap();
@@ -49,8 +55,8 @@ fn opened_file_stays_bound_after_path_and_root_replacement() {
 #[test]
 fn nofollow_traversal_refuses_replaced_ancestors_and_special_files() {
     use std::os::unix::fs::symlink;
-    let dir = tempfile::tempdir().unwrap();
-    let outside = tempfile::tempdir().unwrap();
+    let dir = physical_tempdir();
+    let outside = physical_tempdir();
     let path = Utf8Path::from_path(dir.path()).unwrap();
     std::fs::create_dir(path.join("src")).unwrap();
     std::fs::write(outside.path().join("sentinel.rs"), "OUTSIDE_SENTINEL").unwrap();
@@ -86,8 +92,8 @@ fn unsupported_platform_refuses_instead_of_reopening_a_checked_path() {
 #[cfg(unix)]
 #[test]
 fn ignored_symlinks_are_not_entered_and_cuts_count_only_source_files() {
-    let dir = tempfile::tempdir().unwrap();
-    let outside = tempfile::tempdir().unwrap();
+    let dir = physical_tempdir();
+    let outside = physical_tempdir();
     let path = Utf8Path::from_path(dir.path()).unwrap();
     std::fs::write(
         outside.path().join("sentinel.rs"),
@@ -110,8 +116,8 @@ fn ignored_symlinks_are_not_entered_and_cuts_count_only_source_files() {
 #[cfg(unix)]
 #[test]
 fn selected_ancestor_replacement_never_reads_the_external_tree() {
-    let dir = tempfile::tempdir().unwrap();
-    let outside = tempfile::tempdir().unwrap();
+    let dir = physical_tempdir();
+    let outside = physical_tempdir();
     let root_path = Utf8Path::from_path(dir.path()).unwrap();
     std::fs::create_dir(root_path.join("src")).unwrap();
     std::fs::write(root_path.join("src/code.rs"), "safe").unwrap();
@@ -141,8 +147,8 @@ fn selected_ancestor_replacement_never_reads_the_external_tree() {
 #[cfg(unix)]
 #[test]
 fn unscanned_symlink_entries_are_skipped_without_following_their_targets() {
-    let dir = tempfile::tempdir().unwrap();
-    let outside = tempfile::tempdir().unwrap();
+    let dir = physical_tempdir();
+    let outside = physical_tempdir();
     let root_path = Utf8Path::from_path(dir.path()).unwrap();
     std::fs::write(
         outside.path().join("sentinel.rs"),
