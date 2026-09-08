@@ -159,6 +159,77 @@ reopen action, new parent kind, or proposal association. Native CLI and Rust
 calls remain direct and do not need an HTTP server. Generated SDKs only call
 an existing host and do not start or manage it.
 
+## Requested behaviors outside the current catalog
+
+Two requested behaviors were checked against this catalog and the native
+store. Neither exists as a native operation today. This section records what
+was checked, so a later request starts from the same facts. No substitute was
+added, and no model change is approved or requested here.
+
+### Typed text edits with per-discussion history
+
+The request was typed edits to graph text, plus durable before/after history
+of those edits, linked to one discussion. No native operation gives this:
+
+- `plan` and `apply` reconcile a typed declaration document. The result
+  carries `changes` entries (`field`, `before`, `after`) per reconciled
+  resource. That report is transient; nothing stores it. These operations
+  follow declarations. They are not a general record editor.
+- `StateStore::update_question`
+  (`crates/provenance-store/src/state_store/shaping_writers.rs`) changes only
+  `resolution_method`, `status`, `links`, and `resolution_id`. It does not
+  edit record text.
+- `RequirementReview` records
+  (`crates/provenance-store/src/state_store/requirement_reviews.rs`) are the
+  one durable before/after store. A restated Requirement statement raises one
+  per citing Rule, and a verification run clears it. The record names no
+  Thread and no Message.
+- `origin_thread` and `origin_message` on created records are placement
+  fields set once at creation. No stored record links an edit to a discussion.
+
+History of edits linked to a discussion needs a new persisted relationship.
+That is outside the unchanged data model, so the catalog does not offer it.
+
+### Authorized Source content reads and edits
+
+The request was authorized reads and edits of Source content, safe mapping of
+citations to targets, conflict detection, and publication of content and
+history together. No native operation gives this:
+
+- A Source record stores citation fields only: `source_type`, `url`,
+  `reference`, and `commit_pin`. `create-source`
+  (`crates/provenance-store/src/state_store/writers.rs`) stores what the
+  request supplies and opens nothing. A citation does not authorize opening a
+  file or fetching a URL.
+- The structured reads return record fields. No operation returns Source
+  content.
+- Repository file reads serve evidence and scans only. `evidence`, `impact`,
+  and `resolve-symbol` read implementation and verification files through the
+  held-file seam (`crates/provenance-store/src/operations/files.rs`), for
+  request paths below a configured root
+  ([repository evidence access](operation-file-access.md)). No operation maps
+  a Source citation to a filesystem target or a network location.
+- No operation edits Source content. Declaration `apply` can restate or retire
+  a declared Source through reconciliation; the cited document itself is never
+  read or written.
+- The only target map is the `test-fixture` `FixtureAccess` configuration. It
+  is a fixed test map. It is not a production grant and not derived from
+  citations.
+- Publication has no rollback. A failure after publication starts reports
+  `uncertain_write`. No journal pairs a content write with a history write.
+
+Source content access therefore stays outside the unchanged model.
+
+### Proposal and disposition records
+
+The catalog does not expose the proposal and disposition lifecycle. The
+native surface is `StateStore::list_proposal_cards`,
+`list_proposal_definitions`, `list_dispositions`, and
+`list_assertion_records` (`crates/provenance-store/src/state_store.rs`), and
+the writers in `crates/provenance-store/src/state_store/proposal_writers.rs`.
+A future exposure must call these existing functions with their existing
+inputs, results, validators, and locks.
+
 ## Write failures and task ownership
 
 Protocol, access, and known validation refusals occur before intended graph
