@@ -24,6 +24,10 @@
 {"schema_version":2,"scope_id":"default","id":"thr_rule_rule_prov_annot_013_0","parent":{"node_type":"rule","node_id":"rule_prov_annot_013"},"status":"active","created_at":1773227470465}
 {"schema_version":2,"scope_id":"default","id":"thr_rule_rule_prov_scan_011_0","parent":{"node_type":"rule","node_id":"rule_prov_scan_011"},"status":"active","created_at":1773227473542}
 {"schema_version":2,"scope_id":"default","id":"thread_question_q_relations_first_class_or_properties","parent":{"node_type":"question","node_id":"q_relations_first_class_or_properties"},"status":"active","created_at":1}
+{"schema_version":2,"scope_id":"default","id":"thread_question_question_local_http_alias_meaning","parent":{"node_type":"question","node_id":"question_local_http_alias_meaning"},"status":"active","created_at":1}
+{"schema_version":2,"scope_id":"default","id":"thread_question_question_local_http_repository_selection","parent":{"node_type":"question","node_id":"question_local_http_repository_selection"},"status":"active","created_at":1}
+{"schema_version":2,"scope_id":"default","id":"thread_question_question_native_rust_sdk_role","parent":{"node_type":"question","node_id":"question_native_rust_sdk_role"},"status":"active","created_at":1}
+{"schema_version":2,"scope_id":"default","id":"thread_question_question_sdk_local_host_ownership","parent":{"node_type":"question","node_id":"question_sdk_local_host_ownership"},"status":"active","created_at":1}
 {"schema_version":2,"scope_id":"default","id":"thread_question_question_wiki_homepage_direction","parent":{"node_type":"question","node_id":"question_wiki_homepage_direction"},"status":"active","created_at":1}
 {"schema_version":2,"scope_id":"default","id":"thread_requirement_req_public_operation_contract","parent":{"node_type":"requirement","node_id":"req_public_operation_contract"},"status":"active","created_at":1}
 {"schema_version":2,"scope_id":"default","id":"thread_requirement_req_query_answers_carry_a_freshness_stamp","parent":{"node_type":"requirement","node_id":"req_query_answers_carry_a_freshness_stamp"},"status":"active","created_at":1}
