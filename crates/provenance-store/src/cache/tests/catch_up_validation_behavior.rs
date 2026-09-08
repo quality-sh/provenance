@@ -19,9 +19,9 @@ async fn catch_up_refuses_state_the_aggregate_validator_refuses() {
     let (_dir, layout, _scope) = aggregate_layout();
     materialize_state(&layout).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
-    let serial_before = stored_serial(&pool).await;
-    let rows_before = dump_family_tables(&pool).await;
-    pool.close().await;
+    let serial_before = stored_serial(pool.pool()).await;
+    let rows_before = dump_family_tables(pool.pool()).await;
+    pool.close().await.unwrap();
 
     // Remove the allowed disposition actor. No shard byte moves, but the
     // aggregate on disk is one a rebuild refuses.
@@ -38,8 +38,16 @@ async fn catch_up_refuses_state_the_aggregate_validator_refuses() {
     assert!(error.contains("actor"), "validator error expected: {error}");
 
     let pool = open_cache(&layout).await.unwrap();
-    assert_eq!(stored_serial(&pool).await, serial_before, "no new revision");
-    assert_eq!(dump_family_tables(&pool).await, rows_before, "no row moved");
+    assert_eq!(
+        stored_serial(pool.pool()).await,
+        serial_before,
+        "no new revision"
+    );
+    assert_eq!(
+        dump_family_tables(pool.pool()).await,
+        rows_before,
+        "no row moved"
+    );
 }
 
 #[tokio::test]
@@ -62,13 +70,13 @@ async fn a_departed_scope_loses_its_rows_and_its_baselines() {
     let pool = open_cache(&layout).await.unwrap();
     let rows: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM requirements WHERE scope_id = ?")
         .bind(scope.as_str())
-        .fetch_one(&pool)
+        .fetch_one(pool.pool())
         .await
         .unwrap();
     let baselines: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM projection_family_digests WHERE scope_id = ?")
             .bind(scope.as_str())
-            .fetch_one(&pool)
+            .fetch_one(pool.pool())
             .await
             .unwrap();
     assert_eq!(rows, 0, "departed scope rows must go");
@@ -88,13 +96,13 @@ async fn a_schema_move_routes_catch_up_to_a_full_rebuild() {
         "ALTER TABLE projection_family_digests ADD COLUMN size_bytes INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE projection_family_digests ADD COLUMN mtime_ns INTEGER NOT NULL DEFAULT 0",
     ] {
-        sqlx::query(statement).execute(&pool).await.unwrap();
+        sqlx::query(statement).execute(pool.pool()).await.unwrap();
     }
     sqlx::query("DELETE FROM _schema_migrations WHERE id = '020'")
-        .execute(&pool)
+        .execute(pool.pool())
         .await
         .unwrap();
-    pool.close().await;
+    pool.close().await.unwrap();
 
     let report = catch_up_state(&layout).await.unwrap();
     assert!(report.rebuilt, "a migration must force a rebuild");
@@ -117,12 +125,12 @@ async fn a_concurrent_rebuild_and_catch_up_serialize_on_the_guard() {
     let pool = open_cache(&layout).await.unwrap();
     let serials: Vec<i64> =
         sqlx::query_scalar("SELECT serial FROM projection_revision ORDER BY serial")
-            .fetch_all(&pool)
+            .fetch_all(pool.pool())
             .await
             .unwrap();
     let mut strictly = serials.clone();
     strictly.dedup();
     assert_eq!(serials, strictly, "one serial progression, no duplicates");
-    pool.close().await;
+    pool.close().await.unwrap();
     assert_catch_up_equals_rebuild(&layout).await;
 }

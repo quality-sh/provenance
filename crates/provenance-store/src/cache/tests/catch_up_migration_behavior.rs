@@ -33,9 +33,9 @@ async fn a_crash_between_a_migration_and_its_rebuild_is_healed_by_the_next_pass(
     let (_dir, layout, _scope) = seeded_layout();
     materialize_state(&layout).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
-    let (serial_before, _) = latest_revision(&pool).await;
-    forget_migration_022(&pool).await;
-    pool.close().await;
+    let (serial_before, _) = latest_revision(pool.pool()).await;
+    forget_migration_022(pool.pool()).await;
+    pool.close().await.unwrap();
 
     crate::test_probes::crash_at("catch_up_after_migrations");
     let error = catch_up_state(&layout).await.unwrap_err();
@@ -44,17 +44,17 @@ async fn a_crash_between_a_migration_and_its_rebuild_is_healed_by_the_next_pass(
 
     let pool = open_cache(&layout).await.unwrap();
     assert_eq!(
-        requirement_count(&pool).await,
+        requirement_count(pool.pool()).await,
         0,
         "the migration committed and emptied the table before the crash"
     );
-    pool.close().await;
+    pool.close().await.unwrap();
 
     let report = catch_up_state(&layout).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
-    assert_eq!(requirement_count(&pool).await, 1, "{report:?}");
-    let (serial_after, _) = latest_revision(&pool).await;
+    assert_eq!(requirement_count(pool.pool()).await, 1, "{report:?}");
+    let (serial_after, _) = latest_revision(pool.pool()).await;
     assert!(serial_after > serial_before, "{report:?}");
-    pool.close().await;
+    pool.close().await.unwrap();
     assert_catch_up_equals_rebuild(&layout).await;
 }

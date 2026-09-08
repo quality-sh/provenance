@@ -1,9 +1,8 @@
 //! Cancellation and panic must not release the lock during `SQLite` close.
 use super::wal_behavior::wal_files;
-use crate::cache::{close_cache, open_cache};
+use crate::cache::{open_cache, CacheConnection};
 use crate::layout::ProvenanceLayout;
 use fs2::FileExt;
-use sqlx::SqlitePool;
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 
@@ -33,14 +32,16 @@ impl Drop for PauseOnDrop {
     }
 }
 
-async fn pause_physical_close(pool: &SqlitePool) -> (Release, tokio::sync::oneshot::Receiver<()>) {
+async fn pause_physical_close(
+    pool: &CacheConnection,
+) -> (Release, tokio::sync::oneshot::Receiver<()>) {
     let gate = Arc::new((Mutex::new(false), Condvar::new()));
     let (signal, started) = tokio::sync::oneshot::channel();
     let pause = PauseOnDrop {
         signal: Some(signal),
         gate: Arc::clone(&gate),
     };
-    let mut connection = pool.acquire().await.unwrap();
+    let mut connection = pool.pool().acquire().await.unwrap();
     let mut handle = connection.lock_handle().await.unwrap();
     // SQLx removes this handler during ConnectionState::drop, before the
     // SQLite handle field drops. The closure destructor pauses that close.
@@ -60,23 +61,23 @@ async fn cancellation_probe(panic_instead: bool) {
     );
     let first = open_cache(&layout).await.unwrap();
     sqlx::query("CREATE TABLE sample(value INTEGER)")
-        .execute(&first)
+        .execute(first.pool())
         .await
         .unwrap();
     sqlx::query("INSERT INTO sample VALUES (1)")
-        .execute(&first)
+        .execute(first.pool())
         .await
         .unwrap();
     let second = open_cache(&layout).await.unwrap();
     sqlx::query("SELECT * FROM sample")
-        .fetch_all(&second)
+        .fetch_all(second.pool())
         .await
         .unwrap();
     let (release, started) = pause_physical_close(&first).await;
     let (panic_now, panic_rx) = tokio::sync::oneshot::channel::<()>();
     let task = tokio::spawn(async move {
         tokio::select! {
-            result = close_cache(&first) => result.unwrap(),
+            result = first.close() => result.unwrap(),
             _ = panic_rx => panic!("verification: panic while the close future is pending"),
         }
     });
@@ -111,7 +112,7 @@ async fn cancellation_probe(panic_instead: bool) {
         !lock_released_early,
         "the close must keep ownership after cancellation"
     );
-    let next = close_cache(&second);
+    let next = second.close();
     tokio::pin!(next);
     let early = tokio::time::timeout(Duration::from_millis(50), &mut next).await;
     assert!(

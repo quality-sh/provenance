@@ -2,7 +2,7 @@
 
 use super::freshness::{self, Freshness};
 use super::{ReadRefusal, ReadSnapshot};
-use crate::cache::{scope_ids, unit_digest, units_for};
+use crate::cache::{open_stored_cache, scope_ids, unit_digest, units_for};
 use crate::layout::ProvenanceLayout;
 use crate::publication::publication_guard;
 use provenance_core::protocol::StampPolicy;
@@ -31,13 +31,13 @@ pub(super) fn describe_moved(moved: &[MovedUnit]) -> String {
 pub(super) async fn run(layout: &ProvenanceLayout, scope: &ScopeId) -> anyhow::Result<Freshness> {
     let guard = match publication_guard(layout).await {
         Ok(guard) => Some(guard),
-        Err(error) if freshness::permission_failure(layout, &error) => None,
+        Err(error) if crate::cache::permission_failure(layout, &error) => None,
         Err(error) => return Err(error),
     };
-    let pool = freshness::open_stored(layout)
+    let connection = open_stored_cache(layout)
         .await
         .map_err(|error| freshness::no_projection(layout, &error))?;
-    let checked = check(&pool, layout, scope, guard.is_none()).await;
+    let checked = check(connection.pool(), layout, scope, guard.is_none()).await;
     drop(guard);
     let checked = checked.and_then(|snapshot| {
         crate::test_probes::at("refuse_stale_after_hash")?;
@@ -45,15 +45,12 @@ pub(super) async fn run(layout: &ProvenanceLayout, scope: &ScopeId) -> anyhow::R
     });
     match checked {
         Ok(snapshot) => Ok(Freshness {
-            pool,
+            connection,
             snapshot: Some(snapshot),
             policy: StampPolicy::RefuseStale,
             error: None,
         }),
-        Err(error) => {
-            pool.close().await;
-            Err(error)
-        }
+        Err(error) => Err(connection.close_reporting(error).await),
     }
 }
 

@@ -13,6 +13,10 @@
 //! The context guards its transaction with an async mutex and its word
 //! sets with plain mutexes, so the future a read runs is `Send`; the
 //! operations read one statement at a time, so no lock is contended.
+//!
+//! The freshness step owns the read's cache connection, and its
+//! `complete` method is the read's one completion point: whatever
+//! the answer is, the connection closes in order before it leaves.
 
 mod freshness;
 mod live;
@@ -30,7 +34,6 @@ pub use snapshot::{ReadSnapshot, Relations, Table};
 pub use crate::cache::read::{kind_of, SqlFront};
 
 use super::read_policy::ReadPolicy;
-use super::stamp;
 use crate::layout::ProvenanceLayout;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::protocol::Stamped;
@@ -136,6 +139,9 @@ impl ReadContext {
 /// Runs one read: the freshness step under the guard, then `run` over a
 /// pinned snapshot, then the stamp. Every query answer leaves through here,
 /// so every answer carries a stamp.
+///
+/// The freshness step owns the read's connection, and its awaited close is
+/// the read's one completion point: no answer or refusal leaves before it.
 #[rule("rule_query_answer_carries_a_stamp")]
 pub async fn answer<R: Send>(
     repo: &Utf8Path,
@@ -145,36 +151,7 @@ pub async fn answer<R: Send>(
 ) -> anyhow::Result<Stamped<R>> {
     let layout = ProvenanceLayout::new(repo.to_path_buf());
     let fresh = freshness::run(&layout, scope, policy.freshness).await?;
-    let opened = match fresh.snapshot {
-        Some(snapshot) => Ok(Some(snapshot)),
-        None => ReadSnapshot::open(&fresh.pool, scope).await,
-    };
-    let snapshot = match opened {
-        Ok(Some(snapshot)) => snapshot,
-        Ok(None) => {
-            crate::cache::close_cache(&fresh.pool).await?;
-            return Err(ReadRefusal::NoProjection {
-                database: layout.cache_db_path(),
-                because: fresh
-                    .error
-                    .as_deref()
-                    .map(|error| format!(" (catch-up failed: {error})"))
-                    .unwrap_or_default(),
-            }
-            .into());
-        }
-        Err(error) => {
-            crate::cache::close_cache(&fresh.pool).await?;
-            return Err(error);
-        }
-    };
-    let context = ReadContext::new(snapshot, repo, policy.scan_limit);
-    let result = run(&context).await;
-    let stamp = stamp::seal(context, fresh.policy);
-    crate::cache::close_cache(&fresh.pool).await?;
-    Ok(Stamped {
-        result: result?,
-        stamp,
-        freshness_error: fresh.error,
-    })
+    fresh
+        .complete(&layout, repo, scope, policy.scan_limit, run)
+        .await
 }

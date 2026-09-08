@@ -26,14 +26,14 @@ use provenance_macros::verifies;
 async fn stored(store: &TestStore) -> (i64, String) {
     let pool = open_cache(&store.layout()).await.unwrap();
     let serial: i64 = sqlx::query_scalar("SELECT MAX(serial) FROM projection_revision")
-        .fetch_one(&pool)
+        .fetch_one(pool.pool())
         .await
         .unwrap();
     let instance_id: String = sqlx::query_scalar("SELECT instance_id FROM projection_instance")
-        .fetch_one(&pool)
+        .fetch_one(pool.pool())
         .await
         .unwrap();
-    pool.close().await;
+    pool.close().await.unwrap();
     (serial, instance_id)
 }
 
@@ -310,7 +310,7 @@ async fn a_table_handle_puts_its_word_in_attested() {
     );
 
     let pool = open_cache(&store.layout()).await.unwrap();
-    let snapshot = ReadSnapshot::open(&pool, &store.scope)
+    let snapshot = ReadSnapshot::open(pool.pool(), &store.scope)
         .await
         .unwrap()
         .expect("a revision");
@@ -321,7 +321,7 @@ async fn a_table_handle_puts_its_word_in_attested() {
         .store();
     let stamp = seal(context, StampPolicy::AnnotateOnly);
     assert_eq!(words(&stamp), (vec!["rules"], vec!["canonical"]));
-    pool.close().await;
+    pool.close().await.unwrap();
 }
 
 #[tokio::test]
