@@ -7,7 +7,7 @@ use axum::{
     Json, Router,
 };
 use provenance_core::protocol::{
-    failure::{FailureEnvelope, InvalidInputReason, OperationFailure},
+    failure::{ErasedFailure as FailureEnvelope, InvalidInputReason, OperationFailure},
     host::HostMetadata,
 };
 use provenance_store::operations::catalog;
@@ -30,6 +30,9 @@ async fn invoke(
     Path((version, operation)): Path<(String, String)>,
     request: Request,
 ) -> Response {
+    if let Err(error) = host.authenticate(request.headers()) {
+        return failure::response(error);
+    }
     let _admission = match host.admit() {
         Ok(permit) => permit,
         Err(error) => return failure::response(error),
@@ -44,10 +47,7 @@ async fn invoke(
             InvalidInputReason::InvalidValue,
         );
     };
-    if !catalog::definitions()
-        .iter()
-        .any(|entry| entry.name == operation)
-    {
+    if !catalog::contains(&operation) {
         return failure::response(FailureEnvelope::new(
             None,
             OperationFailure::UnknownOperation,

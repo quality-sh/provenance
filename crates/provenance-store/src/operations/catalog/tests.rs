@@ -32,7 +32,7 @@ async fn statement_call_is_closed_and_refuses_invalid_payloads() {
         let error = invoke("check-statement", SDK_PROTOCOL_VERSION, value)
             .await
             .unwrap_err();
-        assert!(matches!(error.error, OperationFailure::InvalidInput { .. }));
+        assert_eq!(error.error["kind"], "invalid_input");
         assert_eq!(error.operation.as_deref(), Some("check-statement"));
     }
 }
@@ -42,7 +42,7 @@ async fn unknown_operations_never_claim_an_execution_identity() {
     let error = invoke("attacker-name", SDK_PROTOCOL_VERSION, json!({}))
         .await
         .unwrap_err();
-    assert_eq!(error.error, OperationFailure::UnknownOperation);
+    assert_eq!(error.error, json!({"kind":"unknown_operation"}));
     assert_eq!(error.operation, None);
 }
 
@@ -53,10 +53,7 @@ async fn dispatch_refuses_incompatible_versions_before_decoding() {
         .unwrap_err();
     assert_eq!(
         error.error,
-        OperationFailure::ProtocolMismatch {
-            requested: SDK_PROTOCOL_VERSION + 1,
-            supported: SDK_PROTOCOL_VERSION
-        }
+        json!({"kind":"protocol_mismatch","requested":SDK_PROTOCOL_VERSION+1,"supported":SDK_PROTOCOL_VERSION})
     );
 }
 
@@ -107,7 +104,7 @@ async fn handler_failure_cannot_change_its_declared_wire_variant() {
         super::invoke::invoke_erased::<FailureFixture>(json!({"request":{"statement":"x"}}))
             .await
             .unwrap_err();
-    assert_eq!(failure.error, OperationFailure::AccessDenied);
+    assert_eq!(failure.error, json!({"kind":"access_denied"}));
 }
 
 #[cfg(feature = "schema")]
@@ -143,11 +140,75 @@ impl super::Operation for ExtendedFailureFixture {
     }
 }
 #[tokio::test]
-async fn unsupported_handler_fields_cannot_disappear_during_erasure() {
+async fn declared_handler_fields_cannot_disappear_during_erasure() {
     let failure = super::invoke::invoke_erased::<ExtendedFailureFixture>(
         json!({"request":{"statement":"x"}}),
     )
     .await
     .unwrap_err();
-    assert_eq!(failure.error, OperationFailure::Internal);
+    assert_eq!(
+        failure.error,
+        json!({"kind":"access_denied", "detail":true})
+    );
+}
+
+#[cfg(feature = "schema")]
+#[test]
+fn record_reads_have_one_registered_contract_each() {
+    let names: Vec<_> = super::definitions()
+        .into_iter()
+        .map(|entry| entry.name)
+        .collect();
+    assert_eq!(
+        names,
+        [
+            "check-statement",
+            "info",
+            "get",
+            "search",
+            "neighbors",
+            "trace"
+        ]
+    );
+}
+
+#[cfg(feature = "schema")]
+#[test]
+fn repository_info_has_a_literal_version_and_repository_only_context() {
+    let definition = super::definitions()
+        .into_iter()
+        .find(|definition| definition.name == "info")
+        .unwrap();
+    assert_eq!(
+        definition.success_schema["properties"]["protocol_version"]["const"],
+        SDK_PROTOCOL_VERSION
+    );
+    let validator = jsonschema::JSONSchema::options()
+        .with_draft(jsonschema::Draft::Draft202012)
+        .compile(&definition.request_schema)
+        .unwrap();
+    assert!(validator.is_valid(&json!({"context":{"repository":"first"},"request":{}})));
+    assert!(!validator
+        .is_valid(&json!({"context":{"repository":"first","scope":"default"},"request":{}})));
+}
+
+#[cfg(feature = "schema")]
+#[test]
+fn data_free_failure_schema_does_not_advertise_read_refusals() {
+    let definitions = super::definitions();
+    let statement = definitions
+        .iter()
+        .find(|entry| entry.name == "check-statement")
+        .unwrap();
+    assert!(!statement
+        .failure_schema
+        .to_string()
+        .contains("no_projection"));
+    assert!(!statement.http_statuses.contains(&409));
+    let get = definitions
+        .iter()
+        .find(|entry| entry.name == "get")
+        .unwrap();
+    assert!(get.failure_schema.to_string().contains("no_projection"));
+    assert!(get.http_statuses.contains(&409));
 }

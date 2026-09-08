@@ -20,4 +20,5 @@ syn = { version = "=2.0.117", features = ["full"] }
 prettyplease = "=0.2.37"
 
 [dev-dependencies]
+jsonschema.workspace = true
 tempfile.workspace = true

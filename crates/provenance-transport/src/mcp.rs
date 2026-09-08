@@ -1,5 +1,7 @@
 use crate::{StatementHost, MAX_BODY_BYTES};
-use provenance_core::protocol::failure::{FailureEnvelope, InvalidInputReason, OperationFailure};
+use provenance_core::protocol::failure::{
+    ErasedFailure as FailureEnvelope, InvalidInputReason, OperationFailure,
+};
 use provenance_store::operations::catalog;
 use rmcp::{
     model::{
@@ -34,10 +36,11 @@ impl ServerHandler for StatementHost {
     ) -> Result<ListToolsResult, ErrorData> {
         let tools = catalog::definitions()
             .into_iter()
+            .filter(|definition| self.advertises(definition.name))
             .map(|definition| {
                 let mut tool = Tool::new(
                     definition.name,
-                    "Check a descriptive statement.",
+                    "Invoke the shared operation.",
                     definition
                         .mcp_input_schema()
                         .as_object()
@@ -66,14 +69,20 @@ impl ServerHandler for StatementHost {
         request: CallToolRequestParam,
         _: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
-        if !catalog::definitions()
-            .iter()
-            .any(|entry| entry.name == request.name)
-        {
+        if !catalog::contains(&request.name) {
             return Err(ErrorData::new(
                 ErrorCode::METHOD_NOT_FOUND,
                 "Unknown tool",
                 None,
+            ));
+        }
+        if !self.advertises(&request.name) {
+            return Ok(CallToolResult::structured_error(
+                serde_json::to_value(FailureEnvelope::new(
+                    Some(&request.name),
+                    OperationFailure::AccessDenied,
+                ))
+                .expect("failure is JSON"),
             ));
         }
         let _admission = match self.admit() {

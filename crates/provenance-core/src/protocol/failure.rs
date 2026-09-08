@@ -33,6 +33,8 @@ pub enum OperationFailure {
     AccessDenied,
     #[error("unknown repository target")]
     UnknownTarget,
+    #[error("unknown scope")]
+    UnknownScope,
     #[error("required execution resources are unavailable")]
     UnavailableNeeds,
     #[error("internal operation failure")]
@@ -43,7 +45,7 @@ impl OperationFailure {
     pub const fn status_code(&self) -> u16 {
         match self {
             Self::InvalidInput { .. } | Self::ProtocolMismatch { .. } => 400,
-            Self::UnknownOperation | Self::UnknownTarget => 404,
+            Self::UnknownOperation | Self::UnknownTarget | Self::UnknownScope => 404,
             Self::Unauthenticated => 401,
             Self::AccessDenied => 403,
             Self::UnavailableNeeds => 503,
@@ -81,4 +83,46 @@ pub enum OperationError<F> {
     Common(OperationFailure),
     #[error(transparent)]
     Handler(F),
+}
+
+/// Exact declared failure payload after dispatch, with private response status.
+#[derive(Debug, Serialize, thiserror::Error)]
+#[error("operation refused")]
+pub struct ErasedFailure {
+    pub protocol_version: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub operation: Option<String>,
+    pub error: serde_json::Value,
+    #[serde(skip)]
+    status: u16,
+}
+impl ErasedFailure {
+    pub fn new(operation: Option<&str>, error: OperationFailure) -> Self {
+        let status = error.status_code();
+        Self {
+            protocol_version: SDK_PROTOCOL_VERSION,
+            operation: operation.map(str::to_owned),
+            error: serde_json::to_value(error).expect("common failure is JSON"),
+            status,
+        }
+    }
+    pub fn declared<E: Serialize>(operation: &'static str, error: E, status: u16) -> Self {
+        serde_json::to_value(error).map_or_else(
+            |_| Self::new(Some(operation), OperationFailure::Internal),
+            |error| Self {
+                protocol_version: SDK_PROTOCOL_VERSION,
+                operation: Some(operation.to_owned()),
+                error,
+                status,
+            },
+        )
+    }
+    pub const fn status_code(&self) -> u16 {
+        self.status
+    }
+}
+impl From<FailureEnvelope> for ErasedFailure {
+    fn from(value: FailureEnvelope) -> Self {
+        Self::new(value.operation.as_deref(), value.error)
+    }
 }

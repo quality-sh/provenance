@@ -6,18 +6,22 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
+import { checkStatements } from './test-statements.mjs';
+import { checkRecords } from './test-records.mjs';
 
-if (process.argv[2] !== 'statements') throw new Error('Only Phase 1 statements are implemented');
+const family = process.argv[2];
+if (!['statements', 'records'].includes(family)) throw new Error('Expected statements or records');
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 function run(args, env = process.env) {
   const child = spawnSync('cargo', args, { cwd: root, env, stdio: 'inherit' });
   if (child.status !== 0) throw new Error(`cargo ${args.join(' ')} failed`);
 }
-run(['build', '-p', 'provenance-transport', '--features', 'test-fixture', '--bin', 'statement-host-fixture']);
-const host = spawn(join(root, 'target/debug/statement-host-fixture'), [], { cwd: root, stdio: ['pipe', 'pipe', 'inherit'] });
+const binary = family === 'statements' ? 'statement-host-fixture' : 'records-host-fixture';
+run(['build', '--locked', '-p', 'provenance-transport', '--features', 'test-fixture', '--bin', binary]);
 const temporary = await mkdtemp(join(tmpdir(), 'provenance-clients-'));
+const host = spawn(join(root, 'target/debug', binary), [], { cwd: temporary, stdio: ['pipe', 'pipe', 'inherit'] });
 try {
-  const url = await new Promise((resolve, reject) => {
+  const firstLine = await new Promise((resolve, reject) => {
     let output = '';
     const timeout = setTimeout(() => reject(new Error('Fixture did not start')), 30000);
     host.once('exit', code => { clearTimeout(timeout); reject(new Error(`Fixture exited: ${code}`)); });
@@ -26,28 +30,18 @@ try {
       if (output.includes('\n')) { clearTimeout(timeout); resolve(output.split('\n')[0].trim()); }
     });
   });
+  const fixture = family === 'statements' ? { url: firstLine } : JSON.parse(firstLine);
   const source = await readFile(join(root, 'packages/provenance/src/generated/client.ts'), 'utf8');
   const script = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText;
   await writeFile(join(temporary, 'client.mjs'), script);
-  const { HttpClient, OperationError, PROTOCOL_VERSION } = await import(join(temporary, 'client.mjs'));
-  const client = await HttpClient.connect(url);
-  for (const statement of ['Install the cover.', 'Stop; wait.', 'Café; stop.']) {
-    const call = { request: { statement } };
-    const raw = await fetch(`${url}/v${PROTOCOL_VERSION}/operations/check-statement`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(call) });
-    assert.equal(raw.status, 200);
-    assert.deepEqual(await client.checkStatement(call), await raw.json());
-  }
-  await assert.rejects(client.checkStatement({ request: {} }), error => {
-    assert.ok(error instanceof OperationError);
-    assert.equal(error.status, 400);
-    assert.equal(error.failure.operation, 'check-statement');
-    assert.equal(error.failure.error.kind, 'invalid_input');
-    return true;
+  const module = await import(join(temporary, 'client.mjs'));
+  await (family === 'statements' ? checkStatements : checkRecords)(module, fixture);
+  run(['test', '--locked', '-p', 'provenance-http-client', '--test', family, '--', '--ignored'], {
+    ...process.env, PROVENANCE_TEST_HOST: fixture.url, PROVENANCE_RECORDS_FIXTURE: JSON.stringify(fixture),
   });
-  run(['test', '-p', 'provenance-http-client', '--test', 'statements', '--', '--ignored'], { ...process.env, PROVENANCE_TEST_HOST: url });
-  console.log('Both generated clients passed against the real statement host.');
+  console.log(`Both generated clients passed against the real ${family} host.`);
 } finally {
-  const exited = once(host, 'exit');
+  const exited = host.exitCode === null ? once(host, 'exit') : Promise.resolve([host.exitCode]);
   host.stdin.end();
   const timeout = setTimeout(() => host.kill('SIGKILL'), 10000);
   try { const [code] = await exited; assert.equal(code, 0, 'Fixture must join cleanly'); }

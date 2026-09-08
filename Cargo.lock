@@ -2233,6 +2233,7 @@ dependencies = [
 name = "provenance-codegen"
 version = "0.2.2"
 dependencies = [
+ "jsonschema",
  "prettyplease",
  "provenance-core",
  "provenance-ste100",
@@ -2265,6 +2266,7 @@ dependencies = [
 name = "provenance-http-client"
 version = "0.2.2"
 dependencies = [
+ "regress",
  "reqwest",
  "serde",
  "serde_json",
@@ -2361,6 +2363,7 @@ dependencies = [
  "rmcp",
  "serde",
  "serde_json",
+ "sqlx",
  "tempfile",
  "tokio",
  "tokio-util",

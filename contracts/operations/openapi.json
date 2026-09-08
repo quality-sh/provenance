@@ -143,6 +143,18 @@
           {
             "properties": {
               "kind": {
+                "const": "unknown_scope",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
                 "const": "unavailable_needs",
                 "type": "string"
               }
@@ -298,6 +310,1864 @@
         "minimum": 0,
         "type": "integer"
       },
+      "GetFailureOutput": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/GetFailureOutputOperationError"
+          },
+          "operation": {
+            "const": "get",
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "error"
+        ],
+        "title": "FailureEnvelope",
+        "type": "object"
+      },
+      "GetFailureOutputInvalidInputReason": {
+        "enum": [
+          "required",
+          "invalid_value",
+          "malformed_json",
+          "unknown_field",
+          "too_large"
+        ],
+        "type": "string"
+      },
+      "GetFailureOutputMovedUnit": {
+        "properties": {
+          "live": {
+            "type": "string"
+          },
+          "stored": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "unit",
+          "stored",
+          "live"
+        ],
+        "type": "object"
+      },
+      "GetFailureOutputOperationError": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/GetFailureOutputOperationFailure"
+          },
+          {
+            "$ref": "#/components/schemas/GetFailureOutputReadFailure"
+          }
+        ],
+        "description": "Keeps the handler's native error separate from preparation failure."
+      },
+      "GetFailureOutputOperationFailure": {
+        "oneOf": [
+          {
+            "properties": {
+              "field": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "const": "invalid_input",
+                "type": "string"
+              },
+              "reason": {
+                "$ref": "#/components/schemas/GetFailureOutputInvalidInputReason"
+              }
+            },
+            "required": [
+              "kind",
+              "field",
+              "reason"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "protocol_mismatch",
+                "type": "string"
+              },
+              "requested": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "supported": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "requested",
+              "supported"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_operation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unauthenticated",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "access_denied",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_target",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_scope",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unavailable_needs",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "internal",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "GetFailureOutputReadFailure": {
+        "oneOf": [
+          {
+            "properties": {
+              "kind": {
+                "const": "no_projection",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "digest": {
+                "type": "string"
+              },
+              "instance_id": {
+                "type": "string"
+              },
+              "kind": {
+                "const": "stale",
+                "type": "string"
+              },
+              "moved": {
+                "items": {
+                  "$ref": "#/components/schemas/GetFailureOutputMovedUnit"
+                },
+                "type": "array"
+              },
+              "serial": {
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "serial",
+              "digest",
+              "instance_id",
+              "moved"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unit_unreadable",
+                "type": "string"
+              },
+              "unit": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "unit"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "schema_behind",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "half_migrated",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "read_failed",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "GetRequestInput": {
+        "additionalProperties": false,
+        "properties": {
+          "context": {
+            "$ref": "#/components/schemas/GetRequestInputRepositoryContext"
+          },
+          "request": {
+            "$ref": "#/components/schemas/GetRequestInputGetQuery"
+          }
+        },
+        "required": [
+          "context",
+          "request"
+        ],
+        "title": "RepositoryCall",
+        "type": "object"
+      },
+      "GetRequestInputFreshnessPolicy": {
+        "description": "Which freshness step a read runs before it answers.",
+        "oneOf": [
+          {
+            "const": "catch_up",
+            "description": "Run catch-up under the publication guard, then answer.",
+            "type": "string"
+          },
+          {
+            "const": "annotate_only",
+            "description": "Answer at the stored serial without a freshness step.",
+            "type": "string"
+          },
+          {
+            "const": "refuse_stale",
+            "description": "Refuse when the stored projection differs from canonical state.",
+            "type": "string"
+          }
+        ]
+      },
+      "GetRequestInputGetQuery": {
+        "additionalProperties": false,
+        "description": "Fetch one record by canonical ID.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "include_retired": {
+            "default": false,
+            "type": "boolean"
+          },
+          "node_type": {
+            "$ref": "#/components/schemas/GetRequestInputNodeType"
+          },
+          "protocol_version": {
+            "default": null,
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "node_type",
+          "id"
+        ],
+        "type": "object"
+      },
+      "GetRequestInputNodeType": {
+        "enum": [
+          "source",
+          "requirement",
+          "resolution",
+          "rule",
+          "topic",
+          "question",
+          "domain",
+          "boundary"
+        ],
+        "type": "string"
+      },
+      "GetRequestInputRepositoryContext": {
+        "additionalProperties": false,
+        "properties": {
+          "freshness": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GetRequestInputFreshnessPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "repository": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "repository",
+          "scope"
+        ],
+        "type": "object"
+      },
+      "GetSuccessOutput": {
+        "description": "The envelope every query primitive answers in.\n\nThe protocol version travels with the answer, so a caller holding a\nrecorded response can tell which contract produced it, `operation`\nnames which primitive it came from, and `stamp` says what the answer\nreflects.",
+        "properties": {
+          "found": {
+            "type": "boolean"
+          },
+          "freshness_cause": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GetSuccessOutputFreshnessCause"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "freshness_error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "node": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GetSuccessOutputGraphNode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "operation": {
+            "const": "get",
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          },
+          "stamp": {
+            "$ref": "#/components/schemas/GetSuccessOutputStamp"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "operation",
+          "stamp",
+          "found"
+        ],
+        "title": "QueryResponse",
+        "type": "object"
+      },
+      "GetSuccessOutputArtifactLink": {
+        "properties": {
+          "target_id": {
+            "$ref": "#/components/schemas/GetSuccessOutputStableId"
+          },
+          "target_type": {
+            "$ref": "#/components/schemas/GetSuccessOutputArtifactLinkTargetType"
+          }
+        },
+        "required": [
+          "target_type",
+          "target_id"
+        ],
+        "type": "object"
+      },
+      "GetSuccessOutputArtifactLinkTargetType": {
+        "enum": [
+          "source",
+          "requirement",
+          "resolution",
+          "rule"
+        ],
+        "type": "string"
+      },
+      "GetSuccessOutputBoundary": {
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/GetSuccessOutputStableId"
+          },
+          "requirement_id": {
+            "$ref": "#/components/schemas/GetSuccessOutputStableId"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/GetSuccessOutputScopeId"
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GetSuccessOutputSourceReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "statement": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "requirement_id",
+          "statement"
+        ],
+        "type": "object"
+      },
+      "GetSuccessOutputDeclarationAddress": {
+        "description": "One owner-local path to a language-authored declaration.",
+        "items": {
+          "pattern": "\\S",
+          "type": "string"
+        },
+        "minItems": 1,
+        "type": "array"
+      },
+      "GetSuccessOutputDomain": {
+        "properties": {
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/GetSuccessOutputStableId"
+          },
+          "name": {
+            "type": "string"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/GetSuccessOutputScopeId"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "GetSuccessOutputFreshnessCause": {
+        "description": "The stage that failed is known even when its lower-level error is not public.",
+        "enum": [
+          "catch_up_failed"
+        ],
+        "type": "string"
+      },
+      "GetSuccessOutputGraphNode": {
+        "description": "One canonical record as a query hands it back.\n\nEach variant carries the record the store already writes, so a primitive\nnever invents a second vocabulary for a Requirement or a Rule. The\n`node_type` tag is the same word a relation row uses for its endpoints.",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/GetSuccessOutputSource",
+            "properties": {
+              "node_type": {
+                "const": "source",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/GetSuccessOutputRequirement",
+            "properties": {
+              "node_type": {
+                "const": "requirement",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/GetSuccessOutputResolution",
+            "properties": {
+              "node_type": {
+                "const": "resolution",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/GetSuccessOutputRule",
+            "properties": {
+              "node_type": {
+                "const": "rule",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/GetSuccessOutputTopic",
+            "properties": {
+              "node_type": {
+                "const": "topic",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/GetSuccessOutputQuestion",
+            "properties": {
+              "node_type": {
+                "const": "question",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/GetSuccessOutputDomain",
+            "properties": {
+              "node_type": {
+                "const": "domain",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/GetSuccessOutputBoundary",
+            "properties": {
+              "node_type": {
+                "const": "boundary",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "GetSuccessOutputQuestion": {
+        "properties": {
+          "answer": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "claimed_at": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "claimed_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "contradicts": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GetSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/GetSuccessOutputStableId"
+          },
+          "links": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GetSuccessOutputArtifactLink"
+            },
+            "type": "array"
+          },
+          "question": {
+            "type": "string"
+          },
+          "requirement_id": {
+            "$ref": "#/components/schemas/GetSuccessOutputStableId"
+          },
+          "resolution_id": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GetSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resolution_method": {
+            "$ref": "#/components/schemas/GetSuccessOutputResolutionMethod",
+            "description": "The verb that resolves this question, chosen when the question is minted."
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/GetSuccessOutputScopeId"
+          },
+          "status": {
+            "$ref": "#/components/schemas/GetSuccessOutputQuestionStatus"
+          },
+          "topic_id": {
+            "$ref": "#/components/schemas/GetSuccessOutputStableId"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "topic_id",
+          "requirement_id",
+          "question",
+          "resolution_method",
+          "status",
+          "links"
+        ],
+        "type": "object"
+      },
+      "GetSuccessOutputQuestionStatus": {
+        "enum": [
+          "open",
+          "blocked_on_human",
+          "answered"
+        ],
+        "type": "string"
+      },
+      "GetSuccessOutputRequirement": {
+        "properties": {
+          "declaration_address": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GetSuccessOutputDeclarationAddress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "declared_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "depends_on": {
+            "items": {
+              "$ref": "#/components/schemas/GetSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "domain_id": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GetSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fog": {
+            "description": "Deliberately unstructured free text: the dim view of decisions and\ninvestigations that are coming but cannot yet be phrased sharply.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/GetSuccessOutputStableId"
+          },
+          "origin_message": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GetSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GetSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "refines": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GetSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "retired": {
+            "type": "boolean"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/GetSuccessOutputScopeId"
+          },
+          "source_refs": {
+            "items": {
+              "$ref": "#/components/schemas/GetSuccessOutputSourceReference"
+            },
+            "type": "array"
+          },
+          "spawned_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GetSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "statement": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/GetSuccessOutputRequirementStatus"
+          },
+          "supersedes": {
+            "items": {
+              "$ref": "#/components/schemas/GetSuccessOutputStableId"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "statement",
+          "status"
+        ],
+        "type": "object"
+      },
+      "GetSuccessOutputRequirementStatus": {
+        "enum": [
+          "active",
+          "discovery",
+          "refinement",
+          "resolved"
+        ],
+        "type": "string"
+      },
+      "GetSuccessOutputResolution": {
+        "properties": {
+          "approved_at": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "approved_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "confidence": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "context": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "enforcement": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/GetSuccessOutputStableId"
+          },
+          "inputs": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GetSuccessOutputResolutionInput"
+            },
+            "type": "array"
+          },
+          "made_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "origin_message": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GetSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GetSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "position": {
+            "type": "string"
+          },
+          "rationale": {
+            "type": "string"
+          },
+          "requirement_ids": {
+            "items": {
+              "$ref": "#/components/schemas/GetSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "review_on": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/GetSuccessOutputScopeId"
+          },
+          "status": {
+            "$ref": "#/components/schemas/GetSuccessOutputResolutionStatus"
+          },
+          "supersedes": {
+            "items": {
+              "$ref": "#/components/schemas/GetSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "title",
+          "position",
+          "rationale",
+          "status",
+          "inputs",
+          "review_on"
+        ],
+        "type": "object"
+      },
+      "GetSuccessOutputResolutionInput": {
+        "properties": {
+          "input_type": {
+            "$ref": "#/components/schemas/GetSuccessOutputResolutionInputType"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "input_type",
+          "reference",
+          "summary"
+        ],
+        "type": "object"
+      },
+      "GetSuccessOutputResolutionInputType": {
+        "enum": [
+          "regulatory",
+          "legal_advice",
+          "commercial",
+          "benchmark",
+          "technical",
+          "incident",
+          "source_material"
+        ],
+        "type": "string"
+      },
+      "GetSuccessOutputResolutionMethod": {
+        "enum": [
+          "grill",
+          "prototype",
+          "research",
+          "verify",
+          "task"
+        ],
+        "type": "string"
+      },
+      "GetSuccessOutputResolutionStatus": {
+        "enum": [
+          "draft",
+          "review",
+          "proposed",
+          "approved",
+          "rejected",
+          "revised",
+          "superseded",
+          "abandoned"
+        ],
+        "type": "string"
+      },
+      "GetSuccessOutputRule": {
+        "properties": {
+          "declaration_address": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GetSuccessOutputDeclarationAddress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "declared_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/GetSuccessOutputStableId"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "origin_message": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GetSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GetSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "requirement_ids": {
+            "items": {
+              "$ref": "#/components/schemas/GetSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "resolution_ids": {
+            "items": {
+              "$ref": "#/components/schemas/GetSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "retired": {
+            "type": "boolean"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/GetSuccessOutputScopeId"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/GetSuccessOutputRuleSeverity"
+          },
+          "source_document": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_section": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "statement": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/GetSuccessOutputRuleStatus"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "statement",
+          "status",
+          "severity"
+        ],
+        "type": "object"
+      },
+      "GetSuccessOutputRuleSeverity": {
+        "enum": [
+          "low",
+          "medium",
+          "high",
+          "critical"
+        ],
+        "type": "string"
+      },
+      "GetSuccessOutputRuleStatus": {
+        "enum": [
+          "draft",
+          "review",
+          "active",
+          "deprecated",
+          "archived"
+        ],
+        "type": "string"
+      },
+      "GetSuccessOutputScopeId": {
+        "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "GetSuccessOutputSource": {
+        "properties": {
+          "commit_pin": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "declaration_address": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GetSuccessOutputDeclarationAddress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "declared_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "effective_date": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/GetSuccessOutputStableId"
+          },
+          "name": {
+            "type": "string"
+          },
+          "origin_message": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GetSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GetSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reference": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "retired": {
+            "type": "boolean"
+          },
+          "review_date": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/GetSuccessOutputScopeId"
+          },
+          "source_type": {
+            "$ref": "#/components/schemas/GetSuccessOutputSourceType"
+          },
+          "supersedes": {
+            "items": {
+              "$ref": "#/components/schemas/GetSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "name",
+          "source_type",
+          "url"
+        ],
+        "type": "object"
+      },
+      "GetSuccessOutputSourceReference": {
+        "properties": {
+          "clause": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_id": {
+            "$ref": "#/components/schemas/GetSuccessOutputStableId"
+          }
+        },
+        "required": [
+          "source_id"
+        ],
+        "type": "object"
+      },
+      "GetSuccessOutputSourceType": {
+        "enum": [
+          "policy",
+          "document",
+          "legislation",
+          "company_agreement",
+          "system_state",
+          "external_integration",
+          "domain_knowledge",
+          "project_artifact",
+          "incident",
+          "api_spec"
+        ],
+        "type": "string"
+      },
+      "GetSuccessOutputStableId": {
+        "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "GetSuccessOutputStamp": {
+        "description": "What a query answer reflects: the projection revision the rows came\nfrom, the freshness step the reader ran, and which parts of the answer\nthe revision covers.\n\n`serial` and `digest` name the latest `projection_revision` row and\n`instance_id` the `projection_instance` row; serials compare only within\none instance. `attested` names the projection tables behind the answer.\n`live` names what the stamp does not cover, from a closed list:\n`canonical` (canonical shards), `scanned_sites` (a working-tree scan),\n`verification_runs` (cache JSONL), and `diff` (git). A stamp never\nimplies freshness for anything it does not list.",
+        "properties": {
+          "attested": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "derivation": {
+            "description": "The reader logic version. It moves when the reader answers\ndifferently over the same rows, never for a migration.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "instance_id": {
+            "type": "string"
+          },
+          "live": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/GetSuccessOutputStampPolicy"
+          },
+          "serial": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "serial",
+          "digest",
+          "instance_id",
+          "derivation",
+          "policy",
+          "attested",
+          "live"
+        ],
+        "type": "object"
+      },
+      "GetSuccessOutputStampPolicy": {
+        "description": "The freshness step a read ran before it answered.",
+        "oneOf": [
+          {
+            "const": "catch_up",
+            "description": "Catch-up ran under the publication guard and the answer is at or\nafter the serial it committed.",
+            "type": "string"
+          },
+          {
+            "const": "annotate_only",
+            "description": "No freshness step; the answer is at the stored serial.",
+            "type": "string"
+          },
+          {
+            "const": "refuse_stale",
+            "description": "Reserved: a read refuses when the projection is behind.",
+            "type": "string"
+          },
+          {
+            "const": "catch_up_failed",
+            "description": "Catch-up failed and the answer is at the stored serial; the error\ntext travels in `freshness_error`.",
+            "type": "string"
+          }
+        ]
+      },
+      "GetSuccessOutputTopic": {
+        "properties": {
+          "claimed_at": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "claimed_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/GetSuccessOutputStableId"
+          },
+          "links": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/GetSuccessOutputArtifactLink"
+            },
+            "type": "array"
+          },
+          "requirement_id": {
+            "$ref": "#/components/schemas/GetSuccessOutputStableId"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/GetSuccessOutputScopeId"
+          },
+          "status": {
+            "$ref": "#/components/schemas/GetSuccessOutputTopicStatus"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "requirement_id",
+          "title",
+          "status",
+          "links"
+        ],
+        "type": "object"
+      },
+      "GetSuccessOutputTopicStatus": {
+        "enum": [
+          "open",
+          "explored",
+          "closed"
+        ],
+        "type": "string"
+      },
+      "InfoFailureOutput": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/InfoFailureOutputOperationError"
+          },
+          "operation": {
+            "const": "info",
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "error"
+        ],
+        "title": "FailureEnvelope",
+        "type": "object"
+      },
+      "InfoFailureOutputInvalidInputReason": {
+        "enum": [
+          "required",
+          "invalid_value",
+          "malformed_json",
+          "unknown_field",
+          "too_large"
+        ],
+        "type": "string"
+      },
+      "InfoFailureOutputMovedUnit": {
+        "properties": {
+          "live": {
+            "type": "string"
+          },
+          "stored": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "unit",
+          "stored",
+          "live"
+        ],
+        "type": "object"
+      },
+      "InfoFailureOutputOperationError": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/InfoFailureOutputOperationFailure"
+          },
+          {
+            "$ref": "#/components/schemas/InfoFailureOutputReadFailure"
+          }
+        ],
+        "description": "Keeps the handler's native error separate from preparation failure."
+      },
+      "InfoFailureOutputOperationFailure": {
+        "oneOf": [
+          {
+            "properties": {
+              "field": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "const": "invalid_input",
+                "type": "string"
+              },
+              "reason": {
+                "$ref": "#/components/schemas/InfoFailureOutputInvalidInputReason"
+              }
+            },
+            "required": [
+              "kind",
+              "field",
+              "reason"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "protocol_mismatch",
+                "type": "string"
+              },
+              "requested": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "supported": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "requested",
+              "supported"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_operation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unauthenticated",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "access_denied",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_target",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_scope",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unavailable_needs",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "internal",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "InfoFailureOutputReadFailure": {
+        "oneOf": [
+          {
+            "properties": {
+              "kind": {
+                "const": "no_projection",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "digest": {
+                "type": "string"
+              },
+              "instance_id": {
+                "type": "string"
+              },
+              "kind": {
+                "const": "stale",
+                "type": "string"
+              },
+              "moved": {
+                "items": {
+                  "$ref": "#/components/schemas/InfoFailureOutputMovedUnit"
+                },
+                "type": "array"
+              },
+              "serial": {
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "serial",
+              "digest",
+              "instance_id",
+              "moved"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unit_unreadable",
+                "type": "string"
+              },
+              "unit": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "unit"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "schema_behind",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "half_migrated",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "read_failed",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "InfoRequestInput": {
+        "additionalProperties": false,
+        "properties": {
+          "context": {
+            "$ref": "#/components/schemas/InfoRequestInputRepositoryTarget"
+          },
+          "request": {
+            "$ref": "#/components/schemas/InfoRequestInputInfoRequest"
+          }
+        },
+        "required": [
+          "context",
+          "request"
+        ],
+        "title": "RepositoryCall",
+        "type": "object"
+      },
+      "InfoRequestInputInfoRequest": {
+        "additionalProperties": false,
+        "type": "object"
+      },
+      "InfoRequestInputRepositoryTarget": {
+        "additionalProperties": false,
+        "properties": {
+          "repository": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "repository"
+        ],
+        "type": "object"
+      },
+      "InfoSuccessOutput": {
+        "description": "External metadata names the requested target, never a host path.",
+        "properties": {
+          "engine_version": {
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          },
+          "repository": {
+            "type": "string"
+          },
+          "state_schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "engine_version",
+          "protocol_version",
+          "state_schema_version",
+          "repository"
+        ],
+        "title": "RepositoryInfo",
+        "type": "object"
+      },
       "MetadataOutput": {
         "properties": {
           "engine_version": {
@@ -313,6 +2183,4664 @@
           "protocol_version"
         ],
         "title": "HostMetadata",
+        "type": "object"
+      },
+      "NeighborsFailureOutput": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/NeighborsFailureOutputOperationError"
+          },
+          "operation": {
+            "const": "neighbors",
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "error"
+        ],
+        "title": "FailureEnvelope",
+        "type": "object"
+      },
+      "NeighborsFailureOutputInvalidInputReason": {
+        "enum": [
+          "required",
+          "invalid_value",
+          "malformed_json",
+          "unknown_field",
+          "too_large"
+        ],
+        "type": "string"
+      },
+      "NeighborsFailureOutputMovedUnit": {
+        "properties": {
+          "live": {
+            "type": "string"
+          },
+          "stored": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "unit",
+          "stored",
+          "live"
+        ],
+        "type": "object"
+      },
+      "NeighborsFailureOutputOperationError": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/NeighborsFailureOutputOperationFailure"
+          },
+          {
+            "$ref": "#/components/schemas/NeighborsFailureOutputReadFailure"
+          }
+        ],
+        "description": "Keeps the handler's native error separate from preparation failure."
+      },
+      "NeighborsFailureOutputOperationFailure": {
+        "oneOf": [
+          {
+            "properties": {
+              "field": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "const": "invalid_input",
+                "type": "string"
+              },
+              "reason": {
+                "$ref": "#/components/schemas/NeighborsFailureOutputInvalidInputReason"
+              }
+            },
+            "required": [
+              "kind",
+              "field",
+              "reason"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "protocol_mismatch",
+                "type": "string"
+              },
+              "requested": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "supported": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "requested",
+              "supported"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_operation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unauthenticated",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "access_denied",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_target",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_scope",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unavailable_needs",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "internal",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "NeighborsFailureOutputReadFailure": {
+        "oneOf": [
+          {
+            "properties": {
+              "kind": {
+                "const": "no_projection",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "digest": {
+                "type": "string"
+              },
+              "instance_id": {
+                "type": "string"
+              },
+              "kind": {
+                "const": "stale",
+                "type": "string"
+              },
+              "moved": {
+                "items": {
+                  "$ref": "#/components/schemas/NeighborsFailureOutputMovedUnit"
+                },
+                "type": "array"
+              },
+              "serial": {
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "serial",
+              "digest",
+              "instance_id",
+              "moved"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unit_unreadable",
+                "type": "string"
+              },
+              "unit": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "unit"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "schema_behind",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "half_migrated",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "read_failed",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "NeighborsRequestInput": {
+        "additionalProperties": false,
+        "properties": {
+          "context": {
+            "$ref": "#/components/schemas/NeighborsRequestInputRepositoryContext"
+          },
+          "request": {
+            "$ref": "#/components/schemas/NeighborsRequestInputNeighborsQuery"
+          }
+        },
+        "required": [
+          "context",
+          "request"
+        ],
+        "title": "RepositoryCall",
+        "type": "object"
+      },
+      "NeighborsRequestInputDirection": {
+        "description": "Which way a query follows a relation.\n\n`out` reads the relations the named record holds in its own fields, `in`\nreads the relations other records hold toward it, and `both` reads every\nrelation from either end.",
+        "enum": [
+          "out",
+          "in",
+          "both"
+        ],
+        "type": "string"
+      },
+      "NeighborsRequestInputFreshnessPolicy": {
+        "description": "Which freshness step a read runs before it answers.",
+        "oneOf": [
+          {
+            "const": "catch_up",
+            "description": "Run catch-up under the publication guard, then answer.",
+            "type": "string"
+          },
+          {
+            "const": "annotate_only",
+            "description": "Answer at the stored serial without a freshness step.",
+            "type": "string"
+          },
+          {
+            "const": "refuse_stale",
+            "description": "Refuse when the stored projection differs from canonical state.",
+            "type": "string"
+          }
+        ]
+      },
+      "NeighborsRequestInputNeighborsQuery": {
+        "additionalProperties": false,
+        "description": "Read the records one hop from a record.",
+        "properties": {
+          "direction": {
+            "$ref": "#/components/schemas/NeighborsRequestInputDirection",
+            "default": "both"
+          },
+          "id": {
+            "type": "string"
+          },
+          "include_retired": {
+            "default": false,
+            "type": "boolean"
+          },
+          "limit": {
+            "default": 50,
+            "format": "uint",
+            "maximum": 200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "node_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NeighborsRequestInputNodeType"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "protocol_version": {
+            "default": null,
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "relations": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "NeighborsRequestInputNodeType": {
+        "enum": [
+          "source",
+          "requirement",
+          "resolution",
+          "rule",
+          "topic",
+          "question",
+          "domain",
+          "boundary"
+        ],
+        "type": "string"
+      },
+      "NeighborsRequestInputRepositoryContext": {
+        "additionalProperties": false,
+        "properties": {
+          "freshness": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NeighborsRequestInputFreshnessPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "repository": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "repository",
+          "scope"
+        ],
+        "type": "object"
+      },
+      "NeighborsSuccessOutput": {
+        "description": "The envelope every query primitive answers in.\n\nThe protocol version travels with the answer, so a caller holding a\nrecorded response can tell which contract produced it, `operation`\nnames which primitive it came from, and `stamp` says what the answer\nreflects.",
+        "properties": {
+          "freshness_cause": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NeighborsSuccessOutputFreshnessCause"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "freshness_error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "has_more": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "limit": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "neighbors": {
+            "items": {
+              "$ref": "#/components/schemas/NeighborsSuccessOutputNeighbor"
+            },
+            "type": "array"
+          },
+          "operation": {
+            "const": "neighbors",
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          },
+          "stamp": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputStamp"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "operation",
+          "stamp",
+          "id",
+          "limit",
+          "has_more",
+          "neighbors"
+        ],
+        "title": "QueryResponse",
+        "type": "object"
+      },
+      "NeighborsSuccessOutputArtifactLink": {
+        "properties": {
+          "target_id": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputStableId"
+          },
+          "target_type": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputArtifactLinkTargetType"
+          }
+        },
+        "required": [
+          "target_type",
+          "target_id"
+        ],
+        "type": "object"
+      },
+      "NeighborsSuccessOutputArtifactLinkTargetType": {
+        "enum": [
+          "source",
+          "requirement",
+          "resolution",
+          "rule"
+        ],
+        "type": "string"
+      },
+      "NeighborsSuccessOutputBoundary": {
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputStableId"
+          },
+          "requirement_id": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputStableId"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputScopeId"
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NeighborsSuccessOutputSourceReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "statement": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "requirement_id",
+          "statement"
+        ],
+        "type": "object"
+      },
+      "NeighborsSuccessOutputDeclarationAddress": {
+        "description": "One owner-local path to a language-authored declaration.",
+        "items": {
+          "pattern": "\\S",
+          "type": "string"
+        },
+        "minItems": 1,
+        "type": "array"
+      },
+      "NeighborsSuccessOutputDirection": {
+        "description": "Which way a query follows a relation.\n\n`out` reads the relations the named record holds in its own fields, `in`\nreads the relations other records hold toward it, and `both` reads every\nrelation from either end.",
+        "enum": [
+          "out",
+          "in",
+          "both"
+        ],
+        "type": "string"
+      },
+      "NeighborsSuccessOutputDomain": {
+        "properties": {
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputStableId"
+          },
+          "name": {
+            "type": "string"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputScopeId"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "NeighborsSuccessOutputFreshnessCause": {
+        "description": "The stage that failed is known even when its lower-level error is not public.",
+        "enum": [
+          "catch_up_failed"
+        ],
+        "type": "string"
+      },
+      "NeighborsSuccessOutputGraphNode": {
+        "description": "One canonical record as a query hands it back.\n\nEach variant carries the record the store already writes, so a primitive\nnever invents a second vocabulary for a Requirement or a Rule. The\n`node_type` tag is the same word a relation row uses for its endpoints.",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputSource",
+            "properties": {
+              "node_type": {
+                "const": "source",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputRequirement",
+            "properties": {
+              "node_type": {
+                "const": "requirement",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputResolution",
+            "properties": {
+              "node_type": {
+                "const": "resolution",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputRule",
+            "properties": {
+              "node_type": {
+                "const": "rule",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputTopic",
+            "properties": {
+              "node_type": {
+                "const": "topic",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputQuestion",
+            "properties": {
+              "node_type": {
+                "const": "question",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputDomain",
+            "properties": {
+              "node_type": {
+                "const": "domain",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputBoundary",
+            "properties": {
+              "node_type": {
+                "const": "boundary",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "NeighborsSuccessOutputNeighbor": {
+        "description": "One record reached in a single hop, with the relation that reached it.",
+        "properties": {
+          "direction": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputDirection"
+          },
+          "node": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputGraphNode"
+          },
+          "relation": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "relation",
+          "direction",
+          "node"
+        ],
+        "type": "object"
+      },
+      "NeighborsSuccessOutputQuestion": {
+        "properties": {
+          "answer": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "claimed_at": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "claimed_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "contradicts": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NeighborsSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputStableId"
+          },
+          "links": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/NeighborsSuccessOutputArtifactLink"
+            },
+            "type": "array"
+          },
+          "question": {
+            "type": "string"
+          },
+          "requirement_id": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputStableId"
+          },
+          "resolution_id": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NeighborsSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resolution_method": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputResolutionMethod",
+            "description": "The verb that resolves this question, chosen when the question is minted."
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputScopeId"
+          },
+          "status": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputQuestionStatus"
+          },
+          "topic_id": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputStableId"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "topic_id",
+          "requirement_id",
+          "question",
+          "resolution_method",
+          "status",
+          "links"
+        ],
+        "type": "object"
+      },
+      "NeighborsSuccessOutputQuestionStatus": {
+        "enum": [
+          "open",
+          "blocked_on_human",
+          "answered"
+        ],
+        "type": "string"
+      },
+      "NeighborsSuccessOutputRequirement": {
+        "properties": {
+          "declaration_address": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NeighborsSuccessOutputDeclarationAddress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "declared_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "depends_on": {
+            "items": {
+              "$ref": "#/components/schemas/NeighborsSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "domain_id": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NeighborsSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fog": {
+            "description": "Deliberately unstructured free text: the dim view of decisions and\ninvestigations that are coming but cannot yet be phrased sharply.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputStableId"
+          },
+          "origin_message": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NeighborsSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NeighborsSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "refines": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NeighborsSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "retired": {
+            "type": "boolean"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputScopeId"
+          },
+          "source_refs": {
+            "items": {
+              "$ref": "#/components/schemas/NeighborsSuccessOutputSourceReference"
+            },
+            "type": "array"
+          },
+          "spawned_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NeighborsSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "statement": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputRequirementStatus"
+          },
+          "supersedes": {
+            "items": {
+              "$ref": "#/components/schemas/NeighborsSuccessOutputStableId"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "statement",
+          "status"
+        ],
+        "type": "object"
+      },
+      "NeighborsSuccessOutputRequirementStatus": {
+        "enum": [
+          "active",
+          "discovery",
+          "refinement",
+          "resolved"
+        ],
+        "type": "string"
+      },
+      "NeighborsSuccessOutputResolution": {
+        "properties": {
+          "approved_at": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "approved_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "confidence": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "context": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "enforcement": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputStableId"
+          },
+          "inputs": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/NeighborsSuccessOutputResolutionInput"
+            },
+            "type": "array"
+          },
+          "made_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "origin_message": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NeighborsSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NeighborsSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "position": {
+            "type": "string"
+          },
+          "rationale": {
+            "type": "string"
+          },
+          "requirement_ids": {
+            "items": {
+              "$ref": "#/components/schemas/NeighborsSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "review_on": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputScopeId"
+          },
+          "status": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputResolutionStatus"
+          },
+          "supersedes": {
+            "items": {
+              "$ref": "#/components/schemas/NeighborsSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "title",
+          "position",
+          "rationale",
+          "status",
+          "inputs",
+          "review_on"
+        ],
+        "type": "object"
+      },
+      "NeighborsSuccessOutputResolutionInput": {
+        "properties": {
+          "input_type": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputResolutionInputType"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "input_type",
+          "reference",
+          "summary"
+        ],
+        "type": "object"
+      },
+      "NeighborsSuccessOutputResolutionInputType": {
+        "enum": [
+          "regulatory",
+          "legal_advice",
+          "commercial",
+          "benchmark",
+          "technical",
+          "incident",
+          "source_material"
+        ],
+        "type": "string"
+      },
+      "NeighborsSuccessOutputResolutionMethod": {
+        "enum": [
+          "grill",
+          "prototype",
+          "research",
+          "verify",
+          "task"
+        ],
+        "type": "string"
+      },
+      "NeighborsSuccessOutputResolutionStatus": {
+        "enum": [
+          "draft",
+          "review",
+          "proposed",
+          "approved",
+          "rejected",
+          "revised",
+          "superseded",
+          "abandoned"
+        ],
+        "type": "string"
+      },
+      "NeighborsSuccessOutputRule": {
+        "properties": {
+          "declaration_address": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NeighborsSuccessOutputDeclarationAddress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "declared_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputStableId"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "origin_message": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NeighborsSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NeighborsSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "requirement_ids": {
+            "items": {
+              "$ref": "#/components/schemas/NeighborsSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "resolution_ids": {
+            "items": {
+              "$ref": "#/components/schemas/NeighborsSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "retired": {
+            "type": "boolean"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputScopeId"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputRuleSeverity"
+          },
+          "source_document": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_section": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "statement": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputRuleStatus"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "statement",
+          "status",
+          "severity"
+        ],
+        "type": "object"
+      },
+      "NeighborsSuccessOutputRuleSeverity": {
+        "enum": [
+          "low",
+          "medium",
+          "high",
+          "critical"
+        ],
+        "type": "string"
+      },
+      "NeighborsSuccessOutputRuleStatus": {
+        "enum": [
+          "draft",
+          "review",
+          "active",
+          "deprecated",
+          "archived"
+        ],
+        "type": "string"
+      },
+      "NeighborsSuccessOutputScopeId": {
+        "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "NeighborsSuccessOutputSource": {
+        "properties": {
+          "commit_pin": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "declaration_address": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NeighborsSuccessOutputDeclarationAddress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "declared_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "effective_date": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputStableId"
+          },
+          "name": {
+            "type": "string"
+          },
+          "origin_message": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NeighborsSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NeighborsSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reference": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "retired": {
+            "type": "boolean"
+          },
+          "review_date": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputScopeId"
+          },
+          "source_type": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputSourceType"
+          },
+          "supersedes": {
+            "items": {
+              "$ref": "#/components/schemas/NeighborsSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "name",
+          "source_type",
+          "url"
+        ],
+        "type": "object"
+      },
+      "NeighborsSuccessOutputSourceReference": {
+        "properties": {
+          "clause": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_id": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputStableId"
+          }
+        },
+        "required": [
+          "source_id"
+        ],
+        "type": "object"
+      },
+      "NeighborsSuccessOutputSourceType": {
+        "enum": [
+          "policy",
+          "document",
+          "legislation",
+          "company_agreement",
+          "system_state",
+          "external_integration",
+          "domain_knowledge",
+          "project_artifact",
+          "incident",
+          "api_spec"
+        ],
+        "type": "string"
+      },
+      "NeighborsSuccessOutputStableId": {
+        "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "NeighborsSuccessOutputStamp": {
+        "description": "What a query answer reflects: the projection revision the rows came\nfrom, the freshness step the reader ran, and which parts of the answer\nthe revision covers.\n\n`serial` and `digest` name the latest `projection_revision` row and\n`instance_id` the `projection_instance` row; serials compare only within\none instance. `attested` names the projection tables behind the answer.\n`live` names what the stamp does not cover, from a closed list:\n`canonical` (canonical shards), `scanned_sites` (a working-tree scan),\n`verification_runs` (cache JSONL), and `diff` (git). A stamp never\nimplies freshness for anything it does not list.",
+        "properties": {
+          "attested": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "derivation": {
+            "description": "The reader logic version. It moves when the reader answers\ndifferently over the same rows, never for a migration.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "instance_id": {
+            "type": "string"
+          },
+          "live": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputStampPolicy"
+          },
+          "serial": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "serial",
+          "digest",
+          "instance_id",
+          "derivation",
+          "policy",
+          "attested",
+          "live"
+        ],
+        "type": "object"
+      },
+      "NeighborsSuccessOutputStampPolicy": {
+        "description": "The freshness step a read ran before it answered.",
+        "oneOf": [
+          {
+            "const": "catch_up",
+            "description": "Catch-up ran under the publication guard and the answer is at or\nafter the serial it committed.",
+            "type": "string"
+          },
+          {
+            "const": "annotate_only",
+            "description": "No freshness step; the answer is at the stored serial.",
+            "type": "string"
+          },
+          {
+            "const": "refuse_stale",
+            "description": "Reserved: a read refuses when the projection is behind.",
+            "type": "string"
+          },
+          {
+            "const": "catch_up_failed",
+            "description": "Catch-up failed and the answer is at the stored serial; the error\ntext travels in `freshness_error`.",
+            "type": "string"
+          }
+        ]
+      },
+      "NeighborsSuccessOutputTopic": {
+        "properties": {
+          "claimed_at": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "claimed_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputStableId"
+          },
+          "links": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/NeighborsSuccessOutputArtifactLink"
+            },
+            "type": "array"
+          },
+          "requirement_id": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputStableId"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputScopeId"
+          },
+          "status": {
+            "$ref": "#/components/schemas/NeighborsSuccessOutputTopicStatus"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "requirement_id",
+          "title",
+          "status",
+          "links"
+        ],
+        "type": "object"
+      },
+      "NeighborsSuccessOutputTopicStatus": {
+        "enum": [
+          "open",
+          "explored",
+          "closed"
+        ],
+        "type": "string"
+      },
+      "SearchFailureOutput": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/SearchFailureOutputOperationError"
+          },
+          "operation": {
+            "const": "search",
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "error"
+        ],
+        "title": "FailureEnvelope",
+        "type": "object"
+      },
+      "SearchFailureOutputInvalidInputReason": {
+        "enum": [
+          "required",
+          "invalid_value",
+          "malformed_json",
+          "unknown_field",
+          "too_large"
+        ],
+        "type": "string"
+      },
+      "SearchFailureOutputMovedUnit": {
+        "properties": {
+          "live": {
+            "type": "string"
+          },
+          "stored": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "unit",
+          "stored",
+          "live"
+        ],
+        "type": "object"
+      },
+      "SearchFailureOutputOperationError": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/SearchFailureOutputOperationFailure"
+          },
+          {
+            "$ref": "#/components/schemas/SearchFailureOutputReadFailure"
+          }
+        ],
+        "description": "Keeps the handler's native error separate from preparation failure."
+      },
+      "SearchFailureOutputOperationFailure": {
+        "oneOf": [
+          {
+            "properties": {
+              "field": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "const": "invalid_input",
+                "type": "string"
+              },
+              "reason": {
+                "$ref": "#/components/schemas/SearchFailureOutputInvalidInputReason"
+              }
+            },
+            "required": [
+              "kind",
+              "field",
+              "reason"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "protocol_mismatch",
+                "type": "string"
+              },
+              "requested": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "supported": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "requested",
+              "supported"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_operation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unauthenticated",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "access_denied",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_target",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_scope",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unavailable_needs",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "internal",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "SearchFailureOutputReadFailure": {
+        "oneOf": [
+          {
+            "properties": {
+              "kind": {
+                "const": "no_projection",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "digest": {
+                "type": "string"
+              },
+              "instance_id": {
+                "type": "string"
+              },
+              "kind": {
+                "const": "stale",
+                "type": "string"
+              },
+              "moved": {
+                "items": {
+                  "$ref": "#/components/schemas/SearchFailureOutputMovedUnit"
+                },
+                "type": "array"
+              },
+              "serial": {
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "serial",
+              "digest",
+              "instance_id",
+              "moved"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unit_unreadable",
+                "type": "string"
+              },
+              "unit": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "unit"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "schema_behind",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "half_migrated",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "read_failed",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "SearchRequestInput": {
+        "additionalProperties": false,
+        "properties": {
+          "context": {
+            "$ref": "#/components/schemas/SearchRequestInputRepositoryContext"
+          },
+          "request": {
+            "$ref": "#/components/schemas/SearchRequestInputSearchQuery"
+          }
+        },
+        "required": [
+          "context",
+          "request"
+        ],
+        "title": "RepositoryCall",
+        "type": "object"
+      },
+      "SearchRequestInputFreshnessPolicy": {
+        "description": "Which freshness step a read runs before it answers.",
+        "oneOf": [
+          {
+            "const": "catch_up",
+            "description": "Run catch-up under the publication guard, then answer.",
+            "type": "string"
+          },
+          {
+            "const": "annotate_only",
+            "description": "Answer at the stored serial without a freshness step.",
+            "type": "string"
+          },
+          {
+            "const": "refuse_stale",
+            "description": "Refuse when the stored projection differs from canonical state.",
+            "type": "string"
+          }
+        ]
+      },
+      "SearchRequestInputNodeType": {
+        "enum": [
+          "source",
+          "requirement",
+          "resolution",
+          "rule",
+          "topic",
+          "question",
+          "domain",
+          "boundary"
+        ],
+        "type": "string"
+      },
+      "SearchRequestInputRepositoryContext": {
+        "additionalProperties": false,
+        "properties": {
+          "freshness": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SearchRequestInputFreshnessPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "repository": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "repository",
+          "scope"
+        ],
+        "type": "object"
+      },
+      "SearchRequestInputSearchQuery": {
+        "additionalProperties": false,
+        "description": "Find records whose text contains a phrase.",
+        "properties": {
+          "include_retired": {
+            "default": false,
+            "type": "boolean"
+          },
+          "limit": {
+            "default": 50,
+            "format": "uint",
+            "maximum": 200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "node_types": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SearchRequestInputNodeType"
+            },
+            "type": "array"
+          },
+          "protocol_version": {
+            "default": null,
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "type": "object"
+      },
+      "SearchSuccessOutput": {
+        "description": "The envelope every query primitive answers in.\n\nThe protocol version travels with the answer, so a caller holding a\nrecorded response can tell which contract produced it, `operation`\nnames which primitive it came from, and `stamp` says what the answer\nreflects.",
+        "properties": {
+          "freshness_cause": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SearchSuccessOutputFreshnessCause"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "freshness_error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "has_more": {
+            "type": "boolean"
+          },
+          "limit": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/SearchSuccessOutputGraphNode"
+            },
+            "type": "array"
+          },
+          "operation": {
+            "const": "search",
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          },
+          "stamp": {
+            "$ref": "#/components/schemas/SearchSuccessOutputStamp"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "operation",
+          "stamp",
+          "limit",
+          "has_more",
+          "nodes"
+        ],
+        "title": "QueryResponse",
+        "type": "object"
+      },
+      "SearchSuccessOutputArtifactLink": {
+        "properties": {
+          "target_id": {
+            "$ref": "#/components/schemas/SearchSuccessOutputStableId"
+          },
+          "target_type": {
+            "$ref": "#/components/schemas/SearchSuccessOutputArtifactLinkTargetType"
+          }
+        },
+        "required": [
+          "target_type",
+          "target_id"
+        ],
+        "type": "object"
+      },
+      "SearchSuccessOutputArtifactLinkTargetType": {
+        "enum": [
+          "source",
+          "requirement",
+          "resolution",
+          "rule"
+        ],
+        "type": "string"
+      },
+      "SearchSuccessOutputBoundary": {
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/SearchSuccessOutputStableId"
+          },
+          "requirement_id": {
+            "$ref": "#/components/schemas/SearchSuccessOutputStableId"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/SearchSuccessOutputScopeId"
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SearchSuccessOutputSourceReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "statement": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "requirement_id",
+          "statement"
+        ],
+        "type": "object"
+      },
+      "SearchSuccessOutputDeclarationAddress": {
+        "description": "One owner-local path to a language-authored declaration.",
+        "items": {
+          "pattern": "\\S",
+          "type": "string"
+        },
+        "minItems": 1,
+        "type": "array"
+      },
+      "SearchSuccessOutputDomain": {
+        "properties": {
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/SearchSuccessOutputStableId"
+          },
+          "name": {
+            "type": "string"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/SearchSuccessOutputScopeId"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "SearchSuccessOutputFreshnessCause": {
+        "description": "The stage that failed is known even when its lower-level error is not public.",
+        "enum": [
+          "catch_up_failed"
+        ],
+        "type": "string"
+      },
+      "SearchSuccessOutputGraphNode": {
+        "description": "One canonical record as a query hands it back.\n\nEach variant carries the record the store already writes, so a primitive\nnever invents a second vocabulary for a Requirement or a Rule. The\n`node_type` tag is the same word a relation row uses for its endpoints.",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/SearchSuccessOutputSource",
+            "properties": {
+              "node_type": {
+                "const": "source",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/SearchSuccessOutputRequirement",
+            "properties": {
+              "node_type": {
+                "const": "requirement",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/SearchSuccessOutputResolution",
+            "properties": {
+              "node_type": {
+                "const": "resolution",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/SearchSuccessOutputRule",
+            "properties": {
+              "node_type": {
+                "const": "rule",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/SearchSuccessOutputTopic",
+            "properties": {
+              "node_type": {
+                "const": "topic",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/SearchSuccessOutputQuestion",
+            "properties": {
+              "node_type": {
+                "const": "question",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/SearchSuccessOutputDomain",
+            "properties": {
+              "node_type": {
+                "const": "domain",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/SearchSuccessOutputBoundary",
+            "properties": {
+              "node_type": {
+                "const": "boundary",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "SearchSuccessOutputQuestion": {
+        "properties": {
+          "answer": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "claimed_at": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "claimed_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "contradicts": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SearchSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/SearchSuccessOutputStableId"
+          },
+          "links": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SearchSuccessOutputArtifactLink"
+            },
+            "type": "array"
+          },
+          "question": {
+            "type": "string"
+          },
+          "requirement_id": {
+            "$ref": "#/components/schemas/SearchSuccessOutputStableId"
+          },
+          "resolution_id": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SearchSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resolution_method": {
+            "$ref": "#/components/schemas/SearchSuccessOutputResolutionMethod",
+            "description": "The verb that resolves this question, chosen when the question is minted."
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/SearchSuccessOutputScopeId"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SearchSuccessOutputQuestionStatus"
+          },
+          "topic_id": {
+            "$ref": "#/components/schemas/SearchSuccessOutputStableId"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "topic_id",
+          "requirement_id",
+          "question",
+          "resolution_method",
+          "status",
+          "links"
+        ],
+        "type": "object"
+      },
+      "SearchSuccessOutputQuestionStatus": {
+        "enum": [
+          "open",
+          "blocked_on_human",
+          "answered"
+        ],
+        "type": "string"
+      },
+      "SearchSuccessOutputRequirement": {
+        "properties": {
+          "declaration_address": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SearchSuccessOutputDeclarationAddress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "declared_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "depends_on": {
+            "items": {
+              "$ref": "#/components/schemas/SearchSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "domain_id": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SearchSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fog": {
+            "description": "Deliberately unstructured free text: the dim view of decisions and\ninvestigations that are coming but cannot yet be phrased sharply.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/SearchSuccessOutputStableId"
+          },
+          "origin_message": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SearchSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SearchSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "refines": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SearchSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "retired": {
+            "type": "boolean"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/SearchSuccessOutputScopeId"
+          },
+          "source_refs": {
+            "items": {
+              "$ref": "#/components/schemas/SearchSuccessOutputSourceReference"
+            },
+            "type": "array"
+          },
+          "spawned_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SearchSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "statement": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SearchSuccessOutputRequirementStatus"
+          },
+          "supersedes": {
+            "items": {
+              "$ref": "#/components/schemas/SearchSuccessOutputStableId"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "statement",
+          "status"
+        ],
+        "type": "object"
+      },
+      "SearchSuccessOutputRequirementStatus": {
+        "enum": [
+          "active",
+          "discovery",
+          "refinement",
+          "resolved"
+        ],
+        "type": "string"
+      },
+      "SearchSuccessOutputResolution": {
+        "properties": {
+          "approved_at": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "approved_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "confidence": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "context": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "enforcement": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/SearchSuccessOutputStableId"
+          },
+          "inputs": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SearchSuccessOutputResolutionInput"
+            },
+            "type": "array"
+          },
+          "made_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "origin_message": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SearchSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SearchSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "position": {
+            "type": "string"
+          },
+          "rationale": {
+            "type": "string"
+          },
+          "requirement_ids": {
+            "items": {
+              "$ref": "#/components/schemas/SearchSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "review_on": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/SearchSuccessOutputScopeId"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SearchSuccessOutputResolutionStatus"
+          },
+          "supersedes": {
+            "items": {
+              "$ref": "#/components/schemas/SearchSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "title",
+          "position",
+          "rationale",
+          "status",
+          "inputs",
+          "review_on"
+        ],
+        "type": "object"
+      },
+      "SearchSuccessOutputResolutionInput": {
+        "properties": {
+          "input_type": {
+            "$ref": "#/components/schemas/SearchSuccessOutputResolutionInputType"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "input_type",
+          "reference",
+          "summary"
+        ],
+        "type": "object"
+      },
+      "SearchSuccessOutputResolutionInputType": {
+        "enum": [
+          "regulatory",
+          "legal_advice",
+          "commercial",
+          "benchmark",
+          "technical",
+          "incident",
+          "source_material"
+        ],
+        "type": "string"
+      },
+      "SearchSuccessOutputResolutionMethod": {
+        "enum": [
+          "grill",
+          "prototype",
+          "research",
+          "verify",
+          "task"
+        ],
+        "type": "string"
+      },
+      "SearchSuccessOutputResolutionStatus": {
+        "enum": [
+          "draft",
+          "review",
+          "proposed",
+          "approved",
+          "rejected",
+          "revised",
+          "superseded",
+          "abandoned"
+        ],
+        "type": "string"
+      },
+      "SearchSuccessOutputRule": {
+        "properties": {
+          "declaration_address": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SearchSuccessOutputDeclarationAddress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "declared_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/SearchSuccessOutputStableId"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "origin_message": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SearchSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SearchSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "requirement_ids": {
+            "items": {
+              "$ref": "#/components/schemas/SearchSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "resolution_ids": {
+            "items": {
+              "$ref": "#/components/schemas/SearchSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "retired": {
+            "type": "boolean"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/SearchSuccessOutputScopeId"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/SearchSuccessOutputRuleSeverity"
+          },
+          "source_document": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_section": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "statement": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SearchSuccessOutputRuleStatus"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "statement",
+          "status",
+          "severity"
+        ],
+        "type": "object"
+      },
+      "SearchSuccessOutputRuleSeverity": {
+        "enum": [
+          "low",
+          "medium",
+          "high",
+          "critical"
+        ],
+        "type": "string"
+      },
+      "SearchSuccessOutputRuleStatus": {
+        "enum": [
+          "draft",
+          "review",
+          "active",
+          "deprecated",
+          "archived"
+        ],
+        "type": "string"
+      },
+      "SearchSuccessOutputScopeId": {
+        "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "SearchSuccessOutputSource": {
+        "properties": {
+          "commit_pin": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "declaration_address": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SearchSuccessOutputDeclarationAddress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "declared_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "effective_date": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/SearchSuccessOutputStableId"
+          },
+          "name": {
+            "type": "string"
+          },
+          "origin_message": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SearchSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SearchSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reference": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "retired": {
+            "type": "boolean"
+          },
+          "review_date": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/SearchSuccessOutputScopeId"
+          },
+          "source_type": {
+            "$ref": "#/components/schemas/SearchSuccessOutputSourceType"
+          },
+          "supersedes": {
+            "items": {
+              "$ref": "#/components/schemas/SearchSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "name",
+          "source_type",
+          "url"
+        ],
+        "type": "object"
+      },
+      "SearchSuccessOutputSourceReference": {
+        "properties": {
+          "clause": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_id": {
+            "$ref": "#/components/schemas/SearchSuccessOutputStableId"
+          }
+        },
+        "required": [
+          "source_id"
+        ],
+        "type": "object"
+      },
+      "SearchSuccessOutputSourceType": {
+        "enum": [
+          "policy",
+          "document",
+          "legislation",
+          "company_agreement",
+          "system_state",
+          "external_integration",
+          "domain_knowledge",
+          "project_artifact",
+          "incident",
+          "api_spec"
+        ],
+        "type": "string"
+      },
+      "SearchSuccessOutputStableId": {
+        "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "SearchSuccessOutputStamp": {
+        "description": "What a query answer reflects: the projection revision the rows came\nfrom, the freshness step the reader ran, and which parts of the answer\nthe revision covers.\n\n`serial` and `digest` name the latest `projection_revision` row and\n`instance_id` the `projection_instance` row; serials compare only within\none instance. `attested` names the projection tables behind the answer.\n`live` names what the stamp does not cover, from a closed list:\n`canonical` (canonical shards), `scanned_sites` (a working-tree scan),\n`verification_runs` (cache JSONL), and `diff` (git). A stamp never\nimplies freshness for anything it does not list.",
+        "properties": {
+          "attested": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "derivation": {
+            "description": "The reader logic version. It moves when the reader answers\ndifferently over the same rows, never for a migration.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "instance_id": {
+            "type": "string"
+          },
+          "live": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/SearchSuccessOutputStampPolicy"
+          },
+          "serial": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "serial",
+          "digest",
+          "instance_id",
+          "derivation",
+          "policy",
+          "attested",
+          "live"
+        ],
+        "type": "object"
+      },
+      "SearchSuccessOutputStampPolicy": {
+        "description": "The freshness step a read ran before it answered.",
+        "oneOf": [
+          {
+            "const": "catch_up",
+            "description": "Catch-up ran under the publication guard and the answer is at or\nafter the serial it committed.",
+            "type": "string"
+          },
+          {
+            "const": "annotate_only",
+            "description": "No freshness step; the answer is at the stored serial.",
+            "type": "string"
+          },
+          {
+            "const": "refuse_stale",
+            "description": "Reserved: a read refuses when the projection is behind.",
+            "type": "string"
+          },
+          {
+            "const": "catch_up_failed",
+            "description": "Catch-up failed and the answer is at the stored serial; the error\ntext travels in `freshness_error`.",
+            "type": "string"
+          }
+        ]
+      },
+      "SearchSuccessOutputTopic": {
+        "properties": {
+          "claimed_at": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "claimed_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/SearchSuccessOutputStableId"
+          },
+          "links": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SearchSuccessOutputArtifactLink"
+            },
+            "type": "array"
+          },
+          "requirement_id": {
+            "$ref": "#/components/schemas/SearchSuccessOutputStableId"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/SearchSuccessOutputScopeId"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SearchSuccessOutputTopicStatus"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "requirement_id",
+          "title",
+          "status",
+          "links"
+        ],
+        "type": "object"
+      },
+      "SearchSuccessOutputTopicStatus": {
+        "enum": [
+          "open",
+          "explored",
+          "closed"
+        ],
+        "type": "string"
+      },
+      "TraceFailureOutput": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/TraceFailureOutputOperationError"
+          },
+          "operation": {
+            "const": "trace",
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "error"
+        ],
+        "title": "FailureEnvelope",
+        "type": "object"
+      },
+      "TraceFailureOutputInvalidInputReason": {
+        "enum": [
+          "required",
+          "invalid_value",
+          "malformed_json",
+          "unknown_field",
+          "too_large"
+        ],
+        "type": "string"
+      },
+      "TraceFailureOutputMovedUnit": {
+        "properties": {
+          "live": {
+            "type": "string"
+          },
+          "stored": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "unit",
+          "stored",
+          "live"
+        ],
+        "type": "object"
+      },
+      "TraceFailureOutputOperationError": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/TraceFailureOutputOperationFailure"
+          },
+          {
+            "$ref": "#/components/schemas/TraceFailureOutputReadFailure"
+          }
+        ],
+        "description": "Keeps the handler's native error separate from preparation failure."
+      },
+      "TraceFailureOutputOperationFailure": {
+        "oneOf": [
+          {
+            "properties": {
+              "field": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "const": "invalid_input",
+                "type": "string"
+              },
+              "reason": {
+                "$ref": "#/components/schemas/TraceFailureOutputInvalidInputReason"
+              }
+            },
+            "required": [
+              "kind",
+              "field",
+              "reason"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "protocol_mismatch",
+                "type": "string"
+              },
+              "requested": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "supported": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "requested",
+              "supported"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_operation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unauthenticated",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "access_denied",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_target",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_scope",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unavailable_needs",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "internal",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "TraceFailureOutputReadFailure": {
+        "oneOf": [
+          {
+            "properties": {
+              "kind": {
+                "const": "no_projection",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "digest": {
+                "type": "string"
+              },
+              "instance_id": {
+                "type": "string"
+              },
+              "kind": {
+                "const": "stale",
+                "type": "string"
+              },
+              "moved": {
+                "items": {
+                  "$ref": "#/components/schemas/TraceFailureOutputMovedUnit"
+                },
+                "type": "array"
+              },
+              "serial": {
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "serial",
+              "digest",
+              "instance_id",
+              "moved"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unit_unreadable",
+                "type": "string"
+              },
+              "unit": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "unit"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "schema_behind",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "half_migrated",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "read_failed",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "TraceRequestInput": {
+        "additionalProperties": false,
+        "properties": {
+          "context": {
+            "$ref": "#/components/schemas/TraceRequestInputRepositoryContext"
+          },
+          "request": {
+            "$ref": "#/components/schemas/TraceRequestInputTraceQuery"
+          }
+        },
+        "required": [
+          "context",
+          "request"
+        ],
+        "title": "RepositoryCall",
+        "type": "object"
+      },
+      "TraceRequestInputDirection": {
+        "description": "Which way a query follows a relation.\n\n`out` reads the relations the named record holds in its own fields, `in`\nreads the relations other records hold toward it, and `both` reads every\nrelation from either end.",
+        "enum": [
+          "out",
+          "in",
+          "both"
+        ],
+        "type": "string"
+      },
+      "TraceRequestInputFreshnessPolicy": {
+        "description": "Which freshness step a read runs before it answers.",
+        "oneOf": [
+          {
+            "const": "catch_up",
+            "description": "Run catch-up under the publication guard, then answer.",
+            "type": "string"
+          },
+          {
+            "const": "annotate_only",
+            "description": "Answer at the stored serial without a freshness step.",
+            "type": "string"
+          },
+          {
+            "const": "refuse_stale",
+            "description": "Refuse when the stored projection differs from canonical state.",
+            "type": "string"
+          }
+        ]
+      },
+      "TraceRequestInputNodeType": {
+        "enum": [
+          "source",
+          "requirement",
+          "resolution",
+          "rule",
+          "topic",
+          "question",
+          "domain",
+          "boundary"
+        ],
+        "type": "string"
+      },
+      "TraceRequestInputRepositoryContext": {
+        "additionalProperties": false,
+        "properties": {
+          "freshness": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TraceRequestInputFreshnessPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "repository": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "repository",
+          "scope"
+        ],
+        "type": "object"
+      },
+      "TraceRequestInputTraceQuery": {
+        "additionalProperties": false,
+        "description": "Walk outward from a record for a bounded number of hops.",
+        "properties": {
+          "direction": {
+            "$ref": "#/components/schemas/TraceRequestInputDirection",
+            "default": "both"
+          },
+          "id": {
+            "type": "string"
+          },
+          "include_retired": {
+            "default": false,
+            "type": "boolean"
+          },
+          "limit": {
+            "default": 50,
+            "format": "uint",
+            "maximum": 200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "max_depth": {
+            "default": 3,
+            "format": "uint",
+            "maximum": 10,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "node_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TraceRequestInputNodeType"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "protocol_version": {
+            "default": null,
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "relations": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "TraceSuccessOutput": {
+        "description": "The envelope every query primitive answers in.\n\nThe protocol version travels with the answer, so a caller holding a\nrecorded response can tell which contract produced it, `operation`\nnames which primitive it came from, and `stamp` says what the answer\nreflects.",
+        "properties": {
+          "freshness_cause": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TraceSuccessOutputFreshnessCause"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "freshness_error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "has_more": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "limit": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "max_depth": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/TraceSuccessOutputTracedNode"
+            },
+            "type": "array"
+          },
+          "operation": {
+            "const": "trace",
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          },
+          "stamp": {
+            "$ref": "#/components/schemas/TraceSuccessOutputStamp"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "operation",
+          "stamp",
+          "id",
+          "max_depth",
+          "limit",
+          "has_more",
+          "nodes"
+        ],
+        "title": "QueryResponse",
+        "type": "object"
+      },
+      "TraceSuccessOutputArtifactLink": {
+        "properties": {
+          "target_id": {
+            "$ref": "#/components/schemas/TraceSuccessOutputStableId"
+          },
+          "target_type": {
+            "$ref": "#/components/schemas/TraceSuccessOutputArtifactLinkTargetType"
+          }
+        },
+        "required": [
+          "target_type",
+          "target_id"
+        ],
+        "type": "object"
+      },
+      "TraceSuccessOutputArtifactLinkTargetType": {
+        "enum": [
+          "source",
+          "requirement",
+          "resolution",
+          "rule"
+        ],
+        "type": "string"
+      },
+      "TraceSuccessOutputBoundary": {
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/TraceSuccessOutputStableId"
+          },
+          "requirement_id": {
+            "$ref": "#/components/schemas/TraceSuccessOutputStableId"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/TraceSuccessOutputScopeId"
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TraceSuccessOutputSourceReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "statement": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "requirement_id",
+          "statement"
+        ],
+        "type": "object"
+      },
+      "TraceSuccessOutputDeclarationAddress": {
+        "description": "One owner-local path to a language-authored declaration.",
+        "items": {
+          "pattern": "\\S",
+          "type": "string"
+        },
+        "minItems": 1,
+        "type": "array"
+      },
+      "TraceSuccessOutputDomain": {
+        "properties": {
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/TraceSuccessOutputStableId"
+          },
+          "name": {
+            "type": "string"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/TraceSuccessOutputScopeId"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "TraceSuccessOutputFreshnessCause": {
+        "description": "The stage that failed is known even when its lower-level error is not public.",
+        "enum": [
+          "catch_up_failed"
+        ],
+        "type": "string"
+      },
+      "TraceSuccessOutputGraphNode": {
+        "description": "One canonical record as a query hands it back.\n\nEach variant carries the record the store already writes, so a primitive\nnever invents a second vocabulary for a Requirement or a Rule. The\n`node_type` tag is the same word a relation row uses for its endpoints.",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/TraceSuccessOutputSource",
+            "properties": {
+              "node_type": {
+                "const": "source",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/TraceSuccessOutputRequirement",
+            "properties": {
+              "node_type": {
+                "const": "requirement",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/TraceSuccessOutputResolution",
+            "properties": {
+              "node_type": {
+                "const": "resolution",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/TraceSuccessOutputRule",
+            "properties": {
+              "node_type": {
+                "const": "rule",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/TraceSuccessOutputTopic",
+            "properties": {
+              "node_type": {
+                "const": "topic",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/TraceSuccessOutputQuestion",
+            "properties": {
+              "node_type": {
+                "const": "question",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/TraceSuccessOutputDomain",
+            "properties": {
+              "node_type": {
+                "const": "domain",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/TraceSuccessOutputBoundary",
+            "properties": {
+              "node_type": {
+                "const": "boundary",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "TraceSuccessOutputQuestion": {
+        "properties": {
+          "answer": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "claimed_at": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "claimed_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "contradicts": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TraceSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/TraceSuccessOutputStableId"
+          },
+          "links": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/TraceSuccessOutputArtifactLink"
+            },
+            "type": "array"
+          },
+          "question": {
+            "type": "string"
+          },
+          "requirement_id": {
+            "$ref": "#/components/schemas/TraceSuccessOutputStableId"
+          },
+          "resolution_id": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TraceSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resolution_method": {
+            "$ref": "#/components/schemas/TraceSuccessOutputResolutionMethod",
+            "description": "The verb that resolves this question, chosen when the question is minted."
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/TraceSuccessOutputScopeId"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TraceSuccessOutputQuestionStatus"
+          },
+          "topic_id": {
+            "$ref": "#/components/schemas/TraceSuccessOutputStableId"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "topic_id",
+          "requirement_id",
+          "question",
+          "resolution_method",
+          "status",
+          "links"
+        ],
+        "type": "object"
+      },
+      "TraceSuccessOutputQuestionStatus": {
+        "enum": [
+          "open",
+          "blocked_on_human",
+          "answered"
+        ],
+        "type": "string"
+      },
+      "TraceSuccessOutputRequirement": {
+        "properties": {
+          "declaration_address": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TraceSuccessOutputDeclarationAddress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "declared_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "depends_on": {
+            "items": {
+              "$ref": "#/components/schemas/TraceSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "domain_id": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TraceSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fog": {
+            "description": "Deliberately unstructured free text: the dim view of decisions and\ninvestigations that are coming but cannot yet be phrased sharply.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/TraceSuccessOutputStableId"
+          },
+          "origin_message": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TraceSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TraceSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "refines": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TraceSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "retired": {
+            "type": "boolean"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/TraceSuccessOutputScopeId"
+          },
+          "source_refs": {
+            "items": {
+              "$ref": "#/components/schemas/TraceSuccessOutputSourceReference"
+            },
+            "type": "array"
+          },
+          "spawned_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TraceSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "statement": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TraceSuccessOutputRequirementStatus"
+          },
+          "supersedes": {
+            "items": {
+              "$ref": "#/components/schemas/TraceSuccessOutputStableId"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "statement",
+          "status"
+        ],
+        "type": "object"
+      },
+      "TraceSuccessOutputRequirementStatus": {
+        "enum": [
+          "active",
+          "discovery",
+          "refinement",
+          "resolved"
+        ],
+        "type": "string"
+      },
+      "TraceSuccessOutputResolution": {
+        "properties": {
+          "approved_at": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "approved_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "confidence": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "context": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "enforcement": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/TraceSuccessOutputStableId"
+          },
+          "inputs": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/TraceSuccessOutputResolutionInput"
+            },
+            "type": "array"
+          },
+          "made_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "origin_message": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TraceSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TraceSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "position": {
+            "type": "string"
+          },
+          "rationale": {
+            "type": "string"
+          },
+          "requirement_ids": {
+            "items": {
+              "$ref": "#/components/schemas/TraceSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "review_on": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/TraceSuccessOutputScopeId"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TraceSuccessOutputResolutionStatus"
+          },
+          "supersedes": {
+            "items": {
+              "$ref": "#/components/schemas/TraceSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "title",
+          "position",
+          "rationale",
+          "status",
+          "inputs",
+          "review_on"
+        ],
+        "type": "object"
+      },
+      "TraceSuccessOutputResolutionInput": {
+        "properties": {
+          "input_type": {
+            "$ref": "#/components/schemas/TraceSuccessOutputResolutionInputType"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "input_type",
+          "reference",
+          "summary"
+        ],
+        "type": "object"
+      },
+      "TraceSuccessOutputResolutionInputType": {
+        "enum": [
+          "regulatory",
+          "legal_advice",
+          "commercial",
+          "benchmark",
+          "technical",
+          "incident",
+          "source_material"
+        ],
+        "type": "string"
+      },
+      "TraceSuccessOutputResolutionMethod": {
+        "enum": [
+          "grill",
+          "prototype",
+          "research",
+          "verify",
+          "task"
+        ],
+        "type": "string"
+      },
+      "TraceSuccessOutputResolutionStatus": {
+        "enum": [
+          "draft",
+          "review",
+          "proposed",
+          "approved",
+          "rejected",
+          "revised",
+          "superseded",
+          "abandoned"
+        ],
+        "type": "string"
+      },
+      "TraceSuccessOutputRule": {
+        "properties": {
+          "declaration_address": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TraceSuccessOutputDeclarationAddress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "declared_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/TraceSuccessOutputStableId"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "origin_message": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TraceSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TraceSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "requirement_ids": {
+            "items": {
+              "$ref": "#/components/schemas/TraceSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "resolution_ids": {
+            "items": {
+              "$ref": "#/components/schemas/TraceSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "retired": {
+            "type": "boolean"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/TraceSuccessOutputScopeId"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/TraceSuccessOutputRuleSeverity"
+          },
+          "source_document": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_section": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "statement": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TraceSuccessOutputRuleStatus"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "statement",
+          "status",
+          "severity"
+        ],
+        "type": "object"
+      },
+      "TraceSuccessOutputRuleSeverity": {
+        "enum": [
+          "low",
+          "medium",
+          "high",
+          "critical"
+        ],
+        "type": "string"
+      },
+      "TraceSuccessOutputRuleStatus": {
+        "enum": [
+          "draft",
+          "review",
+          "active",
+          "deprecated",
+          "archived"
+        ],
+        "type": "string"
+      },
+      "TraceSuccessOutputScopeId": {
+        "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "TraceSuccessOutputSource": {
+        "properties": {
+          "commit_pin": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "declaration_address": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TraceSuccessOutputDeclarationAddress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "declared_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "effective_date": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/TraceSuccessOutputStableId"
+          },
+          "name": {
+            "type": "string"
+          },
+          "origin_message": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TraceSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TraceSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reference": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "retired": {
+            "type": "boolean"
+          },
+          "review_date": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/TraceSuccessOutputScopeId"
+          },
+          "source_type": {
+            "$ref": "#/components/schemas/TraceSuccessOutputSourceType"
+          },
+          "supersedes": {
+            "items": {
+              "$ref": "#/components/schemas/TraceSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "name",
+          "source_type",
+          "url"
+        ],
+        "type": "object"
+      },
+      "TraceSuccessOutputSourceReference": {
+        "properties": {
+          "clause": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_id": {
+            "$ref": "#/components/schemas/TraceSuccessOutputStableId"
+          }
+        },
+        "required": [
+          "source_id"
+        ],
+        "type": "object"
+      },
+      "TraceSuccessOutputSourceType": {
+        "enum": [
+          "policy",
+          "document",
+          "legislation",
+          "company_agreement",
+          "system_state",
+          "external_integration",
+          "domain_knowledge",
+          "project_artifact",
+          "incident",
+          "api_spec"
+        ],
+        "type": "string"
+      },
+      "TraceSuccessOutputStableId": {
+        "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "TraceSuccessOutputStamp": {
+        "description": "What a query answer reflects: the projection revision the rows came\nfrom, the freshness step the reader ran, and which parts of the answer\nthe revision covers.\n\n`serial` and `digest` name the latest `projection_revision` row and\n`instance_id` the `projection_instance` row; serials compare only within\none instance. `attested` names the projection tables behind the answer.\n`live` names what the stamp does not cover, from a closed list:\n`canonical` (canonical shards), `scanned_sites` (a working-tree scan),\n`verification_runs` (cache JSONL), and `diff` (git). A stamp never\nimplies freshness for anything it does not list.",
+        "properties": {
+          "attested": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "derivation": {
+            "description": "The reader logic version. It moves when the reader answers\ndifferently over the same rows, never for a migration.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "instance_id": {
+            "type": "string"
+          },
+          "live": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/TraceSuccessOutputStampPolicy"
+          },
+          "serial": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "serial",
+          "digest",
+          "instance_id",
+          "derivation",
+          "policy",
+          "attested",
+          "live"
+        ],
+        "type": "object"
+      },
+      "TraceSuccessOutputStampPolicy": {
+        "description": "The freshness step a read ran before it answered.",
+        "oneOf": [
+          {
+            "const": "catch_up",
+            "description": "Catch-up ran under the publication guard and the answer is at or\nafter the serial it committed.",
+            "type": "string"
+          },
+          {
+            "const": "annotate_only",
+            "description": "No freshness step; the answer is at the stored serial.",
+            "type": "string"
+          },
+          {
+            "const": "refuse_stale",
+            "description": "Reserved: a read refuses when the projection is behind.",
+            "type": "string"
+          },
+          {
+            "const": "catch_up_failed",
+            "description": "Catch-up failed and the answer is at the stored serial; the error\ntext travels in `freshness_error`.",
+            "type": "string"
+          }
+        ]
+      },
+      "TraceSuccessOutputTopic": {
+        "properties": {
+          "claimed_at": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "claimed_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/TraceSuccessOutputStableId"
+          },
+          "links": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/TraceSuccessOutputArtifactLink"
+            },
+            "type": "array"
+          },
+          "requirement_id": {
+            "$ref": "#/components/schemas/TraceSuccessOutputStableId"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/TraceSuccessOutputScopeId"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TraceSuccessOutputTopicStatus"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "requirement_id",
+          "title",
+          "status",
+          "links"
+        ],
+        "type": "object"
+      },
+      "TraceSuccessOutputTopicStatus": {
+        "enum": [
+          "open",
+          "explored",
+          "closed"
+        ],
+        "type": "string"
+      },
+      "TraceSuccessOutputTracedNode": {
+        "description": "One record reached by a walk, with how many hops it took.",
+        "properties": {
+          "depth": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "node": {
+            "$ref": "#/components/schemas/TraceSuccessOutputGraphNode"
+          }
+        },
+        "required": [
+          "depth",
+          "node"
+        ],
         "type": "object"
       }
     }
@@ -372,7 +6900,7 @@
                 }
               }
             },
-            "description": "Invalid request"
+            "description": "Operation refused"
           },
           "401": {
             "content": {
@@ -382,7 +6910,7 @@
                 }
               }
             },
-            "description": "Authentication required"
+            "description": "Operation refused"
           },
           "403": {
             "content": {
@@ -392,7 +6920,7 @@
                 }
               }
             },
-            "description": "Access denied"
+            "description": "Operation refused"
           },
           "404": {
             "content": {
@@ -402,7 +6930,7 @@
                 }
               }
             },
-            "description": "Unknown operation or target"
+            "description": "Operation refused"
           },
           "500": {
             "content": {
@@ -412,7 +6940,7 @@
                 }
               }
             },
-            "description": "Internal failure"
+            "description": "Operation refused"
           },
           "503": {
             "content": {
@@ -422,7 +6950,482 @@
                 }
               }
             },
-            "description": "Execution resources unavailable"
+            "description": "Operation refused"
+          }
+        }
+      }
+    },
+    "/v7/operations/get": {
+      "post": {
+        "operationId": "get",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetRequestInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetSuccessOutput"
+                }
+              }
+            },
+            "description": "Operation result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          }
+        }
+      }
+    },
+    "/v7/operations/info": {
+      "post": {
+        "operationId": "info",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InfoRequestInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InfoSuccessOutput"
+                }
+              }
+            },
+            "description": "Operation result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InfoFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InfoFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InfoFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InfoFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InfoFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InfoFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          }
+        }
+      }
+    },
+    "/v7/operations/neighbors": {
+      "post": {
+        "operationId": "neighbors",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NeighborsRequestInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeighborsSuccessOutput"
+                }
+              }
+            },
+            "description": "Operation result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeighborsFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeighborsFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeighborsFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeighborsFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeighborsFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeighborsFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeighborsFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          }
+        }
+      }
+    },
+    "/v7/operations/search": {
+      "post": {
+        "operationId": "search",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchRequestInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchSuccessOutput"
+                }
+              }
+            },
+            "description": "Operation result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          }
+        }
+      }
+    },
+    "/v7/operations/trace": {
+      "post": {
+        "operationId": "trace",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TraceRequestInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TraceSuccessOutput"
+                }
+              }
+            },
+            "description": "Operation result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TraceFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TraceFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TraceFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TraceFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TraceFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TraceFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TraceFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
           }
         }
       }

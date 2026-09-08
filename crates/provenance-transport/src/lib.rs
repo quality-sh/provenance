@@ -2,14 +2,17 @@
 //!
 //! This crate does not open a listener. The optional fixture binary exists only
 //! for contract tests. Production exposure remains subject to the host review.
+mod access;
 mod execution;
 mod failure;
+#[cfg(feature = "test-fixture")]
+pub mod fixture;
 mod http;
 mod mcp;
 mod mcp_io;
 
 use execution::Execution;
-use provenance_core::protocol::failure::{FailureEnvelope, OperationFailure};
+use provenance_core::protocol::failure::{ErasedFailure as FailureEnvelope, OperationFailure};
 use serde_json::Value;
 use std::sync::Arc;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
@@ -20,6 +23,7 @@ pub(crate) const MAX_BODY_BYTES: usize = 1024 * 1024;
 #[derive(Clone)]
 pub struct StatementHost {
     execution: Execution,
+    access: Arc<dyn access::HostAccess>,
     ingress: Arc<Semaphore>,
     stopping: CancellationToken,
 }
@@ -28,6 +32,7 @@ impl Default for StatementHost {
     fn default() -> Self {
         Self {
             execution: Execution::default(),
+            access: Arc::new(access::DataFreeAccess),
             ingress: Arc::new(Semaphore::new(8)),
             stopping: CancellationToken::new(),
         }
@@ -35,6 +40,25 @@ impl Default for StatementHost {
 }
 
 impl StatementHost {
+    #[cfg(feature = "test-fixture")]
+    pub fn with_fixture_access(access: fixture::FixtureAccess) -> Self {
+        Self {
+            access: Arc::new(access),
+            ..Self::default()
+        }
+    }
+    pub(crate) fn authenticate(
+        &self,
+        headers: &axum::http::HeaderMap,
+    ) -> Result<(), FailureEnvelope> {
+        self.access
+            .authenticate(headers)
+            .map_err(|error| FailureEnvelope::new(None, error))
+    }
+    pub(crate) fn advertises(&self, operation: &str) -> bool {
+        self.access.advertises(operation)
+    }
+
     fn admit(&self) -> Result<OwnedSemaphorePermit, FailureEnvelope> {
         self.ingress
             .clone()
@@ -74,10 +98,12 @@ impl StatementHost {
         call: Value,
     ) -> Result<Value, FailureEnvelope> {
         let runtime = tokio::runtime::Handle::current();
+        let access: Arc<dyn provenance_store::operations::catalog::ContextResolver> =
+            self.access.clone();
         self.execution
             .run(move || {
-                runtime.block_on(provenance_store::operations::catalog::invoke(
-                    &operation, version, call,
+                runtime.block_on(provenance_store::operations::catalog::invoke_with(
+                    &operation, version, call, access,
                 ))
             })
             .await

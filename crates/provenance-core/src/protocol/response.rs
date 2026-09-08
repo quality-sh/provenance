@@ -23,6 +23,8 @@ pub struct QueryResponse<Result> {
     pub stamp: Stamp,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub freshness_error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub freshness_cause: Option<super::read_failure::FreshnessCause>,
     #[serde(flatten)]
     pub result: Result,
 }
@@ -34,6 +36,7 @@ impl<Result> QueryResponse<Result> {
             operation,
             stamp: answer.stamp,
             freshness_error: answer.freshness_error,
+            freshness_cause: None,
             result: answer.result,
         }
     }

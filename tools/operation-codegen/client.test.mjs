@@ -49,3 +49,17 @@ test('typed refusal is preserved and operation is sent once', async () => {
   });
   assert.equal(posts, 1);
 });
+
+test('bearer connection authenticates metadata and operation requests', async () => {
+  const { HttpClient, PROTOCOL_VERSION } = await generatedClient();
+  const observed = [];
+  const report = { standard: 'ASD-STE100', issue: 9, analyzer_version: 'test', findings: [] };
+  await host((request, response) => {
+    observed.push(request.headers.authorization);
+    response.end(JSON.stringify(request.method === 'GET' ? { engine_version: 'test', protocol_version: PROTOCOL_VERSION } : report));
+  }, async url => {
+    const client = await HttpClient.connectWithBearer(url, 'fixture-secret');
+    assert.deepEqual(await client.checkStatement({ request: { statement: 'Stop.' } }), report);
+  });
+  assert.deepEqual(observed, ['Bearer fixture-secret', 'Bearer fixture-secret']);
+});

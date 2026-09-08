@@ -1,10 +1,9 @@
 use axum::response::{IntoResponse, Response};
-use provenance_core::protocol::failure::FailureEnvelope;
+use provenance_core::protocol::failure::ErasedFailure as FailureEnvelope;
 
 pub fn response(failure: FailureEnvelope) -> Response {
     (
-        axum::http::StatusCode::from_u16(failure.error.status_code())
-            .expect("valid contract status"),
+        axum::http::StatusCode::from_u16(failure.status_code()).expect("valid contract status"),
         axum::Json(failure),
     )
         .into_response()

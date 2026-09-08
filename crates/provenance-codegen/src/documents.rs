@@ -82,19 +82,16 @@ pub fn documents() -> (Value, Value) {
             &mut schemas,
         );
         let method = format!("{}{}", &name[..1].to_lowercase(), &name[1..]);
+        let mut responses = Map::new();
+        responses.insert("200".into(), json!({"description":"Operation result", "content":{"application/json":{"schema":success}}}));
+        for status in definition.http_statuses {
+            responses.insert(status.to_string(), json!({"description":"Operation refused", "content":{"application/json":{"schema":failure}}}));
+        }
         paths.insert(format!("/v{version}/operations/{}", definition.name), json!({
             "post": {
                 "operationId": method,
                 "requestBody": {"required":true,"content":{"application/json":{"schema": request}}},
-                "responses": {
-                    "200":{"description":"Operation result","content":{"application/json":{"schema":success}}},
-                    "400":{"description":"Invalid request","content":{"application/json":{"schema":failure}}},
-                    "401":{"description":"Authentication required","content":{"application/json":{"schema":failure}}},
-                    "403":{"description":"Access denied","content":{"application/json":{"schema":failure}}},
-                    "404":{"description":"Unknown operation or target","content":{"application/json":{"schema":failure}}},
-                    "500":{"description":"Internal failure","content":{"application/json":{"schema":failure}}},
-                    "503":{"description":"Execution resources unavailable","content":{"application/json":{"schema":failure}}}
-                }
+                "responses": responses
             }
         }));
         tools.push(json!({"name":definition.name,"inputSchema":input,"outputSchema":definition.success_schema}));

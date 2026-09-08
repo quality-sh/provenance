@@ -1,4 +1,4 @@
-use provenance_core::protocol::failure::{FailureEnvelope, OperationFailure};
+use provenance_core::protocol::failure::{ErasedFailure as FailureEnvelope, OperationFailure};
 use serde_json::Value;
 use std::sync::{Arc, Mutex};
 use tokio::sync::Semaphore;
@@ -105,7 +105,10 @@ mod tests {
             .run(|| panic!("Rejected work must not run"))
             .await
             .unwrap_err();
-        assert_eq!(refused.error, OperationFailure::UnavailableNeeds);
+        assert_eq!(
+            refused.error,
+            serde_json::json!({"kind":"unavailable_needs"})
+        );
         tokio::task::spawn_blocking(move || barrier.wait())
             .await
             .unwrap();

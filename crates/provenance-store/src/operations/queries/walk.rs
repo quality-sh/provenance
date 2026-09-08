@@ -5,8 +5,8 @@
 use crate::operations::reader::{kind_of, ReadContext, ReadSnapshot, SqlFront};
 use provenance_core::model::relations::{related_nodes, RelatedNode, RelationDirection};
 use provenance_core::protocol::{
-    ensure_limit, ensure_max_depth, ensure_protocol_version, take_page, Direction, GraphNode,
-    Neighbor, NeighborsQuery, NeighborsResult, TraceQuery, TraceResult, TracedNode,
+    take_page, Direction, GraphNode, Neighbor, NeighborsQuery, NeighborsResult, TraceQuery,
+    TraceResult, TracedNode,
 };
 use provenance_core::{NodeType, StableId};
 use std::collections::BTreeSet;
@@ -137,9 +137,9 @@ pub(super) async fn neighbors(
     ctx: &ReadContext,
     request: NeighborsQuery,
 ) -> anyhow::Result<NeighborsResult> {
-    ensure_protocol_version(request.protocol_version)?;
-    ensure_limit(request.limit)?;
-    ensure_relations(&request.relations)?;
+    request
+        .validate()
+        .map_err(provenance_core::protocol::QueryValidation::into_native)?;
     let id = StableId::new(request.id.clone())?;
     let snapshot = ctx.snapshot();
     let found = match origin_kind(snapshot, request.node_type, &id, request.include_retired).await?
@@ -157,10 +157,9 @@ pub(super) async fn neighbors(
 }
 
 pub(super) async fn trace(ctx: &ReadContext, request: TraceQuery) -> anyhow::Result<TraceResult> {
-    ensure_protocol_version(request.protocol_version)?;
-    ensure_limit(request.limit)?;
-    ensure_max_depth(request.max_depth)?;
-    ensure_relations(&request.relations)?;
+    request
+        .validate()
+        .map_err(provenance_core::protocol::QueryValidation::into_native)?;
     let id = StableId::new(request.id.clone())?;
     let snapshot = ctx.snapshot();
     let include_retired = request.include_retired;
@@ -230,17 +229,4 @@ pub(super) async fn trace(ctx: &ReadContext, request: TraceQuery) -> anyhow::Res
         has_more,
         nodes,
     })
-}
-
-/// Refuses a filter naming a relation no declaration carries.
-fn ensure_relations(relations: &[String]) -> anyhow::Result<()> {
-    for name in relations {
-        if !provenance_core::model::relations::is_relation_name(name) {
-            anyhow::bail!(
-                "{}",
-                provenance_core::model::relations::unknown_relation_refusal(name)
-            );
-        }
-    }
-    Ok(())
 }

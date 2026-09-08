@@ -17,6 +17,8 @@ pub enum CheckStatementFailureOutputOperationFailure {
     AccessDenied,
     #[serde(rename = "unknown_target")]
     UnknownTarget,
+    #[serde(rename = "unknown_scope")]
+    UnknownScope,
     #[serde(rename = "unavailable_needs")]
     UnavailableNeeds,
     #[serde(rename = "internal")]

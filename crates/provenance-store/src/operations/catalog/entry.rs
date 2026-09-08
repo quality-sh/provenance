@@ -1,5 +1,5 @@
 use super::{ExecutionNeeds, PreparedContext};
-use provenance_core::protocol::failure::FailureEnvelope;
+use provenance_core::protocol::failure::ErasedFailure as FailureEnvelope;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
 use std::{future::Future, pin::Pin};
@@ -21,6 +21,16 @@ pub trait Operation: Send + Sync + 'static {
     type Success: Serialize + WireSchema + Send + 'static;
     type Failure: std::error::Error + Serialize + WireSchema + Send + 'static;
     const NAME: &'static str;
+    const CONTEXT: super::ContextKind = super::ContextKind::DataFree;
+    const FAILURE_STATUSES: &'static [u16] = &[];
+    fn failure_status(_: &Self::Failure) -> u16 {
+        500
+    }
+    fn validate_external(
+        _: &Self::Request,
+    ) -> Result<(), provenance_core::protocol::failure::OperationFailure> {
+        Ok(())
+    }
     fn needs(request: &Self::Request) -> ExecutionNeeds;
     fn run(
         context: PreparedContext,
@@ -35,9 +45,20 @@ pub(super) struct DataFreeCall<R> {
     pub request: R,
 }
 
+#[derive(Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub(super) struct RepositoryCall<R, C> {
+    pub context: C,
+    pub request: R,
+}
+
 pub(super) struct Entry {
     pub name: &'static str,
-    pub invoke: fn(Value) -> OperationFuture<Value, FailureEnvelope>,
+    pub invoke: fn(
+        Value,
+        std::sync::Arc<dyn super::ContextResolver>,
+    ) -> OperationFuture<Value, FailureEnvelope>,
     #[cfg(feature = "schema")]
     pub definition: fn() -> super::Definition,
 }
@@ -45,12 +66,19 @@ pub(super) struct Entry {
 fn register<O: Operation>() -> Entry {
     Entry {
         name: O::NAME,
-        invoke: super::invoke::invoke_erased::<O>,
+        invoke: super::invoke::invoke_resolved::<O>,
         #[cfg(feature = "schema")]
         definition: super::schema::definition::<O>,
     }
 }
 
 pub(super) fn entries() -> Vec<Entry> {
-    vec![register::<super::CheckStatement>()]
+    vec![
+        register::<super::CheckStatement>(),
+        register::<super::Info>(),
+        register::<super::Get>(),
+        register::<super::Search>(),
+        register::<super::Neighbors>(),
+        register::<super::Trace>(),
+    ]
 }

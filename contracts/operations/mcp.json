@@ -152,6 +152,5150 @@
         "title": "Report",
         "type": "object"
       }
+    },
+    {
+      "inputSchema": {
+        "$defs": {
+          "InfoRequest": {
+            "additionalProperties": false,
+            "type": "object"
+          },
+          "RepositoryTarget": {
+            "additionalProperties": false,
+            "properties": {
+              "repository": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "repository"
+            ],
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "call": {
+            "additionalProperties": false,
+            "properties": {
+              "context": {
+                "$ref": "#/$defs/RepositoryTarget"
+              },
+              "request": {
+                "$ref": "#/$defs/InfoRequest"
+              }
+            },
+            "required": [
+              "context",
+              "request"
+            ],
+            "title": "RepositoryCall",
+            "type": "object"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "call"
+        ],
+        "type": "object"
+      },
+      "name": "info",
+      "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "External metadata names the requested target, never a host path.",
+        "properties": {
+          "engine_version": {
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          },
+          "repository": {
+            "type": "string"
+          },
+          "state_schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "engine_version",
+          "protocol_version",
+          "state_schema_version",
+          "repository"
+        ],
+        "title": "RepositoryInfo",
+        "type": "object"
+      }
+    },
+    {
+      "inputSchema": {
+        "$defs": {
+          "FreshnessPolicy": {
+            "description": "Which freshness step a read runs before it answers.",
+            "oneOf": [
+              {
+                "const": "catch_up",
+                "description": "Run catch-up under the publication guard, then answer.",
+                "type": "string"
+              },
+              {
+                "const": "annotate_only",
+                "description": "Answer at the stored serial without a freshness step.",
+                "type": "string"
+              },
+              {
+                "const": "refuse_stale",
+                "description": "Refuse when the stored projection differs from canonical state.",
+                "type": "string"
+              }
+            ]
+          },
+          "GetQuery": {
+            "additionalProperties": false,
+            "description": "Fetch one record by canonical ID.",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "include_retired": {
+                "default": false,
+                "type": "boolean"
+              },
+              "node_type": {
+                "$ref": "#/$defs/NodeType"
+              },
+              "protocol_version": {
+                "default": null,
+                "format": "uint32",
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "node_type",
+              "id"
+            ],
+            "type": "object"
+          },
+          "NodeType": {
+            "enum": [
+              "source",
+              "requirement",
+              "resolution",
+              "rule",
+              "topic",
+              "question",
+              "domain",
+              "boundary"
+            ],
+            "type": "string"
+          },
+          "RepositoryContext": {
+            "additionalProperties": false,
+            "properties": {
+              "freshness": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/FreshnessPolicy"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "repository": {
+                "type": "string"
+              },
+              "scope": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "repository",
+              "scope"
+            ],
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "call": {
+            "additionalProperties": false,
+            "properties": {
+              "context": {
+                "$ref": "#/$defs/RepositoryContext"
+              },
+              "request": {
+                "$ref": "#/$defs/GetQuery"
+              }
+            },
+            "required": [
+              "context",
+              "request"
+            ],
+            "title": "RepositoryCall",
+            "type": "object"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "call"
+        ],
+        "type": "object"
+      },
+      "name": "get",
+      "outputSchema": {
+        "$defs": {
+          "ArtifactLink": {
+            "properties": {
+              "target_id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "target_type": {
+                "$ref": "#/$defs/ArtifactLinkTargetType"
+              }
+            },
+            "required": [
+              "target_type",
+              "target_id"
+            ],
+            "type": "object"
+          },
+          "ArtifactLinkTargetType": {
+            "enum": [
+              "source",
+              "requirement",
+              "resolution",
+              "rule"
+            ],
+            "type": "string"
+          },
+          "Boundary": {
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "requirement_id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              },
+              "source_ref": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceReference"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "statement": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "schema_version",
+              "scope_id",
+              "id",
+              "requirement_id",
+              "statement"
+            ],
+            "type": "object"
+          },
+          "DeclarationAddress": {
+            "description": "One owner-local path to a language-authored declaration.",
+            "items": {
+              "pattern": "\\S",
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "Domain": {
+            "properties": {
+              "color": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "name": {
+                "type": "string"
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              }
+            },
+            "required": [
+              "schema_version",
+              "scope_id",
+              "id",
+              "name"
+            ],
+            "type": "object"
+          },
+          "FreshnessCause": {
+            "description": "The stage that failed is known even when its lower-level error is not public.",
+            "enum": [
+              "catch_up_failed"
+            ],
+            "type": "string"
+          },
+          "GraphNode": {
+            "description": "One canonical record as a query hands it back.\n\nEach variant carries the record the store already writes, so a primitive\nnever invents a second vocabulary for a Requirement or a Rule. The\n`node_type` tag is the same word a relation row uses for its endpoints.",
+            "oneOf": [
+              {
+                "$ref": "#/$defs/Source",
+                "properties": {
+                  "node_type": {
+                    "const": "source",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node_type"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Requirement",
+                "properties": {
+                  "node_type": {
+                    "const": "requirement",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node_type"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Resolution",
+                "properties": {
+                  "node_type": {
+                    "const": "resolution",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node_type"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Rule",
+                "properties": {
+                  "node_type": {
+                    "const": "rule",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node_type"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Topic",
+                "properties": {
+                  "node_type": {
+                    "const": "topic",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node_type"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Question",
+                "properties": {
+                  "node_type": {
+                    "const": "question",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node_type"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Domain",
+                "properties": {
+                  "node_type": {
+                    "const": "domain",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node_type"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Boundary",
+                "properties": {
+                  "node_type": {
+                    "const": "boundary",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node_type"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "Question": {
+            "properties": {
+              "answer": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "claimed_at": {
+                "format": "int64",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "claimed_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "contradicts": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "links": {
+                "default": [],
+                "items": {
+                  "$ref": "#/$defs/ArtifactLink"
+                },
+                "type": "array"
+              },
+              "question": {
+                "type": "string"
+              },
+              "requirement_id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "resolution_id": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "resolution_method": {
+                "$ref": "#/$defs/ResolutionMethod",
+                "description": "The verb that resolves this question, chosen when the question is minted."
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              },
+              "status": {
+                "$ref": "#/$defs/QuestionStatus"
+              },
+              "topic_id": {
+                "$ref": "#/$defs/StableId"
+              }
+            },
+            "required": [
+              "schema_version",
+              "scope_id",
+              "id",
+              "topic_id",
+              "requirement_id",
+              "question",
+              "resolution_method",
+              "status",
+              "links"
+            ],
+            "type": "object"
+          },
+          "QuestionStatus": {
+            "enum": [
+              "open",
+              "blocked_on_human",
+              "answered"
+            ],
+            "type": "string"
+          },
+          "Requirement": {
+            "properties": {
+              "declaration_address": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/DeclarationAddress"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "declared_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "depends_on": {
+                "items": {
+                  "$ref": "#/$defs/StableId"
+                },
+                "type": "array"
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "domain_id": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "fog": {
+                "description": "Deliberately unstructured free text: the dim view of decisions and\ninvestigations that are coming but cannot yet be phrased sharply.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "origin_message": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "origin_thread": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "refines": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "retired": {
+                "type": "boolean"
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              },
+              "source_refs": {
+                "items": {
+                  "$ref": "#/$defs/SourceReference"
+                },
+                "type": "array"
+              },
+              "spawned_by": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "statement": {
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/RequirementStatus"
+              },
+              "supersedes": {
+                "items": {
+                  "$ref": "#/$defs/StableId"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "schema_version",
+              "scope_id",
+              "id",
+              "statement",
+              "status"
+            ],
+            "type": "object"
+          },
+          "RequirementStatus": {
+            "enum": [
+              "active",
+              "discovery",
+              "refinement",
+              "resolved"
+            ],
+            "type": "string"
+          },
+          "Resolution": {
+            "properties": {
+              "approved_at": {
+                "format": "int64",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "approved_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "confidence": {
+                "format": "double",
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "context": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "enforcement": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "inputs": {
+                "default": [],
+                "items": {
+                  "$ref": "#/$defs/ResolutionInput"
+                },
+                "type": "array"
+              },
+              "made_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "origin_message": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "origin_thread": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "position": {
+                "type": "string"
+              },
+              "rationale": {
+                "type": "string"
+              },
+              "requirement_ids": {
+                "items": {
+                  "$ref": "#/$defs/StableId"
+                },
+                "type": "array"
+              },
+              "review_on": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              },
+              "status": {
+                "$ref": "#/$defs/ResolutionStatus"
+              },
+              "supersedes": {
+                "items": {
+                  "$ref": "#/$defs/StableId"
+                },
+                "type": "array"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "schema_version",
+              "scope_id",
+              "id",
+              "title",
+              "position",
+              "rationale",
+              "status",
+              "inputs",
+              "review_on"
+            ],
+            "type": "object"
+          },
+          "ResolutionInput": {
+            "properties": {
+              "input_type": {
+                "$ref": "#/$defs/ResolutionInputType"
+              },
+              "reference": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "input_type",
+              "reference",
+              "summary"
+            ],
+            "type": "object"
+          },
+          "ResolutionInputType": {
+            "enum": [
+              "regulatory",
+              "legal_advice",
+              "commercial",
+              "benchmark",
+              "technical",
+              "incident",
+              "source_material"
+            ],
+            "type": "string"
+          },
+          "ResolutionMethod": {
+            "enum": [
+              "grill",
+              "prototype",
+              "research",
+              "verify",
+              "task"
+            ],
+            "type": "string"
+          },
+          "ResolutionStatus": {
+            "enum": [
+              "draft",
+              "review",
+              "proposed",
+              "approved",
+              "rejected",
+              "revised",
+              "superseded",
+              "abandoned"
+            ],
+            "type": "string"
+          },
+          "Rule": {
+            "properties": {
+              "declaration_address": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/DeclarationAddress"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "declared_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "origin_message": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "origin_thread": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "requirement_ids": {
+                "items": {
+                  "$ref": "#/$defs/StableId"
+                },
+                "type": "array"
+              },
+              "resolution_ids": {
+                "items": {
+                  "$ref": "#/$defs/StableId"
+                },
+                "type": "array"
+              },
+              "retired": {
+                "type": "boolean"
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              },
+              "severity": {
+                "$ref": "#/$defs/RuleSeverity"
+              },
+              "source_document": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "source_section": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "statement": {
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/RuleStatus"
+              }
+            },
+            "required": [
+              "schema_version",
+              "scope_id",
+              "id",
+              "statement",
+              "status",
+              "severity"
+            ],
+            "type": "object"
+          },
+          "RuleSeverity": {
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ],
+            "type": "string"
+          },
+          "RuleStatus": {
+            "enum": [
+              "draft",
+              "review",
+              "active",
+              "deprecated",
+              "archived"
+            ],
+            "type": "string"
+          },
+          "ScopeId": {
+            "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          },
+          "Source": {
+            "properties": {
+              "commit_pin": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "declaration_address": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/DeclarationAddress"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "declared_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "effective_date": {
+                "format": "int64",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "name": {
+                "type": "string"
+              },
+              "origin_message": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "origin_thread": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "reference": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "retired": {
+                "type": "boolean"
+              },
+              "review_date": {
+                "format": "int64",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              },
+              "source_type": {
+                "$ref": "#/$defs/SourceType"
+              },
+              "supersedes": {
+                "items": {
+                  "$ref": "#/$defs/StableId"
+                },
+                "type": "array"
+              },
+              "url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "schema_version",
+              "scope_id",
+              "id",
+              "name",
+              "source_type",
+              "url"
+            ],
+            "type": "object"
+          },
+          "SourceReference": {
+            "properties": {
+              "clause": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "source_id": {
+                "$ref": "#/$defs/StableId"
+              }
+            },
+            "required": [
+              "source_id"
+            ],
+            "type": "object"
+          },
+          "SourceType": {
+            "enum": [
+              "policy",
+              "document",
+              "legislation",
+              "company_agreement",
+              "system_state",
+              "external_integration",
+              "domain_knowledge",
+              "project_artifact",
+              "incident",
+              "api_spec"
+            ],
+            "type": "string"
+          },
+          "StableId": {
+            "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          },
+          "Stamp": {
+            "description": "What a query answer reflects: the projection revision the rows came\nfrom, the freshness step the reader ran, and which parts of the answer\nthe revision covers.\n\n`serial` and `digest` name the latest `projection_revision` row and\n`instance_id` the `projection_instance` row; serials compare only within\none instance. `attested` names the projection tables behind the answer.\n`live` names what the stamp does not cover, from a closed list:\n`canonical` (canonical shards), `scanned_sites` (a working-tree scan),\n`verification_runs` (cache JSONL), and `diff` (git). A stamp never\nimplies freshness for anything it does not list.",
+            "properties": {
+              "attested": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "derivation": {
+                "description": "The reader logic version. It moves when the reader answers\ndifferently over the same rows, never for a migration.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "digest": {
+                "type": "string"
+              },
+              "instance_id": {
+                "type": "string"
+              },
+              "live": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "policy": {
+                "$ref": "#/$defs/StampPolicy"
+              },
+              "serial": {
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "serial",
+              "digest",
+              "instance_id",
+              "derivation",
+              "policy",
+              "attested",
+              "live"
+            ],
+            "type": "object"
+          },
+          "StampPolicy": {
+            "description": "The freshness step a read ran before it answered.",
+            "oneOf": [
+              {
+                "const": "catch_up",
+                "description": "Catch-up ran under the publication guard and the answer is at or\nafter the serial it committed.",
+                "type": "string"
+              },
+              {
+                "const": "annotate_only",
+                "description": "No freshness step; the answer is at the stored serial.",
+                "type": "string"
+              },
+              {
+                "const": "refuse_stale",
+                "description": "Reserved: a read refuses when the projection is behind.",
+                "type": "string"
+              },
+              {
+                "const": "catch_up_failed",
+                "description": "Catch-up failed and the answer is at the stored serial; the error\ntext travels in `freshness_error`.",
+                "type": "string"
+              }
+            ]
+          },
+          "Topic": {
+            "properties": {
+              "claimed_at": {
+                "format": "int64",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "claimed_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "links": {
+                "default": [],
+                "items": {
+                  "$ref": "#/$defs/ArtifactLink"
+                },
+                "type": "array"
+              },
+              "requirement_id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              },
+              "status": {
+                "$ref": "#/$defs/TopicStatus"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "schema_version",
+              "scope_id",
+              "id",
+              "requirement_id",
+              "title",
+              "status",
+              "links"
+            ],
+            "type": "object"
+          },
+          "TopicStatus": {
+            "enum": [
+              "open",
+              "explored",
+              "closed"
+            ],
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "The envelope every query primitive answers in.\n\nThe protocol version travels with the answer, so a caller holding a\nrecorded response can tell which contract produced it, `operation`\nnames which primitive it came from, and `stamp` says what the answer\nreflects.",
+        "properties": {
+          "found": {
+            "type": "boolean"
+          },
+          "freshness_cause": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/FreshnessCause"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "freshness_error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "node": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/GraphNode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "operation": {
+            "const": "get",
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          },
+          "stamp": {
+            "$ref": "#/$defs/Stamp"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "operation",
+          "stamp",
+          "found"
+        ],
+        "title": "QueryResponse",
+        "type": "object"
+      }
+    },
+    {
+      "inputSchema": {
+        "$defs": {
+          "FreshnessPolicy": {
+            "description": "Which freshness step a read runs before it answers.",
+            "oneOf": [
+              {
+                "const": "catch_up",
+                "description": "Run catch-up under the publication guard, then answer.",
+                "type": "string"
+              },
+              {
+                "const": "annotate_only",
+                "description": "Answer at the stored serial without a freshness step.",
+                "type": "string"
+              },
+              {
+                "const": "refuse_stale",
+                "description": "Refuse when the stored projection differs from canonical state.",
+                "type": "string"
+              }
+            ]
+          },
+          "NodeType": {
+            "enum": [
+              "source",
+              "requirement",
+              "resolution",
+              "rule",
+              "topic",
+              "question",
+              "domain",
+              "boundary"
+            ],
+            "type": "string"
+          },
+          "RepositoryContext": {
+            "additionalProperties": false,
+            "properties": {
+              "freshness": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/FreshnessPolicy"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "repository": {
+                "type": "string"
+              },
+              "scope": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "repository",
+              "scope"
+            ],
+            "type": "object"
+          },
+          "SearchQuery": {
+            "additionalProperties": false,
+            "description": "Find records whose text contains a phrase.",
+            "properties": {
+              "include_retired": {
+                "default": false,
+                "type": "boolean"
+              },
+              "limit": {
+                "default": 50,
+                "format": "uint",
+                "maximum": 200,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "node_types": {
+                "default": [],
+                "items": {
+                  "$ref": "#/$defs/NodeType"
+                },
+                "type": "array"
+              },
+              "protocol_version": {
+                "default": null,
+                "format": "uint32",
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "text"
+            ],
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "call": {
+            "additionalProperties": false,
+            "properties": {
+              "context": {
+                "$ref": "#/$defs/RepositoryContext"
+              },
+              "request": {
+                "$ref": "#/$defs/SearchQuery"
+              }
+            },
+            "required": [
+              "context",
+              "request"
+            ],
+            "title": "RepositoryCall",
+            "type": "object"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "call"
+        ],
+        "type": "object"
+      },
+      "name": "search",
+      "outputSchema": {
+        "$defs": {
+          "ArtifactLink": {
+            "properties": {
+              "target_id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "target_type": {
+                "$ref": "#/$defs/ArtifactLinkTargetType"
+              }
+            },
+            "required": [
+              "target_type",
+              "target_id"
+            ],
+            "type": "object"
+          },
+          "ArtifactLinkTargetType": {
+            "enum": [
+              "source",
+              "requirement",
+              "resolution",
+              "rule"
+            ],
+            "type": "string"
+          },
+          "Boundary": {
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "requirement_id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              },
+              "source_ref": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceReference"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "statement": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "schema_version",
+              "scope_id",
+              "id",
+              "requirement_id",
+              "statement"
+            ],
+            "type": "object"
+          },
+          "DeclarationAddress": {
+            "description": "One owner-local path to a language-authored declaration.",
+            "items": {
+              "pattern": "\\S",
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "Domain": {
+            "properties": {
+              "color": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "name": {
+                "type": "string"
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              }
+            },
+            "required": [
+              "schema_version",
+              "scope_id",
+              "id",
+              "name"
+            ],
+            "type": "object"
+          },
+          "FreshnessCause": {
+            "description": "The stage that failed is known even when its lower-level error is not public.",
+            "enum": [
+              "catch_up_failed"
+            ],
+            "type": "string"
+          },
+          "GraphNode": {
+            "description": "One canonical record as a query hands it back.\n\nEach variant carries the record the store already writes, so a primitive\nnever invents a second vocabulary for a Requirement or a Rule. The\n`node_type` tag is the same word a relation row uses for its endpoints.",
+            "oneOf": [
+              {
+                "$ref": "#/$defs/Source",
+                "properties": {
+                  "node_type": {
+                    "const": "source",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node_type"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Requirement",
+                "properties": {
+                  "node_type": {
+                    "const": "requirement",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node_type"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Resolution",
+                "properties": {
+                  "node_type": {
+                    "const": "resolution",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node_type"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Rule",
+                "properties": {
+                  "node_type": {
+                    "const": "rule",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node_type"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Topic",
+                "properties": {
+                  "node_type": {
+                    "const": "topic",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node_type"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Question",
+                "properties": {
+                  "node_type": {
+                    "const": "question",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node_type"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Domain",
+                "properties": {
+                  "node_type": {
+                    "const": "domain",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node_type"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Boundary",
+                "properties": {
+                  "node_type": {
+                    "const": "boundary",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node_type"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "Question": {
+            "properties": {
+              "answer": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "claimed_at": {
+                "format": "int64",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "claimed_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "contradicts": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "links": {
+                "default": [],
+                "items": {
+                  "$ref": "#/$defs/ArtifactLink"
+                },
+                "type": "array"
+              },
+              "question": {
+                "type": "string"
+              },
+              "requirement_id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "resolution_id": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "resolution_method": {
+                "$ref": "#/$defs/ResolutionMethod",
+                "description": "The verb that resolves this question, chosen when the question is minted."
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              },
+              "status": {
+                "$ref": "#/$defs/QuestionStatus"
+              },
+              "topic_id": {
+                "$ref": "#/$defs/StableId"
+              }
+            },
+            "required": [
+              "schema_version",
+              "scope_id",
+              "id",
+              "topic_id",
+              "requirement_id",
+              "question",
+              "resolution_method",
+              "status",
+              "links"
+            ],
+            "type": "object"
+          },
+          "QuestionStatus": {
+            "enum": [
+              "open",
+              "blocked_on_human",
+              "answered"
+            ],
+            "type": "string"
+          },
+          "Requirement": {
+            "properties": {
+              "declaration_address": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/DeclarationAddress"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "declared_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "depends_on": {
+                "items": {
+                  "$ref": "#/$defs/StableId"
+                },
+                "type": "array"
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "domain_id": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "fog": {
+                "description": "Deliberately unstructured free text: the dim view of decisions and\ninvestigations that are coming but cannot yet be phrased sharply.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "origin_message": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "origin_thread": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "refines": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "retired": {
+                "type": "boolean"
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              },
+              "source_refs": {
+                "items": {
+                  "$ref": "#/$defs/SourceReference"
+                },
+                "type": "array"
+              },
+              "spawned_by": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "statement": {
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/RequirementStatus"
+              },
+              "supersedes": {
+                "items": {
+                  "$ref": "#/$defs/StableId"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "schema_version",
+              "scope_id",
+              "id",
+              "statement",
+              "status"
+            ],
+            "type": "object"
+          },
+          "RequirementStatus": {
+            "enum": [
+              "active",
+              "discovery",
+              "refinement",
+              "resolved"
+            ],
+            "type": "string"
+          },
+          "Resolution": {
+            "properties": {
+              "approved_at": {
+                "format": "int64",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "approved_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "confidence": {
+                "format": "double",
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "context": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "enforcement": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "inputs": {
+                "default": [],
+                "items": {
+                  "$ref": "#/$defs/ResolutionInput"
+                },
+                "type": "array"
+              },
+              "made_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "origin_message": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "origin_thread": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "position": {
+                "type": "string"
+              },
+              "rationale": {
+                "type": "string"
+              },
+              "requirement_ids": {
+                "items": {
+                  "$ref": "#/$defs/StableId"
+                },
+                "type": "array"
+              },
+              "review_on": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              },
+              "status": {
+                "$ref": "#/$defs/ResolutionStatus"
+              },
+              "supersedes": {
+                "items": {
+                  "$ref": "#/$defs/StableId"
+                },
+                "type": "array"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "schema_version",
+              "scope_id",
+              "id",
+              "title",
+              "position",
+              "rationale",
+              "status",
+              "inputs",
+              "review_on"
+            ],
+            "type": "object"
+          },
+          "ResolutionInput": {
+            "properties": {
+              "input_type": {
+                "$ref": "#/$defs/ResolutionInputType"
+              },
+              "reference": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "input_type",
+              "reference",
+              "summary"
+            ],
+            "type": "object"
+          },
+          "ResolutionInputType": {
+            "enum": [
+              "regulatory",
+              "legal_advice",
+              "commercial",
+              "benchmark",
+              "technical",
+              "incident",
+              "source_material"
+            ],
+            "type": "string"
+          },
+          "ResolutionMethod": {
+            "enum": [
+              "grill",
+              "prototype",
+              "research",
+              "verify",
+              "task"
+            ],
+            "type": "string"
+          },
+          "ResolutionStatus": {
+            "enum": [
+              "draft",
+              "review",
+              "proposed",
+              "approved",
+              "rejected",
+              "revised",
+              "superseded",
+              "abandoned"
+            ],
+            "type": "string"
+          },
+          "Rule": {
+            "properties": {
+              "declaration_address": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/DeclarationAddress"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "declared_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "origin_message": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "origin_thread": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "requirement_ids": {
+                "items": {
+                  "$ref": "#/$defs/StableId"
+                },
+                "type": "array"
+              },
+              "resolution_ids": {
+                "items": {
+                  "$ref": "#/$defs/StableId"
+                },
+                "type": "array"
+              },
+              "retired": {
+                "type": "boolean"
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              },
+              "severity": {
+                "$ref": "#/$defs/RuleSeverity"
+              },
+              "source_document": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "source_section": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "statement": {
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/RuleStatus"
+              }
+            },
+            "required": [
+              "schema_version",
+              "scope_id",
+              "id",
+              "statement",
+              "status",
+              "severity"
+            ],
+            "type": "object"
+          },
+          "RuleSeverity": {
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ],
+            "type": "string"
+          },
+          "RuleStatus": {
+            "enum": [
+              "draft",
+              "review",
+              "active",
+              "deprecated",
+              "archived"
+            ],
+            "type": "string"
+          },
+          "ScopeId": {
+            "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          },
+          "Source": {
+            "properties": {
+              "commit_pin": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "declaration_address": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/DeclarationAddress"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "declared_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "effective_date": {
+                "format": "int64",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "name": {
+                "type": "string"
+              },
+              "origin_message": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "origin_thread": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "reference": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "retired": {
+                "type": "boolean"
+              },
+              "review_date": {
+                "format": "int64",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              },
+              "source_type": {
+                "$ref": "#/$defs/SourceType"
+              },
+              "supersedes": {
+                "items": {
+                  "$ref": "#/$defs/StableId"
+                },
+                "type": "array"
+              },
+              "url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "schema_version",
+              "scope_id",
+              "id",
+              "name",
+              "source_type",
+              "url"
+            ],
+            "type": "object"
+          },
+          "SourceReference": {
+            "properties": {
+              "clause": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "source_id": {
+                "$ref": "#/$defs/StableId"
+              }
+            },
+            "required": [
+              "source_id"
+            ],
+            "type": "object"
+          },
+          "SourceType": {
+            "enum": [
+              "policy",
+              "document",
+              "legislation",
+              "company_agreement",
+              "system_state",
+              "external_integration",
+              "domain_knowledge",
+              "project_artifact",
+              "incident",
+              "api_spec"
+            ],
+            "type": "string"
+          },
+          "StableId": {
+            "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          },
+          "Stamp": {
+            "description": "What a query answer reflects: the projection revision the rows came\nfrom, the freshness step the reader ran, and which parts of the answer\nthe revision covers.\n\n`serial` and `digest` name the latest `projection_revision` row and\n`instance_id` the `projection_instance` row; serials compare only within\none instance. `attested` names the projection tables behind the answer.\n`live` names what the stamp does not cover, from a closed list:\n`canonical` (canonical shards), `scanned_sites` (a working-tree scan),\n`verification_runs` (cache JSONL), and `diff` (git). A stamp never\nimplies freshness for anything it does not list.",
+            "properties": {
+              "attested": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "derivation": {
+                "description": "The reader logic version. It moves when the reader answers\ndifferently over the same rows, never for a migration.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "digest": {
+                "type": "string"
+              },
+              "instance_id": {
+                "type": "string"
+              },
+              "live": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "policy": {
+                "$ref": "#/$defs/StampPolicy"
+              },
+              "serial": {
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "serial",
+              "digest",
+              "instance_id",
+              "derivation",
+              "policy",
+              "attested",
+              "live"
+            ],
+            "type": "object"
+          },
+          "StampPolicy": {
+            "description": "The freshness step a read ran before it answered.",
+            "oneOf": [
+              {
+                "const": "catch_up",
+                "description": "Catch-up ran under the publication guard and the answer is at or\nafter the serial it committed.",
+                "type": "string"
+              },
+              {
+                "const": "annotate_only",
+                "description": "No freshness step; the answer is at the stored serial.",
+                "type": "string"
+              },
+              {
+                "const": "refuse_stale",
+                "description": "Reserved: a read refuses when the projection is behind.",
+                "type": "string"
+              },
+              {
+                "const": "catch_up_failed",
+                "description": "Catch-up failed and the answer is at the stored serial; the error\ntext travels in `freshness_error`.",
+                "type": "string"
+              }
+            ]
+          },
+          "Topic": {
+            "properties": {
+              "claimed_at": {
+                "format": "int64",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "claimed_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "links": {
+                "default": [],
+                "items": {
+                  "$ref": "#/$defs/ArtifactLink"
+                },
+                "type": "array"
+              },
+              "requirement_id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              },
+              "status": {
+                "$ref": "#/$defs/TopicStatus"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "schema_version",
+              "scope_id",
+              "id",
+              "requirement_id",
+              "title",
+              "status",
+              "links"
+            ],
+            "type": "object"
+          },
+          "TopicStatus": {
+            "enum": [
+              "open",
+              "explored",
+              "closed"
+            ],
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "The envelope every query primitive answers in.\n\nThe protocol version travels with the answer, so a caller holding a\nrecorded response can tell which contract produced it, `operation`\nnames which primitive it came from, and `stamp` says what the answer\nreflects.",
+        "properties": {
+          "freshness_cause": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/FreshnessCause"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "freshness_error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "has_more": {
+            "type": "boolean"
+          },
+          "limit": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/$defs/GraphNode"
+            },
+            "type": "array"
+          },
+          "operation": {
+            "const": "search",
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          },
+          "stamp": {
+            "$ref": "#/$defs/Stamp"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "operation",
+          "stamp",
+          "limit",
+          "has_more",
+          "nodes"
+        ],
+        "title": "QueryResponse",
+        "type": "object"
+      }
+    },
+    {
+      "inputSchema": {
+        "$defs": {
+          "Direction": {
+            "description": "Which way a query follows a relation.\n\n`out` reads the relations the named record holds in its own fields, `in`\nreads the relations other records hold toward it, and `both` reads every\nrelation from either end.",
+            "enum": [
+              "out",
+              "in",
+              "both"
+            ],
+            "type": "string"
+          },
+          "FreshnessPolicy": {
+            "description": "Which freshness step a read runs before it answers.",
+            "oneOf": [
+              {
+                "const": "catch_up",
+                "description": "Run catch-up under the publication guard, then answer.",
+                "type": "string"
+              },
+              {
+                "const": "annotate_only",
+                "description": "Answer at the stored serial without a freshness step.",
+                "type": "string"
+              },
+              {
+                "const": "refuse_stale",
+                "description": "Refuse when the stored projection differs from canonical state.",
+                "type": "string"
+              }
+            ]
+          },
+          "NeighborsQuery": {
+            "additionalProperties": false,
+            "description": "Read the records one hop from a record.",
+            "properties": {
+              "direction": {
+                "$ref": "#/$defs/Direction",
+                "default": "both"
+              },
+              "id": {
+                "type": "string"
+              },
+              "include_retired": {
+                "default": false,
+                "type": "boolean"
+              },
+              "limit": {
+                "default": 50,
+                "format": "uint",
+                "maximum": 200,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "node_type": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/NodeType"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "protocol_version": {
+                "default": null,
+                "format": "uint32",
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "relations": {
+                "default": [],
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
+          "NodeType": {
+            "enum": [
+              "source",
+              "requirement",
+              "resolution",
+              "rule",
+              "topic",
+              "question",
+              "domain",
+              "boundary"
+            ],
+            "type": "string"
+          },
+          "RepositoryContext": {
+            "additionalProperties": false,
+            "properties": {
+              "freshness": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/FreshnessPolicy"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "repository": {
+                "type": "string"
+              },
+              "scope": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "repository",
+              "scope"
+            ],
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "call": {
+            "additionalProperties": false,
+            "properties": {
+              "context": {
+                "$ref": "#/$defs/RepositoryContext"
+              },
+              "request": {
+                "$ref": "#/$defs/NeighborsQuery"
+              }
+            },
+            "required": [
+              "context",
+              "request"
+            ],
+            "title": "RepositoryCall",
+            "type": "object"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "call"
+        ],
+        "type": "object"
+      },
+      "name": "neighbors",
+      "outputSchema": {
+        "$defs": {
+          "ArtifactLink": {
+            "properties": {
+              "target_id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "target_type": {
+                "$ref": "#/$defs/ArtifactLinkTargetType"
+              }
+            },
+            "required": [
+              "target_type",
+              "target_id"
+            ],
+            "type": "object"
+          },
+          "ArtifactLinkTargetType": {
+            "enum": [
+              "source",
+              "requirement",
+              "resolution",
+              "rule"
+            ],
+            "type": "string"
+          },
+          "Boundary": {
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "requirement_id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              },
+              "source_ref": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceReference"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "statement": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "schema_version",
+              "scope_id",
+              "id",
+              "requirement_id",
+              "statement"
+            ],
+            "type": "object"
+          },
+          "DeclarationAddress": {
+            "description": "One owner-local path to a language-authored declaration.",
+            "items": {
+              "pattern": "\\S",
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "Direction": {
+            "description": "Which way a query follows a relation.\n\n`out` reads the relations the named record holds in its own fields, `in`\nreads the relations other records hold toward it, and `both` reads every\nrelation from either end.",
+            "enum": [
+              "out",
+              "in",
+              "both"
+            ],
+            "type": "string"
+          },
+          "Domain": {
+            "properties": {
+              "color": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "name": {
+                "type": "string"
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              }
+            },
+            "required": [
+              "schema_version",
+              "scope_id",
+              "id",
+              "name"
+            ],
+            "type": "object"
+          },
+          "FreshnessCause": {
+            "description": "The stage that failed is known even when its lower-level error is not public.",
+            "enum": [
+              "catch_up_failed"
+            ],
+            "type": "string"
+          },
+          "GraphNode": {
+            "description": "One canonical record as a query hands it back.\n\nEach variant carries the record the store already writes, so a primitive\nnever invents a second vocabulary for a Requirement or a Rule. The\n`node_type` tag is the same word a relation row uses for its endpoints.",
+            "oneOf": [
+              {
+                "$ref": "#/$defs/Source",
+                "properties": {
+                  "node_type": {
+                    "const": "source",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node_type"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Requirement",
+                "properties": {
+                  "node_type": {
+                    "const": "requirement",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node_type"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Resolution",
+                "properties": {
+                  "node_type": {
+                    "const": "resolution",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node_type"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Rule",
+                "properties": {
+                  "node_type": {
+                    "const": "rule",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node_type"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Topic",
+                "properties": {
+                  "node_type": {
+                    "const": "topic",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node_type"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Question",
+                "properties": {
+                  "node_type": {
+                    "const": "question",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node_type"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Domain",
+                "properties": {
+                  "node_type": {
+                    "const": "domain",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node_type"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Boundary",
+                "properties": {
+                  "node_type": {
+                    "const": "boundary",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node_type"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "Neighbor": {
+            "description": "One record reached in a single hop, with the relation that reached it.",
+            "properties": {
+              "direction": {
+                "$ref": "#/$defs/Direction"
+              },
+              "node": {
+                "$ref": "#/$defs/GraphNode"
+              },
+              "relation": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "relation",
+              "direction",
+              "node"
+            ],
+            "type": "object"
+          },
+          "Question": {
+            "properties": {
+              "answer": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "claimed_at": {
+                "format": "int64",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "claimed_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "contradicts": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "links": {
+                "default": [],
+                "items": {
+                  "$ref": "#/$defs/ArtifactLink"
+                },
+                "type": "array"
+              },
+              "question": {
+                "type": "string"
+              },
+              "requirement_id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "resolution_id": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "resolution_method": {
+                "$ref": "#/$defs/ResolutionMethod",
+                "description": "The verb that resolves this question, chosen when the question is minted."
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              },
+              "status": {
+                "$ref": "#/$defs/QuestionStatus"
+              },
+              "topic_id": {
+                "$ref": "#/$defs/StableId"
+              }
+            },
+            "required": [
+              "schema_version",
+              "scope_id",
+              "id",
+              "topic_id",
+              "requirement_id",
+              "question",
+              "resolution_method",
+              "status",
+              "links"
+            ],
+            "type": "object"
+          },
+          "QuestionStatus": {
+            "enum": [
+              "open",
+              "blocked_on_human",
+              "answered"
+            ],
+            "type": "string"
+          },
+          "Requirement": {
+            "properties": {
+              "declaration_address": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/DeclarationAddress"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "declared_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "depends_on": {
+                "items": {
+                  "$ref": "#/$defs/StableId"
+                },
+                "type": "array"
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "domain_id": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "fog": {
+                "description": "Deliberately unstructured free text: the dim view of decisions and\ninvestigations that are coming but cannot yet be phrased sharply.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "origin_message": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "origin_thread": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "refines": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "retired": {
+                "type": "boolean"
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              },
+              "source_refs": {
+                "items": {
+                  "$ref": "#/$defs/SourceReference"
+                },
+                "type": "array"
+              },
+              "spawned_by": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "statement": {
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/RequirementStatus"
+              },
+              "supersedes": {
+                "items": {
+                  "$ref": "#/$defs/StableId"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "schema_version",
+              "scope_id",
+              "id",
+              "statement",
+              "status"
+            ],
+            "type": "object"
+          },
+          "RequirementStatus": {
+            "enum": [
+              "active",
+              "discovery",
+              "refinement",
+              "resolved"
+            ],
+            "type": "string"
+          },
+          "Resolution": {
+            "properties": {
+              "approved_at": {
+                "format": "int64",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "approved_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "confidence": {
+                "format": "double",
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "context": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "enforcement": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "inputs": {
+                "default": [],
+                "items": {
+                  "$ref": "#/$defs/ResolutionInput"
+                },
+                "type": "array"
+              },
+              "made_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "origin_message": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "origin_thread": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "position": {
+                "type": "string"
+              },
+              "rationale": {
+                "type": "string"
+              },
+              "requirement_ids": {
+                "items": {
+                  "$ref": "#/$defs/StableId"
+                },
+                "type": "array"
+              },
+              "review_on": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              },
+              "status": {
+                "$ref": "#/$defs/ResolutionStatus"
+              },
+              "supersedes": {
+                "items": {
+                  "$ref": "#/$defs/StableId"
+                },
+                "type": "array"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "schema_version",
+              "scope_id",
+              "id",
+              "title",
+              "position",
+              "rationale",
+              "status",
+              "inputs",
+              "review_on"
+            ],
+            "type": "object"
+          },
+          "ResolutionInput": {
+            "properties": {
+              "input_type": {
+                "$ref": "#/$defs/ResolutionInputType"
+              },
+              "reference": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "input_type",
+              "reference",
+              "summary"
+            ],
+            "type": "object"
+          },
+          "ResolutionInputType": {
+            "enum": [
+              "regulatory",
+              "legal_advice",
+              "commercial",
+              "benchmark",
+              "technical",
+              "incident",
+              "source_material"
+            ],
+            "type": "string"
+          },
+          "ResolutionMethod": {
+            "enum": [
+              "grill",
+              "prototype",
+              "research",
+              "verify",
+              "task"
+            ],
+            "type": "string"
+          },
+          "ResolutionStatus": {
+            "enum": [
+              "draft",
+              "review",
+              "proposed",
+              "approved",
+              "rejected",
+              "revised",
+              "superseded",
+              "abandoned"
+            ],
+            "type": "string"
+          },
+          "Rule": {
+            "properties": {
+              "declaration_address": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/DeclarationAddress"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "declared_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "origin_message": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "origin_thread": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "requirement_ids": {
+                "items": {
+                  "$ref": "#/$defs/StableId"
+                },
+                "type": "array"
+              },
+              "resolution_ids": {
+                "items": {
+                  "$ref": "#/$defs/StableId"
+                },
+                "type": "array"
+              },
+              "retired": {
+                "type": "boolean"
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              },
+              "severity": {
+                "$ref": "#/$defs/RuleSeverity"
+              },
+              "source_document": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "source_section": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "statement": {
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/RuleStatus"
+              }
+            },
+            "required": [
+              "schema_version",
+              "scope_id",
+              "id",
+              "statement",
+              "status",
+              "severity"
+            ],
+            "type": "object"
+          },
+          "RuleSeverity": {
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ],
+            "type": "string"
+          },
+          "RuleStatus": {
+            "enum": [
+              "draft",
+              "review",
+              "active",
+              "deprecated",
+              "archived"
+            ],
+            "type": "string"
+          },
+          "ScopeId": {
+            "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          },
+          "Source": {
+            "properties": {
+              "commit_pin": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "declaration_address": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/DeclarationAddress"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "declared_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "effective_date": {
+                "format": "int64",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "name": {
+                "type": "string"
+              },
+              "origin_message": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "origin_thread": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "reference": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "retired": {
+                "type": "boolean"
+              },
+              "review_date": {
+                "format": "int64",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              },
+              "source_type": {
+                "$ref": "#/$defs/SourceType"
+              },
+              "supersedes": {
+                "items": {
+                  "$ref": "#/$defs/StableId"
+                },
+                "type": "array"
+              },
+              "url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "schema_version",
+              "scope_id",
+              "id",
+              "name",
+              "source_type",
+              "url"
+            ],
+            "type": "object"
+          },
+          "SourceReference": {
+            "properties": {
+              "clause": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "source_id": {
+                "$ref": "#/$defs/StableId"
+              }
+            },
+            "required": [
+              "source_id"
+            ],
+            "type": "object"
+          },
+          "SourceType": {
+            "enum": [
+              "policy",
+              "document",
+              "legislation",
+              "company_agreement",
+              "system_state",
+              "external_integration",
+              "domain_knowledge",
+              "project_artifact",
+              "incident",
+              "api_spec"
+            ],
+            "type": "string"
+          },
+          "StableId": {
+            "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          },
+          "Stamp": {
+            "description": "What a query answer reflects: the projection revision the rows came\nfrom, the freshness step the reader ran, and which parts of the answer\nthe revision covers.\n\n`serial` and `digest` name the latest `projection_revision` row and\n`instance_id` the `projection_instance` row; serials compare only within\none instance. `attested` names the projection tables behind the answer.\n`live` names what the stamp does not cover, from a closed list:\n`canonical` (canonical shards), `scanned_sites` (a working-tree scan),\n`verification_runs` (cache JSONL), and `diff` (git). A stamp never\nimplies freshness for anything it does not list.",
+            "properties": {
+              "attested": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "derivation": {
+                "description": "The reader logic version. It moves when the reader answers\ndifferently over the same rows, never for a migration.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "digest": {
+                "type": "string"
+              },
+              "instance_id": {
+                "type": "string"
+              },
+              "live": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "policy": {
+                "$ref": "#/$defs/StampPolicy"
+              },
+              "serial": {
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "serial",
+              "digest",
+              "instance_id",
+              "derivation",
+              "policy",
+              "attested",
+              "live"
+            ],
+            "type": "object"
+          },
+          "StampPolicy": {
+            "description": "The freshness step a read ran before it answered.",
+            "oneOf": [
+              {
+                "const": "catch_up",
+                "description": "Catch-up ran under the publication guard and the answer is at or\nafter the serial it committed.",
+                "type": "string"
+              },
+              {
+                "const": "annotate_only",
+                "description": "No freshness step; the answer is at the stored serial.",
+                "type": "string"
+              },
+              {
+                "const": "refuse_stale",
+                "description": "Reserved: a read refuses when the projection is behind.",
+                "type": "string"
+              },
+              {
+                "const": "catch_up_failed",
+                "description": "Catch-up failed and the answer is at the stored serial; the error\ntext travels in `freshness_error`.",
+                "type": "string"
+              }
+            ]
+          },
+          "Topic": {
+            "properties": {
+              "claimed_at": {
+                "format": "int64",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "claimed_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "links": {
+                "default": [],
+                "items": {
+                  "$ref": "#/$defs/ArtifactLink"
+                },
+                "type": "array"
+              },
+              "requirement_id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              },
+              "status": {
+                "$ref": "#/$defs/TopicStatus"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "schema_version",
+              "scope_id",
+              "id",
+              "requirement_id",
+              "title",
+              "status",
+              "links"
+            ],
+            "type": "object"
+          },
+          "TopicStatus": {
+            "enum": [
+              "open",
+              "explored",
+              "closed"
+            ],
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "The envelope every query primitive answers in.\n\nThe protocol version travels with the answer, so a caller holding a\nrecorded response can tell which contract produced it, `operation`\nnames which primitive it came from, and `stamp` says what the answer\nreflects.",
+        "properties": {
+          "freshness_cause": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/FreshnessCause"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "freshness_error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "has_more": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "limit": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "neighbors": {
+            "items": {
+              "$ref": "#/$defs/Neighbor"
+            },
+            "type": "array"
+          },
+          "operation": {
+            "const": "neighbors",
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          },
+          "stamp": {
+            "$ref": "#/$defs/Stamp"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "operation",
+          "stamp",
+          "id",
+          "limit",
+          "has_more",
+          "neighbors"
+        ],
+        "title": "QueryResponse",
+        "type": "object"
+      }
+    },
+    {
+      "inputSchema": {
+        "$defs": {
+          "Direction": {
+            "description": "Which way a query follows a relation.\n\n`out` reads the relations the named record holds in its own fields, `in`\nreads the relations other records hold toward it, and `both` reads every\nrelation from either end.",
+            "enum": [
+              "out",
+              "in",
+              "both"
+            ],
+            "type": "string"
+          },
+          "FreshnessPolicy": {
+            "description": "Which freshness step a read runs before it answers.",
+            "oneOf": [
+              {
+                "const": "catch_up",
+                "description": "Run catch-up under the publication guard, then answer.",
+                "type": "string"
+              },
+              {
+                "const": "annotate_only",
+                "description": "Answer at the stored serial without a freshness step.",
+                "type": "string"
+              },
+              {
+                "const": "refuse_stale",
+                "description": "Refuse when the stored projection differs from canonical state.",
+                "type": "string"
+              }
+            ]
+          },
+          "NodeType": {
+            "enum": [
+              "source",
+              "requirement",
+              "resolution",
+              "rule",
+              "topic",
+              "question",
+              "domain",
+              "boundary"
+            ],
+            "type": "string"
+          },
+          "RepositoryContext": {
+            "additionalProperties": false,
+            "properties": {
+              "freshness": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/FreshnessPolicy"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "repository": {
+                "type": "string"
+              },
+              "scope": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "repository",
+              "scope"
+            ],
+            "type": "object"
+          },
+          "TraceQuery": {
+            "additionalProperties": false,
+            "description": "Walk outward from a record for a bounded number of hops.",
+            "properties": {
+              "direction": {
+                "$ref": "#/$defs/Direction",
+                "default": "both"
+              },
+              "id": {
+                "type": "string"
+              },
+              "include_retired": {
+                "default": false,
+                "type": "boolean"
+              },
+              "limit": {
+                "default": 50,
+                "format": "uint",
+                "maximum": 200,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "max_depth": {
+                "default": 3,
+                "format": "uint",
+                "maximum": 10,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "node_type": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/NodeType"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "protocol_version": {
+                "default": null,
+                "format": "uint32",
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "relations": {
+                "default": [],
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "call": {
+            "additionalProperties": false,
+            "properties": {
+              "context": {
+                "$ref": "#/$defs/RepositoryContext"
+              },
+              "request": {
+                "$ref": "#/$defs/TraceQuery"
+              }
+            },
+            "required": [
+              "context",
+              "request"
+            ],
+            "title": "RepositoryCall",
+            "type": "object"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "call"
+        ],
+        "type": "object"
+      },
+      "name": "trace",
+      "outputSchema": {
+        "$defs": {
+          "ArtifactLink": {
+            "properties": {
+              "target_id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "target_type": {
+                "$ref": "#/$defs/ArtifactLinkTargetType"
+              }
+            },
+            "required": [
+              "target_type",
+              "target_id"
+            ],
+            "type": "object"
+          },
+          "ArtifactLinkTargetType": {
+            "enum": [
+              "source",
+              "requirement",
+              "resolution",
+              "rule"
+            ],
+            "type": "string"
+          },
+          "Boundary": {
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "requirement_id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              },
+              "source_ref": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/SourceReference"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "statement": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "schema_version",
+              "scope_id",
+              "id",
+              "requirement_id",
+              "statement"
+            ],
+            "type": "object"
+          },
+          "DeclarationAddress": {
+            "description": "One owner-local path to a language-authored declaration.",
+            "items": {
+              "pattern": "\\S",
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "Domain": {
+            "properties": {
+              "color": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "name": {
+                "type": "string"
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              }
+            },
+            "required": [
+              "schema_version",
+              "scope_id",
+              "id",
+              "name"
+            ],
+            "type": "object"
+          },
+          "FreshnessCause": {
+            "description": "The stage that failed is known even when its lower-level error is not public.",
+            "enum": [
+              "catch_up_failed"
+            ],
+            "type": "string"
+          },
+          "GraphNode": {
+            "description": "One canonical record as a query hands it back.\n\nEach variant carries the record the store already writes, so a primitive\nnever invents a second vocabulary for a Requirement or a Rule. The\n`node_type` tag is the same word a relation row uses for its endpoints.",
+            "oneOf": [
+              {
+                "$ref": "#/$defs/Source",
+                "properties": {
+                  "node_type": {
+                    "const": "source",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node_type"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Requirement",
+                "properties": {
+                  "node_type": {
+                    "const": "requirement",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node_type"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Resolution",
+                "properties": {
+                  "node_type": {
+                    "const": "resolution",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node_type"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Rule",
+                "properties": {
+                  "node_type": {
+                    "const": "rule",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node_type"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Topic",
+                "properties": {
+                  "node_type": {
+                    "const": "topic",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node_type"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Question",
+                "properties": {
+                  "node_type": {
+                    "const": "question",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node_type"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Domain",
+                "properties": {
+                  "node_type": {
+                    "const": "domain",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node_type"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/Boundary",
+                "properties": {
+                  "node_type": {
+                    "const": "boundary",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node_type"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "Question": {
+            "properties": {
+              "answer": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "claimed_at": {
+                "format": "int64",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "claimed_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "contradicts": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "links": {
+                "default": [],
+                "items": {
+                  "$ref": "#/$defs/ArtifactLink"
+                },
+                "type": "array"
+              },
+              "question": {
+                "type": "string"
+              },
+              "requirement_id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "resolution_id": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "resolution_method": {
+                "$ref": "#/$defs/ResolutionMethod",
+                "description": "The verb that resolves this question, chosen when the question is minted."
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              },
+              "status": {
+                "$ref": "#/$defs/QuestionStatus"
+              },
+              "topic_id": {
+                "$ref": "#/$defs/StableId"
+              }
+            },
+            "required": [
+              "schema_version",
+              "scope_id",
+              "id",
+              "topic_id",
+              "requirement_id",
+              "question",
+              "resolution_method",
+              "status",
+              "links"
+            ],
+            "type": "object"
+          },
+          "QuestionStatus": {
+            "enum": [
+              "open",
+              "blocked_on_human",
+              "answered"
+            ],
+            "type": "string"
+          },
+          "Requirement": {
+            "properties": {
+              "declaration_address": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/DeclarationAddress"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "declared_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "depends_on": {
+                "items": {
+                  "$ref": "#/$defs/StableId"
+                },
+                "type": "array"
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "domain_id": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "fog": {
+                "description": "Deliberately unstructured free text: the dim view of decisions and\ninvestigations that are coming but cannot yet be phrased sharply.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "origin_message": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "origin_thread": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "refines": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "retired": {
+                "type": "boolean"
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              },
+              "source_refs": {
+                "items": {
+                  "$ref": "#/$defs/SourceReference"
+                },
+                "type": "array"
+              },
+              "spawned_by": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "statement": {
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/RequirementStatus"
+              },
+              "supersedes": {
+                "items": {
+                  "$ref": "#/$defs/StableId"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "schema_version",
+              "scope_id",
+              "id",
+              "statement",
+              "status"
+            ],
+            "type": "object"
+          },
+          "RequirementStatus": {
+            "enum": [
+              "active",
+              "discovery",
+              "refinement",
+              "resolved"
+            ],
+            "type": "string"
+          },
+          "Resolution": {
+            "properties": {
+              "approved_at": {
+                "format": "int64",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "approved_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "confidence": {
+                "format": "double",
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "context": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "enforcement": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "inputs": {
+                "default": [],
+                "items": {
+                  "$ref": "#/$defs/ResolutionInput"
+                },
+                "type": "array"
+              },
+              "made_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "origin_message": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "origin_thread": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "position": {
+                "type": "string"
+              },
+              "rationale": {
+                "type": "string"
+              },
+              "requirement_ids": {
+                "items": {
+                  "$ref": "#/$defs/StableId"
+                },
+                "type": "array"
+              },
+              "review_on": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              },
+              "status": {
+                "$ref": "#/$defs/ResolutionStatus"
+              },
+              "supersedes": {
+                "items": {
+                  "$ref": "#/$defs/StableId"
+                },
+                "type": "array"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "schema_version",
+              "scope_id",
+              "id",
+              "title",
+              "position",
+              "rationale",
+              "status",
+              "inputs",
+              "review_on"
+            ],
+            "type": "object"
+          },
+          "ResolutionInput": {
+            "properties": {
+              "input_type": {
+                "$ref": "#/$defs/ResolutionInputType"
+              },
+              "reference": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "input_type",
+              "reference",
+              "summary"
+            ],
+            "type": "object"
+          },
+          "ResolutionInputType": {
+            "enum": [
+              "regulatory",
+              "legal_advice",
+              "commercial",
+              "benchmark",
+              "technical",
+              "incident",
+              "source_material"
+            ],
+            "type": "string"
+          },
+          "ResolutionMethod": {
+            "enum": [
+              "grill",
+              "prototype",
+              "research",
+              "verify",
+              "task"
+            ],
+            "type": "string"
+          },
+          "ResolutionStatus": {
+            "enum": [
+              "draft",
+              "review",
+              "proposed",
+              "approved",
+              "rejected",
+              "revised",
+              "superseded",
+              "abandoned"
+            ],
+            "type": "string"
+          },
+          "Rule": {
+            "properties": {
+              "declaration_address": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/DeclarationAddress"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "declared_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "origin_message": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "origin_thread": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "requirement_ids": {
+                "items": {
+                  "$ref": "#/$defs/StableId"
+                },
+                "type": "array"
+              },
+              "resolution_ids": {
+                "items": {
+                  "$ref": "#/$defs/StableId"
+                },
+                "type": "array"
+              },
+              "retired": {
+                "type": "boolean"
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              },
+              "severity": {
+                "$ref": "#/$defs/RuleSeverity"
+              },
+              "source_document": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "source_section": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "statement": {
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/RuleStatus"
+              }
+            },
+            "required": [
+              "schema_version",
+              "scope_id",
+              "id",
+              "statement",
+              "status",
+              "severity"
+            ],
+            "type": "object"
+          },
+          "RuleSeverity": {
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ],
+            "type": "string"
+          },
+          "RuleStatus": {
+            "enum": [
+              "draft",
+              "review",
+              "active",
+              "deprecated",
+              "archived"
+            ],
+            "type": "string"
+          },
+          "ScopeId": {
+            "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          },
+          "Source": {
+            "properties": {
+              "commit_pin": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "declaration_address": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/DeclarationAddress"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "declared_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "effective_date": {
+                "format": "int64",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "name": {
+                "type": "string"
+              },
+              "origin_message": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "origin_thread": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "reference": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "retired": {
+                "type": "boolean"
+              },
+              "review_date": {
+                "format": "int64",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              },
+              "source_type": {
+                "$ref": "#/$defs/SourceType"
+              },
+              "supersedes": {
+                "items": {
+                  "$ref": "#/$defs/StableId"
+                },
+                "type": "array"
+              },
+              "url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "schema_version",
+              "scope_id",
+              "id",
+              "name",
+              "source_type",
+              "url"
+            ],
+            "type": "object"
+          },
+          "SourceReference": {
+            "properties": {
+              "clause": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "source_id": {
+                "$ref": "#/$defs/StableId"
+              }
+            },
+            "required": [
+              "source_id"
+            ],
+            "type": "object"
+          },
+          "SourceType": {
+            "enum": [
+              "policy",
+              "document",
+              "legislation",
+              "company_agreement",
+              "system_state",
+              "external_integration",
+              "domain_knowledge",
+              "project_artifact",
+              "incident",
+              "api_spec"
+            ],
+            "type": "string"
+          },
+          "StableId": {
+            "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          },
+          "Stamp": {
+            "description": "What a query answer reflects: the projection revision the rows came\nfrom, the freshness step the reader ran, and which parts of the answer\nthe revision covers.\n\n`serial` and `digest` name the latest `projection_revision` row and\n`instance_id` the `projection_instance` row; serials compare only within\none instance. `attested` names the projection tables behind the answer.\n`live` names what the stamp does not cover, from a closed list:\n`canonical` (canonical shards), `scanned_sites` (a working-tree scan),\n`verification_runs` (cache JSONL), and `diff` (git). A stamp never\nimplies freshness for anything it does not list.",
+            "properties": {
+              "attested": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "derivation": {
+                "description": "The reader logic version. It moves when the reader answers\ndifferently over the same rows, never for a migration.",
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "digest": {
+                "type": "string"
+              },
+              "instance_id": {
+                "type": "string"
+              },
+              "live": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "policy": {
+                "$ref": "#/$defs/StampPolicy"
+              },
+              "serial": {
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "serial",
+              "digest",
+              "instance_id",
+              "derivation",
+              "policy",
+              "attested",
+              "live"
+            ],
+            "type": "object"
+          },
+          "StampPolicy": {
+            "description": "The freshness step a read ran before it answered.",
+            "oneOf": [
+              {
+                "const": "catch_up",
+                "description": "Catch-up ran under the publication guard and the answer is at or\nafter the serial it committed.",
+                "type": "string"
+              },
+              {
+                "const": "annotate_only",
+                "description": "No freshness step; the answer is at the stored serial.",
+                "type": "string"
+              },
+              {
+                "const": "refuse_stale",
+                "description": "Reserved: a read refuses when the projection is behind.",
+                "type": "string"
+              },
+              {
+                "const": "catch_up_failed",
+                "description": "Catch-up failed and the answer is at the stored serial; the error\ntext travels in `freshness_error`.",
+                "type": "string"
+              }
+            ]
+          },
+          "Topic": {
+            "properties": {
+              "claimed_at": {
+                "format": "int64",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "claimed_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "links": {
+                "default": [],
+                "items": {
+                  "$ref": "#/$defs/ArtifactLink"
+                },
+                "type": "array"
+              },
+              "requirement_id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "schema_version": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              },
+              "status": {
+                "$ref": "#/$defs/TopicStatus"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "schema_version",
+              "scope_id",
+              "id",
+              "requirement_id",
+              "title",
+              "status",
+              "links"
+            ],
+            "type": "object"
+          },
+          "TopicStatus": {
+            "enum": [
+              "open",
+              "explored",
+              "closed"
+            ],
+            "type": "string"
+          },
+          "TracedNode": {
+            "description": "One record reached by a walk, with how many hops it took.",
+            "properties": {
+              "depth": {
+                "format": "uint",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "node": {
+                "$ref": "#/$defs/GraphNode"
+              }
+            },
+            "required": [
+              "depth",
+              "node"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "The envelope every query primitive answers in.\n\nThe protocol version travels with the answer, so a caller holding a\nrecorded response can tell which contract produced it, `operation`\nnames which primitive it came from, and `stamp` says what the answer\nreflects.",
+        "properties": {
+          "freshness_cause": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/FreshnessCause"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "freshness_error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "has_more": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "limit": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "max_depth": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/$defs/TracedNode"
+            },
+            "type": "array"
+          },
+          "operation": {
+            "const": "trace",
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          },
+          "stamp": {
+            "$ref": "#/$defs/Stamp"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "operation",
+          "stamp",
+          "id",
+          "max_depth",
+          "limit",
+          "has_more",
+          "nodes"
+        ],
+        "title": "QueryResponse",
+        "type": "object"
+      }
     }
   ]
 }

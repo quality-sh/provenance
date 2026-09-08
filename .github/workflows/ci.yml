@@ -529,10 +529,11 @@ jobs:
       - run: cargo test -p provenance-core -p provenance-ste100 -p provenance-store --features schema
       - run: cargo test -p provenance-codegen -p provenance-http-client
       - run: cargo test -p provenance-transport --all-features
-      - run: cargo test -p provenance-cli --test cli_sdk_check_statement
+      - run: cargo test -p provenance-cli --test cli_sdk_check_statement --test cli_sdk_query_get --test cli_sdk_refuse_stale
       - run: node tools/operation-codegen/generate.mjs --check
       - run: npm test --prefix tools/operation-codegen
       - run: node tools/operation-codegen/test-clients.mjs statements
+      - run: node tools/operation-codegen/test-clients.mjs records
       - run: git diff --exit-code
 
   ci-ok:

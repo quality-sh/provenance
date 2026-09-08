@@ -1,6 +1,10 @@
 pub mod failure;
 mod node;
 mod query;
+mod query_validation;
+pub use query_validation::QueryValidation;
+pub mod read_failure;
+pub mod repository;
 mod response;
 mod stamp;
 mod typed_spec;

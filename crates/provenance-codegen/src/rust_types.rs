@@ -46,6 +46,7 @@ pub fn rust_types(
             return Err(format!("converted Rust schema name collision: {name}").into());
         }
     }
+    crate::unions::normalize(&mut definitions, document);
     draft7(&mut definitions);
     let root = serde_json::from_value::<schemars08::schema::RootSchema>(
         json!({"definitions":definitions}),

@@ -1,5 +1,5 @@
 use super::{
-    entry::{entries, DataFreeCall},
+    entry::{entries, DataFreeCall, RepositoryCall},
     Operation,
 };
 use provenance_core::{
@@ -12,8 +12,10 @@ use schemars::{
 };
 use serde_json::{json, Value};
 
+#[derive(Clone)]
 pub struct Definition {
     pub name: &'static str,
+    pub http_statuses: Vec<u16>,
     pub request_schema: Value,
     pub success_schema: Value,
     pub failure_schema: Value,
@@ -51,20 +53,44 @@ pub(super) fn definition<O: Operation>() -> Definition {
     failure["properties"]["operation"] = json!({"type":"string","const":O::NAME});
     Definition {
         name: O::NAME,
-        request_schema: schema::<DataFreeCall<O::Request>>(Contract::Deserialize),
+        http_statuses: [400, 401, 403, 404, 500, 503]
+            .into_iter()
+            .chain(O::FAILURE_STATUSES.iter().copied())
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect(),
+        request_schema: match O::CONTEXT {
+            super::ContextKind::DataFree => {
+                schema::<DataFreeCall<O::Request>>(Contract::Deserialize)
+            }
+            super::ContextKind::Repository => schema::<
+                RepositoryCall<O::Request, provenance_core::protocol::repository::RepositoryTarget>,
+            >(Contract::Deserialize),
+            super::ContextKind::Scoped => schema::<
+                RepositoryCall<
+                    O::Request,
+                    provenance_core::protocol::repository::RepositoryContext,
+                >,
+            >(Contract::Deserialize),
+        },
         success_schema: bind_response_identity(schema::<O::Success>(Contract::Serialize), O::NAME),
         failure_schema: failure,
     }
 }
 
 pub fn definitions() -> Vec<Definition> {
-    entries().iter().map(|entry| (entry.definition)()).collect()
+    static DEFINITIONS: std::sync::OnceLock<Vec<Definition>> = std::sync::OnceLock::new();
+    DEFINITIONS
+        .get_or_init(|| entries().iter().map(|entry| (entry.definition)()).collect())
+        .clone()
 }
 
 /// Binds flattened query results to the registered operation identity.
 pub fn bind_response_identity(mut schema: Value, operation: &str) -> Value {
     if schema["properties"].get("operation").is_some() {
         schema["properties"]["operation"] = json!({"type":"string", "const":operation});
+    }
+    if schema["properties"].get("protocol_version").is_some() {
         schema["properties"]["protocol_version"] =
             json!({"type":"integer", "const":SDK_PROTOCOL_VERSION});
     }

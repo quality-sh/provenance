@@ -5,3 +5,5 @@ mod corpus;
 mod rust_types;
 pub use corpus::corpus;
 pub use rust_types::rust_types;
+
+mod unions;

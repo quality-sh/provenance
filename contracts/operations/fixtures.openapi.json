@@ -18,6 +18,16 @@
       "EvidenceOutput": {
         "description": "The envelope every query primitive answers in.\n\nThe protocol version travels with the answer, so a caller holding a\nrecorded response can tell which contract produced it, `operation`\nnames which primitive it came from, and `stamp` says what the answer\nreflects.",
         "properties": {
+          "freshness_cause": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EvidenceOutputFreshnessCause"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "freshness_error": {
             "type": [
               "string",
@@ -203,6 +213,13 @@
           "verification",
           "annotation",
           "source_reference"
+        ],
+        "type": "string"
+      },
+      "EvidenceOutputFreshnessCause": {
+        "description": "The stage that failed is known even when its lower-level error is not public.",
+        "enum": [
+          "catch_up_failed"
         ],
         "type": "string"
       },
@@ -577,6 +594,16 @@
           "found": {
             "type": "boolean"
           },
+          "freshness_cause": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GetOutputFreshnessCause"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "freshness_error": {
             "type": [
               "string",
@@ -722,6 +749,13 @@
           "name"
         ],
         "type": "object"
+      },
+      "GetOutputFreshnessCause": {
+        "description": "The stage that failed is known even when its lower-level error is not public.",
+        "enum": [
+          "catch_up_failed"
+        ],
+        "type": "string"
       },
       "GetOutputGraphNode": {
         "description": "One canonical record as a query hands it back.\n\nEach variant carries the record the store already writes, so a primitive\nnever invents a second vocabulary for a Requirement or a Rule. The\n`node_type` tag is the same word a relation row uses for its endpoints.",

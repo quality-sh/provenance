@@ -40,6 +40,24 @@ const input: Schemas['CheckStatementInput'] = {statement:null};
 const node: Schemas['GraphNodeOutput']['node_type'] = 'invented';
 `);
     run(process.execPath, [join(root, 'tools/operation-codegen/node_modules/typescript/bin/tsc'), '--strict', '--noEmit', '--skipLibCheck', '--target', 'es2022', join(temporary, 'assertions.ts')]);
+    await mkdir(join(temporary, 'client'), { recursive: true });
+    for (const name of ['client.ts', 'schema.ts']) await writeFile(join(temporary, 'client', name), await readFile(join(root, 'packages/provenance/src/generated', name)));
+    await writeFile(join(temporary, 'client', 'assertions.ts'), `import { HttpClient, type OperationFailure, type components } from './client';
+declare const client: HttpClient;
+client.info({context:{repository:'first'},request:{}});
+client.get({context:{repository:'first',scope:'default',freshness:null},request:{node_type:'rule',id:'rule_shared'}});
+// @ts-expect-error scoped get needs a scope
+client.get({context:{repository:'first'},request:{node_type:'rule',id:'rule_shared'}});
+// @ts-expect-error info context has no scope
+client.info({context:{repository:'first',scope:'default'},request:{}});
+type Assert<T extends true> = T;
+type Closed = Assert<'invented' extends OperationFailure['error']['kind'] ? false : true>;
+type StatementSubset = Assert<'stale' extends components['schemas']['CheckStatementFailureOutput']['error']['kind'] ? false : true>;
+function facts(failure: OperationFailure): string | undefined {
+  if (failure.operation === 'get' && failure.error.kind === 'stale') return failure.error.moved[0]?.stored;
+}
+`);
+    run(process.execPath, [join(root, 'tools/operation-codegen/node_modules/typescript/bin/tsc'), '--strict', '--noEmit', '--skipLibCheck', '--target', 'es2022', join(temporary, 'client', 'assertions.ts')]);
     // Use the already built exporter. This test never starts a nested Cargo
     // build while another Cargo test holds the workspace target lock.
     await mkdir(join(temporary, 'src'), { recursive: true });
