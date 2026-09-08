@@ -3,7 +3,7 @@
 #[path = "support/records.rs"]
 mod records;
 use records::{call, host, Repository};
-use rmcp::{model::CallToolRequestParam, ServiceExt};
+use rmcp::{model::CallToolRequestParams, ServiceExt};
 use serde_json::json;
 
 #[tokio::test]
@@ -31,15 +31,14 @@ async fn real_mcp_keeps_all_evidence_fields_stamps_and_complete_list_wrapper() {
         let (status, expected) = call(&host, operation, body.clone()).await;
         assert_eq!(status, 200, "{expected}");
         let answer = client
-            .call_tool(CallToolRequestParam {
-                name: operation.into(),
-                arguments: Some(
+            .call_tool(
+                CallToolRequestParams::new(operation).with_arguments(
                     json!({"protocol_version":7,"call":body})
                         .as_object()
                         .unwrap()
                         .clone(),
                 ),
-            })
+            )
             .await
             .unwrap();
         assert_ne!(answer.is_error, Some(true));

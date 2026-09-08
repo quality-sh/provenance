@@ -1,15 +1,12 @@
 use provenance_transport::StatementHost;
-use rmcp::{model::CallToolRequestParam, ServiceExt};
+use rmcp::{model::CallToolRequestParams, ServiceExt};
 use serde_json::{json, Value};
 
-fn statement_call(arguments: Value) -> CallToolRequestParam {
+fn statement_call(arguments: Value) -> CallToolRequestParams {
     let Value::Object(arguments) = arguments else {
         panic!("tool arguments must be an object")
     };
-    CallToolRequestParam {
-        name: "check-statement".into(),
-        arguments: Some(arguments),
-    }
+    CallToolRequestParams::new("check-statement").with_arguments(arguments)
 }
 
 #[tokio::test]
@@ -86,10 +83,7 @@ async fn actual_mcp_session_lists_contract_and_preserves_report_and_failure_chan
         "too_large"
     );
     let unknown = client
-        .call_tool(CallToolRequestParam {
-            name: "unknown".into(),
-            arguments: None,
-        })
+        .call_tool(CallToolRequestParams::new("unknown"))
         .await;
     assert!(
         unknown.is_err(),

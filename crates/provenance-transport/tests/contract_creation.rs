@@ -171,7 +171,7 @@ async fn known_creation_refusals_preserve_graph_records() {
 
 #[tokio::test]
 async fn mcp_creation_uses_explicit_write_grants_and_native_records() {
-    use rmcp::{model::CallToolRequestParam, ServiceExt};
+    use rmcp::{model::CallToolRequestParams, ServiceExt};
     let repo = Repository::new("The shared graph is readable.");
     for writable in [false, true] {
         let host = if writable {
@@ -186,15 +186,14 @@ async fn mcp_creation_uses_explicit_write_grants_and_native_records() {
         let tools = client.list_all_tools().await.unwrap();
         assert_creation_tools(&tools, writable);
         let result = client
-            .call_tool(CallToolRequestParam {
-                name: "create-source".into(),
-                arguments: Some(
+            .call_tool(
+                CallToolRequestParams::new("create-source").with_arguments(
                     json!({"protocol_version":7,"call":scoped(source())})
                         .as_object()
                         .unwrap()
                         .clone(),
                 ),
-            })
+            )
             .await
             .unwrap();
         let result_value = result.structured_content.unwrap();
@@ -232,15 +231,14 @@ async fn mcp_creation_uses_explicit_write_grants_and_native_records() {
                 ),
             ] {
                 let result = client
-                    .call_tool(CallToolRequestParam {
-                        name: name.into(),
-                        arguments: Some(
+                    .call_tool(
+                        CallToolRequestParams::new(name).with_arguments(
                             json!({"protocol_version":7,"call":scoped(request)})
                                 .as_object()
                                 .unwrap()
                                 .clone(),
                         ),
-                    })
+                    )
                     .await
                     .unwrap();
                 assert_ne!(result.is_error, Some(true), "{result:?}");

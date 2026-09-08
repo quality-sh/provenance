@@ -5,7 +5,7 @@ use provenance_core::protocol::failure::{
 use provenance_store::operations::catalog;
 use rmcp::{
     model::{
-        CallToolRequestParam, CallToolResult, ErrorCode, ListToolsResult, PaginatedRequestParam,
+        CallToolRequestParams, CallToolResult, ErrorCode, ListToolsResult, PaginatedRequestParams,
         ServerCapabilities, ServerInfo, Tool,
     },
     service::RequestContext,
@@ -13,6 +13,7 @@ use rmcp::{
 };
 use serde::Deserialize;
 use serde_json::Value;
+use std::future::Future;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -23,17 +24,19 @@ struct Invocation {
 
 impl ServerHandler for StatementHost {
     fn get_info(&self) -> ServerInfo {
-        ServerInfo {
-            capabilities: ServerCapabilities::builder().enable_tools().build(),
-            ..ServerInfo::default()
-        }
+        // The type is non-exhaustive in rmcp 1.4, so build from the default.
+        let mut info = ServerInfo::default();
+        info.capabilities = ServerCapabilities::builder().enable_tools().build();
+        info
     }
 
-    async fn list_tools(
+    /// Listing tools is synchronous catalog work, so this returns a ready
+    /// future instead of declaring an `async fn` that never awaits.
+    fn list_tools(
         &self,
-        _: Option<PaginatedRequestParam>,
+        _: Option<PaginatedRequestParams>,
         _: RequestContext<RoleServer>,
-    ) -> Result<ListToolsResult, ErrorData> {
+    ) -> impl Future<Output = Result<ListToolsResult, ErrorData>> + '_ {
         let tools = catalog::definitions()
             .into_iter()
             .filter(|definition| self.advertises(definition.name))
@@ -58,15 +61,15 @@ impl ServerHandler for StatementHost {
                 tool
             })
             .collect();
-        Ok(ListToolsResult {
+        std::future::ready(Ok(ListToolsResult {
             tools,
             ..Default::default()
-        })
+        }))
     }
 
     async fn call_tool(
         &self,
-        request: CallToolRequestParam,
+        request: CallToolRequestParams,
         _: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
         if !catalog::contains(&request.name) {

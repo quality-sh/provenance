@@ -20,7 +20,7 @@ serde_json.workspace = true
 serde.workspace = true
 tokio-util = { version = "0.7", features = ["rt"] }
 tokio = { workspace = true, features = ["sync", "io-util", "io-std", "time"] }
-rmcp = { version = "=0.8.4", features = ["server", "client"] }
+rmcp = { version = "=1.4.0", default-features = false, features = ["server", "client"] }
 
 [dev-dependencies]
 sqlx.workspace = true

@@ -190,7 +190,7 @@ async fn native_context_kind_refuses_before_any_handler_reads() {
 
 #[tokio::test]
 async fn mcp_advertises_only_permitted_writes_and_persists_the_same_contract() {
-    use rmcp::{model::CallToolRequestParam, ServiceExt};
+    use rmcp::{model::CallToolRequestParams, ServiceExt};
     let repo = Repository::new("The shared graph is readable.");
     for writable in [false, true] {
         let host = if writable {
@@ -204,9 +204,14 @@ async fn mcp_advertises_only_permitted_writes_and_persists_the_same_contract() {
         let client = ().serve(client_io).await.unwrap();
         let tools = client.list_all_tools().await.unwrap();
         assert_eq!(tools.iter().any(|tool| tool.name == "apply"), writable);
-        let result = client.call_tool(CallToolRequestParam {
-            name: "apply".into(), arguments: Some(json!({"protocol_version":provenance_core::SDK_PROTOCOL_VERSION,"call":scoped(document())}).as_object().unwrap().clone()),
-        }).await.unwrap();
+        let result = client
+            .call_tool(
+                CallToolRequestParams::new("apply").with_arguments(
+                    json!({"protocol_version":provenance_core::SDK_PROTOCOL_VERSION,"call":scoped(document())}).as_object().unwrap().clone(),
+                ),
+            )
+            .await
+            .unwrap();
         let value = result.structured_content.unwrap();
         if writable {
             assert_ne!(result.is_error, Some(true));
@@ -215,16 +220,20 @@ async fn mcp_advertises_only_permitted_writes_and_persists_the_same_contract() {
             assert_eq!(status, 200, "{plan}");
             assert_eq!(plan["unchanged"], 3);
             std::fs::write(repo.dir.path().join("mcp-check.rs"), "fn check() {}\n").unwrap();
-            let run = client.call_tool(CallToolRequestParam {
-                name: "begin-verification".into(),
-                arguments: Some(json!({"protocol_version":provenance_core::SDK_PROTOCOL_VERSION,"call":scoped(json!({"rule":"rule_shared","key":"mcp","method":"examples","declared_by":"fixture","file":"mcp-check.rs"}))}).as_object().unwrap().clone()),
-            }).await.unwrap();
+            let run = client
+                .call_tool(CallToolRequestParams::new("begin-verification").with_arguments(
+                    json!({"protocol_version":provenance_core::SDK_PROTOCOL_VERSION,"call":scoped(json!({"rule":"rule_shared","key":"mcp","method":"examples","declared_by":"fixture","file":"mcp-check.rs"}))}).as_object().unwrap().clone(),
+                ))
+                .await
+                .unwrap();
             assert_ne!(run.is_error, Some(true));
             let run = run.structured_content.unwrap();
-            let complete = client.call_tool(CallToolRequestParam {
-                name: "complete-verification".into(),
-                arguments: Some(json!({"protocol_version":provenance_core::SDK_PROTOCOL_VERSION,"call":scoped(json!({"run":run["id"],"status":"failed","error":"callback failure"}))}).as_object().unwrap().clone()),
-            }).await.unwrap();
+            let complete = client
+                .call_tool(CallToolRequestParams::new("complete-verification").with_arguments(
+                    json!({"protocol_version":provenance_core::SDK_PROTOCOL_VERSION,"call":scoped(json!({"run":run["id"],"status":"failed","error":"callback failure"}))}).as_object().unwrap().clone(),
+                ))
+                .await
+                .unwrap();
             assert_ne!(complete.is_error, Some(true));
             let complete = complete.structured_content.unwrap();
             assert_eq!(complete["status"], "failed");
