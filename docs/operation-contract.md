@@ -159,6 +159,58 @@ reopen action, new parent kind, or proposal association. Native CLI and Rust
 calls remain direct and do not need an HTTP server. Generated SDKs only call
 an existing host and do not start or manage it.
 
+## Current operation limits
+
+The catalog exposes existing native operations. It does not implement
+text-edit history linked to discussions or Source-content editing.
+
+### Graph text and discussion history
+
+`plan` and `apply` reconcile typed declarations. Their per-resource `changes`
+entries contain `field`, `before`, and `after`, but the report is transient.
+These operations do not provide a general record editor or stored edit history.
+
+`StateStore::update_question`
+(`crates/provenance-store/src/state_store/shaping_writers.rs`) changes only
+`resolution_method`, `status`, `links`, and `resolution_id`. It does not edit
+record text.
+
+`RequirementReview` records
+(`crates/provenance-store/src/state_store/requirement_reviews.rs`) retain
+before/after statement values for Requirement reviews. A restated Requirement
+raises a review per affected Rule, and verification marks it cleared. The
+record names no Thread or Message. Creation-time `origin_thread` and
+`origin_message` fields do not identify later edits.
+
+No native operation stores the requested link between an edit and a discussion.
+Adding that relationship is outside the unchanged data model.
+
+### Source content
+
+A Source record holds citation metadata such as `source_type`, `url`,
+`reference`, and `commit_pin`. `create-source`
+(`crates/provenance-store/src/state_store/writers.rs`) stores the record; it
+does not open the cited target. A citation grants no file or network access.
+Structured queries return record fields, not the cited content. Declaration
+`apply` can restate or retire a Source but does not edit its cited document.
+
+`evidence`, `impact`, and `resolve-symbol` use the held-file seam for evidence
+and scans (`crates/provenance-store/src/operations/files.rs`). Their request
+paths are below a configured repository root
+([repository evidence access](operation-file-access.md)). Fixture roots do not
+map Source citations or grant production access. No native operation maps a
+Source citation to an authorized content target or publishes content edits
+with linked discussion history.
+
+### Proposal and disposition records
+
+The catalog does not yet expose the native proposal lifecycle. Its read
+surface is `StateStore::list_proposal_cards`, `list_proposal_definitions`,
+`list_dispositions`, and `list_assertion_records`
+(`crates/provenance-store/src/state_store.rs`). Writers live in
+`crates/provenance-store/src/state_store/proposal_writers.rs`. Exposure must
+preserve their existing inputs, results, validation, and lifecycle locks.
+
 ## Write failures and task ownership
 
 Protocol, access, and known validation refusals occur before intended graph
