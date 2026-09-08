@@ -7,6 +7,9 @@ members = [
     "crates/provenance-sdk",
     "crates/provenance-ste100",
     "crates/provenance-store",
+    "crates/provenance-transport",
+    "crates/provenance-codegen",
+    "crates/provenance-http-client",
 ]
 resolver = "2"
 
@@ -38,7 +41,7 @@ filetime = "0.2"
 fs2 = "0.4"
 fs_at = "0.2"
 insta = "1.39"
-jsonschema = "0.18"
+jsonschema = { version = "0.18", features = ["draft202012"] }
 proc-macro2 = "1.0"
 pulldown-cmark = "0.10"
 quote = "1.0"
@@ -68,3 +71,5 @@ provenance-ste100 = { path = "crates/provenance-ste100", version = "0.2.2" }
 provenance-store = { path = "crates/provenance-store", version = "0.2.2" }
 walkdir = "2.5"
 windows-sys = { version = "0.52", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
+
+schemars = "=1.2.2"

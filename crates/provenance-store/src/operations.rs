@@ -17,6 +17,7 @@ use crate::state_store::{
     BeginVerificationInput, CompleteVerificationInput, StateStore, TypedSpecInput, TypedSpecResult,
 };
 
+pub mod catalog;
 mod plan;
 pub mod queries;
 pub mod read_policy;

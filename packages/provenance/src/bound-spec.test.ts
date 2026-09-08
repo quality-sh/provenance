@@ -100,7 +100,7 @@ const source = readFileSync(0, "utf8");
 const input = source === "" ? undefined : JSON.parse(source);
 appendFileSync(${JSON.stringify(log)}, JSON.stringify({ command, input }) + "\\n");
 if (command === "info") process.stdout.write(JSON.stringify({
-  engine_version: "0.1.0", protocol_version: 6, state_schema_version: ${STATE_SCHEMA_VERSION}, repository: "/project"
+  engine_version: "0.1.0", protocol_version: 7, state_schema_version: ${STATE_SCHEMA_VERSION}, repository: "/project"
 }));
 else if (command === "begin-verification") process.stdout.write(JSON.stringify({
   id: "run_1", binding_id: "binding_1", rule_id: "rule_1", status: "running"

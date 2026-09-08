@@ -107,7 +107,7 @@ if (Object.hasOwn(responses, command)) {
 } else if (command === "info") {
   process.stdout.write(JSON.stringify({
     engine_version: "0.1.0",
-    protocol_version: 6,
+    protocol_version: 7,
     state_schema_version: ${STATE_SCHEMA_VERSION},
     repository: "/project",
   }));
@@ -257,7 +257,7 @@ test("plan sends the finalized spec to the read-only engine command", async () =
   const recorder = recordingEngine({
     info: {
       engine_version: "0.1.0",
-      protocol_version: 6,
+      protocol_version: 7,
       state_schema_version: STATE_SCHEMA_VERSION,
       repository: "/project",
     },

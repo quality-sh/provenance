@@ -1,3 +1,4 @@
+pub mod failure;
 mod node;
 mod query;
 mod response;
@@ -25,7 +26,7 @@ pub use typed_spec::{
     TypedRequirementInput, TypedRuleInput, TypedSourceInput, TypedSpecInput,
 };
 
-pub const SDK_PROTOCOL_VERSION: u32 = 6;
+pub const SDK_PROTOCOL_VERSION: u32 = 7;
 
 /// How many records a query returns when the caller names no limit.
 pub const QUERY_DEFAULT_LIMIT: usize = 50;
@@ -40,11 +41,13 @@ pub const TRACE_DEFAULT_MAX_DEPTH: usize = 3;
 pub const TRACE_MAX_DEPTH: usize = 10;
 
 /// Language-neutral contract advertised by the Rust engine before SDK work.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct EngineInfo {
     pub engine_version: String,
     pub protocol_version: u32,
     pub state_schema_version: u32,
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub repository: Utf8PathBuf,
 }
 
@@ -92,3 +95,5 @@ pub fn take_page<T>(mut items: Vec<T>, limit: usize) -> (Vec<T>, bool) {
     items.truncate(limit);
     (items, has_more)
 }
+
+pub mod host;

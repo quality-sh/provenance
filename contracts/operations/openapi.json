@@ -1,0 +1,432 @@
+{
+  "components": {
+    "schemas": {
+      "CheckStatementFailureOutput": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/CheckStatementFailureOutputOperationError"
+          },
+          "operation": {
+            "const": "check-statement",
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "error"
+        ],
+        "title": "FailureEnvelope",
+        "type": "object"
+      },
+      "CheckStatementFailureOutputInvalidInputReason": {
+        "enum": [
+          "required",
+          "invalid_value",
+          "malformed_json",
+          "unknown_field",
+          "too_large"
+        ],
+        "type": "string"
+      },
+      "CheckStatementFailureOutputOperationError": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/CheckStatementFailureOutputOperationFailure"
+          },
+          {
+            "$ref": "#/components/schemas/CheckStatementFailureOutputStatementFailure"
+          }
+        ],
+        "description": "Keeps the handler's native error separate from preparation failure."
+      },
+      "CheckStatementFailureOutputOperationFailure": {
+        "oneOf": [
+          {
+            "properties": {
+              "field": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "const": "invalid_input",
+                "type": "string"
+              },
+              "reason": {
+                "$ref": "#/components/schemas/CheckStatementFailureOutputInvalidInputReason"
+              }
+            },
+            "required": [
+              "kind",
+              "field",
+              "reason"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "protocol_mismatch",
+                "type": "string"
+              },
+              "requested": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "supported": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "requested",
+              "supported"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_operation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unauthenticated",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "access_denied",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_target",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unavailable_needs",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "internal",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "CheckStatementFailureOutputStatementFailure": false,
+      "CheckStatementRequestInput": {
+        "additionalProperties": false,
+        "properties": {
+          "request": {
+            "$ref": "#/components/schemas/CheckStatementRequestInputCheckStatementRequest"
+          }
+        },
+        "required": [
+          "request"
+        ],
+        "title": "DataFreeCall",
+        "type": "object"
+      },
+      "CheckStatementRequestInputCheckStatementRequest": {
+        "additionalProperties": false,
+        "description": "The fixed request shape for one statement preflight.",
+        "properties": {
+          "statement": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "statement"
+        ],
+        "type": "object"
+      },
+      "CheckStatementSuccessOutput": {
+        "description": "A report from the fixed ASD-STE100 Issue 9 analyzer.",
+        "properties": {
+          "analyzer_version": {
+            "type": "string"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/CheckStatementSuccessOutputFinding"
+            },
+            "type": "array"
+          },
+          "issue": {
+            "$ref": "#/components/schemas/CheckStatementSuccessOutputStandardIssue"
+          },
+          "standard": {
+            "$ref": "#/components/schemas/CheckStatementSuccessOutputStandard"
+          }
+        },
+        "required": [
+          "standard",
+          "issue",
+          "analyzer_version",
+          "findings"
+        ],
+        "title": "Report",
+        "type": "object"
+      },
+      "CheckStatementSuccessOutputFinding": {
+        "description": "One nonconformance found in descriptive text.",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/CheckStatementSuccessOutputFindingKind"
+          },
+          "message": {
+            "type": "string"
+          },
+          "rule": {
+            "$ref": "#/components/schemas/CheckStatementSuccessOutputRuleNumber"
+          },
+          "span": {
+            "$ref": "#/components/schemas/CheckStatementSuccessOutputSpan"
+          }
+        },
+        "required": [
+          "rule",
+          "kind",
+          "span",
+          "message"
+        ],
+        "type": "object"
+      },
+      "CheckStatementSuccessOutputFindingKind": {
+        "description": "The disposition of a finding.",
+        "enum": [
+          "violation"
+        ],
+        "type": "string"
+      },
+      "CheckStatementSuccessOutputRuleNumber": {
+        "description": "An ASD-STE100 Issue 9 rule implemented by this analyzer.",
+        "enum": [
+          "1.1",
+          "4.2",
+          "6.3",
+          "6.6",
+          "8.1"
+        ],
+        "type": "string"
+      },
+      "CheckStatementSuccessOutputSpan": {
+        "description": "A half-open UTF-8 byte range in the analyzed text.",
+        "properties": {
+          "end": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "start": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "type": "object"
+      },
+      "CheckStatementSuccessOutputStandard": {
+        "description": "The authority used by the analyzer.",
+        "enum": [
+          "ASD-STE100"
+        ],
+        "type": "string"
+      },
+      "CheckStatementSuccessOutputStandardIssue": {
+        "const": 9,
+        "description": "The fixed issue of the standard used by the analyzer.",
+        "format": "uint8",
+        "maximum": 255,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "MetadataOutput": {
+        "properties": {
+          "engine_version": {
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "engine_version",
+          "protocol_version"
+        ],
+        "title": "HostMetadata",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "Provenance operations",
+    "version": "7"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/metadata": {
+      "get": {
+        "operationId": "metadata",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetadataOutput"
+                }
+              }
+            },
+            "description": "Engine metadata"
+          }
+        }
+      }
+    },
+    "/v7/operations/check-statement": {
+      "post": {
+        "operationId": "checkStatement",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckStatementRequestInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckStatementSuccessOutput"
+                }
+              }
+            },
+            "description": "Operation result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckStatementFailureOutput"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckStatementFailureOutput"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckStatementFailureOutput"
+                }
+              }
+            },
+            "description": "Access denied"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckStatementFailureOutput"
+                }
+              }
+            },
+            "description": "Unknown operation or target"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckStatementFailureOutput"
+                }
+              }
+            },
+            "description": "Internal failure"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckStatementFailureOutput"
+                }
+              }
+            },
+            "description": "Execution resources unavailable"
+          }
+        }
+      }
+    }
+  },
+  "x-protocol-version": 7
+}

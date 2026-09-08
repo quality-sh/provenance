@@ -1,0 +1,157 @@
+{
+  "tools": [
+    {
+      "inputSchema": {
+        "$defs": {
+          "CheckStatementRequest": {
+            "additionalProperties": false,
+            "description": "The fixed request shape for one statement preflight.",
+            "properties": {
+              "statement": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "statement"
+            ],
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "call": {
+            "additionalProperties": false,
+            "properties": {
+              "request": {
+                "$ref": "#/$defs/CheckStatementRequest"
+              }
+            },
+            "required": [
+              "request"
+            ],
+            "title": "DataFreeCall",
+            "type": "object"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "call"
+        ],
+        "type": "object"
+      },
+      "name": "check-statement",
+      "outputSchema": {
+        "$defs": {
+          "Finding": {
+            "description": "One nonconformance found in descriptive text.",
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/FindingKind"
+              },
+              "message": {
+                "type": "string"
+              },
+              "rule": {
+                "$ref": "#/$defs/RuleNumber"
+              },
+              "span": {
+                "$ref": "#/$defs/Span"
+              }
+            },
+            "required": [
+              "rule",
+              "kind",
+              "span",
+              "message"
+            ],
+            "type": "object"
+          },
+          "FindingKind": {
+            "description": "The disposition of a finding.",
+            "enum": [
+              "violation"
+            ],
+            "type": "string"
+          },
+          "RuleNumber": {
+            "description": "An ASD-STE100 Issue 9 rule implemented by this analyzer.",
+            "enum": [
+              "1.1",
+              "4.2",
+              "6.3",
+              "6.6",
+              "8.1"
+            ],
+            "type": "string"
+          },
+          "Span": {
+            "description": "A half-open UTF-8 byte range in the analyzed text.",
+            "properties": {
+              "end": {
+                "format": "uint",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "start": {
+                "format": "uint",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "start",
+              "end"
+            ],
+            "type": "object"
+          },
+          "Standard": {
+            "description": "The authority used by the analyzer.",
+            "enum": [
+              "ASD-STE100"
+            ],
+            "type": "string"
+          },
+          "StandardIssue": {
+            "const": 9,
+            "description": "The fixed issue of the standard used by the analyzer.",
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "A report from the fixed ASD-STE100 Issue 9 analyzer.",
+        "properties": {
+          "analyzer_version": {
+            "type": "string"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/$defs/Finding"
+            },
+            "type": "array"
+          },
+          "issue": {
+            "$ref": "#/$defs/StandardIssue"
+          },
+          "standard": {
+            "$ref": "#/$defs/Standard"
+          }
+        },
+        "required": [
+          "standard",
+          "issue",
+          "analyzer_version",
+          "findings"
+        ],
+        "title": "Report",
+        "type": "object"
+      }
+    }
+  ]
+}

@@ -12,7 +12,7 @@ mod render;
 
 pub(super) async fn handle(command: SdkCommand) -> anyhow::Result<()> {
     match command {
-        SdkCommand::CheckStatement { format } => check_statement::handle(format)?,
+        SdkCommand::CheckStatement { format } => check_statement::handle(format).await?,
         SdkCommand::Info { repo, format } => {
             output::print(format, &operations::engine_info(repo)?)?;
         }

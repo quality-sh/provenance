@@ -2,7 +2,7 @@ import type { GetResponse, Stamp } from "@quality-sh/provenance";
 
 // An answer recorded before the stamp existed still satisfies the envelope.
 const recorded: GetResponse = {
-  protocol_version: 6,
+  protocol_version: 7,
   operation: "get",
   found: false,
 };

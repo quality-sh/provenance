@@ -1,0 +1,85 @@
+//! Isolated adapters for the shared operation contract.
+//!
+//! This crate does not open a listener. The optional fixture binary exists only
+//! for contract tests. Production exposure remains subject to the host review.
+mod execution;
+mod failure;
+mod http;
+mod mcp;
+mod mcp_io;
+
+use execution::Execution;
+use provenance_core::protocol::failure::{FailureEnvelope, OperationFailure};
+use serde_json::Value;
+use std::sync::Arc;
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
+use tokio_util::sync::CancellationToken;
+
+pub(crate) const MAX_BODY_BYTES: usize = 1024 * 1024;
+
+#[derive(Clone)]
+pub struct StatementHost {
+    execution: Execution,
+    ingress: Arc<Semaphore>,
+    stopping: CancellationToken,
+}
+
+impl Default for StatementHost {
+    fn default() -> Self {
+        Self {
+            execution: Execution::default(),
+            ingress: Arc::new(Semaphore::new(8)),
+            stopping: CancellationToken::new(),
+        }
+    }
+}
+
+impl StatementHost {
+    fn admit(&self) -> Result<OwnedSemaphorePermit, FailureEnvelope> {
+        self.ingress
+            .clone()
+            .try_acquire_owned()
+            .map_err(|_| FailureEnvelope::new(None, OperationFailure::UnavailableNeeds))
+    }
+
+    /// Serve a bounded MCP session on a caller-owned test stream.
+    pub async fn serve_mcp<T>(
+        self,
+        io: T,
+    ) -> Result<
+        rmcp::service::RunningService<rmcp::RoleServer, Self>,
+        rmcp::service::ServerInitializeError,
+    >
+    where
+        T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
+    {
+        rmcp::ServiceExt::serve(self, mcp_io::BoundedIo::new(io)).await
+    }
+
+    pub fn router(&self) -> axum::Router {
+        http::router(self.clone())
+    }
+
+    /// Close admission and wait for all operation work, including disconnected calls.
+    pub async fn shutdown(&self) {
+        self.ingress.close();
+        self.stopping.cancel();
+        self.execution.shutdown().await;
+    }
+
+    async fn invoke(
+        &self,
+        operation: String,
+        version: u32,
+        call: Value,
+    ) -> Result<Value, FailureEnvelope> {
+        let runtime = tokio::runtime::Handle::current();
+        self.execution
+            .run(move || {
+                runtime.block_on(provenance_store::operations::catalog::invoke(
+                    &operation, version, call,
+                ))
+            })
+            .await
+    }
+}

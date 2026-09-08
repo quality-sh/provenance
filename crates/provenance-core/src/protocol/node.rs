@@ -13,6 +13,7 @@ use super::Direction;
 /// Each variant carries the record the store already writes, so a primitive
 /// never invents a second vocabulary for a Requirement or a Rule. The
 /// `node_type` tag is the same word a relation row uses for its endpoints.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "node_type", rename_all = "snake_case")]
 pub enum GraphNode {
@@ -104,6 +105,7 @@ impl GraphNode {
 }
 
 /// One record reached in a single hop, with the relation that reached it.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Neighbor {
     pub relation: String,
@@ -112,6 +114,7 @@ pub struct Neighbor {
 }
 
 /// One record reached by a walk, with how many hops it took.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TracedNode {
     pub depth: usize,
@@ -119,8 +122,10 @@ pub struct TracedNode {
 }
 
 /// Where a Rule is implemented.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Deserialize, Serialize)]
 pub struct ImplementationSite {
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub file: Utf8PathBuf,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub line: Option<usize>,
@@ -129,6 +134,7 @@ pub struct ImplementationSite {
 }
 
 /// Where a Rule is verified, and how.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Deserialize, Serialize)]
 pub struct VerificationSite {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -136,6 +142,7 @@ pub struct VerificationSite {
     pub method: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub declared_by: Option<String>,
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub file: Utf8PathBuf,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub line: Option<usize>,
@@ -144,6 +151,7 @@ pub struct VerificationSite {
 }
 
 /// One Rule a change reaches, with the code that stands behind it.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AffectedRule {
     pub id: StableId,

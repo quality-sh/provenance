@@ -137,6 +137,7 @@ pub use provenance_core::protocol::{
     TypedRuleInput, TypedSourceInput, TypedSpecInput,
 };
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TypedResourceKind {
@@ -145,6 +146,7 @@ pub enum TypedResourceKind {
     Rule,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ReconcileState {
@@ -156,6 +158,7 @@ pub enum ReconcileState {
     Unchanged,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct ReconciledResource {
     pub kind: TypedResourceKind,
@@ -169,6 +172,7 @@ pub struct ReconciledResource {
     pub changes: Vec<TypedFieldChange>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct TypedFieldChange {
     pub field: String,
@@ -177,6 +181,7 @@ pub struct TypedFieldChange {
 }
 
 /// One ASD-STE100 violation attached to its typed declaration site.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct TypedSpecDiagnostic {
     pub address: DeclarationAddress,
@@ -190,6 +195,7 @@ pub struct TypedSpecDiagnostic {
     pub message: String,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct TypedSpecResult {
     pub declared_by: String,
@@ -206,6 +212,7 @@ pub struct TypedSpecResult {
     pub implementation_bindings: Vec<provenance_core::ImplementationBinding>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BeginVerificationInput {
@@ -217,6 +224,7 @@ pub struct BeginVerificationInput {
     pub method: String,
     pub declared_by: String,
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
     pub file: Option<camino::Utf8PathBuf>,
     #[serde(default)]
     pub symbol: Option<String>,
@@ -242,6 +250,7 @@ pub struct MaterializeImplementationBindingInput {
     pub symbol: String,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DeclarationReferenceInput {
@@ -249,6 +258,7 @@ pub struct DeclarationReferenceInput {
     pub address: DeclarationAddress,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CompleteVerificationInput {

@@ -1,0 +1,1 @@
+{"name":"provenance-operation-codegen","private":true,"type":"module","scripts":{"test":"node --test *.test.mjs"},"dependencies":{"openapi-typescript":"7.13.0","typescript":"5.9.3"}}

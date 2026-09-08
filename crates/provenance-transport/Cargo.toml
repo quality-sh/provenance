@@ -1,0 +1,33 @@
+[package]
+name = "provenance-transport"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[features]
+test-fixture = []
+
+[dependencies]
+axum.workspace = true
+provenance-core.workspace = true
+provenance-store = { workspace = true, features = ["schema"] }
+serde_json.workspace = true
+serde.workspace = true
+tokio-util = { version = "0.7", features = ["rt"] }
+tokio = { workspace = true, features = ["sync", "io-util", "io-std", "time"] }
+rmcp = { version = "=0.8.4", features = ["server", "client"] }
+
+[dev-dependencies]
+futures = "0.3"
+provenance-ste100.workspace = true
+tempfile.workspace = true
+tower = { version = "0.5", features = ["util"] }
+
+[[bin]]
+name = "statement-host-fixture"
+path = "src/bin/statement-host-fixture.rs"
+required-features = ["test-fixture"]

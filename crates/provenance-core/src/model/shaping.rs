@@ -5,6 +5,7 @@ use super::artifacts::SourceReference;
 use super::ids::{SchemaVersion, ScopeId, StableId};
 use super::parsing::normalize_enum_value;
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ArtifactLinkTargetType {
     #[serde(rename = "source")]
@@ -31,6 +32,7 @@ impl ArtifactLinkTargetType {
     }
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TopicStatus {
     #[serde(rename = "open")]
@@ -52,6 +54,7 @@ impl TopicStatus {
     }
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum QuestionStatus {
     #[serde(rename = "open")]
@@ -73,6 +76,7 @@ impl QuestionStatus {
     }
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ResolutionMethod {
     #[serde(rename = "grill")]
@@ -102,6 +106,7 @@ impl ResolutionMethod {
     }
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ArtifactLink {
     #[serde(alias = "targetType")]
@@ -110,6 +115,7 @@ pub struct ArtifactLink {
     pub target_id: StableId,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Relations, ProjectionRow)]
 #[table("boundaries")]
 pub struct Boundary {
@@ -126,6 +132,7 @@ pub struct Boundary {
     pub source_ref: Option<SourceReference>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Relations, ProjectionRow)]
 #[table("topics")]
 pub struct Topic {
@@ -145,6 +152,7 @@ pub struct Topic {
     pub links: Vec<ArtifactLink>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Relations, ProjectionRow)]
 #[table("questions")]
 pub struct Question {

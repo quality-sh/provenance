@@ -17,6 +17,7 @@ pub use evidence::{ReviewReason, RuleEvidence};
 ///
 /// `TypedSpecPlan` flattens `TypedSpecResult`, so `TypedSpecResult` must
 /// never gain `deny_unknown_fields`.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Deserialize, Serialize)]
 pub struct TypedSpecPlan {
     #[serde(flatten)]
@@ -24,6 +25,7 @@ pub struct TypedSpecPlan {
     pub affected_rules: Vec<AffectedRule>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Deserialize, Serialize)]
 pub struct AffectedRule {
     #[serde(flatten)]

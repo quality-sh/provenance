@@ -109,7 +109,7 @@ async function leavesRepositoryDiscoveryToRust(): Promise<void> {
   const recorder = recordingEngine({
     info: {
       engine_version: "0.1.0",
-      protocol_version: 6,
+      protocol_version: 7,
       state_schema_version: STATE_SCHEMA_VERSION,
       repository: "/project",
     },
