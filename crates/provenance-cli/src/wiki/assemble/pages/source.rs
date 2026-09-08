@@ -1,24 +1,18 @@
 use crate::wiki::model::{PageId, PageLink, RecordKind, SourcePage};
-use provenance_core::{NodeType, Source, StableId};
+use provenance_core::{NodeType, Source};
 
 use super::super::context::Assembler;
 use super::super::page_links::{requirement_link, source_link};
 
-impl<'a> Assembler<'a> {
-    pub(in crate::wiki::assemble) fn source_page(&self, source: &'a Source) -> SourcePage {
+impl Assembler<'_> {
+    pub(in crate::wiki::assemble) fn source_page(&self, source: &Source) -> SourcePage {
         let referenced_requirements: Vec<PageLink> = self
-            .state
-            .requirements
-            .iter()
-            .filter(|requirement| {
-                requirement
-                    .source_refs
-                    .iter()
-                    .any(|reference| reference.source_id == source.id)
-            })
+            .query
+            .requirements_citing_source(&source.id)
+            .into_iter()
             .map(requirement_link)
             .collect();
-        let superseded_by = self.superseding_source(&source.id).map(source_link);
+        let superseded_by = self.query.source_superseded_by(&source.id).map(source_link);
         SourcePage {
             id: PageId::new(RecordKind::Source, source.id.as_str()),
             title: source.name.clone(),
@@ -33,15 +27,5 @@ impl<'a> Assembler<'a> {
             gaps: self.gaps_for(NodeType::Source, &source.id),
             threads: self.threads_for(NodeType::Source, &source.id),
         }
-    }
-
-    /// The source whose `supersedes` names this one: the first in id order
-    /// when several do.
-    fn superseding_source(&self, source_id: &StableId) -> Option<&'a Source> {
-        self.state
-            .sources
-            .iter()
-            .filter(|candidate| candidate.supersedes.contains(source_id))
-            .min_by_key(|candidate| candidate.id.as_str())
     }
 }
