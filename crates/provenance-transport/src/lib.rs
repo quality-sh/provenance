@@ -67,17 +67,22 @@ impl StatementHost {
     }
 
     /// Serve a bounded MCP session on a caller-owned test stream.
+    ///
+    /// The library's initialization error is a large enum, so the public
+    /// failure channel boxes it to keep this result small.
     pub async fn serve_mcp<T>(
         self,
         io: T,
     ) -> Result<
         rmcp::service::RunningService<rmcp::RoleServer, Self>,
-        rmcp::service::ServerInitializeError,
+        Box<rmcp::service::ServerInitializeError>,
     >
     where
         T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
     {
-        rmcp::ServiceExt::serve(self, mcp_io::BoundedIo::new(io)).await
+        rmcp::ServiceExt::serve(self, mcp_io::BoundedIo::new(io))
+            .await
+            .map_err(Box::new)
     }
 
     pub fn router(&self) -> axum::Router {

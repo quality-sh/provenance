@@ -83,7 +83,7 @@ pub fn documents() -> (Value, Value) {
             definition.failure_schema,
             &mut schemas,
         );
-        let method = format!("{}{}", &name[..1].to_lowercase(), &name[1..]);
+        let method = format!("{}{}", name[..1].to_lowercase(), &name[1..]);
         let mut responses = Map::new();
         responses.insert("200".into(), json!({"description":"Operation result", "content":{"application/json":{"schema":success}}}));
         for status in definition.http_statuses {

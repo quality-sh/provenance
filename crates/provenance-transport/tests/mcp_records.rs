@@ -2,19 +2,16 @@
 #[path = "support/records.rs"]
 mod records;
 use records::{call, get_call, host, Repository};
-use rmcp::{model::CallToolRequestParam, ServiceExt};
+use rmcp::{model::CallToolRequestParams, ServiceExt};
 use serde_json::{json, Value};
 
-fn tool(operation: &str, call: &Value) -> CallToolRequestParam {
-    CallToolRequestParam {
-        name: operation.to_owned().into(),
-        arguments: Some(
-            json!({"protocol_version":7,"call":call})
-                .as_object()
-                .unwrap()
-                .clone(),
-        ),
-    }
+fn tool(operation: &str, call: &Value) -> CallToolRequestParams {
+    CallToolRequestParams::new(operation.to_owned()).with_arguments(
+        json!({"protocol_version":7,"call":call})
+            .as_object()
+            .unwrap()
+            .clone(),
+    )
 }
 
 #[tokio::test]

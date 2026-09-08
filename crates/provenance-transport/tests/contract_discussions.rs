@@ -125,7 +125,7 @@ async fn message_read_failure_after_thread_publication_is_uncertain() {
 
 #[tokio::test]
 async fn mcp_discussions_use_explicit_write_grants_and_complete_native_lists() {
-    use rmcp::{model::CallToolRequestParam, ServiceExt};
+    use rmcp::{model::CallToolRequestParams, ServiceExt};
     let repo = Repository::new("The shared graph is readable.");
     let scope = ScopeId::new("default").unwrap();
     for writable in [false, true] {
@@ -147,15 +147,14 @@ async fn mcp_discussions_use_explicit_write_grants_and_complete_native_lists() {
             assert!(tools.iter().any(|tool| tool.name == name));
         }
         let result = client
-            .call_tool(CallToolRequestParam {
-                name: "post-thread-message".into(),
-                arguments: Some(
+            .call_tool(
+                CallToolRequestParams::new("post-thread-message").with_arguments(
                     json!({"protocol_version":7,"call":scoped(&input("MCP"))})
                         .as_object()
                         .unwrap()
                         .clone(),
                 ),
-            })
+            )
             .await
             .unwrap();
         let store = StateStore::new(repo.layout.clone());
@@ -183,15 +182,14 @@ async fn mcp_discussions_use_explicit_write_grants_and_complete_native_lists() {
             ("list-messages", json!(store.list_messages(&scope).unwrap())),
         ] {
             let result = client
-                .call_tool(CallToolRequestParam {
-                    name: name.into(),
-                    arguments: Some(
+                .call_tool(
+                    CallToolRequestParams::new(name).with_arguments(
                         json!({"protocol_version":7,"call":scoped(&Value::Null)})
                             .as_object()
                             .unwrap()
                             .clone(),
                     ),
-                })
+                )
                 .await
                 .unwrap();
             assert_ne!(result.is_error, Some(true), "{result:?}");
