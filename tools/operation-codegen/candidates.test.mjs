@@ -1,3 +1,4 @@
+import { buildBinary } from './cargo.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, writeFile, mkdir, rm } from 'node:fs/promises';
@@ -73,10 +74,9 @@ function facts(failure: OperationFailure): string | undefined {
 }
 `);
     run(process.execPath, [join(root, 'tools/operation-codegen/node_modules/typescript/bin/tsc'), '--strict', '--noEmit', '--skipLibCheck', '--target', 'es2022', join(temporary, 'client', 'assertions.ts')]);
-    // Use the already built exporter. This test never starts a nested Cargo
-    // build while another Cargo test holds the workspace target lock.
+    // Cargo reports the exporter path, including any configured build cache.
     await mkdir(join(temporary, 'src'), { recursive: true });
-    run(join(root, 'target/debug/provenance-codegen'), ['rust', join(root, 'contracts/operations/fixtures.openapi.json'), join(temporary, 'src/generated')]);
+    run(buildBinary(root, ['--locked', '-p', 'provenance-codegen', '--bin', 'provenance-codegen'], 'provenance-codegen'), ['rust', join(root, 'contracts/operations/fixtures.openapi.json'), join(temporary, 'src/generated')]);
     await writeFile(join(temporary, 'fixtures.json'), JSON.stringify(document['x-wire-fixtures']));
     await writeFile(join(temporary, 'Cargo.toml'), `[package]\nname="operation-generator-candidate"\nversion="0.0.0"\nedition="2021"\n[workspace]\n[dependencies]\nserde={version="=1.0.228",features=["derive"]}\nserde_json="=1.0.150"\nchrono={version="=0.4.45",features=["serde"]}\nuuid={version="=1.24.0",features=["serde"]}\nregress="=0.11.1"\n`);
     await writeFile(join(temporary, 'Cargo.lock'), await readFile(join(root, 'Cargo.lock')));

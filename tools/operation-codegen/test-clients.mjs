@@ -1,3 +1,4 @@
+import { buildBinary } from './cargo.mjs';
 import { ensureGenerated } from './ensure-generated.mjs';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
@@ -24,14 +25,15 @@ function run(args, env = process.env) {
 }
 await ensureGenerated();
 const binary = ['writes', 'creation', 'discussions'].includes(family) ? 'existing-root-host-fixture' : family === 'statements' ? 'statement-host-fixture' : 'records-host-fixture';
-run(['build', '--locked', '-p', 'provenance-transport', '--features', 'test-fixture', '--bin', binary]);
+const hostBinary = buildBinary(root, ['--locked', '-p', 'provenance-transport', '--features', 'test-fixture', '--bin', binary], binary);
 const temporary = await mkdtemp(join(tmpdir(), 'provenance-clients-'));
 if (['writes', 'creation', 'discussions'].includes(family)) {
-  const result = spawnSync(join(root, 'target/debug/provenance'), ['init', '--path', temporary, '--scope', 'default', '--path-prefix', '.'], { encoding: 'utf8' });
+  const cliBinary = buildBinary(root, ['--locked', '-p', 'provenance-cli', '--bin', 'provenance'], 'provenance');
+  const result = spawnSync(cliBinary, ['init', '--path', temporary, '--scope', 'default', '--path-prefix', '.'], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
   await writeFile(join(temporary, 'check.rs'), 'fn check() {}\n');
 }
-const host = spawn(join(root, 'target/debug', binary), [], { cwd: temporary, env: { ...process.env, PROVENANCE_FIXTURE_ROOT: temporary, PROVENANCE_FIXTURE_REPOSITORY_ID: 'fixture', PROVENANCE_FIXTURE_SCOPE: 'default', PROVENANCE_FIXTURE_TOKEN: 'fixture-secret' }, stdio: ['pipe', 'pipe', 'inherit'] });
+const host = spawn(hostBinary, [], { cwd: temporary, env: { ...process.env, PROVENANCE_FIXTURE_ROOT: temporary, PROVENANCE_FIXTURE_REPOSITORY_ID: 'fixture', PROVENANCE_FIXTURE_SCOPE: 'default', PROVENANCE_FIXTURE_TOKEN: 'fixture-secret' }, stdio: ['pipe', 'pipe', 'inherit'] });
 try {
   const firstLine = await new Promise((resolve, reject) => {
     let output = '';

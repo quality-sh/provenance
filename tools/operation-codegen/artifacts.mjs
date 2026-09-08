@@ -32,7 +32,7 @@ async function inputs(root) {
     paths.push(`crates/${crate}/Cargo.toml`, ...await files(root, `crates/${crate}/src`));
   }
   // Generator dependencies and templates matter; its tests and documentation do not.
-  const toolPaths = ['generate.mjs', 'artifacts.mjs', 'inventory.mjs', 'typescript.mjs', 'typescript-schema.mjs', 'validators.mjs', 'templates.mjs', 'package.json', 'package-lock.json'];
+  const toolPaths = ['generate.mjs', 'cargo.mjs', 'artifacts.mjs', 'inventory.mjs', 'typescript.mjs', 'typescript-schema.mjs', 'validators.mjs', 'templates.mjs', 'package.json', 'package-lock.json'];
   paths.push(...toolPaths.map(path => `tools/operation-codegen/${path}`), ...await files(root, 'tools/operation-codegen/templates'));
   const values = [];
   for (const path of paths.sort()) {

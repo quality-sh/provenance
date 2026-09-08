@@ -1,3 +1,4 @@
+import { buildBinary } from './cargo.mjs';
 import { spawnSync } from 'node:child_process';
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
@@ -14,9 +15,8 @@ function run(command, args) {
   const result = spawnSync(command, args, { cwd: root, stdio: 'inherit' });
   if (result.status !== 0) throw new Error(`${command} failed (${result.status})`);
 }
-async function generate(temporary) {
+async function generate(temporary, generator) {
   for (const directory of directories) await mkdir(join(temporary, directory), { recursive: true });
-  const generator = join(root, 'target/debug/provenance-codegen');
   run(generator, ['export', join(temporary, directories[0])]);
   const openapiPath = join(temporary, directories[0], 'openapi.json');
   const document = JSON.parse(await readFile(openapiPath, 'utf8'));
@@ -39,12 +39,12 @@ async function generate(temporary) {
 
 const temporary = await mkdtemp(join(tmpdir(), 'provenance-codegen-'));
 try {
-  run('cargo', ['build', '--locked', '--quiet', '-p', 'provenance-codegen', '--all-targets']);
+  const generator = buildBinary(root, ['--locked', '--quiet', '-p', 'provenance-codegen', '--all-targets'], 'provenance-codegen');
   const first = join(temporary, 'first');
-  await generate(first);
+  await generate(first, generator);
   if (process.argv.includes('--check')) {
     const second = join(temporary, 'second');
-    await generate(second);
+    await generate(second, generator);
     const errors = (await Promise.all(directories.map(async directory =>
       (await compareTrees(join(first, directory), join(second, directory))).map(error => `${directory}: ${error}`)))).flat();
     if (errors.length) throw new Error(errors.join('\n'));
