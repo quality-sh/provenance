@@ -6,3 +6,4 @@ mod index;
 mod load;
 mod records;
 mod requirements;
+mod scale;
