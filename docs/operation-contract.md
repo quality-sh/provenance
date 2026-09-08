@@ -193,9 +193,15 @@ node tools/operation-codegen/generate.mjs
 node tools/operation-codegen/generate.mjs --check
 ```
 
-The check writes to a temporary directory. It compares both contents and the
-complete file inventory. Missing, changed, or stale output fails the check.
-Generated Rust files obey the repository's 500-line limit.
+Generated files never enter source control. Build and test commands prepare the
+ignored output, and release jobs include it in package artifacts. Package consumers
+do not need to run the generator. Before a workspace Cargo build, run
+`node tools/operation-codegen/ensure-generated.mjs` to prepare current output.
+
+The check generates twice in separate temporary directories and compares contents
+and the complete file inventory. Differences fail the check. Generated Rust files
+obey the repository's 500-line limit. A pre-commit and CI check rejects generated
+paths in the Git index.
 
 ## Development host
 

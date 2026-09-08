@@ -7,17 +7,15 @@ import { typescriptFiles } from './typescript.mjs';
 import { responseSchemas } from './validators.mjs';
 import { compareTrees } from './inventory.mjs';
 import { rustClientFiles } from './templates.mjs';
+import { generatedDirectories as directories, recordGeneration } from './artifacts.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 function run(command, args) {
   const result = spawnSync(command, args, { cwd: root, stdio: 'inherit' });
   if (result.status !== 0) throw new Error(`${command} failed (${result.status})`);
 }
-const directories = ['contracts/operations', 'packages/provenance/src/generated', 'crates/provenance-http-client/src/generated'];
-const temporary = await mkdtemp(join(tmpdir(), 'provenance-codegen-'));
-try {
+async function generate(temporary) {
   for (const directory of directories) await mkdir(join(temporary, directory), { recursive: true });
-  run('cargo', ['build', '--locked', '--quiet', '-p', 'provenance-codegen', '--all-targets']);
   const generator = join(root, 'target/debug/provenance-codegen');
   run(generator, ['export', join(temporary, directories[0])]);
   const openapiPath = join(temporary, directories[0], 'openapi.json');
@@ -32,19 +30,29 @@ try {
     await mkdir(dirname(join(rustDir, path)), { recursive: true });
     await writeFile(join(rustDir, path), source);
   }
-  // rustfmt all outputs so drift compares the repository's normal format.
+  // Format generated connection and operation templates before comparison.
   run('rustfmt', ['--edition', '2021', ...Object.keys(clientFiles).map(path => join(rustDir, path))]);
   const oversized = await compareTrees(rustDir, rustDir);
   if (oversized.length) throw new Error(oversized.join('\n'));
+  await recordGeneration(root, temporary);
+}
+
+const temporary = await mkdtemp(join(tmpdir(), 'provenance-codegen-'));
+try {
+  run('cargo', ['build', '--locked', '--quiet', '-p', 'provenance-codegen', '--all-targets']);
+  const first = join(temporary, 'first');
+  await generate(first);
   if (process.argv.includes('--check')) {
+    const second = join(temporary, 'second');
+    await generate(second);
     const errors = (await Promise.all(directories.map(async directory =>
-      (await compareTrees(join(temporary, directory), join(root, directory))).map(error => `${directory}: ${error}`)))).flat();
+      (await compareTrees(join(first, directory), join(second, directory))).map(error => `${directory}: ${error}`)))).flat();
     if (errors.length) throw new Error(errors.join('\n'));
-    console.log('Operation definitions and both clients match.');
+    console.log('Operation generation is deterministic; Rust outputs satisfy the file size limit.');
   } else {
     for (const directory of directories) {
       await rm(join(root, directory), { recursive: true, force: true });
-      await cp(join(temporary, directory), join(root, directory), { recursive: true });
+      await cp(join(first, directory), join(root, directory), { recursive: true });
     }
   }
 } finally { await rm(temporary, { recursive: true, force: true }); }

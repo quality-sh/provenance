@@ -1,3 +1,4 @@
+import { ensureGenerated } from './ensure-generated.mjs';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
@@ -20,6 +21,7 @@ function run(args, env = process.env) {
   const child = spawnSync('cargo', args, { cwd: root, env, stdio: 'inherit' });
   if (child.status !== 0) throw new Error(`cargo ${args.join(' ')} failed`);
 }
+await ensureGenerated();
 const binary = ['writes', 'creation'].includes(family) ? 'existing-root-host-fixture' : family === 'statements' ? 'statement-host-fixture' : 'records-host-fixture';
 run(['build', '--locked', '-p', 'provenance-transport', '--features', 'test-fixture', '--bin', binary]);
 const temporary = await mkdtemp(join(tmpdir(), 'provenance-clients-'));

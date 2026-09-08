@@ -400,3 +400,23 @@ persistence.
 
 See `examples/typescript-sdk/` for package-name consumption through a local npm
 dependency.
+
+## Build from a source checkout
+
+Generated operation source and the platform lookup module are not tracked in Git.
+Install the generator dependencies once, then build the SDK:
+
+```sh
+npm ci --prefix tools/operation-codegen
+npm ci --prefix packages/provenance
+npm run build --prefix packages/provenance
+```
+
+Run these commands from the repository root. The first source build also needs
+the repository's Rust toolchain to export the operation contract. Later builds
+reuse generated output only when its source fingerprint and output checksums
+match. CI supplies this output as a build artifact to npm-only jobs.
+
+Published npm packages contain compiled clients and validators. Installing or
+using a published package does not run the generator or require Rust or a host
+server toolchain. The explicit CLI remains a separate packaged executable.

@@ -3,6 +3,9 @@
 repo_root=$(git rev-parse --show-toplevel) || exit 1
 cd "$repo_root" || exit 1
 
+node tools/operation-codegen/check-source-control.mjs || exit 1
+node tools/operation-codegen/ensure-generated.mjs || exit 1
+
 if ! cargo fmt --all --check; then
     echo "pre-commit: cargo fmt --all --check failed" >&2
     exit 1

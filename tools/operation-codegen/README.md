@@ -29,19 +29,22 @@ conversions to primitive types. Directional schema roots declare their model
 family in OpenAPI; each family owns an include index. Named operation methods
 have separate files, and connection setup remains in the shared client file.
 Generation removes Typify's repeated schema doc blocks; OpenAPI keeps the schema.
-A model, family index, or other generated Rust file over 500 lines stops generation. Generated output is never edited.
+A model, family index, or other generated Rust file over 500 lines stops generation.
+Generated output is never edited or committed.
 
-Run `npm ci --prefix tools/operation-codegen`, then:
+Before the first workspace build or test, install the pinned Rust toolchain and
+run `npm ci --prefix tools/operation-codegen`, then:
 
 ```sh
 node tools/operation-codegen/generate.mjs
 cargo test -p provenance-codegen
-node --test tools/operation-codegen/*.test.mjs
+npm test --prefix tools/operation-codegen
 cargo test -p provenance-http-client
 node tools/operation-codegen/test-clients.mjs statements
 node tools/operation-codegen/test-clients.mjs records
 node tools/operation-codegen/test-clients.mjs evidence
 node tools/operation-codegen/test-clients.mjs writes
+node tools/operation-codegen/test-clients.mjs creation
 node tools/operation-codegen/generate.mjs --check
 ```
 
@@ -57,9 +60,23 @@ failure family. The evidence fixture adds two real Git commits and complete
 verification records. Its checks cover all four cuts, null and omitted fields,
 list scope and filters, and typed file and Git refusals.
 
-`--check` writes to a temporary directory and compares the full file inventory
-and file bytes. Missing, stale, changed, and oversized files fail. Tests mutate
-temporary copies to verify each condition. The checkout remains unchanged.
+`--check` generates twice in separate temporary directories and compares the full
+file inventory and bytes. Differences and oversized files fail. It does not
+compare against a source-control snapshot or change the checkout.
+
+The documents and client source directories are ignored. Generation writes an
+ignored `.generation.json` receipt with source and output hashes. Run
+`node tools/operation-codegen/ensure-generated.mjs` before later workspace builds.
+It reuses complete, current output without loading generator dependencies. Missing,
+changed, or stale output causes regeneration. The source fingerprint normalizes
+checkout line endings so a CI artifact can be used on Windows.
+
+SDK build and test commands prepare generated source automatically. CI and release
+jobs generate once and pass the output as a build artifact to dependent jobs.
+Published npm and Rust packages include their client outputs; package consumers
+do not need Node generation tools or a Rust generator. The release consumer map
+`packages/provenance/src/engine-packages.ts` is also generated during SDK builds.
+The pre-commit hook and CI reject generated paths in the Git index.
 
 Clients require an HTTP host and check its protocol version before use. They do
 not start an engine process. They do not retry operation calls or follow redirects.

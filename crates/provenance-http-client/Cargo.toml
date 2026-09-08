@@ -8,6 +8,8 @@ repository.workspace = true
 homepage.workspace = true
 readme.workspace = true
 publish.workspace = true
+# The source generator runs before packaging; consumers use these included files.
+include = ["src/**", "Cargo.toml", "README.md"]
 
 [lints]
 workspace = true
