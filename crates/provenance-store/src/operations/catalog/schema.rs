@@ -22,6 +22,22 @@ pub struct Definition {
 }
 
 impl Definition {
+    /// MCP structured content must be an object; list results remain complete.
+    pub fn mcp_output_schema(&self) -> Value {
+        if self.success_schema["type"] != "array" {
+            return self.success_schema.clone();
+        }
+        let mut array = self.success_schema.clone();
+        let definitions = array
+            .as_object_mut()
+            .and_then(|value| value.remove("$defs"));
+        array.as_object_mut().unwrap().remove("$schema");
+        let mut schema = json!({"type":"object","required":["result"],"additionalProperties":false,"properties":{"result":array}});
+        if let Some(definitions) = definitions {
+            schema["$defs"] = definitions;
+        }
+        schema
+    }
     pub fn mcp_input_schema(&self) -> Value {
         let mut call = self.request_schema.clone();
         let object = call
@@ -65,6 +81,9 @@ pub(super) fn definition<O: Operation>() -> Definition {
             }
             super::ContextKind::Repository => schema::<
                 RepositoryCall<O::Request, provenance_core::protocol::repository::RepositoryTarget>,
+            >(Contract::Deserialize),
+            super::ContextKind::Scope => schema::<
+                RepositoryCall<O::Request, provenance_core::protocol::repository::RepositoryScope>,
             >(Contract::Deserialize),
             super::ContextKind::Scoped => schema::<
                 RepositoryCall<

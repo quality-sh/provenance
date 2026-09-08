@@ -8,6 +8,12 @@ impl ::std::ops::Deref for SearchSuccessOutputDeclarationAddressItem {
         &self.0
     }
 }
+impl ::std::convert::From<SearchSuccessOutputDeclarationAddressItem>
+for ::std::string::String {
+    fn from(value: SearchSuccessOutputDeclarationAddressItem) -> Self {
+        value.0
+    }
+}
 impl ::std::str::FromStr for SearchSuccessOutputDeclarationAddressItem {
     type Err = self::error::ConversionError;
     fn from_str(

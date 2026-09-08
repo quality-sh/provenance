@@ -8,6 +8,11 @@ impl ::std::ops::Deref for TraceFailureOutputProtocolVersion {
         &self.0
     }
 }
+impl ::std::convert::From<TraceFailureOutputProtocolVersion> for i64 {
+    fn from(value: TraceFailureOutputProtocolVersion) -> Self {
+        value.0
+    }
+}
 impl ::std::convert::TryFrom<i64> for TraceFailureOutputProtocolVersion {
     type Error = self::error::ConversionError;
     fn try_from(

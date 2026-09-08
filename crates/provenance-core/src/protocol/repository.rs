@@ -58,3 +58,21 @@ pub struct RepositoryInfo {
 pub struct RepositoryTarget {
     pub repository: String,
 }
+
+/// Scope selection for operations that do not use projection freshness.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct RepositoryScope {
+    pub repository: String,
+    pub scope: String,
+}
+
+/// Existing verification lists remain complete and have no page controls.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct VerificationListRequest {
+    #[serde(default)]
+    pub rule: Option<crate::StableId>,
+}

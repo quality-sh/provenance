@@ -2332,11 +2332,13 @@ dependencies = [
  "camino",
  "filetime",
  "fs2",
+ "fs_at",
  "jsonschema",
  "provenance-core",
  "provenance-macros",
  "provenance-scanner",
  "provenance-ste100",
+ "rustix",
  "schemars 1.2.2",
  "serde",
  "serde_ignored",
@@ -2349,6 +2351,7 @@ dependencies = [
  "tokio",
  "trybuild",
  "uuid",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]

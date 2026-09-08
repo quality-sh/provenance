@@ -22,10 +22,34 @@ impl ReadError {
     pub(super) fn status(&self) -> u16 {
         match self.safe() {
             ReadFailure::ReadFailed => 500,
+            ReadFailure::FileAccessDenied => 403,
+            ReadFailure::FileUnavailable | ReadFailure::GitUnavailable => 503,
             _ => 409,
         }
     }
     fn safe(&self) -> ReadFailure {
+        if let Some(error) = self.0.downcast_ref::<crate::stale::git::GitRefusal>() {
+            return match error {
+                crate::stale::git::GitRefusal::Unavailable { .. } => ReadFailure::GitUnavailable,
+                crate::stale::git::GitRefusal::RevisionNotFound { .. } => {
+                    ReadFailure::GitRevisionNotFound
+                }
+            };
+        }
+        if let Some(error) = self
+            .0
+            .downcast_ref::<crate::operations::files::FileAccessRefusal>()
+        {
+            return match error {
+                crate::operations::files::FileAccessRefusal::Unavailable => {
+                    ReadFailure::FileUnavailable
+                }
+                crate::operations::files::FileAccessRefusal::Denied => {
+                    ReadFailure::FileAccessDenied
+                }
+                _ => ReadFailure::ReadFailed,
+            };
+        }
         match self.0.downcast_ref::<ReadRefusal>() {
             Some(ReadRefusal::NoProjection { .. }) => ReadFailure::NoProjection,
             Some(ReadRefusal::Stale {

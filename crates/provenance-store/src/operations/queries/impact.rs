@@ -1,8 +1,6 @@
 use crate::operations::reader::{kind_of, Live, ReadContext, SqlFront};
 use provenance_core::model::relations::flow_neighbors;
-use provenance_core::protocol::{
-    ensure_limit, ensure_protocol_version, take_page, ImpactQuery, ImpactResult, TRACE_MAX_DEPTH,
-};
+use provenance_core::protocol::{take_page, ImpactQuery, ImpactResult, TRACE_MAX_DEPTH};
 use provenance_core::{ImplementationBinding, NodeType, Rule, StableId, VerificationBinding};
 use provenance_macros::rule;
 use std::collections::BTreeSet;
@@ -25,8 +23,9 @@ pub(super) async fn impact(
     ctx: &ReadContext,
     request: ImpactQuery,
 ) -> anyhow::Result<ImpactResult> {
-    ensure_protocol_version(request.protocol_version)?;
-    ensure_limit(request.limit)?;
+    request
+        .validate()
+        .map_err(provenance_core::protocol::QueryValidation::into_native)?;
     let id = StableId::new(request.id.clone())?;
     let include_retired = request.include_retired;
     let snapshot = ctx.snapshot();

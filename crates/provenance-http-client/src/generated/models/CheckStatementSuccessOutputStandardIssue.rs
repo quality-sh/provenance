@@ -8,6 +8,11 @@ impl ::std::ops::Deref for CheckStatementSuccessOutputStandardIssue {
         &self.0
     }
 }
+impl ::std::convert::From<CheckStatementSuccessOutputStandardIssue> for u8 {
+    fn from(value: CheckStatementSuccessOutputStandardIssue) -> Self {
+        value.0
+    }
+}
 impl ::std::convert::TryFrom<u8> for CheckStatementSuccessOutputStandardIssue {
     type Error = self::error::ConversionError;
     fn try_from(value: u8) -> ::std::result::Result<Self, self::error::ConversionError> {

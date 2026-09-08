@@ -23,7 +23,7 @@ fn statement_documents_have_named_operation_and_closed_call_schema() {
 }
 
 #[test]
-fn six_operation_names_and_failure_statuses_are_explicit() {
+fn twelve_operation_names_and_failure_statuses_are_explicit() {
     let (document, mcp) = provenance_codegen::documents();
     let mut names = mcp["tools"]
         .as_array()
@@ -36,11 +36,17 @@ fn six_operation_names_and_failure_statuses_are_explicit() {
         names,
         [
             "check-statement",
+            "evidence",
             "get",
+            "impact",
             "info",
             "neighbors",
+            "resolve-symbol",
             "search",
-            "trace"
+            "stale",
+            "trace",
+            "verification-bindings",
+            "verification-runs"
         ]
     );
     let paths = &document["paths"];
@@ -61,4 +67,40 @@ fn six_operation_names_and_failure_statuses_are_explicit() {
         .unwrap();
     assert_eq!(resolved["required"], json!(["repository"]));
     assert!(resolved["properties"].get("scope").is_none());
+}
+
+#[test]
+fn mcp_list_outputs_wrap_the_complete_http_array() {
+    let (document, mcp) = provenance_codegen::documents();
+    for name in ["verification-bindings", "verification-runs"] {
+        let tool = mcp["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|tool| tool["name"] == name)
+            .unwrap();
+        let schema = &tool["outputSchema"];
+        assert_eq!(schema["type"], "object");
+        assert_eq!(schema["properties"]["result"]["type"], "array");
+        let validator = jsonschema::JSONSchema::options()
+            .with_draft(jsonschema::Draft::Draft202012)
+            .compile(schema)
+            .unwrap();
+        assert!(validator.is_valid(&json!({"result":[]})));
+        assert!(!validator.is_valid(&json!([])));
+        let path = format!(
+            "/v{}/operations/{name}",
+            provenance_core::protocol::SDK_PROTOCOL_VERSION
+        );
+        let reference = document["paths"][path]["post"]["responses"]["200"]["content"]
+            ["application/json"]["schema"]["$ref"]
+            .as_str()
+            .unwrap();
+        assert_eq!(
+            document
+                .pointer(reference.strip_prefix('#').unwrap())
+                .unwrap()["type"],
+            "array"
+        );
+    }
 }

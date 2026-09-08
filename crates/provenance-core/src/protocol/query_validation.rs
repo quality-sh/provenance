@@ -94,3 +94,34 @@ impl TraceQuery {
         id(&self.id)
     }
 }
+
+impl super::ImpactQuery {
+    pub fn validate(&self) -> Result<(), QueryValidation> {
+        version(self.protocol_version)?;
+        check("limit", super::ensure_limit(self.limit))?;
+        id(&self.id)
+    }
+}
+impl super::EvidenceQuery {
+    pub fn validate(&self) -> Result<(), QueryValidation> {
+        version(self.protocol_version)?;
+        check("limit", super::ensure_limit(self.limit))?;
+        check("rule", StableId::new(&self.rule)).map(|_| ())
+    }
+}
+impl super::ResolveSymbolQuery {
+    pub fn validate(&self) -> Result<(), QueryValidation> {
+        version(self.protocol_version)?;
+        check("limit", super::ensure_limit(self.limit))
+    }
+}
+impl super::StaleQuery {
+    pub fn validate(&self) -> Result<(), QueryValidation> {
+        version(self.protocol_version)?;
+        check("limit", super::ensure_limit(self.limit))?;
+        for rule in &self.rules {
+            check("rules", StableId::new(rule))?;
+        }
+        Ok(())
+    }
+}

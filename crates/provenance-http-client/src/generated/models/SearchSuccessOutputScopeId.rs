@@ -8,6 +8,11 @@ impl ::std::ops::Deref for SearchSuccessOutputScopeId {
         &self.0
     }
 }
+impl ::std::convert::From<SearchSuccessOutputScopeId> for ::std::string::String {
+    fn from(value: SearchSuccessOutputScopeId) -> Self {
+        value.0
+    }
+}
 impl ::std::str::FromStr for SearchSuccessOutputScopeId {
     type Err = self::error::ConversionError;
     fn from_str(

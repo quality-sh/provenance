@@ -8,6 +8,11 @@ impl ::std::ops::Deref for TraceSuccessOutputStableId {
         &self.0
     }
 }
+impl ::std::convert::From<TraceSuccessOutputStableId> for ::std::string::String {
+    fn from(value: TraceSuccessOutputStableId) -> Self {
+        value.0
+    }
+}
 impl ::std::str::FromStr for TraceSuccessOutputStableId {
     type Err = self::error::ConversionError;
     fn from_str(

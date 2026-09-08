@@ -8,6 +8,12 @@ impl ::std::ops::Deref for NeighborsSuccessOutputDeclarationAddressItem {
         &self.0
     }
 }
+impl ::std::convert::From<NeighborsSuccessOutputDeclarationAddressItem>
+for ::std::string::String {
+    fn from(value: NeighborsSuccessOutputDeclarationAddressItem) -> Self {
+        value.0
+    }
+}
 impl ::std::str::FromStr for NeighborsSuccessOutputDeclarationAddressItem {
     type Err = self::error::ConversionError;
     fn from_str(

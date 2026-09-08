@@ -5,7 +5,7 @@ export const PROTOCOL_VERSION = 7;
 export class ProtocolMismatchError extends Error {
   constructor(readonly requested: number, readonly supported: number) { super('Incompatible operation protocol'); }
 }
-export type OperationFailure = components['schemas']['CheckStatementFailureOutput'] | components['schemas']['GetFailureOutput'] | components['schemas']['InfoFailureOutput'] | components['schemas']['NeighborsFailureOutput'] | components['schemas']['SearchFailureOutput'] | components['schemas']['TraceFailureOutput'];
+export type OperationFailure = components['schemas']['CheckStatementFailureOutput'] | components['schemas']['EvidenceFailureOutput'] | components['schemas']['GetFailureOutput'] | components['schemas']['ImpactFailureOutput'] | components['schemas']['InfoFailureOutput'] | components['schemas']['NeighborsFailureOutput'] | components['schemas']['ResolveSymbolFailureOutput'] | components['schemas']['SearchFailureOutput'] | components['schemas']['StaleFailureOutput'] | components['schemas']['TraceFailureOutput'] | components['schemas']['VerificationBindingsFailureOutput'] | components['schemas']['VerificationRunsFailureOutput'];
 export class OperationError extends Error {
   constructor(readonly status: number, readonly failure: OperationFailure) { super('Operation refused'); }
 }
@@ -36,12 +36,26 @@ export class HttpClient {
     if (!response.ok) throw new OperationError(response.status, await response.json() as components['schemas']['CheckStatementFailureOutput']);
     return await response.json() as components['schemas']['CheckStatementSuccessOutput'];
   }
+  async evidence(call: components['schemas']['EvidenceRequestInput']): Promise<components['schemas']['EvidenceSuccessOutput']> {
+    const response = await this.fetcher(this.baseUrl + '/v7/operations/evidence', {
+      method: 'POST', redirect: 'error', headers: { 'content-type': 'application/json' }, body: JSON.stringify(call),
+    });
+    if (!response.ok) throw new OperationError(response.status, await response.json() as components['schemas']['EvidenceFailureOutput']);
+    return await response.json() as components['schemas']['EvidenceSuccessOutput'];
+  }
   async get(call: components['schemas']['GetRequestInput']): Promise<components['schemas']['GetSuccessOutput']> {
     const response = await this.fetcher(this.baseUrl + '/v7/operations/get', {
       method: 'POST', redirect: 'error', headers: { 'content-type': 'application/json' }, body: JSON.stringify(call),
     });
     if (!response.ok) throw new OperationError(response.status, await response.json() as components['schemas']['GetFailureOutput']);
     return await response.json() as components['schemas']['GetSuccessOutput'];
+  }
+  async impact(call: components['schemas']['ImpactRequestInput']): Promise<components['schemas']['ImpactSuccessOutput']> {
+    const response = await this.fetcher(this.baseUrl + '/v7/operations/impact', {
+      method: 'POST', redirect: 'error', headers: { 'content-type': 'application/json' }, body: JSON.stringify(call),
+    });
+    if (!response.ok) throw new OperationError(response.status, await response.json() as components['schemas']['ImpactFailureOutput']);
+    return await response.json() as components['schemas']['ImpactSuccessOutput'];
   }
   async info(call: components['schemas']['InfoRequestInput']): Promise<components['schemas']['InfoSuccessOutput']> {
     const response = await this.fetcher(this.baseUrl + '/v7/operations/info', {
@@ -57,6 +71,13 @@ export class HttpClient {
     if (!response.ok) throw new OperationError(response.status, await response.json() as components['schemas']['NeighborsFailureOutput']);
     return await response.json() as components['schemas']['NeighborsSuccessOutput'];
   }
+  async resolveSymbol(call: components['schemas']['ResolveSymbolRequestInput']): Promise<components['schemas']['ResolveSymbolSuccessOutput']> {
+    const response = await this.fetcher(this.baseUrl + '/v7/operations/resolve-symbol', {
+      method: 'POST', redirect: 'error', headers: { 'content-type': 'application/json' }, body: JSON.stringify(call),
+    });
+    if (!response.ok) throw new OperationError(response.status, await response.json() as components['schemas']['ResolveSymbolFailureOutput']);
+    return await response.json() as components['schemas']['ResolveSymbolSuccessOutput'];
+  }
   async search(call: components['schemas']['SearchRequestInput']): Promise<components['schemas']['SearchSuccessOutput']> {
     const response = await this.fetcher(this.baseUrl + '/v7/operations/search', {
       method: 'POST', redirect: 'error', headers: { 'content-type': 'application/json' }, body: JSON.stringify(call),
@@ -64,11 +85,32 @@ export class HttpClient {
     if (!response.ok) throw new OperationError(response.status, await response.json() as components['schemas']['SearchFailureOutput']);
     return await response.json() as components['schemas']['SearchSuccessOutput'];
   }
+  async stale(call: components['schemas']['StaleRequestInput']): Promise<components['schemas']['StaleSuccessOutput']> {
+    const response = await this.fetcher(this.baseUrl + '/v7/operations/stale', {
+      method: 'POST', redirect: 'error', headers: { 'content-type': 'application/json' }, body: JSON.stringify(call),
+    });
+    if (!response.ok) throw new OperationError(response.status, await response.json() as components['schemas']['StaleFailureOutput']);
+    return await response.json() as components['schemas']['StaleSuccessOutput'];
+  }
   async trace(call: components['schemas']['TraceRequestInput']): Promise<components['schemas']['TraceSuccessOutput']> {
     const response = await this.fetcher(this.baseUrl + '/v7/operations/trace', {
       method: 'POST', redirect: 'error', headers: { 'content-type': 'application/json' }, body: JSON.stringify(call),
     });
     if (!response.ok) throw new OperationError(response.status, await response.json() as components['schemas']['TraceFailureOutput']);
     return await response.json() as components['schemas']['TraceSuccessOutput'];
+  }
+  async verificationBindings(call: components['schemas']['VerificationBindingsRequestInput']): Promise<components['schemas']['VerificationBindingsSuccessOutput']> {
+    const response = await this.fetcher(this.baseUrl + '/v7/operations/verification-bindings', {
+      method: 'POST', redirect: 'error', headers: { 'content-type': 'application/json' }, body: JSON.stringify(call),
+    });
+    if (!response.ok) throw new OperationError(response.status, await response.json() as components['schemas']['VerificationBindingsFailureOutput']);
+    return await response.json() as components['schemas']['VerificationBindingsSuccessOutput'];
+  }
+  async verificationRuns(call: components['schemas']['VerificationRunsRequestInput']): Promise<components['schemas']['VerificationRunsSuccessOutput']> {
+    const response = await this.fetcher(this.baseUrl + '/v7/operations/verification-runs', {
+      method: 'POST', redirect: 'error', headers: { 'content-type': 'application/json' }, body: JSON.stringify(call),
+    });
+    if (!response.ok) throw new OperationError(response.status, await response.json() as components['schemas']['VerificationRunsFailureOutput']);
+    return await response.json() as components['schemas']['VerificationRunsSuccessOutput'];
   }
 }

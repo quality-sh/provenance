@@ -10,10 +10,10 @@ use crate::cache::{self, GraphEvidence};
 use crate::layout::ProvenanceLayout;
 use crate::stale::{gate, git};
 use crate::state_store::StateStore;
-use camino::{Utf8Component, Utf8Path};
+use camino::Utf8Path;
 use provenance_core::coverage::{EvidenceDiffSite, EvidenceDiffState};
 use provenance_core::{ScopeId, VerificationRun};
-use provenance_scanner::{FileScan, Language};
+use provenance_scanner::FileScan;
 
 /// The closed list of live words.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -87,32 +87,25 @@ impl<'c> LiveHandle<'c> {
         if let Some(scans) = crate::test_probes::test_scan() {
             return Ok((scans, false));
         }
-        provenance_scanner::scan_path_bounded(self.context.repo(), self.context.scan_limit())
+        Ok(
+            crate::operations::files::RepositoryFiles::open(self.context.repo())?
+                .scan_tree(self.context.scan_limit())?,
+        )
     }
 
-    /// A scan of one named file alone, so it never meets the file count
-    /// and cannot miss the file. Only a repository-relative path in
-    /// canonical spelling names a file, as the bindings read it: an
-    /// absolute path, a `.` segment, or a `..` segment scans nothing, so
-    /// no file outside the repository is read. A file the scanner has no
-    /// language for, or one that cannot be read, yields no sites. A test
-    /// that set the tree scan in advance is handed that file's entry.
-    pub fn scan_file(&self, file: &Utf8Path) -> Option<FileScan> {
+    /// A selected file is read through a held no-follow handle.
+    /// Missing files and unsupported languages keep binding-only answers.
+    pub fn scan_file(
+        &self,
+        file: &Utf8Path,
+    ) -> Result<Option<FileScan>, crate::operations::files::FileAccessRefusal> {
         self.only(Live::ScannedSites);
-        let relative = !file.is_absolute()
-            && file
-                .components()
-                .all(|component| matches!(component, Utf8Component::Normal(_)));
-        if !relative {
-            return None;
-        }
-        let path = self.context.repo().join(file);
+        crate::operations::files::validate_relative(file)?;
         if let Some(scans) = crate::test_probes::test_scan() {
-            return scans.into_iter().find(|scan| scan.file_path == path);
+            let path = self.context.repo().join(file);
+            return Ok(scans.into_iter().find(|scan| scan.file_path == path));
         }
-        let language = path.extension().and_then(Language::from_extension)?;
-        let content = std::fs::read_to_string(&path).ok()?;
-        Some(provenance_scanner::scan_file(&path, language, &content))
+        crate::operations::files::RepositoryFiles::open(self.context.repo())?.scan_file(file)
     }
 
     /// The scope's verification runs.

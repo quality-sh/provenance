@@ -167,7 +167,13 @@ fn record_reads_have_one_registered_contract_each() {
             "get",
             "search",
             "neighbors",
-            "trace"
+            "trace",
+            "impact",
+            "resolve-symbol",
+            "evidence",
+            "stale",
+            "verification-runs",
+            "verification-bindings"
         ]
     );
 }

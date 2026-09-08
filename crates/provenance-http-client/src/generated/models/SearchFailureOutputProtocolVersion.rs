@@ -8,6 +8,11 @@ impl ::std::ops::Deref for SearchFailureOutputProtocolVersion {
         &self.0
     }
 }
+impl ::std::convert::From<SearchFailureOutputProtocolVersion> for i64 {
+    fn from(value: SearchFailureOutputProtocolVersion) -> Self {
+        value.0
+    }
+}
 impl ::std::convert::TryFrom<i64> for SearchFailureOutputProtocolVersion {
     type Error = self::error::ConversionError;
     fn try_from(

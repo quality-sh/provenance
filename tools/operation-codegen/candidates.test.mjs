@@ -16,7 +16,7 @@ test('pinned generators retain actual production null, omission, flat, tagged, a
   const temporary = await mkdtemp(join(tmpdir(), 'operation-candidates-'));
   try {
     const document = JSON.parse(await readFile(join(root, 'contracts/operations/fixtures.openapi.json'), 'utf8'));
-    const source = astToString(await openapiTS(document));
+    const source = astToString(await openapiTS(document, { defaultNonNullable: false }));
     assert.doesNotMatch(source, /\bany\b/);
     await writeFile(join(temporary, 'schema.ts'), source);
     await writeFile(join(temporary, 'assertions.ts'), `import type { components } from './schema';
@@ -45,6 +45,17 @@ const node: Schemas['GraphNodeOutput']['node_type'] = 'invented';
     await writeFile(join(temporary, 'client', 'assertions.ts'), `import { HttpClient, type OperationFailure, type components } from './client';
 declare const client: HttpClient;
 client.info({context:{repository:'first'},request:{}});
+const context = {repository:'first',scope:'default'};
+client.impact({context,request:{id:'rule_shared'}});
+client.resolveSymbol({context,request:{file:'code.rs',symbol:null}});
+client.evidence({context,request:{rule:'rule_shared',base:null}});
+client.stale({context,request:{base:'HEAD',head:null}});
+client.verificationRuns({context,request:{rule:null}});
+client.verificationBindings({context,request:{}});
+// @ts-expect-error verification lists do not accept freshness policy
+client.verificationRuns({context:{...context,freshness:'catch_up'},request:{}});
+// @ts-expect-error verification lists remain unbounded with a closed request
+client.verificationBindings({context,request:{limit:1}});
 client.get({context:{repository:'first',scope:'default',freshness:null},request:{node_type:'rule',id:'rule_shared'}});
 // @ts-expect-error scoped get needs a scope
 client.get({context:{repository:'first'},request:{node_type:'rule',id:'rule_shared'}});

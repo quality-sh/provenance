@@ -6,7 +6,8 @@ Rust types. HTTP and MCP adapters use the same handler and preparation path.
 The native Rust SDK remains available.
 
 The catalog contains `check-statement`, `info`, `get`, `search`, `neighbors`,
-and `trace`. The statement handler returns the
+`trace`, `impact`, `resolve-symbol`, `evidence`, `stale`, `verification-runs`,
+and `verification-bindings`. The statement handler returns the
 existing ASD-STE100 analyzer report. A finding is a successful report result.
 The operation does not open a repository, load settings, or use a dictionary.
 
@@ -45,7 +46,7 @@ The external result retains engine, operation-protocol, and state-schema
 versions. Its `repository` is `first`. Native `engine_info` keeps the resolved
 repository path. Neither result carries a projection stamp.
 
-The four structured reads require a target and scope. They accept the existing
+The eight structured reads require a target and scope. They accept the existing
 query fields and an optional freshness setting:
 
 ```json
@@ -61,7 +62,7 @@ bounded at 200, with `has_more` and no cursor.
 
 External validation uses the same semantic checks as native queries, but runs
 before host preparation. Native queries retain validation after the freshness
-step. The native CLI uses registered entries for these four reads and retains
+step. The native CLI uses registered entries for these eight reads and retains
 its existing JSON and stderr behavior.
 
 ## Read diagnostics
@@ -150,3 +151,7 @@ SDK or remove package-supplied engine installation.
 The operation-protocol change does not change legacy disposition grants or
 consume their migration window. The later `provenance-cvs` release owns that
 window. State schema, read derivation, and `graph-reference-v1` remain separate.
+
+See [repository evidence access](operation-file-access.md) for held-file behavior,
+MCP list wrapping, and the control-data trust assumptions. Real repository
+hosting remains gated.

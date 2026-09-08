@@ -3,7 +3,8 @@
 #[allow(
     clippy::if_not_else,
     clippy::missing_const_for_fn,
-    clippy::derivable_impls
+    clippy::derivable_impls,
+    clippy::default_trait_access
 )]
 pub mod types {
     include!("generated/types.rs");

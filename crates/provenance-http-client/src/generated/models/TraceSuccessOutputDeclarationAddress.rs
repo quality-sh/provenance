@@ -10,6 +10,12 @@ impl ::std::ops::Deref for TraceSuccessOutputDeclarationAddress {
         &self.0
     }
 }
+impl ::std::convert::From<TraceSuccessOutputDeclarationAddress>
+for ::std::vec::Vec<TraceSuccessOutputDeclarationAddressItem> {
+    fn from(value: TraceSuccessOutputDeclarationAddress) -> Self {
+        value.0
+    }
+}
 impl ::std::convert::From<::std::vec::Vec<TraceSuccessOutputDeclarationAddressItem>>
 for TraceSuccessOutputDeclarationAddress {
     fn from(value: ::std::vec::Vec<TraceSuccessOutputDeclarationAddressItem>) -> Self {

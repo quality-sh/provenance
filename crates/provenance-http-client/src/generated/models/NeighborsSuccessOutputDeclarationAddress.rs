@@ -10,6 +10,12 @@ impl ::std::ops::Deref for NeighborsSuccessOutputDeclarationAddress {
         &self.0
     }
 }
+impl ::std::convert::From<NeighborsSuccessOutputDeclarationAddress>
+for ::std::vec::Vec<NeighborsSuccessOutputDeclarationAddressItem> {
+    fn from(value: NeighborsSuccessOutputDeclarationAddress) -> Self {
+        value.0
+    }
+}
 impl ::std::convert::From<::std::vec::Vec<NeighborsSuccessOutputDeclarationAddressItem>>
 for NeighborsSuccessOutputDeclarationAddress {
     fn from(

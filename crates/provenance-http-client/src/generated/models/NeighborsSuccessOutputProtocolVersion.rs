@@ -8,6 +8,11 @@ impl ::std::ops::Deref for NeighborsSuccessOutputProtocolVersion {
         &self.0
     }
 }
+impl ::std::convert::From<NeighborsSuccessOutputProtocolVersion> for i64 {
+    fn from(value: NeighborsSuccessOutputProtocolVersion) -> Self {
+        value.0
+    }
+}
 impl ::std::convert::TryFrom<i64> for NeighborsSuccessOutputProtocolVersion {
     type Error = self::error::ConversionError;
     fn try_from(

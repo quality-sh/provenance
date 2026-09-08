@@ -35,7 +35,15 @@ thiserror.workspace = true
 tokio = { workspace = true, features = ["time"] }
 uuid.workspace = true
 
+[target.'cfg(unix)'.dependencies]
+rustix.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+fs_at.workspace = true
+windows-sys.workspace = true
+
 [dev-dependencies]
+fs_at.workspace = true
 jsonschema = { workspace = true, features = ["draft202012"] }
 filetime.workspace = true
 trybuild.workspace = true

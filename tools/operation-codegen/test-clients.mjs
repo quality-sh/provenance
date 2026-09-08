@@ -8,9 +8,11 @@ import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { checkStatements } from './test-statements.mjs';
 import { checkRecords } from './test-records.mjs';
+import { checkEvidence } from './test-evidence.mjs';
 
 const family = process.argv[2];
-if (!['statements', 'records'].includes(family)) throw new Error('Expected statements or records');
+const checks = { statements: checkStatements, records: checkRecords, evidence: checkEvidence };
+if (!checks[family]) throw new Error('Expected statements, records, or evidence');
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 function run(args, env = process.env) {
   const child = spawnSync('cargo', args, { cwd: root, env, stdio: 'inherit' });
@@ -35,7 +37,7 @@ try {
   const script = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText;
   await writeFile(join(temporary, 'client.mjs'), script);
   const module = await import(join(temporary, 'client.mjs'));
-  await (family === 'statements' ? checkStatements : checkRecords)(module, fixture);
+  await checks[family](module, fixture);
   run(['test', '--locked', '-p', 'provenance-http-client', '--test', family, '--', '--ignored'], {
     ...process.env, PROVENANCE_TEST_HOST: fixture.url, PROVENANCE_RECORDS_FIXTURE: JSON.stringify(fixture),
   });

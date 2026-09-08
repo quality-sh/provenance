@@ -1,8 +1,6 @@
 use crate::operations::reader::{Live, ReadContext};
 use provenance_core::coverage::{EvidenceDiffSite, EvidenceDiffState, EvidenceDiffSummary};
-use provenance_core::protocol::{
-    ensure_limit, ensure_protocol_version, take_page, StaleQuery, StaleResult,
-};
+use provenance_core::protocol::{take_page, StaleQuery, StaleResult};
 use provenance_core::ScopeId;
 
 /// What a commit range did to the code carrying graph evidence.
@@ -15,8 +13,9 @@ pub(super) fn stale(
     scope: &ScopeId,
     request: StaleQuery,
 ) -> anyhow::Result<StaleResult> {
-    ensure_protocol_version(request.protocol_version)?;
-    ensure_limit(request.limit)?;
+    request
+        .validate()
+        .map_err(provenance_core::protocol::QueryValidation::into_native)?;
     // The range resolves before the store is read, so a bad base is the
     // error that surfaces.
     let diff = ctx.live(Live::Diff);

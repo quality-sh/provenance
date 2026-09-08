@@ -80,5 +80,11 @@ pub(super) fn entries() -> Vec<Entry> {
         register::<super::Search>(),
         register::<super::Neighbors>(),
         register::<super::Trace>(),
+        register::<super::Impact>(),
+        register::<super::ResolveSymbol>(),
+        register::<super::Evidence>(),
+        register::<super::Stale>(),
+        register::<super::VerificationRuns>(),
+        register::<super::VerificationBindings>(),
     ]
 }

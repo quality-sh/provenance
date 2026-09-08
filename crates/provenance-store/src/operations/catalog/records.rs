@@ -10,7 +10,7 @@ use provenance_core::protocol::{
 };
 
 macro_rules! query {
-    ($name:ident, $wire:literal, $request:ident, $result:ident, $handler:ident) => {
+    ($name:ident, $wire:literal, $request:ident, $result:ident, $handler:ident, $needs:expr) => {
         pub struct $name;
         impl Operation for $name {
             type Request = protocol::$request;
@@ -22,11 +22,8 @@ macro_rules! query {
             const NAME: &'static str = $wire;
             const CONTEXT: super::ContextKind = super::ContextKind::Scoped;
             const FAILURE_STATUSES: &'static [u16] = &[409, 500];
-            fn needs(_: &Self::Request) -> ExecutionNeeds {
-                &[
-                    ExecutionNeed::GraphStorage,
-                    ExecutionNeed::ProjectionMaintenance,
-                ]
+            fn needs(request: &Self::Request) -> ExecutionNeeds {
+                ($needs)(request)
             }
             fn validate_external(request: &Self::Request) -> Result<(), OperationFailure> {
                 request
@@ -65,16 +62,24 @@ macro_rules! query {
         }
     };
 }
-query!(Get, "get", GetQuery, GetResult, get);
-query!(Search, "search", SearchQuery, SearchResult, search);
+query!(Get, "get", GetQuery, GetResult, get, graph_needs);
+query!(
+    Search,
+    "search",
+    SearchQuery,
+    SearchResult,
+    search,
+    graph_needs
+);
 query!(
     Neighbors,
     "neighbors",
     NeighborsQuery,
     NeighborsResult,
-    neighbors
+    neighbors,
+    graph_needs
 );
-query!(Trace, "trace", TraceQuery, TraceResult, trace);
+query!(Trace, "trace", TraceQuery, TraceResult, trace, graph_needs);
 
 pub struct Info;
 impl Operation for Info {
@@ -105,3 +110,11 @@ impl Operation for Info {
         })
     }
 }
+
+const fn graph_needs<R>(_: &R) -> ExecutionNeeds {
+    &[
+        ExecutionNeed::GraphStorage,
+        ExecutionNeed::ProjectionMaintenance,
+    ]
+}
+pub(super) use query;

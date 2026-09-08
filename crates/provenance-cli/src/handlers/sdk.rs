@@ -2,13 +2,14 @@ use std::io::Read as _;
 
 use crate::cli::sdk::SdkCommand;
 use crate::output;
-use provenance_core::{ScopeId, StableId};
+use provenance_core::ScopeId;
 use provenance_store::operations;
 use provenance_store::state_store::{BeginVerificationInput, CompleteVerificationInput};
 
 mod check_statement;
 mod query;
 mod render;
+mod verification_lists;
 
 pub(super) async fn handle(command: SdkCommand) -> anyhow::Result<()> {
     match command {
@@ -71,10 +72,10 @@ pub(super) async fn handle(command: SdkCommand) -> anyhow::Result<()> {
             rule,
             format,
         } => {
-            let repo = Some(operations::discover_repository(repo)?);
-            let rule = rule.map(StableId::new).transpose()?;
-            let runs = operations::verification_runs(repo, &ScopeId::new(scope)?, rule.as_ref())?;
-            output::print(format, &runs)?;
+            verification_lists::print::<operations::catalog::VerificationRuns>(
+                repo, scope, rule, format,
+            )
+            .await?;
         }
         SdkCommand::Get { query } => query::handle(query::Operation::Get, query).await?,
         SdkCommand::Search { query } => query::handle(query::Operation::Search, query).await?,
@@ -94,11 +95,10 @@ pub(super) async fn handle(command: SdkCommand) -> anyhow::Result<()> {
             rule,
             format,
         } => {
-            let repo = Some(operations::discover_repository(repo)?);
-            let rule = rule.map(StableId::new).transpose()?;
-            let bindings =
-                operations::verification_bindings(repo, &ScopeId::new(scope)?, rule.as_ref())?;
-            output::print(format, &bindings)?;
+            verification_lists::print::<operations::catalog::VerificationBindings>(
+                repo, scope, rule, format,
+            )
+            .await?;
         }
     }
     Ok(())

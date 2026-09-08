@@ -1,21 +1,33 @@
 // Generated from OpenAPI. Do not edit.
 use crate::types::{
     CheckStatementFailureOutput, CheckStatementRequestInput, CheckStatementSuccessOutput,
-    GetFailureOutput, GetRequestInput, GetSuccessOutput, InfoFailureOutput, InfoRequestInput,
-    InfoSuccessOutput, NeighborsFailureOutput, NeighborsRequestInput, NeighborsSuccessOutput,
-    SearchFailureOutput, SearchRequestInput, SearchSuccessOutput, TraceFailureOutput,
-    TraceRequestInput, TraceSuccessOutput,
+    EvidenceFailureOutput, EvidenceRequestInput, EvidenceSuccessOutput, GetFailureOutput,
+    GetRequestInput, GetSuccessOutput, ImpactFailureOutput, ImpactRequestInput,
+    ImpactSuccessOutput, InfoFailureOutput, InfoRequestInput, InfoSuccessOutput,
+    NeighborsFailureOutput, NeighborsRequestInput, NeighborsSuccessOutput,
+    ResolveSymbolFailureOutput, ResolveSymbolRequestInput, ResolveSymbolSuccessOutput,
+    SearchFailureOutput, SearchRequestInput, SearchSuccessOutput, StaleFailureOutput,
+    StaleRequestInput, StaleSuccessOutput, TraceFailureOutput, TraceRequestInput,
+    TraceSuccessOutput, VerificationBindingsFailureOutput, VerificationBindingsRequestInput,
+    VerificationBindingsSuccessOutput, VerificationRunsFailureOutput, VerificationRunsRequestInput,
+    VerificationRunsSuccessOutput,
 };
 pub const PROTOCOL_VERSION: u32 = 7;
 #[derive(Debug, serde::Serialize)]
 #[serde(untagged)]
 pub enum OperationFailure {
     CheckStatement(Box<CheckStatementFailureOutput>),
+    Evidence(Box<EvidenceFailureOutput>),
     Get(Box<GetFailureOutput>),
+    Impact(Box<ImpactFailureOutput>),
     Info(Box<InfoFailureOutput>),
     Neighbors(Box<NeighborsFailureOutput>),
+    ResolveSymbol(Box<ResolveSymbolFailureOutput>),
     Search(Box<SearchFailureOutput>),
+    Stale(Box<StaleFailureOutput>),
     Trace(Box<TraceFailureOutput>),
+    VerificationBindings(Box<VerificationBindingsFailureOutput>),
+    VerificationRuns(Box<VerificationRunsFailureOutput>),
 }
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -96,120 +108,16 @@ impl HttpClient {
         }
         Ok(client)
     }
-    pub async fn check_statement(
-        &self,
-        call: &CheckStatementRequestInput,
-    ) -> Result<CheckStatementSuccessOutput, Error> {
-        let response = self
-            .http
-            .post(format!("{}/v7/operations/check-statement", self.base_url))
-            .json(call)
-            .send()
-            .await
-            .map_err(Error::Transport)?;
-        let status = response.status();
-        if !status.is_success() {
-            let failure: CheckStatementFailureOutput =
-                response.json().await.map_err(Error::Transport)?;
-            return Err(Error::Operation {
-                status: status.as_u16(),
-                failure: OperationFailure::CheckStatement(Box::new(failure)),
-            });
-        }
-        response.json().await.map_err(Error::Transport)
-    }
-    pub async fn get(&self, call: &GetRequestInput) -> Result<GetSuccessOutput, Error> {
-        let response = self
-            .http
-            .post(format!("{}/v7/operations/get", self.base_url))
-            .json(call)
-            .send()
-            .await
-            .map_err(Error::Transport)?;
-        let status = response.status();
-        if !status.is_success() {
-            let failure: GetFailureOutput = response.json().await.map_err(Error::Transport)?;
-            return Err(Error::Operation {
-                status: status.as_u16(),
-                failure: OperationFailure::Get(Box::new(failure)),
-            });
-        }
-        response.json().await.map_err(Error::Transport)
-    }
-    pub async fn info(&self, call: &InfoRequestInput) -> Result<InfoSuccessOutput, Error> {
-        let response = self
-            .http
-            .post(format!("{}/v7/operations/info", self.base_url))
-            .json(call)
-            .send()
-            .await
-            .map_err(Error::Transport)?;
-        let status = response.status();
-        if !status.is_success() {
-            let failure: InfoFailureOutput = response.json().await.map_err(Error::Transport)?;
-            return Err(Error::Operation {
-                status: status.as_u16(),
-                failure: OperationFailure::Info(Box::new(failure)),
-            });
-        }
-        response.json().await.map_err(Error::Transport)
-    }
-    pub async fn neighbors(
-        &self,
-        call: &NeighborsRequestInput,
-    ) -> Result<NeighborsSuccessOutput, Error> {
-        let response = self
-            .http
-            .post(format!("{}/v7/operations/neighbors", self.base_url))
-            .json(call)
-            .send()
-            .await
-            .map_err(Error::Transport)?;
-        let status = response.status();
-        if !status.is_success() {
-            let failure: NeighborsFailureOutput =
-                response.json().await.map_err(Error::Transport)?;
-            return Err(Error::Operation {
-                status: status.as_u16(),
-                failure: OperationFailure::Neighbors(Box::new(failure)),
-            });
-        }
-        response.json().await.map_err(Error::Transport)
-    }
-    pub async fn search(&self, call: &SearchRequestInput) -> Result<SearchSuccessOutput, Error> {
-        let response = self
-            .http
-            .post(format!("{}/v7/operations/search", self.base_url))
-            .json(call)
-            .send()
-            .await
-            .map_err(Error::Transport)?;
-        let status = response.status();
-        if !status.is_success() {
-            let failure: SearchFailureOutput = response.json().await.map_err(Error::Transport)?;
-            return Err(Error::Operation {
-                status: status.as_u16(),
-                failure: OperationFailure::Search(Box::new(failure)),
-            });
-        }
-        response.json().await.map_err(Error::Transport)
-    }
-    pub async fn trace(&self, call: &TraceRequestInput) -> Result<TraceSuccessOutput, Error> {
-        let response = self
-            .http
-            .post(format!("{}/v7/operations/trace", self.base_url))
-            .json(call)
-            .send()
-            .await
-            .map_err(Error::Transport)?;
-        let status = response.status();
-        if !status.is_success() {
-            let failure: TraceFailureOutput = response.json().await.map_err(Error::Transport)?;
-            return Err(Error::Operation {
-                status: status.as_u16(),
-                failure: OperationFailure::Trace(Box::new(failure)),
-            });
-        }
-        response.json().await.map_err(Error::Transport)
-    }
 }
+include!("operations/check_statement.rs");
+include!("operations/evidence.rs");
+include!("operations/get.rs");
+include!("operations/impact.rs");
+include!("operations/info.rs");
+include!("operations/neighbors.rs");
+include!("operations/resolve_symbol.rs");
+include!("operations/search.rs");
+include!("operations/stale.rs");
+include!("operations/trace.rs");
+include!("operations/verification_bindings.rs");
+include!("operations/verification_runs.rs");

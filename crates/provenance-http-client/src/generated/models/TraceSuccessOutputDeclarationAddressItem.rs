@@ -8,6 +8,12 @@ impl ::std::ops::Deref for TraceSuccessOutputDeclarationAddressItem {
         &self.0
     }
 }
+impl ::std::convert::From<TraceSuccessOutputDeclarationAddressItem>
+for ::std::string::String {
+    fn from(value: TraceSuccessOutputDeclarationAddressItem) -> Self {
+        value.0
+    }
+}
 impl ::std::str::FromStr for TraceSuccessOutputDeclarationAddressItem {
     type Err = self::error::ConversionError;
     fn from_str(

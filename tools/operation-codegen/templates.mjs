@@ -50,7 +50,7 @@ ${methods}
 `;
 }
 
-export function rustClient(document) {
+export function rustClientFiles(document) {
   const imports = new Set();
   for (const route of Object.values(document.paths)) {
     if (!route.post) continue;
@@ -58,14 +58,16 @@ export function rustClient(document) {
     for (const status of ['200', '400']) imports.add(route.post.responses[status].content['application/json'].schema.$ref.split('/').at(-1));
   }
   const version = document['x-protocol-version'];
-  const methods = Object.entries(document.paths).filter(([,route])=>route.post).map(([path, route]) => {
+  const methods = Object.fromEntries(Object.entries(document.paths).filter(([,route])=>route.post).map(([path, route]) => {
     const op = route.post;
     const request = op.requestBody.content['application/json'].schema.$ref.split('/').at(-1);
     const success = op.responses['200'].content['application/json'].schema.$ref.split('/').at(-1);
     const failure = op.responses['400'].content['application/json'].schema.$ref.split('/').at(-1);
     const variant = op.operationId[0].toUpperCase() + op.operationId.slice(1);
     const method = op.operationId.replace(/[A-Z]/g, c => '_' + c.toLowerCase());
-    return `    pub async fn ${method}(&self, call: &${request}) -> Result<${success}, Error> {
+    return [`operations/${method}.rs`, `// Generated from OpenAPI. Do not edit.
+impl HttpClient {
+    pub async fn ${method}(&self, call: &${request}) -> Result<${success}, Error> {
         let response = self.http.post(format!("{}${path}", self.base_url))
             .json(call).send().await.map_err(Error::Transport)?;
         let status = response.status();
@@ -74,15 +76,17 @@ export function rustClient(document) {
             return Err(Error::Operation { status: status.as_u16(), failure: OperationFailure::${variant}(Box::new(failure)) });
         }
         response.json().await.map_err(Error::Transport)
-    }`;
-  }).join('\n');
+    }
+}
+`];
+  }));
   const failureVariants = Object.values(document.paths).filter(route => route.post).map(route => {
     const op = route.post;
     const name = op.operationId[0].toUpperCase() + op.operationId.slice(1);
     const type = op.responses['400'].content['application/json'].schema.$ref.split('/').at(-1);
     return `    ${name}(Box<${type}>),`;
   }).join('\n');
-  return `// Generated from OpenAPI. Do not edit.
+  const connection = `// Generated from OpenAPI. Do not edit.
 use crate::types::{${[...imports].sort().join(', ')}};
 pub const PROTOCOL_VERSION: u32 = ${version};
 #[derive(Debug, serde::Serialize)]
@@ -135,7 +139,8 @@ impl HttpClient {
         }
         Ok(client)
     }
-${methods}
 }
+${Object.keys(methods).map(path => `include!("${path}");`).join('\n')}
 `;
+  return { 'client.rs': connection, ...methods };
 }

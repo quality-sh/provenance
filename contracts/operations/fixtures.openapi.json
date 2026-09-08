@@ -13,7 +13,8 @@
           "statement"
         ],
         "title": "CheckStatementRequest",
-        "type": "object"
+        "type": "object",
+        "x-provenance-model-family": "CheckStatementInput"
       },
       "EvidenceOutput": {
         "description": "The envelope every query primitive answers in.\n\nThe protocol version travels with the answer, so a caller holding a\nrecorded response can tell which contract produced it, `operation`\nnames which primitive it came from, and `stamp` says what the answer\nreflects.",
@@ -140,7 +141,8 @@
           "reviews_has_more"
         ],
         "title": "QueryResponse",
-        "type": "object"
+        "type": "object",
+        "x-provenance-model-family": "EvidenceOutput"
       },
       "EvidenceOutputEvidenceDiffSite": {
         "description": "One graph-cited evidence site resolved against both ends of a diff.",
@@ -639,7 +641,8 @@
           "found"
         ],
         "title": "QueryResponse",
-        "type": "object"
+        "type": "object",
+        "x-provenance-model-family": "GetOutput"
       },
       "GetOutputArtifactLink": {
         "properties": {
@@ -1794,7 +1797,8 @@
             "type": "object"
           }
         ],
-        "title": "GraphNode"
+        "title": "GraphNode",
+        "x-provenance-model-family": "GraphNodeOutput"
       },
       "GraphNodeOutputArtifactLink": {
         "properties": {
@@ -2727,7 +2731,8 @@
           "affected_rules"
         ],
         "title": "TypedSpecPlan",
-        "type": "object"
+        "type": "object",
+        "x-provenance-model-family": "PlanOutput"
       },
       "PlanOutputAffectedRule": {
         "description": "One Rule a change reaches, with the code that stands behind it.",
@@ -3132,7 +3137,8 @@
           "findings"
         ],
         "title": "Report",
-        "type": "object"
+        "type": "object",
+        "x-provenance-model-family": "ReportOutput"
       },
       "ReportOutputFinding": {
         "description": "One nonconformance found in descriptive text.",
@@ -3250,7 +3256,8 @@
           "text"
         ],
         "title": "SearchQuery",
-        "type": "object"
+        "type": "object",
+        "x-provenance-model-family": "SearchInput"
       },
       "SearchInputNodeType": {
         "enum": [
@@ -3311,7 +3318,8 @@
           "declared_by"
         ],
         "title": "TypedSpecInput",
-        "type": "object"
+        "type": "object",
+        "x-provenance-model-family": "TypedSpecInput"
       },
       "TypedSpecInputDeclarationAddress": {
         "description": "One owner-local path to a language-authored declaration.",
@@ -3638,7 +3646,8 @@
           "started_at"
         ],
         "title": "VerificationRun",
-        "type": "object"
+        "type": "object",
+        "x-provenance-model-family": "VerificationRunOutput"
       },
       "VerificationRunOutputScopeId": {
         "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",

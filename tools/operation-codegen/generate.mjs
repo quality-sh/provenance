@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import openapiTS, { astToString } from 'openapi-typescript';
 import { compareTrees } from './inventory.mjs';
-import { rustClient, typescriptClient } from './templates.mjs';
+import { rustClientFiles, typescriptClient } from './templates.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 function run(command, args) {
@@ -22,13 +22,17 @@ try {
   const openapiPath = join(temporary, directories[0], 'openapi.json');
   const document = JSON.parse(await readFile(openapiPath, 'utf8'));
   const tsDir = join(temporary, directories[1]);
-  await writeFile(join(tsDir, 'schema.ts'), astToString(await openapiTS(document)));
+  await writeFile(join(tsDir, 'schema.ts'), astToString(await openapiTS(document, { defaultNonNullable: false })));
   await writeFile(join(tsDir, 'client.ts'), typescriptClient(document));
   const rustDir = join(temporary, directories[2]);
   run(generator, ['rust', openapiPath, rustDir]);
-  await writeFile(join(rustDir, 'client.rs'), rustClient(document));
+  const clientFiles = rustClientFiles(document);
+  for (const [path, source] of Object.entries(clientFiles)) {
+    await mkdir(dirname(join(rustDir, path)), { recursive: true });
+    await writeFile(join(rustDir, path), source);
+  }
   // rustfmt all outputs so drift compares the repository's normal format.
-  run('rustfmt', ['--edition', '2021', join(rustDir, 'client.rs')]);
+  run('rustfmt', ['--edition', '2021', ...Object.keys(clientFiles).map(path => join(rustDir, path))]);
   const oversized = await compareTrees(rustDir, rustDir);
   if (oversized.length) throw new Error(oversized.join('\n'));
   if (process.argv.includes('--check')) {

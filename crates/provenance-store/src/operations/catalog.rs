@@ -2,6 +2,7 @@
 
 mod context;
 mod entry;
+mod evidence;
 mod failures;
 mod invoke;
 mod records;
@@ -11,7 +12,7 @@ mod statement;
 
 pub use context::{
     ContextKind, ContextResolver, ExecutionNeed, ExecutionNeeds, PreparedContext, PreparedRead,
-    PreparedRepository, RequestedContext,
+    PreparedRepository, PreparedScope, RequestedContext,
 };
 pub use entry::{Operation, OperationFuture, WireSchema};
 pub use invoke::{invoke, invoke_typed, invoke_with};
@@ -28,3 +29,7 @@ pub use records::{Get, Info, Neighbors, Search, Trace};
 pub fn contains(operation: &str) -> bool {
     entry::entries().iter().any(|entry| entry.name == operation)
 }
+
+pub use evidence::{
+    Evidence, Impact, ResolveSymbol, Stale, VerificationBindings, VerificationRuns,
+};

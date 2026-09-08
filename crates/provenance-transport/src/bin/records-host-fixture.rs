@@ -13,6 +13,7 @@ use tokio::io::AsyncReadExt;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let first = Repository::new("The first shared graph is selected.");
     first.all_kinds();
+    let evidence_base = first.evidence();
     first.add_scope("other", "The other shared scope is selected.");
     queries::get(
         Some(first.dir.path().to_str().unwrap().into()),
@@ -73,7 +74,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?);
     println!(
         "{}",
-        json!({"url":format!("http://{authority}"),"bearer":"fixture-secret","targets":{"first":"first","second":"second"},"nodes":{"domain":"domain_shared","boundary":"boundary_shared","requirement":"req_shared","rule":"rule_shared","source":"source_shared","resolution":"resolution_shared","topic":"topic_shared","question":"question_shared"},"shared_rule":"rule_shared","expected":{"first":"The saved first shared graph is selected.","second":"The second shared graph is selected.","other":"The other shared scope is selected."},"stale_target":"stale","unmaterialized_target":"unmaterialized","denied_target":"denied"})
+        json!({"evidence":{"rule_id":"rule_shared","file":"code.rs","base":evidence_base,"target":"first","no_git_target":"second"},"url":format!("http://{authority}"),"bearer":"fixture-secret","targets":{"first":"first","second":"second"},"nodes":{"domain":"domain_shared","boundary":"boundary_shared","requirement":"req_shared","rule":"rule_shared","source":"source_shared","resolution":"resolution_shared","topic":"topic_shared","question":"question_shared"},"shared_rule":"rule_shared","expected":{"first":"The saved first shared graph is selected.","second":"The second shared graph is selected.","other":"The other shared scope is selected."},"stale_target":"stale","unmaterialized_target":"unmaterialized","denied_target":"denied"})
     );
     std::io::stdout().flush()?;
     let closing = host.clone();

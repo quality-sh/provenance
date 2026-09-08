@@ -8,6 +8,11 @@ impl ::std::ops::Deref for MetadataOutputProtocolVersion {
         &self.0
     }
 }
+impl ::std::convert::From<MetadataOutputProtocolVersion> for i64 {
+    fn from(value: MetadataOutputProtocolVersion) -> Self {
+        value.0
+    }
+}
 impl ::std::convert::TryFrom<i64> for MetadataOutputProtocolVersion {
     type Error = self::error::ConversionError;
     fn try_from(

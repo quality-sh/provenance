@@ -5,6 +5,14 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ReadFailure {
+    #[error("repository file access denied")]
+    FileAccessDenied,
+    #[error("secure repository file access unavailable")]
+    FileUnavailable,
+    #[error("Git capability unavailable")]
+    GitUnavailable,
+    #[error("Git revision does not name a commit")]
+    GitRevisionNotFound,
     #[error("no projection; run provenance materialize")]
     NoProjection,
     #[error("projection differs from canonical state")]

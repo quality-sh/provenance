@@ -2,6 +2,14 @@
 #[derive(::serde::Deserialize, ::serde::Serialize, Clone, Debug)]
 #[serde(tag = "kind")]
 pub enum NeighborsFailureOutputReadFailure {
+    #[serde(rename = "file_access_denied")]
+    FileAccessDenied,
+    #[serde(rename = "file_unavailable")]
+    FileUnavailable,
+    #[serde(rename = "git_unavailable")]
+    GitUnavailable,
+    #[serde(rename = "git_revision_not_found")]
+    GitRevisionNotFound,
     #[serde(rename = "no_projection")]
     NoProjection,
     #[serde(rename = "stale")]

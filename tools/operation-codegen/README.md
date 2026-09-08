@@ -11,7 +11,8 @@ production types; its operations are not registered or exposed by Phase 1.
 
 Tools are pinned in Cargo.lock and this directory's package-lock.json:
 
-- openapi-typescript 7.13.0 generates TypeScript types.
+- openapi-typescript 7.13.0 generates TypeScript types with
+  `defaultNonNullable: false`. Schema defaults do not make input fields required.
 - typify 0.7.0 generates Rust types. The exporter converts JSON Schema `const`
   to a one-value `enum` and rewrites references for its draft-7 input reader.
   Disjoint, required `kind` tags permit an equivalent `anyOf` to `oneOf`
@@ -23,9 +24,12 @@ Tools are pinned in Cargo.lock and this directory's package-lock.json:
   refusal, and the named method's refusal for 201.
 - Checked source templates generate named HTTP methods from OpenAPI operation IDs.
 
-Each generated Rust file contains one model and its implementations.
+Each generated Rust model file contains its implementations, including reverse
+conversions to primitive types. Directional schema roots declare their model
+family in OpenAPI; each family owns an include index. Named operation methods
+have separate files, and connection setup remains in the shared client file.
 Generation removes Typify's repeated schema doc blocks; OpenAPI keeps the schema.
-A model group over 500 lines stops generation. Generated output is never edited.
+A model, family index, or other generated Rust file over 500 lines stops generation. Generated output is never edited.
 
 Run `npm ci --prefix tools/operation-codegen`, then:
 
@@ -36,6 +40,7 @@ node --test tools/operation-codegen/*.test.mjs
 cargo test -p provenance-http-client
 node tools/operation-codegen/test-clients.mjs statements
 node tools/operation-codegen/test-clients.mjs records
+node tools/operation-codegen/test-clients.mjs evidence
 node tools/operation-codegen/generate.mjs --check
 ```
 
@@ -47,7 +52,9 @@ waits for the test host to stop. This listener requires the transport test-fixtu
 feature; it is not a production listener. The records fixture selects opaque
 repository names, exercises separate scopes and freshness policies, and uses a
 fixed test bearer credential. Both clients preserve each method's declared
-failure family.
+failure family. The evidence fixture adds two real Git commits and complete
+verification records. Its checks cover all four cuts, null and omitted fields,
+list scope and filters, and typed file and Git refusals.
 
 `--check` writes to a temporary directory and compares the full file inventory
 and file bytes. Missing, stale, changed, and oversized files fail. Tests mutate
@@ -62,5 +69,7 @@ both metadata and operation requests. The Rust error contains a named
 TypeScript error contains a union of the operation failure envelopes.
 
 The generated Rust module allows only Typify's `if_not_else` conversion style
-and explicit default helpers (`missing_const_for_fn`, `derivable_impls`).
+and explicit default helpers (`missing_const_for_fn`, `derivable_impls`,
+`default_trait_access`). Models with more than three declared Boolean fields
+retain those wire fields with a local `struct_excessive_bools` allowance.
 Handwritten code keeps the normal workspace lint settings.

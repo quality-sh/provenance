@@ -8,6 +8,11 @@ impl ::std::ops::Deref for NeighborsSuccessOutputScopeId {
         &self.0
     }
 }
+impl ::std::convert::From<NeighborsSuccessOutputScopeId> for ::std::string::String {
+    fn from(value: NeighborsSuccessOutputScopeId) -> Self {
+        value.0
+    }
+}
 impl ::std::str::FromStr for NeighborsSuccessOutputScopeId {
     type Err = self::error::ConversionError;
     fn from_str(

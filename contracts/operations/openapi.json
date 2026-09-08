@@ -20,7 +20,8 @@
           "error"
         ],
         "title": "FailureEnvelope",
-        "type": "object"
+        "type": "object",
+        "x-provenance-model-family": "CheckStatementFailureOutput"
       },
       "CheckStatementFailureOutputInvalidInputReason": {
         "enum": [
@@ -190,7 +191,8 @@
           "request"
         ],
         "title": "DataFreeCall",
-        "type": "object"
+        "type": "object",
+        "x-provenance-model-family": "CheckStatementRequestInput"
       },
       "CheckStatementRequestInputCheckStatementRequest": {
         "additionalProperties": false,
@@ -231,7 +233,8 @@
           "findings"
         ],
         "title": "Report",
-        "type": "object"
+        "type": "object",
+        "x-provenance-model-family": "CheckStatementSuccessOutput"
       },
       "CheckStatementSuccessOutputFinding": {
         "description": "One nonconformance found in descriptive text.",
@@ -310,6 +313,1037 @@
         "minimum": 0,
         "type": "integer"
       },
+      "EvidenceFailureOutput": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/EvidenceFailureOutputOperationError"
+          },
+          "operation": {
+            "const": "evidence",
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "error"
+        ],
+        "title": "FailureEnvelope",
+        "type": "object",
+        "x-provenance-model-family": "EvidenceFailureOutput"
+      },
+      "EvidenceFailureOutputInvalidInputReason": {
+        "enum": [
+          "required",
+          "invalid_value",
+          "malformed_json",
+          "unknown_field",
+          "too_large"
+        ],
+        "type": "string"
+      },
+      "EvidenceFailureOutputMovedUnit": {
+        "properties": {
+          "live": {
+            "type": "string"
+          },
+          "stored": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "unit",
+          "stored",
+          "live"
+        ],
+        "type": "object"
+      },
+      "EvidenceFailureOutputOperationError": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/EvidenceFailureOutputOperationFailure"
+          },
+          {
+            "$ref": "#/components/schemas/EvidenceFailureOutputReadFailure"
+          }
+        ],
+        "description": "Keeps the handler's native error separate from preparation failure."
+      },
+      "EvidenceFailureOutputOperationFailure": {
+        "oneOf": [
+          {
+            "properties": {
+              "field": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "const": "invalid_input",
+                "type": "string"
+              },
+              "reason": {
+                "$ref": "#/components/schemas/EvidenceFailureOutputInvalidInputReason"
+              }
+            },
+            "required": [
+              "kind",
+              "field",
+              "reason"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "protocol_mismatch",
+                "type": "string"
+              },
+              "requested": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "supported": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "requested",
+              "supported"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_operation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unauthenticated",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "access_denied",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_target",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_scope",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unavailable_needs",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "internal",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "EvidenceFailureOutputReadFailure": {
+        "oneOf": [
+          {
+            "properties": {
+              "kind": {
+                "const": "file_access_denied",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "file_unavailable",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "git_unavailable",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "git_revision_not_found",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "no_projection",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "digest": {
+                "type": "string"
+              },
+              "instance_id": {
+                "type": "string"
+              },
+              "kind": {
+                "const": "stale",
+                "type": "string"
+              },
+              "moved": {
+                "items": {
+                  "$ref": "#/components/schemas/EvidenceFailureOutputMovedUnit"
+                },
+                "type": "array"
+              },
+              "serial": {
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "serial",
+              "digest",
+              "instance_id",
+              "moved"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unit_unreadable",
+                "type": "string"
+              },
+              "unit": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "unit"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "schema_behind",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "half_migrated",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "read_failed",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "EvidenceRequestInput": {
+        "additionalProperties": false,
+        "properties": {
+          "context": {
+            "$ref": "#/components/schemas/EvidenceRequestInputRepositoryContext"
+          },
+          "request": {
+            "$ref": "#/components/schemas/EvidenceRequestInputEvidenceQuery"
+          }
+        },
+        "required": [
+          "context",
+          "request"
+        ],
+        "title": "RepositoryCall",
+        "type": "object",
+        "x-provenance-model-family": "EvidenceRequestInput"
+      },
+      "EvidenceRequestInputEvidenceQuery": {
+        "additionalProperties": false,
+        "description": "Read everything standing behind one Rule.\n\n`base` is what makes the stale report computable: stale means the code\ncarrying the evidence changed, and that is read from a diff. Without a\nbase the response says so rather than guessing.",
+        "properties": {
+          "base": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "head": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "include_retired": {
+            "default": false,
+            "type": "boolean"
+          },
+          "limit": {
+            "default": 50,
+            "format": "uint",
+            "maximum": 200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "protocol_version": {
+            "default": null,
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "rule": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "rule"
+        ],
+        "type": "object"
+      },
+      "EvidenceRequestInputFreshnessPolicy": {
+        "description": "Which freshness step a read runs before it answers.",
+        "oneOf": [
+          {
+            "const": "catch_up",
+            "description": "Run catch-up under the publication guard, then answer.",
+            "type": "string"
+          },
+          {
+            "const": "annotate_only",
+            "description": "Answer at the stored serial without a freshness step.",
+            "type": "string"
+          },
+          {
+            "const": "refuse_stale",
+            "description": "Refuse when the stored projection differs from canonical state.",
+            "type": "string"
+          }
+        ]
+      },
+      "EvidenceRequestInputRepositoryContext": {
+        "additionalProperties": false,
+        "properties": {
+          "freshness": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EvidenceRequestInputFreshnessPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "repository": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "repository",
+          "scope"
+        ],
+        "type": "object"
+      },
+      "EvidenceSuccessOutput": {
+        "description": "The envelope every query primitive answers in.\n\nThe protocol version travels with the answer, so a caller holding a\nrecorded response can tell which contract produced it, `operation`\nnames which primitive it came from, and `stamp` says what the answer\nreflects.",
+        "properties": {
+          "freshness_cause": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EvidenceSuccessOutputFreshnessCause"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "freshness_error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "has_more": {
+            "type": "boolean"
+          },
+          "implementation_bindings": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceSuccessOutputImplementationBinding"
+            },
+            "type": "array"
+          },
+          "implementation_bindings_has_more": {
+            "default": false,
+            "description": "The cut flag of each list; `has_more` is the OR of the four.",
+            "type": "boolean"
+          },
+          "latest_verification_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EvidenceSuccessOutputVerificationRun"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "limit": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "operation": {
+            "const": "evidence",
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          },
+          "review_required": {
+            "type": "boolean"
+          },
+          "reviews": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceSuccessOutputRequirementReview"
+            },
+            "type": "array"
+          },
+          "reviews_has_more": {
+            "default": false,
+            "type": "boolean"
+          },
+          "rule_id": {
+            "type": "string"
+          },
+          "stale": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EvidenceSuccessOutputStaleEvidence"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stamp": {
+            "$ref": "#/components/schemas/EvidenceSuccessOutputStamp"
+          },
+          "verification_bindings": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceSuccessOutputVerificationBinding"
+            },
+            "type": "array"
+          },
+          "verification_bindings_has_more": {
+            "default": false,
+            "type": "boolean"
+          },
+          "verification_runs": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceSuccessOutputVerificationRun"
+            },
+            "type": "array"
+          },
+          "verification_runs_has_more": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "operation",
+          "stamp",
+          "rule_id",
+          "limit",
+          "has_more",
+          "implementation_bindings",
+          "verification_bindings",
+          "verification_runs",
+          "review_required",
+          "reviews",
+          "stale",
+          "implementation_bindings_has_more",
+          "verification_bindings_has_more",
+          "verification_runs_has_more",
+          "reviews_has_more"
+        ],
+        "title": "QueryResponse",
+        "type": "object",
+        "x-provenance-model-family": "EvidenceSuccessOutput"
+      },
+      "EvidenceSuccessOutputEvidenceDiffSite": {
+        "description": "One graph-cited evidence site resolved against both ends of a diff.",
+        "properties": {
+          "end_line": {
+            "format": "uint",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "file_path": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/EvidenceSuccessOutputEvidenceSiteKind"
+          },
+          "line": {
+            "format": "uint",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "original_file_path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "original_line": {
+            "format": "uint",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/EvidenceSuccessOutputEvidenceDiffState"
+          },
+          "subject_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "subject_id",
+          "file_path",
+          "state"
+        ],
+        "type": "object"
+      },
+      "EvidenceSuccessOutputEvidenceDiffState": {
+        "description": "How one graph evidence path relates to a selected Git diff.",
+        "enum": [
+          "untouched",
+          "touched",
+          "moved",
+          "gone"
+        ],
+        "type": "string"
+      },
+      "EvidenceSuccessOutputEvidenceSiteKind": {
+        "description": "The graph relationship that makes a path evidence.",
+        "enum": [
+          "rule_binding",
+          "verification",
+          "annotation",
+          "source_reference"
+        ],
+        "type": "string"
+      },
+      "EvidenceSuccessOutputFreshnessCause": {
+        "description": "The stage that failed is known even when its lower-level error is not public.",
+        "enum": [
+          "catch_up_failed"
+        ],
+        "type": "string"
+      },
+      "EvidenceSuccessOutputImplementationBinding": {
+        "description": "One canonical primary implementation relationship from an exported\nproduction symbol to a Rule.",
+        "properties": {
+          "declared_by": {
+            "type": "string"
+          },
+          "file": {
+            "type": "string"
+          },
+          "id": {
+            "$ref": "#/components/schemas/EvidenceSuccessOutputStableId"
+          },
+          "retired": {
+            "type": "boolean"
+          },
+          "rule_id": {
+            "$ref": "#/components/schemas/EvidenceSuccessOutputStableId"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/EvidenceSuccessOutputScopeId"
+          },
+          "symbol": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "rule_id",
+          "declared_by",
+          "file",
+          "symbol"
+        ],
+        "type": "object"
+      },
+      "EvidenceSuccessOutputRequirementReview": {
+        "description": "One record of a Rule whose evidence needs review because the Requirement\nit serves was restated.\n\nThe record keeps why review was asked for. A verification run arriving\nafter the change clears it in place rather than removing the reason.",
+        "properties": {
+          "after": {
+            "type": "string"
+          },
+          "before": {
+            "type": "string"
+          },
+          "changed_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "cleared_at": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "cleared_by_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EvidenceSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "field": {
+            "type": "string"
+          },
+          "id": {
+            "$ref": "#/components/schemas/EvidenceSuccessOutputStableId"
+          },
+          "requirement_id": {
+            "$ref": "#/components/schemas/EvidenceSuccessOutputStableId"
+          },
+          "rule_id": {
+            "$ref": "#/components/schemas/EvidenceSuccessOutputStableId"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/EvidenceSuccessOutputScopeId"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "rule_id",
+          "requirement_id",
+          "field",
+          "before",
+          "after",
+          "changed_at"
+        ],
+        "type": "object"
+      },
+      "EvidenceSuccessOutputScopeId": {
+        "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "EvidenceSuccessOutputStableId": {
+        "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "EvidenceSuccessOutputStaleEvidence": {
+        "description": "What a commit range did to the code carrying a Rule's evidence.",
+        "properties": {
+          "base": {
+            "type": "string"
+          },
+          "head": {
+            "type": "string"
+          },
+          "sites": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceSuccessOutputEvidenceDiffSite"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "base",
+          "head",
+          "sites"
+        ],
+        "type": "object"
+      },
+      "EvidenceSuccessOutputStamp": {
+        "description": "What a query answer reflects: the projection revision the rows came\nfrom, the freshness step the reader ran, and which parts of the answer\nthe revision covers.\n\n`serial` and `digest` name the latest `projection_revision` row and\n`instance_id` the `projection_instance` row; serials compare only within\none instance. `attested` names the projection tables behind the answer.\n`live` names what the stamp does not cover, from a closed list:\n`canonical` (canonical shards), `scanned_sites` (a working-tree scan),\n`verification_runs` (cache JSONL), and `diff` (git). A stamp never\nimplies freshness for anything it does not list.",
+        "properties": {
+          "attested": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "derivation": {
+            "description": "The reader logic version. It moves when the reader answers\ndifferently over the same rows, never for a migration.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "instance_id": {
+            "type": "string"
+          },
+          "live": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/EvidenceSuccessOutputStampPolicy"
+          },
+          "serial": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "serial",
+          "digest",
+          "instance_id",
+          "derivation",
+          "policy",
+          "attested",
+          "live"
+        ],
+        "type": "object"
+      },
+      "EvidenceSuccessOutputStampPolicy": {
+        "description": "The freshness step a read ran before it answered.",
+        "oneOf": [
+          {
+            "const": "catch_up",
+            "description": "Catch-up ran under the publication guard and the answer is at or\nafter the serial it committed.",
+            "type": "string"
+          },
+          {
+            "const": "annotate_only",
+            "description": "No freshness step; the answer is at the stored serial.",
+            "type": "string"
+          },
+          {
+            "const": "refuse_stale",
+            "description": "Reserved: a read refuses when the projection is behind.",
+            "type": "string"
+          },
+          {
+            "const": "catch_up_failed",
+            "description": "Catch-up failed and the answer is at the stored serial; the error\ntext travels in `freshness_error`.",
+            "type": "string"
+          }
+        ]
+      },
+      "EvidenceSuccessOutputVerificationBinding": {
+        "description": "One durable language-authored relationship from a code site to a Rule.",
+        "properties": {
+          "declared_by": {
+            "type": "string"
+          },
+          "file": {
+            "type": "string"
+          },
+          "id": {
+            "$ref": "#/components/schemas/EvidenceSuccessOutputStableId"
+          },
+          "key": {
+            "type": "string"
+          },
+          "method": {
+            "$ref": "#/components/schemas/EvidenceSuccessOutputVerificationMethod"
+          },
+          "retired": {
+            "type": "boolean"
+          },
+          "rule_id": {
+            "$ref": "#/components/schemas/EvidenceSuccessOutputStableId"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/EvidenceSuccessOutputScopeId"
+          },
+          "symbol": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "rule_id",
+          "key",
+          "method",
+          "declared_by",
+          "file"
+        ],
+        "type": "object"
+      },
+      "EvidenceSuccessOutputVerificationMethod": {
+        "description": "How a verification binding supports its Rule.",
+        "enum": [
+          "exhaustion",
+          "property",
+          "examples",
+          "conformance",
+          "construction",
+          "proof"
+        ],
+        "type": "string"
+      },
+      "EvidenceSuccessOutputVerificationRun": {
+        "description": "Volatile evidence from one language-owned verification callback.\n\nRuns live in Provenance's derived cache rather than canonical state: a\nlocal test run must not dirty the repository. `rule_id` is the join back\nto the canonical graph.",
+        "properties": {
+          "binding_id": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EvidenceSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "commit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "completed_at": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "declared_by": {
+            "type": "string"
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "file": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/EvidenceSuccessOutputStableId"
+          },
+          "method": {
+            "type": "string"
+          },
+          "rule_id": {
+            "$ref": "#/components/schemas/EvidenceSuccessOutputStableId"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/EvidenceSuccessOutputScopeId"
+          },
+          "started_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/components/schemas/EvidenceSuccessOutputVerificationRunStatus"
+          },
+          "symbol": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "rule_id",
+          "method",
+          "declared_by",
+          "status",
+          "started_at"
+        ],
+        "type": "object"
+      },
+      "EvidenceSuccessOutputVerificationRunStatus": {
+        "description": "The lifecycle state of one callback-backed verification run.",
+        "enum": [
+          "running",
+          "passed",
+          "failed"
+        ],
+        "type": "string"
+      },
       "GetFailureOutput": {
         "properties": {
           "error": {
@@ -329,7 +1363,8 @@
           "error"
         ],
         "title": "FailureEnvelope",
-        "type": "object"
+        "type": "object",
+        "x-provenance-model-family": "GetFailureOutput"
       },
       "GetFailureOutputInvalidInputReason": {
         "enum": [
@@ -511,6 +1546,54 @@
           {
             "properties": {
               "kind": {
+                "const": "file_access_denied",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "file_unavailable",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "git_unavailable",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "git_revision_not_found",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
                 "const": "no_projection",
                 "type": "string"
               }
@@ -621,7 +1704,8 @@
           "request"
         ],
         "title": "RepositoryCall",
-        "type": "object"
+        "type": "object",
+        "x-provenance-model-family": "GetRequestInput"
       },
       "GetRequestInputFreshnessPolicy": {
         "description": "Which freshness step a read runs before it answers.",
@@ -764,7 +1848,8 @@
           "found"
         ],
         "title": "QueryResponse",
-        "type": "object"
+        "type": "object",
+        "x-provenance-model-family": "GetSuccessOutput"
       },
       "GetSuccessOutputArtifactLink": {
         "properties": {
@@ -1811,6 +2896,717 @@
         ],
         "type": "string"
       },
+      "ImpactFailureOutput": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ImpactFailureOutputOperationError"
+          },
+          "operation": {
+            "const": "impact",
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "error"
+        ],
+        "title": "FailureEnvelope",
+        "type": "object",
+        "x-provenance-model-family": "ImpactFailureOutput"
+      },
+      "ImpactFailureOutputInvalidInputReason": {
+        "enum": [
+          "required",
+          "invalid_value",
+          "malformed_json",
+          "unknown_field",
+          "too_large"
+        ],
+        "type": "string"
+      },
+      "ImpactFailureOutputMovedUnit": {
+        "properties": {
+          "live": {
+            "type": "string"
+          },
+          "stored": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "unit",
+          "stored",
+          "live"
+        ],
+        "type": "object"
+      },
+      "ImpactFailureOutputOperationError": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ImpactFailureOutputOperationFailure"
+          },
+          {
+            "$ref": "#/components/schemas/ImpactFailureOutputReadFailure"
+          }
+        ],
+        "description": "Keeps the handler's native error separate from preparation failure."
+      },
+      "ImpactFailureOutputOperationFailure": {
+        "oneOf": [
+          {
+            "properties": {
+              "field": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "const": "invalid_input",
+                "type": "string"
+              },
+              "reason": {
+                "$ref": "#/components/schemas/ImpactFailureOutputInvalidInputReason"
+              }
+            },
+            "required": [
+              "kind",
+              "field",
+              "reason"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "protocol_mismatch",
+                "type": "string"
+              },
+              "requested": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "supported": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "requested",
+              "supported"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_operation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unauthenticated",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "access_denied",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_target",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_scope",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unavailable_needs",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "internal",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "ImpactFailureOutputReadFailure": {
+        "oneOf": [
+          {
+            "properties": {
+              "kind": {
+                "const": "file_access_denied",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "file_unavailable",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "git_unavailable",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "git_revision_not_found",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "no_projection",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "digest": {
+                "type": "string"
+              },
+              "instance_id": {
+                "type": "string"
+              },
+              "kind": {
+                "const": "stale",
+                "type": "string"
+              },
+              "moved": {
+                "items": {
+                  "$ref": "#/components/schemas/ImpactFailureOutputMovedUnit"
+                },
+                "type": "array"
+              },
+              "serial": {
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "serial",
+              "digest",
+              "instance_id",
+              "moved"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unit_unreadable",
+                "type": "string"
+              },
+              "unit": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "unit"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "schema_behind",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "half_migrated",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "read_failed",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "ImpactRequestInput": {
+        "additionalProperties": false,
+        "properties": {
+          "context": {
+            "$ref": "#/components/schemas/ImpactRequestInputRepositoryContext"
+          },
+          "request": {
+            "$ref": "#/components/schemas/ImpactRequestInputImpactQuery"
+          }
+        },
+        "required": [
+          "context",
+          "request"
+        ],
+        "title": "RepositoryCall",
+        "type": "object",
+        "x-provenance-model-family": "ImpactRequestInput"
+      },
+      "ImpactRequestInputFreshnessPolicy": {
+        "description": "Which freshness step a read runs before it answers.",
+        "oneOf": [
+          {
+            "const": "catch_up",
+            "description": "Run catch-up under the publication guard, then answer.",
+            "type": "string"
+          },
+          {
+            "const": "annotate_only",
+            "description": "Answer at the stored serial without a freshness step.",
+            "type": "string"
+          },
+          {
+            "const": "refuse_stale",
+            "description": "Refuse when the stored projection differs from canonical state.",
+            "type": "string"
+          }
+        ]
+      },
+      "ImpactRequestInputImpactQuery": {
+        "additionalProperties": false,
+        "description": "Read the Rules a record reaches, with the code standing behind them.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "include_retired": {
+            "default": false,
+            "type": "boolean"
+          },
+          "limit": {
+            "default": 50,
+            "format": "uint",
+            "maximum": 200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "node_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImpactRequestInputNodeType"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "protocol_version": {
+            "default": null,
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "ImpactRequestInputNodeType": {
+        "enum": [
+          "source",
+          "requirement",
+          "resolution",
+          "rule",
+          "topic",
+          "question",
+          "domain",
+          "boundary"
+        ],
+        "type": "string"
+      },
+      "ImpactRequestInputRepositoryContext": {
+        "additionalProperties": false,
+        "properties": {
+          "freshness": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImpactRequestInputFreshnessPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "repository": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "repository",
+          "scope"
+        ],
+        "type": "object"
+      },
+      "ImpactSuccessOutput": {
+        "description": "The envelope every query primitive answers in.\n\nThe protocol version travels with the answer, so a caller holding a\nrecorded response can tell which contract produced it, `operation`\nnames which primitive it came from, and `stamp` says what the answer\nreflects.",
+        "properties": {
+          "affected_rules": {
+            "items": {
+              "$ref": "#/components/schemas/ImpactSuccessOutputAffectedRule"
+            },
+            "type": "array"
+          },
+          "freshness_cause": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImpactSuccessOutputFreshnessCause"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "freshness_error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "has_more": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "limit": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "operation": {
+            "const": "impact",
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          },
+          "scan_cut": {
+            "default": false,
+            "description": "The working-tree scan stopped at the configured file count, so the\nscanned sites are a lower bound.",
+            "type": "boolean"
+          },
+          "stamp": {
+            "$ref": "#/components/schemas/ImpactSuccessOutputStamp"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "operation",
+          "stamp",
+          "id",
+          "limit",
+          "has_more",
+          "affected_rules",
+          "scan_cut"
+        ],
+        "title": "QueryResponse",
+        "type": "object",
+        "x-provenance-model-family": "ImpactSuccessOutput"
+      },
+      "ImpactSuccessOutputAffectedRule": {
+        "description": "One Rule a change reaches, with the code that stands behind it.",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/ImpactSuccessOutputStableId"
+          },
+          "implementations": {
+            "items": {
+              "$ref": "#/components/schemas/ImpactSuccessOutputImplementationSite"
+            },
+            "type": "array"
+          },
+          "verifications": {
+            "items": {
+              "$ref": "#/components/schemas/ImpactSuccessOutputVerificationSite"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "implementations",
+          "verifications"
+        ],
+        "type": "object"
+      },
+      "ImpactSuccessOutputFreshnessCause": {
+        "description": "The stage that failed is known even when its lower-level error is not public.",
+        "enum": [
+          "catch_up_failed"
+        ],
+        "type": "string"
+      },
+      "ImpactSuccessOutputImplementationSite": {
+        "description": "Where a Rule is implemented.",
+        "properties": {
+          "file": {
+            "type": "string"
+          },
+          "line": {
+            "format": "uint",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "symbol": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "type": "object"
+      },
+      "ImpactSuccessOutputStableId": {
+        "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "ImpactSuccessOutputStamp": {
+        "description": "What a query answer reflects: the projection revision the rows came\nfrom, the freshness step the reader ran, and which parts of the answer\nthe revision covers.\n\n`serial` and `digest` name the latest `projection_revision` row and\n`instance_id` the `projection_instance` row; serials compare only within\none instance. `attested` names the projection tables behind the answer.\n`live` names what the stamp does not cover, from a closed list:\n`canonical` (canonical shards), `scanned_sites` (a working-tree scan),\n`verification_runs` (cache JSONL), and `diff` (git). A stamp never\nimplies freshness for anything it does not list.",
+        "properties": {
+          "attested": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "derivation": {
+            "description": "The reader logic version. It moves when the reader answers\ndifferently over the same rows, never for a migration.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "instance_id": {
+            "type": "string"
+          },
+          "live": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/ImpactSuccessOutputStampPolicy"
+          },
+          "serial": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "serial",
+          "digest",
+          "instance_id",
+          "derivation",
+          "policy",
+          "attested",
+          "live"
+        ],
+        "type": "object"
+      },
+      "ImpactSuccessOutputStampPolicy": {
+        "description": "The freshness step a read ran before it answered.",
+        "oneOf": [
+          {
+            "const": "catch_up",
+            "description": "Catch-up ran under the publication guard and the answer is at or\nafter the serial it committed.",
+            "type": "string"
+          },
+          {
+            "const": "annotate_only",
+            "description": "No freshness step; the answer is at the stored serial.",
+            "type": "string"
+          },
+          {
+            "const": "refuse_stale",
+            "description": "Reserved: a read refuses when the projection is behind.",
+            "type": "string"
+          },
+          {
+            "const": "catch_up_failed",
+            "description": "Catch-up failed and the answer is at the stored serial; the error\ntext travels in `freshness_error`.",
+            "type": "string"
+          }
+        ]
+      },
+      "ImpactSuccessOutputVerificationSite": {
+        "description": "Where a Rule is verified, and how.",
+        "properties": {
+          "declared_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "file": {
+            "type": "string"
+          },
+          "key": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "line": {
+            "format": "uint",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "method": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "method",
+          "file"
+        ],
+        "type": "object"
+      },
       "InfoFailureOutput": {
         "properties": {
           "error": {
@@ -1830,7 +3626,8 @@
           "error"
         ],
         "title": "FailureEnvelope",
-        "type": "object"
+        "type": "object",
+        "x-provenance-model-family": "InfoFailureOutput"
       },
       "InfoFailureOutputInvalidInputReason": {
         "enum": [
@@ -2012,6 +3809,54 @@
           {
             "properties": {
               "kind": {
+                "const": "file_access_denied",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "file_unavailable",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "git_unavailable",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "git_revision_not_found",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
                 "const": "no_projection",
                 "type": "string"
               }
@@ -2122,7 +3967,8 @@
           "request"
         ],
         "title": "RepositoryCall",
-        "type": "object"
+        "type": "object",
+        "x-provenance-model-family": "InfoRequestInput"
       },
       "InfoRequestInputInfoRequest": {
         "additionalProperties": false,
@@ -2166,7 +4012,8 @@
           "repository"
         ],
         "title": "RepositoryInfo",
-        "type": "object"
+        "type": "object",
+        "x-provenance-model-family": "InfoSuccessOutput"
       },
       "MetadataOutput": {
         "properties": {
@@ -2183,7 +4030,8 @@
           "protocol_version"
         ],
         "title": "HostMetadata",
-        "type": "object"
+        "type": "object",
+        "x-provenance-model-family": "MetadataOutput"
       },
       "NeighborsFailureOutput": {
         "properties": {
@@ -2204,7 +4052,8 @@
           "error"
         ],
         "title": "FailureEnvelope",
-        "type": "object"
+        "type": "object",
+        "x-provenance-model-family": "NeighborsFailureOutput"
       },
       "NeighborsFailureOutputInvalidInputReason": {
         "enum": [
@@ -2386,6 +4235,54 @@
           {
             "properties": {
               "kind": {
+                "const": "file_access_denied",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "file_unavailable",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "git_unavailable",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "git_revision_not_found",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
                 "const": "no_projection",
                 "type": "string"
               }
@@ -2496,7 +4393,8 @@
           "request"
         ],
         "title": "RepositoryCall",
-        "type": "object"
+        "type": "object",
+        "x-provenance-model-family": "NeighborsRequestInput"
       },
       "NeighborsRequestInputDirection": {
         "description": "Which way a query follows a relation.\n\n`out` reads the relations the named record holds in its own fields, `in`\nreads the relations other records hold toward it, and `both` reads every\nrelation from either end.",
@@ -2680,7 +4578,8 @@
           "neighbors"
         ],
         "title": "QueryResponse",
-        "type": "object"
+        "type": "object",
+        "x-provenance-model-family": "NeighborsSuccessOutput"
       },
       "NeighborsSuccessOutputArtifactLink": {
         "properties": {
@@ -3756,6 +5655,1577 @@
         ],
         "type": "string"
       },
+      "ResolveSymbolFailureOutput": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ResolveSymbolFailureOutputOperationError"
+          },
+          "operation": {
+            "const": "resolve-symbol",
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "error"
+        ],
+        "title": "FailureEnvelope",
+        "type": "object",
+        "x-provenance-model-family": "ResolveSymbolFailureOutput"
+      },
+      "ResolveSymbolFailureOutputInvalidInputReason": {
+        "enum": [
+          "required",
+          "invalid_value",
+          "malformed_json",
+          "unknown_field",
+          "too_large"
+        ],
+        "type": "string"
+      },
+      "ResolveSymbolFailureOutputMovedUnit": {
+        "properties": {
+          "live": {
+            "type": "string"
+          },
+          "stored": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "unit",
+          "stored",
+          "live"
+        ],
+        "type": "object"
+      },
+      "ResolveSymbolFailureOutputOperationError": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ResolveSymbolFailureOutputOperationFailure"
+          },
+          {
+            "$ref": "#/components/schemas/ResolveSymbolFailureOutputReadFailure"
+          }
+        ],
+        "description": "Keeps the handler's native error separate from preparation failure."
+      },
+      "ResolveSymbolFailureOutputOperationFailure": {
+        "oneOf": [
+          {
+            "properties": {
+              "field": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "const": "invalid_input",
+                "type": "string"
+              },
+              "reason": {
+                "$ref": "#/components/schemas/ResolveSymbolFailureOutputInvalidInputReason"
+              }
+            },
+            "required": [
+              "kind",
+              "field",
+              "reason"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "protocol_mismatch",
+                "type": "string"
+              },
+              "requested": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "supported": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "requested",
+              "supported"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_operation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unauthenticated",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "access_denied",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_target",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_scope",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unavailable_needs",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "internal",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "ResolveSymbolFailureOutputReadFailure": {
+        "oneOf": [
+          {
+            "properties": {
+              "kind": {
+                "const": "file_access_denied",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "file_unavailable",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "git_unavailable",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "git_revision_not_found",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "no_projection",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "digest": {
+                "type": "string"
+              },
+              "instance_id": {
+                "type": "string"
+              },
+              "kind": {
+                "const": "stale",
+                "type": "string"
+              },
+              "moved": {
+                "items": {
+                  "$ref": "#/components/schemas/ResolveSymbolFailureOutputMovedUnit"
+                },
+                "type": "array"
+              },
+              "serial": {
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "serial",
+              "digest",
+              "instance_id",
+              "moved"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unit_unreadable",
+                "type": "string"
+              },
+              "unit": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "unit"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "schema_behind",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "half_migrated",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "read_failed",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "ResolveSymbolRequestInput": {
+        "additionalProperties": false,
+        "properties": {
+          "context": {
+            "$ref": "#/components/schemas/ResolveSymbolRequestInputRepositoryContext"
+          },
+          "request": {
+            "$ref": "#/components/schemas/ResolveSymbolRequestInputResolveSymbolQuery"
+          }
+        },
+        "required": [
+          "context",
+          "request"
+        ],
+        "title": "RepositoryCall",
+        "type": "object",
+        "x-provenance-model-family": "ResolveSymbolRequestInput"
+      },
+      "ResolveSymbolRequestInputFreshnessPolicy": {
+        "description": "Which freshness step a read runs before it answers.",
+        "oneOf": [
+          {
+            "const": "catch_up",
+            "description": "Run catch-up under the publication guard, then answer.",
+            "type": "string"
+          },
+          {
+            "const": "annotate_only",
+            "description": "Answer at the stored serial without a freshness step.",
+            "type": "string"
+          },
+          {
+            "const": "refuse_stale",
+            "description": "Refuse when the stored projection differs from canonical state.",
+            "type": "string"
+          }
+        ]
+      },
+      "ResolveSymbolRequestInputRepositoryContext": {
+        "additionalProperties": false,
+        "properties": {
+          "freshness": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResolveSymbolRequestInputFreshnessPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "repository": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "repository",
+          "scope"
+        ],
+        "type": "object"
+      },
+      "ResolveSymbolRequestInputResolveSymbolQuery": {
+        "additionalProperties": false,
+        "description": "Read the Rules bound to one code site.",
+        "properties": {
+          "file": {
+            "type": "string"
+          },
+          "include_retired": {
+            "default": false,
+            "type": "boolean"
+          },
+          "limit": {
+            "default": 50,
+            "format": "uint",
+            "maximum": 200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "line": {
+            "default": null,
+            "format": "uint",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "protocol_version": {
+            "default": null,
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "symbol": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "type": "object"
+      },
+      "ResolveSymbolSuccessOutput": {
+        "description": "The envelope every query primitive answers in.\n\nThe protocol version travels with the answer, so a caller holding a\nrecorded response can tell which contract produced it, `operation`\nnames which primitive it came from, and `stamp` says what the answer\nreflects.",
+        "properties": {
+          "file": {
+            "type": "string"
+          },
+          "freshness_cause": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResolveSymbolSuccessOutputFreshnessCause"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "freshness_error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "has_more": {
+            "type": "boolean"
+          },
+          "limit": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "operation": {
+            "const": "resolve-symbol",
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/ResolveSymbolSuccessOutputGraphNode"
+            },
+            "type": "array"
+          },
+          "stamp": {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStamp"
+          },
+          "symbol": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "protocol_version",
+          "operation",
+          "stamp",
+          "file",
+          "limit",
+          "has_more",
+          "rules"
+        ],
+        "title": "QueryResponse",
+        "type": "object",
+        "x-provenance-model-family": "ResolveSymbolSuccessOutput"
+      },
+      "ResolveSymbolSuccessOutputArtifactLink": {
+        "properties": {
+          "target_id": {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStableId"
+          },
+          "target_type": {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputArtifactLinkTargetType"
+          }
+        },
+        "required": [
+          "target_type",
+          "target_id"
+        ],
+        "type": "object"
+      },
+      "ResolveSymbolSuccessOutputArtifactLinkTargetType": {
+        "enum": [
+          "source",
+          "requirement",
+          "resolution",
+          "rule"
+        ],
+        "type": "string"
+      },
+      "ResolveSymbolSuccessOutputBoundary": {
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStableId"
+          },
+          "requirement_id": {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStableId"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputScopeId"
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResolveSymbolSuccessOutputSourceReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "statement": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "requirement_id",
+          "statement"
+        ],
+        "type": "object"
+      },
+      "ResolveSymbolSuccessOutputDeclarationAddress": {
+        "description": "One owner-local path to a language-authored declaration.",
+        "items": {
+          "pattern": "\\S",
+          "type": "string"
+        },
+        "minItems": 1,
+        "type": "array"
+      },
+      "ResolveSymbolSuccessOutputDomain": {
+        "properties": {
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStableId"
+          },
+          "name": {
+            "type": "string"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputScopeId"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "ResolveSymbolSuccessOutputFreshnessCause": {
+        "description": "The stage that failed is known even when its lower-level error is not public.",
+        "enum": [
+          "catch_up_failed"
+        ],
+        "type": "string"
+      },
+      "ResolveSymbolSuccessOutputGraphNode": {
+        "description": "One canonical record as a query hands it back.\n\nEach variant carries the record the store already writes, so a primitive\nnever invents a second vocabulary for a Requirement or a Rule. The\n`node_type` tag is the same word a relation row uses for its endpoints.",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputSource",
+            "properties": {
+              "node_type": {
+                "const": "source",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputRequirement",
+            "properties": {
+              "node_type": {
+                "const": "requirement",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputResolution",
+            "properties": {
+              "node_type": {
+                "const": "resolution",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputRule",
+            "properties": {
+              "node_type": {
+                "const": "rule",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputTopic",
+            "properties": {
+              "node_type": {
+                "const": "topic",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputQuestion",
+            "properties": {
+              "node_type": {
+                "const": "question",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputDomain",
+            "properties": {
+              "node_type": {
+                "const": "domain",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          },
+          {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputBoundary",
+            "properties": {
+              "node_type": {
+                "const": "boundary",
+                "type": "string"
+              }
+            },
+            "required": [
+              "node_type"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "ResolveSymbolSuccessOutputQuestion": {
+        "properties": {
+          "answer": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "claimed_at": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "claimed_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "contradicts": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStableId"
+          },
+          "links": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ResolveSymbolSuccessOutputArtifactLink"
+            },
+            "type": "array"
+          },
+          "question": {
+            "type": "string"
+          },
+          "requirement_id": {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStableId"
+          },
+          "resolution_id": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resolution_method": {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputResolutionMethod",
+            "description": "The verb that resolves this question, chosen when the question is minted."
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputScopeId"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputQuestionStatus"
+          },
+          "topic_id": {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStableId"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "topic_id",
+          "requirement_id",
+          "question",
+          "resolution_method",
+          "status",
+          "links"
+        ],
+        "type": "object"
+      },
+      "ResolveSymbolSuccessOutputQuestionStatus": {
+        "enum": [
+          "open",
+          "blocked_on_human",
+          "answered"
+        ],
+        "type": "string"
+      },
+      "ResolveSymbolSuccessOutputRequirement": {
+        "properties": {
+          "declaration_address": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResolveSymbolSuccessOutputDeclarationAddress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "declared_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "depends_on": {
+            "items": {
+              "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "domain_id": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fog": {
+            "description": "Deliberately unstructured free text: the dim view of decisions and\ninvestigations that are coming but cannot yet be phrased sharply.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStableId"
+          },
+          "origin_message": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "refines": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "retired": {
+            "type": "boolean"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputScopeId"
+          },
+          "source_refs": {
+            "items": {
+              "$ref": "#/components/schemas/ResolveSymbolSuccessOutputSourceReference"
+            },
+            "type": "array"
+          },
+          "spawned_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "statement": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputRequirementStatus"
+          },
+          "supersedes": {
+            "items": {
+              "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStableId"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "statement",
+          "status"
+        ],
+        "type": "object"
+      },
+      "ResolveSymbolSuccessOutputRequirementStatus": {
+        "enum": [
+          "active",
+          "discovery",
+          "refinement",
+          "resolved"
+        ],
+        "type": "string"
+      },
+      "ResolveSymbolSuccessOutputResolution": {
+        "properties": {
+          "approved_at": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "approved_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "confidence": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "context": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "enforcement": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStableId"
+          },
+          "inputs": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ResolveSymbolSuccessOutputResolutionInput"
+            },
+            "type": "array"
+          },
+          "made_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "origin_message": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "position": {
+            "type": "string"
+          },
+          "rationale": {
+            "type": "string"
+          },
+          "requirement_ids": {
+            "items": {
+              "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "review_on": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputScopeId"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputResolutionStatus"
+          },
+          "supersedes": {
+            "items": {
+              "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "title",
+          "position",
+          "rationale",
+          "status",
+          "inputs",
+          "review_on"
+        ],
+        "type": "object"
+      },
+      "ResolveSymbolSuccessOutputResolutionInput": {
+        "properties": {
+          "input_type": {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputResolutionInputType"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "input_type",
+          "reference",
+          "summary"
+        ],
+        "type": "object"
+      },
+      "ResolveSymbolSuccessOutputResolutionInputType": {
+        "enum": [
+          "regulatory",
+          "legal_advice",
+          "commercial",
+          "benchmark",
+          "technical",
+          "incident",
+          "source_material"
+        ],
+        "type": "string"
+      },
+      "ResolveSymbolSuccessOutputResolutionMethod": {
+        "enum": [
+          "grill",
+          "prototype",
+          "research",
+          "verify",
+          "task"
+        ],
+        "type": "string"
+      },
+      "ResolveSymbolSuccessOutputResolutionStatus": {
+        "enum": [
+          "draft",
+          "review",
+          "proposed",
+          "approved",
+          "rejected",
+          "revised",
+          "superseded",
+          "abandoned"
+        ],
+        "type": "string"
+      },
+      "ResolveSymbolSuccessOutputRule": {
+        "properties": {
+          "declaration_address": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResolveSymbolSuccessOutputDeclarationAddress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "declared_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStableId"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "origin_message": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "requirement_ids": {
+            "items": {
+              "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "resolution_ids": {
+            "items": {
+              "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "retired": {
+            "type": "boolean"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputScopeId"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputRuleSeverity"
+          },
+          "source_document": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_section": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "statement": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputRuleStatus"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "statement",
+          "status",
+          "severity"
+        ],
+        "type": "object"
+      },
+      "ResolveSymbolSuccessOutputRuleSeverity": {
+        "enum": [
+          "low",
+          "medium",
+          "high",
+          "critical"
+        ],
+        "type": "string"
+      },
+      "ResolveSymbolSuccessOutputRuleStatus": {
+        "enum": [
+          "draft",
+          "review",
+          "active",
+          "deprecated",
+          "archived"
+        ],
+        "type": "string"
+      },
+      "ResolveSymbolSuccessOutputScopeId": {
+        "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "ResolveSymbolSuccessOutputSource": {
+        "properties": {
+          "commit_pin": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "declaration_address": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResolveSymbolSuccessOutputDeclarationAddress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "declared_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "effective_date": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStableId"
+          },
+          "name": {
+            "type": "string"
+          },
+          "origin_message": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reference": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "retired": {
+            "type": "boolean"
+          },
+          "review_date": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputScopeId"
+          },
+          "source_type": {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputSourceType"
+          },
+          "supersedes": {
+            "items": {
+              "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "name",
+          "source_type",
+          "url"
+        ],
+        "type": "object"
+      },
+      "ResolveSymbolSuccessOutputSourceReference": {
+        "properties": {
+          "clause": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_id": {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStableId"
+          }
+        },
+        "required": [
+          "source_id"
+        ],
+        "type": "object"
+      },
+      "ResolveSymbolSuccessOutputSourceType": {
+        "enum": [
+          "policy",
+          "document",
+          "legislation",
+          "company_agreement",
+          "system_state",
+          "external_integration",
+          "domain_knowledge",
+          "project_artifact",
+          "incident",
+          "api_spec"
+        ],
+        "type": "string"
+      },
+      "ResolveSymbolSuccessOutputStableId": {
+        "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "ResolveSymbolSuccessOutputStamp": {
+        "description": "What a query answer reflects: the projection revision the rows came\nfrom, the freshness step the reader ran, and which parts of the answer\nthe revision covers.\n\n`serial` and `digest` name the latest `projection_revision` row and\n`instance_id` the `projection_instance` row; serials compare only within\none instance. `attested` names the projection tables behind the answer.\n`live` names what the stamp does not cover, from a closed list:\n`canonical` (canonical shards), `scanned_sites` (a working-tree scan),\n`verification_runs` (cache JSONL), and `diff` (git). A stamp never\nimplies freshness for anything it does not list.",
+        "properties": {
+          "attested": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "derivation": {
+            "description": "The reader logic version. It moves when the reader answers\ndifferently over the same rows, never for a migration.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "instance_id": {
+            "type": "string"
+          },
+          "live": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStampPolicy"
+          },
+          "serial": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "serial",
+          "digest",
+          "instance_id",
+          "derivation",
+          "policy",
+          "attested",
+          "live"
+        ],
+        "type": "object"
+      },
+      "ResolveSymbolSuccessOutputStampPolicy": {
+        "description": "The freshness step a read ran before it answered.",
+        "oneOf": [
+          {
+            "const": "catch_up",
+            "description": "Catch-up ran under the publication guard and the answer is at or\nafter the serial it committed.",
+            "type": "string"
+          },
+          {
+            "const": "annotate_only",
+            "description": "No freshness step; the answer is at the stored serial.",
+            "type": "string"
+          },
+          {
+            "const": "refuse_stale",
+            "description": "Reserved: a read refuses when the projection is behind.",
+            "type": "string"
+          },
+          {
+            "const": "catch_up_failed",
+            "description": "Catch-up failed and the answer is at the stored serial; the error\ntext travels in `freshness_error`.",
+            "type": "string"
+          }
+        ]
+      },
+      "ResolveSymbolSuccessOutputTopic": {
+        "properties": {
+          "claimed_at": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "claimed_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStableId"
+          },
+          "links": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ResolveSymbolSuccessOutputArtifactLink"
+            },
+            "type": "array"
+          },
+          "requirement_id": {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputStableId"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputScopeId"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ResolveSymbolSuccessOutputTopicStatus"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "requirement_id",
+          "title",
+          "status",
+          "links"
+        ],
+        "type": "object"
+      },
+      "ResolveSymbolSuccessOutputTopicStatus": {
+        "enum": [
+          "open",
+          "explored",
+          "closed"
+        ],
+        "type": "string"
+      },
       "SearchFailureOutput": {
         "properties": {
           "error": {
@@ -3775,7 +7245,8 @@
           "error"
         ],
         "title": "FailureEnvelope",
-        "type": "object"
+        "type": "object",
+        "x-provenance-model-family": "SearchFailureOutput"
       },
       "SearchFailureOutputInvalidInputReason": {
         "enum": [
@@ -3957,6 +7428,54 @@
           {
             "properties": {
               "kind": {
+                "const": "file_access_denied",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "file_unavailable",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "git_unavailable",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "git_revision_not_found",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
                 "const": "no_projection",
                 "type": "string"
               }
@@ -4067,7 +7586,8 @@
           "request"
         ],
         "title": "RepositoryCall",
-        "type": "object"
+        "type": "object",
+        "x-provenance-model-family": "SearchRequestInput"
       },
       "SearchRequestInputFreshnessPolicy": {
         "description": "Which freshness step a read runs before it answers.",
@@ -4223,7 +7743,8 @@
           "nodes"
         ],
         "title": "QueryResponse",
-        "type": "object"
+        "type": "object",
+        "x-provenance-model-family": "SearchSuccessOutput"
       },
       "SearchSuccessOutputArtifactLink": {
         "properties": {
@@ -5270,6 +8791,727 @@
         ],
         "type": "string"
       },
+      "StaleFailureOutput": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/StaleFailureOutputOperationError"
+          },
+          "operation": {
+            "const": "stale",
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "error"
+        ],
+        "title": "FailureEnvelope",
+        "type": "object",
+        "x-provenance-model-family": "StaleFailureOutput"
+      },
+      "StaleFailureOutputInvalidInputReason": {
+        "enum": [
+          "required",
+          "invalid_value",
+          "malformed_json",
+          "unknown_field",
+          "too_large"
+        ],
+        "type": "string"
+      },
+      "StaleFailureOutputMovedUnit": {
+        "properties": {
+          "live": {
+            "type": "string"
+          },
+          "stored": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "unit",
+          "stored",
+          "live"
+        ],
+        "type": "object"
+      },
+      "StaleFailureOutputOperationError": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/StaleFailureOutputOperationFailure"
+          },
+          {
+            "$ref": "#/components/schemas/StaleFailureOutputReadFailure"
+          }
+        ],
+        "description": "Keeps the handler's native error separate from preparation failure."
+      },
+      "StaleFailureOutputOperationFailure": {
+        "oneOf": [
+          {
+            "properties": {
+              "field": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "const": "invalid_input",
+                "type": "string"
+              },
+              "reason": {
+                "$ref": "#/components/schemas/StaleFailureOutputInvalidInputReason"
+              }
+            },
+            "required": [
+              "kind",
+              "field",
+              "reason"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "protocol_mismatch",
+                "type": "string"
+              },
+              "requested": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "supported": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "requested",
+              "supported"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_operation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unauthenticated",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "access_denied",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_target",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_scope",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unavailable_needs",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "internal",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "StaleFailureOutputReadFailure": {
+        "oneOf": [
+          {
+            "properties": {
+              "kind": {
+                "const": "file_access_denied",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "file_unavailable",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "git_unavailable",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "git_revision_not_found",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "no_projection",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "digest": {
+                "type": "string"
+              },
+              "instance_id": {
+                "type": "string"
+              },
+              "kind": {
+                "const": "stale",
+                "type": "string"
+              },
+              "moved": {
+                "items": {
+                  "$ref": "#/components/schemas/StaleFailureOutputMovedUnit"
+                },
+                "type": "array"
+              },
+              "serial": {
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "serial",
+              "digest",
+              "instance_id",
+              "moved"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unit_unreadable",
+                "type": "string"
+              },
+              "unit": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "unit"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "schema_behind",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "half_migrated",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "read_failed",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "StaleRequestInput": {
+        "additionalProperties": false,
+        "properties": {
+          "context": {
+            "$ref": "#/components/schemas/StaleRequestInputRepositoryContext"
+          },
+          "request": {
+            "$ref": "#/components/schemas/StaleRequestInputStaleQuery"
+          }
+        },
+        "required": [
+          "context",
+          "request"
+        ],
+        "title": "RepositoryCall",
+        "type": "object",
+        "x-provenance-model-family": "StaleRequestInput"
+      },
+      "StaleRequestInputFreshnessPolicy": {
+        "description": "Which freshness step a read runs before it answers.",
+        "oneOf": [
+          {
+            "const": "catch_up",
+            "description": "Run catch-up under the publication guard, then answer.",
+            "type": "string"
+          },
+          {
+            "const": "annotate_only",
+            "description": "Answer at the stored serial without a freshness step.",
+            "type": "string"
+          },
+          {
+            "const": "refuse_stale",
+            "description": "Refuse when the stored projection differs from canonical state.",
+            "type": "string"
+          }
+        ]
+      },
+      "StaleRequestInputRepositoryContext": {
+        "additionalProperties": false,
+        "properties": {
+          "freshness": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StaleRequestInputFreshnessPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "repository": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "repository",
+          "scope"
+        ],
+        "type": "object"
+      },
+      "StaleRequestInputStaleQuery": {
+        "additionalProperties": false,
+        "description": "Read which evidence sites a commit range disturbed.",
+        "properties": {
+          "base": {
+            "type": "string"
+          },
+          "head": {
+            "default": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "include_retired": {
+            "default": false,
+            "type": "boolean"
+          },
+          "limit": {
+            "default": 50,
+            "format": "uint",
+            "maximum": 200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "protocol_version": {
+            "default": null,
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "rules": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "base"
+        ],
+        "type": "object"
+      },
+      "StaleSuccessOutput": {
+        "description": "The envelope every query primitive answers in.\n\nThe protocol version travels with the answer, so a caller holding a\nrecorded response can tell which contract produced it, `operation`\nnames which primitive it came from, and `stamp` says what the answer\nreflects.",
+        "properties": {
+          "base": {
+            "type": "string"
+          },
+          "files_changed": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "freshness_cause": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StaleSuccessOutputFreshnessCause"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "freshness_error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "has_more": {
+            "type": "boolean"
+          },
+          "head": {
+            "type": "string"
+          },
+          "limit": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "operation": {
+            "const": "stale",
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          },
+          "sites": {
+            "items": {
+              "$ref": "#/components/schemas/StaleSuccessOutputEvidenceDiffSite"
+            },
+            "type": "array"
+          },
+          "stamp": {
+            "$ref": "#/components/schemas/StaleSuccessOutputStamp"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/StaleSuccessOutputEvidenceDiffSummary"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "operation",
+          "stamp",
+          "base",
+          "head",
+          "files_changed",
+          "summary",
+          "limit",
+          "has_more",
+          "sites"
+        ],
+        "title": "QueryResponse",
+        "type": "object",
+        "x-provenance-model-family": "StaleSuccessOutput"
+      },
+      "StaleSuccessOutputEvidenceDiffSite": {
+        "description": "One graph-cited evidence site resolved against both ends of a diff.",
+        "properties": {
+          "end_line": {
+            "format": "uint",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "file_path": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/StaleSuccessOutputEvidenceSiteKind"
+          },
+          "line": {
+            "format": "uint",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "original_file_path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "original_line": {
+            "format": "uint",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/StaleSuccessOutputEvidenceDiffState"
+          },
+          "subject_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "subject_id",
+          "file_path",
+          "state"
+        ],
+        "type": "object"
+      },
+      "StaleSuccessOutputEvidenceDiffState": {
+        "description": "How one graph evidence path relates to a selected Git diff.",
+        "enum": [
+          "untouched",
+          "touched",
+          "moved",
+          "gone"
+        ],
+        "type": "string"
+      },
+      "StaleSuccessOutputEvidenceDiffSummary": {
+        "properties": {
+          "gone": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "moved": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "total_sites": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "touched": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "untouched": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_sites",
+          "untouched",
+          "touched",
+          "moved",
+          "gone"
+        ],
+        "type": "object"
+      },
+      "StaleSuccessOutputEvidenceSiteKind": {
+        "description": "The graph relationship that makes a path evidence.",
+        "enum": [
+          "rule_binding",
+          "verification",
+          "annotation",
+          "source_reference"
+        ],
+        "type": "string"
+      },
+      "StaleSuccessOutputFreshnessCause": {
+        "description": "The stage that failed is known even when its lower-level error is not public.",
+        "enum": [
+          "catch_up_failed"
+        ],
+        "type": "string"
+      },
+      "StaleSuccessOutputStamp": {
+        "description": "What a query answer reflects: the projection revision the rows came\nfrom, the freshness step the reader ran, and which parts of the answer\nthe revision covers.\n\n`serial` and `digest` name the latest `projection_revision` row and\n`instance_id` the `projection_instance` row; serials compare only within\none instance. `attested` names the projection tables behind the answer.\n`live` names what the stamp does not cover, from a closed list:\n`canonical` (canonical shards), `scanned_sites` (a working-tree scan),\n`verification_runs` (cache JSONL), and `diff` (git). A stamp never\nimplies freshness for anything it does not list.",
+        "properties": {
+          "attested": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "derivation": {
+            "description": "The reader logic version. It moves when the reader answers\ndifferently over the same rows, never for a migration.",
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "digest": {
+            "type": "string"
+          },
+          "instance_id": {
+            "type": "string"
+          },
+          "live": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/StaleSuccessOutputStampPolicy"
+          },
+          "serial": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "serial",
+          "digest",
+          "instance_id",
+          "derivation",
+          "policy",
+          "attested",
+          "live"
+        ],
+        "type": "object"
+      },
+      "StaleSuccessOutputStampPolicy": {
+        "description": "The freshness step a read ran before it answered.",
+        "oneOf": [
+          {
+            "const": "catch_up",
+            "description": "Catch-up ran under the publication guard and the answer is at or\nafter the serial it committed.",
+            "type": "string"
+          },
+          {
+            "const": "annotate_only",
+            "description": "No freshness step; the answer is at the stored serial.",
+            "type": "string"
+          },
+          {
+            "const": "refuse_stale",
+            "description": "Reserved: a read refuses when the projection is behind.",
+            "type": "string"
+          },
+          {
+            "const": "catch_up_failed",
+            "description": "Catch-up failed and the answer is at the stored serial; the error\ntext travels in `freshness_error`.",
+            "type": "string"
+          }
+        ]
+      },
       "TraceFailureOutput": {
         "properties": {
           "error": {
@@ -5289,7 +9531,8 @@
           "error"
         ],
         "title": "FailureEnvelope",
-        "type": "object"
+        "type": "object",
+        "x-provenance-model-family": "TraceFailureOutput"
       },
       "TraceFailureOutputInvalidInputReason": {
         "enum": [
@@ -5471,6 +9714,54 @@
           {
             "properties": {
               "kind": {
+                "const": "file_access_denied",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "file_unavailable",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "git_unavailable",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "git_revision_not_found",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
                 "const": "no_projection",
                 "type": "string"
               }
@@ -5581,7 +9872,8 @@
           "request"
         ],
         "title": "RepositoryCall",
-        "type": "object"
+        "type": "object",
+        "x-provenance-model-family": "TraceRequestInput"
       },
       "TraceRequestInputDirection": {
         "description": "Which way a query follows a relation.\n\n`out` reads the relations the named record holds in its own fields, `in`\nreads the relations other records hold toward it, and `both` reads every\nrelation from either end.",
@@ -5778,7 +10070,8 @@
           "nodes"
         ],
         "title": "QueryResponse",
-        "type": "object"
+        "type": "object",
+        "x-provenance-model-family": "TraceSuccessOutput"
       },
       "TraceSuccessOutputArtifactLink": {
         "properties": {
@@ -6842,6 +11135,1004 @@
           "node"
         ],
         "type": "object"
+      },
+      "VerificationBindingsFailureOutput": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/VerificationBindingsFailureOutputOperationError"
+          },
+          "operation": {
+            "const": "verification-bindings",
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "error"
+        ],
+        "title": "FailureEnvelope",
+        "type": "object",
+        "x-provenance-model-family": "VerificationBindingsFailureOutput"
+      },
+      "VerificationBindingsFailureOutputInvalidInputReason": {
+        "enum": [
+          "required",
+          "invalid_value",
+          "malformed_json",
+          "unknown_field",
+          "too_large"
+        ],
+        "type": "string"
+      },
+      "VerificationBindingsFailureOutputMovedUnit": {
+        "properties": {
+          "live": {
+            "type": "string"
+          },
+          "stored": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "unit",
+          "stored",
+          "live"
+        ],
+        "type": "object"
+      },
+      "VerificationBindingsFailureOutputOperationError": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/VerificationBindingsFailureOutputOperationFailure"
+          },
+          {
+            "$ref": "#/components/schemas/VerificationBindingsFailureOutputReadFailure"
+          }
+        ],
+        "description": "Keeps the handler's native error separate from preparation failure."
+      },
+      "VerificationBindingsFailureOutputOperationFailure": {
+        "oneOf": [
+          {
+            "properties": {
+              "field": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "const": "invalid_input",
+                "type": "string"
+              },
+              "reason": {
+                "$ref": "#/components/schemas/VerificationBindingsFailureOutputInvalidInputReason"
+              }
+            },
+            "required": [
+              "kind",
+              "field",
+              "reason"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "protocol_mismatch",
+                "type": "string"
+              },
+              "requested": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "supported": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "requested",
+              "supported"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_operation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unauthenticated",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "access_denied",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_target",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_scope",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unavailable_needs",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "internal",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "VerificationBindingsFailureOutputReadFailure": {
+        "oneOf": [
+          {
+            "properties": {
+              "kind": {
+                "const": "file_access_denied",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "file_unavailable",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "git_unavailable",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "git_revision_not_found",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "no_projection",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "digest": {
+                "type": "string"
+              },
+              "instance_id": {
+                "type": "string"
+              },
+              "kind": {
+                "const": "stale",
+                "type": "string"
+              },
+              "moved": {
+                "items": {
+                  "$ref": "#/components/schemas/VerificationBindingsFailureOutputMovedUnit"
+                },
+                "type": "array"
+              },
+              "serial": {
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "serial",
+              "digest",
+              "instance_id",
+              "moved"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unit_unreadable",
+                "type": "string"
+              },
+              "unit": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "unit"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "schema_behind",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "half_migrated",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "read_failed",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "VerificationBindingsRequestInput": {
+        "additionalProperties": false,
+        "properties": {
+          "context": {
+            "$ref": "#/components/schemas/VerificationBindingsRequestInputRepositoryScope"
+          },
+          "request": {
+            "$ref": "#/components/schemas/VerificationBindingsRequestInputVerificationListRequest"
+          }
+        },
+        "required": [
+          "context",
+          "request"
+        ],
+        "title": "RepositoryCall",
+        "type": "object",
+        "x-provenance-model-family": "VerificationBindingsRequestInput"
+      },
+      "VerificationBindingsRequestInputRepositoryScope": {
+        "additionalProperties": false,
+        "description": "Scope selection for operations that do not use projection freshness.",
+        "properties": {
+          "repository": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "repository",
+          "scope"
+        ],
+        "type": "object"
+      },
+      "VerificationBindingsRequestInputStableId": {
+        "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "VerificationBindingsRequestInputVerificationListRequest": {
+        "additionalProperties": false,
+        "description": "Existing verification lists remain complete and have no page controls.",
+        "properties": {
+          "rule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VerificationBindingsRequestInputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "type": "object"
+      },
+      "VerificationBindingsSuccessOutput": {
+        "items": {
+          "$ref": "#/components/schemas/VerificationBindingsSuccessOutputVerificationBinding"
+        },
+        "title": "Array_of_VerificationBinding",
+        "type": "array",
+        "x-provenance-model-family": "VerificationBindingsSuccessOutput"
+      },
+      "VerificationBindingsSuccessOutputScopeId": {
+        "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "VerificationBindingsSuccessOutputStableId": {
+        "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "VerificationBindingsSuccessOutputVerificationBinding": {
+        "description": "One durable language-authored relationship from a code site to a Rule.",
+        "properties": {
+          "declared_by": {
+            "type": "string"
+          },
+          "file": {
+            "type": "string"
+          },
+          "id": {
+            "$ref": "#/components/schemas/VerificationBindingsSuccessOutputStableId"
+          },
+          "key": {
+            "type": "string"
+          },
+          "method": {
+            "$ref": "#/components/schemas/VerificationBindingsSuccessOutputVerificationMethod"
+          },
+          "retired": {
+            "type": "boolean"
+          },
+          "rule_id": {
+            "$ref": "#/components/schemas/VerificationBindingsSuccessOutputStableId"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/VerificationBindingsSuccessOutputScopeId"
+          },
+          "symbol": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "rule_id",
+          "key",
+          "method",
+          "declared_by",
+          "file"
+        ],
+        "type": "object"
+      },
+      "VerificationBindingsSuccessOutputVerificationMethod": {
+        "description": "How a verification binding supports its Rule.",
+        "enum": [
+          "exhaustion",
+          "property",
+          "examples",
+          "conformance",
+          "construction",
+          "proof"
+        ],
+        "type": "string"
+      },
+      "VerificationRunsFailureOutput": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/VerificationRunsFailureOutputOperationError"
+          },
+          "operation": {
+            "const": "verification-runs",
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "error"
+        ],
+        "title": "FailureEnvelope",
+        "type": "object",
+        "x-provenance-model-family": "VerificationRunsFailureOutput"
+      },
+      "VerificationRunsFailureOutputInvalidInputReason": {
+        "enum": [
+          "required",
+          "invalid_value",
+          "malformed_json",
+          "unknown_field",
+          "too_large"
+        ],
+        "type": "string"
+      },
+      "VerificationRunsFailureOutputMovedUnit": {
+        "properties": {
+          "live": {
+            "type": "string"
+          },
+          "stored": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "unit",
+          "stored",
+          "live"
+        ],
+        "type": "object"
+      },
+      "VerificationRunsFailureOutputOperationError": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/VerificationRunsFailureOutputOperationFailure"
+          },
+          {
+            "$ref": "#/components/schemas/VerificationRunsFailureOutputReadFailure"
+          }
+        ],
+        "description": "Keeps the handler's native error separate from preparation failure."
+      },
+      "VerificationRunsFailureOutputOperationFailure": {
+        "oneOf": [
+          {
+            "properties": {
+              "field": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "const": "invalid_input",
+                "type": "string"
+              },
+              "reason": {
+                "$ref": "#/components/schemas/VerificationRunsFailureOutputInvalidInputReason"
+              }
+            },
+            "required": [
+              "kind",
+              "field",
+              "reason"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "protocol_mismatch",
+                "type": "string"
+              },
+              "requested": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "supported": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "requested",
+              "supported"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_operation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unauthenticated",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "access_denied",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_target",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_scope",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unavailable_needs",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "internal",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "VerificationRunsFailureOutputReadFailure": {
+        "oneOf": [
+          {
+            "properties": {
+              "kind": {
+                "const": "file_access_denied",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "file_unavailable",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "git_unavailable",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "git_revision_not_found",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "no_projection",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "digest": {
+                "type": "string"
+              },
+              "instance_id": {
+                "type": "string"
+              },
+              "kind": {
+                "const": "stale",
+                "type": "string"
+              },
+              "moved": {
+                "items": {
+                  "$ref": "#/components/schemas/VerificationRunsFailureOutputMovedUnit"
+                },
+                "type": "array"
+              },
+              "serial": {
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "serial",
+              "digest",
+              "instance_id",
+              "moved"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unit_unreadable",
+                "type": "string"
+              },
+              "unit": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "unit"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "schema_behind",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "half_migrated",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "read_failed",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "VerificationRunsRequestInput": {
+        "additionalProperties": false,
+        "properties": {
+          "context": {
+            "$ref": "#/components/schemas/VerificationRunsRequestInputRepositoryScope"
+          },
+          "request": {
+            "$ref": "#/components/schemas/VerificationRunsRequestInputVerificationListRequest"
+          }
+        },
+        "required": [
+          "context",
+          "request"
+        ],
+        "title": "RepositoryCall",
+        "type": "object",
+        "x-provenance-model-family": "VerificationRunsRequestInput"
+      },
+      "VerificationRunsRequestInputRepositoryScope": {
+        "additionalProperties": false,
+        "description": "Scope selection for operations that do not use projection freshness.",
+        "properties": {
+          "repository": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "repository",
+          "scope"
+        ],
+        "type": "object"
+      },
+      "VerificationRunsRequestInputStableId": {
+        "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "VerificationRunsRequestInputVerificationListRequest": {
+        "additionalProperties": false,
+        "description": "Existing verification lists remain complete and have no page controls.",
+        "properties": {
+          "rule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VerificationRunsRequestInputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "type": "object"
+      },
+      "VerificationRunsSuccessOutput": {
+        "items": {
+          "$ref": "#/components/schemas/VerificationRunsSuccessOutputVerificationRun"
+        },
+        "title": "Array_of_VerificationRun",
+        "type": "array",
+        "x-provenance-model-family": "VerificationRunsSuccessOutput"
+      },
+      "VerificationRunsSuccessOutputScopeId": {
+        "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "VerificationRunsSuccessOutputStableId": {
+        "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "VerificationRunsSuccessOutputVerificationRun": {
+        "description": "Volatile evidence from one language-owned verification callback.\n\nRuns live in Provenance's derived cache rather than canonical state: a\nlocal test run must not dirty the repository. `rule_id` is the join back\nto the canonical graph.",
+        "properties": {
+          "binding_id": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VerificationRunsSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "commit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "completed_at": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "declared_by": {
+            "type": "string"
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "file": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/VerificationRunsSuccessOutputStableId"
+          },
+          "method": {
+            "type": "string"
+          },
+          "rule_id": {
+            "$ref": "#/components/schemas/VerificationRunsSuccessOutputStableId"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/VerificationRunsSuccessOutputScopeId"
+          },
+          "started_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/components/schemas/VerificationRunsSuccessOutputVerificationRunStatus"
+          },
+          "symbol": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "rule_id",
+          "method",
+          "declared_by",
+          "status",
+          "started_at"
+        ],
+        "type": "object"
+      },
+      "VerificationRunsSuccessOutputVerificationRunStatus": {
+        "description": "The lifecycle state of one callback-backed verification run.",
+        "enum": [
+          "running",
+          "passed",
+          "failed"
+        ],
+        "type": "string"
       }
     }
   },
@@ -6955,6 +12246,103 @@
         }
       }
     },
+    "/v7/operations/evidence": {
+      "post": {
+        "operationId": "evidence",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvidenceRequestInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceSuccessOutput"
+                }
+              }
+            },
+            "description": "Operation result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          }
+        }
+      }
+    },
     "/v7/operations/get": {
       "post": {
         "operationId": "get",
@@ -7044,6 +12432,103 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/GetFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          }
+        }
+      }
+    },
+    "/v7/operations/impact": {
+      "post": {
+        "operationId": "impact",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImpactRequestInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImpactSuccessOutput"
+                }
+              }
+            },
+            "description": "Operation result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImpactFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImpactFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImpactFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImpactFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImpactFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImpactFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImpactFailureOutput"
                 }
               }
             },
@@ -7236,6 +12721,103 @@
         }
       }
     },
+    "/v7/operations/resolve-symbol": {
+      "post": {
+        "operationId": "resolveSymbol",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveSymbolRequestInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolveSymbolSuccessOutput"
+                }
+              }
+            },
+            "description": "Operation result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolveSymbolFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolveSymbolFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolveSymbolFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolveSymbolFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolveSymbolFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolveSymbolFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolveSymbolFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          }
+        }
+      }
+    },
     "/v7/operations/search": {
       "post": {
         "operationId": "search",
@@ -7333,6 +12915,103 @@
         }
       }
     },
+    "/v7/operations/stale": {
+      "post": {
+        "operationId": "stale",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StaleRequestInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaleSuccessOutput"
+                }
+              }
+            },
+            "description": "Operation result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaleFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaleFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaleFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaleFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaleFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaleFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaleFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          }
+        }
+      }
+    },
     "/v7/operations/trace": {
       "post": {
         "operationId": "trace",
@@ -7422,6 +13101,180 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/TraceFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          }
+        }
+      }
+    },
+    "/v7/operations/verification-bindings": {
+      "post": {
+        "operationId": "verificationBindings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerificationBindingsRequestInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerificationBindingsSuccessOutput"
+                }
+              }
+            },
+            "description": "Operation result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerificationBindingsFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerificationBindingsFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerificationBindingsFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerificationBindingsFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerificationBindingsFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerificationBindingsFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          }
+        }
+      }
+    },
+    "/v7/operations/verification-runs": {
+      "post": {
+        "operationId": "verificationRuns",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerificationRunsRequestInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerificationRunsSuccessOutput"
+                }
+              }
+            },
+            "description": "Operation result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerificationRunsFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerificationRunsFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerificationRunsFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerificationRunsFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerificationRunsFailureOutput"
+                }
+              }
+            },
+            "description": "Operation refused"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerificationRunsFailureOutput"
                 }
               }
             },

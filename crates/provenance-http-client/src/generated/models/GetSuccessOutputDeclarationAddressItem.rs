@@ -8,6 +8,12 @@ impl ::std::ops::Deref for GetSuccessOutputDeclarationAddressItem {
         &self.0
     }
 }
+impl ::std::convert::From<GetSuccessOutputDeclarationAddressItem>
+for ::std::string::String {
+    fn from(value: GetSuccessOutputDeclarationAddressItem) -> Self {
+        value.0
+    }
+}
 impl ::std::str::FromStr for GetSuccessOutputDeclarationAddressItem {
     type Err = self::error::ConversionError;
     fn from_str(

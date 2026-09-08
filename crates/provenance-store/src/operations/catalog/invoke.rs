@@ -77,6 +77,16 @@ pub(super) fn invoke_resolved<O: Operation>(
                     call.request,
                 )
             }
+            super::ContextKind::Scope => {
+                let call: RepositoryCall<
+                    O::Request,
+                    provenance_core::protocol::repository::RepositoryScope,
+                > = decode::<O, _>(call)?;
+                (
+                    Some(super::RequestedContext::Scope(call.context)),
+                    call.request,
+                )
+            }
             super::ContextKind::Scoped => {
                 let call: RepositoryCall<
                     O::Request,

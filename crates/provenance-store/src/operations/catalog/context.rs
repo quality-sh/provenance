@@ -4,7 +4,7 @@ use camino::Utf8PathBuf;
 use provenance_core::{
     protocol::{
         failure::OperationFailure,
-        repository::{RepositoryContext, RepositoryTarget},
+        repository::{RepositoryContext, RepositoryScope, RepositoryTarget},
     },
     ScopeId,
 };
@@ -23,11 +23,18 @@ pub type ExecutionNeeds = &'static [ExecutionNeed];
 #[derive(Debug, Clone)]
 pub struct PreparedContext {
     read: Option<PreparedRead>,
+    scope: Option<PreparedScope>,
     repository: Option<PreparedRepository>,
 }
 #[derive(Debug, Clone)]
 pub struct PreparedRepository {
     pub root: Utf8PathBuf,
+    pub requested_target: String,
+}
+#[derive(Debug, Clone)]
+pub struct PreparedScope {
+    pub root: Utf8PathBuf,
+    pub scope: ScopeId,
     pub requested_target: String,
 }
 #[derive(Debug, Clone)]
@@ -42,6 +49,7 @@ impl PreparedContext {
     pub const fn data_free() -> Self {
         Self {
             read: None,
+            scope: None,
             repository: None,
         }
     }
@@ -51,6 +59,11 @@ impl PreparedContext {
                 root: read.root.clone(),
                 requested_target: read.requested_target.clone(),
             }),
+            scope: Some(PreparedScope {
+                root: read.root.clone(),
+                scope: read.scope.clone(),
+                requested_target: read.requested_target.clone(),
+            }),
             read: Some(read),
         }
     }
@@ -58,7 +71,21 @@ impl PreparedContext {
         Self {
             repository: Some(repository),
             read: None,
+            scope: None,
         }
+    }
+    pub fn for_scope(scope: PreparedScope) -> Self {
+        Self {
+            repository: Some(PreparedRepository {
+                root: scope.root.clone(),
+                requested_target: scope.requested_target.clone(),
+            }),
+            read: None,
+            scope: Some(scope),
+        }
+    }
+    pub(super) fn scope(self) -> Result<PreparedScope, OperationFailure> {
+        self.scope.ok_or(OperationFailure::UnavailableNeeds)
     }
     pub(super) fn repository(self) -> Result<PreparedRepository, OperationFailure> {
         self.repository.ok_or(OperationFailure::UnavailableNeeds)
@@ -68,9 +95,11 @@ impl PreparedContext {
     }
     pub(super) fn prepare(self, needs: ExecutionNeeds) -> Result<Self, OperationFailure> {
         if needs.iter().all(|need| match need {
-            ExecutionNeed::GraphStorage => self.repository.is_some(),
+            ExecutionNeed::GraphStorage | ExecutionNeed::Git | ExecutionNeed::RunStorage => {
+                self.repository.is_some()
+            }
             ExecutionNeed::ProjectionMaintenance => self.read.is_some(),
-            _ => false,
+            ExecutionNeed::RepositoryFiles => self.repository.is_some() && cfg!(any(unix, windows)),
         }) {
             Ok(self)
         } else {
@@ -105,9 +134,11 @@ pub enum ContextKind {
     DataFree,
     Repository,
     Scoped,
+    Scope,
 }
 #[derive(Debug, Clone)]
 pub enum RequestedContext {
     Repository(RepositoryTarget),
     Scoped(RepositoryContext),
+    Scope(RepositoryScope),
 }

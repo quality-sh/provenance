@@ -110,10 +110,18 @@ impl ContextResolver for FixtureAccess {
         &self,
         operation: &'static str,
         context: RequestedContext,
-        _: ExecutionNeeds,
+        needs: ExecutionNeeds,
     ) -> Result<PreparedContext, OperationFailure> {
         let (target, selected) = match context {
             RequestedContext::Repository(context) => (context.repository, None),
+            RequestedContext::Scope(context) => (
+                context.repository.clone(),
+                Some(provenance_core::protocol::repository::RepositoryContext {
+                    repository: context.repository,
+                    scope: context.scope,
+                    freshness: None,
+                }),
+            ),
             RequestedContext::Scoped(context) => (context.repository.clone(), Some(context)),
         };
         let root = self
@@ -152,6 +160,17 @@ impl ContextResolver for FixtureAccess {
             .any(|candidate| candidate.id == scope)
         {
             return Err(OperationFailure::UnknownScope);
+        }
+        if !needs
+            .contains(&provenance_store::operations::catalog::ExecutionNeed::ProjectionMaintenance)
+        {
+            return Ok(PreparedContext::for_scope(
+                provenance_store::operations::catalog::PreparedScope {
+                    root: root.to_str().ok_or(OperationFailure::Internal)?.into(),
+                    scope,
+                    requested_target: target,
+                },
+            ));
         }
         let settings = Settings::load(&layout).map_err(|_| OperationFailure::Internal)?;
         Ok(PreparedContext::read(PreparedRead {

@@ -4,6 +4,7 @@ use serde_json::{json, Map, Value};
 pub fn component(name: &str, mut schema: Value, components: &mut Map<String, Value>) -> Value {
     let definitions = schema.as_object_mut().unwrap().remove("$defs");
     schema.as_object_mut().unwrap().remove("$schema");
+    schema["x-provenance-model-family"] = json!(name);
     rewrite(&mut schema, name);
     if let Some(Value::Object(definitions)) = definitions {
         for (key, mut value) in definitions {
@@ -65,6 +66,7 @@ pub fn documents() -> (Value, Value) {
     check_operation_names(definitions.iter().map(|definition| definition.name));
     for definition in definitions {
         let input = definition.mcp_input_schema();
+        let output = definition.mcp_output_schema();
         let name = pascal(definition.name);
         let request = component(
             &format!("{name}RequestInput"),
@@ -94,7 +96,7 @@ pub fn documents() -> (Value, Value) {
                 "responses": responses
             }
         }));
-        tools.push(json!({"name":definition.name,"inputSchema":input,"outputSchema":definition.success_schema}));
+        tools.push(json!({"name":definition.name,"inputSchema":input,"outputSchema":output}));
     }
     let settings = schemars::generate::SchemaSettings::draft2020_12()
         .with(|settings| settings.contract = schemars::generate::Contract::Serialize);

@@ -49,7 +49,7 @@ impl ServerHandler for StatementHost {
                 );
                 tool.output_schema = Some(
                     definition
-                        .success_schema
+                        .mcp_output_schema()
                         .as_object()
                         .expect("object output schema")
                         .clone()
@@ -121,7 +121,11 @@ impl ServerHandler for StatementHost {
                 )
                 .await
             {
-                Ok(value) => CallToolResult::structured(value),
+                Ok(value) => CallToolResult::structured(if value.is_array() {
+                    serde_json::json!({"result":value})
+                } else {
+                    value
+                }),
                 Err(failure) => CallToolResult::structured_error(
                     serde_json::to_value(failure).expect("failure is JSON"),
                 ),

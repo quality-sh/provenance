@@ -1,3 +1,4 @@
+mod evidence;
 use provenance_core::{
     Manifest, RepoPathPrefix, RequirementStatus, RuleSeverity, RuleStatus, ScopeId, StableId,
 };

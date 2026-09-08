@@ -37,6 +37,41 @@ pub struct ChangedFile {
     pub new_lines: Vec<LineSpan>,
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum GitRefusal {
+    #[error("Git capability unavailable")]
+    Unavailable {
+        #[source]
+        source: anyhow::Error,
+    },
+    #[error("git rev-parse failed: {diagnostic}")]
+    RevisionNotFound { diagnostic: String },
+}
+
+/// Git control data and the executable are trusted; request environment overrides are removed.
+pub(crate) fn command(repo: &Utf8Path) -> Command {
+    let mut command = Command::new("git");
+    for (key, _) in std::env::vars_os() {
+        if key
+            .to_string_lossy()
+            .get(..4)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("GIT_"))
+        {
+            command.env_remove(key);
+        }
+    }
+    command
+        .args([
+            "--no-pager",
+            "--no-lazy-fetch",
+            "-c",
+            "core.fsmonitor=false",
+        ])
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .current_dir(repo);
+    command
+}
+
 pub fn resolve_range(
     repo: &Utf8Path,
     base: Option<String>,
@@ -50,6 +85,21 @@ pub fn resolve_range(
             "stale requires two commits (`stale <BASE> <HEAD>`) or `--since <COMMIT>`"
         ),
     };
+    let available = command(repo)
+        .args(["rev-parse", "--git-dir"])
+        .output()
+        .map_err(|error| GitRefusal::Unavailable {
+            source: error.into(),
+        })?;
+    if !available.status.success() {
+        return Err(GitRefusal::Unavailable {
+            source: anyhow::anyhow!(
+                "git rev-parse failed: {}",
+                String::from_utf8_lossy(&available.stderr).trim()
+            ),
+        }
+        .into());
+    }
     Ok((resolve_commit(repo, &base)?, resolve_commit(repo, &head)?))
 }
 
@@ -81,7 +131,17 @@ pub fn revision_files(repo: &Utf8Path, revision: &str) -> anyhow::Result<Vec<Rev
 pub fn changed_files(repo: &Utf8Path, base: &str, head: &str) -> anyhow::Result<Vec<ChangedFile>> {
     let output = git(
         repo,
-        &["diff", "--name-status", "-z", "--find-renames", base, head],
+        &[
+            "diff",
+            "--no-ext-diff",
+            "--no-textconv",
+            "--name-status",
+            "-z",
+            "--find-renames",
+            base,
+            head,
+            "--",
+        ],
     )?;
     let fields = output
         .stdout
@@ -129,13 +189,14 @@ fn diff_lines(
     old_path: &str,
     new_path: &str,
 ) -> anyhow::Result<(Vec<LineSpan>, Vec<LineSpan>)> {
-    let mut command = Command::new("git");
+    let mut command = command(repo);
     command
         .args([
             "diff",
             "--unified=0",
             "--no-color",
             "--no-ext-diff",
+            "--no-textconv",
             base,
             head,
             "--",
@@ -173,12 +234,23 @@ fn parse_hunk_span(field: &str, prefix: char) -> anyhow::Result<LineSpan> {
 
 fn resolve_commit(repo: &Utf8Path, revision: &str) -> anyhow::Result<String> {
     let expression = format!("{revision}^{{commit}}");
-    let output = git(repo, &["rev-parse", "--verify", &expression])?;
+    let output = command(repo)
+        .args(["rev-parse", "--verify", "--end-of-options", &expression])
+        .output()
+        .map_err(|error| GitRefusal::Unavailable {
+            source: error.into(),
+        })?;
+    if !output.status.success() {
+        return Err(GitRefusal::RevisionNotFound {
+            diagnostic: String::from_utf8_lossy(&output.stderr).trim().to_owned(),
+        }
+        .into());
+    }
     Ok(String::from_utf8(output.stdout)?.trim().to_string())
 }
 
 fn git(repo: &Utf8Path, args: &[&str]) -> anyhow::Result<Output> {
-    let output = Command::new("git")
+    let output = command(repo)
         .args(args)
         .current_dir(repo)
         .output()
@@ -194,6 +266,9 @@ fn checked(output: Output, operation: &str) -> anyhow::Result<Output> {
     );
     Ok(output)
 }
+
+#[cfg(test)]
+mod security_tests;
 
 #[cfg(test)]
 mod tests {

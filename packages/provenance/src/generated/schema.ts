@@ -31,6 +31,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v7/operations/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["evidence"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v7/operations/get": {
         parameters: {
             query?: never;
@@ -41,6 +57,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["get"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v7/operations/impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["impact"];
         delete?: never;
         options?: never;
         head?: never;
@@ -79,6 +111,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v7/operations/resolve-symbol": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["resolveSymbol"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v7/operations/search": {
         parameters: {
             query?: never;
@@ -95,6 +143,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v7/operations/stale": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["stale"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v7/operations/trace": {
         parameters: {
             query?: never;
@@ -105,6 +169,38 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["trace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v7/operations/verification-bindings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["verificationBindings"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v7/operations/verification-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["verificationRuns"];
         delete?: never;
         options?: never;
         head?: never;
@@ -216,6 +312,336 @@ export interface components {
          */
         CheckStatementSuccessOutputStandardIssue: 9;
         /** FailureEnvelope */
+        EvidenceFailureOutput: {
+            error: components["schemas"]["EvidenceFailureOutputOperationError"];
+            /** @constant */
+            operation?: "evidence";
+            /** @constant */
+            protocol_version: 7;
+        };
+        /** @enum {string} */
+        EvidenceFailureOutputInvalidInputReason: "required" | "invalid_value" | "malformed_json" | "unknown_field" | "too_large";
+        EvidenceFailureOutputMovedUnit: {
+            live: string;
+            stored: string;
+            unit: string;
+        };
+        /** @description Keeps the handler's native error separate from preparation failure. */
+        EvidenceFailureOutputOperationError: components["schemas"]["EvidenceFailureOutputOperationFailure"] | components["schemas"]["EvidenceFailureOutputReadFailure"];
+        EvidenceFailureOutputOperationFailure: {
+            field: string | null;
+            /** @constant */
+            kind: "invalid_input";
+            reason: components["schemas"]["EvidenceFailureOutputInvalidInputReason"];
+        } | {
+            /** @constant */
+            kind: "protocol_mismatch";
+            /** Format: uint32 */
+            requested: number;
+            /** Format: uint32 */
+            supported: number;
+        } | {
+            /** @constant */
+            kind: "unknown_operation";
+        } | {
+            /** @constant */
+            kind: "unauthenticated";
+        } | {
+            /** @constant */
+            kind: "access_denied";
+        } | {
+            /** @constant */
+            kind: "unknown_target";
+        } | {
+            /** @constant */
+            kind: "unknown_scope";
+        } | {
+            /** @constant */
+            kind: "unavailable_needs";
+        } | {
+            /** @constant */
+            kind: "internal";
+        };
+        EvidenceFailureOutputReadFailure: {
+            /** @constant */
+            kind: "file_access_denied";
+        } | {
+            /** @constant */
+            kind: "file_unavailable";
+        } | {
+            /** @constant */
+            kind: "git_unavailable";
+        } | {
+            /** @constant */
+            kind: "git_revision_not_found";
+        } | {
+            /** @constant */
+            kind: "no_projection";
+        } | {
+            digest: string;
+            instance_id: string;
+            /** @constant */
+            kind: "stale";
+            moved: components["schemas"]["EvidenceFailureOutputMovedUnit"][];
+            /** Format: int64 */
+            serial: number;
+        } | {
+            /** @constant */
+            kind: "unit_unreadable";
+            unit: string;
+        } | {
+            /** @constant */
+            kind: "schema_behind";
+        } | {
+            /** @constant */
+            kind: "half_migrated";
+        } | {
+            /** @constant */
+            kind: "read_failed";
+        };
+        /** RepositoryCall */
+        EvidenceRequestInput: {
+            context: components["schemas"]["EvidenceRequestInputRepositoryContext"];
+            request: components["schemas"]["EvidenceRequestInputEvidenceQuery"];
+        };
+        /**
+         * @description Read everything standing behind one Rule.
+         *
+         *     `base` is what makes the stale report computable: stale means the code
+         *     carrying the evidence changed, and that is read from a diff. Without a
+         *     base the response says so rather than guessing.
+         */
+        EvidenceRequestInputEvidenceQuery: {
+            /** @default null */
+            base?: string | null;
+            /** @default null */
+            head?: string | null;
+            /** @default false */
+            include_retired?: boolean;
+            /**
+             * Format: uint
+             * @default 50
+             */
+            limit?: number;
+            /**
+             * Format: uint32
+             * @default null
+             */
+            protocol_version?: number | null;
+            rule: string;
+        };
+        /** @description Which freshness step a read runs before it answers. */
+        EvidenceRequestInputFreshnessPolicy: "catch_up" | "annotate_only" | "refuse_stale";
+        EvidenceRequestInputRepositoryContext: {
+            /** @default null */
+            freshness?: components["schemas"]["EvidenceRequestInputFreshnessPolicy"] | null;
+            repository: string;
+            scope: string;
+        };
+        /**
+         * QueryResponse
+         * @description The envelope every query primitive answers in.
+         *
+         *     The protocol version travels with the answer, so a caller holding a
+         *     recorded response can tell which contract produced it, `operation`
+         *     names which primitive it came from, and `stamp` says what the answer
+         *     reflects.
+         */
+        EvidenceSuccessOutput: {
+            freshness_cause?: components["schemas"]["EvidenceSuccessOutputFreshnessCause"] | null;
+            freshness_error?: string | null;
+            has_more: boolean;
+            implementation_bindings: components["schemas"]["EvidenceSuccessOutputImplementationBinding"][];
+            /**
+             * @description The cut flag of each list; `has_more` is the OR of the four.
+             * @default false
+             */
+            implementation_bindings_has_more: boolean;
+            latest_verification_run?: components["schemas"]["EvidenceSuccessOutputVerificationRun"] | null;
+            /** Format: uint */
+            limit: number;
+            /** @constant */
+            operation: "evidence";
+            /** @constant */
+            protocol_version: 7;
+            review_required: boolean;
+            reviews: components["schemas"]["EvidenceSuccessOutputRequirementReview"][];
+            /** @default false */
+            reviews_has_more: boolean;
+            rule_id: string;
+            stale: components["schemas"]["EvidenceSuccessOutputStaleEvidence"] | null;
+            stamp: components["schemas"]["EvidenceSuccessOutputStamp"];
+            verification_bindings: components["schemas"]["EvidenceSuccessOutputVerificationBinding"][];
+            /** @default false */
+            verification_bindings_has_more: boolean;
+            verification_runs: components["schemas"]["EvidenceSuccessOutputVerificationRun"][];
+            /** @default false */
+            verification_runs_has_more: boolean;
+        };
+        /** @description One graph-cited evidence site resolved against both ends of a diff. */
+        EvidenceSuccessOutputEvidenceDiffSite: {
+            /** Format: uint */
+            end_line?: number | null;
+            file_path: string;
+            kind: components["schemas"]["EvidenceSuccessOutputEvidenceSiteKind"];
+            /** Format: uint */
+            line?: number | null;
+            original_file_path?: string | null;
+            /** Format: uint */
+            original_line?: number | null;
+            state: components["schemas"]["EvidenceSuccessOutputEvidenceDiffState"];
+            subject_id: string;
+        };
+        /**
+         * @description How one graph evidence path relates to a selected Git diff.
+         * @enum {string}
+         */
+        EvidenceSuccessOutputEvidenceDiffState: "untouched" | "touched" | "moved" | "gone";
+        /**
+         * @description The graph relationship that makes a path evidence.
+         * @enum {string}
+         */
+        EvidenceSuccessOutputEvidenceSiteKind: "rule_binding" | "verification" | "annotation" | "source_reference";
+        /**
+         * @description The stage that failed is known even when its lower-level error is not public.
+         * @enum {string}
+         */
+        EvidenceSuccessOutputFreshnessCause: "catch_up_failed";
+        /**
+         * @description One canonical primary implementation relationship from an exported
+         *     production symbol to a Rule.
+         */
+        EvidenceSuccessOutputImplementationBinding: {
+            declared_by: string;
+            file: string;
+            id: components["schemas"]["EvidenceSuccessOutputStableId"];
+            retired?: boolean;
+            rule_id: components["schemas"]["EvidenceSuccessOutputStableId"];
+            /** Format: uint32 */
+            schema_version: number;
+            scope_id: components["schemas"]["EvidenceSuccessOutputScopeId"];
+            symbol: string;
+        };
+        /**
+         * @description One record of a Rule whose evidence needs review because the Requirement
+         *     it serves was restated.
+         *
+         *     The record keeps why review was asked for. A verification run arriving
+         *     after the change clears it in place rather than removing the reason.
+         */
+        EvidenceSuccessOutputRequirementReview: {
+            after: string;
+            before: string;
+            /** Format: int64 */
+            changed_at: number;
+            /** Format: int64 */
+            cleared_at?: number | null;
+            cleared_by_run?: components["schemas"]["EvidenceSuccessOutputStableId"] | null;
+            field: string;
+            id: components["schemas"]["EvidenceSuccessOutputStableId"];
+            requirement_id: components["schemas"]["EvidenceSuccessOutputStableId"];
+            rule_id: components["schemas"]["EvidenceSuccessOutputStableId"];
+            /** Format: uint32 */
+            schema_version: number;
+            scope_id: components["schemas"]["EvidenceSuccessOutputScopeId"];
+        };
+        /**
+         * @description A scope id. The inner `String` is private and `new` is the only way in, so
+         *     every `ScopeId` in existence satisfies [`is_well_formed_id`].
+         */
+        EvidenceSuccessOutputScopeId: string;
+        /**
+         * @description A stable artifact id. The inner `String` is private and `new` is the only
+         *     way in, so every `StableId` in existence satisfies [`is_well_formed_id`].
+         */
+        EvidenceSuccessOutputStableId: string;
+        /** @description What a commit range did to the code carrying a Rule's evidence. */
+        EvidenceSuccessOutputStaleEvidence: {
+            base: string;
+            head: string;
+            sites: components["schemas"]["EvidenceSuccessOutputEvidenceDiffSite"][];
+        };
+        /**
+         * @description What a query answer reflects: the projection revision the rows came
+         *     from, the freshness step the reader ran, and which parts of the answer
+         *     the revision covers.
+         *
+         *     `serial` and `digest` name the latest `projection_revision` row and
+         *     `instance_id` the `projection_instance` row; serials compare only within
+         *     one instance. `attested` names the projection tables behind the answer.
+         *     `live` names what the stamp does not cover, from a closed list:
+         *     `canonical` (canonical shards), `scanned_sites` (a working-tree scan),
+         *     `verification_runs` (cache JSONL), and `diff` (git). A stamp never
+         *     implies freshness for anything it does not list.
+         */
+        EvidenceSuccessOutputStamp: {
+            attested: string[];
+            /**
+             * Format: uint32
+             * @description The reader logic version. It moves when the reader answers
+             *     differently over the same rows, never for a migration.
+             */
+            derivation: number;
+            digest: string;
+            instance_id: string;
+            live: string[];
+            policy: components["schemas"]["EvidenceSuccessOutputStampPolicy"];
+            /** Format: int64 */
+            serial: number;
+        };
+        /** @description The freshness step a read ran before it answered. */
+        EvidenceSuccessOutputStampPolicy: "catch_up" | "annotate_only" | "refuse_stale" | "catch_up_failed";
+        /** @description One durable language-authored relationship from a code site to a Rule. */
+        EvidenceSuccessOutputVerificationBinding: {
+            declared_by: string;
+            file: string;
+            id: components["schemas"]["EvidenceSuccessOutputStableId"];
+            key: string;
+            method: components["schemas"]["EvidenceSuccessOutputVerificationMethod"];
+            retired?: boolean;
+            rule_id: components["schemas"]["EvidenceSuccessOutputStableId"];
+            /** Format: uint32 */
+            schema_version: number;
+            scope_id: components["schemas"]["EvidenceSuccessOutputScopeId"];
+            symbol?: string | null;
+        };
+        /**
+         * @description How a verification binding supports its Rule.
+         * @enum {string}
+         */
+        EvidenceSuccessOutputVerificationMethod: "exhaustion" | "property" | "examples" | "conformance" | "construction" | "proof";
+        /**
+         * @description Volatile evidence from one language-owned verification callback.
+         *
+         *     Runs live in Provenance's derived cache rather than canonical state: a
+         *     local test run must not dirty the repository. `rule_id` is the join back
+         *     to the canonical graph.
+         */
+        EvidenceSuccessOutputVerificationRun: {
+            binding_id?: components["schemas"]["EvidenceSuccessOutputStableId"] | null;
+            commit?: string | null;
+            /** Format: int64 */
+            completed_at?: number | null;
+            declared_by: string;
+            error?: string | null;
+            file?: string | null;
+            id: components["schemas"]["EvidenceSuccessOutputStableId"];
+            method: string;
+            rule_id: components["schemas"]["EvidenceSuccessOutputStableId"];
+            /** Format: uint32 */
+            schema_version: number;
+            scope_id: components["schemas"]["EvidenceSuccessOutputScopeId"];
+            /** Format: int64 */
+            started_at: number;
+            status: components["schemas"]["EvidenceSuccessOutputVerificationRunStatus"];
+            symbol?: string | null;
+        };
+        /**
+         * @description The lifecycle state of one callback-backed verification run.
+         * @enum {string}
+         */
+        EvidenceSuccessOutputVerificationRunStatus: "running" | "passed" | "failed";
+        /** FailureEnvelope */
         GetFailureOutput: {
             error: components["schemas"]["GetFailureOutputOperationError"];
             /** @constant */
@@ -268,6 +694,18 @@ export interface components {
         };
         GetFailureOutputReadFailure: {
             /** @constant */
+            kind: "file_access_denied";
+        } | {
+            /** @constant */
+            kind: "file_unavailable";
+        } | {
+            /** @constant */
+            kind: "git_unavailable";
+        } | {
+            /** @constant */
+            kind: "git_revision_not_found";
+        } | {
+            /** @constant */
             kind: "no_projection";
         } | {
             digest: string;
@@ -302,19 +740,19 @@ export interface components {
         GetRequestInputGetQuery: {
             id: string;
             /** @default false */
-            include_retired: boolean;
+            include_retired?: boolean;
             node_type: components["schemas"]["GetRequestInputNodeType"];
             /**
              * Format: uint32
              * @default null
              */
-            protocol_version: number | null;
+            protocol_version?: number | null;
         };
         /** @enum {string} */
         GetRequestInputNodeType: "source" | "requirement" | "resolution" | "rule" | "topic" | "question" | "domain" | "boundary";
         GetRequestInputRepositoryContext: {
             /** @default null */
-            freshness: components["schemas"]["GetRequestInputFreshnessPolicy"] | null;
+            freshness?: components["schemas"]["GetRequestInputFreshnessPolicy"] | null;
             repository: string;
             scope: string;
         };
@@ -570,6 +1008,219 @@ export interface components {
         /** @enum {string} */
         GetSuccessOutputTopicStatus: "open" | "explored" | "closed";
         /** FailureEnvelope */
+        ImpactFailureOutput: {
+            error: components["schemas"]["ImpactFailureOutputOperationError"];
+            /** @constant */
+            operation?: "impact";
+            /** @constant */
+            protocol_version: 7;
+        };
+        /** @enum {string} */
+        ImpactFailureOutputInvalidInputReason: "required" | "invalid_value" | "malformed_json" | "unknown_field" | "too_large";
+        ImpactFailureOutputMovedUnit: {
+            live: string;
+            stored: string;
+            unit: string;
+        };
+        /** @description Keeps the handler's native error separate from preparation failure. */
+        ImpactFailureOutputOperationError: components["schemas"]["ImpactFailureOutputOperationFailure"] | components["schemas"]["ImpactFailureOutputReadFailure"];
+        ImpactFailureOutputOperationFailure: {
+            field: string | null;
+            /** @constant */
+            kind: "invalid_input";
+            reason: components["schemas"]["ImpactFailureOutputInvalidInputReason"];
+        } | {
+            /** @constant */
+            kind: "protocol_mismatch";
+            /** Format: uint32 */
+            requested: number;
+            /** Format: uint32 */
+            supported: number;
+        } | {
+            /** @constant */
+            kind: "unknown_operation";
+        } | {
+            /** @constant */
+            kind: "unauthenticated";
+        } | {
+            /** @constant */
+            kind: "access_denied";
+        } | {
+            /** @constant */
+            kind: "unknown_target";
+        } | {
+            /** @constant */
+            kind: "unknown_scope";
+        } | {
+            /** @constant */
+            kind: "unavailable_needs";
+        } | {
+            /** @constant */
+            kind: "internal";
+        };
+        ImpactFailureOutputReadFailure: {
+            /** @constant */
+            kind: "file_access_denied";
+        } | {
+            /** @constant */
+            kind: "file_unavailable";
+        } | {
+            /** @constant */
+            kind: "git_unavailable";
+        } | {
+            /** @constant */
+            kind: "git_revision_not_found";
+        } | {
+            /** @constant */
+            kind: "no_projection";
+        } | {
+            digest: string;
+            instance_id: string;
+            /** @constant */
+            kind: "stale";
+            moved: components["schemas"]["ImpactFailureOutputMovedUnit"][];
+            /** Format: int64 */
+            serial: number;
+        } | {
+            /** @constant */
+            kind: "unit_unreadable";
+            unit: string;
+        } | {
+            /** @constant */
+            kind: "schema_behind";
+        } | {
+            /** @constant */
+            kind: "half_migrated";
+        } | {
+            /** @constant */
+            kind: "read_failed";
+        };
+        /** RepositoryCall */
+        ImpactRequestInput: {
+            context: components["schemas"]["ImpactRequestInputRepositoryContext"];
+            request: components["schemas"]["ImpactRequestInputImpactQuery"];
+        };
+        /** @description Which freshness step a read runs before it answers. */
+        ImpactRequestInputFreshnessPolicy: "catch_up" | "annotate_only" | "refuse_stale";
+        /** @description Read the Rules a record reaches, with the code standing behind them. */
+        ImpactRequestInputImpactQuery: {
+            id: string;
+            /** @default false */
+            include_retired?: boolean;
+            /**
+             * Format: uint
+             * @default 50
+             */
+            limit?: number;
+            /** @default null */
+            node_type?: components["schemas"]["ImpactRequestInputNodeType"] | null;
+            /**
+             * Format: uint32
+             * @default null
+             */
+            protocol_version?: number | null;
+        };
+        /** @enum {string} */
+        ImpactRequestInputNodeType: "source" | "requirement" | "resolution" | "rule" | "topic" | "question" | "domain" | "boundary";
+        ImpactRequestInputRepositoryContext: {
+            /** @default null */
+            freshness?: components["schemas"]["ImpactRequestInputFreshnessPolicy"] | null;
+            repository: string;
+            scope: string;
+        };
+        /**
+         * QueryResponse
+         * @description The envelope every query primitive answers in.
+         *
+         *     The protocol version travels with the answer, so a caller holding a
+         *     recorded response can tell which contract produced it, `operation`
+         *     names which primitive it came from, and `stamp` says what the answer
+         *     reflects.
+         */
+        ImpactSuccessOutput: {
+            affected_rules: components["schemas"]["ImpactSuccessOutputAffectedRule"][];
+            freshness_cause?: components["schemas"]["ImpactSuccessOutputFreshnessCause"] | null;
+            freshness_error?: string | null;
+            has_more: boolean;
+            id: string;
+            /** Format: uint */
+            limit: number;
+            /** @constant */
+            operation: "impact";
+            /** @constant */
+            protocol_version: 7;
+            /**
+             * @description The working-tree scan stopped at the configured file count, so the
+             *     scanned sites are a lower bound.
+             * @default false
+             */
+            scan_cut: boolean;
+            stamp: components["schemas"]["ImpactSuccessOutputStamp"];
+        };
+        /** @description One Rule a change reaches, with the code that stands behind it. */
+        ImpactSuccessOutputAffectedRule: {
+            id: components["schemas"]["ImpactSuccessOutputStableId"];
+            implementations: components["schemas"]["ImpactSuccessOutputImplementationSite"][];
+            verifications: components["schemas"]["ImpactSuccessOutputVerificationSite"][];
+        };
+        /**
+         * @description The stage that failed is known even when its lower-level error is not public.
+         * @enum {string}
+         */
+        ImpactSuccessOutputFreshnessCause: "catch_up_failed";
+        /** @description Where a Rule is implemented. */
+        ImpactSuccessOutputImplementationSite: {
+            file: string;
+            /** Format: uint */
+            line?: number | null;
+            symbol?: string | null;
+        };
+        /**
+         * @description A stable artifact id. The inner `String` is private and `new` is the only
+         *     way in, so every `StableId` in existence satisfies [`is_well_formed_id`].
+         */
+        ImpactSuccessOutputStableId: string;
+        /**
+         * @description What a query answer reflects: the projection revision the rows came
+         *     from, the freshness step the reader ran, and which parts of the answer
+         *     the revision covers.
+         *
+         *     `serial` and `digest` name the latest `projection_revision` row and
+         *     `instance_id` the `projection_instance` row; serials compare only within
+         *     one instance. `attested` names the projection tables behind the answer.
+         *     `live` names what the stamp does not cover, from a closed list:
+         *     `canonical` (canonical shards), `scanned_sites` (a working-tree scan),
+         *     `verification_runs` (cache JSONL), and `diff` (git). A stamp never
+         *     implies freshness for anything it does not list.
+         */
+        ImpactSuccessOutputStamp: {
+            attested: string[];
+            /**
+             * Format: uint32
+             * @description The reader logic version. It moves when the reader answers
+             *     differently over the same rows, never for a migration.
+             */
+            derivation: number;
+            digest: string;
+            instance_id: string;
+            live: string[];
+            policy: components["schemas"]["ImpactSuccessOutputStampPolicy"];
+            /** Format: int64 */
+            serial: number;
+        };
+        /** @description The freshness step a read ran before it answered. */
+        ImpactSuccessOutputStampPolicy: "catch_up" | "annotate_only" | "refuse_stale" | "catch_up_failed";
+        /** @description Where a Rule is verified, and how. */
+        ImpactSuccessOutputVerificationSite: {
+            declared_by?: string | null;
+            file: string;
+            key?: string | null;
+            /** Format: uint */
+            line?: number | null;
+            method: string;
+            symbol?: string | null;
+        };
+        /** FailureEnvelope */
         InfoFailureOutput: {
             error: components["schemas"]["InfoFailureOutputOperationError"];
             /** @constant */
@@ -621,6 +1272,18 @@ export interface components {
             kind: "internal";
         };
         InfoFailureOutputReadFailure: {
+            /** @constant */
+            kind: "file_access_denied";
+        } | {
+            /** @constant */
+            kind: "file_unavailable";
+        } | {
+            /** @constant */
+            kind: "git_unavailable";
+        } | {
+            /** @constant */
+            kind: "git_revision_not_found";
+        } | {
             /** @constant */
             kind: "no_projection";
         } | {
@@ -725,6 +1388,18 @@ export interface components {
         };
         NeighborsFailureOutputReadFailure: {
             /** @constant */
+            kind: "file_access_denied";
+        } | {
+            /** @constant */
+            kind: "file_unavailable";
+        } | {
+            /** @constant */
+            kind: "git_unavailable";
+        } | {
+            /** @constant */
+            kind: "git_revision_not_found";
+        } | {
+            /** @constant */
             kind: "no_projection";
         } | {
             digest: string;
@@ -767,30 +1442,30 @@ export interface components {
         /** @description Read the records one hop from a record. */
         NeighborsRequestInputNeighborsQuery: {
             /** @default both */
-            direction: components["schemas"]["NeighborsRequestInputDirection"];
+            direction?: components["schemas"]["NeighborsRequestInputDirection"];
             id: string;
             /** @default false */
-            include_retired: boolean;
+            include_retired?: boolean;
             /**
              * Format: uint
              * @default 50
              */
-            limit: number;
+            limit?: number;
             /** @default null */
-            node_type: components["schemas"]["NeighborsRequestInputNodeType"] | null;
+            node_type?: components["schemas"]["NeighborsRequestInputNodeType"] | null;
             /**
              * Format: uint32
              * @default null
              */
-            protocol_version: number | null;
+            protocol_version?: number | null;
             /** @default [] */
-            relations: string[];
+            relations?: string[];
         };
         /** @enum {string} */
         NeighborsRequestInputNodeType: "source" | "requirement" | "resolution" | "rule" | "topic" | "question" | "domain" | "boundary";
         NeighborsRequestInputRepositoryContext: {
             /** @default null */
-            freshness: components["schemas"]["NeighborsRequestInputFreshnessPolicy"] | null;
+            freshness?: components["schemas"]["NeighborsRequestInputFreshnessPolicy"] | null;
             repository: string;
             scope: string;
         };
@@ -1064,6 +1739,385 @@ export interface components {
         /** @enum {string} */
         NeighborsSuccessOutputTopicStatus: "open" | "explored" | "closed";
         /** FailureEnvelope */
+        ResolveSymbolFailureOutput: {
+            error: components["schemas"]["ResolveSymbolFailureOutputOperationError"];
+            /** @constant */
+            operation?: "resolve-symbol";
+            /** @constant */
+            protocol_version: 7;
+        };
+        /** @enum {string} */
+        ResolveSymbolFailureOutputInvalidInputReason: "required" | "invalid_value" | "malformed_json" | "unknown_field" | "too_large";
+        ResolveSymbolFailureOutputMovedUnit: {
+            live: string;
+            stored: string;
+            unit: string;
+        };
+        /** @description Keeps the handler's native error separate from preparation failure. */
+        ResolveSymbolFailureOutputOperationError: components["schemas"]["ResolveSymbolFailureOutputOperationFailure"] | components["schemas"]["ResolveSymbolFailureOutputReadFailure"];
+        ResolveSymbolFailureOutputOperationFailure: {
+            field: string | null;
+            /** @constant */
+            kind: "invalid_input";
+            reason: components["schemas"]["ResolveSymbolFailureOutputInvalidInputReason"];
+        } | {
+            /** @constant */
+            kind: "protocol_mismatch";
+            /** Format: uint32 */
+            requested: number;
+            /** Format: uint32 */
+            supported: number;
+        } | {
+            /** @constant */
+            kind: "unknown_operation";
+        } | {
+            /** @constant */
+            kind: "unauthenticated";
+        } | {
+            /** @constant */
+            kind: "access_denied";
+        } | {
+            /** @constant */
+            kind: "unknown_target";
+        } | {
+            /** @constant */
+            kind: "unknown_scope";
+        } | {
+            /** @constant */
+            kind: "unavailable_needs";
+        } | {
+            /** @constant */
+            kind: "internal";
+        };
+        ResolveSymbolFailureOutputReadFailure: {
+            /** @constant */
+            kind: "file_access_denied";
+        } | {
+            /** @constant */
+            kind: "file_unavailable";
+        } | {
+            /** @constant */
+            kind: "git_unavailable";
+        } | {
+            /** @constant */
+            kind: "git_revision_not_found";
+        } | {
+            /** @constant */
+            kind: "no_projection";
+        } | {
+            digest: string;
+            instance_id: string;
+            /** @constant */
+            kind: "stale";
+            moved: components["schemas"]["ResolveSymbolFailureOutputMovedUnit"][];
+            /** Format: int64 */
+            serial: number;
+        } | {
+            /** @constant */
+            kind: "unit_unreadable";
+            unit: string;
+        } | {
+            /** @constant */
+            kind: "schema_behind";
+        } | {
+            /** @constant */
+            kind: "half_migrated";
+        } | {
+            /** @constant */
+            kind: "read_failed";
+        };
+        /** RepositoryCall */
+        ResolveSymbolRequestInput: {
+            context: components["schemas"]["ResolveSymbolRequestInputRepositoryContext"];
+            request: components["schemas"]["ResolveSymbolRequestInputResolveSymbolQuery"];
+        };
+        /** @description Which freshness step a read runs before it answers. */
+        ResolveSymbolRequestInputFreshnessPolicy: "catch_up" | "annotate_only" | "refuse_stale";
+        ResolveSymbolRequestInputRepositoryContext: {
+            /** @default null */
+            freshness?: components["schemas"]["ResolveSymbolRequestInputFreshnessPolicy"] | null;
+            repository: string;
+            scope: string;
+        };
+        /** @description Read the Rules bound to one code site. */
+        ResolveSymbolRequestInputResolveSymbolQuery: {
+            file: string;
+            /** @default false */
+            include_retired?: boolean;
+            /**
+             * Format: uint
+             * @default 50
+             */
+            limit?: number;
+            /**
+             * Format: uint
+             * @default null
+             */
+            line?: number | null;
+            /**
+             * Format: uint32
+             * @default null
+             */
+            protocol_version?: number | null;
+            /** @default null */
+            symbol?: string | null;
+        };
+        /**
+         * QueryResponse
+         * @description The envelope every query primitive answers in.
+         *
+         *     The protocol version travels with the answer, so a caller holding a
+         *     recorded response can tell which contract produced it, `operation`
+         *     names which primitive it came from, and `stamp` says what the answer
+         *     reflects.
+         */
+        ResolveSymbolSuccessOutput: {
+            file: string;
+            freshness_cause?: components["schemas"]["ResolveSymbolSuccessOutputFreshnessCause"] | null;
+            freshness_error?: string | null;
+            has_more: boolean;
+            /** Format: uint */
+            limit: number;
+            /** @constant */
+            operation: "resolve-symbol";
+            /** @constant */
+            protocol_version: 7;
+            rules: components["schemas"]["ResolveSymbolSuccessOutputGraphNode"][];
+            stamp: components["schemas"]["ResolveSymbolSuccessOutputStamp"];
+            symbol?: string | null;
+        };
+        ResolveSymbolSuccessOutputArtifactLink: {
+            target_id: components["schemas"]["ResolveSymbolSuccessOutputStableId"];
+            target_type: components["schemas"]["ResolveSymbolSuccessOutputArtifactLinkTargetType"];
+        };
+        /** @enum {string} */
+        ResolveSymbolSuccessOutputArtifactLinkTargetType: "source" | "requirement" | "resolution" | "rule";
+        ResolveSymbolSuccessOutputBoundary: {
+            id: components["schemas"]["ResolveSymbolSuccessOutputStableId"];
+            requirement_id: components["schemas"]["ResolveSymbolSuccessOutputStableId"];
+            /** Format: uint32 */
+            schema_version: number;
+            scope_id: components["schemas"]["ResolveSymbolSuccessOutputScopeId"];
+            source_ref?: components["schemas"]["ResolveSymbolSuccessOutputSourceReference"] | null;
+            statement: string;
+        };
+        /** @description One owner-local path to a language-authored declaration. */
+        ResolveSymbolSuccessOutputDeclarationAddress: string[];
+        ResolveSymbolSuccessOutputDomain: {
+            color?: string | null;
+            description?: string | null;
+            id: components["schemas"]["ResolveSymbolSuccessOutputStableId"];
+            name: string;
+            /** Format: uint32 */
+            schema_version: number;
+            scope_id: components["schemas"]["ResolveSymbolSuccessOutputScopeId"];
+        };
+        /**
+         * @description The stage that failed is known even when its lower-level error is not public.
+         * @enum {string}
+         */
+        ResolveSymbolSuccessOutputFreshnessCause: "catch_up_failed";
+        /**
+         * @description One canonical record as a query hands it back.
+         *
+         *     Each variant carries the record the store already writes, so a primitive
+         *     never invents a second vocabulary for a Requirement or a Rule. The
+         *     `node_type` tag is the same word a relation row uses for its endpoints.
+         */
+        ResolveSymbolSuccessOutputGraphNode: components["schemas"]["ResolveSymbolSuccessOutputSource"] | components["schemas"]["ResolveSymbolSuccessOutputRequirement"] | components["schemas"]["ResolveSymbolSuccessOutputResolution"] | components["schemas"]["ResolveSymbolSuccessOutputRule"] | components["schemas"]["ResolveSymbolSuccessOutputTopic"] | components["schemas"]["ResolveSymbolSuccessOutputQuestion"] | components["schemas"]["ResolveSymbolSuccessOutputDomain"] | components["schemas"]["ResolveSymbolSuccessOutputBoundary"];
+        ResolveSymbolSuccessOutputQuestion: {
+            answer?: string | null;
+            /** Format: int64 */
+            claimed_at?: number | null;
+            claimed_by?: string | null;
+            contradicts?: components["schemas"]["ResolveSymbolSuccessOutputStableId"] | null;
+            id: components["schemas"]["ResolveSymbolSuccessOutputStableId"];
+            /** @default [] */
+            links: components["schemas"]["ResolveSymbolSuccessOutputArtifactLink"][];
+            question: string;
+            requirement_id: components["schemas"]["ResolveSymbolSuccessOutputStableId"];
+            resolution_id?: components["schemas"]["ResolveSymbolSuccessOutputStableId"] | null;
+            /** @description The verb that resolves this question, chosen when the question is minted. */
+            resolution_method: components["schemas"]["ResolveSymbolSuccessOutputResolutionMethod"];
+            /** Format: uint32 */
+            schema_version: number;
+            scope_id: components["schemas"]["ResolveSymbolSuccessOutputScopeId"];
+            status: components["schemas"]["ResolveSymbolSuccessOutputQuestionStatus"];
+            topic_id: components["schemas"]["ResolveSymbolSuccessOutputStableId"];
+        };
+        /** @enum {string} */
+        ResolveSymbolSuccessOutputQuestionStatus: "open" | "blocked_on_human" | "answered";
+        ResolveSymbolSuccessOutputRequirement: {
+            declaration_address?: components["schemas"]["ResolveSymbolSuccessOutputDeclarationAddress"] | null;
+            declared_by?: string | null;
+            depends_on?: components["schemas"]["ResolveSymbolSuccessOutputStableId"][];
+            description?: string | null;
+            domain_id?: components["schemas"]["ResolveSymbolSuccessOutputStableId"] | null;
+            /**
+             * @description Deliberately unstructured free text: the dim view of decisions and
+             *     investigations that are coming but cannot yet be phrased sharply.
+             */
+            fog?: string | null;
+            id: components["schemas"]["ResolveSymbolSuccessOutputStableId"];
+            origin_message?: components["schemas"]["ResolveSymbolSuccessOutputStableId"] | null;
+            origin_thread?: components["schemas"]["ResolveSymbolSuccessOutputStableId"] | null;
+            refines?: components["schemas"]["ResolveSymbolSuccessOutputStableId"] | null;
+            retired?: boolean;
+            /** Format: uint32 */
+            schema_version: number;
+            scope_id: components["schemas"]["ResolveSymbolSuccessOutputScopeId"];
+            source_refs?: components["schemas"]["ResolveSymbolSuccessOutputSourceReference"][];
+            spawned_by?: components["schemas"]["ResolveSymbolSuccessOutputStableId"] | null;
+            statement: string;
+            status: components["schemas"]["ResolveSymbolSuccessOutputRequirementStatus"];
+            supersedes?: components["schemas"]["ResolveSymbolSuccessOutputStableId"][];
+        };
+        /** @enum {string} */
+        ResolveSymbolSuccessOutputRequirementStatus: "active" | "discovery" | "refinement" | "resolved";
+        ResolveSymbolSuccessOutputResolution: {
+            /** Format: int64 */
+            approved_at?: number | null;
+            approved_by?: string | null;
+            /** Format: double */
+            confidence?: number | null;
+            context?: string | null;
+            enforcement?: string | null;
+            id: components["schemas"]["ResolveSymbolSuccessOutputStableId"];
+            /** @default [] */
+            inputs: components["schemas"]["ResolveSymbolSuccessOutputResolutionInput"][];
+            made_by?: string | null;
+            origin_message?: components["schemas"]["ResolveSymbolSuccessOutputStableId"] | null;
+            origin_thread?: components["schemas"]["ResolveSymbolSuccessOutputStableId"] | null;
+            position: string;
+            rationale: string;
+            requirement_ids?: components["schemas"]["ResolveSymbolSuccessOutputStableId"][];
+            review_on: string | null;
+            /** Format: uint32 */
+            schema_version: number;
+            scope_id: components["schemas"]["ResolveSymbolSuccessOutputScopeId"];
+            status: components["schemas"]["ResolveSymbolSuccessOutputResolutionStatus"];
+            supersedes?: components["schemas"]["ResolveSymbolSuccessOutputStableId"][];
+            title: string;
+        };
+        ResolveSymbolSuccessOutputResolutionInput: {
+            input_type: components["schemas"]["ResolveSymbolSuccessOutputResolutionInputType"];
+            reference: string;
+            summary: string;
+        };
+        /** @enum {string} */
+        ResolveSymbolSuccessOutputResolutionInputType: "regulatory" | "legal_advice" | "commercial" | "benchmark" | "technical" | "incident" | "source_material";
+        /** @enum {string} */
+        ResolveSymbolSuccessOutputResolutionMethod: "grill" | "prototype" | "research" | "verify" | "task";
+        /** @enum {string} */
+        ResolveSymbolSuccessOutputResolutionStatus: "draft" | "review" | "proposed" | "approved" | "rejected" | "revised" | "superseded" | "abandoned";
+        ResolveSymbolSuccessOutputRule: {
+            declaration_address?: components["schemas"]["ResolveSymbolSuccessOutputDeclarationAddress"] | null;
+            declared_by?: string | null;
+            description?: string | null;
+            id: components["schemas"]["ResolveSymbolSuccessOutputStableId"];
+            name?: string | null;
+            origin_message?: components["schemas"]["ResolveSymbolSuccessOutputStableId"] | null;
+            origin_thread?: components["schemas"]["ResolveSymbolSuccessOutputStableId"] | null;
+            requirement_ids?: components["schemas"]["ResolveSymbolSuccessOutputStableId"][];
+            resolution_ids?: components["schemas"]["ResolveSymbolSuccessOutputStableId"][];
+            retired?: boolean;
+            /** Format: uint32 */
+            schema_version: number;
+            scope_id: components["schemas"]["ResolveSymbolSuccessOutputScopeId"];
+            severity: components["schemas"]["ResolveSymbolSuccessOutputRuleSeverity"];
+            source_document?: string | null;
+            source_section?: string | null;
+            statement: string;
+            status: components["schemas"]["ResolveSymbolSuccessOutputRuleStatus"];
+        };
+        /** @enum {string} */
+        ResolveSymbolSuccessOutputRuleSeverity: "low" | "medium" | "high" | "critical";
+        /** @enum {string} */
+        ResolveSymbolSuccessOutputRuleStatus: "draft" | "review" | "active" | "deprecated" | "archived";
+        /**
+         * @description A scope id. The inner `String` is private and `new` is the only way in, so
+         *     every `ScopeId` in existence satisfies [`is_well_formed_id`].
+         */
+        ResolveSymbolSuccessOutputScopeId: string;
+        ResolveSymbolSuccessOutputSource: {
+            commit_pin?: string | null;
+            declaration_address?: components["schemas"]["ResolveSymbolSuccessOutputDeclarationAddress"] | null;
+            declared_by?: string | null;
+            /** Format: int64 */
+            effective_date?: number | null;
+            id: components["schemas"]["ResolveSymbolSuccessOutputStableId"];
+            name: string;
+            origin_message?: components["schemas"]["ResolveSymbolSuccessOutputStableId"] | null;
+            origin_thread?: components["schemas"]["ResolveSymbolSuccessOutputStableId"] | null;
+            reference?: string | null;
+            retired?: boolean;
+            /** Format: int64 */
+            review_date?: number | null;
+            /** Format: uint32 */
+            schema_version: number;
+            scope_id: components["schemas"]["ResolveSymbolSuccessOutputScopeId"];
+            source_type: components["schemas"]["ResolveSymbolSuccessOutputSourceType"];
+            supersedes?: components["schemas"]["ResolveSymbolSuccessOutputStableId"][];
+            url: string | null;
+        };
+        ResolveSymbolSuccessOutputSourceReference: {
+            clause?: string | null;
+            source_id: components["schemas"]["ResolveSymbolSuccessOutputStableId"];
+        };
+        /** @enum {string} */
+        ResolveSymbolSuccessOutputSourceType: "policy" | "document" | "legislation" | "company_agreement" | "system_state" | "external_integration" | "domain_knowledge" | "project_artifact" | "incident" | "api_spec";
+        /**
+         * @description A stable artifact id. The inner `String` is private and `new` is the only
+         *     way in, so every `StableId` in existence satisfies [`is_well_formed_id`].
+         */
+        ResolveSymbolSuccessOutputStableId: string;
+        /**
+         * @description What a query answer reflects: the projection revision the rows came
+         *     from, the freshness step the reader ran, and which parts of the answer
+         *     the revision covers.
+         *
+         *     `serial` and `digest` name the latest `projection_revision` row and
+         *     `instance_id` the `projection_instance` row; serials compare only within
+         *     one instance. `attested` names the projection tables behind the answer.
+         *     `live` names what the stamp does not cover, from a closed list:
+         *     `canonical` (canonical shards), `scanned_sites` (a working-tree scan),
+         *     `verification_runs` (cache JSONL), and `diff` (git). A stamp never
+         *     implies freshness for anything it does not list.
+         */
+        ResolveSymbolSuccessOutputStamp: {
+            attested: string[];
+            /**
+             * Format: uint32
+             * @description The reader logic version. It moves when the reader answers
+             *     differently over the same rows, never for a migration.
+             */
+            derivation: number;
+            digest: string;
+            instance_id: string;
+            live: string[];
+            policy: components["schemas"]["ResolveSymbolSuccessOutputStampPolicy"];
+            /** Format: int64 */
+            serial: number;
+        };
+        /** @description The freshness step a read ran before it answered. */
+        ResolveSymbolSuccessOutputStampPolicy: "catch_up" | "annotate_only" | "refuse_stale" | "catch_up_failed";
+        ResolveSymbolSuccessOutputTopic: {
+            /** Format: int64 */
+            claimed_at?: number | null;
+            claimed_by?: string | null;
+            id: components["schemas"]["ResolveSymbolSuccessOutputStableId"];
+            /** @default [] */
+            links: components["schemas"]["ResolveSymbolSuccessOutputArtifactLink"][];
+            requirement_id: components["schemas"]["ResolveSymbolSuccessOutputStableId"];
+            /** Format: uint32 */
+            schema_version: number;
+            scope_id: components["schemas"]["ResolveSymbolSuccessOutputScopeId"];
+            status: components["schemas"]["ResolveSymbolSuccessOutputTopicStatus"];
+            title: string;
+        };
+        /** @enum {string} */
+        ResolveSymbolSuccessOutputTopicStatus: "open" | "explored" | "closed";
+        /** FailureEnvelope */
         SearchFailureOutput: {
             error: components["schemas"]["SearchFailureOutputOperationError"];
             /** @constant */
@@ -1116,6 +2170,18 @@ export interface components {
         };
         SearchFailureOutputReadFailure: {
             /** @constant */
+            kind: "file_access_denied";
+        } | {
+            /** @constant */
+            kind: "file_unavailable";
+        } | {
+            /** @constant */
+            kind: "git_unavailable";
+        } | {
+            /** @constant */
+            kind: "git_revision_not_found";
+        } | {
+            /** @constant */
             kind: "no_projection";
         } | {
             digest: string;
@@ -1150,26 +2216,26 @@ export interface components {
         SearchRequestInputNodeType: "source" | "requirement" | "resolution" | "rule" | "topic" | "question" | "domain" | "boundary";
         SearchRequestInputRepositoryContext: {
             /** @default null */
-            freshness: components["schemas"]["SearchRequestInputFreshnessPolicy"] | null;
+            freshness?: components["schemas"]["SearchRequestInputFreshnessPolicy"] | null;
             repository: string;
             scope: string;
         };
         /** @description Find records whose text contains a phrase. */
         SearchRequestInputSearchQuery: {
             /** @default false */
-            include_retired: boolean;
+            include_retired?: boolean;
             /**
              * Format: uint
              * @default 50
              */
-            limit: number;
+            limit?: number;
             /** @default [] */
-            node_types: components["schemas"]["SearchRequestInputNodeType"][];
+            node_types?: components["schemas"]["SearchRequestInputNodeType"][];
             /**
              * Format: uint32
              * @default null
              */
-            protocol_version: number | null;
+            protocol_version?: number | null;
             text: string;
         };
         /**
@@ -1426,6 +2492,225 @@ export interface components {
         /** @enum {string} */
         SearchSuccessOutputTopicStatus: "open" | "explored" | "closed";
         /** FailureEnvelope */
+        StaleFailureOutput: {
+            error: components["schemas"]["StaleFailureOutputOperationError"];
+            /** @constant */
+            operation?: "stale";
+            /** @constant */
+            protocol_version: 7;
+        };
+        /** @enum {string} */
+        StaleFailureOutputInvalidInputReason: "required" | "invalid_value" | "malformed_json" | "unknown_field" | "too_large";
+        StaleFailureOutputMovedUnit: {
+            live: string;
+            stored: string;
+            unit: string;
+        };
+        /** @description Keeps the handler's native error separate from preparation failure. */
+        StaleFailureOutputOperationError: components["schemas"]["StaleFailureOutputOperationFailure"] | components["schemas"]["StaleFailureOutputReadFailure"];
+        StaleFailureOutputOperationFailure: {
+            field: string | null;
+            /** @constant */
+            kind: "invalid_input";
+            reason: components["schemas"]["StaleFailureOutputInvalidInputReason"];
+        } | {
+            /** @constant */
+            kind: "protocol_mismatch";
+            /** Format: uint32 */
+            requested: number;
+            /** Format: uint32 */
+            supported: number;
+        } | {
+            /** @constant */
+            kind: "unknown_operation";
+        } | {
+            /** @constant */
+            kind: "unauthenticated";
+        } | {
+            /** @constant */
+            kind: "access_denied";
+        } | {
+            /** @constant */
+            kind: "unknown_target";
+        } | {
+            /** @constant */
+            kind: "unknown_scope";
+        } | {
+            /** @constant */
+            kind: "unavailable_needs";
+        } | {
+            /** @constant */
+            kind: "internal";
+        };
+        StaleFailureOutputReadFailure: {
+            /** @constant */
+            kind: "file_access_denied";
+        } | {
+            /** @constant */
+            kind: "file_unavailable";
+        } | {
+            /** @constant */
+            kind: "git_unavailable";
+        } | {
+            /** @constant */
+            kind: "git_revision_not_found";
+        } | {
+            /** @constant */
+            kind: "no_projection";
+        } | {
+            digest: string;
+            instance_id: string;
+            /** @constant */
+            kind: "stale";
+            moved: components["schemas"]["StaleFailureOutputMovedUnit"][];
+            /** Format: int64 */
+            serial: number;
+        } | {
+            /** @constant */
+            kind: "unit_unreadable";
+            unit: string;
+        } | {
+            /** @constant */
+            kind: "schema_behind";
+        } | {
+            /** @constant */
+            kind: "half_migrated";
+        } | {
+            /** @constant */
+            kind: "read_failed";
+        };
+        /** RepositoryCall */
+        StaleRequestInput: {
+            context: components["schemas"]["StaleRequestInputRepositoryContext"];
+            request: components["schemas"]["StaleRequestInputStaleQuery"];
+        };
+        /** @description Which freshness step a read runs before it answers. */
+        StaleRequestInputFreshnessPolicy: "catch_up" | "annotate_only" | "refuse_stale";
+        StaleRequestInputRepositoryContext: {
+            /** @default null */
+            freshness?: components["schemas"]["StaleRequestInputFreshnessPolicy"] | null;
+            repository: string;
+            scope: string;
+        };
+        /** @description Read which evidence sites a commit range disturbed. */
+        StaleRequestInputStaleQuery: {
+            base: string;
+            /** @default null */
+            head?: string | null;
+            /** @default false */
+            include_retired?: boolean;
+            /**
+             * Format: uint
+             * @default 50
+             */
+            limit?: number;
+            /**
+             * Format: uint32
+             * @default null
+             */
+            protocol_version?: number | null;
+            /** @default [] */
+            rules?: string[];
+        };
+        /**
+         * QueryResponse
+         * @description The envelope every query primitive answers in.
+         *
+         *     The protocol version travels with the answer, so a caller holding a
+         *     recorded response can tell which contract produced it, `operation`
+         *     names which primitive it came from, and `stamp` says what the answer
+         *     reflects.
+         */
+        StaleSuccessOutput: {
+            base: string;
+            /** Format: uint */
+            files_changed: number;
+            freshness_cause?: components["schemas"]["StaleSuccessOutputFreshnessCause"] | null;
+            freshness_error?: string | null;
+            has_more: boolean;
+            head: string;
+            /** Format: uint */
+            limit: number;
+            /** @constant */
+            operation: "stale";
+            /** @constant */
+            protocol_version: 7;
+            sites: components["schemas"]["StaleSuccessOutputEvidenceDiffSite"][];
+            stamp: components["schemas"]["StaleSuccessOutputStamp"];
+            summary: components["schemas"]["StaleSuccessOutputEvidenceDiffSummary"];
+        };
+        /** @description One graph-cited evidence site resolved against both ends of a diff. */
+        StaleSuccessOutputEvidenceDiffSite: {
+            /** Format: uint */
+            end_line?: number | null;
+            file_path: string;
+            kind: components["schemas"]["StaleSuccessOutputEvidenceSiteKind"];
+            /** Format: uint */
+            line?: number | null;
+            original_file_path?: string | null;
+            /** Format: uint */
+            original_line?: number | null;
+            state: components["schemas"]["StaleSuccessOutputEvidenceDiffState"];
+            subject_id: string;
+        };
+        /**
+         * @description How one graph evidence path relates to a selected Git diff.
+         * @enum {string}
+         */
+        StaleSuccessOutputEvidenceDiffState: "untouched" | "touched" | "moved" | "gone";
+        StaleSuccessOutputEvidenceDiffSummary: {
+            /** Format: uint */
+            gone: number;
+            /** Format: uint */
+            moved: number;
+            /** Format: uint */
+            total_sites: number;
+            /** Format: uint */
+            touched: number;
+            /** Format: uint */
+            untouched: number;
+        };
+        /**
+         * @description The graph relationship that makes a path evidence.
+         * @enum {string}
+         */
+        StaleSuccessOutputEvidenceSiteKind: "rule_binding" | "verification" | "annotation" | "source_reference";
+        /**
+         * @description The stage that failed is known even when its lower-level error is not public.
+         * @enum {string}
+         */
+        StaleSuccessOutputFreshnessCause: "catch_up_failed";
+        /**
+         * @description What a query answer reflects: the projection revision the rows came
+         *     from, the freshness step the reader ran, and which parts of the answer
+         *     the revision covers.
+         *
+         *     `serial` and `digest` name the latest `projection_revision` row and
+         *     `instance_id` the `projection_instance` row; serials compare only within
+         *     one instance. `attested` names the projection tables behind the answer.
+         *     `live` names what the stamp does not cover, from a closed list:
+         *     `canonical` (canonical shards), `scanned_sites` (a working-tree scan),
+         *     `verification_runs` (cache JSONL), and `diff` (git). A stamp never
+         *     implies freshness for anything it does not list.
+         */
+        StaleSuccessOutputStamp: {
+            attested: string[];
+            /**
+             * Format: uint32
+             * @description The reader logic version. It moves when the reader answers
+             *     differently over the same rows, never for a migration.
+             */
+            derivation: number;
+            digest: string;
+            instance_id: string;
+            live: string[];
+            policy: components["schemas"]["StaleSuccessOutputStampPolicy"];
+            /** Format: int64 */
+            serial: number;
+        };
+        /** @description The freshness step a read ran before it answered. */
+        StaleSuccessOutputStampPolicy: "catch_up" | "annotate_only" | "refuse_stale" | "catch_up_failed";
+        /** FailureEnvelope */
         TraceFailureOutput: {
             error: components["schemas"]["TraceFailureOutputOperationError"];
             /** @constant */
@@ -1478,6 +2763,18 @@ export interface components {
         };
         TraceFailureOutputReadFailure: {
             /** @constant */
+            kind: "file_access_denied";
+        } | {
+            /** @constant */
+            kind: "file_unavailable";
+        } | {
+            /** @constant */
+            kind: "git_unavailable";
+        } | {
+            /** @constant */
+            kind: "git_revision_not_found";
+        } | {
+            /** @constant */
             kind: "no_projection";
         } | {
             digest: string;
@@ -1521,36 +2818,36 @@ export interface components {
         TraceRequestInputNodeType: "source" | "requirement" | "resolution" | "rule" | "topic" | "question" | "domain" | "boundary";
         TraceRequestInputRepositoryContext: {
             /** @default null */
-            freshness: components["schemas"]["TraceRequestInputFreshnessPolicy"] | null;
+            freshness?: components["schemas"]["TraceRequestInputFreshnessPolicy"] | null;
             repository: string;
             scope: string;
         };
         /** @description Walk outward from a record for a bounded number of hops. */
         TraceRequestInputTraceQuery: {
             /** @default both */
-            direction: components["schemas"]["TraceRequestInputDirection"];
+            direction?: components["schemas"]["TraceRequestInputDirection"];
             id: string;
             /** @default false */
-            include_retired: boolean;
+            include_retired?: boolean;
             /**
              * Format: uint
              * @default 50
              */
-            limit: number;
+            limit?: number;
             /**
              * Format: uint
              * @default 3
              */
-            max_depth: number;
+            max_depth?: number;
             /** @default null */
-            node_type: components["schemas"]["TraceRequestInputNodeType"] | null;
+            node_type?: components["schemas"]["TraceRequestInputNodeType"] | null;
             /**
              * Format: uint32
              * @default null
              */
-            protocol_version: number | null;
+            protocol_version?: number | null;
             /** @default [] */
-            relations: string[];
+            relations?: string[];
         };
         /**
          * QueryResponse
@@ -1814,6 +3111,296 @@ export interface components {
             depth: number;
             node: components["schemas"]["TraceSuccessOutputGraphNode"];
         };
+        /** FailureEnvelope */
+        VerificationBindingsFailureOutput: {
+            error: components["schemas"]["VerificationBindingsFailureOutputOperationError"];
+            /** @constant */
+            operation?: "verification-bindings";
+            /** @constant */
+            protocol_version: 7;
+        };
+        /** @enum {string} */
+        VerificationBindingsFailureOutputInvalidInputReason: "required" | "invalid_value" | "malformed_json" | "unknown_field" | "too_large";
+        VerificationBindingsFailureOutputMovedUnit: {
+            live: string;
+            stored: string;
+            unit: string;
+        };
+        /** @description Keeps the handler's native error separate from preparation failure. */
+        VerificationBindingsFailureOutputOperationError: components["schemas"]["VerificationBindingsFailureOutputOperationFailure"] | components["schemas"]["VerificationBindingsFailureOutputReadFailure"];
+        VerificationBindingsFailureOutputOperationFailure: {
+            field: string | null;
+            /** @constant */
+            kind: "invalid_input";
+            reason: components["schemas"]["VerificationBindingsFailureOutputInvalidInputReason"];
+        } | {
+            /** @constant */
+            kind: "protocol_mismatch";
+            /** Format: uint32 */
+            requested: number;
+            /** Format: uint32 */
+            supported: number;
+        } | {
+            /** @constant */
+            kind: "unknown_operation";
+        } | {
+            /** @constant */
+            kind: "unauthenticated";
+        } | {
+            /** @constant */
+            kind: "access_denied";
+        } | {
+            /** @constant */
+            kind: "unknown_target";
+        } | {
+            /** @constant */
+            kind: "unknown_scope";
+        } | {
+            /** @constant */
+            kind: "unavailable_needs";
+        } | {
+            /** @constant */
+            kind: "internal";
+        };
+        VerificationBindingsFailureOutputReadFailure: {
+            /** @constant */
+            kind: "file_access_denied";
+        } | {
+            /** @constant */
+            kind: "file_unavailable";
+        } | {
+            /** @constant */
+            kind: "git_unavailable";
+        } | {
+            /** @constant */
+            kind: "git_revision_not_found";
+        } | {
+            /** @constant */
+            kind: "no_projection";
+        } | {
+            digest: string;
+            instance_id: string;
+            /** @constant */
+            kind: "stale";
+            moved: components["schemas"]["VerificationBindingsFailureOutputMovedUnit"][];
+            /** Format: int64 */
+            serial: number;
+        } | {
+            /** @constant */
+            kind: "unit_unreadable";
+            unit: string;
+        } | {
+            /** @constant */
+            kind: "schema_behind";
+        } | {
+            /** @constant */
+            kind: "half_migrated";
+        } | {
+            /** @constant */
+            kind: "read_failed";
+        };
+        /** RepositoryCall */
+        VerificationBindingsRequestInput: {
+            context: components["schemas"]["VerificationBindingsRequestInputRepositoryScope"];
+            request: components["schemas"]["VerificationBindingsRequestInputVerificationListRequest"];
+        };
+        /** @description Scope selection for operations that do not use projection freshness. */
+        VerificationBindingsRequestInputRepositoryScope: {
+            repository: string;
+            scope: string;
+        };
+        /**
+         * @description A stable artifact id. The inner `String` is private and `new` is the only
+         *     way in, so every `StableId` in existence satisfies [`is_well_formed_id`].
+         */
+        VerificationBindingsRequestInputStableId: string;
+        /** @description Existing verification lists remain complete and have no page controls. */
+        VerificationBindingsRequestInputVerificationListRequest: {
+            /** @default null */
+            rule?: components["schemas"]["VerificationBindingsRequestInputStableId"] | null;
+        };
+        /** Array_of_VerificationBinding */
+        VerificationBindingsSuccessOutput: components["schemas"]["VerificationBindingsSuccessOutputVerificationBinding"][];
+        /**
+         * @description A scope id. The inner `String` is private and `new` is the only way in, so
+         *     every `ScopeId` in existence satisfies [`is_well_formed_id`].
+         */
+        VerificationBindingsSuccessOutputScopeId: string;
+        /**
+         * @description A stable artifact id. The inner `String` is private and `new` is the only
+         *     way in, so every `StableId` in existence satisfies [`is_well_formed_id`].
+         */
+        VerificationBindingsSuccessOutputStableId: string;
+        /** @description One durable language-authored relationship from a code site to a Rule. */
+        VerificationBindingsSuccessOutputVerificationBinding: {
+            declared_by: string;
+            file: string;
+            id: components["schemas"]["VerificationBindingsSuccessOutputStableId"];
+            key: string;
+            method: components["schemas"]["VerificationBindingsSuccessOutputVerificationMethod"];
+            retired?: boolean;
+            rule_id: components["schemas"]["VerificationBindingsSuccessOutputStableId"];
+            /** Format: uint32 */
+            schema_version: number;
+            scope_id: components["schemas"]["VerificationBindingsSuccessOutputScopeId"];
+            symbol?: string | null;
+        };
+        /**
+         * @description How a verification binding supports its Rule.
+         * @enum {string}
+         */
+        VerificationBindingsSuccessOutputVerificationMethod: "exhaustion" | "property" | "examples" | "conformance" | "construction" | "proof";
+        /** FailureEnvelope */
+        VerificationRunsFailureOutput: {
+            error: components["schemas"]["VerificationRunsFailureOutputOperationError"];
+            /** @constant */
+            operation?: "verification-runs";
+            /** @constant */
+            protocol_version: 7;
+        };
+        /** @enum {string} */
+        VerificationRunsFailureOutputInvalidInputReason: "required" | "invalid_value" | "malformed_json" | "unknown_field" | "too_large";
+        VerificationRunsFailureOutputMovedUnit: {
+            live: string;
+            stored: string;
+            unit: string;
+        };
+        /** @description Keeps the handler's native error separate from preparation failure. */
+        VerificationRunsFailureOutputOperationError: components["schemas"]["VerificationRunsFailureOutputOperationFailure"] | components["schemas"]["VerificationRunsFailureOutputReadFailure"];
+        VerificationRunsFailureOutputOperationFailure: {
+            field: string | null;
+            /** @constant */
+            kind: "invalid_input";
+            reason: components["schemas"]["VerificationRunsFailureOutputInvalidInputReason"];
+        } | {
+            /** @constant */
+            kind: "protocol_mismatch";
+            /** Format: uint32 */
+            requested: number;
+            /** Format: uint32 */
+            supported: number;
+        } | {
+            /** @constant */
+            kind: "unknown_operation";
+        } | {
+            /** @constant */
+            kind: "unauthenticated";
+        } | {
+            /** @constant */
+            kind: "access_denied";
+        } | {
+            /** @constant */
+            kind: "unknown_target";
+        } | {
+            /** @constant */
+            kind: "unknown_scope";
+        } | {
+            /** @constant */
+            kind: "unavailable_needs";
+        } | {
+            /** @constant */
+            kind: "internal";
+        };
+        VerificationRunsFailureOutputReadFailure: {
+            /** @constant */
+            kind: "file_access_denied";
+        } | {
+            /** @constant */
+            kind: "file_unavailable";
+        } | {
+            /** @constant */
+            kind: "git_unavailable";
+        } | {
+            /** @constant */
+            kind: "git_revision_not_found";
+        } | {
+            /** @constant */
+            kind: "no_projection";
+        } | {
+            digest: string;
+            instance_id: string;
+            /** @constant */
+            kind: "stale";
+            moved: components["schemas"]["VerificationRunsFailureOutputMovedUnit"][];
+            /** Format: int64 */
+            serial: number;
+        } | {
+            /** @constant */
+            kind: "unit_unreadable";
+            unit: string;
+        } | {
+            /** @constant */
+            kind: "schema_behind";
+        } | {
+            /** @constant */
+            kind: "half_migrated";
+        } | {
+            /** @constant */
+            kind: "read_failed";
+        };
+        /** RepositoryCall */
+        VerificationRunsRequestInput: {
+            context: components["schemas"]["VerificationRunsRequestInputRepositoryScope"];
+            request: components["schemas"]["VerificationRunsRequestInputVerificationListRequest"];
+        };
+        /** @description Scope selection for operations that do not use projection freshness. */
+        VerificationRunsRequestInputRepositoryScope: {
+            repository: string;
+            scope: string;
+        };
+        /**
+         * @description A stable artifact id. The inner `String` is private and `new` is the only
+         *     way in, so every `StableId` in existence satisfies [`is_well_formed_id`].
+         */
+        VerificationRunsRequestInputStableId: string;
+        /** @description Existing verification lists remain complete and have no page controls. */
+        VerificationRunsRequestInputVerificationListRequest: {
+            /** @default null */
+            rule?: components["schemas"]["VerificationRunsRequestInputStableId"] | null;
+        };
+        /** Array_of_VerificationRun */
+        VerificationRunsSuccessOutput: components["schemas"]["VerificationRunsSuccessOutputVerificationRun"][];
+        /**
+         * @description A scope id. The inner `String` is private and `new` is the only way in, so
+         *     every `ScopeId` in existence satisfies [`is_well_formed_id`].
+         */
+        VerificationRunsSuccessOutputScopeId: string;
+        /**
+         * @description A stable artifact id. The inner `String` is private and `new` is the only
+         *     way in, so every `StableId` in existence satisfies [`is_well_formed_id`].
+         */
+        VerificationRunsSuccessOutputStableId: string;
+        /**
+         * @description Volatile evidence from one language-owned verification callback.
+         *
+         *     Runs live in Provenance's derived cache rather than canonical state: a
+         *     local test run must not dirty the repository. `rule_id` is the join back
+         *     to the canonical graph.
+         */
+        VerificationRunsSuccessOutputVerificationRun: {
+            binding_id?: components["schemas"]["VerificationRunsSuccessOutputStableId"] | null;
+            commit?: string | null;
+            /** Format: int64 */
+            completed_at?: number | null;
+            declared_by: string;
+            error?: string | null;
+            file?: string | null;
+            id: components["schemas"]["VerificationRunsSuccessOutputStableId"];
+            method: string;
+            rule_id: components["schemas"]["VerificationRunsSuccessOutputStableId"];
+            /** Format: uint32 */
+            schema_version: number;
+            scope_id: components["schemas"]["VerificationRunsSuccessOutputScopeId"];
+            /** Format: int64 */
+            started_at: number;
+            status: components["schemas"]["VerificationRunsSuccessOutputVerificationRunStatus"];
+            symbol?: string | null;
+        };
+        /**
+         * @description The lifecycle state of one callback-backed verification run.
+         * @enum {string}
+         */
+        VerificationRunsSuccessOutputVerificationRunStatus: "running" | "passed" | "failed";
     };
     responses: never;
     parameters: never;
@@ -1921,6 +3508,93 @@ export interface operations {
             };
         };
     };
+    evidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EvidenceRequestInput"];
+            };
+        };
+        responses: {
+            /** @description Operation result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceSuccessOutput"];
+                };
+            };
+            /** @description Operation refused */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceFailureOutput"];
+                };
+            };
+            /** @description Operation refused */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceFailureOutput"];
+                };
+            };
+            /** @description Operation refused */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceFailureOutput"];
+                };
+            };
+            /** @description Operation refused */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceFailureOutput"];
+                };
+            };
+            /** @description Operation refused */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceFailureOutput"];
+                };
+            };
+            /** @description Operation refused */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceFailureOutput"];
+                };
+            };
+            /** @description Operation refused */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceFailureOutput"];
+                };
+            };
+        };
+    };
     get: {
         parameters: {
             query?: never;
@@ -2004,6 +3678,93 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GetFailureOutput"];
+                };
+            };
+        };
+    };
+    impact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImpactRequestInput"];
+            };
+        };
+        responses: {
+            /** @description Operation result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImpactSuccessOutput"];
+                };
+            };
+            /** @description Operation refused */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImpactFailureOutput"];
+                };
+            };
+            /** @description Operation refused */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImpactFailureOutput"];
+                };
+            };
+            /** @description Operation refused */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImpactFailureOutput"];
+                };
+            };
+            /** @description Operation refused */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImpactFailureOutput"];
+                };
+            };
+            /** @description Operation refused */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImpactFailureOutput"];
+                };
+            };
+            /** @description Operation refused */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImpactFailureOutput"];
+                };
+            };
+            /** @description Operation refused */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImpactFailureOutput"];
                 };
             };
         };
@@ -2173,6 +3934,93 @@ export interface operations {
             };
         };
     };
+    resolveSymbol: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveSymbolRequestInput"];
+            };
+        };
+        responses: {
+            /** @description Operation result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResolveSymbolSuccessOutput"];
+                };
+            };
+            /** @description Operation refused */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResolveSymbolFailureOutput"];
+                };
+            };
+            /** @description Operation refused */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResolveSymbolFailureOutput"];
+                };
+            };
+            /** @description Operation refused */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResolveSymbolFailureOutput"];
+                };
+            };
+            /** @description Operation refused */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResolveSymbolFailureOutput"];
+                };
+            };
+            /** @description Operation refused */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResolveSymbolFailureOutput"];
+                };
+            };
+            /** @description Operation refused */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResolveSymbolFailureOutput"];
+                };
+            };
+            /** @description Operation refused */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResolveSymbolFailureOutput"];
+                };
+            };
+        };
+    };
     search: {
         parameters: {
             query?: never;
@@ -2260,6 +4108,93 @@ export interface operations {
             };
         };
     };
+    stale: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaleRequestInput"];
+            };
+        };
+        responses: {
+            /** @description Operation result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaleSuccessOutput"];
+                };
+            };
+            /** @description Operation refused */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaleFailureOutput"];
+                };
+            };
+            /** @description Operation refused */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaleFailureOutput"];
+                };
+            };
+            /** @description Operation refused */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaleFailureOutput"];
+                };
+            };
+            /** @description Operation refused */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaleFailureOutput"];
+                };
+            };
+            /** @description Operation refused */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaleFailureOutput"];
+                };
+            };
+            /** @description Operation refused */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaleFailureOutput"];
+                };
+            };
+            /** @description Operation refused */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaleFailureOutput"];
+                };
+            };
+        };
+    };
     trace: {
         parameters: {
             query?: never;
@@ -2343,6 +4278,162 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TraceFailureOutput"];
+                };
+            };
+        };
+    };
+    verificationBindings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerificationBindingsRequestInput"];
+            };
+        };
+        responses: {
+            /** @description Operation result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificationBindingsSuccessOutput"];
+                };
+            };
+            /** @description Operation refused */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificationBindingsFailureOutput"];
+                };
+            };
+            /** @description Operation refused */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificationBindingsFailureOutput"];
+                };
+            };
+            /** @description Operation refused */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificationBindingsFailureOutput"];
+                };
+            };
+            /** @description Operation refused */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificationBindingsFailureOutput"];
+                };
+            };
+            /** @description Operation refused */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificationBindingsFailureOutput"];
+                };
+            };
+            /** @description Operation refused */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificationBindingsFailureOutput"];
+                };
+            };
+        };
+    };
+    verificationRuns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerificationRunsRequestInput"];
+            };
+        };
+        responses: {
+            /** @description Operation result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificationRunsSuccessOutput"];
+                };
+            };
+            /** @description Operation refused */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificationRunsFailureOutput"];
+                };
+            };
+            /** @description Operation refused */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificationRunsFailureOutput"];
+                };
+            };
+            /** @description Operation refused */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificationRunsFailureOutput"];
+                };
+            };
+            /** @description Operation refused */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificationRunsFailureOutput"];
+                };
+            };
+            /** @description Operation refused */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificationRunsFailureOutput"];
+                };
+            };
+            /** @description Operation refused */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificationRunsFailureOutput"];
                 };
             };
         };
