@@ -1,0 +1,23 @@
+// Generated from OpenAPI. Do not edit.
+include!("../models/CreateResolutionFailureOutput.rs");
+include!("../models/CreateResolutionFailureOutputDeclarationAddress.rs");
+include!("../models/CreateResolutionFailureOutputDeclarationAddressItem.rs");
+include!("../models/CreateResolutionFailureOutputFinding.rs");
+include!("../models/CreateResolutionFailureOutputFindingKind.rs");
+include!("../models/CreateResolutionFailureOutputInvalidInputReason.rs");
+include!("../models/CreateResolutionFailureOutputOperation.rs");
+include!("../models/CreateResolutionFailureOutputOperationError.rs");
+include!("../models/CreateResolutionFailureOutputOperationFailure.rs");
+include!("../models/CreateResolutionFailureOutputProtocolVersion.rs");
+include!("../models/CreateResolutionFailureOutputReconcileState.rs");
+include!("../models/CreateResolutionFailureOutputReconciledResource.rs");
+include!("../models/CreateResolutionFailureOutputReport.rs");
+include!("../models/CreateResolutionFailureOutputRuleNumber.rs");
+include!("../models/CreateResolutionFailureOutputSpan.rs");
+include!("../models/CreateResolutionFailureOutputStableId.rs");
+include!("../models/CreateResolutionFailureOutputStandard.rs");
+include!("../models/CreateResolutionFailureOutputStandardIssue.rs");
+include!("../models/CreateResolutionFailureOutputTypedFieldChange.rs");
+include!("../models/CreateResolutionFailureOutputTypedResourceKind.rs");
+include!("../models/CreateResolutionFailureOutputTypedSpecDiagnostic.rs");
+include!("../models/CreateResolutionFailureOutputWriteFailure.rs");

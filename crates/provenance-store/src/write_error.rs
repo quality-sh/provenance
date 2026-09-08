@@ -7,6 +7,12 @@ use serde::Serialize;
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum WriteFailure {
     SchemaVersion,
+    AlreadyExists,
+    InvalidCommitPin,
+    ScopeMismatch,
+    StatementInvalid {
+        report: provenance_ste100::Report,
+    },
     InvalidDeclaration,
     OwnershipConflict {
         conflicts: Vec<ReconciledResource>,
@@ -108,7 +114,8 @@ impl WriteError {
             WriteFailure::WriteFailed | WriteFailure::UncertainWrite => 500,
             WriteFailure::FileAccessDenied => 403,
             WriteFailure::FileUnavailable => 503,
-            WriteFailure::OwnershipConflict { .. }
+            WriteFailure::AlreadyExists
+            | WriteFailure::OwnershipConflict { .. }
             | WriteFailure::AlreadyComplete
             | WriteFailure::RetiredRule => 409,
             _ => 400,

@@ -2,6 +2,7 @@ use super::reference_writers::declared;
 use super::writers::sorted_ids;
 use super::{CreateResolutionInput, CreateRuleInput, StateStore};
 use crate::shards;
+use crate::write_error::{SourceFailure, WriteFailure};
 use provenance_core::model::relations::required_refusal;
 use provenance_core::{NodeType, Resolution, Rule, SUPPORTED_SCHEMA_VERSION};
 
@@ -30,7 +31,8 @@ impl StateStore {
             origin_thread,
             origin_message,
         } = input;
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            MissingReference,
             !requirement_ids.is_empty(),
             "{}",
             required_refusal(declared::<Resolution>("requirement_ids"))
@@ -71,7 +73,8 @@ impl StateStore {
                 origin_thread,
                 origin_message,
             };
-            anyhow::ensure!(
+            crate::write_error::ensure!(
+                AlreadyExists,
                 !records.iter().any(|record| record.id == resolution.id),
                 "resolution already exists"
             );
@@ -102,8 +105,18 @@ impl StateStore {
             origin_thread,
             origin_message,
         } = input;
-        super::statement_policy::ensure_statement_is_writable(&self.layout, &statement)?;
-        anyhow::ensure!(
+        super::statement_policy::ensure_statement_is_writable(&self.layout, &statement).map_err(
+            |error| {
+                SourceFailure::wrap(
+                    WriteFailure::StatementInvalid {
+                        report: error.report.clone(),
+                    },
+                    error,
+                )
+            },
+        )?;
+        crate::write_error::ensure!(
+            MissingReference,
             !requirement_ids.is_empty(),
             "{}",
             required_refusal(declared::<Rule>("requirement_ids"))
@@ -147,7 +160,8 @@ impl StateStore {
                 origin_thread,
                 origin_message,
             };
-            anyhow::ensure!(
+            crate::write_error::ensure!(
+                AlreadyExists,
                 !records.iter().any(|record| record.id == rule.id),
                 "rule already exists"
             );

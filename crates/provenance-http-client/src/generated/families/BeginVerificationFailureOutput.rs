@@ -2,6 +2,7 @@
 include!("../models/BeginVerificationFailureOutput.rs");
 include!("../models/BeginVerificationFailureOutputDeclarationAddress.rs");
 include!("../models/BeginVerificationFailureOutputDeclarationAddressItem.rs");
+include!("../models/BeginVerificationFailureOutputFinding.rs");
 include!("../models/BeginVerificationFailureOutputFindingKind.rs");
 include!("../models/BeginVerificationFailureOutputInvalidInputReason.rs");
 include!("../models/BeginVerificationFailureOutputOperation.rs");
@@ -10,6 +11,7 @@ include!("../models/BeginVerificationFailureOutputOperationFailure.rs");
 include!("../models/BeginVerificationFailureOutputProtocolVersion.rs");
 include!("../models/BeginVerificationFailureOutputReconcileState.rs");
 include!("../models/BeginVerificationFailureOutputReconciledResource.rs");
+include!("../models/BeginVerificationFailureOutputReport.rs");
 include!("../models/BeginVerificationFailureOutputRuleNumber.rs");
 include!("../models/BeginVerificationFailureOutputSpan.rs");
 include!("../models/BeginVerificationFailureOutputStableId.rs");

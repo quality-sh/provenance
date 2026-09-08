@@ -1,4 +1,7 @@
 // Generated from OpenAPI. Do not edit.
+include!("families/AddSourceReferenceFailureOutput.rs");
+include!("families/AddSourceReferenceRequestInput.rs");
+include!("families/AddSourceReferenceSuccessOutput.rs");
 include!("families/ApplyFailureOutput.rs");
 include!("families/ApplyRequestInput.rs");
 include!("families/ApplySuccessOutput.rs");
@@ -11,6 +14,18 @@ include!("families/CheckStatementSuccessOutput.rs");
 include!("families/CompleteVerificationFailureOutput.rs");
 include!("families/CompleteVerificationRequestInput.rs");
 include!("families/CompleteVerificationSuccessOutput.rs");
+include!("families/CreateRequirementFailureOutput.rs");
+include!("families/CreateRequirementRequestInput.rs");
+include!("families/CreateRequirementSuccessOutput.rs");
+include!("families/CreateResolutionFailureOutput.rs");
+include!("families/CreateResolutionRequestInput.rs");
+include!("families/CreateResolutionSuccessOutput.rs");
+include!("families/CreateRuleFailureOutput.rs");
+include!("families/CreateRuleRequestInput.rs");
+include!("families/CreateRuleSuccessOutput.rs");
+include!("families/CreateSourceFailureOutput.rs");
+include!("families/CreateSourceRequestInput.rs");
+include!("families/CreateSourceSuccessOutput.rs");
 include!("families/EvidenceFailureOutput.rs");
 include!("families/EvidenceRequestInput.rs");
 include!("families/EvidenceSuccessOutput.rs");

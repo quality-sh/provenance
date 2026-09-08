@@ -156,6 +156,1640 @@
     {
       "inputSchema": {
         "$defs": {
+          "CreateSourceInput": {
+            "additionalProperties": false,
+            "properties": {
+              "commit_pin": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "effective_date": {
+                "format": "int64",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "name": {
+                "type": "string"
+              },
+              "origin_message": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "origin_thread": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "reference": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "review_date": {
+                "format": "int64",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              },
+              "source_type": {
+                "$ref": "#/$defs/SourceType"
+              },
+              "supersedes": {
+                "items": {
+                  "$ref": "#/$defs/StableId"
+                },
+                "type": "array"
+              },
+              "url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "scope_id",
+              "id",
+              "name",
+              "source_type",
+              "supersedes"
+            ],
+            "type": "object"
+          },
+          "RepositoryScope": {
+            "additionalProperties": false,
+            "description": "Scope selection for operations that do not use projection freshness.",
+            "properties": {
+              "repository": {
+                "type": "string"
+              },
+              "scope": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "repository",
+              "scope"
+            ],
+            "type": "object"
+          },
+          "ScopeId": {
+            "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          },
+          "SourceType": {
+            "enum": [
+              "policy",
+              "document",
+              "legislation",
+              "company_agreement",
+              "system_state",
+              "external_integration",
+              "domain_knowledge",
+              "project_artifact",
+              "incident",
+              "api_spec"
+            ],
+            "type": "string"
+          },
+          "StableId": {
+            "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "call": {
+            "additionalProperties": false,
+            "properties": {
+              "context": {
+                "$ref": "#/$defs/RepositoryScope"
+              },
+              "request": {
+                "$ref": "#/$defs/CreateSourceInput"
+              }
+            },
+            "required": [
+              "context",
+              "request"
+            ],
+            "title": "RepositoryCall",
+            "type": "object"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "call"
+        ],
+        "type": "object"
+      },
+      "name": "create-source",
+      "outputSchema": {
+        "$defs": {
+          "DeclarationAddress": {
+            "description": "One owner-local path to a language-authored declaration.",
+            "items": {
+              "pattern": "\\S",
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "ScopeId": {
+            "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          },
+          "SourceType": {
+            "enum": [
+              "policy",
+              "document",
+              "legislation",
+              "company_agreement",
+              "system_state",
+              "external_integration",
+              "domain_knowledge",
+              "project_artifact",
+              "incident",
+              "api_spec"
+            ],
+            "type": "string"
+          },
+          "StableId": {
+            "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "commit_pin": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "declaration_address": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/DeclarationAddress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "declared_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "effective_date": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/$defs/StableId"
+          },
+          "name": {
+            "type": "string"
+          },
+          "origin_message": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/StableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/StableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reference": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "retired": {
+            "type": "boolean"
+          },
+          "review_date": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/$defs/ScopeId"
+          },
+          "source_type": {
+            "$ref": "#/$defs/SourceType"
+          },
+          "supersedes": {
+            "items": {
+              "$ref": "#/$defs/StableId"
+            },
+            "type": "array"
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "name",
+          "source_type",
+          "url"
+        ],
+        "title": "Source",
+        "type": "object"
+      }
+    },
+    {
+      "inputSchema": {
+        "$defs": {
+          "CreateRequirementInput": {
+            "additionalProperties": false,
+            "properties": {
+              "depends_on": {
+                "items": {
+                  "$ref": "#/$defs/StableId"
+                },
+                "type": "array"
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "domain_id": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "origin_message": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "origin_thread": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "refines": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              },
+              "spawned_by": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "statement": {
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/RequirementStatus"
+              },
+              "supersedes": {
+                "items": {
+                  "$ref": "#/$defs/StableId"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "scope_id",
+              "id",
+              "statement",
+              "status",
+              "depends_on",
+              "supersedes"
+            ],
+            "type": "object"
+          },
+          "RepositoryScope": {
+            "additionalProperties": false,
+            "description": "Scope selection for operations that do not use projection freshness.",
+            "properties": {
+              "repository": {
+                "type": "string"
+              },
+              "scope": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "repository",
+              "scope"
+            ],
+            "type": "object"
+          },
+          "RequirementStatus": {
+            "enum": [
+              "active",
+              "discovery",
+              "refinement",
+              "resolved"
+            ],
+            "type": "string"
+          },
+          "ScopeId": {
+            "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          },
+          "StableId": {
+            "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "call": {
+            "additionalProperties": false,
+            "properties": {
+              "context": {
+                "$ref": "#/$defs/RepositoryScope"
+              },
+              "request": {
+                "$ref": "#/$defs/CreateRequirementInput"
+              }
+            },
+            "required": [
+              "context",
+              "request"
+            ],
+            "title": "RepositoryCall",
+            "type": "object"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "call"
+        ],
+        "type": "object"
+      },
+      "name": "create-requirement",
+      "outputSchema": {
+        "$defs": {
+          "DeclarationAddress": {
+            "description": "One owner-local path to a language-authored declaration.",
+            "items": {
+              "pattern": "\\S",
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "RequirementStatus": {
+            "enum": [
+              "active",
+              "discovery",
+              "refinement",
+              "resolved"
+            ],
+            "type": "string"
+          },
+          "ScopeId": {
+            "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          },
+          "SourceReference": {
+            "properties": {
+              "clause": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "source_id": {
+                "$ref": "#/$defs/StableId"
+              }
+            },
+            "required": [
+              "source_id"
+            ],
+            "type": "object"
+          },
+          "StableId": {
+            "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "declaration_address": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/DeclarationAddress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "declared_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "depends_on": {
+            "items": {
+              "$ref": "#/$defs/StableId"
+            },
+            "type": "array"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "domain_id": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/StableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fog": {
+            "description": "Deliberately unstructured free text: the dim view of decisions and\ninvestigations that are coming but cannot yet be phrased sharply.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/$defs/StableId"
+          },
+          "origin_message": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/StableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/StableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "refines": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/StableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "retired": {
+            "type": "boolean"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/$defs/ScopeId"
+          },
+          "source_refs": {
+            "items": {
+              "$ref": "#/$defs/SourceReference"
+            },
+            "type": "array"
+          },
+          "spawned_by": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/StableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "statement": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/$defs/RequirementStatus"
+          },
+          "supersedes": {
+            "items": {
+              "$ref": "#/$defs/StableId"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "statement",
+          "status"
+        ],
+        "title": "Requirement",
+        "type": "object"
+      }
+    },
+    {
+      "inputSchema": {
+        "$defs": {
+          "CreateRuleInput": {
+            "additionalProperties": false,
+            "properties": {
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "origin_message": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "origin_thread": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "requirement_ids": {
+                "items": {
+                  "$ref": "#/$defs/StableId"
+                },
+                "type": "array"
+              },
+              "resolution_ids": {
+                "items": {
+                  "$ref": "#/$defs/StableId"
+                },
+                "type": "array"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              },
+              "severity": {
+                "$ref": "#/$defs/RuleSeverity"
+              },
+              "source_document": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "source_section": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "statement": {
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/RuleStatus"
+              }
+            },
+            "required": [
+              "scope_id",
+              "id",
+              "requirement_ids",
+              "resolution_ids",
+              "statement",
+              "status",
+              "severity"
+            ],
+            "type": "object"
+          },
+          "RepositoryScope": {
+            "additionalProperties": false,
+            "description": "Scope selection for operations that do not use projection freshness.",
+            "properties": {
+              "repository": {
+                "type": "string"
+              },
+              "scope": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "repository",
+              "scope"
+            ],
+            "type": "object"
+          },
+          "RuleSeverity": {
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ],
+            "type": "string"
+          },
+          "RuleStatus": {
+            "enum": [
+              "draft",
+              "review",
+              "active",
+              "deprecated",
+              "archived"
+            ],
+            "type": "string"
+          },
+          "ScopeId": {
+            "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          },
+          "StableId": {
+            "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "call": {
+            "additionalProperties": false,
+            "properties": {
+              "context": {
+                "$ref": "#/$defs/RepositoryScope"
+              },
+              "request": {
+                "$ref": "#/$defs/CreateRuleInput"
+              }
+            },
+            "required": [
+              "context",
+              "request"
+            ],
+            "title": "RepositoryCall",
+            "type": "object"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "call"
+        ],
+        "type": "object"
+      },
+      "name": "create-rule",
+      "outputSchema": {
+        "$defs": {
+          "DeclarationAddress": {
+            "description": "One owner-local path to a language-authored declaration.",
+            "items": {
+              "pattern": "\\S",
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "RuleSeverity": {
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ],
+            "type": "string"
+          },
+          "RuleStatus": {
+            "enum": [
+              "draft",
+              "review",
+              "active",
+              "deprecated",
+              "archived"
+            ],
+            "type": "string"
+          },
+          "ScopeId": {
+            "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          },
+          "StableId": {
+            "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "declaration_address": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/DeclarationAddress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "declared_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/$defs/StableId"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "origin_message": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/StableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/StableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "requirement_ids": {
+            "items": {
+              "$ref": "#/$defs/StableId"
+            },
+            "type": "array"
+          },
+          "resolution_ids": {
+            "items": {
+              "$ref": "#/$defs/StableId"
+            },
+            "type": "array"
+          },
+          "retired": {
+            "type": "boolean"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/$defs/ScopeId"
+          },
+          "severity": {
+            "$ref": "#/$defs/RuleSeverity"
+          },
+          "source_document": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_section": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "statement": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/$defs/RuleStatus"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "statement",
+          "status",
+          "severity"
+        ],
+        "title": "Rule",
+        "type": "object"
+      }
+    },
+    {
+      "inputSchema": {
+        "$defs": {
+          "CreateResolutionInput": {
+            "additionalProperties": false,
+            "properties": {
+              "approved_at": {
+                "format": "int64",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "approved_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "confidence": {
+                "format": "double",
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "context": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "enforcement": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "inputs": {
+                "items": {
+                  "$ref": "#/$defs/ResolutionInput"
+                },
+                "type": "array"
+              },
+              "made_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "origin_message": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "origin_thread": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/StableId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "position": {
+                "type": "string"
+              },
+              "rationale": {
+                "type": "string"
+              },
+              "requirement_ids": {
+                "items": {
+                  "$ref": "#/$defs/StableId"
+                },
+                "type": "array"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              },
+              "status": {
+                "$ref": "#/$defs/ResolutionStatus"
+              },
+              "supersedes": {
+                "items": {
+                  "$ref": "#/$defs/StableId"
+                },
+                "type": "array"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "scope_id",
+              "id",
+              "title",
+              "requirement_ids",
+              "supersedes",
+              "position",
+              "rationale",
+              "status",
+              "inputs"
+            ],
+            "type": "object"
+          },
+          "RepositoryScope": {
+            "additionalProperties": false,
+            "description": "Scope selection for operations that do not use projection freshness.",
+            "properties": {
+              "repository": {
+                "type": "string"
+              },
+              "scope": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "repository",
+              "scope"
+            ],
+            "type": "object"
+          },
+          "ResolutionInput": {
+            "description": "The fields of a [`ResolutionInput`] as they arrive on the wire, before\n`validate_resolution_input_content` has passed judgement on them. Serde\nreads this, the conversion below either builds the record or refuses it, so\na blank input cannot enter the graph through a file the way it can through\na struct literal.",
+            "properties": {
+              "input_type": {
+                "$ref": "#/$defs/ResolutionInputType"
+              },
+              "reference": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "input_type",
+              "reference",
+              "summary"
+            ],
+            "type": "object"
+          },
+          "ResolutionInputType": {
+            "enum": [
+              "regulatory",
+              "legal_advice",
+              "commercial",
+              "benchmark",
+              "technical",
+              "incident",
+              "source_material"
+            ],
+            "type": "string"
+          },
+          "ResolutionStatus": {
+            "enum": [
+              "draft",
+              "review",
+              "proposed",
+              "approved",
+              "rejected",
+              "revised",
+              "superseded",
+              "abandoned"
+            ],
+            "type": "string"
+          },
+          "ScopeId": {
+            "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          },
+          "StableId": {
+            "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "call": {
+            "additionalProperties": false,
+            "properties": {
+              "context": {
+                "$ref": "#/$defs/RepositoryScope"
+              },
+              "request": {
+                "$ref": "#/$defs/CreateResolutionInput"
+              }
+            },
+            "required": [
+              "context",
+              "request"
+            ],
+            "title": "RepositoryCall",
+            "type": "object"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "call"
+        ],
+        "type": "object"
+      },
+      "name": "create-resolution",
+      "outputSchema": {
+        "$defs": {
+          "ResolutionInput": {
+            "properties": {
+              "input_type": {
+                "$ref": "#/$defs/ResolutionInputType"
+              },
+              "reference": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "input_type",
+              "reference",
+              "summary"
+            ],
+            "type": "object"
+          },
+          "ResolutionInputType": {
+            "enum": [
+              "regulatory",
+              "legal_advice",
+              "commercial",
+              "benchmark",
+              "technical",
+              "incident",
+              "source_material"
+            ],
+            "type": "string"
+          },
+          "ResolutionStatus": {
+            "enum": [
+              "draft",
+              "review",
+              "proposed",
+              "approved",
+              "rejected",
+              "revised",
+              "superseded",
+              "abandoned"
+            ],
+            "type": "string"
+          },
+          "ScopeId": {
+            "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          },
+          "StableId": {
+            "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "approved_at": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "approved_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "confidence": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "context": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "enforcement": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/$defs/StableId"
+          },
+          "inputs": {
+            "default": [],
+            "items": {
+              "$ref": "#/$defs/ResolutionInput"
+            },
+            "type": "array"
+          },
+          "made_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "origin_message": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/StableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/StableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "position": {
+            "type": "string"
+          },
+          "rationale": {
+            "type": "string"
+          },
+          "requirement_ids": {
+            "items": {
+              "$ref": "#/$defs/StableId"
+            },
+            "type": "array"
+          },
+          "review_on": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/$defs/ScopeId"
+          },
+          "status": {
+            "$ref": "#/$defs/ResolutionStatus"
+          },
+          "supersedes": {
+            "items": {
+              "$ref": "#/$defs/StableId"
+            },
+            "type": "array"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "title",
+          "position",
+          "rationale",
+          "status",
+          "inputs",
+          "review_on"
+        ],
+        "title": "Resolution",
+        "type": "object"
+      }
+    },
+    {
+      "inputSchema": {
+        "$defs": {
+          "AddSourceReferenceInput": {
+            "additionalProperties": false,
+            "properties": {
+              "clause": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "requirement_id": {
+                "$ref": "#/$defs/StableId"
+              },
+              "scope_id": {
+                "$ref": "#/$defs/ScopeId"
+              },
+              "source_id": {
+                "$ref": "#/$defs/StableId"
+              }
+            },
+            "required": [
+              "scope_id",
+              "source_id",
+              "requirement_id"
+            ],
+            "type": "object"
+          },
+          "RepositoryScope": {
+            "additionalProperties": false,
+            "description": "Scope selection for operations that do not use projection freshness.",
+            "properties": {
+              "repository": {
+                "type": "string"
+              },
+              "scope": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "repository",
+              "scope"
+            ],
+            "type": "object"
+          },
+          "ScopeId": {
+            "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          },
+          "StableId": {
+            "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "call": {
+            "additionalProperties": false,
+            "properties": {
+              "context": {
+                "$ref": "#/$defs/RepositoryScope"
+              },
+              "request": {
+                "$ref": "#/$defs/AddSourceReferenceInput"
+              }
+            },
+            "required": [
+              "context",
+              "request"
+            ],
+            "title": "RepositoryCall",
+            "type": "object"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "call"
+        ],
+        "type": "object"
+      },
+      "name": "add-source-reference",
+      "outputSchema": {
+        "$defs": {
+          "DeclarationAddress": {
+            "description": "One owner-local path to a language-authored declaration.",
+            "items": {
+              "pattern": "\\S",
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "RequirementStatus": {
+            "enum": [
+              "active",
+              "discovery",
+              "refinement",
+              "resolved"
+            ],
+            "type": "string"
+          },
+          "ScopeId": {
+            "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          },
+          "SourceReference": {
+            "properties": {
+              "clause": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "source_id": {
+                "$ref": "#/$defs/StableId"
+              }
+            },
+            "required": [
+              "source_id"
+            ],
+            "type": "object"
+          },
+          "StableId": {
+            "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "declaration_address": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/DeclarationAddress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "declared_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "depends_on": {
+            "items": {
+              "$ref": "#/$defs/StableId"
+            },
+            "type": "array"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "domain_id": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/StableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fog": {
+            "description": "Deliberately unstructured free text: the dim view of decisions and\ninvestigations that are coming but cannot yet be phrased sharply.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/$defs/StableId"
+          },
+          "origin_message": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/StableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/StableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "refines": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/StableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "retired": {
+            "type": "boolean"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/$defs/ScopeId"
+          },
+          "source_refs": {
+            "items": {
+              "$ref": "#/$defs/SourceReference"
+            },
+            "type": "array"
+          },
+          "spawned_by": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/StableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "statement": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/$defs/RequirementStatus"
+          },
+          "supersedes": {
+            "items": {
+              "$ref": "#/$defs/StableId"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "statement",
+          "status"
+        ],
+        "title": "Requirement",
+        "type": "object"
+      }
+    },
+    {
+      "inputSchema": {
+        "$defs": {
           "DeclarationAddress": {
             "description": "One owner-local path to a language-authored declaration.",
             "items": {

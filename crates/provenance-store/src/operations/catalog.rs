@@ -2,6 +2,7 @@
 
 mod authoring;
 mod context;
+mod creation;
 mod entry;
 mod evidence;
 mod failures;
@@ -15,6 +16,9 @@ pub use authoring::{Apply, BeginVerification, CompleteVerification, Plan};
 pub use context::{
     ContextKind, ContextResolver, ExecutionNeed, ExecutionNeeds, PreparedContext, PreparedRead,
     PreparedRepository, PreparedScope, RequestedContext,
+};
+pub use creation::{
+    AddSourceReference, CreateRequirement, CreateResolution, CreateRule, CreateSource,
 };
 pub use entry::{Operation, OperationFuture, WireSchema};
 pub use invoke::{invoke, invoke_typed, invoke_with};

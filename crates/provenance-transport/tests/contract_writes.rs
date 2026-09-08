@@ -24,9 +24,14 @@ async fn authoring_schema_failure_is_typed_and_preserves_graph() {
 }
 
 #[test]
-fn baseline_inventory_includes_all_sixteen_operations() {
+fn catalog_inventory_includes_existing_creation_operations() {
     let expected = [
         "check-statement",
+        "create-source",
+        "create-requirement",
+        "create-resolution",
+        "create-rule",
+        "add-source-reference",
         "info",
         "get",
         "search",

@@ -78,6 +78,11 @@ fn register<O: Operation>() -> Entry {
 pub(super) fn entries() -> Vec<Entry> {
     vec![
         register::<super::CheckStatement>(),
+        register::<super::CreateSource>(),
+        register::<super::CreateRequirement>(),
+        register::<super::CreateRule>(),
+        register::<super::CreateResolution>(),
+        register::<super::AddSourceReference>(),
         register::<super::Plan>(),
         register::<super::Apply>(),
         register::<super::BeginVerification>(),

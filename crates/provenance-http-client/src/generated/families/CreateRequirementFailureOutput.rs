@@ -1,0 +1,23 @@
+// Generated from OpenAPI. Do not edit.
+include!("../models/CreateRequirementFailureOutput.rs");
+include!("../models/CreateRequirementFailureOutputDeclarationAddress.rs");
+include!("../models/CreateRequirementFailureOutputDeclarationAddressItem.rs");
+include!("../models/CreateRequirementFailureOutputFinding.rs");
+include!("../models/CreateRequirementFailureOutputFindingKind.rs");
+include!("../models/CreateRequirementFailureOutputInvalidInputReason.rs");
+include!("../models/CreateRequirementFailureOutputOperation.rs");
+include!("../models/CreateRequirementFailureOutputOperationError.rs");
+include!("../models/CreateRequirementFailureOutputOperationFailure.rs");
+include!("../models/CreateRequirementFailureOutputProtocolVersion.rs");
+include!("../models/CreateRequirementFailureOutputReconcileState.rs");
+include!("../models/CreateRequirementFailureOutputReconciledResource.rs");
+include!("../models/CreateRequirementFailureOutputReport.rs");
+include!("../models/CreateRequirementFailureOutputRuleNumber.rs");
+include!("../models/CreateRequirementFailureOutputSpan.rs");
+include!("../models/CreateRequirementFailureOutputStableId.rs");
+include!("../models/CreateRequirementFailureOutputStandard.rs");
+include!("../models/CreateRequirementFailureOutputStandardIssue.rs");
+include!("../models/CreateRequirementFailureOutputTypedFieldChange.rs");
+include!("../models/CreateRequirementFailureOutputTypedResourceKind.rs");
+include!("../models/CreateRequirementFailureOutputTypedSpecDiagnostic.rs");
+include!("../models/CreateRequirementFailureOutputWriteFailure.rs");

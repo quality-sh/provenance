@@ -15,6 +15,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v7/operations/add-source-reference": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["addSourceReference"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v7/operations/apply": {
         parameters: {
             query?: never;
@@ -73,6 +89,70 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["completeVerification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v7/operations/create-requirement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createRequirement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v7/operations/create-resolution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createResolution"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v7/operations/create-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v7/operations/create-source": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createSource"];
         delete?: never;
         options?: never;
         head?: never;
@@ -276,6 +356,259 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /** FailureEnvelope */
+        AddSourceReferenceFailureOutput: {
+            error: components["schemas"]["AddSourceReferenceFailureOutputOperationError"];
+            /** @constant */
+            operation?: "add-source-reference";
+            /** @constant */
+            protocol_version: 7;
+        };
+        /** @description One owner-local path to a language-authored declaration. */
+        AddSourceReferenceFailureOutputDeclarationAddress: string[];
+        /** @description One nonconformance found in descriptive text. */
+        AddSourceReferenceFailureOutputFinding: {
+            kind: components["schemas"]["AddSourceReferenceFailureOutputFindingKind"];
+            message: string;
+            rule: components["schemas"]["AddSourceReferenceFailureOutputRuleNumber"];
+            span: components["schemas"]["AddSourceReferenceFailureOutputSpan"];
+        };
+        /**
+         * @description The disposition of a finding.
+         * @enum {string}
+         */
+        AddSourceReferenceFailureOutputFindingKind: "violation";
+        /** @enum {string} */
+        AddSourceReferenceFailureOutputInvalidInputReason: "required" | "invalid_value" | "malformed_json" | "unknown_field" | "too_large";
+        /** @description Keeps the handler's native error separate from preparation failure. */
+        AddSourceReferenceFailureOutputOperationError: components["schemas"]["AddSourceReferenceFailureOutputOperationFailure"] | components["schemas"]["AddSourceReferenceFailureOutputWriteFailure"];
+        AddSourceReferenceFailureOutputOperationFailure: {
+            field: string | null;
+            /** @constant */
+            kind: "invalid_input";
+            reason: components["schemas"]["AddSourceReferenceFailureOutputInvalidInputReason"];
+        } | {
+            /** @constant */
+            kind: "protocol_mismatch";
+            /** Format: uint32 */
+            requested: number;
+            /** Format: uint32 */
+            supported: number;
+        } | {
+            /** @constant */
+            kind: "unknown_operation";
+        } | {
+            /** @constant */
+            kind: "unauthenticated";
+        } | {
+            /** @constant */
+            kind: "access_denied";
+        } | {
+            /** @constant */
+            kind: "unknown_target";
+        } | {
+            /** @constant */
+            kind: "unknown_scope";
+        } | {
+            /** @constant */
+            kind: "unavailable_needs";
+        } | {
+            /** @constant */
+            kind: "internal";
+        } | {
+            /** @constant */
+            kind: "uncertain_write";
+        };
+        /** @enum {string} */
+        AddSourceReferenceFailureOutputReconcileState: "created" | "updated" | "moved" | "retired" | "conflict" | "unchanged";
+        AddSourceReferenceFailureOutputReconciledResource: {
+            address: components["schemas"]["AddSourceReferenceFailureOutputDeclarationAddress"];
+            changes?: components["schemas"]["AddSourceReferenceFailureOutputTypedFieldChange"][];
+            id: components["schemas"]["AddSourceReferenceFailureOutputStableId"];
+            key: string;
+            kind: components["schemas"]["AddSourceReferenceFailureOutputTypedResourceKind"];
+            parent?: string | null;
+            state: components["schemas"]["AddSourceReferenceFailureOutputReconcileState"];
+        };
+        /** @description A report from the fixed ASD-STE100 Issue 9 analyzer. */
+        AddSourceReferenceFailureOutputReport: {
+            analyzer_version: string;
+            findings: components["schemas"]["AddSourceReferenceFailureOutputFinding"][];
+            issue: components["schemas"]["AddSourceReferenceFailureOutputStandardIssue"];
+            standard: components["schemas"]["AddSourceReferenceFailureOutputStandard"];
+        };
+        /**
+         * @description An ASD-STE100 Issue 9 rule implemented by this analyzer.
+         * @enum {string}
+         */
+        AddSourceReferenceFailureOutputRuleNumber: "1.1" | "4.2" | "6.3" | "6.6" | "8.1";
+        /** @description A half-open UTF-8 byte range in the analyzed text. */
+        AddSourceReferenceFailureOutputSpan: {
+            /** Format: uint */
+            end: number;
+            /** Format: uint */
+            start: number;
+        };
+        /**
+         * @description A stable artifact id. The inner `String` is private and `new` is the only
+         *     way in, so every `StableId` in existence satisfies [`is_well_formed_id`].
+         */
+        AddSourceReferenceFailureOutputStableId: string;
+        /**
+         * @description The authority used by the analyzer.
+         * @enum {string}
+         */
+        AddSourceReferenceFailureOutputStandard: "ASD-STE100";
+        /**
+         * Format: uint8
+         * @description The fixed issue of the standard used by the analyzer.
+         * @constant
+         */
+        AddSourceReferenceFailureOutputStandardIssue: 9;
+        AddSourceReferenceFailureOutputTypedFieldChange: {
+            after: unknown;
+            before: unknown;
+            field: string;
+        };
+        /** @enum {string} */
+        AddSourceReferenceFailureOutputTypedResourceKind: "source" | "requirement" | "rule";
+        /** @description One ASD-STE100 violation attached to its typed declaration site. */
+        AddSourceReferenceFailureOutputTypedSpecDiagnostic: {
+            address: components["schemas"]["AddSourceReferenceFailureOutputDeclarationAddress"];
+            disposition: components["schemas"]["AddSourceReferenceFailureOutputFindingKind"];
+            field: string;
+            issue: components["schemas"]["AddSourceReferenceFailureOutputStandardIssue"];
+            message: string;
+            resource_kind: components["schemas"]["AddSourceReferenceFailureOutputTypedResourceKind"];
+            rule: components["schemas"]["AddSourceReferenceFailureOutputRuleNumber"];
+            span: components["schemas"]["AddSourceReferenceFailureOutputSpan"];
+            standard: components["schemas"]["AddSourceReferenceFailureOutputStandard"];
+        };
+        AddSourceReferenceFailureOutputWriteFailure: {
+            /** @constant */
+            kind: "schema_version";
+        } | {
+            /** @constant */
+            kind: "already_exists";
+        } | {
+            /** @constant */
+            kind: "invalid_commit_pin";
+        } | {
+            /** @constant */
+            kind: "scope_mismatch";
+        } | {
+            /** @constant */
+            kind: "statement_invalid";
+            report: components["schemas"]["AddSourceReferenceFailureOutputReport"];
+        } | {
+            /** @constant */
+            kind: "invalid_declaration";
+        } | {
+            conflicts: components["schemas"]["AddSourceReferenceFailureOutputReconciledResource"][];
+            /** @constant */
+            kind: "ownership_conflict";
+        } | {
+            /** @constant */
+            kind: "missing_reference";
+        } | {
+            diagnostics: components["schemas"]["AddSourceReferenceFailureOutputTypedSpecDiagnostic"][];
+            /** @constant */
+            kind: "statement_rejected";
+        } | {
+            /** @constant */
+            kind: "invalid_verification_target";
+        } | {
+            /** @constant */
+            kind: "retired_rule";
+        } | {
+            /** @constant */
+            kind: "invalid_completion";
+        } | {
+            /** @constant */
+            kind: "already_complete";
+        } | {
+            /** @constant */
+            kind: "file_access_denied";
+        } | {
+            /** @constant */
+            kind: "file_unavailable";
+        } | {
+            /** @constant */
+            kind: "write_failed";
+        } | {
+            /** @constant */
+            kind: "uncertain_write";
+        };
+        /** RepositoryCall */
+        AddSourceReferenceRequestInput: {
+            context: components["schemas"]["AddSourceReferenceRequestInputRepositoryScope"];
+            request: components["schemas"]["AddSourceReferenceRequestInputAddSourceReferenceInput"];
+        };
+        AddSourceReferenceRequestInputAddSourceReferenceInput: {
+            clause?: string | null;
+            requirement_id: components["schemas"]["AddSourceReferenceRequestInputStableId"];
+            scope_id: components["schemas"]["AddSourceReferenceRequestInputScopeId"];
+            source_id: components["schemas"]["AddSourceReferenceRequestInputStableId"];
+        };
+        /** @description Scope selection for operations that do not use projection freshness. */
+        AddSourceReferenceRequestInputRepositoryScope: {
+            repository: string;
+            scope: string;
+        };
+        /**
+         * @description A scope id. The inner `String` is private and `new` is the only way in, so
+         *     every `ScopeId` in existence satisfies [`is_well_formed_id`].
+         */
+        AddSourceReferenceRequestInputScopeId: string;
+        /**
+         * @description A stable artifact id. The inner `String` is private and `new` is the only
+         *     way in, so every `StableId` in existence satisfies [`is_well_formed_id`].
+         */
+        AddSourceReferenceRequestInputStableId: string;
+        /** Requirement */
+        AddSourceReferenceSuccessOutput: {
+            declaration_address?: components["schemas"]["AddSourceReferenceSuccessOutputDeclarationAddress"] | null;
+            declared_by?: string | null;
+            depends_on?: components["schemas"]["AddSourceReferenceSuccessOutputStableId"][];
+            description?: string | null;
+            domain_id?: components["schemas"]["AddSourceReferenceSuccessOutputStableId"] | null;
+            /**
+             * @description Deliberately unstructured free text: the dim view of decisions and
+             *     investigations that are coming but cannot yet be phrased sharply.
+             */
+            fog?: string | null;
+            id: components["schemas"]["AddSourceReferenceSuccessOutputStableId"];
+            origin_message?: components["schemas"]["AddSourceReferenceSuccessOutputStableId"] | null;
+            origin_thread?: components["schemas"]["AddSourceReferenceSuccessOutputStableId"] | null;
+            refines?: components["schemas"]["AddSourceReferenceSuccessOutputStableId"] | null;
+            retired?: boolean;
+            /** Format: uint32 */
+            schema_version: number;
+            scope_id: components["schemas"]["AddSourceReferenceSuccessOutputScopeId"];
+            source_refs?: components["schemas"]["AddSourceReferenceSuccessOutputSourceReference"][];
+            spawned_by?: components["schemas"]["AddSourceReferenceSuccessOutputStableId"] | null;
+            statement: string;
+            status: components["schemas"]["AddSourceReferenceSuccessOutputRequirementStatus"];
+            supersedes?: components["schemas"]["AddSourceReferenceSuccessOutputStableId"][];
+        };
+        /** @description One owner-local path to a language-authored declaration. */
+        AddSourceReferenceSuccessOutputDeclarationAddress: string[];
+        /** @enum {string} */
+        AddSourceReferenceSuccessOutputRequirementStatus: "active" | "discovery" | "refinement" | "resolved";
+        /**
+         * @description A scope id. The inner `String` is private and `new` is the only way in, so
+         *     every `ScopeId` in existence satisfies [`is_well_formed_id`].
+         */
+        AddSourceReferenceSuccessOutputScopeId: string;
+        AddSourceReferenceSuccessOutputSourceReference: {
+            clause?: string | null;
+            source_id: components["schemas"]["AddSourceReferenceSuccessOutputStableId"];
+        };
+        /**
+         * @description A stable artifact id. The inner `String` is private and `new` is the only
+         *     way in, so every `StableId` in existence satisfies [`is_well_formed_id`].
+         */
+        AddSourceReferenceSuccessOutputStableId: string;
+        /** FailureEnvelope */
         ApplyFailureOutput: {
             error: components["schemas"]["ApplyFailureOutputOperationError"];
             /** @constant */
@@ -285,6 +618,13 @@ export interface components {
         };
         /** @description One owner-local path to a language-authored declaration. */
         ApplyFailureOutputDeclarationAddress: string[];
+        /** @description One nonconformance found in descriptive text. */
+        ApplyFailureOutputFinding: {
+            kind: components["schemas"]["ApplyFailureOutputFindingKind"];
+            message: string;
+            rule: components["schemas"]["ApplyFailureOutputRuleNumber"];
+            span: components["schemas"]["ApplyFailureOutputSpan"];
+        };
         /**
          * @description The disposition of a finding.
          * @enum {string}
@@ -342,6 +682,13 @@ export interface components {
             parent?: string | null;
             state: components["schemas"]["ApplyFailureOutputReconcileState"];
         };
+        /** @description A report from the fixed ASD-STE100 Issue 9 analyzer. */
+        ApplyFailureOutputReport: {
+            analyzer_version: string;
+            findings: components["schemas"]["ApplyFailureOutputFinding"][];
+            issue: components["schemas"]["ApplyFailureOutputStandardIssue"];
+            standard: components["schemas"]["ApplyFailureOutputStandard"];
+        };
         /**
          * @description An ASD-STE100 Issue 9 rule implemented by this analyzer.
          * @enum {string}
@@ -392,6 +739,19 @@ export interface components {
         ApplyFailureOutputWriteFailure: {
             /** @constant */
             kind: "schema_version";
+        } | {
+            /** @constant */
+            kind: "already_exists";
+        } | {
+            /** @constant */
+            kind: "invalid_commit_pin";
+        } | {
+            /** @constant */
+            kind: "scope_mismatch";
+        } | {
+            /** @constant */
+            kind: "statement_invalid";
+            report: components["schemas"]["ApplyFailureOutputReport"];
         } | {
             /** @constant */
             kind: "invalid_declaration";
@@ -623,6 +983,13 @@ export interface components {
         };
         /** @description One owner-local path to a language-authored declaration. */
         BeginVerificationFailureOutputDeclarationAddress: string[];
+        /** @description One nonconformance found in descriptive text. */
+        BeginVerificationFailureOutputFinding: {
+            kind: components["schemas"]["BeginVerificationFailureOutputFindingKind"];
+            message: string;
+            rule: components["schemas"]["BeginVerificationFailureOutputRuleNumber"];
+            span: components["schemas"]["BeginVerificationFailureOutputSpan"];
+        };
         /**
          * @description The disposition of a finding.
          * @enum {string}
@@ -680,6 +1047,13 @@ export interface components {
             parent?: string | null;
             state: components["schemas"]["BeginVerificationFailureOutputReconcileState"];
         };
+        /** @description A report from the fixed ASD-STE100 Issue 9 analyzer. */
+        BeginVerificationFailureOutputReport: {
+            analyzer_version: string;
+            findings: components["schemas"]["BeginVerificationFailureOutputFinding"][];
+            issue: components["schemas"]["BeginVerificationFailureOutputStandardIssue"];
+            standard: components["schemas"]["BeginVerificationFailureOutputStandard"];
+        };
         /**
          * @description An ASD-STE100 Issue 9 rule implemented by this analyzer.
          * @enum {string}
@@ -730,6 +1104,19 @@ export interface components {
         BeginVerificationFailureOutputWriteFailure: {
             /** @constant */
             kind: "schema_version";
+        } | {
+            /** @constant */
+            kind: "already_exists";
+        } | {
+            /** @constant */
+            kind: "invalid_commit_pin";
+        } | {
+            /** @constant */
+            kind: "scope_mismatch";
+        } | {
+            /** @constant */
+            kind: "statement_invalid";
+            report: components["schemas"]["BeginVerificationFailureOutputReport"];
         } | {
             /** @constant */
             kind: "invalid_declaration";
@@ -955,6 +1342,13 @@ export interface components {
         };
         /** @description One owner-local path to a language-authored declaration. */
         CompleteVerificationFailureOutputDeclarationAddress: string[];
+        /** @description One nonconformance found in descriptive text. */
+        CompleteVerificationFailureOutputFinding: {
+            kind: components["schemas"]["CompleteVerificationFailureOutputFindingKind"];
+            message: string;
+            rule: components["schemas"]["CompleteVerificationFailureOutputRuleNumber"];
+            span: components["schemas"]["CompleteVerificationFailureOutputSpan"];
+        };
         /**
          * @description The disposition of a finding.
          * @enum {string}
@@ -1012,6 +1406,13 @@ export interface components {
             parent?: string | null;
             state: components["schemas"]["CompleteVerificationFailureOutputReconcileState"];
         };
+        /** @description A report from the fixed ASD-STE100 Issue 9 analyzer. */
+        CompleteVerificationFailureOutputReport: {
+            analyzer_version: string;
+            findings: components["schemas"]["CompleteVerificationFailureOutputFinding"][];
+            issue: components["schemas"]["CompleteVerificationFailureOutputStandardIssue"];
+            standard: components["schemas"]["CompleteVerificationFailureOutputStandard"];
+        };
         /**
          * @description An ASD-STE100 Issue 9 rule implemented by this analyzer.
          * @enum {string}
@@ -1062,6 +1463,19 @@ export interface components {
         CompleteVerificationFailureOutputWriteFailure: {
             /** @constant */
             kind: "schema_version";
+        } | {
+            /** @constant */
+            kind: "already_exists";
+        } | {
+            /** @constant */
+            kind: "invalid_commit_pin";
+        } | {
+            /** @constant */
+            kind: "scope_mismatch";
+        } | {
+            /** @constant */
+            kind: "statement_invalid";
+            report: components["schemas"]["CompleteVerificationFailureOutputReport"];
         } | {
             /** @constant */
             kind: "invalid_declaration";
@@ -1160,6 +1574,1070 @@ export interface components {
          * @enum {string}
          */
         CompleteVerificationSuccessOutputVerificationRunStatus: "running" | "passed" | "failed";
+        /** FailureEnvelope */
+        CreateRequirementFailureOutput: {
+            error: components["schemas"]["CreateRequirementFailureOutputOperationError"];
+            /** @constant */
+            operation?: "create-requirement";
+            /** @constant */
+            protocol_version: 7;
+        };
+        /** @description One owner-local path to a language-authored declaration. */
+        CreateRequirementFailureOutputDeclarationAddress: string[];
+        /** @description One nonconformance found in descriptive text. */
+        CreateRequirementFailureOutputFinding: {
+            kind: components["schemas"]["CreateRequirementFailureOutputFindingKind"];
+            message: string;
+            rule: components["schemas"]["CreateRequirementFailureOutputRuleNumber"];
+            span: components["schemas"]["CreateRequirementFailureOutputSpan"];
+        };
+        /**
+         * @description The disposition of a finding.
+         * @enum {string}
+         */
+        CreateRequirementFailureOutputFindingKind: "violation";
+        /** @enum {string} */
+        CreateRequirementFailureOutputInvalidInputReason: "required" | "invalid_value" | "malformed_json" | "unknown_field" | "too_large";
+        /** @description Keeps the handler's native error separate from preparation failure. */
+        CreateRequirementFailureOutputOperationError: components["schemas"]["CreateRequirementFailureOutputOperationFailure"] | components["schemas"]["CreateRequirementFailureOutputWriteFailure"];
+        CreateRequirementFailureOutputOperationFailure: {
+            field: string | null;
+            /** @constant */
+            kind: "invalid_input";
+            reason: components["schemas"]["CreateRequirementFailureOutputInvalidInputReason"];
+        } | {
+            /** @constant */
+            kind: "protocol_mismatch";
+            /** Format: uint32 */
+            requested: number;
+            /** Format: uint32 */
+            supported: number;
+        } | {
+            /** @constant */
+            kind: "unknown_operation";
+        } | {
+            /** @constant */
+            kind: "unauthenticated";
+        } | {
+            /** @constant */
+            kind: "access_denied";
+        } | {
+            /** @constant */
+            kind: "unknown_target";
+        } | {
+            /** @constant */
+            kind: "unknown_scope";
+        } | {
+            /** @constant */
+            kind: "unavailable_needs";
+        } | {
+            /** @constant */
+            kind: "internal";
+        } | {
+            /** @constant */
+            kind: "uncertain_write";
+        };
+        /** @enum {string} */
+        CreateRequirementFailureOutputReconcileState: "created" | "updated" | "moved" | "retired" | "conflict" | "unchanged";
+        CreateRequirementFailureOutputReconciledResource: {
+            address: components["schemas"]["CreateRequirementFailureOutputDeclarationAddress"];
+            changes?: components["schemas"]["CreateRequirementFailureOutputTypedFieldChange"][];
+            id: components["schemas"]["CreateRequirementFailureOutputStableId"];
+            key: string;
+            kind: components["schemas"]["CreateRequirementFailureOutputTypedResourceKind"];
+            parent?: string | null;
+            state: components["schemas"]["CreateRequirementFailureOutputReconcileState"];
+        };
+        /** @description A report from the fixed ASD-STE100 Issue 9 analyzer. */
+        CreateRequirementFailureOutputReport: {
+            analyzer_version: string;
+            findings: components["schemas"]["CreateRequirementFailureOutputFinding"][];
+            issue: components["schemas"]["CreateRequirementFailureOutputStandardIssue"];
+            standard: components["schemas"]["CreateRequirementFailureOutputStandard"];
+        };
+        /**
+         * @description An ASD-STE100 Issue 9 rule implemented by this analyzer.
+         * @enum {string}
+         */
+        CreateRequirementFailureOutputRuleNumber: "1.1" | "4.2" | "6.3" | "6.6" | "8.1";
+        /** @description A half-open UTF-8 byte range in the analyzed text. */
+        CreateRequirementFailureOutputSpan: {
+            /** Format: uint */
+            end: number;
+            /** Format: uint */
+            start: number;
+        };
+        /**
+         * @description A stable artifact id. The inner `String` is private and `new` is the only
+         *     way in, so every `StableId` in existence satisfies [`is_well_formed_id`].
+         */
+        CreateRequirementFailureOutputStableId: string;
+        /**
+         * @description The authority used by the analyzer.
+         * @enum {string}
+         */
+        CreateRequirementFailureOutputStandard: "ASD-STE100";
+        /**
+         * Format: uint8
+         * @description The fixed issue of the standard used by the analyzer.
+         * @constant
+         */
+        CreateRequirementFailureOutputStandardIssue: 9;
+        CreateRequirementFailureOutputTypedFieldChange: {
+            after: unknown;
+            before: unknown;
+            field: string;
+        };
+        /** @enum {string} */
+        CreateRequirementFailureOutputTypedResourceKind: "source" | "requirement" | "rule";
+        /** @description One ASD-STE100 violation attached to its typed declaration site. */
+        CreateRequirementFailureOutputTypedSpecDiagnostic: {
+            address: components["schemas"]["CreateRequirementFailureOutputDeclarationAddress"];
+            disposition: components["schemas"]["CreateRequirementFailureOutputFindingKind"];
+            field: string;
+            issue: components["schemas"]["CreateRequirementFailureOutputStandardIssue"];
+            message: string;
+            resource_kind: components["schemas"]["CreateRequirementFailureOutputTypedResourceKind"];
+            rule: components["schemas"]["CreateRequirementFailureOutputRuleNumber"];
+            span: components["schemas"]["CreateRequirementFailureOutputSpan"];
+            standard: components["schemas"]["CreateRequirementFailureOutputStandard"];
+        };
+        CreateRequirementFailureOutputWriteFailure: {
+            /** @constant */
+            kind: "schema_version";
+        } | {
+            /** @constant */
+            kind: "already_exists";
+        } | {
+            /** @constant */
+            kind: "invalid_commit_pin";
+        } | {
+            /** @constant */
+            kind: "scope_mismatch";
+        } | {
+            /** @constant */
+            kind: "statement_invalid";
+            report: components["schemas"]["CreateRequirementFailureOutputReport"];
+        } | {
+            /** @constant */
+            kind: "invalid_declaration";
+        } | {
+            conflicts: components["schemas"]["CreateRequirementFailureOutputReconciledResource"][];
+            /** @constant */
+            kind: "ownership_conflict";
+        } | {
+            /** @constant */
+            kind: "missing_reference";
+        } | {
+            diagnostics: components["schemas"]["CreateRequirementFailureOutputTypedSpecDiagnostic"][];
+            /** @constant */
+            kind: "statement_rejected";
+        } | {
+            /** @constant */
+            kind: "invalid_verification_target";
+        } | {
+            /** @constant */
+            kind: "retired_rule";
+        } | {
+            /** @constant */
+            kind: "invalid_completion";
+        } | {
+            /** @constant */
+            kind: "already_complete";
+        } | {
+            /** @constant */
+            kind: "file_access_denied";
+        } | {
+            /** @constant */
+            kind: "file_unavailable";
+        } | {
+            /** @constant */
+            kind: "write_failed";
+        } | {
+            /** @constant */
+            kind: "uncertain_write";
+        };
+        /** RepositoryCall */
+        CreateRequirementRequestInput: {
+            context: components["schemas"]["CreateRequirementRequestInputRepositoryScope"];
+            request: components["schemas"]["CreateRequirementRequestInputCreateRequirementInput"];
+        };
+        CreateRequirementRequestInputCreateRequirementInput: {
+            depends_on: components["schemas"]["CreateRequirementRequestInputStableId"][];
+            description?: string | null;
+            domain_id?: components["schemas"]["CreateRequirementRequestInputStableId"] | null;
+            id: components["schemas"]["CreateRequirementRequestInputStableId"];
+            origin_message?: components["schemas"]["CreateRequirementRequestInputStableId"] | null;
+            origin_thread?: components["schemas"]["CreateRequirementRequestInputStableId"] | null;
+            refines?: components["schemas"]["CreateRequirementRequestInputStableId"] | null;
+            scope_id: components["schemas"]["CreateRequirementRequestInputScopeId"];
+            spawned_by?: components["schemas"]["CreateRequirementRequestInputStableId"] | null;
+            statement: string;
+            status: components["schemas"]["CreateRequirementRequestInputRequirementStatus"];
+            supersedes: components["schemas"]["CreateRequirementRequestInputStableId"][];
+        };
+        /** @description Scope selection for operations that do not use projection freshness. */
+        CreateRequirementRequestInputRepositoryScope: {
+            repository: string;
+            scope: string;
+        };
+        /** @enum {string} */
+        CreateRequirementRequestInputRequirementStatus: "active" | "discovery" | "refinement" | "resolved";
+        /**
+         * @description A scope id. The inner `String` is private and `new` is the only way in, so
+         *     every `ScopeId` in existence satisfies [`is_well_formed_id`].
+         */
+        CreateRequirementRequestInputScopeId: string;
+        /**
+         * @description A stable artifact id. The inner `String` is private and `new` is the only
+         *     way in, so every `StableId` in existence satisfies [`is_well_formed_id`].
+         */
+        CreateRequirementRequestInputStableId: string;
+        /** Requirement */
+        CreateRequirementSuccessOutput: {
+            declaration_address?: components["schemas"]["CreateRequirementSuccessOutputDeclarationAddress"] | null;
+            declared_by?: string | null;
+            depends_on?: components["schemas"]["CreateRequirementSuccessOutputStableId"][];
+            description?: string | null;
+            domain_id?: components["schemas"]["CreateRequirementSuccessOutputStableId"] | null;
+            /**
+             * @description Deliberately unstructured free text: the dim view of decisions and
+             *     investigations that are coming but cannot yet be phrased sharply.
+             */
+            fog?: string | null;
+            id: components["schemas"]["CreateRequirementSuccessOutputStableId"];
+            origin_message?: components["schemas"]["CreateRequirementSuccessOutputStableId"] | null;
+            origin_thread?: components["schemas"]["CreateRequirementSuccessOutputStableId"] | null;
+            refines?: components["schemas"]["CreateRequirementSuccessOutputStableId"] | null;
+            retired?: boolean;
+            /** Format: uint32 */
+            schema_version: number;
+            scope_id: components["schemas"]["CreateRequirementSuccessOutputScopeId"];
+            source_refs?: components["schemas"]["CreateRequirementSuccessOutputSourceReference"][];
+            spawned_by?: components["schemas"]["CreateRequirementSuccessOutputStableId"] | null;
+            statement: string;
+            status: components["schemas"]["CreateRequirementSuccessOutputRequirementStatus"];
+            supersedes?: components["schemas"]["CreateRequirementSuccessOutputStableId"][];
+        };
+        /** @description One owner-local path to a language-authored declaration. */
+        CreateRequirementSuccessOutputDeclarationAddress: string[];
+        /** @enum {string} */
+        CreateRequirementSuccessOutputRequirementStatus: "active" | "discovery" | "refinement" | "resolved";
+        /**
+         * @description A scope id. The inner `String` is private and `new` is the only way in, so
+         *     every `ScopeId` in existence satisfies [`is_well_formed_id`].
+         */
+        CreateRequirementSuccessOutputScopeId: string;
+        CreateRequirementSuccessOutputSourceReference: {
+            clause?: string | null;
+            source_id: components["schemas"]["CreateRequirementSuccessOutputStableId"];
+        };
+        /**
+         * @description A stable artifact id. The inner `String` is private and `new` is the only
+         *     way in, so every `StableId` in existence satisfies [`is_well_formed_id`].
+         */
+        CreateRequirementSuccessOutputStableId: string;
+        /** FailureEnvelope */
+        CreateResolutionFailureOutput: {
+            error: components["schemas"]["CreateResolutionFailureOutputOperationError"];
+            /** @constant */
+            operation?: "create-resolution";
+            /** @constant */
+            protocol_version: 7;
+        };
+        /** @description One owner-local path to a language-authored declaration. */
+        CreateResolutionFailureOutputDeclarationAddress: string[];
+        /** @description One nonconformance found in descriptive text. */
+        CreateResolutionFailureOutputFinding: {
+            kind: components["schemas"]["CreateResolutionFailureOutputFindingKind"];
+            message: string;
+            rule: components["schemas"]["CreateResolutionFailureOutputRuleNumber"];
+            span: components["schemas"]["CreateResolutionFailureOutputSpan"];
+        };
+        /**
+         * @description The disposition of a finding.
+         * @enum {string}
+         */
+        CreateResolutionFailureOutputFindingKind: "violation";
+        /** @enum {string} */
+        CreateResolutionFailureOutputInvalidInputReason: "required" | "invalid_value" | "malformed_json" | "unknown_field" | "too_large";
+        /** @description Keeps the handler's native error separate from preparation failure. */
+        CreateResolutionFailureOutputOperationError: components["schemas"]["CreateResolutionFailureOutputOperationFailure"] | components["schemas"]["CreateResolutionFailureOutputWriteFailure"];
+        CreateResolutionFailureOutputOperationFailure: {
+            field: string | null;
+            /** @constant */
+            kind: "invalid_input";
+            reason: components["schemas"]["CreateResolutionFailureOutputInvalidInputReason"];
+        } | {
+            /** @constant */
+            kind: "protocol_mismatch";
+            /** Format: uint32 */
+            requested: number;
+            /** Format: uint32 */
+            supported: number;
+        } | {
+            /** @constant */
+            kind: "unknown_operation";
+        } | {
+            /** @constant */
+            kind: "unauthenticated";
+        } | {
+            /** @constant */
+            kind: "access_denied";
+        } | {
+            /** @constant */
+            kind: "unknown_target";
+        } | {
+            /** @constant */
+            kind: "unknown_scope";
+        } | {
+            /** @constant */
+            kind: "unavailable_needs";
+        } | {
+            /** @constant */
+            kind: "internal";
+        } | {
+            /** @constant */
+            kind: "uncertain_write";
+        };
+        /** @enum {string} */
+        CreateResolutionFailureOutputReconcileState: "created" | "updated" | "moved" | "retired" | "conflict" | "unchanged";
+        CreateResolutionFailureOutputReconciledResource: {
+            address: components["schemas"]["CreateResolutionFailureOutputDeclarationAddress"];
+            changes?: components["schemas"]["CreateResolutionFailureOutputTypedFieldChange"][];
+            id: components["schemas"]["CreateResolutionFailureOutputStableId"];
+            key: string;
+            kind: components["schemas"]["CreateResolutionFailureOutputTypedResourceKind"];
+            parent?: string | null;
+            state: components["schemas"]["CreateResolutionFailureOutputReconcileState"];
+        };
+        /** @description A report from the fixed ASD-STE100 Issue 9 analyzer. */
+        CreateResolutionFailureOutputReport: {
+            analyzer_version: string;
+            findings: components["schemas"]["CreateResolutionFailureOutputFinding"][];
+            issue: components["schemas"]["CreateResolutionFailureOutputStandardIssue"];
+            standard: components["schemas"]["CreateResolutionFailureOutputStandard"];
+        };
+        /**
+         * @description An ASD-STE100 Issue 9 rule implemented by this analyzer.
+         * @enum {string}
+         */
+        CreateResolutionFailureOutputRuleNumber: "1.1" | "4.2" | "6.3" | "6.6" | "8.1";
+        /** @description A half-open UTF-8 byte range in the analyzed text. */
+        CreateResolutionFailureOutputSpan: {
+            /** Format: uint */
+            end: number;
+            /** Format: uint */
+            start: number;
+        };
+        /**
+         * @description A stable artifact id. The inner `String` is private and `new` is the only
+         *     way in, so every `StableId` in existence satisfies [`is_well_formed_id`].
+         */
+        CreateResolutionFailureOutputStableId: string;
+        /**
+         * @description The authority used by the analyzer.
+         * @enum {string}
+         */
+        CreateResolutionFailureOutputStandard: "ASD-STE100";
+        /**
+         * Format: uint8
+         * @description The fixed issue of the standard used by the analyzer.
+         * @constant
+         */
+        CreateResolutionFailureOutputStandardIssue: 9;
+        CreateResolutionFailureOutputTypedFieldChange: {
+            after: unknown;
+            before: unknown;
+            field: string;
+        };
+        /** @enum {string} */
+        CreateResolutionFailureOutputTypedResourceKind: "source" | "requirement" | "rule";
+        /** @description One ASD-STE100 violation attached to its typed declaration site. */
+        CreateResolutionFailureOutputTypedSpecDiagnostic: {
+            address: components["schemas"]["CreateResolutionFailureOutputDeclarationAddress"];
+            disposition: components["schemas"]["CreateResolutionFailureOutputFindingKind"];
+            field: string;
+            issue: components["schemas"]["CreateResolutionFailureOutputStandardIssue"];
+            message: string;
+            resource_kind: components["schemas"]["CreateResolutionFailureOutputTypedResourceKind"];
+            rule: components["schemas"]["CreateResolutionFailureOutputRuleNumber"];
+            span: components["schemas"]["CreateResolutionFailureOutputSpan"];
+            standard: components["schemas"]["CreateResolutionFailureOutputStandard"];
+        };
+        CreateResolutionFailureOutputWriteFailure: {
+            /** @constant */
+            kind: "schema_version";
+        } | {
+            /** @constant */
+            kind: "already_exists";
+        } | {
+            /** @constant */
+            kind: "invalid_commit_pin";
+        } | {
+            /** @constant */
+            kind: "scope_mismatch";
+        } | {
+            /** @constant */
+            kind: "statement_invalid";
+            report: components["schemas"]["CreateResolutionFailureOutputReport"];
+        } | {
+            /** @constant */
+            kind: "invalid_declaration";
+        } | {
+            conflicts: components["schemas"]["CreateResolutionFailureOutputReconciledResource"][];
+            /** @constant */
+            kind: "ownership_conflict";
+        } | {
+            /** @constant */
+            kind: "missing_reference";
+        } | {
+            diagnostics: components["schemas"]["CreateResolutionFailureOutputTypedSpecDiagnostic"][];
+            /** @constant */
+            kind: "statement_rejected";
+        } | {
+            /** @constant */
+            kind: "invalid_verification_target";
+        } | {
+            /** @constant */
+            kind: "retired_rule";
+        } | {
+            /** @constant */
+            kind: "invalid_completion";
+        } | {
+            /** @constant */
+            kind: "already_complete";
+        } | {
+            /** @constant */
+            kind: "file_access_denied";
+        } | {
+            /** @constant */
+            kind: "file_unavailable";
+        } | {
+            /** @constant */
+            kind: "write_failed";
+        } | {
+            /** @constant */
+            kind: "uncertain_write";
+        };
+        /** RepositoryCall */
+        CreateResolutionRequestInput: {
+            context: components["schemas"]["CreateResolutionRequestInputRepositoryScope"];
+            request: components["schemas"]["CreateResolutionRequestInputCreateResolutionInput"];
+        };
+        CreateResolutionRequestInputCreateResolutionInput: {
+            /** Format: int64 */
+            approved_at?: number | null;
+            approved_by?: string | null;
+            /** Format: double */
+            confidence?: number | null;
+            context?: string | null;
+            enforcement?: string | null;
+            id: components["schemas"]["CreateResolutionRequestInputStableId"];
+            inputs: components["schemas"]["CreateResolutionRequestInputResolutionInput"][];
+            made_by?: string | null;
+            origin_message?: components["schemas"]["CreateResolutionRequestInputStableId"] | null;
+            origin_thread?: components["schemas"]["CreateResolutionRequestInputStableId"] | null;
+            position: string;
+            rationale: string;
+            requirement_ids: components["schemas"]["CreateResolutionRequestInputStableId"][];
+            scope_id: components["schemas"]["CreateResolutionRequestInputScopeId"];
+            status: components["schemas"]["CreateResolutionRequestInputResolutionStatus"];
+            supersedes: components["schemas"]["CreateResolutionRequestInputStableId"][];
+            title: string;
+        };
+        /** @description Scope selection for operations that do not use projection freshness. */
+        CreateResolutionRequestInputRepositoryScope: {
+            repository: string;
+            scope: string;
+        };
+        /**
+         * @description The fields of a [`ResolutionInput`] as they arrive on the wire, before
+         *     `validate_resolution_input_content` has passed judgement on them. Serde
+         *     reads this, the conversion below either builds the record or refuses it, so
+         *     a blank input cannot enter the graph through a file the way it can through
+         *     a struct literal.
+         */
+        CreateResolutionRequestInputResolutionInput: {
+            input_type: components["schemas"]["CreateResolutionRequestInputResolutionInputType"];
+            reference: string;
+            summary: string;
+        };
+        /** @enum {string} */
+        CreateResolutionRequestInputResolutionInputType: "regulatory" | "legal_advice" | "commercial" | "benchmark" | "technical" | "incident" | "source_material";
+        /** @enum {string} */
+        CreateResolutionRequestInputResolutionStatus: "draft" | "review" | "proposed" | "approved" | "rejected" | "revised" | "superseded" | "abandoned";
+        /**
+         * @description A scope id. The inner `String` is private and `new` is the only way in, so
+         *     every `ScopeId` in existence satisfies [`is_well_formed_id`].
+         */
+        CreateResolutionRequestInputScopeId: string;
+        /**
+         * @description A stable artifact id. The inner `String` is private and `new` is the only
+         *     way in, so every `StableId` in existence satisfies [`is_well_formed_id`].
+         */
+        CreateResolutionRequestInputStableId: string;
+        /** Resolution */
+        CreateResolutionSuccessOutput: {
+            /** Format: int64 */
+            approved_at?: number | null;
+            approved_by?: string | null;
+            /** Format: double */
+            confidence?: number | null;
+            context?: string | null;
+            enforcement?: string | null;
+            id: components["schemas"]["CreateResolutionSuccessOutputStableId"];
+            /** @default [] */
+            inputs: components["schemas"]["CreateResolutionSuccessOutputResolutionInput"][];
+            made_by?: string | null;
+            origin_message?: components["schemas"]["CreateResolutionSuccessOutputStableId"] | null;
+            origin_thread?: components["schemas"]["CreateResolutionSuccessOutputStableId"] | null;
+            position: string;
+            rationale: string;
+            requirement_ids?: components["schemas"]["CreateResolutionSuccessOutputStableId"][];
+            review_on: string | null;
+            /** Format: uint32 */
+            schema_version: number;
+            scope_id: components["schemas"]["CreateResolutionSuccessOutputScopeId"];
+            status: components["schemas"]["CreateResolutionSuccessOutputResolutionStatus"];
+            supersedes?: components["schemas"]["CreateResolutionSuccessOutputStableId"][];
+            title: string;
+        };
+        CreateResolutionSuccessOutputResolutionInput: {
+            input_type: components["schemas"]["CreateResolutionSuccessOutputResolutionInputType"];
+            reference: string;
+            summary: string;
+        };
+        /** @enum {string} */
+        CreateResolutionSuccessOutputResolutionInputType: "regulatory" | "legal_advice" | "commercial" | "benchmark" | "technical" | "incident" | "source_material";
+        /** @enum {string} */
+        CreateResolutionSuccessOutputResolutionStatus: "draft" | "review" | "proposed" | "approved" | "rejected" | "revised" | "superseded" | "abandoned";
+        /**
+         * @description A scope id. The inner `String` is private and `new` is the only way in, so
+         *     every `ScopeId` in existence satisfies [`is_well_formed_id`].
+         */
+        CreateResolutionSuccessOutputScopeId: string;
+        /**
+         * @description A stable artifact id. The inner `String` is private and `new` is the only
+         *     way in, so every `StableId` in existence satisfies [`is_well_formed_id`].
+         */
+        CreateResolutionSuccessOutputStableId: string;
+        /** FailureEnvelope */
+        CreateRuleFailureOutput: {
+            error: components["schemas"]["CreateRuleFailureOutputOperationError"];
+            /** @constant */
+            operation?: "create-rule";
+            /** @constant */
+            protocol_version: 7;
+        };
+        /** @description One owner-local path to a language-authored declaration. */
+        CreateRuleFailureOutputDeclarationAddress: string[];
+        /** @description One nonconformance found in descriptive text. */
+        CreateRuleFailureOutputFinding: {
+            kind: components["schemas"]["CreateRuleFailureOutputFindingKind"];
+            message: string;
+            rule: components["schemas"]["CreateRuleFailureOutputRuleNumber"];
+            span: components["schemas"]["CreateRuleFailureOutputSpan"];
+        };
+        /**
+         * @description The disposition of a finding.
+         * @enum {string}
+         */
+        CreateRuleFailureOutputFindingKind: "violation";
+        /** @enum {string} */
+        CreateRuleFailureOutputInvalidInputReason: "required" | "invalid_value" | "malformed_json" | "unknown_field" | "too_large";
+        /** @description Keeps the handler's native error separate from preparation failure. */
+        CreateRuleFailureOutputOperationError: components["schemas"]["CreateRuleFailureOutputOperationFailure"] | components["schemas"]["CreateRuleFailureOutputWriteFailure"];
+        CreateRuleFailureOutputOperationFailure: {
+            field: string | null;
+            /** @constant */
+            kind: "invalid_input";
+            reason: components["schemas"]["CreateRuleFailureOutputInvalidInputReason"];
+        } | {
+            /** @constant */
+            kind: "protocol_mismatch";
+            /** Format: uint32 */
+            requested: number;
+            /** Format: uint32 */
+            supported: number;
+        } | {
+            /** @constant */
+            kind: "unknown_operation";
+        } | {
+            /** @constant */
+            kind: "unauthenticated";
+        } | {
+            /** @constant */
+            kind: "access_denied";
+        } | {
+            /** @constant */
+            kind: "unknown_target";
+        } | {
+            /** @constant */
+            kind: "unknown_scope";
+        } | {
+            /** @constant */
+            kind: "unavailable_needs";
+        } | {
+            /** @constant */
+            kind: "internal";
+        } | {
+            /** @constant */
+            kind: "uncertain_write";
+        };
+        /** @enum {string} */
+        CreateRuleFailureOutputReconcileState: "created" | "updated" | "moved" | "retired" | "conflict" | "unchanged";
+        CreateRuleFailureOutputReconciledResource: {
+            address: components["schemas"]["CreateRuleFailureOutputDeclarationAddress"];
+            changes?: components["schemas"]["CreateRuleFailureOutputTypedFieldChange"][];
+            id: components["schemas"]["CreateRuleFailureOutputStableId"];
+            key: string;
+            kind: components["schemas"]["CreateRuleFailureOutputTypedResourceKind"];
+            parent?: string | null;
+            state: components["schemas"]["CreateRuleFailureOutputReconcileState"];
+        };
+        /** @description A report from the fixed ASD-STE100 Issue 9 analyzer. */
+        CreateRuleFailureOutputReport: {
+            analyzer_version: string;
+            findings: components["schemas"]["CreateRuleFailureOutputFinding"][];
+            issue: components["schemas"]["CreateRuleFailureOutputStandardIssue"];
+            standard: components["schemas"]["CreateRuleFailureOutputStandard"];
+        };
+        /**
+         * @description An ASD-STE100 Issue 9 rule implemented by this analyzer.
+         * @enum {string}
+         */
+        CreateRuleFailureOutputRuleNumber: "1.1" | "4.2" | "6.3" | "6.6" | "8.1";
+        /** @description A half-open UTF-8 byte range in the analyzed text. */
+        CreateRuleFailureOutputSpan: {
+            /** Format: uint */
+            end: number;
+            /** Format: uint */
+            start: number;
+        };
+        /**
+         * @description A stable artifact id. The inner `String` is private and `new` is the only
+         *     way in, so every `StableId` in existence satisfies [`is_well_formed_id`].
+         */
+        CreateRuleFailureOutputStableId: string;
+        /**
+         * @description The authority used by the analyzer.
+         * @enum {string}
+         */
+        CreateRuleFailureOutputStandard: "ASD-STE100";
+        /**
+         * Format: uint8
+         * @description The fixed issue of the standard used by the analyzer.
+         * @constant
+         */
+        CreateRuleFailureOutputStandardIssue: 9;
+        CreateRuleFailureOutputTypedFieldChange: {
+            after: unknown;
+            before: unknown;
+            field: string;
+        };
+        /** @enum {string} */
+        CreateRuleFailureOutputTypedResourceKind: "source" | "requirement" | "rule";
+        /** @description One ASD-STE100 violation attached to its typed declaration site. */
+        CreateRuleFailureOutputTypedSpecDiagnostic: {
+            address: components["schemas"]["CreateRuleFailureOutputDeclarationAddress"];
+            disposition: components["schemas"]["CreateRuleFailureOutputFindingKind"];
+            field: string;
+            issue: components["schemas"]["CreateRuleFailureOutputStandardIssue"];
+            message: string;
+            resource_kind: components["schemas"]["CreateRuleFailureOutputTypedResourceKind"];
+            rule: components["schemas"]["CreateRuleFailureOutputRuleNumber"];
+            span: components["schemas"]["CreateRuleFailureOutputSpan"];
+            standard: components["schemas"]["CreateRuleFailureOutputStandard"];
+        };
+        CreateRuleFailureOutputWriteFailure: {
+            /** @constant */
+            kind: "schema_version";
+        } | {
+            /** @constant */
+            kind: "already_exists";
+        } | {
+            /** @constant */
+            kind: "invalid_commit_pin";
+        } | {
+            /** @constant */
+            kind: "scope_mismatch";
+        } | {
+            /** @constant */
+            kind: "statement_invalid";
+            report: components["schemas"]["CreateRuleFailureOutputReport"];
+        } | {
+            /** @constant */
+            kind: "invalid_declaration";
+        } | {
+            conflicts: components["schemas"]["CreateRuleFailureOutputReconciledResource"][];
+            /** @constant */
+            kind: "ownership_conflict";
+        } | {
+            /** @constant */
+            kind: "missing_reference";
+        } | {
+            diagnostics: components["schemas"]["CreateRuleFailureOutputTypedSpecDiagnostic"][];
+            /** @constant */
+            kind: "statement_rejected";
+        } | {
+            /** @constant */
+            kind: "invalid_verification_target";
+        } | {
+            /** @constant */
+            kind: "retired_rule";
+        } | {
+            /** @constant */
+            kind: "invalid_completion";
+        } | {
+            /** @constant */
+            kind: "already_complete";
+        } | {
+            /** @constant */
+            kind: "file_access_denied";
+        } | {
+            /** @constant */
+            kind: "file_unavailable";
+        } | {
+            /** @constant */
+            kind: "write_failed";
+        } | {
+            /** @constant */
+            kind: "uncertain_write";
+        };
+        /** RepositoryCall */
+        CreateRuleRequestInput: {
+            context: components["schemas"]["CreateRuleRequestInputRepositoryScope"];
+            request: components["schemas"]["CreateRuleRequestInputCreateRuleInput"];
+        };
+        CreateRuleRequestInputCreateRuleInput: {
+            description?: string | null;
+            id: components["schemas"]["CreateRuleRequestInputStableId"];
+            name?: string | null;
+            origin_message?: components["schemas"]["CreateRuleRequestInputStableId"] | null;
+            origin_thread?: components["schemas"]["CreateRuleRequestInputStableId"] | null;
+            requirement_ids: components["schemas"]["CreateRuleRequestInputStableId"][];
+            resolution_ids: components["schemas"]["CreateRuleRequestInputStableId"][];
+            scope_id: components["schemas"]["CreateRuleRequestInputScopeId"];
+            severity: components["schemas"]["CreateRuleRequestInputRuleSeverity"];
+            source_document?: string | null;
+            source_section?: string | null;
+            statement: string;
+            status: components["schemas"]["CreateRuleRequestInputRuleStatus"];
+        };
+        /** @description Scope selection for operations that do not use projection freshness. */
+        CreateRuleRequestInputRepositoryScope: {
+            repository: string;
+            scope: string;
+        };
+        /** @enum {string} */
+        CreateRuleRequestInputRuleSeverity: "low" | "medium" | "high" | "critical";
+        /** @enum {string} */
+        CreateRuleRequestInputRuleStatus: "draft" | "review" | "active" | "deprecated" | "archived";
+        /**
+         * @description A scope id. The inner `String` is private and `new` is the only way in, so
+         *     every `ScopeId` in existence satisfies [`is_well_formed_id`].
+         */
+        CreateRuleRequestInputScopeId: string;
+        /**
+         * @description A stable artifact id. The inner `String` is private and `new` is the only
+         *     way in, so every `StableId` in existence satisfies [`is_well_formed_id`].
+         */
+        CreateRuleRequestInputStableId: string;
+        /** Rule */
+        CreateRuleSuccessOutput: {
+            declaration_address?: components["schemas"]["CreateRuleSuccessOutputDeclarationAddress"] | null;
+            declared_by?: string | null;
+            description?: string | null;
+            id: components["schemas"]["CreateRuleSuccessOutputStableId"];
+            name?: string | null;
+            origin_message?: components["schemas"]["CreateRuleSuccessOutputStableId"] | null;
+            origin_thread?: components["schemas"]["CreateRuleSuccessOutputStableId"] | null;
+            requirement_ids?: components["schemas"]["CreateRuleSuccessOutputStableId"][];
+            resolution_ids?: components["schemas"]["CreateRuleSuccessOutputStableId"][];
+            retired?: boolean;
+            /** Format: uint32 */
+            schema_version: number;
+            scope_id: components["schemas"]["CreateRuleSuccessOutputScopeId"];
+            severity: components["schemas"]["CreateRuleSuccessOutputRuleSeverity"];
+            source_document?: string | null;
+            source_section?: string | null;
+            statement: string;
+            status: components["schemas"]["CreateRuleSuccessOutputRuleStatus"];
+        };
+        /** @description One owner-local path to a language-authored declaration. */
+        CreateRuleSuccessOutputDeclarationAddress: string[];
+        /** @enum {string} */
+        CreateRuleSuccessOutputRuleSeverity: "low" | "medium" | "high" | "critical";
+        /** @enum {string} */
+        CreateRuleSuccessOutputRuleStatus: "draft" | "review" | "active" | "deprecated" | "archived";
+        /**
+         * @description A scope id. The inner `String` is private and `new` is the only way in, so
+         *     every `ScopeId` in existence satisfies [`is_well_formed_id`].
+         */
+        CreateRuleSuccessOutputScopeId: string;
+        /**
+         * @description A stable artifact id. The inner `String` is private and `new` is the only
+         *     way in, so every `StableId` in existence satisfies [`is_well_formed_id`].
+         */
+        CreateRuleSuccessOutputStableId: string;
+        /** FailureEnvelope */
+        CreateSourceFailureOutput: {
+            error: components["schemas"]["CreateSourceFailureOutputOperationError"];
+            /** @constant */
+            operation?: "create-source";
+            /** @constant */
+            protocol_version: 7;
+        };
+        /** @description One owner-local path to a language-authored declaration. */
+        CreateSourceFailureOutputDeclarationAddress: string[];
+        /** @description One nonconformance found in descriptive text. */
+        CreateSourceFailureOutputFinding: {
+            kind: components["schemas"]["CreateSourceFailureOutputFindingKind"];
+            message: string;
+            rule: components["schemas"]["CreateSourceFailureOutputRuleNumber"];
+            span: components["schemas"]["CreateSourceFailureOutputSpan"];
+        };
+        /**
+         * @description The disposition of a finding.
+         * @enum {string}
+         */
+        CreateSourceFailureOutputFindingKind: "violation";
+        /** @enum {string} */
+        CreateSourceFailureOutputInvalidInputReason: "required" | "invalid_value" | "malformed_json" | "unknown_field" | "too_large";
+        /** @description Keeps the handler's native error separate from preparation failure. */
+        CreateSourceFailureOutputOperationError: components["schemas"]["CreateSourceFailureOutputOperationFailure"] | components["schemas"]["CreateSourceFailureOutputWriteFailure"];
+        CreateSourceFailureOutputOperationFailure: {
+            field: string | null;
+            /** @constant */
+            kind: "invalid_input";
+            reason: components["schemas"]["CreateSourceFailureOutputInvalidInputReason"];
+        } | {
+            /** @constant */
+            kind: "protocol_mismatch";
+            /** Format: uint32 */
+            requested: number;
+            /** Format: uint32 */
+            supported: number;
+        } | {
+            /** @constant */
+            kind: "unknown_operation";
+        } | {
+            /** @constant */
+            kind: "unauthenticated";
+        } | {
+            /** @constant */
+            kind: "access_denied";
+        } | {
+            /** @constant */
+            kind: "unknown_target";
+        } | {
+            /** @constant */
+            kind: "unknown_scope";
+        } | {
+            /** @constant */
+            kind: "unavailable_needs";
+        } | {
+            /** @constant */
+            kind: "internal";
+        } | {
+            /** @constant */
+            kind: "uncertain_write";
+        };
+        /** @enum {string} */
+        CreateSourceFailureOutputReconcileState: "created" | "updated" | "moved" | "retired" | "conflict" | "unchanged";
+        CreateSourceFailureOutputReconciledResource: {
+            address: components["schemas"]["CreateSourceFailureOutputDeclarationAddress"];
+            changes?: components["schemas"]["CreateSourceFailureOutputTypedFieldChange"][];
+            id: components["schemas"]["CreateSourceFailureOutputStableId"];
+            key: string;
+            kind: components["schemas"]["CreateSourceFailureOutputTypedResourceKind"];
+            parent?: string | null;
+            state: components["schemas"]["CreateSourceFailureOutputReconcileState"];
+        };
+        /** @description A report from the fixed ASD-STE100 Issue 9 analyzer. */
+        CreateSourceFailureOutputReport: {
+            analyzer_version: string;
+            findings: components["schemas"]["CreateSourceFailureOutputFinding"][];
+            issue: components["schemas"]["CreateSourceFailureOutputStandardIssue"];
+            standard: components["schemas"]["CreateSourceFailureOutputStandard"];
+        };
+        /**
+         * @description An ASD-STE100 Issue 9 rule implemented by this analyzer.
+         * @enum {string}
+         */
+        CreateSourceFailureOutputRuleNumber: "1.1" | "4.2" | "6.3" | "6.6" | "8.1";
+        /** @description A half-open UTF-8 byte range in the analyzed text. */
+        CreateSourceFailureOutputSpan: {
+            /** Format: uint */
+            end: number;
+            /** Format: uint */
+            start: number;
+        };
+        /**
+         * @description A stable artifact id. The inner `String` is private and `new` is the only
+         *     way in, so every `StableId` in existence satisfies [`is_well_formed_id`].
+         */
+        CreateSourceFailureOutputStableId: string;
+        /**
+         * @description The authority used by the analyzer.
+         * @enum {string}
+         */
+        CreateSourceFailureOutputStandard: "ASD-STE100";
+        /**
+         * Format: uint8
+         * @description The fixed issue of the standard used by the analyzer.
+         * @constant
+         */
+        CreateSourceFailureOutputStandardIssue: 9;
+        CreateSourceFailureOutputTypedFieldChange: {
+            after: unknown;
+            before: unknown;
+            field: string;
+        };
+        /** @enum {string} */
+        CreateSourceFailureOutputTypedResourceKind: "source" | "requirement" | "rule";
+        /** @description One ASD-STE100 violation attached to its typed declaration site. */
+        CreateSourceFailureOutputTypedSpecDiagnostic: {
+            address: components["schemas"]["CreateSourceFailureOutputDeclarationAddress"];
+            disposition: components["schemas"]["CreateSourceFailureOutputFindingKind"];
+            field: string;
+            issue: components["schemas"]["CreateSourceFailureOutputStandardIssue"];
+            message: string;
+            resource_kind: components["schemas"]["CreateSourceFailureOutputTypedResourceKind"];
+            rule: components["schemas"]["CreateSourceFailureOutputRuleNumber"];
+            span: components["schemas"]["CreateSourceFailureOutputSpan"];
+            standard: components["schemas"]["CreateSourceFailureOutputStandard"];
+        };
+        CreateSourceFailureOutputWriteFailure: {
+            /** @constant */
+            kind: "schema_version";
+        } | {
+            /** @constant */
+            kind: "already_exists";
+        } | {
+            /** @constant */
+            kind: "invalid_commit_pin";
+        } | {
+            /** @constant */
+            kind: "scope_mismatch";
+        } | {
+            /** @constant */
+            kind: "statement_invalid";
+            report: components["schemas"]["CreateSourceFailureOutputReport"];
+        } | {
+            /** @constant */
+            kind: "invalid_declaration";
+        } | {
+            conflicts: components["schemas"]["CreateSourceFailureOutputReconciledResource"][];
+            /** @constant */
+            kind: "ownership_conflict";
+        } | {
+            /** @constant */
+            kind: "missing_reference";
+        } | {
+            diagnostics: components["schemas"]["CreateSourceFailureOutputTypedSpecDiagnostic"][];
+            /** @constant */
+            kind: "statement_rejected";
+        } | {
+            /** @constant */
+            kind: "invalid_verification_target";
+        } | {
+            /** @constant */
+            kind: "retired_rule";
+        } | {
+            /** @constant */
+            kind: "invalid_completion";
+        } | {
+            /** @constant */
+            kind: "already_complete";
+        } | {
+            /** @constant */
+            kind: "file_access_denied";
+        } | {
+            /** @constant */
+            kind: "file_unavailable";
+        } | {
+            /** @constant */
+            kind: "write_failed";
+        } | {
+            /** @constant */
+            kind: "uncertain_write";
+        };
+        /** RepositoryCall */
+        CreateSourceRequestInput: {
+            context: components["schemas"]["CreateSourceRequestInputRepositoryScope"];
+            request: components["schemas"]["CreateSourceRequestInputCreateSourceInput"];
+        };
+        CreateSourceRequestInputCreateSourceInput: {
+            commit_pin?: string | null;
+            /** Format: int64 */
+            effective_date?: number | null;
+            id: components["schemas"]["CreateSourceRequestInputStableId"];
+            name: string;
+            origin_message?: components["schemas"]["CreateSourceRequestInputStableId"] | null;
+            origin_thread?: components["schemas"]["CreateSourceRequestInputStableId"] | null;
+            reference?: string | null;
+            /** Format: int64 */
+            review_date?: number | null;
+            scope_id: components["schemas"]["CreateSourceRequestInputScopeId"];
+            source_type: components["schemas"]["CreateSourceRequestInputSourceType"];
+            supersedes: components["schemas"]["CreateSourceRequestInputStableId"][];
+            url?: string | null;
+        };
+        /** @description Scope selection for operations that do not use projection freshness. */
+        CreateSourceRequestInputRepositoryScope: {
+            repository: string;
+            scope: string;
+        };
+        /**
+         * @description A scope id. The inner `String` is private and `new` is the only way in, so
+         *     every `ScopeId` in existence satisfies [`is_well_formed_id`].
+         */
+        CreateSourceRequestInputScopeId: string;
+        /** @enum {string} */
+        CreateSourceRequestInputSourceType: "policy" | "document" | "legislation" | "company_agreement" | "system_state" | "external_integration" | "domain_knowledge" | "project_artifact" | "incident" | "api_spec";
+        /**
+         * @description A stable artifact id. The inner `String` is private and `new` is the only
+         *     way in, so every `StableId` in existence satisfies [`is_well_formed_id`].
+         */
+        CreateSourceRequestInputStableId: string;
+        /** Source */
+        CreateSourceSuccessOutput: {
+            commit_pin?: string | null;
+            declaration_address?: components["schemas"]["CreateSourceSuccessOutputDeclarationAddress"] | null;
+            declared_by?: string | null;
+            /** Format: int64 */
+            effective_date?: number | null;
+            id: components["schemas"]["CreateSourceSuccessOutputStableId"];
+            name: string;
+            origin_message?: components["schemas"]["CreateSourceSuccessOutputStableId"] | null;
+            origin_thread?: components["schemas"]["CreateSourceSuccessOutputStableId"] | null;
+            reference?: string | null;
+            retired?: boolean;
+            /** Format: int64 */
+            review_date?: number | null;
+            /** Format: uint32 */
+            schema_version: number;
+            scope_id: components["schemas"]["CreateSourceSuccessOutputScopeId"];
+            source_type: components["schemas"]["CreateSourceSuccessOutputSourceType"];
+            supersedes?: components["schemas"]["CreateSourceSuccessOutputStableId"][];
+            url: string | null;
+        };
+        /** @description One owner-local path to a language-authored declaration. */
+        CreateSourceSuccessOutputDeclarationAddress: string[];
+        /**
+         * @description A scope id. The inner `String` is private and `new` is the only way in, so
+         *     every `ScopeId` in existence satisfies [`is_well_formed_id`].
+         */
+        CreateSourceSuccessOutputScopeId: string;
+        /** @enum {string} */
+        CreateSourceSuccessOutputSourceType: "policy" | "document" | "legislation" | "company_agreement" | "system_state" | "external_integration" | "domain_knowledge" | "project_artifact" | "incident" | "api_spec";
+        /**
+         * @description A stable artifact id. The inner `String` is private and `new` is the only
+         *     way in, so every `StableId` in existence satisfies [`is_well_formed_id`].
+         */
+        CreateSourceSuccessOutputStableId: string;
         /** FailureEnvelope */
         EvidenceFailureOutput: {
             error: components["schemas"]["EvidenceFailureOutputOperationError"];
@@ -2660,6 +4138,13 @@ export interface components {
         };
         /** @description One owner-local path to a language-authored declaration. */
         PlanFailureOutputDeclarationAddress: string[];
+        /** @description One nonconformance found in descriptive text. */
+        PlanFailureOutputFinding: {
+            kind: components["schemas"]["PlanFailureOutputFindingKind"];
+            message: string;
+            rule: components["schemas"]["PlanFailureOutputRuleNumber"];
+            span: components["schemas"]["PlanFailureOutputSpan"];
+        };
         /**
          * @description The disposition of a finding.
          * @enum {string}
@@ -2717,6 +4202,13 @@ export interface components {
             parent?: string | null;
             state: components["schemas"]["PlanFailureOutputReconcileState"];
         };
+        /** @description A report from the fixed ASD-STE100 Issue 9 analyzer. */
+        PlanFailureOutputReport: {
+            analyzer_version: string;
+            findings: components["schemas"]["PlanFailureOutputFinding"][];
+            issue: components["schemas"]["PlanFailureOutputStandardIssue"];
+            standard: components["schemas"]["PlanFailureOutputStandard"];
+        };
         /**
          * @description An ASD-STE100 Issue 9 rule implemented by this analyzer.
          * @enum {string}
@@ -2767,6 +4259,19 @@ export interface components {
         PlanFailureOutputWriteFailure: {
             /** @constant */
             kind: "schema_version";
+        } | {
+            /** @constant */
+            kind: "already_exists";
+        } | {
+            /** @constant */
+            kind: "invalid_commit_pin";
+        } | {
+            /** @constant */
+            kind: "scope_mismatch";
+        } | {
+            /** @constant */
+            kind: "statement_invalid";
+            report: components["schemas"]["PlanFailureOutputReport"];
         } | {
             /** @constant */
             kind: "invalid_declaration";
@@ -4815,6 +6320,93 @@ export interface operations {
             };
         };
     };
+    addSourceReference: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddSourceReferenceRequestInput"];
+            };
+        };
+        responses: {
+            /** @description Operation result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddSourceReferenceSuccessOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddSourceReferenceFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddSourceReferenceFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddSourceReferenceFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddSourceReferenceFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddSourceReferenceFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddSourceReferenceFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddSourceReferenceFailureOutput"];
+                };
+            };
+        };
+    };
     apply: {
         parameters: {
             query?: never;
@@ -5150,6 +6742,354 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CompleteVerificationFailureOutput"];
+                };
+            };
+        };
+    };
+    createRequirement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRequirementRequestInput"];
+            };
+        };
+        responses: {
+            /** @description Operation result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateRequirementSuccessOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateRequirementFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateRequirementFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateRequirementFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateRequirementFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateRequirementFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateRequirementFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateRequirementFailureOutput"];
+                };
+            };
+        };
+    };
+    createResolution: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateResolutionRequestInput"];
+            };
+        };
+        responses: {
+            /** @description Operation result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateResolutionSuccessOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateResolutionFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateResolutionFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateResolutionFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateResolutionFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateResolutionFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateResolutionFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateResolutionFailureOutput"];
+                };
+            };
+        };
+    };
+    createRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRuleRequestInput"];
+            };
+        };
+        responses: {
+            /** @description Operation result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateRuleSuccessOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateRuleFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateRuleFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateRuleFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateRuleFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateRuleFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateRuleFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateRuleFailureOutput"];
+                };
+            };
+        };
+    };
+    createSource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSourceRequestInput"];
+            };
+        };
+        responses: {
+            /** @description Operation result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateSourceSuccessOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateSourceFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateSourceFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateSourceFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateSourceFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateSourceFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateSourceFailureOutput"];
+                };
+            };
+            /** @description Operation failed or was refused */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateSourceFailureOutput"];
                 };
             };
         };

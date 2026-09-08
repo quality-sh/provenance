@@ -4,6 +4,14 @@
 pub enum CompleteVerificationFailureOutputWriteFailure {
     #[serde(rename = "schema_version")]
     SchemaVersion,
+    #[serde(rename = "already_exists")]
+    AlreadyExists,
+    #[serde(rename = "invalid_commit_pin")]
+    InvalidCommitPin,
+    #[serde(rename = "scope_mismatch")]
+    ScopeMismatch,
+    #[serde(rename = "statement_invalid")]
+    StatementInvalid { report: CompleteVerificationFailureOutputReport },
     #[serde(rename = "invalid_declaration")]
     InvalidDeclaration,
     #[serde(rename = "ownership_conflict")]

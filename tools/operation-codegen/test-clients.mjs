@@ -10,19 +10,20 @@ import { checkStatements } from './test-statements.mjs';
 import { checkRecords } from './test-records.mjs';
 import { checkEvidence } from './test-evidence.mjs';
 import { checkWrites } from './test-writes.mjs';
+import { checkCreation } from './test-creation.mjs';
 
 const family = process.argv[2];
-const checks = { statements: checkStatements, records: checkRecords, evidence: checkEvidence, writes: checkWrites };
-if (!checks[family]) throw new Error('Expected statements, records, evidence, or writes');
+const checks = { statements: checkStatements, records: checkRecords, evidence: checkEvidence, writes: checkWrites, creation: checkCreation };
+if (!checks[family]) throw new Error('Expected statements, records, evidence, writes, or creation');
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 function run(args, env = process.env) {
   const child = spawnSync('cargo', args, { cwd: root, env, stdio: 'inherit' });
   if (child.status !== 0) throw new Error(`cargo ${args.join(' ')} failed`);
 }
-const binary = family === 'writes' ? 'existing-root-host-fixture' : family === 'statements' ? 'statement-host-fixture' : 'records-host-fixture';
+const binary = ['writes', 'creation'].includes(family) ? 'existing-root-host-fixture' : family === 'statements' ? 'statement-host-fixture' : 'records-host-fixture';
 run(['build', '--locked', '-p', 'provenance-transport', '--features', 'test-fixture', '--bin', binary]);
 const temporary = await mkdtemp(join(tmpdir(), 'provenance-clients-'));
-if (family === 'writes') {
+if (['writes', 'creation'].includes(family)) {
   const result = spawnSync(join(root, 'target/debug/provenance'), ['init', '--path', temporary, '--scope', 'default', '--path-prefix', '.'], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
   await writeFile(join(temporary, 'check.rs'), 'fn check() {}\n');

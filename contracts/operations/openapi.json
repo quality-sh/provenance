@@ -1,6 +1,904 @@
 {
   "components": {
     "schemas": {
+      "AddSourceReferenceFailureOutput": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/AddSourceReferenceFailureOutputOperationError"
+          },
+          "operation": {
+            "const": "add-source-reference",
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "error"
+        ],
+        "title": "FailureEnvelope",
+        "type": "object",
+        "x-provenance-model-family": "AddSourceReferenceFailureOutput"
+      },
+      "AddSourceReferenceFailureOutputDeclarationAddress": {
+        "description": "One owner-local path to a language-authored declaration.",
+        "items": {
+          "pattern": "\\S",
+          "type": "string"
+        },
+        "minItems": 1,
+        "type": "array"
+      },
+      "AddSourceReferenceFailureOutputFinding": {
+        "description": "One nonconformance found in descriptive text.",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/AddSourceReferenceFailureOutputFindingKind"
+          },
+          "message": {
+            "type": "string"
+          },
+          "rule": {
+            "$ref": "#/components/schemas/AddSourceReferenceFailureOutputRuleNumber"
+          },
+          "span": {
+            "$ref": "#/components/schemas/AddSourceReferenceFailureOutputSpan"
+          }
+        },
+        "required": [
+          "rule",
+          "kind",
+          "span",
+          "message"
+        ],
+        "type": "object"
+      },
+      "AddSourceReferenceFailureOutputFindingKind": {
+        "description": "The disposition of a finding.",
+        "enum": [
+          "violation"
+        ],
+        "type": "string"
+      },
+      "AddSourceReferenceFailureOutputInvalidInputReason": {
+        "enum": [
+          "required",
+          "invalid_value",
+          "malformed_json",
+          "unknown_field",
+          "too_large"
+        ],
+        "type": "string"
+      },
+      "AddSourceReferenceFailureOutputOperationError": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/AddSourceReferenceFailureOutputOperationFailure"
+          },
+          {
+            "$ref": "#/components/schemas/AddSourceReferenceFailureOutputWriteFailure"
+          }
+        ],
+        "description": "Keeps the handler's native error separate from preparation failure."
+      },
+      "AddSourceReferenceFailureOutputOperationFailure": {
+        "oneOf": [
+          {
+            "properties": {
+              "field": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "const": "invalid_input",
+                "type": "string"
+              },
+              "reason": {
+                "$ref": "#/components/schemas/AddSourceReferenceFailureOutputInvalidInputReason"
+              }
+            },
+            "required": [
+              "kind",
+              "field",
+              "reason"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "protocol_mismatch",
+                "type": "string"
+              },
+              "requested": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "supported": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "requested",
+              "supported"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_operation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unauthenticated",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "access_denied",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_target",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_scope",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unavailable_needs",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "internal",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "uncertain_write",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "AddSourceReferenceFailureOutputReconcileState": {
+        "enum": [
+          "created",
+          "updated",
+          "moved",
+          "retired",
+          "conflict",
+          "unchanged"
+        ],
+        "type": "string"
+      },
+      "AddSourceReferenceFailureOutputReconciledResource": {
+        "properties": {
+          "address": {
+            "$ref": "#/components/schemas/AddSourceReferenceFailureOutputDeclarationAddress"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/AddSourceReferenceFailureOutputTypedFieldChange"
+            },
+            "type": "array"
+          },
+          "id": {
+            "$ref": "#/components/schemas/AddSourceReferenceFailureOutputStableId"
+          },
+          "key": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/AddSourceReferenceFailureOutputTypedResourceKind"
+          },
+          "parent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/AddSourceReferenceFailureOutputReconcileState"
+          }
+        },
+        "required": [
+          "kind",
+          "key",
+          "address",
+          "id",
+          "state"
+        ],
+        "type": "object"
+      },
+      "AddSourceReferenceFailureOutputReport": {
+        "description": "A report from the fixed ASD-STE100 Issue 9 analyzer.",
+        "properties": {
+          "analyzer_version": {
+            "type": "string"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/AddSourceReferenceFailureOutputFinding"
+            },
+            "type": "array"
+          },
+          "issue": {
+            "$ref": "#/components/schemas/AddSourceReferenceFailureOutputStandardIssue"
+          },
+          "standard": {
+            "$ref": "#/components/schemas/AddSourceReferenceFailureOutputStandard"
+          }
+        },
+        "required": [
+          "standard",
+          "issue",
+          "analyzer_version",
+          "findings"
+        ],
+        "type": "object"
+      },
+      "AddSourceReferenceFailureOutputRuleNumber": {
+        "description": "An ASD-STE100 Issue 9 rule implemented by this analyzer.",
+        "enum": [
+          "1.1",
+          "4.2",
+          "6.3",
+          "6.6",
+          "8.1"
+        ],
+        "type": "string"
+      },
+      "AddSourceReferenceFailureOutputSpan": {
+        "description": "A half-open UTF-8 byte range in the analyzed text.",
+        "properties": {
+          "end": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "start": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "type": "object"
+      },
+      "AddSourceReferenceFailureOutputStableId": {
+        "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "AddSourceReferenceFailureOutputStandard": {
+        "description": "The authority used by the analyzer.",
+        "enum": [
+          "ASD-STE100"
+        ],
+        "type": "string"
+      },
+      "AddSourceReferenceFailureOutputStandardIssue": {
+        "const": 9,
+        "description": "The fixed issue of the standard used by the analyzer.",
+        "format": "uint8",
+        "maximum": 255,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "AddSourceReferenceFailureOutputTypedFieldChange": {
+        "properties": {
+          "after": true,
+          "before": true,
+          "field": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "before",
+          "after"
+        ],
+        "type": "object"
+      },
+      "AddSourceReferenceFailureOutputTypedResourceKind": {
+        "enum": [
+          "source",
+          "requirement",
+          "rule"
+        ],
+        "type": "string"
+      },
+      "AddSourceReferenceFailureOutputTypedSpecDiagnostic": {
+        "description": "One ASD-STE100 violation attached to its typed declaration site.",
+        "properties": {
+          "address": {
+            "$ref": "#/components/schemas/AddSourceReferenceFailureOutputDeclarationAddress"
+          },
+          "disposition": {
+            "$ref": "#/components/schemas/AddSourceReferenceFailureOutputFindingKind"
+          },
+          "field": {
+            "type": "string"
+          },
+          "issue": {
+            "$ref": "#/components/schemas/AddSourceReferenceFailureOutputStandardIssue"
+          },
+          "message": {
+            "type": "string"
+          },
+          "resource_kind": {
+            "$ref": "#/components/schemas/AddSourceReferenceFailureOutputTypedResourceKind"
+          },
+          "rule": {
+            "$ref": "#/components/schemas/AddSourceReferenceFailureOutputRuleNumber"
+          },
+          "span": {
+            "$ref": "#/components/schemas/AddSourceReferenceFailureOutputSpan"
+          },
+          "standard": {
+            "$ref": "#/components/schemas/AddSourceReferenceFailureOutputStandard"
+          }
+        },
+        "required": [
+          "address",
+          "resource_kind",
+          "field",
+          "standard",
+          "issue",
+          "rule",
+          "disposition",
+          "span",
+          "message"
+        ],
+        "type": "object"
+      },
+      "AddSourceReferenceFailureOutputWriteFailure": {
+        "oneOf": [
+          {
+            "properties": {
+              "kind": {
+                "const": "schema_version",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "already_exists",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "invalid_commit_pin",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "scope_mismatch",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "statement_invalid",
+                "type": "string"
+              },
+              "report": {
+                "$ref": "#/components/schemas/AddSourceReferenceFailureOutputReport"
+              }
+            },
+            "required": [
+              "kind",
+              "report"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "invalid_declaration",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "conflicts": {
+                "items": {
+                  "$ref": "#/components/schemas/AddSourceReferenceFailureOutputReconciledResource"
+                },
+                "type": "array"
+              },
+              "kind": {
+                "const": "ownership_conflict",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "conflicts"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "missing_reference",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "diagnostics": {
+                "items": {
+                  "$ref": "#/components/schemas/AddSourceReferenceFailureOutputTypedSpecDiagnostic"
+                },
+                "type": "array"
+              },
+              "kind": {
+                "const": "statement_rejected",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "diagnostics"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "invalid_verification_target",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "retired_rule",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "invalid_completion",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "already_complete",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "file_access_denied",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "file_unavailable",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "write_failed",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "uncertain_write",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "AddSourceReferenceRequestInput": {
+        "additionalProperties": false,
+        "properties": {
+          "context": {
+            "$ref": "#/components/schemas/AddSourceReferenceRequestInputRepositoryScope"
+          },
+          "request": {
+            "$ref": "#/components/schemas/AddSourceReferenceRequestInputAddSourceReferenceInput"
+          }
+        },
+        "required": [
+          "context",
+          "request"
+        ],
+        "title": "RepositoryCall",
+        "type": "object",
+        "x-provenance-model-family": "AddSourceReferenceRequestInput"
+      },
+      "AddSourceReferenceRequestInputAddSourceReferenceInput": {
+        "additionalProperties": false,
+        "properties": {
+          "clause": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "requirement_id": {
+            "$ref": "#/components/schemas/AddSourceReferenceRequestInputStableId"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/AddSourceReferenceRequestInputScopeId"
+          },
+          "source_id": {
+            "$ref": "#/components/schemas/AddSourceReferenceRequestInputStableId"
+          }
+        },
+        "required": [
+          "scope_id",
+          "source_id",
+          "requirement_id"
+        ],
+        "type": "object"
+      },
+      "AddSourceReferenceRequestInputRepositoryScope": {
+        "additionalProperties": false,
+        "description": "Scope selection for operations that do not use projection freshness.",
+        "properties": {
+          "repository": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "repository",
+          "scope"
+        ],
+        "type": "object"
+      },
+      "AddSourceReferenceRequestInputScopeId": {
+        "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "AddSourceReferenceRequestInputStableId": {
+        "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "AddSourceReferenceSuccessOutput": {
+        "properties": {
+          "declaration_address": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AddSourceReferenceSuccessOutputDeclarationAddress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "declared_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "depends_on": {
+            "items": {
+              "$ref": "#/components/schemas/AddSourceReferenceSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "domain_id": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AddSourceReferenceSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fog": {
+            "description": "Deliberately unstructured free text: the dim view of decisions and\ninvestigations that are coming but cannot yet be phrased sharply.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/AddSourceReferenceSuccessOutputStableId"
+          },
+          "origin_message": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AddSourceReferenceSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AddSourceReferenceSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "refines": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AddSourceReferenceSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "retired": {
+            "type": "boolean"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/AddSourceReferenceSuccessOutputScopeId"
+          },
+          "source_refs": {
+            "items": {
+              "$ref": "#/components/schemas/AddSourceReferenceSuccessOutputSourceReference"
+            },
+            "type": "array"
+          },
+          "spawned_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AddSourceReferenceSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "statement": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AddSourceReferenceSuccessOutputRequirementStatus"
+          },
+          "supersedes": {
+            "items": {
+              "$ref": "#/components/schemas/AddSourceReferenceSuccessOutputStableId"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "statement",
+          "status"
+        ],
+        "title": "Requirement",
+        "type": "object",
+        "x-provenance-model-family": "AddSourceReferenceSuccessOutput"
+      },
+      "AddSourceReferenceSuccessOutputDeclarationAddress": {
+        "description": "One owner-local path to a language-authored declaration.",
+        "items": {
+          "pattern": "\\S",
+          "type": "string"
+        },
+        "minItems": 1,
+        "type": "array"
+      },
+      "AddSourceReferenceSuccessOutputRequirementStatus": {
+        "enum": [
+          "active",
+          "discovery",
+          "refinement",
+          "resolved"
+        ],
+        "type": "string"
+      },
+      "AddSourceReferenceSuccessOutputScopeId": {
+        "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "AddSourceReferenceSuccessOutputSourceReference": {
+        "properties": {
+          "clause": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_id": {
+            "$ref": "#/components/schemas/AddSourceReferenceSuccessOutputStableId"
+          }
+        },
+        "required": [
+          "source_id"
+        ],
+        "type": "object"
+      },
+      "AddSourceReferenceSuccessOutputStableId": {
+        "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
       "ApplyFailureOutput": {
         "properties": {
           "error": {
@@ -31,6 +929,30 @@
         },
         "minItems": 1,
         "type": "array"
+      },
+      "ApplyFailureOutputFinding": {
+        "description": "One nonconformance found in descriptive text.",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/ApplyFailureOutputFindingKind"
+          },
+          "message": {
+            "type": "string"
+          },
+          "rule": {
+            "$ref": "#/components/schemas/ApplyFailureOutputRuleNumber"
+          },
+          "span": {
+            "$ref": "#/components/schemas/ApplyFailureOutputSpan"
+          }
+        },
+        "required": [
+          "rule",
+          "kind",
+          "span",
+          "message"
+        ],
+        "type": "object"
       },
       "ApplyFailureOutputFindingKind": {
         "description": "The disposition of a finding.",
@@ -257,6 +1179,33 @@
         ],
         "type": "object"
       },
+      "ApplyFailureOutputReport": {
+        "description": "A report from the fixed ASD-STE100 Issue 9 analyzer.",
+        "properties": {
+          "analyzer_version": {
+            "type": "string"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/ApplyFailureOutputFinding"
+            },
+            "type": "array"
+          },
+          "issue": {
+            "$ref": "#/components/schemas/ApplyFailureOutputStandardIssue"
+          },
+          "standard": {
+            "$ref": "#/components/schemas/ApplyFailureOutputStandard"
+          }
+        },
+        "required": [
+          "standard",
+          "issue",
+          "analyzer_version",
+          "findings"
+        ],
+        "type": "object"
+      },
       "ApplyFailureOutputRuleNumber": {
         "description": "An ASD-STE100 Issue 9 rule implemented by this analyzer.",
         "enum": [
@@ -386,6 +1335,58 @@
             },
             "required": [
               "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "already_exists",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "invalid_commit_pin",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "scope_mismatch",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "statement_invalid",
+                "type": "string"
+              },
+              "report": {
+                "$ref": "#/components/schemas/ApplyFailureOutputReport"
+              }
+            },
+            "required": [
+              "kind",
+              "report"
             ],
             "type": "object"
           },
@@ -1203,6 +2204,30 @@
         "minItems": 1,
         "type": "array"
       },
+      "BeginVerificationFailureOutputFinding": {
+        "description": "One nonconformance found in descriptive text.",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/BeginVerificationFailureOutputFindingKind"
+          },
+          "message": {
+            "type": "string"
+          },
+          "rule": {
+            "$ref": "#/components/schemas/BeginVerificationFailureOutputRuleNumber"
+          },
+          "span": {
+            "$ref": "#/components/schemas/BeginVerificationFailureOutputSpan"
+          }
+        },
+        "required": [
+          "rule",
+          "kind",
+          "span",
+          "message"
+        ],
+        "type": "object"
+      },
       "BeginVerificationFailureOutputFindingKind": {
         "description": "The disposition of a finding.",
         "enum": [
@@ -1428,6 +2453,33 @@
         ],
         "type": "object"
       },
+      "BeginVerificationFailureOutputReport": {
+        "description": "A report from the fixed ASD-STE100 Issue 9 analyzer.",
+        "properties": {
+          "analyzer_version": {
+            "type": "string"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/BeginVerificationFailureOutputFinding"
+            },
+            "type": "array"
+          },
+          "issue": {
+            "$ref": "#/components/schemas/BeginVerificationFailureOutputStandardIssue"
+          },
+          "standard": {
+            "$ref": "#/components/schemas/BeginVerificationFailureOutputStandard"
+          }
+        },
+        "required": [
+          "standard",
+          "issue",
+          "analyzer_version",
+          "findings"
+        ],
+        "type": "object"
+      },
       "BeginVerificationFailureOutputRuleNumber": {
         "description": "An ASD-STE100 Issue 9 rule implemented by this analyzer.",
         "enum": [
@@ -1557,6 +2609,58 @@
             },
             "required": [
               "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "already_exists",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "invalid_commit_pin",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "scope_mismatch",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "statement_invalid",
+                "type": "string"
+              },
+              "report": {
+                "$ref": "#/components/schemas/BeginVerificationFailureOutputReport"
+              }
+            },
+            "required": [
+              "kind",
+              "report"
             ],
             "type": "object"
           },
@@ -2299,6 +3403,30 @@
         "minItems": 1,
         "type": "array"
       },
+      "CompleteVerificationFailureOutputFinding": {
+        "description": "One nonconformance found in descriptive text.",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/CompleteVerificationFailureOutputFindingKind"
+          },
+          "message": {
+            "type": "string"
+          },
+          "rule": {
+            "$ref": "#/components/schemas/CompleteVerificationFailureOutputRuleNumber"
+          },
+          "span": {
+            "$ref": "#/components/schemas/CompleteVerificationFailureOutputSpan"
+          }
+        },
+        "required": [
+          "rule",
+          "kind",
+          "span",
+          "message"
+        ],
+        "type": "object"
+      },
       "CompleteVerificationFailureOutputFindingKind": {
         "description": "The disposition of a finding.",
         "enum": [
@@ -2524,6 +3652,33 @@
         ],
         "type": "object"
       },
+      "CompleteVerificationFailureOutputReport": {
+        "description": "A report from the fixed ASD-STE100 Issue 9 analyzer.",
+        "properties": {
+          "analyzer_version": {
+            "type": "string"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/CompleteVerificationFailureOutputFinding"
+            },
+            "type": "array"
+          },
+          "issue": {
+            "$ref": "#/components/schemas/CompleteVerificationFailureOutputStandardIssue"
+          },
+          "standard": {
+            "$ref": "#/components/schemas/CompleteVerificationFailureOutputStandard"
+          }
+        },
+        "required": [
+          "standard",
+          "issue",
+          "analyzer_version",
+          "findings"
+        ],
+        "type": "object"
+      },
       "CompleteVerificationFailureOutputRuleNumber": {
         "description": "An ASD-STE100 Issue 9 rule implemented by this analyzer.",
         "enum": [
@@ -2653,6 +3808,58 @@
             },
             "required": [
               "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "already_exists",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "invalid_commit_pin",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "scope_mismatch",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "statement_invalid",
+                "type": "string"
+              },
+              "report": {
+                "$ref": "#/components/schemas/CompleteVerificationFailureOutputReport"
+              }
+            },
+            "required": [
+              "kind",
+              "report"
             ],
             "type": "object"
           },
@@ -2978,6 +4185,3897 @@
           "passed",
           "failed"
         ],
+        "type": "string"
+      },
+      "CreateRequirementFailureOutput": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/CreateRequirementFailureOutputOperationError"
+          },
+          "operation": {
+            "const": "create-requirement",
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "error"
+        ],
+        "title": "FailureEnvelope",
+        "type": "object",
+        "x-provenance-model-family": "CreateRequirementFailureOutput"
+      },
+      "CreateRequirementFailureOutputDeclarationAddress": {
+        "description": "One owner-local path to a language-authored declaration.",
+        "items": {
+          "pattern": "\\S",
+          "type": "string"
+        },
+        "minItems": 1,
+        "type": "array"
+      },
+      "CreateRequirementFailureOutputFinding": {
+        "description": "One nonconformance found in descriptive text.",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/CreateRequirementFailureOutputFindingKind"
+          },
+          "message": {
+            "type": "string"
+          },
+          "rule": {
+            "$ref": "#/components/schemas/CreateRequirementFailureOutputRuleNumber"
+          },
+          "span": {
+            "$ref": "#/components/schemas/CreateRequirementFailureOutputSpan"
+          }
+        },
+        "required": [
+          "rule",
+          "kind",
+          "span",
+          "message"
+        ],
+        "type": "object"
+      },
+      "CreateRequirementFailureOutputFindingKind": {
+        "description": "The disposition of a finding.",
+        "enum": [
+          "violation"
+        ],
+        "type": "string"
+      },
+      "CreateRequirementFailureOutputInvalidInputReason": {
+        "enum": [
+          "required",
+          "invalid_value",
+          "malformed_json",
+          "unknown_field",
+          "too_large"
+        ],
+        "type": "string"
+      },
+      "CreateRequirementFailureOutputOperationError": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/CreateRequirementFailureOutputOperationFailure"
+          },
+          {
+            "$ref": "#/components/schemas/CreateRequirementFailureOutputWriteFailure"
+          }
+        ],
+        "description": "Keeps the handler's native error separate from preparation failure."
+      },
+      "CreateRequirementFailureOutputOperationFailure": {
+        "oneOf": [
+          {
+            "properties": {
+              "field": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "const": "invalid_input",
+                "type": "string"
+              },
+              "reason": {
+                "$ref": "#/components/schemas/CreateRequirementFailureOutputInvalidInputReason"
+              }
+            },
+            "required": [
+              "kind",
+              "field",
+              "reason"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "protocol_mismatch",
+                "type": "string"
+              },
+              "requested": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "supported": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "requested",
+              "supported"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_operation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unauthenticated",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "access_denied",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_target",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_scope",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unavailable_needs",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "internal",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "uncertain_write",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "CreateRequirementFailureOutputReconcileState": {
+        "enum": [
+          "created",
+          "updated",
+          "moved",
+          "retired",
+          "conflict",
+          "unchanged"
+        ],
+        "type": "string"
+      },
+      "CreateRequirementFailureOutputReconciledResource": {
+        "properties": {
+          "address": {
+            "$ref": "#/components/schemas/CreateRequirementFailureOutputDeclarationAddress"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/CreateRequirementFailureOutputTypedFieldChange"
+            },
+            "type": "array"
+          },
+          "id": {
+            "$ref": "#/components/schemas/CreateRequirementFailureOutputStableId"
+          },
+          "key": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/CreateRequirementFailureOutputTypedResourceKind"
+          },
+          "parent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/CreateRequirementFailureOutputReconcileState"
+          }
+        },
+        "required": [
+          "kind",
+          "key",
+          "address",
+          "id",
+          "state"
+        ],
+        "type": "object"
+      },
+      "CreateRequirementFailureOutputReport": {
+        "description": "A report from the fixed ASD-STE100 Issue 9 analyzer.",
+        "properties": {
+          "analyzer_version": {
+            "type": "string"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/CreateRequirementFailureOutputFinding"
+            },
+            "type": "array"
+          },
+          "issue": {
+            "$ref": "#/components/schemas/CreateRequirementFailureOutputStandardIssue"
+          },
+          "standard": {
+            "$ref": "#/components/schemas/CreateRequirementFailureOutputStandard"
+          }
+        },
+        "required": [
+          "standard",
+          "issue",
+          "analyzer_version",
+          "findings"
+        ],
+        "type": "object"
+      },
+      "CreateRequirementFailureOutputRuleNumber": {
+        "description": "An ASD-STE100 Issue 9 rule implemented by this analyzer.",
+        "enum": [
+          "1.1",
+          "4.2",
+          "6.3",
+          "6.6",
+          "8.1"
+        ],
+        "type": "string"
+      },
+      "CreateRequirementFailureOutputSpan": {
+        "description": "A half-open UTF-8 byte range in the analyzed text.",
+        "properties": {
+          "end": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "start": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "type": "object"
+      },
+      "CreateRequirementFailureOutputStableId": {
+        "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "CreateRequirementFailureOutputStandard": {
+        "description": "The authority used by the analyzer.",
+        "enum": [
+          "ASD-STE100"
+        ],
+        "type": "string"
+      },
+      "CreateRequirementFailureOutputStandardIssue": {
+        "const": 9,
+        "description": "The fixed issue of the standard used by the analyzer.",
+        "format": "uint8",
+        "maximum": 255,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "CreateRequirementFailureOutputTypedFieldChange": {
+        "properties": {
+          "after": true,
+          "before": true,
+          "field": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "before",
+          "after"
+        ],
+        "type": "object"
+      },
+      "CreateRequirementFailureOutputTypedResourceKind": {
+        "enum": [
+          "source",
+          "requirement",
+          "rule"
+        ],
+        "type": "string"
+      },
+      "CreateRequirementFailureOutputTypedSpecDiagnostic": {
+        "description": "One ASD-STE100 violation attached to its typed declaration site.",
+        "properties": {
+          "address": {
+            "$ref": "#/components/schemas/CreateRequirementFailureOutputDeclarationAddress"
+          },
+          "disposition": {
+            "$ref": "#/components/schemas/CreateRequirementFailureOutputFindingKind"
+          },
+          "field": {
+            "type": "string"
+          },
+          "issue": {
+            "$ref": "#/components/schemas/CreateRequirementFailureOutputStandardIssue"
+          },
+          "message": {
+            "type": "string"
+          },
+          "resource_kind": {
+            "$ref": "#/components/schemas/CreateRequirementFailureOutputTypedResourceKind"
+          },
+          "rule": {
+            "$ref": "#/components/schemas/CreateRequirementFailureOutputRuleNumber"
+          },
+          "span": {
+            "$ref": "#/components/schemas/CreateRequirementFailureOutputSpan"
+          },
+          "standard": {
+            "$ref": "#/components/schemas/CreateRequirementFailureOutputStandard"
+          }
+        },
+        "required": [
+          "address",
+          "resource_kind",
+          "field",
+          "standard",
+          "issue",
+          "rule",
+          "disposition",
+          "span",
+          "message"
+        ],
+        "type": "object"
+      },
+      "CreateRequirementFailureOutputWriteFailure": {
+        "oneOf": [
+          {
+            "properties": {
+              "kind": {
+                "const": "schema_version",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "already_exists",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "invalid_commit_pin",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "scope_mismatch",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "statement_invalid",
+                "type": "string"
+              },
+              "report": {
+                "$ref": "#/components/schemas/CreateRequirementFailureOutputReport"
+              }
+            },
+            "required": [
+              "kind",
+              "report"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "invalid_declaration",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "conflicts": {
+                "items": {
+                  "$ref": "#/components/schemas/CreateRequirementFailureOutputReconciledResource"
+                },
+                "type": "array"
+              },
+              "kind": {
+                "const": "ownership_conflict",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "conflicts"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "missing_reference",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "diagnostics": {
+                "items": {
+                  "$ref": "#/components/schemas/CreateRequirementFailureOutputTypedSpecDiagnostic"
+                },
+                "type": "array"
+              },
+              "kind": {
+                "const": "statement_rejected",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "diagnostics"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "invalid_verification_target",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "retired_rule",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "invalid_completion",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "already_complete",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "file_access_denied",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "file_unavailable",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "write_failed",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "uncertain_write",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "CreateRequirementRequestInput": {
+        "additionalProperties": false,
+        "properties": {
+          "context": {
+            "$ref": "#/components/schemas/CreateRequirementRequestInputRepositoryScope"
+          },
+          "request": {
+            "$ref": "#/components/schemas/CreateRequirementRequestInputCreateRequirementInput"
+          }
+        },
+        "required": [
+          "context",
+          "request"
+        ],
+        "title": "RepositoryCall",
+        "type": "object",
+        "x-provenance-model-family": "CreateRequirementRequestInput"
+      },
+      "CreateRequirementRequestInputCreateRequirementInput": {
+        "additionalProperties": false,
+        "properties": {
+          "depends_on": {
+            "items": {
+              "$ref": "#/components/schemas/CreateRequirementRequestInputStableId"
+            },
+            "type": "array"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "domain_id": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreateRequirementRequestInputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/CreateRequirementRequestInputStableId"
+          },
+          "origin_message": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreateRequirementRequestInputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreateRequirementRequestInputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "refines": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreateRequirementRequestInputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/CreateRequirementRequestInputScopeId"
+          },
+          "spawned_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreateRequirementRequestInputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "statement": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CreateRequirementRequestInputRequirementStatus"
+          },
+          "supersedes": {
+            "items": {
+              "$ref": "#/components/schemas/CreateRequirementRequestInputStableId"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "scope_id",
+          "id",
+          "statement",
+          "status",
+          "depends_on",
+          "supersedes"
+        ],
+        "type": "object"
+      },
+      "CreateRequirementRequestInputRepositoryScope": {
+        "additionalProperties": false,
+        "description": "Scope selection for operations that do not use projection freshness.",
+        "properties": {
+          "repository": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "repository",
+          "scope"
+        ],
+        "type": "object"
+      },
+      "CreateRequirementRequestInputRequirementStatus": {
+        "enum": [
+          "active",
+          "discovery",
+          "refinement",
+          "resolved"
+        ],
+        "type": "string"
+      },
+      "CreateRequirementRequestInputScopeId": {
+        "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "CreateRequirementRequestInputStableId": {
+        "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "CreateRequirementSuccessOutput": {
+        "properties": {
+          "declaration_address": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreateRequirementSuccessOutputDeclarationAddress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "declared_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "depends_on": {
+            "items": {
+              "$ref": "#/components/schemas/CreateRequirementSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "domain_id": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreateRequirementSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fog": {
+            "description": "Deliberately unstructured free text: the dim view of decisions and\ninvestigations that are coming but cannot yet be phrased sharply.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/CreateRequirementSuccessOutputStableId"
+          },
+          "origin_message": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreateRequirementSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreateRequirementSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "refines": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreateRequirementSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "retired": {
+            "type": "boolean"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/CreateRequirementSuccessOutputScopeId"
+          },
+          "source_refs": {
+            "items": {
+              "$ref": "#/components/schemas/CreateRequirementSuccessOutputSourceReference"
+            },
+            "type": "array"
+          },
+          "spawned_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreateRequirementSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "statement": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CreateRequirementSuccessOutputRequirementStatus"
+          },
+          "supersedes": {
+            "items": {
+              "$ref": "#/components/schemas/CreateRequirementSuccessOutputStableId"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "statement",
+          "status"
+        ],
+        "title": "Requirement",
+        "type": "object",
+        "x-provenance-model-family": "CreateRequirementSuccessOutput"
+      },
+      "CreateRequirementSuccessOutputDeclarationAddress": {
+        "description": "One owner-local path to a language-authored declaration.",
+        "items": {
+          "pattern": "\\S",
+          "type": "string"
+        },
+        "minItems": 1,
+        "type": "array"
+      },
+      "CreateRequirementSuccessOutputRequirementStatus": {
+        "enum": [
+          "active",
+          "discovery",
+          "refinement",
+          "resolved"
+        ],
+        "type": "string"
+      },
+      "CreateRequirementSuccessOutputScopeId": {
+        "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "CreateRequirementSuccessOutputSourceReference": {
+        "properties": {
+          "clause": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_id": {
+            "$ref": "#/components/schemas/CreateRequirementSuccessOutputStableId"
+          }
+        },
+        "required": [
+          "source_id"
+        ],
+        "type": "object"
+      },
+      "CreateRequirementSuccessOutputStableId": {
+        "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "CreateResolutionFailureOutput": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/CreateResolutionFailureOutputOperationError"
+          },
+          "operation": {
+            "const": "create-resolution",
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "error"
+        ],
+        "title": "FailureEnvelope",
+        "type": "object",
+        "x-provenance-model-family": "CreateResolutionFailureOutput"
+      },
+      "CreateResolutionFailureOutputDeclarationAddress": {
+        "description": "One owner-local path to a language-authored declaration.",
+        "items": {
+          "pattern": "\\S",
+          "type": "string"
+        },
+        "minItems": 1,
+        "type": "array"
+      },
+      "CreateResolutionFailureOutputFinding": {
+        "description": "One nonconformance found in descriptive text.",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/CreateResolutionFailureOutputFindingKind"
+          },
+          "message": {
+            "type": "string"
+          },
+          "rule": {
+            "$ref": "#/components/schemas/CreateResolutionFailureOutputRuleNumber"
+          },
+          "span": {
+            "$ref": "#/components/schemas/CreateResolutionFailureOutputSpan"
+          }
+        },
+        "required": [
+          "rule",
+          "kind",
+          "span",
+          "message"
+        ],
+        "type": "object"
+      },
+      "CreateResolutionFailureOutputFindingKind": {
+        "description": "The disposition of a finding.",
+        "enum": [
+          "violation"
+        ],
+        "type": "string"
+      },
+      "CreateResolutionFailureOutputInvalidInputReason": {
+        "enum": [
+          "required",
+          "invalid_value",
+          "malformed_json",
+          "unknown_field",
+          "too_large"
+        ],
+        "type": "string"
+      },
+      "CreateResolutionFailureOutputOperationError": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/CreateResolutionFailureOutputOperationFailure"
+          },
+          {
+            "$ref": "#/components/schemas/CreateResolutionFailureOutputWriteFailure"
+          }
+        ],
+        "description": "Keeps the handler's native error separate from preparation failure."
+      },
+      "CreateResolutionFailureOutputOperationFailure": {
+        "oneOf": [
+          {
+            "properties": {
+              "field": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "const": "invalid_input",
+                "type": "string"
+              },
+              "reason": {
+                "$ref": "#/components/schemas/CreateResolutionFailureOutputInvalidInputReason"
+              }
+            },
+            "required": [
+              "kind",
+              "field",
+              "reason"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "protocol_mismatch",
+                "type": "string"
+              },
+              "requested": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "supported": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "requested",
+              "supported"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_operation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unauthenticated",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "access_denied",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_target",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_scope",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unavailable_needs",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "internal",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "uncertain_write",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "CreateResolutionFailureOutputReconcileState": {
+        "enum": [
+          "created",
+          "updated",
+          "moved",
+          "retired",
+          "conflict",
+          "unchanged"
+        ],
+        "type": "string"
+      },
+      "CreateResolutionFailureOutputReconciledResource": {
+        "properties": {
+          "address": {
+            "$ref": "#/components/schemas/CreateResolutionFailureOutputDeclarationAddress"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/CreateResolutionFailureOutputTypedFieldChange"
+            },
+            "type": "array"
+          },
+          "id": {
+            "$ref": "#/components/schemas/CreateResolutionFailureOutputStableId"
+          },
+          "key": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/CreateResolutionFailureOutputTypedResourceKind"
+          },
+          "parent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/CreateResolutionFailureOutputReconcileState"
+          }
+        },
+        "required": [
+          "kind",
+          "key",
+          "address",
+          "id",
+          "state"
+        ],
+        "type": "object"
+      },
+      "CreateResolutionFailureOutputReport": {
+        "description": "A report from the fixed ASD-STE100 Issue 9 analyzer.",
+        "properties": {
+          "analyzer_version": {
+            "type": "string"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/CreateResolutionFailureOutputFinding"
+            },
+            "type": "array"
+          },
+          "issue": {
+            "$ref": "#/components/schemas/CreateResolutionFailureOutputStandardIssue"
+          },
+          "standard": {
+            "$ref": "#/components/schemas/CreateResolutionFailureOutputStandard"
+          }
+        },
+        "required": [
+          "standard",
+          "issue",
+          "analyzer_version",
+          "findings"
+        ],
+        "type": "object"
+      },
+      "CreateResolutionFailureOutputRuleNumber": {
+        "description": "An ASD-STE100 Issue 9 rule implemented by this analyzer.",
+        "enum": [
+          "1.1",
+          "4.2",
+          "6.3",
+          "6.6",
+          "8.1"
+        ],
+        "type": "string"
+      },
+      "CreateResolutionFailureOutputSpan": {
+        "description": "A half-open UTF-8 byte range in the analyzed text.",
+        "properties": {
+          "end": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "start": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "type": "object"
+      },
+      "CreateResolutionFailureOutputStableId": {
+        "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "CreateResolutionFailureOutputStandard": {
+        "description": "The authority used by the analyzer.",
+        "enum": [
+          "ASD-STE100"
+        ],
+        "type": "string"
+      },
+      "CreateResolutionFailureOutputStandardIssue": {
+        "const": 9,
+        "description": "The fixed issue of the standard used by the analyzer.",
+        "format": "uint8",
+        "maximum": 255,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "CreateResolutionFailureOutputTypedFieldChange": {
+        "properties": {
+          "after": true,
+          "before": true,
+          "field": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "before",
+          "after"
+        ],
+        "type": "object"
+      },
+      "CreateResolutionFailureOutputTypedResourceKind": {
+        "enum": [
+          "source",
+          "requirement",
+          "rule"
+        ],
+        "type": "string"
+      },
+      "CreateResolutionFailureOutputTypedSpecDiagnostic": {
+        "description": "One ASD-STE100 violation attached to its typed declaration site.",
+        "properties": {
+          "address": {
+            "$ref": "#/components/schemas/CreateResolutionFailureOutputDeclarationAddress"
+          },
+          "disposition": {
+            "$ref": "#/components/schemas/CreateResolutionFailureOutputFindingKind"
+          },
+          "field": {
+            "type": "string"
+          },
+          "issue": {
+            "$ref": "#/components/schemas/CreateResolutionFailureOutputStandardIssue"
+          },
+          "message": {
+            "type": "string"
+          },
+          "resource_kind": {
+            "$ref": "#/components/schemas/CreateResolutionFailureOutputTypedResourceKind"
+          },
+          "rule": {
+            "$ref": "#/components/schemas/CreateResolutionFailureOutputRuleNumber"
+          },
+          "span": {
+            "$ref": "#/components/schemas/CreateResolutionFailureOutputSpan"
+          },
+          "standard": {
+            "$ref": "#/components/schemas/CreateResolutionFailureOutputStandard"
+          }
+        },
+        "required": [
+          "address",
+          "resource_kind",
+          "field",
+          "standard",
+          "issue",
+          "rule",
+          "disposition",
+          "span",
+          "message"
+        ],
+        "type": "object"
+      },
+      "CreateResolutionFailureOutputWriteFailure": {
+        "oneOf": [
+          {
+            "properties": {
+              "kind": {
+                "const": "schema_version",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "already_exists",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "invalid_commit_pin",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "scope_mismatch",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "statement_invalid",
+                "type": "string"
+              },
+              "report": {
+                "$ref": "#/components/schemas/CreateResolutionFailureOutputReport"
+              }
+            },
+            "required": [
+              "kind",
+              "report"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "invalid_declaration",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "conflicts": {
+                "items": {
+                  "$ref": "#/components/schemas/CreateResolutionFailureOutputReconciledResource"
+                },
+                "type": "array"
+              },
+              "kind": {
+                "const": "ownership_conflict",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "conflicts"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "missing_reference",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "diagnostics": {
+                "items": {
+                  "$ref": "#/components/schemas/CreateResolutionFailureOutputTypedSpecDiagnostic"
+                },
+                "type": "array"
+              },
+              "kind": {
+                "const": "statement_rejected",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "diagnostics"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "invalid_verification_target",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "retired_rule",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "invalid_completion",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "already_complete",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "file_access_denied",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "file_unavailable",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "write_failed",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "uncertain_write",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "CreateResolutionRequestInput": {
+        "additionalProperties": false,
+        "properties": {
+          "context": {
+            "$ref": "#/components/schemas/CreateResolutionRequestInputRepositoryScope"
+          },
+          "request": {
+            "$ref": "#/components/schemas/CreateResolutionRequestInputCreateResolutionInput"
+          }
+        },
+        "required": [
+          "context",
+          "request"
+        ],
+        "title": "RepositoryCall",
+        "type": "object",
+        "x-provenance-model-family": "CreateResolutionRequestInput"
+      },
+      "CreateResolutionRequestInputCreateResolutionInput": {
+        "additionalProperties": false,
+        "properties": {
+          "approved_at": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "approved_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "confidence": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "context": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "enforcement": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/CreateResolutionRequestInputStableId"
+          },
+          "inputs": {
+            "items": {
+              "$ref": "#/components/schemas/CreateResolutionRequestInputResolutionInput"
+            },
+            "type": "array"
+          },
+          "made_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "origin_message": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreateResolutionRequestInputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreateResolutionRequestInputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "position": {
+            "type": "string"
+          },
+          "rationale": {
+            "type": "string"
+          },
+          "requirement_ids": {
+            "items": {
+              "$ref": "#/components/schemas/CreateResolutionRequestInputStableId"
+            },
+            "type": "array"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/CreateResolutionRequestInputScopeId"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CreateResolutionRequestInputResolutionStatus"
+          },
+          "supersedes": {
+            "items": {
+              "$ref": "#/components/schemas/CreateResolutionRequestInputStableId"
+            },
+            "type": "array"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope_id",
+          "id",
+          "title",
+          "requirement_ids",
+          "supersedes",
+          "position",
+          "rationale",
+          "status",
+          "inputs"
+        ],
+        "type": "object"
+      },
+      "CreateResolutionRequestInputRepositoryScope": {
+        "additionalProperties": false,
+        "description": "Scope selection for operations that do not use projection freshness.",
+        "properties": {
+          "repository": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "repository",
+          "scope"
+        ],
+        "type": "object"
+      },
+      "CreateResolutionRequestInputResolutionInput": {
+        "description": "The fields of a [`ResolutionInput`] as they arrive on the wire, before\n`validate_resolution_input_content` has passed judgement on them. Serde\nreads this, the conversion below either builds the record or refuses it, so\na blank input cannot enter the graph through a file the way it can through\na struct literal.",
+        "properties": {
+          "input_type": {
+            "$ref": "#/components/schemas/CreateResolutionRequestInputResolutionInputType"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "input_type",
+          "reference",
+          "summary"
+        ],
+        "type": "object"
+      },
+      "CreateResolutionRequestInputResolutionInputType": {
+        "enum": [
+          "regulatory",
+          "legal_advice",
+          "commercial",
+          "benchmark",
+          "technical",
+          "incident",
+          "source_material"
+        ],
+        "type": "string"
+      },
+      "CreateResolutionRequestInputResolutionStatus": {
+        "enum": [
+          "draft",
+          "review",
+          "proposed",
+          "approved",
+          "rejected",
+          "revised",
+          "superseded",
+          "abandoned"
+        ],
+        "type": "string"
+      },
+      "CreateResolutionRequestInputScopeId": {
+        "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "CreateResolutionRequestInputStableId": {
+        "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "CreateResolutionSuccessOutput": {
+        "properties": {
+          "approved_at": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "approved_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "confidence": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "context": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "enforcement": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/CreateResolutionSuccessOutputStableId"
+          },
+          "inputs": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CreateResolutionSuccessOutputResolutionInput"
+            },
+            "type": "array"
+          },
+          "made_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "origin_message": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreateResolutionSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreateResolutionSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "position": {
+            "type": "string"
+          },
+          "rationale": {
+            "type": "string"
+          },
+          "requirement_ids": {
+            "items": {
+              "$ref": "#/components/schemas/CreateResolutionSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "review_on": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/CreateResolutionSuccessOutputScopeId"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CreateResolutionSuccessOutputResolutionStatus"
+          },
+          "supersedes": {
+            "items": {
+              "$ref": "#/components/schemas/CreateResolutionSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "title",
+          "position",
+          "rationale",
+          "status",
+          "inputs",
+          "review_on"
+        ],
+        "title": "Resolution",
+        "type": "object",
+        "x-provenance-model-family": "CreateResolutionSuccessOutput"
+      },
+      "CreateResolutionSuccessOutputResolutionInput": {
+        "properties": {
+          "input_type": {
+            "$ref": "#/components/schemas/CreateResolutionSuccessOutputResolutionInputType"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "input_type",
+          "reference",
+          "summary"
+        ],
+        "type": "object"
+      },
+      "CreateResolutionSuccessOutputResolutionInputType": {
+        "enum": [
+          "regulatory",
+          "legal_advice",
+          "commercial",
+          "benchmark",
+          "technical",
+          "incident",
+          "source_material"
+        ],
+        "type": "string"
+      },
+      "CreateResolutionSuccessOutputResolutionStatus": {
+        "enum": [
+          "draft",
+          "review",
+          "proposed",
+          "approved",
+          "rejected",
+          "revised",
+          "superseded",
+          "abandoned"
+        ],
+        "type": "string"
+      },
+      "CreateResolutionSuccessOutputScopeId": {
+        "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "CreateResolutionSuccessOutputStableId": {
+        "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "CreateRuleFailureOutput": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/CreateRuleFailureOutputOperationError"
+          },
+          "operation": {
+            "const": "create-rule",
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "error"
+        ],
+        "title": "FailureEnvelope",
+        "type": "object",
+        "x-provenance-model-family": "CreateRuleFailureOutput"
+      },
+      "CreateRuleFailureOutputDeclarationAddress": {
+        "description": "One owner-local path to a language-authored declaration.",
+        "items": {
+          "pattern": "\\S",
+          "type": "string"
+        },
+        "minItems": 1,
+        "type": "array"
+      },
+      "CreateRuleFailureOutputFinding": {
+        "description": "One nonconformance found in descriptive text.",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/CreateRuleFailureOutputFindingKind"
+          },
+          "message": {
+            "type": "string"
+          },
+          "rule": {
+            "$ref": "#/components/schemas/CreateRuleFailureOutputRuleNumber"
+          },
+          "span": {
+            "$ref": "#/components/schemas/CreateRuleFailureOutputSpan"
+          }
+        },
+        "required": [
+          "rule",
+          "kind",
+          "span",
+          "message"
+        ],
+        "type": "object"
+      },
+      "CreateRuleFailureOutputFindingKind": {
+        "description": "The disposition of a finding.",
+        "enum": [
+          "violation"
+        ],
+        "type": "string"
+      },
+      "CreateRuleFailureOutputInvalidInputReason": {
+        "enum": [
+          "required",
+          "invalid_value",
+          "malformed_json",
+          "unknown_field",
+          "too_large"
+        ],
+        "type": "string"
+      },
+      "CreateRuleFailureOutputOperationError": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/CreateRuleFailureOutputOperationFailure"
+          },
+          {
+            "$ref": "#/components/schemas/CreateRuleFailureOutputWriteFailure"
+          }
+        ],
+        "description": "Keeps the handler's native error separate from preparation failure."
+      },
+      "CreateRuleFailureOutputOperationFailure": {
+        "oneOf": [
+          {
+            "properties": {
+              "field": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "const": "invalid_input",
+                "type": "string"
+              },
+              "reason": {
+                "$ref": "#/components/schemas/CreateRuleFailureOutputInvalidInputReason"
+              }
+            },
+            "required": [
+              "kind",
+              "field",
+              "reason"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "protocol_mismatch",
+                "type": "string"
+              },
+              "requested": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "supported": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "requested",
+              "supported"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_operation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unauthenticated",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "access_denied",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_target",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_scope",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unavailable_needs",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "internal",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "uncertain_write",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "CreateRuleFailureOutputReconcileState": {
+        "enum": [
+          "created",
+          "updated",
+          "moved",
+          "retired",
+          "conflict",
+          "unchanged"
+        ],
+        "type": "string"
+      },
+      "CreateRuleFailureOutputReconciledResource": {
+        "properties": {
+          "address": {
+            "$ref": "#/components/schemas/CreateRuleFailureOutputDeclarationAddress"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/CreateRuleFailureOutputTypedFieldChange"
+            },
+            "type": "array"
+          },
+          "id": {
+            "$ref": "#/components/schemas/CreateRuleFailureOutputStableId"
+          },
+          "key": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/CreateRuleFailureOutputTypedResourceKind"
+          },
+          "parent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/CreateRuleFailureOutputReconcileState"
+          }
+        },
+        "required": [
+          "kind",
+          "key",
+          "address",
+          "id",
+          "state"
+        ],
+        "type": "object"
+      },
+      "CreateRuleFailureOutputReport": {
+        "description": "A report from the fixed ASD-STE100 Issue 9 analyzer.",
+        "properties": {
+          "analyzer_version": {
+            "type": "string"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/CreateRuleFailureOutputFinding"
+            },
+            "type": "array"
+          },
+          "issue": {
+            "$ref": "#/components/schemas/CreateRuleFailureOutputStandardIssue"
+          },
+          "standard": {
+            "$ref": "#/components/schemas/CreateRuleFailureOutputStandard"
+          }
+        },
+        "required": [
+          "standard",
+          "issue",
+          "analyzer_version",
+          "findings"
+        ],
+        "type": "object"
+      },
+      "CreateRuleFailureOutputRuleNumber": {
+        "description": "An ASD-STE100 Issue 9 rule implemented by this analyzer.",
+        "enum": [
+          "1.1",
+          "4.2",
+          "6.3",
+          "6.6",
+          "8.1"
+        ],
+        "type": "string"
+      },
+      "CreateRuleFailureOutputSpan": {
+        "description": "A half-open UTF-8 byte range in the analyzed text.",
+        "properties": {
+          "end": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "start": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "type": "object"
+      },
+      "CreateRuleFailureOutputStableId": {
+        "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "CreateRuleFailureOutputStandard": {
+        "description": "The authority used by the analyzer.",
+        "enum": [
+          "ASD-STE100"
+        ],
+        "type": "string"
+      },
+      "CreateRuleFailureOutputStandardIssue": {
+        "const": 9,
+        "description": "The fixed issue of the standard used by the analyzer.",
+        "format": "uint8",
+        "maximum": 255,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "CreateRuleFailureOutputTypedFieldChange": {
+        "properties": {
+          "after": true,
+          "before": true,
+          "field": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "before",
+          "after"
+        ],
+        "type": "object"
+      },
+      "CreateRuleFailureOutputTypedResourceKind": {
+        "enum": [
+          "source",
+          "requirement",
+          "rule"
+        ],
+        "type": "string"
+      },
+      "CreateRuleFailureOutputTypedSpecDiagnostic": {
+        "description": "One ASD-STE100 violation attached to its typed declaration site.",
+        "properties": {
+          "address": {
+            "$ref": "#/components/schemas/CreateRuleFailureOutputDeclarationAddress"
+          },
+          "disposition": {
+            "$ref": "#/components/schemas/CreateRuleFailureOutputFindingKind"
+          },
+          "field": {
+            "type": "string"
+          },
+          "issue": {
+            "$ref": "#/components/schemas/CreateRuleFailureOutputStandardIssue"
+          },
+          "message": {
+            "type": "string"
+          },
+          "resource_kind": {
+            "$ref": "#/components/schemas/CreateRuleFailureOutputTypedResourceKind"
+          },
+          "rule": {
+            "$ref": "#/components/schemas/CreateRuleFailureOutputRuleNumber"
+          },
+          "span": {
+            "$ref": "#/components/schemas/CreateRuleFailureOutputSpan"
+          },
+          "standard": {
+            "$ref": "#/components/schemas/CreateRuleFailureOutputStandard"
+          }
+        },
+        "required": [
+          "address",
+          "resource_kind",
+          "field",
+          "standard",
+          "issue",
+          "rule",
+          "disposition",
+          "span",
+          "message"
+        ],
+        "type": "object"
+      },
+      "CreateRuleFailureOutputWriteFailure": {
+        "oneOf": [
+          {
+            "properties": {
+              "kind": {
+                "const": "schema_version",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "already_exists",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "invalid_commit_pin",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "scope_mismatch",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "statement_invalid",
+                "type": "string"
+              },
+              "report": {
+                "$ref": "#/components/schemas/CreateRuleFailureOutputReport"
+              }
+            },
+            "required": [
+              "kind",
+              "report"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "invalid_declaration",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "conflicts": {
+                "items": {
+                  "$ref": "#/components/schemas/CreateRuleFailureOutputReconciledResource"
+                },
+                "type": "array"
+              },
+              "kind": {
+                "const": "ownership_conflict",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "conflicts"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "missing_reference",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "diagnostics": {
+                "items": {
+                  "$ref": "#/components/schemas/CreateRuleFailureOutputTypedSpecDiagnostic"
+                },
+                "type": "array"
+              },
+              "kind": {
+                "const": "statement_rejected",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "diagnostics"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "invalid_verification_target",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "retired_rule",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "invalid_completion",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "already_complete",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "file_access_denied",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "file_unavailable",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "write_failed",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "uncertain_write",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "CreateRuleRequestInput": {
+        "additionalProperties": false,
+        "properties": {
+          "context": {
+            "$ref": "#/components/schemas/CreateRuleRequestInputRepositoryScope"
+          },
+          "request": {
+            "$ref": "#/components/schemas/CreateRuleRequestInputCreateRuleInput"
+          }
+        },
+        "required": [
+          "context",
+          "request"
+        ],
+        "title": "RepositoryCall",
+        "type": "object",
+        "x-provenance-model-family": "CreateRuleRequestInput"
+      },
+      "CreateRuleRequestInputCreateRuleInput": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/CreateRuleRequestInputStableId"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "origin_message": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreateRuleRequestInputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreateRuleRequestInputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "requirement_ids": {
+            "items": {
+              "$ref": "#/components/schemas/CreateRuleRequestInputStableId"
+            },
+            "type": "array"
+          },
+          "resolution_ids": {
+            "items": {
+              "$ref": "#/components/schemas/CreateRuleRequestInputStableId"
+            },
+            "type": "array"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/CreateRuleRequestInputScopeId"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/CreateRuleRequestInputRuleSeverity"
+          },
+          "source_document": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_section": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "statement": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CreateRuleRequestInputRuleStatus"
+          }
+        },
+        "required": [
+          "scope_id",
+          "id",
+          "requirement_ids",
+          "resolution_ids",
+          "statement",
+          "status",
+          "severity"
+        ],
+        "type": "object"
+      },
+      "CreateRuleRequestInputRepositoryScope": {
+        "additionalProperties": false,
+        "description": "Scope selection for operations that do not use projection freshness.",
+        "properties": {
+          "repository": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "repository",
+          "scope"
+        ],
+        "type": "object"
+      },
+      "CreateRuleRequestInputRuleSeverity": {
+        "enum": [
+          "low",
+          "medium",
+          "high",
+          "critical"
+        ],
+        "type": "string"
+      },
+      "CreateRuleRequestInputRuleStatus": {
+        "enum": [
+          "draft",
+          "review",
+          "active",
+          "deprecated",
+          "archived"
+        ],
+        "type": "string"
+      },
+      "CreateRuleRequestInputScopeId": {
+        "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "CreateRuleRequestInputStableId": {
+        "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "CreateRuleSuccessOutput": {
+        "properties": {
+          "declaration_address": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreateRuleSuccessOutputDeclarationAddress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "declared_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/CreateRuleSuccessOutputStableId"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "origin_message": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreateRuleSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreateRuleSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "requirement_ids": {
+            "items": {
+              "$ref": "#/components/schemas/CreateRuleSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "resolution_ids": {
+            "items": {
+              "$ref": "#/components/schemas/CreateRuleSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "retired": {
+            "type": "boolean"
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/CreateRuleSuccessOutputScopeId"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/CreateRuleSuccessOutputRuleSeverity"
+          },
+          "source_document": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_section": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "statement": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CreateRuleSuccessOutputRuleStatus"
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "statement",
+          "status",
+          "severity"
+        ],
+        "title": "Rule",
+        "type": "object",
+        "x-provenance-model-family": "CreateRuleSuccessOutput"
+      },
+      "CreateRuleSuccessOutputDeclarationAddress": {
+        "description": "One owner-local path to a language-authored declaration.",
+        "items": {
+          "pattern": "\\S",
+          "type": "string"
+        },
+        "minItems": 1,
+        "type": "array"
+      },
+      "CreateRuleSuccessOutputRuleSeverity": {
+        "enum": [
+          "low",
+          "medium",
+          "high",
+          "critical"
+        ],
+        "type": "string"
+      },
+      "CreateRuleSuccessOutputRuleStatus": {
+        "enum": [
+          "draft",
+          "review",
+          "active",
+          "deprecated",
+          "archived"
+        ],
+        "type": "string"
+      },
+      "CreateRuleSuccessOutputScopeId": {
+        "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "CreateRuleSuccessOutputStableId": {
+        "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "CreateSourceFailureOutput": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/CreateSourceFailureOutputOperationError"
+          },
+          "operation": {
+            "const": "create-source",
+            "type": "string"
+          },
+          "protocol_version": {
+            "const": 7,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "protocol_version",
+          "error"
+        ],
+        "title": "FailureEnvelope",
+        "type": "object",
+        "x-provenance-model-family": "CreateSourceFailureOutput"
+      },
+      "CreateSourceFailureOutputDeclarationAddress": {
+        "description": "One owner-local path to a language-authored declaration.",
+        "items": {
+          "pattern": "\\S",
+          "type": "string"
+        },
+        "minItems": 1,
+        "type": "array"
+      },
+      "CreateSourceFailureOutputFinding": {
+        "description": "One nonconformance found in descriptive text.",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/CreateSourceFailureOutputFindingKind"
+          },
+          "message": {
+            "type": "string"
+          },
+          "rule": {
+            "$ref": "#/components/schemas/CreateSourceFailureOutputRuleNumber"
+          },
+          "span": {
+            "$ref": "#/components/schemas/CreateSourceFailureOutputSpan"
+          }
+        },
+        "required": [
+          "rule",
+          "kind",
+          "span",
+          "message"
+        ],
+        "type": "object"
+      },
+      "CreateSourceFailureOutputFindingKind": {
+        "description": "The disposition of a finding.",
+        "enum": [
+          "violation"
+        ],
+        "type": "string"
+      },
+      "CreateSourceFailureOutputInvalidInputReason": {
+        "enum": [
+          "required",
+          "invalid_value",
+          "malformed_json",
+          "unknown_field",
+          "too_large"
+        ],
+        "type": "string"
+      },
+      "CreateSourceFailureOutputOperationError": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/CreateSourceFailureOutputOperationFailure"
+          },
+          {
+            "$ref": "#/components/schemas/CreateSourceFailureOutputWriteFailure"
+          }
+        ],
+        "description": "Keeps the handler's native error separate from preparation failure."
+      },
+      "CreateSourceFailureOutputOperationFailure": {
+        "oneOf": [
+          {
+            "properties": {
+              "field": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "const": "invalid_input",
+                "type": "string"
+              },
+              "reason": {
+                "$ref": "#/components/schemas/CreateSourceFailureOutputInvalidInputReason"
+              }
+            },
+            "required": [
+              "kind",
+              "field",
+              "reason"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "protocol_mismatch",
+                "type": "string"
+              },
+              "requested": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "supported": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "requested",
+              "supported"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_operation",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unauthenticated",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "access_denied",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_target",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unknown_scope",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "unavailable_needs",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "internal",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "uncertain_write",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "CreateSourceFailureOutputReconcileState": {
+        "enum": [
+          "created",
+          "updated",
+          "moved",
+          "retired",
+          "conflict",
+          "unchanged"
+        ],
+        "type": "string"
+      },
+      "CreateSourceFailureOutputReconciledResource": {
+        "properties": {
+          "address": {
+            "$ref": "#/components/schemas/CreateSourceFailureOutputDeclarationAddress"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/CreateSourceFailureOutputTypedFieldChange"
+            },
+            "type": "array"
+          },
+          "id": {
+            "$ref": "#/components/schemas/CreateSourceFailureOutputStableId"
+          },
+          "key": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/CreateSourceFailureOutputTypedResourceKind"
+          },
+          "parent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/CreateSourceFailureOutputReconcileState"
+          }
+        },
+        "required": [
+          "kind",
+          "key",
+          "address",
+          "id",
+          "state"
+        ],
+        "type": "object"
+      },
+      "CreateSourceFailureOutputReport": {
+        "description": "A report from the fixed ASD-STE100 Issue 9 analyzer.",
+        "properties": {
+          "analyzer_version": {
+            "type": "string"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/CreateSourceFailureOutputFinding"
+            },
+            "type": "array"
+          },
+          "issue": {
+            "$ref": "#/components/schemas/CreateSourceFailureOutputStandardIssue"
+          },
+          "standard": {
+            "$ref": "#/components/schemas/CreateSourceFailureOutputStandard"
+          }
+        },
+        "required": [
+          "standard",
+          "issue",
+          "analyzer_version",
+          "findings"
+        ],
+        "type": "object"
+      },
+      "CreateSourceFailureOutputRuleNumber": {
+        "description": "An ASD-STE100 Issue 9 rule implemented by this analyzer.",
+        "enum": [
+          "1.1",
+          "4.2",
+          "6.3",
+          "6.6",
+          "8.1"
+        ],
+        "type": "string"
+      },
+      "CreateSourceFailureOutputSpan": {
+        "description": "A half-open UTF-8 byte range in the analyzed text.",
+        "properties": {
+          "end": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "start": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "type": "object"
+      },
+      "CreateSourceFailureOutputStableId": {
+        "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "CreateSourceFailureOutputStandard": {
+        "description": "The authority used by the analyzer.",
+        "enum": [
+          "ASD-STE100"
+        ],
+        "type": "string"
+      },
+      "CreateSourceFailureOutputStandardIssue": {
+        "const": 9,
+        "description": "The fixed issue of the standard used by the analyzer.",
+        "format": "uint8",
+        "maximum": 255,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "CreateSourceFailureOutputTypedFieldChange": {
+        "properties": {
+          "after": true,
+          "before": true,
+          "field": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "before",
+          "after"
+        ],
+        "type": "object"
+      },
+      "CreateSourceFailureOutputTypedResourceKind": {
+        "enum": [
+          "source",
+          "requirement",
+          "rule"
+        ],
+        "type": "string"
+      },
+      "CreateSourceFailureOutputTypedSpecDiagnostic": {
+        "description": "One ASD-STE100 violation attached to its typed declaration site.",
+        "properties": {
+          "address": {
+            "$ref": "#/components/schemas/CreateSourceFailureOutputDeclarationAddress"
+          },
+          "disposition": {
+            "$ref": "#/components/schemas/CreateSourceFailureOutputFindingKind"
+          },
+          "field": {
+            "type": "string"
+          },
+          "issue": {
+            "$ref": "#/components/schemas/CreateSourceFailureOutputStandardIssue"
+          },
+          "message": {
+            "type": "string"
+          },
+          "resource_kind": {
+            "$ref": "#/components/schemas/CreateSourceFailureOutputTypedResourceKind"
+          },
+          "rule": {
+            "$ref": "#/components/schemas/CreateSourceFailureOutputRuleNumber"
+          },
+          "span": {
+            "$ref": "#/components/schemas/CreateSourceFailureOutputSpan"
+          },
+          "standard": {
+            "$ref": "#/components/schemas/CreateSourceFailureOutputStandard"
+          }
+        },
+        "required": [
+          "address",
+          "resource_kind",
+          "field",
+          "standard",
+          "issue",
+          "rule",
+          "disposition",
+          "span",
+          "message"
+        ],
+        "type": "object"
+      },
+      "CreateSourceFailureOutputWriteFailure": {
+        "oneOf": [
+          {
+            "properties": {
+              "kind": {
+                "const": "schema_version",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "already_exists",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "invalid_commit_pin",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "scope_mismatch",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "statement_invalid",
+                "type": "string"
+              },
+              "report": {
+                "$ref": "#/components/schemas/CreateSourceFailureOutputReport"
+              }
+            },
+            "required": [
+              "kind",
+              "report"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "invalid_declaration",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "conflicts": {
+                "items": {
+                  "$ref": "#/components/schemas/CreateSourceFailureOutputReconciledResource"
+                },
+                "type": "array"
+              },
+              "kind": {
+                "const": "ownership_conflict",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "conflicts"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "missing_reference",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "diagnostics": {
+                "items": {
+                  "$ref": "#/components/schemas/CreateSourceFailureOutputTypedSpecDiagnostic"
+                },
+                "type": "array"
+              },
+              "kind": {
+                "const": "statement_rejected",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "diagnostics"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "invalid_verification_target",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "retired_rule",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "invalid_completion",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "already_complete",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "file_access_denied",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "file_unavailable",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "write_failed",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "uncertain_write",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "CreateSourceRequestInput": {
+        "additionalProperties": false,
+        "properties": {
+          "context": {
+            "$ref": "#/components/schemas/CreateSourceRequestInputRepositoryScope"
+          },
+          "request": {
+            "$ref": "#/components/schemas/CreateSourceRequestInputCreateSourceInput"
+          }
+        },
+        "required": [
+          "context",
+          "request"
+        ],
+        "title": "RepositoryCall",
+        "type": "object",
+        "x-provenance-model-family": "CreateSourceRequestInput"
+      },
+      "CreateSourceRequestInputCreateSourceInput": {
+        "additionalProperties": false,
+        "properties": {
+          "commit_pin": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "effective_date": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/CreateSourceRequestInputStableId"
+          },
+          "name": {
+            "type": "string"
+          },
+          "origin_message": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreateSourceRequestInputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreateSourceRequestInputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reference": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "review_date": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/CreateSourceRequestInputScopeId"
+          },
+          "source_type": {
+            "$ref": "#/components/schemas/CreateSourceRequestInputSourceType"
+          },
+          "supersedes": {
+            "items": {
+              "$ref": "#/components/schemas/CreateSourceRequestInputStableId"
+            },
+            "type": "array"
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "scope_id",
+          "id",
+          "name",
+          "source_type",
+          "supersedes"
+        ],
+        "type": "object"
+      },
+      "CreateSourceRequestInputRepositoryScope": {
+        "additionalProperties": false,
+        "description": "Scope selection for operations that do not use projection freshness.",
+        "properties": {
+          "repository": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "repository",
+          "scope"
+        ],
+        "type": "object"
+      },
+      "CreateSourceRequestInputScopeId": {
+        "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "CreateSourceRequestInputSourceType": {
+        "enum": [
+          "policy",
+          "document",
+          "legislation",
+          "company_agreement",
+          "system_state",
+          "external_integration",
+          "domain_knowledge",
+          "project_artifact",
+          "incident",
+          "api_spec"
+        ],
+        "type": "string"
+      },
+      "CreateSourceRequestInputStableId": {
+        "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "CreateSourceSuccessOutput": {
+        "properties": {
+          "commit_pin": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "declaration_address": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreateSourceSuccessOutputDeclarationAddress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "declared_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "effective_date": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/CreateSourceSuccessOutputStableId"
+          },
+          "name": {
+            "type": "string"
+          },
+          "origin_message": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreateSourceSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_thread": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CreateSourceSuccessOutputStableId"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reference": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "retired": {
+            "type": "boolean"
+          },
+          "review_date": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "schema_version": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scope_id": {
+            "$ref": "#/components/schemas/CreateSourceSuccessOutputScopeId"
+          },
+          "source_type": {
+            "$ref": "#/components/schemas/CreateSourceSuccessOutputSourceType"
+          },
+          "supersedes": {
+            "items": {
+              "$ref": "#/components/schemas/CreateSourceSuccessOutputStableId"
+            },
+            "type": "array"
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "schema_version",
+          "scope_id",
+          "id",
+          "name",
+          "source_type",
+          "url"
+        ],
+        "title": "Source",
+        "type": "object",
+        "x-provenance-model-family": "CreateSourceSuccessOutput"
+      },
+      "CreateSourceSuccessOutputDeclarationAddress": {
+        "description": "One owner-local path to a language-authored declaration.",
+        "items": {
+          "pattern": "\\S",
+          "type": "string"
+        },
+        "minItems": 1,
+        "type": "array"
+      },
+      "CreateSourceSuccessOutputScopeId": {
+        "description": "A scope id. The inner `String` is private and `new` is the only way in, so\nevery `ScopeId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
+        "type": "string"
+      },
+      "CreateSourceSuccessOutputSourceType": {
+        "enum": [
+          "policy",
+          "document",
+          "legislation",
+          "company_agreement",
+          "system_state",
+          "external_integration",
+          "domain_knowledge",
+          "project_artifact",
+          "incident",
+          "api_spec"
+        ],
+        "type": "string"
+      },
+      "CreateSourceSuccessOutputStableId": {
+        "description": "A stable artifact id. The inner `String` is private and `new` is the only\nway in, so every `StableId` in existence satisfies [`is_well_formed_id`].",
+        "pattern": "^[a-z0-9_-]+$",
         "type": "string"
       },
       "EvidenceFailureOutput": {
@@ -8413,6 +13511,30 @@
         "minItems": 1,
         "type": "array"
       },
+      "PlanFailureOutputFinding": {
+        "description": "One nonconformance found in descriptive text.",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/PlanFailureOutputFindingKind"
+          },
+          "message": {
+            "type": "string"
+          },
+          "rule": {
+            "$ref": "#/components/schemas/PlanFailureOutputRuleNumber"
+          },
+          "span": {
+            "$ref": "#/components/schemas/PlanFailureOutputSpan"
+          }
+        },
+        "required": [
+          "rule",
+          "kind",
+          "span",
+          "message"
+        ],
+        "type": "object"
+      },
       "PlanFailureOutputFindingKind": {
         "description": "The disposition of a finding.",
         "enum": [
@@ -8638,6 +13760,33 @@
         ],
         "type": "object"
       },
+      "PlanFailureOutputReport": {
+        "description": "A report from the fixed ASD-STE100 Issue 9 analyzer.",
+        "properties": {
+          "analyzer_version": {
+            "type": "string"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/PlanFailureOutputFinding"
+            },
+            "type": "array"
+          },
+          "issue": {
+            "$ref": "#/components/schemas/PlanFailureOutputStandardIssue"
+          },
+          "standard": {
+            "$ref": "#/components/schemas/PlanFailureOutputStandard"
+          }
+        },
+        "required": [
+          "standard",
+          "issue",
+          "analyzer_version",
+          "findings"
+        ],
+        "type": "object"
+      },
       "PlanFailureOutputRuleNumber": {
         "description": "An ASD-STE100 Issue 9 rule implemented by this analyzer.",
         "enum": [
@@ -8767,6 +13916,58 @@
             },
             "required": [
               "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "already_exists",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "invalid_commit_pin",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "scope_mismatch",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "statement_invalid",
+                "type": "string"
+              },
+              "report": {
+                "$ref": "#/components/schemas/PlanFailureOutputReport"
+              }
+            },
+            "required": [
+              "kind",
+              "report"
             ],
             "type": "object"
           },
@@ -16284,6 +21485,104 @@
         }
       }
     },
+    "/v7/operations/add-source-reference": {
+      "post": {
+        "operationId": "addSourceReference",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddSourceReferenceRequestInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddSourceReferenceSuccessOutput"
+                }
+              }
+            },
+            "description": "Operation result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddSourceReferenceFailureOutput"
+                }
+              }
+            },
+            "description": "Operation failed or was refused"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddSourceReferenceFailureOutput"
+                }
+              }
+            },
+            "description": "Operation failed or was refused"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddSourceReferenceFailureOutput"
+                }
+              }
+            },
+            "description": "Operation failed or was refused"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddSourceReferenceFailureOutput"
+                }
+              }
+            },
+            "description": "Operation failed or was refused"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddSourceReferenceFailureOutput"
+                }
+              }
+            },
+            "description": "Operation failed or was refused"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddSourceReferenceFailureOutput"
+                }
+              }
+            },
+            "description": "Operation failed or was refused"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddSourceReferenceFailureOutput"
+                }
+              }
+            },
+            "description": "Operation failed or was refused"
+          }
+        },
+        "x-operation-mutates": true
+      }
+    },
     "/v7/operations/apply": {
       "post": {
         "operationId": "apply",
@@ -16657,6 +21956,398 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CompleteVerificationFailureOutput"
+                }
+              }
+            },
+            "description": "Operation failed or was refused"
+          }
+        },
+        "x-operation-mutates": true
+      }
+    },
+    "/v7/operations/create-requirement": {
+      "post": {
+        "operationId": "createRequirement",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRequirementRequestInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateRequirementSuccessOutput"
+                }
+              }
+            },
+            "description": "Operation result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateRequirementFailureOutput"
+                }
+              }
+            },
+            "description": "Operation failed or was refused"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateRequirementFailureOutput"
+                }
+              }
+            },
+            "description": "Operation failed or was refused"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateRequirementFailureOutput"
+                }
+              }
+            },
+            "description": "Operation failed or was refused"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateRequirementFailureOutput"
+                }
+              }
+            },
+            "description": "Operation failed or was refused"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateRequirementFailureOutput"
+                }
+              }
+            },
+            "description": "Operation failed or was refused"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateRequirementFailureOutput"
+                }
+              }
+            },
+            "description": "Operation failed or was refused"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateRequirementFailureOutput"
+                }
+              }
+            },
+            "description": "Operation failed or was refused"
+          }
+        },
+        "x-operation-mutates": true
+      }
+    },
+    "/v7/operations/create-resolution": {
+      "post": {
+        "operationId": "createResolution",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateResolutionRequestInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateResolutionSuccessOutput"
+                }
+              }
+            },
+            "description": "Operation result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateResolutionFailureOutput"
+                }
+              }
+            },
+            "description": "Operation failed or was refused"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateResolutionFailureOutput"
+                }
+              }
+            },
+            "description": "Operation failed or was refused"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateResolutionFailureOutput"
+                }
+              }
+            },
+            "description": "Operation failed or was refused"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateResolutionFailureOutput"
+                }
+              }
+            },
+            "description": "Operation failed or was refused"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateResolutionFailureOutput"
+                }
+              }
+            },
+            "description": "Operation failed or was refused"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateResolutionFailureOutput"
+                }
+              }
+            },
+            "description": "Operation failed or was refused"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateResolutionFailureOutput"
+                }
+              }
+            },
+            "description": "Operation failed or was refused"
+          }
+        },
+        "x-operation-mutates": true
+      }
+    },
+    "/v7/operations/create-rule": {
+      "post": {
+        "operationId": "createRule",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRuleRequestInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateRuleSuccessOutput"
+                }
+              }
+            },
+            "description": "Operation result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateRuleFailureOutput"
+                }
+              }
+            },
+            "description": "Operation failed or was refused"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateRuleFailureOutput"
+                }
+              }
+            },
+            "description": "Operation failed or was refused"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateRuleFailureOutput"
+                }
+              }
+            },
+            "description": "Operation failed or was refused"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateRuleFailureOutput"
+                }
+              }
+            },
+            "description": "Operation failed or was refused"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateRuleFailureOutput"
+                }
+              }
+            },
+            "description": "Operation failed or was refused"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateRuleFailureOutput"
+                }
+              }
+            },
+            "description": "Operation failed or was refused"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateRuleFailureOutput"
+                }
+              }
+            },
+            "description": "Operation failed or was refused"
+          }
+        },
+        "x-operation-mutates": true
+      }
+    },
+    "/v7/operations/create-source": {
+      "post": {
+        "operationId": "createSource",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSourceRequestInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateSourceSuccessOutput"
+                }
+              }
+            },
+            "description": "Operation result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateSourceFailureOutput"
+                }
+              }
+            },
+            "description": "Operation failed or was refused"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateSourceFailureOutput"
+                }
+              }
+            },
+            "description": "Operation failed or was refused"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateSourceFailureOutput"
+                }
+              }
+            },
+            "description": "Operation failed or was refused"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateSourceFailureOutput"
+                }
+              }
+            },
+            "description": "Operation failed or was refused"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateSourceFailureOutput"
+                }
+              }
+            },
+            "description": "Operation failed or was refused"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateSourceFailureOutput"
+                }
+              }
+            },
+            "description": "Operation failed or was refused"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateSourceFailureOutput"
                 }
               }
             },

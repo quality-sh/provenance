@@ -2,6 +2,7 @@
 include!("../models/ApplyFailureOutput.rs");
 include!("../models/ApplyFailureOutputDeclarationAddress.rs");
 include!("../models/ApplyFailureOutputDeclarationAddressItem.rs");
+include!("../models/ApplyFailureOutputFinding.rs");
 include!("../models/ApplyFailureOutputFindingKind.rs");
 include!("../models/ApplyFailureOutputInvalidInputReason.rs");
 include!("../models/ApplyFailureOutputOperation.rs");
@@ -10,6 +11,7 @@ include!("../models/ApplyFailureOutputOperationFailure.rs");
 include!("../models/ApplyFailureOutputProtocolVersion.rs");
 include!("../models/ApplyFailureOutputReconcileState.rs");
 include!("../models/ApplyFailureOutputReconciledResource.rs");
+include!("../models/ApplyFailureOutputReport.rs");
 include!("../models/ApplyFailureOutputRuleNumber.rs");
 include!("../models/ApplyFailureOutputSpan.rs");
 include!("../models/ApplyFailureOutputStableId.rs");

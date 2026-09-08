@@ -2,6 +2,7 @@
 include!("../models/PlanFailureOutput.rs");
 include!("../models/PlanFailureOutputDeclarationAddress.rs");
 include!("../models/PlanFailureOutputDeclarationAddressItem.rs");
+include!("../models/PlanFailureOutputFinding.rs");
 include!("../models/PlanFailureOutputFindingKind.rs");
 include!("../models/PlanFailureOutputInvalidInputReason.rs");
 include!("../models/PlanFailureOutputOperation.rs");
@@ -10,6 +11,7 @@ include!("../models/PlanFailureOutputOperationFailure.rs");
 include!("../models/PlanFailureOutputProtocolVersion.rs");
 include!("../models/PlanFailureOutputReconcileState.rs");
 include!("../models/PlanFailureOutputReconciledResource.rs");
+include!("../models/PlanFailureOutputReport.rs");
 include!("../models/PlanFailureOutputRuleNumber.rs");
 include!("../models/PlanFailureOutputSpan.rs");
 include!("../models/PlanFailureOutputStableId.rs");

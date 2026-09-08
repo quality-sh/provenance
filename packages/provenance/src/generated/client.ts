@@ -5,7 +5,7 @@ import { send, readJson, checked, ConnectionError, OperationError, UncertainWrit
 export { ConnectionError, MalformedResponseError, OperationError, UncertainWriteError, ProtocolMismatchError, MAX_RESPONSE_BYTES } from './runtime.js';
 export type { components } from './schema.js';
 export const PROTOCOL_VERSION = 7;
-export type OperationFailure = components['schemas']['ApplyFailureOutput'] | components['schemas']['BeginVerificationFailureOutput'] | components['schemas']['CheckStatementFailureOutput'] | components['schemas']['CompleteVerificationFailureOutput'] | components['schemas']['EvidenceFailureOutput'] | components['schemas']['GetFailureOutput'] | components['schemas']['ImpactFailureOutput'] | components['schemas']['InfoFailureOutput'] | components['schemas']['NeighborsFailureOutput'] | components['schemas']['PlanFailureOutput'] | components['schemas']['ResolveSymbolFailureOutput'] | components['schemas']['SearchFailureOutput'] | components['schemas']['StaleFailureOutput'] | components['schemas']['TraceFailureOutput'] | components['schemas']['VerificationBindingsFailureOutput'] | components['schemas']['VerificationRunsFailureOutput'];
+export type OperationFailure = components['schemas']['AddSourceReferenceFailureOutput'] | components['schemas']['ApplyFailureOutput'] | components['schemas']['BeginVerificationFailureOutput'] | components['schemas']['CheckStatementFailureOutput'] | components['schemas']['CompleteVerificationFailureOutput'] | components['schemas']['CreateRequirementFailureOutput'] | components['schemas']['CreateResolutionFailureOutput'] | components['schemas']['CreateRuleFailureOutput'] | components['schemas']['CreateSourceFailureOutput'] | components['schemas']['EvidenceFailureOutput'] | components['schemas']['GetFailureOutput'] | components['schemas']['ImpactFailureOutput'] | components['schemas']['InfoFailureOutput'] | components['schemas']['NeighborsFailureOutput'] | components['schemas']['PlanFailureOutput'] | components['schemas']['ResolveSymbolFailureOutput'] | components['schemas']['SearchFailureOutput'] | components['schemas']['StaleFailureOutput'] | components['schemas']['TraceFailureOutput'] | components['schemas']['VerificationBindingsFailureOutput'] | components['schemas']['VerificationRunsFailureOutput'];
 export class HttpClient {
   private constructor(private readonly baseUrl: string, private readonly fetcher: typeof fetch) {}
   static async connectWithBearer(baseUrl: string, bearer: string, fetcher: typeof fetch = fetch): Promise<HttpClient> {
@@ -30,6 +30,21 @@ export class HttpClient {
     const metadata = value as { protocol_version: number };
     if (metadata.protocol_version !== PROTOCOL_VERSION) throw new ProtocolMismatchError(PROTOCOL_VERSION, metadata.protocol_version);
     return client;
+  }
+  async addSourceReference(call: components['schemas']['AddSourceReferenceRequestInput']): Promise<components['schemas']['AddSourceReferenceSuccessOutput']> {
+    const body = JSON.stringify(call);
+    const response = await send(this.fetcher, this.baseUrl + '/v7/operations/add-source-reference', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body,
+    }, 'addSourceReference', true);
+    const value = await readJson(response, 'addSourceReference', true);
+    if (!response.ok) {
+      checked(value, validate.AddSourceReferenceFailureOutput, 'addSourceReference', true);
+      const failure = value as components['schemas']['AddSourceReferenceFailureOutput'];
+      if (failure.error.kind === 'uncertain_write' || (true && ['internal', 'write_failed'].includes(failure.error.kind))) throw new UncertainWriteError('addSourceReference', undefined, failure);
+      throw new OperationError(response.status, failure);
+    }
+    checked(value, validate.AddSourceReferenceSuccessOutput, 'addSourceReference', true);
+    return value as components['schemas']['AddSourceReferenceSuccessOutput'];
   }
   async apply(call: components['schemas']['ApplyRequestInput']): Promise<components['schemas']['ApplySuccessOutput']> {
     const body = JSON.stringify(call);
@@ -90,6 +105,66 @@ export class HttpClient {
     }
     checked(value, validate.CompleteVerificationSuccessOutput, 'completeVerification', true);
     return value as components['schemas']['CompleteVerificationSuccessOutput'];
+  }
+  async createRequirement(call: components['schemas']['CreateRequirementRequestInput']): Promise<components['schemas']['CreateRequirementSuccessOutput']> {
+    const body = JSON.stringify(call);
+    const response = await send(this.fetcher, this.baseUrl + '/v7/operations/create-requirement', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body,
+    }, 'createRequirement', true);
+    const value = await readJson(response, 'createRequirement', true);
+    if (!response.ok) {
+      checked(value, validate.CreateRequirementFailureOutput, 'createRequirement', true);
+      const failure = value as components['schemas']['CreateRequirementFailureOutput'];
+      if (failure.error.kind === 'uncertain_write' || (true && ['internal', 'write_failed'].includes(failure.error.kind))) throw new UncertainWriteError('createRequirement', undefined, failure);
+      throw new OperationError(response.status, failure);
+    }
+    checked(value, validate.CreateRequirementSuccessOutput, 'createRequirement', true);
+    return value as components['schemas']['CreateRequirementSuccessOutput'];
+  }
+  async createResolution(call: components['schemas']['CreateResolutionRequestInput']): Promise<components['schemas']['CreateResolutionSuccessOutput']> {
+    const body = JSON.stringify(call);
+    const response = await send(this.fetcher, this.baseUrl + '/v7/operations/create-resolution', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body,
+    }, 'createResolution', true);
+    const value = await readJson(response, 'createResolution', true);
+    if (!response.ok) {
+      checked(value, validate.CreateResolutionFailureOutput, 'createResolution', true);
+      const failure = value as components['schemas']['CreateResolutionFailureOutput'];
+      if (failure.error.kind === 'uncertain_write' || (true && ['internal', 'write_failed'].includes(failure.error.kind))) throw new UncertainWriteError('createResolution', undefined, failure);
+      throw new OperationError(response.status, failure);
+    }
+    checked(value, validate.CreateResolutionSuccessOutput, 'createResolution', true);
+    return value as components['schemas']['CreateResolutionSuccessOutput'];
+  }
+  async createRule(call: components['schemas']['CreateRuleRequestInput']): Promise<components['schemas']['CreateRuleSuccessOutput']> {
+    const body = JSON.stringify(call);
+    const response = await send(this.fetcher, this.baseUrl + '/v7/operations/create-rule', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body,
+    }, 'createRule', true);
+    const value = await readJson(response, 'createRule', true);
+    if (!response.ok) {
+      checked(value, validate.CreateRuleFailureOutput, 'createRule', true);
+      const failure = value as components['schemas']['CreateRuleFailureOutput'];
+      if (failure.error.kind === 'uncertain_write' || (true && ['internal', 'write_failed'].includes(failure.error.kind))) throw new UncertainWriteError('createRule', undefined, failure);
+      throw new OperationError(response.status, failure);
+    }
+    checked(value, validate.CreateRuleSuccessOutput, 'createRule', true);
+    return value as components['schemas']['CreateRuleSuccessOutput'];
+  }
+  async createSource(call: components['schemas']['CreateSourceRequestInput']): Promise<components['schemas']['CreateSourceSuccessOutput']> {
+    const body = JSON.stringify(call);
+    const response = await send(this.fetcher, this.baseUrl + '/v7/operations/create-source', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body,
+    }, 'createSource', true);
+    const value = await readJson(response, 'createSource', true);
+    if (!response.ok) {
+      checked(value, validate.CreateSourceFailureOutput, 'createSource', true);
+      const failure = value as components['schemas']['CreateSourceFailureOutput'];
+      if (failure.error.kind === 'uncertain_write' || (true && ['internal', 'write_failed'].includes(failure.error.kind))) throw new UncertainWriteError('createSource', undefined, failure);
+      throw new OperationError(response.status, failure);
+    }
+    checked(value, validate.CreateSourceSuccessOutput, 'createSource', true);
+    return value as components['schemas']['CreateSourceSuccessOutput'];
   }
   async evidence(call: components['schemas']['EvidenceRequestInput']): Promise<components['schemas']['EvidenceSuccessOutput']> {
     const body = JSON.stringify(call);

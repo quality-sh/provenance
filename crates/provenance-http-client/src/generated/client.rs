@@ -1,9 +1,15 @@
 // Generated from OpenAPI. Do not edit.
 use crate::types::{
-    ApplyFailureOutput, ApplyRequestInput, ApplySuccessOutput, BeginVerificationFailureOutput,
-    BeginVerificationRequestInput, BeginVerificationSuccessOutput, CheckStatementFailureOutput,
-    CheckStatementRequestInput, CheckStatementSuccessOutput, CompleteVerificationFailureOutput,
-    CompleteVerificationRequestInput, CompleteVerificationSuccessOutput, EvidenceFailureOutput,
+    AddSourceReferenceFailureOutput, AddSourceReferenceRequestInput,
+    AddSourceReferenceSuccessOutput, ApplyFailureOutput, ApplyRequestInput, ApplySuccessOutput,
+    BeginVerificationFailureOutput, BeginVerificationRequestInput, BeginVerificationSuccessOutput,
+    CheckStatementFailureOutput, CheckStatementRequestInput, CheckStatementSuccessOutput,
+    CompleteVerificationFailureOutput, CompleteVerificationRequestInput,
+    CompleteVerificationSuccessOutput, CreateRequirementFailureOutput,
+    CreateRequirementRequestInput, CreateRequirementSuccessOutput, CreateResolutionFailureOutput,
+    CreateResolutionRequestInput, CreateResolutionSuccessOutput, CreateRuleFailureOutput,
+    CreateRuleRequestInput, CreateRuleSuccessOutput, CreateSourceFailureOutput,
+    CreateSourceRequestInput, CreateSourceSuccessOutput, EvidenceFailureOutput,
     EvidenceRequestInput, EvidenceSuccessOutput, GetFailureOutput, GetRequestInput,
     GetSuccessOutput, ImpactFailureOutput, ImpactRequestInput, ImpactSuccessOutput,
     InfoFailureOutput, InfoRequestInput, InfoSuccessOutput, NeighborsFailureOutput,
@@ -20,10 +26,15 @@ pub const PROTOCOL_VERSION: u32 = 7;
 #[derive(Debug, serde::Serialize)]
 #[serde(untagged)]
 pub enum OperationFailure {
+    AddSourceReference(Box<AddSourceReferenceFailureOutput>),
     Apply(Box<ApplyFailureOutput>),
     BeginVerification(Box<BeginVerificationFailureOutput>),
     CheckStatement(Box<CheckStatementFailureOutput>),
     CompleteVerification(Box<CompleteVerificationFailureOutput>),
+    CreateRequirement(Box<CreateRequirementFailureOutput>),
+    CreateResolution(Box<CreateResolutionFailureOutput>),
+    CreateRule(Box<CreateRuleFailureOutput>),
+    CreateSource(Box<CreateSourceFailureOutput>),
     Evidence(Box<EvidenceFailureOutput>),
     Get(Box<GetFailureOutput>),
     Impact(Box<ImpactFailureOutput>),
@@ -101,10 +112,15 @@ impl HttpClient {
         Ok(client)
     }
 }
+include!("operations/add_source_reference.rs");
 include!("operations/apply.rs");
 include!("operations/begin_verification.rs");
 include!("operations/check_statement.rs");
 include!("operations/complete_verification.rs");
+include!("operations/create_requirement.rs");
+include!("operations/create_resolution.rs");
+include!("operations/create_rule.rs");
+include!("operations/create_source.rs");
 include!("operations/evidence.rs");
 include!("operations/get.rs");
 include!("operations/impact.rs");

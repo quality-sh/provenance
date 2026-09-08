@@ -1,4 +1,6 @@
 // Generated from OpenAPI. Do not edit.
+export declare function AddSourceReferenceFailureOutput(value: unknown): boolean;
+export declare function AddSourceReferenceSuccessOutput(value: unknown): boolean;
 export declare function ApplyFailureOutput(value: unknown): boolean;
 export declare function ApplySuccessOutput(value: unknown): boolean;
 export declare function BeginVerificationFailureOutput(value: unknown): boolean;
@@ -7,6 +9,14 @@ export declare function CheckStatementFailureOutput(value: unknown): boolean;
 export declare function CheckStatementSuccessOutput(value: unknown): boolean;
 export declare function CompleteVerificationFailureOutput(value: unknown): boolean;
 export declare function CompleteVerificationSuccessOutput(value: unknown): boolean;
+export declare function CreateRequirementFailureOutput(value: unknown): boolean;
+export declare function CreateRequirementSuccessOutput(value: unknown): boolean;
+export declare function CreateResolutionFailureOutput(value: unknown): boolean;
+export declare function CreateResolutionSuccessOutput(value: unknown): boolean;
+export declare function CreateRuleFailureOutput(value: unknown): boolean;
+export declare function CreateRuleSuccessOutput(value: unknown): boolean;
+export declare function CreateSourceFailureOutput(value: unknown): boolean;
+export declare function CreateSourceSuccessOutput(value: unknown): boolean;
 export declare function EvidenceFailureOutput(value: unknown): boolean;
 export declare function EvidenceSuccessOutput(value: unknown): boolean;
 export declare function GetFailureOutput(value: unknown): boolean;

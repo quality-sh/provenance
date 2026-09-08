@@ -10,6 +10,9 @@ use provenance_core::{
 };
 use serde::{Deserialize, Serialize};
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CreateSourceInput {
     pub scope_id: ScopeId,
     pub id: StableId,
@@ -25,6 +28,9 @@ pub struct CreateSourceInput {
     pub origin_message: Option<StableId>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CreateRequirementInput {
     pub scope_id: ScopeId,
     pub id: StableId,
@@ -48,6 +54,9 @@ pub struct CreateDomainInput {
     pub color: Option<String>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct AddSourceReferenceInput {
     pub scope_id: ScopeId,
     pub source_id: StableId,
@@ -94,6 +103,9 @@ pub struct UpdateQuestionInput {
     pub resolution_id: Option<StableId>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CreateResolutionInput {
     pub scope_id: ScopeId,
     pub id: StableId,
@@ -114,6 +126,9 @@ pub struct CreateResolutionInput {
     pub origin_message: Option<StableId>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CreateRuleInput {
     pub scope_id: ScopeId,
     pub id: StableId,

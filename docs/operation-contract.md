@@ -7,9 +7,10 @@ The native Rust SDK remains available.
 
 The catalog contains `check-statement`, `info`, `get`, `search`, `neighbors`,
 `trace`, `impact`, `resolve-symbol`, `evidence`, `stale`, `verification-runs`,
-`verification-bindings`, `plan`, `apply`, `begin-verification`, and
-`complete-verification`. The statement handler returns the
-existing ASD-STE100 analyzer report. A finding is a successful report result.
+`verification-bindings`, `plan`, `apply`, `begin-verification`,
+`complete-verification`, `create-source`, `create-requirement`,
+`create-resolution`, `create-rule`, and `add-source-reference`. The statement
+handler returns the existing ASD-STE100 analyzer report. A finding is a successful report result.
 The operation does not open a repository, load settings, or use a dictionary.
 
 ## Statement calls
@@ -110,6 +111,28 @@ The host uses the held-file checks described in
 [repository evidence access](operation-file-access.md). A caller path grants
 no access. Local SDK file inference must use a separately configured local root.
 
+## Existing creation and Source attachment
+
+The five creation and attachment operations accept the existing Store input
+fields and return the existing Source, Requirement, Resolution, or Rule record.
+The request retains `scope_id`; it must equal the scope in the authorized call
+context. The operation does not replace it with a default.
+
+Creation retains the caller's existing placement and origin fields. Native
+reference checks, ID ordering, duplicate rejection, commit-pin checks, statement
+checks, and lifecycle values apply. Origin fields retain native semantics;
+these operations do not infer or validate message membership. Resolution audit
+fields describe the supplied record and do not authenticate a human actor.
+
+`add-source-reference` attaches a Source to a Requirement through its existing
+`source_refs` field. The same Source and clause are not added twice. Each call
+uses one existing Store operation. Several calls do not form one transaction.
+
+No unified discussion outcome, fuzzy matching, default placement policy,
+edit history, content journal, or new persisted relationship is added. All
+repository listeners remain explicit isolated fixtures pending production
+access control.
+
 ## Write failures and task ownership
 
 Protocol, access, and known validation refusals occur before intended graph
@@ -185,6 +208,7 @@ node tools/operation-codegen/test-clients.mjs statements
 node tools/operation-codegen/test-clients.mjs records
 node tools/operation-codegen/test-clients.mjs evidence
 node tools/operation-codegen/test-clients.mjs writes
+node tools/operation-codegen/test-clients.mjs creation
 ```
 
 The adapters bound request bodies and concurrent work. Blocking operation work
@@ -194,7 +218,8 @@ started work. Shutdown stops admission and joins started work.
 ## Compatibility
 
 The operation protocol advances from 6 to 7. The TypeScript SDK uses the
-generated HTTP client for all sixteen operations. Configure `endpoint`,
+generated HTTP client for the original sixteen operations. The generated client
+also exposes the five creation and attachment operations. Configure `endpoint`,
 `bearer`, `repositoryId`, and `scope`; configure `localRoot` separately when
 converting local implementation or verification paths. The SDK rejects the old
 implicit repository/subprocess configuration. Both HTTP clients validate
