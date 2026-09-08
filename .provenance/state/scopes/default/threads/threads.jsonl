@@ -25,6 +25,7 @@
 {"schema_version":2,"scope_id":"default","id":"thr_rule_rule_prov_scan_011_0","parent":{"node_type":"rule","node_id":"rule_prov_scan_011"},"status":"active","created_at":1773227473542}
 {"schema_version":2,"scope_id":"default","id":"thread_question_q_relations_first_class_or_properties","parent":{"node_type":"question","node_id":"q_relations_first_class_or_properties"},"status":"active","created_at":1}
 {"schema_version":2,"scope_id":"default","id":"thread_question_question_wiki_homepage_direction","parent":{"node_type":"question","node_id":"question_wiki_homepage_direction"},"status":"active","created_at":1}
+{"schema_version":2,"scope_id":"default","id":"thread_requirement_req_public_operation_contract","parent":{"node_type":"requirement","node_id":"req_public_operation_contract"},"status":"active","created_at":1}
 {"schema_version":2,"scope_id":"default","id":"thread_requirement_req_query_answers_carry_a_freshness_stamp","parent":{"node_type":"requirement","node_id":"req_query_answers_carry_a_freshness_stamp"},"status":"active","created_at":1}
 {"schema_version":2,"scope_id":"default","id":"thread_requirement_req_refinement_shows_evolving_structure","parent":{"node_type":"requirement","node_id":"req_refinement_shows_evolving_structure"},"status":"active","created_at":1}
 {"schema_version":2,"scope_id":"default","id":"thread_requirement_req_requirement_document_nests_record_lineage","parent":{"node_type":"requirement","node_id":"req_requirement_document_nests_record_lineage"},"status":"active","created_at":1}
