@@ -176,10 +176,10 @@ async fn refuse_stale_refuses_a_projection_without_a_revision() {
     catch_up_state(&store.layout()).await.unwrap();
     let pool = open_cache(&store.layout()).await.unwrap();
     sqlx::query("DELETE FROM projection_revision")
-        .execute(&pool)
+        .execute(pool.pool())
         .await
         .unwrap();
-    pool.close().await;
+    pool.close().await.unwrap();
     let error = get_through(&store, policy()).await.unwrap_err();
     assert!(
         matches!(
@@ -196,10 +196,10 @@ async fn refuse_stale_refuses_a_half_migrated_projection() {
     catch_up_state(&store.layout()).await.unwrap();
     let pool = open_cache(&store.layout()).await.unwrap();
     sqlx::query("DELETE FROM projection_family_digests")
-        .execute(&pool)
+        .execute(pool.pool())
         .await
         .unwrap();
-    pool.close().await;
+    pool.close().await.unwrap();
     let error = get_through(&store, policy()).await.unwrap_err();
     assert!(
         matches!(
@@ -219,8 +219,8 @@ async fn refuse_stale_refuses_old_migrations_and_validation() {
         let store = test_stores::seeded_queries();
         catch_up_state(&store.layout()).await.unwrap();
         let pool = open_cache(&store.layout()).await.unwrap();
-        sqlx::query(sql).execute(&pool).await.unwrap();
-        pool.close().await;
+        sqlx::query(sql).execute(pool.pool()).await.unwrap();
+        pool.close().await.unwrap();
         let error = get_through(&store, policy()).await.unwrap_err();
         assert!(
             matches!(

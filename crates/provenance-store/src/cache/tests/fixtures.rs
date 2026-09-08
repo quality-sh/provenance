@@ -1,4 +1,4 @@
-use super::super::*;
+use crate::layout::ProvenanceLayout;
 use crate::state_store::{
     AddSourceReferenceInput, CreateBoundaryInput, CreateDomainInput, CreateQuestionInput,
     CreateRequirementInput, CreateResolutionInput, CreateRuleInput, CreateSourceInput,

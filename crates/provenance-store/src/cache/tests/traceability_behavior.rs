@@ -7,6 +7,7 @@
 
 use super::super::*;
 use super::fixtures::*;
+use crate::layout::ProvenanceLayout;
 use crate::state_store::{CreateResolutionInput, CreateRuleInput, StateStore};
 use provenance_core::{RequirementStatus, ResolutionStatus, RuleSeverity, RuleStatus, ScopeId};
 

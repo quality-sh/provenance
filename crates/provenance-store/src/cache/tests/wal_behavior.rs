@@ -3,6 +3,7 @@
 //! read leaves no file behind and that a file still in DELETE mode can be
 //! opened.
 
+use super::super::connection::cache_options;
 use super::super::*;
 use super::fixtures::*;
 use crate::layout::ProvenanceLayout;
@@ -10,7 +11,7 @@ use crate::operations::read_policy::ReadPolicy;
 use provenance_core::protocol::{GetQuery, SDK_PROTOCOL_VERSION};
 use provenance_core::NodeType;
 use provenance_macros::verifies;
-use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode};
+use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 use sqlx::{Connection, SqliteConnection};
 use std::str::FromStr;
 use std::time::Duration;
@@ -161,11 +162,11 @@ async fn a_second_opener_survives_the_wal_switch() {
     .await
     .unwrap();
     let mode: String = sqlx::query_scalar("PRAGMA journal_mode")
-        .fetch_one(&pool)
+        .fetch_one(pool.pool())
         .await
         .unwrap();
     assert_eq!(mode, "wal");
-    pool.close().await;
+    pool.close().await.unwrap();
     assert!(child.wait().unwrap().success());
 }
 
@@ -214,8 +215,9 @@ async fn closing_waits_for_a_connection_already_returning_to_the_pool() {
         .await
         .expect("the connection must start its return");
 
+    let connection = CacheConnection::from_pool(pool.clone());
     tokio::time::timeout(Duration::from_secs(5), async {
-        let (closed, ()) = tokio::join!(close_cache(&pool), async {
+        let (closed, ()) = tokio::join!(connection.close(), async {
             pool.close_event().await;
             resume.notify_one();
         });

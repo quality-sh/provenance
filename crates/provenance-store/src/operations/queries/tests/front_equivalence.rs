@@ -63,7 +63,7 @@ async fn assert_fronts_agree(store: &TestStore) {
 
     catch_up_state(&store.layout()).await.unwrap();
     let pool = open_cache(&store.layout()).await.unwrap();
-    let snapshot = ReadSnapshot::open(&pool, scope)
+    let snapshot = ReadSnapshot::open(pool.pool(), scope)
         .await
         .unwrap()
         .expect("a revision");
@@ -86,7 +86,7 @@ async fn assert_fronts_agree(store: &TestStore) {
         }
     }
     drop(snapshot);
-    pool.close().await;
+    pool.close().await.unwrap();
 }
 
 #[tokio::test]
@@ -110,7 +110,7 @@ async fn a_lookup_outside_the_frontier_is_an_invariant_violation() {
     let store = TestStore::pinned();
     catch_up_state(&store.layout()).await.unwrap();
     let pool = open_cache(&store.layout()).await.unwrap();
-    let snapshot = ReadSnapshot::open(&pool, &store.scope)
+    let snapshot = ReadSnapshot::open(pool.pool(), &store.scope)
         .await
         .unwrap()
         .expect("a revision");
@@ -135,10 +135,10 @@ async fn a_relation_row_with_an_undeclared_name_is_refused() {
          VALUES (?, 'requirement', 'req_overtime', 'befriends', 'source', 'source_schads')",
     )
     .bind(store.scope.as_str())
-    .execute(&pool)
+    .execute(pool.pool())
     .await
     .unwrap();
-    let snapshot = ReadSnapshot::open(&pool, &store.scope)
+    let snapshot = ReadSnapshot::open(pool.pool(), &store.scope)
         .await
         .unwrap()
         .expect("a revision");
@@ -150,5 +150,5 @@ async fn a_relation_row_with_an_undeclared_name_is_refused() {
     .unwrap_err();
     assert!(refused.to_string().contains("befriends"), "{refused}");
     drop(snapshot);
-    pool.close().await;
+    pool.close().await.unwrap();
 }

@@ -1,5 +1,6 @@
 use super::super::*;
 use super::fixtures::*;
+use crate::layout::ProvenanceLayout;
 use crate::state_store::{
     CreateRequirementInput, CreateResolutionInput, CreateRuleInput, StateStore,
 };

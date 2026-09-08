@@ -30,12 +30,10 @@ pub struct CatchUpReport {
 
 pub async fn catch_up_state(layout: &ProvenanceLayout) -> anyhow::Result<CatchUpReport> {
     let guard = publication::publication_guard(layout).await?;
-    let pool = open_cache(layout).await?;
-    let report = catch_up_with_guard(&guard, &pool, layout).await;
-    // Close rather than drop. A dropped pool releases its file handles
-    // asynchronously, and on Windows a later delete of the database file
-    // races that release.
-    crate::cache::close_cache(&pool).await?;
+    let connection = open_cache(layout).await?;
+    let report = catch_up_with_guard(&guard, connection.pool(), layout).await;
+    // The connection completes before the report, whatever the pass did.
+    connection.close().await?;
     report
 }
 
