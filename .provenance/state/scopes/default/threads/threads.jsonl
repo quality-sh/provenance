@@ -26,6 +26,7 @@
 {"schema_version":2,"scope_id":"default","id":"thread_question_q_relations_first_class_or_properties","parent":{"node_type":"question","node_id":"q_relations_first_class_or_properties"},"status":"active","created_at":1}
 {"schema_version":2,"scope_id":"default","id":"thread_question_question_local_http_alias_meaning","parent":{"node_type":"question","node_id":"question_local_http_alias_meaning"},"status":"active","created_at":1}
 {"schema_version":2,"scope_id":"default","id":"thread_question_question_local_http_repository_selection","parent":{"node_type":"question","node_id":"question_local_http_repository_selection"},"status":"active","created_at":1}
+{"schema_version":2,"scope_id":"default","id":"thread_question_question_local_reviewer_working_copy_default","parent":{"node_type":"question","node_id":"question_local_reviewer_working_copy_default"},"status":"active","created_at":1}
 {"schema_version":2,"scope_id":"default","id":"thread_question_question_native_rust_sdk_role","parent":{"node_type":"question","node_id":"question_native_rust_sdk_role"},"status":"active","created_at":1}
 {"schema_version":2,"scope_id":"default","id":"thread_question_question_sdk_local_host_ownership","parent":{"node_type":"question","node_id":"question_sdk_local_host_ownership"},"status":"active","created_at":1}
 {"schema_version":2,"scope_id":"default","id":"thread_question_question_wiki_homepage_direction","parent":{"node_type":"question","node_id":"question_wiki_homepage_direction"},"status":"active","created_at":1}
