@@ -1,5 +1,7 @@
 //! Source failures retain native diagnostics separately from the safe wire form.
-use crate::state_store::{ReconciledResource, TypedSpecDiagnostic, TypedSpecWriteError};
+use crate::state_store::{
+    ReconciledResource, StatementWriteError, TypedSpecDiagnostic, TypedSpecWriteError,
+};
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
@@ -92,6 +94,11 @@ impl WriteError {
         }
         if let Some(error) = self.0.downcast_ref::<SourceFailure>() {
             return error.failure.clone();
+        }
+        if let Some(error) = self.0.downcast_ref::<StatementWriteError>() {
+            return WriteFailure::StatementInvalid {
+                report: error.report.clone(),
+            };
         }
         if let Some(error) = self.0.downcast_ref::<TypedSpecWriteError>() {
             return WriteFailure::StatementRejected {

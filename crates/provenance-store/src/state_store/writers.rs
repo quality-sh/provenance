@@ -78,16 +78,7 @@ impl StateStore {
             origin_thread,
             origin_message,
         } = input;
-        super::statement_policy::ensure_statement_is_writable(&self.layout, &statement).map_err(
-            |error| {
-                SourceFailure::wrap(
-                    WriteFailure::StatementInvalid {
-                        report: error.report.clone(),
-                    },
-                    error,
-                )
-            },
-        )?;
+        super::statement_policy::ensure_statement_is_writable(&self.layout, &statement)?;
         if let Some(domain_id) = &domain_id {
             self.ensure_node_exists(&scope_id, NodeType::Domain, domain_id, "--domain-id")?;
         }
