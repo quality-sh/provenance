@@ -106,3 +106,20 @@ async fn impact_says_when_the_scan_was_cut() {
     assert_eq!(cut.stamp.live, ["scanned_sites"]);
     assert_eq!(cut.stamp.serial, whole.stamp.serial);
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn direct_reader_accepts_an_alias_of_the_repository_root() {
+    let store = TestStore::pinned();
+    let alias_dir = tempfile::tempdir().unwrap();
+    let alias = alias_dir.path().join("repository");
+    std::os::unix::fs::symlink(&store.root, &alias).unwrap();
+    let alias = camino::Utf8PathBuf::from_path_buf(alias).unwrap();
+    let answer = reader::answer(&alias, &store.scope, ReadPolicy::default(), |ctx| {
+        Box::pin(async move { impact::impact(ctx, query("req_overtime")).await })
+    })
+    .await
+    .unwrap();
+    assert!(!answer.result.affected_rules.is_empty());
+    assert!(answer.stamp.live.iter().any(|part| part == "scanned_sites"));
+}

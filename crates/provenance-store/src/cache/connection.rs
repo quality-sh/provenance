@@ -16,7 +16,6 @@ use sqlx::SqlitePool;
 use std::fs::{File, OpenOptions};
 use std::io::ErrorKind;
 use std::path::Path;
-use std::str::FromStr;
 use std::time::Duration;
 
 /// How often a close retries the close lock while another close holds it.
@@ -166,13 +165,13 @@ pub async fn open_cache_with(
     retry: WalSwitchRetry,
 ) -> anyhow::Result<CacheConnection> {
     std::fs::create_dir_all(layout.cache_dir())?;
-    CacheConnection::connect(cache_options(layout)?.create_if_missing(true), false, retry).await
+    CacheConnection::connect(cache_options(layout).create_if_missing(true), false, retry).await
 }
 
 /// Opens the cache database only when the file exists.
 pub async fn open_existing_cache(layout: &ProvenanceLayout) -> anyhow::Result<CacheConnection> {
     CacheConnection::connect(
-        cache_options(layout)?.create_if_missing(false),
+        cache_options(layout).create_if_missing(false),
         false,
         WalSwitchRetry::default(),
     )
@@ -184,7 +183,7 @@ pub async fn open_existing_cache(layout: &ProvenanceLayout) -> anyhow::Result<Ca
 /// file, and an immutable open needs neither.
 pub async fn open_immutable_cache(layout: &ProvenanceLayout) -> anyhow::Result<CacheConnection> {
     CacheConnection::connect(
-        cache_options(layout)?
+        cache_options(layout)
             .create_if_missing(false)
             .read_only(true)
             .immutable(true),
@@ -205,11 +204,10 @@ pub async fn open_stored_cache(layout: &ProvenanceLayout) -> anyhow::Result<Cach
     }
 }
 
-pub fn cache_options(layout: &ProvenanceLayout) -> anyhow::Result<SqliteConnectOptions> {
-    Ok(
-        SqliteConnectOptions::from_str(&format!("sqlite://{}", layout.cache_db_path()))?
-            .journal_mode(SqliteJournalMode::Wal),
-    )
+pub fn cache_options(layout: &ProvenanceLayout) -> SqliteConnectOptions {
+    SqliteConnectOptions::new()
+        .filename(layout.cache_db_path())
+        .journal_mode(SqliteJournalMode::Wal)
 }
 
 /// Connects, retrying while the switch to WAL is refused as busy. The
@@ -357,5 +355,19 @@ pub fn permission_failure(layout: &ProvenanceLayout, error: &anyhow::Error) -> b
                 )
             }),
         _ => false,
+    }
+}
+
+#[cfg(test)]
+mod path_tests {
+    use super::*;
+
+    #[test]
+    fn database_filename_is_not_parsed_as_a_url() {
+        for root in [r"C:\repo?mode=ro", r"\\?\C:\repo", "/tmp/repo?mode=ro"] {
+            let layout = ProvenanceLayout::new(root);
+            let options = cache_options(&layout);
+            assert_eq!(options.get_filename(), layout.cache_db_path().as_std_path());
+        }
     }
 }

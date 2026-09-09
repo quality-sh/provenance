@@ -149,9 +149,10 @@ pub async fn answer<R: Send>(
     policy: ReadPolicy,
     run: impl for<'c> FnOnce(&'c ReadContext) -> ReadFuture<'c, R> + Send,
 ) -> anyhow::Result<Stamped<R>> {
-    let layout = ProvenanceLayout::new(repo.to_path_buf());
+    let repo = super::canonical_repository(repo)?;
+    let layout = ProvenanceLayout::new(repo.clone());
     let fresh = freshness::run(&layout, scope, policy.freshness).await?;
     fresh
-        .complete(&layout, repo, scope, policy.scan_limit, run)
+        .complete(&layout, &repo, scope, policy.scan_limit, run)
         .await
 }

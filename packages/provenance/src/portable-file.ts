@@ -1,3 +1,4 @@
+import { realpathSync } from 'node:fs';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 
 /** Converts local coordinates; host file access remains a separate check. */
@@ -8,9 +9,14 @@ export function portableFile(file: string, localRoot: string | undefined): strin
   }
   const root = resolve(localRoot);
   const target = resolve(root, file);
-  const path = relative(root, target);
-  if (!path || path === '..' || path.startsWith('..' + sep) || isAbsolute(path)) {
-    throw new Error('Local file is outside the configured project root');
+  let path = relative(root, target);
+  if (!inside(path)) {
+    path = relative(realpathSync(root), target);
   }
+  if (!inside(path)) throw new Error('Local file is outside the configured project root');
   return path.split(sep).join('/');
+}
+
+function inside(path: string): boolean {
+  return !!path && path !== '..' && !path.startsWith('..' + sep) && !isAbsolute(path);
 }
