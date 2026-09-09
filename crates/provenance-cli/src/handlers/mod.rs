@@ -105,6 +105,7 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
         Command::Wiki { command } => {
             wiki::handle(command).await?;
         }
+        Command::Review(options) => crate::review::run(options).await?,
         Command::Materialize { repo, format } => {
             materialize::handle(repo, format).await?;
         }

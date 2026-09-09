@@ -35,13 +35,15 @@ provenance-macros.workspace = true
 provenance-scanner.workspace = true
 provenance-ste100.workspace = true
 provenance-store.workspace = true
+provenance-transport = { path = "../provenance-transport", version = "0.2.2" }
 remove_dir_all.workspace = true
 rustix.workspace = true
 same-file.workspace = true
 semver.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["signal"] }
+uuid.workspace = true
 ureq.workspace = true
 url.workspace = true
 walkdir.workspace = true

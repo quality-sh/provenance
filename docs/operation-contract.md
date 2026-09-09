@@ -132,9 +132,9 @@ fields describe the supplied record and do not authenticate a human actor.
 uses one existing Store operation. Several calls do not form one transaction.
 
 No unified discussion outcome, fuzzy matching, default placement policy,
-edit history, content journal, or new persisted relationship is added. All
-repository listeners remain explicit isolated fixtures pending production
-access control.
+edit history, content journal, or new persisted relationship is added. The CLI
+review host can expose these operations for its explicitly configured local
+caller. See [local review host](review-host.md).
 
 ## Existing discussions
 
@@ -274,8 +274,9 @@ that uncertainty and must not retry a mutation automatically.
 
 ## Fixture access
 
-Repository host construction is available only with the `test-fixture`
-feature and an explicit `FixtureAccess` policy. Each policy has a fixed map
+Test repository host construction uses the `test-fixture` feature and an
+explicit `FixtureAccess` policy. Production construction uses `LocalAccess`
+through the CLI review host. Each fixture policy has a fixed map
 of opaque targets to configured roots, explicit target/scope grants, a
 credential, and an expected Host value. Requests cannot supply filesystem
 roots. Duplicate or malformed target configuration is refused at startup.
@@ -289,9 +290,9 @@ Denied calls leave repository file bytes and directory entries unchanged.
 Caller-owned MCP fixture streams represent the configured test principal;
 unavailable or denied tools are not advertised and direct selection refuses.
 
-The default host remains data-free. This fixture policy does not implement
-production RBAC or authorize a real repository listener. Production repository
-exposure remains unavailable pending the approved access implementation.
+The default host remains data-free. Fixture access does not authorize a
+production listener. The [local review host](review-host.md) defines production
+caller authentication, one repository and scope grant, and same-origin access.
 
 ## Generation
 
@@ -324,8 +325,8 @@ paths in the Git index.
 
 ## Development host
 
-The listeners are isolated test fixtures. The client test runner starts each
-fixture explicitly, waits
+The client test listeners are isolated fixtures. The client test runner starts
+each fixture explicitly, waits
 for its selected loopback address, runs both clients, and stops the fixture.
 
 ```sh
@@ -357,13 +358,14 @@ they lose a mutation response or cannot decode it. They never replay the write.
 
 Package installation still supplies the native engine and binary shim. Packed
 tests connect explicitly to a source-checkout fixture host; they do not prove a
-production repository host is available from the installed package. The host
-configuration and access milestones must pass before releasing this migration.
+complete review document is available from the installed package. The CLI now
+provides the production local host; the browser bundle and document integration
+have separate delivery contracts.
 
 The operation-protocol change does not change legacy disposition grants or
 consume their migration window. The later `provenance-cvs` release owns that
 window. State schema, read derivation, and `graph-reference-v1` remain separate.
 
 See [repository evidence access](operation-file-access.md) for held-file behavior,
-MCP list wrapping, and the control-data trust assumptions. Real repository
-hosting remains gated.
+MCP list wrapping, and the control-data trust assumptions. See
+[local review host](review-host.md) for production hosting and asset packaging.

@@ -171,3 +171,9 @@ A named repository that a host makes available to a caller. Its name identifies 
 ## Working-copy graph
 
 The canonical graph saved in a selected repository, including saved changes that are not committed to Git.
+
+## Local caller
+
+The person who starts a local review host and the clients to which that person
+gives access. They share access to the repository target and scope selected for
+that host session.

@@ -6,7 +6,7 @@ use std::{
 
 use serde_json::Value;
 
-const CRATE_ORDER: [&str; 8] = [
+const CRATE_ORDER: [&str; 9] = [
     "provenance-macros",
     "provenance-core",
     "provenance-scanner",
@@ -14,6 +14,7 @@ const CRATE_ORDER: [&str; 8] = [
     "provenance-store",
     "provenance-sdk",
     "provenance-http-client",
+    "provenance-transport",
     "provenance-cli",
 ];
 
@@ -175,6 +176,16 @@ fn cli_package_contains_its_embedded_skills() {
         String::from_utf8_lossy(&output.stderr),
     );
     let files = String::from_utf8(output.stdout).expect("package file list is UTF-8");
+    for file in [
+        "build/review_assets.rs",
+        "review-assets/index.html",
+        "src/review.rs",
+    ] {
+        assert!(
+            files.lines().any(|entry| entry == file),
+            "CLI package omits {file}"
+        );
+    }
     for skill in [
         "provenance-fork-tournament",
         "provenance-grounded-writing",
