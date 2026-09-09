@@ -144,6 +144,10 @@ fn release_workflow_uses_npm_trusted_publishing_without_a_token() {
         .1;
 
     assert!(npm_job.contains("id-token: write"));
+    assert!(
+        npm_job.contains("runs-on: ubuntu-latest"),
+        "npm provenance requires a GitHub-hosted publisher"
+    );
     assert!(npm_job.contains("npm install --global npm@^11.5.1"));
     assert!(!workflow.contains("NPM_TOKEN"));
     assert!(!workflow.contains("NODE_AUTH_TOKEN"));
