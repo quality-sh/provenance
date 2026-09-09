@@ -26,7 +26,6 @@ export function enginePackageFor(host: EngineHost): string {
   return packageName;
 }
 
-// @provenance rule: rule_sdk_package_supplies_engine
 export function resolveEnginePath(
   override?: string,
   options: ResolutionOptions = {},
