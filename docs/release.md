@@ -29,6 +29,7 @@ The workflow publishes these Rust crates to crates.io:
 - `provenance-ste100`
 - `provenance-store`
 - `provenance-sdk`
+- `provenance-http-client`
 - `provenance-cli`
 
 The `crates-io` GitHub environment protects publication. Each crate must trust
@@ -48,8 +49,14 @@ Update the crate and npm package versions. Verify the crate archives before you
 tag the release:
 
 ```sh
-cargo package --workspace --locked
+git diff --exit-code HEAD --
+test -z "$(git ls-files --others --exclude-standard)"
+cargo package --workspace --locked --allow-dirty
 ```
+
+Generated client source stays outside Git and enters the crate archives. Cargo
+requires `--allow-dirty` for those files. The preceding checks reject changes to
+tracked source and untracked files that Git does not ignore.
 
 - [ ] On the release commit, run the timing report command below once. Compare
   the `repository_state` rows with the previous release's notes, meet the
