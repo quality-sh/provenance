@@ -114,3 +114,29 @@ fn get_refuses_a_request_written_for_another_protocol_version() {
         "error should name both versions: {error}"
     );
 }
+
+#[test]
+fn native_validation_errors_keep_the_original_single_error_line() {
+    let directory = init_repo();
+    let repo = directory.path().to_str().unwrap();
+    for (operation, request, expected) in [
+        (
+            "search",
+            json!({"text":"shared","limit":0}),
+            "Error: limit must be between 1 and 200\n".to_owned(),
+        ),
+        (
+            "get",
+            json!({"node_type":"rule","id":"rule_missing","protocol_version":6}),
+            format!(
+                "Error: request names protocol version 6; this engine speaks {}\n",
+                provenance_core::SDK_PROTOCOL_VERSION
+            ),
+        ),
+    ] {
+        let (ok, stdout, stderr) = fixtures::sdk_raw(repo, operation, &request);
+        assert!(!ok);
+        assert!(stdout.is_empty());
+        assert_eq!(stderr, expected);
+    }
+}

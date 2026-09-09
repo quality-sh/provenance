@@ -145,8 +145,6 @@ pub(super) fn request_set(base: &str) -> Vec<Request> {
         resolve("src/pay.rs", None, Some(2)),
         resolve("src/rates.rs", None, None),
         resolve("src/none.rs", None, None),
-        resolve("./src/pay.rs", None, None),
-        resolve("../src/pay.rs", None, Some(1)),
     ]);
     set
 }

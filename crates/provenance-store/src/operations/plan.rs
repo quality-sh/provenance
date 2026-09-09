@@ -17,6 +17,7 @@ pub use evidence::{ReviewReason, RuleEvidence};
 ///
 /// `TypedSpecPlan` flattens `TypedSpecResult`, so `TypedSpecResult` must
 /// never gain `deny_unknown_fields`.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Deserialize, Serialize)]
 pub struct TypedSpecPlan {
     #[serde(flatten)]
@@ -24,6 +25,7 @@ pub struct TypedSpecPlan {
     pub affected_rules: Vec<AffectedRule>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Deserialize, Serialize)]
 pub struct AffectedRule {
     #[serde(flatten)]
@@ -57,7 +59,9 @@ pub(super) fn typed_spec(
     changed_rules.extend(reviews.rules.iter().cloned());
     changed_rules.sort_by(|left, right| left.as_str().cmp(right.as_str()));
     changed_rules.dedup();
-    let scans = provenance_scanner::scan_path(repo)?;
+    let scans = super::files::RepositoryFiles::open(repo)?
+        .scan_tree(usize::MAX)?
+        .0;
     let bindings = store.active_verification_bindings(scope)?;
     let implementation_changes = reconciliation
         .resources

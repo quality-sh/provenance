@@ -13,6 +13,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertPackedConsumerScan } from "./packed-consumer-scan.js";
 import { createPackedCommands } from "./packed-install-commands.js";
+import { startFixtureHost } from "./fixture-host.js";
 import { verifyPackedSteOnboarding } from "./packed-ste-onboarding.js";
 
 const packageRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -93,7 +94,7 @@ npm(
   { cwd: application },
 );
 
-// The second line of the quick start, run as written through the installed bin.
+// Initialize the isolated project through the installed package bin.
 provenance(["--quiet", "init", "--path", ".", "--scope", "default", "--path-prefix", "."], application);
 const projectManifest = JSON.parse(
   readFileSync(join(application, ".provenance", "state", "manifest.json"), "utf8"),
@@ -234,17 +235,17 @@ import { apply, defineSpec, plan, requirement, rule, source } from "@quality-sh/
 import { startWorkflow, WorkflowRunner } from "./runtime.mjs";
 const spec = defineSpec("packed-install", ({ requirement }) => {
   const installed = requirement("installed", {
-    statement: "The installed SDK invokes its package-supplied engine"
+    statement: "The installed SDK connects to an explicit fixture host"
   });
   const invocation = installed.rule("invocation", {
-    statement: "Typed SDK operations reach the packaged Rust engine"
+    statement: "Typed SDK operations reach the shared Rust handlers"
   });
   return { installed, invocation };
 });
 const preview = await plan(spec);
-if (preview.created !== 2) throw new Error("plan did not reach the packaged engine");
+if (preview.created !== 2) throw new Error("plan did not reach the fixture host");
 const result = await apply(spec);
-if (result.created !== 2) throw new Error("apply did not reach the packaged engine");
+if (result.created !== 2) throw new Error("apply did not reach the fixture host");
 await spec.handles.invocation.verify("packed-install", () => undefined, {
   file: "verify.mjs",
   symbol: "packedInstall"
@@ -290,11 +291,15 @@ await typedSpec.requirements["typed-implementation"].rules["typed-start"].verify
 `);
 
 const { PROVENANCE_BIN: _removed, ...environment } = process.env;
-execFileSync(process.execPath, [join(application, "verify.mjs")], {
-  cwd: application,
-  env: { ...environment, PATH: "" },
-  stdio: "pipe",
-});
+// This source-checkout fixture is explicit; no production host command is approved.
+const fixture = await startFixtureHost({ root: application, repositoryId: "packed-install" });
+try {
+  execFileSync(process.execPath, [join(application, "verify.mjs")], {
+    cwd: application,
+    env: { ...environment, ...fixture.environment, PATH: "" },
+    stdio: "pipe",
+  });
+} finally { await fixture.close(); }
 const runs = JSON.parse(execFileSync(localEngine, [
   "sdk", "verification-runs", "--repo", application, "--scope", "default", "--format", "json",
 ], { encoding: "utf8" }));

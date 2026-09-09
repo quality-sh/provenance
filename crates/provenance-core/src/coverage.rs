@@ -37,6 +37,7 @@ pub enum AnchorState {
 }
 
 /// How one graph evidence path relates to a selected Git diff.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EvidenceDiffState {
@@ -48,6 +49,7 @@ pub enum EvidenceDiffState {
 }
 
 /// The graph relationship that makes a path evidence.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EvidenceSiteKind {
@@ -58,10 +60,12 @@ pub enum EvidenceSiteKind {
 }
 
 /// One graph-cited evidence site resolved against both ends of a diff.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub struct EvidenceDiffSite {
     pub kind: EvidenceSiteKind,
     pub subject_id: String,
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub file_path: Utf8PathBuf,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub line: Option<usize>,
@@ -69,11 +73,13 @@ pub struct EvidenceDiffSite {
     pub end_line: Option<usize>,
     pub state: EvidenceDiffState,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
     pub original_file_path: Option<Utf8PathBuf>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub original_line: Option<usize>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub struct EvidenceDiffSummary {
     pub total_sites: usize,

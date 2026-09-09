@@ -11,6 +11,7 @@ const fn is_false(value: &bool) -> bool {
 }
 
 /// How a verification binding supports its Rule.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum VerificationMethod {
@@ -52,8 +53,10 @@ impl FromStr for VerificationMethod {
 }
 
 /// One owner-local path to a language-authored declaration.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(transparent)]
+#[cfg_attr(feature = "schema", schemars(extend("minItems" = 1, "items" = serde_json::json!({"type": "string", "pattern": "\\S"}))))]
 pub struct DeclarationAddress(Vec<String>);
 
 impl DeclarationAddress {
@@ -81,6 +84,7 @@ impl<'de> Deserialize<'de> for DeclarationAddress {
 }
 
 /// The lifecycle state of one callback-backed verification run.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum VerificationRunStatus {
@@ -104,6 +108,7 @@ impl VerificationRunStatus {
 /// Runs live in Provenance's derived cache rather than canonical state: a
 /// local test run must not dirty the repository. `rule_id` is the join back
 /// to the canonical graph.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VerificationRun {
     pub schema_version: SchemaVersion,
@@ -115,6 +120,7 @@ pub struct VerificationRun {
     pub method: String,
     pub declared_by: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
     pub file: Option<Utf8PathBuf>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub symbol: Option<String>,
@@ -129,6 +135,7 @@ pub struct VerificationRun {
 }
 
 /// One durable language-authored relationship from a code site to a Rule.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ProjectionRow)]
 #[table("verification_bindings")]
 pub struct VerificationBinding {
@@ -141,6 +148,7 @@ pub struct VerificationBinding {
     pub declared_by: String,
     #[serde(default, skip_serializing_if = "is_false")]
     pub retired: bool,
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub file: Utf8PathBuf,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub symbol: Option<String>,
@@ -151,6 +159,7 @@ pub struct VerificationBinding {
 ///
 /// The record keeps why review was asked for. A verification run arriving
 /// after the change clears it in place rather than removing the reason.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ProjectionRow)]
 #[table("requirement_reviews")]
 pub struct RequirementReview {
@@ -171,6 +180,7 @@ pub struct RequirementReview {
 
 /// One canonical primary implementation relationship from an exported
 /// production symbol to a Rule.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ProjectionRow)]
 #[table("implementation_bindings")]
 pub struct ImplementationBinding {
@@ -181,6 +191,7 @@ pub struct ImplementationBinding {
     pub declared_by: String,
     #[serde(default, skip_serializing_if = "is_false")]
     pub retired: bool,
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub file: Utf8PathBuf,
     pub symbol: String,
 }

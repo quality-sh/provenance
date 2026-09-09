@@ -1,5 +1,6 @@
 use super::{AddSourceReferenceInput, CreateRequirementInput, CreateSourceInput, StateStore};
 use crate::shards;
+use crate::write_error::{SourceFailure, WriteFailure};
 use provenance_core::{
     validate_optional_commit_pin, NodeType, Requirement, ScopeId, Source, SourceReference,
     StableId, SUPPORTED_SCHEMA_VERSION,
@@ -21,7 +22,8 @@ impl StateStore {
             origin_thread,
             origin_message,
         } = input;
-        let commit_pin = validate_optional_commit_pin(commit_pin)?;
+        let commit_pin = validate_optional_commit_pin(commit_pin)
+            .map_err(|error| SourceFailure::wrap(WriteFailure::InvalidCommitPin, error))?;
         for older in &supersedes {
             self.ensure_node_exists(&scope_id, NodeType::Source, older, "--supersedes")?;
         }
@@ -46,7 +48,8 @@ impl StateStore {
                 origin_thread,
                 origin_message,
             };
-            anyhow::ensure!(
+            crate::write_error::ensure!(
+                AlreadyExists,
                 !records.iter().any(|record| record.id == source.id),
                 "source already exists"
             );
@@ -114,7 +117,8 @@ impl StateStore {
                 origin_thread,
                 origin_message,
             };
-            anyhow::ensure!(
+            crate::write_error::ensure!(
+                AlreadyExists,
                 !records.iter().any(|record| record.id == requirement.id),
                 "requirement already exists"
             );
@@ -163,7 +167,8 @@ impl StateStore {
             requirement_id,
             clause,
         } = input;
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            MissingReference,
             self.list_sources(&scope_id)?
                 .iter()
                 .any(|source| source.id == source_id),
@@ -179,9 +184,12 @@ impl StateStore {
                     .iter_mut()
                     .find(|requirement| requirement.id == requirement_id)
                     .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "requirement {} does not exist (--requirement-id)",
-                            requirement_id.as_str()
+                        SourceFailure::wrap(
+                            WriteFailure::MissingReference,
+                            anyhow::anyhow!(
+                                "requirement {} does not exist (--requirement-id)",
+                                requirement_id.as_str()
+                            ),
                         )
                     })?;
                 if !requirement

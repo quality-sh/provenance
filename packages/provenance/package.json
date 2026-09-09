@@ -38,6 +38,11 @@
       "types": "./dist/rules.d.ts",
       "import": "./dist/rules.js",
       "default": "./dist/rules.js"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.js",
+      "default": "./dist/client.js"
     }
   },
   "engines": {
@@ -52,14 +57,15 @@
     "typescript": "^5.9.3"
   },
   "scripts": {
-    "build": "node scripts/generate-release-consumers.js --check && tsc -p tsconfig.json",
+    "build": "npm run prepare:generated && node scripts/clean-build.js && node scripts/generate-release-consumers.js --check && tsc -p tsconfig.json && node scripts/copy-client-validators.js",
     "generate:release-consumers": "node scripts/generate-release-consumers.js",
     "prepack": "npm run build && node -e \"require('node:fs').copyFileSync('../../LICENSE', 'LICENSE')\"",
     "test": "npm run build && npm run test:runtime && npm run test:types && npm run test:packed",
-    "test:runtime": "tsc -p tsconfig.test.json && node --test .test-dist/*.test.js scripts/*.test.js",
-    "test:types": "node scripts/typecheck-fixtures.mjs",
+    "test:runtime": "npm run prepare:generated && node scripts/clean-build.js .test-dist && tsc -p tsconfig.test.json && node scripts/copy-client-validators.js .test-dist && node --test .test-dist/*.test.js scripts/*.test.js",
+    "test:types": "npm run prepare:generated && node scripts/typecheck-fixtures.mjs",
     "test:bun": "npm run build && bun test test/bun/tail-call.test.ts",
-    "test:packed": "node scripts/test-packed-install.js"
+    "test:packed": "npm run prepare:generated && node scripts/test-packed-install.js",
+    "prepare:generated": "node scripts/prepare-generated.js"
   },
   "devDependencies": {
     "@types/node": "^26.2.0"

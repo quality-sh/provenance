@@ -18,6 +18,7 @@ const fn is_false(value: &bool) -> bool {
     !*value
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Relations, ProjectionRow)]
 #[table("sources")]
 pub struct Source {
@@ -71,6 +72,7 @@ pub struct Source {
     pub origin_message: Option<StableId>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SourceReference {
     #[serde(alias = "sourceId")]
@@ -79,6 +81,7 @@ pub struct SourceReference {
     pub clause: Option<String>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Relations, ProjectionRow)]
 #[table("requirements")]
 pub struct Requirement {
@@ -134,6 +137,7 @@ pub struct Requirement {
     pub origin_message: Option<StableId>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "ResolutionInputFields")]
 pub struct ResolutionInput {
@@ -147,6 +151,7 @@ pub struct ResolutionInput {
 /// reads this, the conversion below either builds the record or refuses it, so
 /// a blank input cannot enter the graph through a file the way it can through
 /// a struct literal.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Deserialize)]
 struct ResolutionInputFields {
     #[serde(alias = "inputType")]
@@ -168,6 +173,7 @@ impl TryFrom<ResolutionInputFields> for ResolutionInput {
     }
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Relations, ProjectionRow)]
 #[table("resolutions")]
 pub struct Resolution {
@@ -224,6 +230,7 @@ pub struct Resolution {
     pub origin_message: Option<StableId>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Relations, ProjectionRow)]
 #[table("rules")]
 pub struct Rule {

@@ -23,14 +23,17 @@ fn is_well_formed_id(value: &str) -> bool {
             .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_' || ch == '-')
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct SchemaVersion(pub u32);
 
 /// A scope id. The inner `String` is private and `new` is the only way in, so
 /// every `ScopeId` in existence satisfies [`is_well_formed_id`].
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(transparent)]
+#[cfg_attr(feature = "schema", schemars(extend("pattern" = "^[a-z0-9_-]+$")))]
 pub struct ScopeId(String);
 
 impl ScopeId {
@@ -63,8 +66,10 @@ impl<'de> Deserialize<'de> for ScopeId {
 
 /// A stable artifact id. The inner `String` is private and `new` is the only
 /// way in, so every `StableId` in existence satisfies [`is_well_formed_id`].
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(transparent)]
+#[cfg_attr(feature = "schema", schemars(extend("pattern" = "^[a-z0-9_-]+$")))]
 pub struct StableId(String);
 
 impl StableId {

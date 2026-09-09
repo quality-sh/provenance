@@ -163,3 +163,11 @@ A group of canonical files with one stored digest. Each manifest scope has one u
 ## Moved unit
 
 A hash unit whose live digest differs from its stored digest. A new unit has no stored digest. A departed unit has no live digest.
+
+## Repository target
+
+A named repository that a host makes available to a caller. Its name identifies the selected repository without identifying its filesystem location.
+
+## Working-copy graph
+
+The canonical graph saved in a selected repository, including saved changes that are not committed to Git.

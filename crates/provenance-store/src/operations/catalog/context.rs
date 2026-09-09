@@ -1,0 +1,161 @@
+//! Resources required before an operation can run.
+use crate::operations::read_policy::ReadPolicy;
+use camino::Utf8PathBuf;
+use provenance_core::{
+    protocol::{
+        failure::OperationFailure,
+        repository::{RepositoryContext, RepositoryScope, RepositoryTarget},
+    },
+    ScopeId,
+};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExecutionNeed {
+    GraphStorage,
+    Dictionary,
+    RepositoryFiles,
+    Git,
+    RunStorage,
+    ProjectionMaintenance,
+}
+pub type ExecutionNeeds = &'static [ExecutionNeed];
+
+/// A native caller or an authorized host supplies the resolved binding once.
+#[derive(Debug, Clone)]
+pub struct PreparedContext {
+    read: Option<PreparedRead>,
+    scope: Option<PreparedScope>,
+    repository: Option<PreparedRepository>,
+}
+#[derive(Debug, Clone)]
+pub struct PreparedRepository {
+    pub root: Utf8PathBuf,
+    pub requested_target: String,
+}
+#[derive(Debug, Clone)]
+pub struct PreparedScope {
+    pub root: Utf8PathBuf,
+    pub scope: ScopeId,
+    pub requested_target: String,
+}
+#[derive(Debug, Clone)]
+pub struct PreparedRead {
+    pub root: Utf8PathBuf,
+    pub scope: ScopeId,
+    pub policy: ReadPolicy,
+    pub requested_target: String,
+    pub external: bool,
+}
+impl PreparedContext {
+    pub const fn data_free() -> Self {
+        Self {
+            read: None,
+            scope: None,
+            repository: None,
+        }
+    }
+    pub fn read(read: PreparedRead) -> Self {
+        Self {
+            repository: Some(PreparedRepository {
+                root: read.root.clone(),
+                requested_target: read.requested_target.clone(),
+            }),
+            scope: Some(PreparedScope {
+                root: read.root.clone(),
+                scope: read.scope.clone(),
+                requested_target: read.requested_target.clone(),
+            }),
+            read: Some(read),
+        }
+    }
+    pub const fn for_repository(repository: PreparedRepository) -> Self {
+        Self {
+            repository: Some(repository),
+            read: None,
+            scope: None,
+        }
+    }
+    pub fn for_scope(scope: PreparedScope) -> Self {
+        Self {
+            repository: Some(PreparedRepository {
+                root: scope.root.clone(),
+                requested_target: scope.requested_target.clone(),
+            }),
+            read: None,
+            scope: Some(scope),
+        }
+    }
+    pub(super) fn scope(self) -> Result<PreparedScope, OperationFailure> {
+        self.scope.ok_or(OperationFailure::UnavailableNeeds)
+    }
+    pub(super) fn repository(self) -> Result<PreparedRepository, OperationFailure> {
+        self.repository.ok_or(OperationFailure::UnavailableNeeds)
+    }
+    pub(super) fn graph(self) -> Result<PreparedRead, OperationFailure> {
+        self.read.ok_or(OperationFailure::UnavailableNeeds)
+    }
+    pub(super) const fn validate_kind(&self, kind: ContextKind) -> Result<(), OperationFailure> {
+        let valid = match kind {
+            ContextKind::DataFree => {
+                self.repository.is_none() && self.scope.is_none() && self.read.is_none()
+            }
+            ContextKind::Repository => self.repository.is_some(),
+            ContextKind::Scope => self.scope.is_some(),
+            ContextKind::Scoped => self.read.is_some(),
+        };
+        if valid {
+            Ok(())
+        } else {
+            Err(OperationFailure::UnavailableNeeds)
+        }
+    }
+    pub(super) fn prepare(self, needs: ExecutionNeeds) -> Result<Self, OperationFailure> {
+        if needs.iter().all(|need| match need {
+            ExecutionNeed::Dictionary
+            | ExecutionNeed::GraphStorage
+            | ExecutionNeed::Git
+            | ExecutionNeed::RunStorage => self.repository.is_some(),
+            ExecutionNeed::ProjectionMaintenance => self.read.is_some(),
+            ExecutionNeed::RepositoryFiles => self.repository.is_some() && cfg!(any(unix, windows)),
+        }) {
+            Ok(self)
+        } else {
+            Err(OperationFailure::UnavailableNeeds)
+        }
+    }
+}
+
+/// Hosts authorize the selected target before reading settings or preparing storage.
+pub trait ContextResolver: Send + Sync {
+    fn prepare(
+        &self,
+        operation: &'static str,
+        context: RequestedContext,
+        needs: ExecutionNeeds,
+    ) -> Result<PreparedContext, OperationFailure>;
+}
+pub(super) struct NoRepositories;
+impl ContextResolver for NoRepositories {
+    fn prepare(
+        &self,
+        _: &'static str,
+        _: RequestedContext,
+        _: ExecutionNeeds,
+    ) -> Result<PreparedContext, OperationFailure> {
+        Err(OperationFailure::UnavailableNeeds)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ContextKind {
+    DataFree,
+    Repository,
+    Scoped,
+    Scope,
+}
+#[derive(Debug, Clone)]
+pub enum RequestedContext {
+    Repository(RepositoryTarget),
+    Scoped(RepositoryContext),
+    Scope(RepositoryScope),
+}

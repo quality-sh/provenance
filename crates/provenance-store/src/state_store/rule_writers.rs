@@ -30,7 +30,8 @@ impl StateStore {
             origin_thread,
             origin_message,
         } = input;
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            MissingReference,
             !requirement_ids.is_empty(),
             "{}",
             required_refusal(declared::<Resolution>("requirement_ids"))
@@ -71,7 +72,8 @@ impl StateStore {
                 origin_thread,
                 origin_message,
             };
-            anyhow::ensure!(
+            crate::write_error::ensure!(
+                AlreadyExists,
                 !records.iter().any(|record| record.id == resolution.id),
                 "resolution already exists"
             );
@@ -103,7 +105,8 @@ impl StateStore {
             origin_message,
         } = input;
         super::statement_policy::ensure_statement_is_writable(&self.layout, &statement)?;
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            MissingReference,
             !requirement_ids.is_empty(),
             "{}",
             required_refusal(declared::<Rule>("requirement_ids"))
@@ -147,7 +150,8 @@ impl StateStore {
                 origin_thread,
                 origin_message,
             };
-            anyhow::ensure!(
+            crate::write_error::ensure!(
+                AlreadyExists,
                 !records.iter().any(|record| record.id == rule.id),
                 "rule already exists"
             );

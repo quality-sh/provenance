@@ -63,6 +63,7 @@ jobs:
         id: contract
         shell: bash
         run: |
+          node packages/provenance/scripts/generate-release-consumers.js --runtime-only
           node packages/provenance/scripts/generate-release-consumers.js --check
           version="${GITHUB_REF_NAME#v}"
           source .github/scripts/release-smoke/lib.sh
@@ -70,6 +71,18 @@ jobs:
           bash .github/scripts/verify-release-versions.sh "$GITHUB_REF_NAME"
           python3 .github/scripts/release-contract.py \
             "$version" .github/release-targets.json >> "$GITHUB_OUTPUT"
+
+      - run: npm ci --prefix tools/operation-codegen
+      - run: node tools/operation-codegen/generate.mjs
+      - name: Archive generated release source
+        run: |
+          mkdir -p target/operation-artifact
+          tar -czf target/operation-artifact/operation-generated.tar.gz contracts/operations packages/provenance/src/generated crates/provenance-http-client/src/generated
+      - uses: actions/upload-artifact@v7
+        with:
+          name: operation-generated
+          path: target/operation-artifact/operation-generated.tar.gz
+          retention-days: 1
 
   build:
     name: Build ${{ matrix.target }}
@@ -183,6 +196,13 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: operation-generated
+          path: target/operation-artifact
+      - name: Restore generated operation source
+        shell: bash
+        run: tar -xzf target/operation-artifact/operation-generated.tar.gz
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
         with:
           # Cargo generates the archive checksum. Keep this version fixed so
@@ -206,6 +226,7 @@ jobs:
             provenance-ste100 \
             provenance-store \
             provenance-sdk \
+            provenance-http-client \
             provenance-cli
           do
             bash .github/scripts/publish-cargo-if-missing.sh \
@@ -227,6 +248,13 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: operation-generated
+          path: target/operation-artifact
+      - name: Restore generated operation source
+        shell: bash
+        run: tar -xzf target/operation-artifact/operation-generated.tar.gz
       - uses: actions/setup-node@v7
         with:
           node-version: 22

@@ -2,17 +2,18 @@ use std::io::Read as _;
 
 use crate::cli::sdk::SdkCommand;
 use crate::output;
-use provenance_core::{ScopeId, StableId};
 use provenance_store::operations;
 use provenance_store::state_store::{BeginVerificationInput, CompleteVerificationInput};
 
+mod authoring;
 mod check_statement;
 mod query;
 mod render;
+mod verification_lists;
 
 pub(super) async fn handle(command: SdkCommand) -> anyhow::Result<()> {
     match command {
-        SdkCommand::CheckStatement { format } => check_statement::handle(format)?,
+        SdkCommand::CheckStatement { format } => check_statement::handle(format).await?,
         SdkCommand::Info { repo, format } => {
             output::print(format, &operations::engine_info(repo)?)?;
         }
@@ -21,9 +22,9 @@ pub(super) async fn handle(command: SdkCommand) -> anyhow::Result<()> {
             scope,
             format,
         } => {
-            let repo = Some(operations::discover_repository(repo)?);
+            let repo = operations::discover_repository(repo)?;
             let input = read_stdin_json()?;
-            let plan = operations::plan(repo, &ScopeId::new(scope)?, input)?;
+            let plan = authoring::invoke::<operations::catalog::Plan>(repo, scope, input).await?;
             match format {
                 output::OutputFormat::Json | output::OutputFormat::Jsonl => {
                     output::print(format, &plan)?;
@@ -40,9 +41,10 @@ pub(super) async fn handle(command: SdkCommand) -> anyhow::Result<()> {
             scope,
             format,
         } => {
-            let repo = Some(operations::discover_repository(repo)?);
+            let repo = operations::discover_repository(repo)?;
             let input = read_stdin_json()?;
-            let result = operations::apply(repo, &ScopeId::new(scope)?, input)?;
+            let result =
+                authoring::invoke::<operations::catalog::Apply>(repo, scope, input).await?;
             output::print(format, &result)?;
         }
         SdkCommand::BeginVerification {
@@ -50,9 +52,11 @@ pub(super) async fn handle(command: SdkCommand) -> anyhow::Result<()> {
             scope,
             format,
         } => {
-            let repo = Some(operations::discover_repository(repo)?);
+            let repo = operations::discover_repository(repo)?;
             let input = read_stdin_json::<BeginVerificationInput>()?;
-            let run = operations::begin_verification(repo, ScopeId::new(scope)?, input)?;
+            let run =
+                authoring::invoke::<operations::catalog::BeginVerification>(repo, scope, input)
+                    .await?;
             output::print(format, &run)?;
         }
         SdkCommand::CompleteVerification {
@@ -60,9 +64,11 @@ pub(super) async fn handle(command: SdkCommand) -> anyhow::Result<()> {
             scope,
             format,
         } => {
-            let repo = Some(operations::discover_repository(repo)?);
+            let repo = operations::discover_repository(repo)?;
             let input = read_stdin_json::<CompleteVerificationInput>()?;
-            let run = operations::complete_verification(repo, &ScopeId::new(scope)?, input)?;
+            let run =
+                authoring::invoke::<operations::catalog::CompleteVerification>(repo, scope, input)
+                    .await?;
             output::print(format, &run)?;
         }
         SdkCommand::VerificationRuns {
@@ -71,10 +77,10 @@ pub(super) async fn handle(command: SdkCommand) -> anyhow::Result<()> {
             rule,
             format,
         } => {
-            let repo = Some(operations::discover_repository(repo)?);
-            let rule = rule.map(StableId::new).transpose()?;
-            let runs = operations::verification_runs(repo, &ScopeId::new(scope)?, rule.as_ref())?;
-            output::print(format, &runs)?;
+            verification_lists::print::<operations::catalog::VerificationRuns>(
+                repo, scope, rule, format,
+            )
+            .await?;
         }
         SdkCommand::Get { query } => query::handle(query::Operation::Get, query).await?,
         SdkCommand::Search { query } => query::handle(query::Operation::Search, query).await?,
@@ -94,11 +100,10 @@ pub(super) async fn handle(command: SdkCommand) -> anyhow::Result<()> {
             rule,
             format,
         } => {
-            let repo = Some(operations::discover_repository(repo)?);
-            let rule = rule.map(StableId::new).transpose()?;
-            let bindings =
-                operations::verification_bindings(repo, &ScopeId::new(scope)?, rule.as_ref())?;
-            output::print(format, &bindings)?;
+            verification_lists::print::<operations::catalog::VerificationBindings>(
+                repo, scope, rule, format,
+            )
+            .await?;
         }
     }
     Ok(())

@@ -63,12 +63,13 @@ fn repeated_verification_runs_reuse_one_durable_binding() {
         .as_str()
         .unwrap();
     #[cfg(unix)]
-    let verification_file = {
+    {
         let alias = directory.path().join("repo-alias");
         std::os::unix::fs::symlink(".", &alias).unwrap();
-        alias.join("tests/share-links.test.ts")
-    };
-    #[cfg(not(unix))]
+        provenance().args(["sdk", "begin-verification", "--repo", repo, "--scope", "default"])
+            .write_stdin(serde_json::to_vec(&json!({"rule":rule_id,"key":"share-link-expiry","method":"examples","declared_by":"ci://node-test","file":alias.join("tests/share-links.test.ts")})).unwrap())
+            .assert().failure().stderr(predicates::str::contains("repository file access denied"));
+    }
     let verification_file = directory.path().join("tests/share-links.test.ts");
     let request = json!({
         "rule": rule_id, "key": "share-link-expiry", "method": "examples",

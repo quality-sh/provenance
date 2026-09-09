@@ -11,7 +11,14 @@ hooks from that checkout:
 git config core.hooksPath .githooks
 ```
 
-The pre-commit hook runs formatting, Clippy, and compile checks. Fix any
+Generated files must never enter source control. Before a workspace Cargo build,
+install the generator dependencies with `npm ci --prefix tools/operation-codegen`
+and run `node tools/operation-codegen/ensure-generated.mjs`. SDK build and test
+commands prepare generated source automatically. See
+`tools/operation-codegen/README.md` for the build and package flow.
+
+The pre-commit hook rejects tracked generated files, prepares generated source,
+and runs formatting, Clippy, and compile checks. Fix any
 reported failure before committing. When a hook must be bypassed intentionally,
 use Git's standard `git commit --no-verify` option.
 

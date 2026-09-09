@@ -18,6 +18,7 @@ const fn default_max_depth() -> usize {
 /// `out` reads the relations the named record holds in its own fields, `in`
 /// reads the relations other records hold toward it, and `both` reads every
 /// relation from either end.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Direction {
@@ -38,6 +39,7 @@ impl Direction {
 }
 
 /// Fetch one record by canonical ID.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct GetQuery {
@@ -50,6 +52,7 @@ pub struct GetQuery {
 }
 
 /// Find records whose text contains a phrase.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SearchQuery {
@@ -61,10 +64,12 @@ pub struct SearchQuery {
     #[serde(default)]
     pub include_retired: bool,
     #[serde(default = "default_limit")]
+    #[cfg_attr(feature = "schema", schemars(range(min = 1, max = super::QUERY_MAX_LIMIT)))]
     pub limit: usize,
 }
 
 /// Read the records one hop from a record.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct NeighborsQuery {
@@ -80,10 +85,12 @@ pub struct NeighborsQuery {
     #[serde(default)]
     pub include_retired: bool,
     #[serde(default = "default_limit")]
+    #[cfg_attr(feature = "schema", schemars(range(min = 1, max = super::QUERY_MAX_LIMIT)))]
     pub limit: usize,
 }
 
 /// Walk outward from a record for a bounded number of hops.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TraceQuery {
@@ -97,14 +104,17 @@ pub struct TraceQuery {
     #[serde(default)]
     pub relations: Vec<String>,
     #[serde(default = "default_max_depth")]
+    #[cfg_attr(feature = "schema", schemars(range(min = 1, max = super::TRACE_MAX_DEPTH)))]
     pub max_depth: usize,
     #[serde(default)]
     pub include_retired: bool,
     #[serde(default = "default_limit")]
+    #[cfg_attr(feature = "schema", schemars(range(min = 1, max = super::QUERY_MAX_LIMIT)))]
     pub limit: usize,
 }
 
 /// Read the Rules a record reaches, with the code standing behind them.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ImpactQuery {
@@ -116,6 +126,7 @@ pub struct ImpactQuery {
     #[serde(default)]
     pub include_retired: bool,
     #[serde(default = "default_limit")]
+    #[cfg_attr(feature = "schema", schemars(range(min = 1, max = super::QUERY_MAX_LIMIT)))]
     pub limit: usize,
 }
 
@@ -124,6 +135,7 @@ pub struct ImpactQuery {
 /// `base` is what makes the stale report computable: stale means the code
 /// carrying the evidence changed, and that is read from a diff. Without a
 /// base the response says so rather than guessing.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EvidenceQuery {
@@ -137,10 +149,12 @@ pub struct EvidenceQuery {
     #[serde(default)]
     pub include_retired: bool,
     #[serde(default = "default_limit")]
+    #[cfg_attr(feature = "schema", schemars(range(min = 1, max = super::QUERY_MAX_LIMIT)))]
     pub limit: usize,
 }
 
 /// Read which evidence sites a commit range disturbed.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct StaleQuery {
@@ -154,15 +168,18 @@ pub struct StaleQuery {
     #[serde(default)]
     pub include_retired: bool,
     #[serde(default = "default_limit")]
+    #[cfg_attr(feature = "schema", schemars(range(min = 1, max = super::QUERY_MAX_LIMIT)))]
     pub limit: usize,
 }
 
 /// Read the Rules bound to one code site.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ResolveSymbolQuery {
     #[serde(default)]
     pub protocol_version: Option<u32>,
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub file: Utf8PathBuf,
     #[serde(default)]
     pub symbol: Option<String>,
@@ -171,5 +188,6 @@ pub struct ResolveSymbolQuery {
     #[serde(default)]
     pub include_retired: bool,
     #[serde(default = "default_limit")]
+    #[cfg_attr(feature = "schema", schemars(range(min = 1, max = super::QUERY_MAX_LIMIT)))]
     pub limit: usize,
 }

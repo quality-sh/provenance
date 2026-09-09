@@ -18,6 +18,7 @@ pub use aggregate_validation::{
 pub use assertion_validation::packet_qualifies_proposal;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(transparent)]
 pub struct AssertionId(StableId);
 
@@ -36,6 +37,7 @@ impl AssertionId {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct AssertionRecord {
     pub schema_version: SchemaVersion,

@@ -12,6 +12,37 @@ an exact development dependency, installs the engine for the current platform,
 writes `.provenance/state/`, and confirms that `npx provenance check` reports
 `ok`.
 
+## SDK connection
+
+SDK operations require an explicitly configured HTTP host. The local CLI remains
+available through the package bin shim; SDK calls do not discover or start it.
+
+```ts
+import { configure } from "@quality-sh/provenance";
+
+configure({
+  endpoint: process.env.PROVENANCE_ENDPOINT,
+  bearer: process.env.PROVENANCE_TOKEN,
+  repositoryId: process.env.PROVENANCE_REPOSITORY_ID,
+  localRoot: process.env.PROVENANCE_LOCAL_ROOT,
+  scope: "default",
+});
+```
+
+The repository ID is an opaque host target. `localRoot` describes the caller's
+checkout, so inferred implementation and test paths become portable relative
+paths before transmission. It does not select the host repository. Legacy
+`engine` and `repository` settings are rejected; `PROVENANCE_REPO` is not an
+HTTP target. Host deployment and access setup must be supplied separately.
+
+Browser callers can import the named `HttpClient` and error classes from
+`@quality-sh/provenance/client`. That subpath has no Node or subprocess imports.
+Both clients validate responses against generated contracts and bound them to
+16 MiB. `OperationError` carries a validated declared failure; `ConnectionError`
+and `MalformedResponseError` identify read failures. A lost or malformed write
+response raises `UncertainWriteError`. Inspect state before deciding whether to
+retry. Clients never retry operations or replay redirects automatically.
+
 ## Consumer CI
 
 Install the locked project dependencies before each check. Use `npx --no` in
@@ -336,9 +367,8 @@ failed callback is recorded and the original error is rethrown.
 
 The package installs a matching Rust engine through a platform-specific
 optional dependency. It does not download a binary from an install script,
-compile Rust, or require a global CLI. Before its first operation, the SDK
-checks that the engine speaks the supported protocol. Rust then finds the
-nearest enclosing Provenance or Git project for each command.
+compile Rust, or require a global CLI. This binary is used by explicit CLI
+commands. SDK operations instead check their configured HTTP host protocol.
 
 This package owns the `provenance` command and forwards it to that engine
 unchanged, so `npx provenance` runs what the install supplied. When the platform
@@ -346,18 +376,20 @@ package is absent, after `npm install --omit=optional` or on a host with no
 published engine, the command names the missing package and the supported
 targets rather than reaching the registry for a command of the same name.
 
-Published targets are macOS arm64/x64, Windows x64, and glibc Linux x64. An
-unsupported host fails with the supported target list. These environment
-variables override the defaults:
+Published targets follow the release target inventory. An unsupported host
+fails with the supported target list. `PROVENANCE_BIN` selects a development
+binary for the CLI shim. SDK environment settings are:
 
-- `PROVENANCE_BIN`: explicit development engine; default packaged engine
-- `PROVENANCE_REPO`: explicit repository; default nearest enclosing project
+- `PROVENANCE_ENDPOINT`: explicit HTTP host URL
+- `PROVENANCE_TOKEN`: bearer credential
+- `PROVENANCE_REPOSITORY_ID`: opaque host repository ID
+- `PROVENANCE_LOCAL_ROOT`: caller checkout root for portable file paths
 - `PROVENANCE_SCOPE`: scope; default `default`
 - `PROVENANCE_SPEC_OWNER`: declaration owner; default `spec://typescript`
 - `PROVENANCE_VERIFICATION_OWNER`: evidence producer; default `ci://typescript`
 
-`configure()` provides the same settings in code. The SDK still uses one short
-process per command; it does not start a daemon.
+`configure()` provides the SDK settings in code. The SDK keeps HTTP connections
+and never starts a subprocess for an operation.
 
 Spec-scoped declaration factories, object-options declarations, and the
 callback form of `defineSpec()` remain available as compatibility surfaces. The
@@ -368,3 +400,23 @@ persistence.
 
 See `examples/typescript-sdk/` for package-name consumption through a local npm
 dependency.
+
+## Build from a source checkout
+
+Generated operation source and the platform lookup module are not tracked in Git.
+Install the generator dependencies once, then build the SDK:
+
+```sh
+npm ci --prefix tools/operation-codegen
+npm ci --prefix packages/provenance
+npm run build --prefix packages/provenance
+```
+
+Run these commands from the repository root. The first source build also needs
+the repository's Rust toolchain to export the operation contract. Later builds
+reuse generated output only when its source fingerprint and output checksums
+match. CI supplies this output as a build artifact to npm-only jobs.
+
+Published npm packages contain compiled clients and validators. Installing or
+using a published package does not run the generator or require Rust or a host
+server toolchain. The explicit CLI remains a separate packaged executable.

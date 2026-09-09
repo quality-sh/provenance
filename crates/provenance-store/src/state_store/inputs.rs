@@ -10,6 +10,9 @@ use provenance_core::{
 };
 use serde::{Deserialize, Serialize};
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CreateSourceInput {
     pub scope_id: ScopeId,
     pub id: StableId,
@@ -25,6 +28,9 @@ pub struct CreateSourceInput {
     pub origin_message: Option<StableId>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CreateRequirementInput {
     pub scope_id: ScopeId,
     pub id: StableId,
@@ -48,6 +54,9 @@ pub struct CreateDomainInput {
     pub color: Option<String>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct AddSourceReferenceInput {
     pub scope_id: ScopeId,
     pub source_id: StableId,
@@ -94,6 +103,9 @@ pub struct UpdateQuestionInput {
     pub resolution_id: Option<StableId>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CreateResolutionInput {
     pub scope_id: ScopeId,
     pub id: StableId,
@@ -114,6 +126,9 @@ pub struct CreateResolutionInput {
     pub origin_message: Option<StableId>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CreateRuleInput {
     pub scope_id: ScopeId,
     pub id: StableId,
@@ -137,6 +152,7 @@ pub use provenance_core::protocol::{
     TypedRuleInput, TypedSourceInput, TypedSpecInput,
 };
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TypedResourceKind {
@@ -145,6 +161,7 @@ pub enum TypedResourceKind {
     Rule,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ReconcileState {
@@ -156,6 +173,7 @@ pub enum ReconcileState {
     Unchanged,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct ReconciledResource {
     pub kind: TypedResourceKind,
@@ -169,6 +187,7 @@ pub struct ReconciledResource {
     pub changes: Vec<TypedFieldChange>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct TypedFieldChange {
     pub field: String,
@@ -177,6 +196,7 @@ pub struct TypedFieldChange {
 }
 
 /// One ASD-STE100 violation attached to its typed declaration site.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct TypedSpecDiagnostic {
     pub address: DeclarationAddress,
@@ -190,6 +210,7 @@ pub struct TypedSpecDiagnostic {
     pub message: String,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct TypedSpecResult {
     pub declared_by: String,
@@ -206,6 +227,7 @@ pub struct TypedSpecResult {
     pub implementation_bindings: Vec<provenance_core::ImplementationBinding>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BeginVerificationInput {
@@ -214,9 +236,11 @@ pub struct BeginVerificationInput {
     #[serde(default)]
     pub declaration: Option<DeclarationReferenceInput>,
     pub key: String,
+    /// Semantic validation accepts examples, property, conformance, construction, exhaustion, and proof.
     pub method: String,
     pub declared_by: String,
     #[serde(default)]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
     pub file: Option<camino::Utf8PathBuf>,
     #[serde(default)]
     pub symbol: Option<String>,
@@ -242,6 +266,7 @@ pub struct MaterializeImplementationBindingInput {
     pub symbol: String,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DeclarationReferenceInput {
@@ -249,15 +274,19 @@ pub struct DeclarationReferenceInput {
     pub address: DeclarationAddress,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CompleteVerificationInput {
     pub run: String,
+    /// Semantic validation accepts passed or failed.
     pub status: String,
     #[serde(default)]
     pub error: Option<String>,
 }
 
+#[derive(Debug, serde::Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct PostMessageInput {
     pub scope_id: ScopeId,
     pub parent: ThreadParent,
@@ -298,6 +327,9 @@ pub struct CreateSynthesisPacketInput {
     pub required_human_decisions: Vec<RequiredHumanDecision>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CreateProposalCardInput {
     pub scope_id: ScopeId,
     pub id: StableId,
@@ -313,6 +345,9 @@ pub struct CreateProposalCardInput {
     pub superseded_by: Option<StableId>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CreateDispositionInput {
     pub scope_id: ScopeId,
     pub id: StableId,
@@ -324,6 +359,9 @@ pub struct CreateDispositionInput {
     pub external_action: Option<provenance_core::ExternalActionCorrelation>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CreateAssertionInput {
     pub scope_id: ScopeId,
     pub id: provenance_core::AssertionId,

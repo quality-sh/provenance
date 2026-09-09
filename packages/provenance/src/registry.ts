@@ -59,7 +59,7 @@ export class DeclarationRegistry {
   assign(result: ApplyResult): void {
     for (const resource of result.resources) {
       for (const handle of this.#handles.get(
-        key(resource.kind, resource.key, resource.parent),
+        key(resource.kind, resource.key, resource.parent ?? undefined),
       ) ?? []) {
         handle.assignId(resource.id);
       }

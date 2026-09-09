@@ -22,6 +22,15 @@ fn init_repo() -> tempfile::TempDir {
         ])
         .assert()
         .success();
+    for name in [
+        "share-links.test.ts",
+        "tests/share-links.test.ts",
+        "tests/missing.test.ts",
+    ] {
+        let file = directory.path().join(name);
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(file, "// verification fixture\n").unwrap();
+    }
     directory
 }
 

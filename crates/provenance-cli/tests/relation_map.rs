@@ -49,6 +49,11 @@ const SETUP: &[&[&str]] = &[
 ];
 
 fn setup(runner: &Runner) {
+    std::fs::write(
+        std::path::Path::new(&runner.repo).join("share-links.test.ts"),
+        "// verification fixture\n",
+    )
+    .unwrap();
     Command::cargo_bin("provenance")
         .unwrap()
         .args([

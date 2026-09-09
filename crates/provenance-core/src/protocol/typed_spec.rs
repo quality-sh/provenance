@@ -15,6 +15,7 @@ use crate::model::DeclarationAddress;
 /// Serialization skips absent optional fields, so a decode and encode
 /// round trip preserves every present field and every omission.
 #[rule("rule_rust_typed_input_round_trip")]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct TypedSpecInput {
@@ -32,6 +33,7 @@ pub struct TypedSpecInput {
 }
 
 /// One exact declaration identity that may transition from unowned to owned.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct TypedAdoptionTarget {
@@ -39,6 +41,7 @@ pub struct TypedAdoptionTarget {
     pub id: String,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TypedDeclarationKind {
@@ -47,6 +50,7 @@ pub enum TypedDeclarationKind {
     Rule,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct TypedSourceInput {
@@ -54,6 +58,7 @@ pub struct TypedSourceInput {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     pub name: String,
+    /// Semantic validation accepts supported Source type names and the linear, github, and jira aliases.
     pub kind: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
@@ -64,6 +69,7 @@ pub struct TypedSourceInput {
     pub supersedes: Option<Vec<String>>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct TypedRequirementInput {
@@ -89,6 +95,7 @@ pub struct TypedRequirementInput {
     pub spawned_by: Option<String>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct TypedRuleInput {
@@ -113,14 +120,17 @@ pub struct TypedRuleInput {
     pub resolution_ids: Option<Vec<String>>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct TypedImplementationInput {
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub file: camino::Utf8PathBuf,
     pub symbol: String,
 }
 
 /// The fixed request shape for one statement preflight.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct CheckStatementRequest {
