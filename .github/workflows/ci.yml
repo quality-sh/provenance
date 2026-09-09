@@ -95,7 +95,7 @@ jobs:
           shared-key: build-cli
           add-job-id-key: "false"
           cache-on-failure: true
-          save-if: github.ref == 'refs/heads/main'
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo build -p provenance-cli
       - name: Upload the CLI for the consumer jobs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -130,7 +130,7 @@ jobs:
           shared-key: build-cli
           add-job-id-key: "false"
           cache-on-failure: true
-          save-if: github.ref == 'refs/heads/main'
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo build -p provenance-cli
       - name: Upload the CLI for the consumer jobs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -171,7 +171,7 @@ jobs:
           shared-key: clippy
           add-job-id-key: "false"
           cache-on-failure: true
-          save-if: github.ref == 'refs/heads/main'
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
   test:
@@ -190,10 +190,10 @@ jobs:
       - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
         with:
           prefix-key: v1
-          shared-key: rust
+          shared-key: test-all-features
           add-job-id-key: "false"
           cache-on-failure: true
-          save-if: github.ref == 'refs/heads/main'
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo test --workspace --all-features --no-fail-fast
 
   # Default-features lane: runs the dogfood absence tests, which assert the
@@ -211,10 +211,10 @@ jobs:
       - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
         with:
           prefix-key: v1
-          shared-key: rust
+          shared-key: test-default-features
           add-job-id-key: "false"
           cache-on-failure: true
-          save-if: github.ref == 'refs/heads/main'
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo test -p provenance-cli --no-fail-fast
 
   rule-coverage:
