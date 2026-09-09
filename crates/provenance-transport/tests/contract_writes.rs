@@ -2,7 +2,7 @@
 #[path = "support/records.rs"]
 #[allow(dead_code)]
 mod records;
-use records::{call, host, Repository};
+use records::{call, host, scoped, writable_host, Repository};
 use serde_json::json;
 
 #[tokio::test]
@@ -12,10 +12,7 @@ async fn authoring_schema_failure_is_typed_and_preserves_graph() {
     let (status, failure) = call(
         &host,
         "apply",
-        json!({
-            "context":{"repository":"selected","scope":"default"},
-            "request":{"schema_version":999,"spec":"test","declared_by":"test"}
-        }),
+        scoped(&json!({"schema_version":999,"spec":"test","declared_by":"test"})),
     )
     .await;
     assert_eq!(status, 400, "{failure}");
@@ -24,7 +21,7 @@ async fn authoring_schema_failure_is_typed_and_preserves_graph() {
 }
 
 #[test]
-fn catalog_inventory_includes_existing_creation_operations() {
+fn catalog_inventory_matches_the_existing_operation_contract() {
     let expected = [
         "check-statement",
         "create-source",
@@ -35,6 +32,12 @@ fn catalog_inventory_includes_existing_creation_operations() {
         "post-thread-message",
         "list-threads",
         "list-messages",
+        "list-proposals",
+        "list-dispositions",
+        "list-assertions",
+        "create-proposal",
+        "create-assertion",
+        "create-disposition",
         "info",
         "get",
         "search",
@@ -64,30 +67,10 @@ fn catalog_inventory_includes_existing_creation_operations() {
 async fn fixture_writes_require_explicit_opt_in() {
     let repo = Repository::new("The shared graph is readable.");
     let host = host(&[("selected", &repo)], &["selected"]);
-    let (status, failure) = call(&host, "apply", json!({
-        "context":{"repository":"selected","scope":"default"},
-        "request":{"schema_version":provenance_core::SUPPORTED_SCHEMA_VERSION.0,"spec":"test","declared_by":"test"}
-    })).await;
+    let (status, failure) = call(&host, "apply", scoped(&json!({"schema_version":provenance_core::SUPPORTED_SCHEMA_VERSION.0,"spec":"test","declared_by":"test"}))).await;
     assert_eq!(status, 403, "{failure}");
     assert_eq!(failure["error"]["kind"], "access_denied");
     host.shutdown().await;
-}
-
-fn writable_host(repo: &Repository) -> provenance_transport::StatementHost {
-    use provenance_transport::fixture::{FixtureAccess, Target};
-    provenance_transport::StatementHost::with_fixture_access(
-        FixtureAccess::new(
-            vec![Target {
-                id: "selected".into(),
-                root: repo.dir.path().to_path_buf(),
-            }],
-            vec![("selected".into(), "default".into())],
-            "fixture-secret",
-            "fixture.test",
-        )
-        .unwrap()
-        .allow_writes(),
-    )
 }
 
 fn document() -> serde_json::Value {
@@ -95,11 +78,6 @@ fn document() -> serde_json::Value {
         "sources":[{"key":"policy","name":"Policy","kind":"github"}],
         "requirements":[{"key":"ready","statement":"The system is ready.","sources":["policy"]}],
         "rules":[{"key":"ready","requirement":"ready","statement":"The system is ready."}]})
-}
-fn scoped(request: serde_json::Value) -> serde_json::Value {
-    let mut call = json!({"context":{"repository":"selected","scope":"default"}});
-    call["request"] = request;
-    call
 }
 
 #[tokio::test]
@@ -115,7 +93,7 @@ async fn http_plan_apply_and_verification_match_native_state() {
         serde_json::from_value(document()).unwrap(),
     )
     .unwrap();
-    let (status, actual) = call(&host, "plan", scoped(document())).await;
+    let (status, actual) = call(&host, "plan", scoped(&document())).await;
     assert_eq!(status, 200, "{actual}");
     assert_eq!(actual, serde_json::to_value(expected).unwrap());
     let expected = operations::apply(
@@ -124,7 +102,7 @@ async fn http_plan_apply_and_verification_match_native_state() {
         serde_json::from_value(document()).unwrap(),
     )
     .unwrap();
-    let (status, actual) = call(&host, "apply", scoped(document())).await;
+    let (status, actual) = call(&host, "apply", scoped(&document())).await;
     assert_eq!(status, 200, "{actual}");
     assert_eq!(actual, serde_json::to_value(expected).unwrap());
     let rule = actual["resources"]
@@ -135,13 +113,13 @@ async fn http_plan_apply_and_verification_match_native_state() {
         .unwrap()["id"]
         .clone();
     std::fs::write(repo.dir.path().join("check.rs"), "fn check() {}\n").unwrap();
-    let (status, run) = call(&host, "begin-verification", scoped(json!({"rule":rule,"key":"ready","method":"examples","declared_by":"fixture","file":"check.rs"}))).await;
+    let (status, run) = call(&host, "begin-verification", scoped(&json!({"rule":rule,"key":"ready","method":"examples","declared_by":"fixture","file":"check.rs"}))).await;
     assert_eq!(status, 200, "{run}");
     assert_eq!(run["status"], "running");
     let (status, done) = call(
         &host,
         "complete-verification",
-        scoped(json!({"run":run["id"],"status":"passed"})),
+        scoped(&json!({"run":run["id"],"status":"passed"})),
     )
     .await;
     assert_eq!(status, 200, "{done}");
@@ -158,7 +136,7 @@ async fn http_plan_apply_and_verification_match_native_state() {
     let (status, failure) = call(
         &host,
         "complete-verification",
-        scoped(json!({"run":run["id"],"status":"passed"})),
+        scoped(&json!({"run":run["id"],"status":"passed"})),
     )
     .await;
     assert_eq!(status, 409, "{failure}");
@@ -207,7 +185,7 @@ async fn mcp_advertises_only_permitted_writes_and_persists_the_same_contract() {
         let result = client
             .call_tool(
                 CallToolRequestParams::new("apply").with_arguments(
-                    json!({"protocol_version":provenance_core::SDK_PROTOCOL_VERSION,"call":scoped(document())}).as_object().unwrap().clone(),
+                    json!({"protocol_version":provenance_core::SDK_PROTOCOL_VERSION,"call":scoped(&document())}).as_object().unwrap().clone(),
                 ),
             )
             .await
@@ -216,13 +194,13 @@ async fn mcp_advertises_only_permitted_writes_and_persists_the_same_contract() {
         if writable {
             assert_ne!(result.is_error, Some(true));
             assert_eq!(value["created"], 3);
-            let (status, plan) = call(&host, "plan", scoped(document())).await;
+            let (status, plan) = call(&host, "plan", scoped(&document())).await;
             assert_eq!(status, 200, "{plan}");
             assert_eq!(plan["unchanged"], 3);
             std::fs::write(repo.dir.path().join("mcp-check.rs"), "fn check() {}\n").unwrap();
             let run = client
                 .call_tool(CallToolRequestParams::new("begin-verification").with_arguments(
-                    json!({"protocol_version":provenance_core::SDK_PROTOCOL_VERSION,"call":scoped(json!({"rule":"rule_shared","key":"mcp","method":"examples","declared_by":"fixture","file":"mcp-check.rs"}))}).as_object().unwrap().clone(),
+                    json!({"protocol_version":provenance_core::SDK_PROTOCOL_VERSION,"call":scoped(&json!({"rule":"rule_shared","key":"mcp","method":"examples","declared_by":"fixture","file":"mcp-check.rs"}))}).as_object().unwrap().clone(),
                 ))
                 .await
                 .unwrap();
@@ -230,14 +208,14 @@ async fn mcp_advertises_only_permitted_writes_and_persists_the_same_contract() {
             let run = run.structured_content.unwrap();
             let complete = client
                 .call_tool(CallToolRequestParams::new("complete-verification").with_arguments(
-                    json!({"protocol_version":provenance_core::SDK_PROTOCOL_VERSION,"call":scoped(json!({"run":run["id"],"status":"failed","error":"callback failure"}))}).as_object().unwrap().clone(),
+                    json!({"protocol_version":provenance_core::SDK_PROTOCOL_VERSION,"call":scoped(&json!({"run":run["id"],"status":"failed","error":"callback failure"}))}).as_object().unwrap().clone(),
                 ))
                 .await
                 .unwrap();
             assert_ne!(complete.is_error, Some(true));
             let complete = complete.structured_content.unwrap();
             assert_eq!(complete["status"], "failed");
-            let (_, runs) = call(&host, "verification-runs", scoped(json!({}))).await;
+            let (_, runs) = call(&host, "verification-runs", scoped(&json!({}))).await;
             assert_eq!(runs, json!([complete]));
         } else {
             assert_eq!(result.is_error, Some(true));
@@ -268,7 +246,7 @@ async fn protocol_and_selected_file_refusals_precede_graph_changes() {
             ))
             .header("host", "fixture.test")
             .header("authorization", "Bearer fixture-secret")
-            .body(Body::from(scoped(document()).to_string()))
+            .body(Body::from(scoped(&document()).to_string()))
             .unwrap(),
         )
         .await
@@ -278,7 +256,7 @@ async fn protocol_and_selected_file_refusals_precede_graph_changes() {
         serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
     assert_eq!(failure["error"]["kind"], "protocol_mismatch");
     for path in ["../outside.rs", "/outside.rs", "missing.rs"] {
-        let (status, _) = call(&host, "begin-verification", scoped(json!({"rule":"rule_shared","key":"test","method":"examples","declared_by":"fixture","file":path}))).await;
+        let (status, _) = call(&host, "begin-verification", scoped(&json!({"rule":"rule_shared","key":"test","method":"examples","declared_by":"fixture","file":path}))).await;
         assert_ne!(status, 200);
         assert_eq!(state_bytes(repo.dir.path()), before);
     }
@@ -306,10 +284,10 @@ async fn statement_refusal_preserves_plan_diagnostics_and_canonical_bytes() {
     let mut input = document();
     input["requirements"][0]["statement"] = json!("Café; requirement");
     let before = state_bytes(repo.layout.state_dir().as_std_path());
-    let (status, plan) = call(&host, "plan", scoped(input.clone())).await;
+    let (status, plan) = call(&host, "plan", scoped(&input.clone())).await;
     assert_eq!(status, 200, "{plan}");
     assert!(!plan["diagnostics"].as_array().unwrap().is_empty());
-    let (status, refused) = call(&host, "apply", scoped(input)).await;
+    let (status, refused) = call(&host, "apply", scoped(&input)).await;
     assert_eq!(status, 400, "{refused}");
     assert_eq!(refused["error"]["kind"], "statement_rejected");
     assert_eq!(refused["error"]["diagnostics"], plan["diagnostics"]);

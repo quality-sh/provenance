@@ -84,12 +84,16 @@ async fn malformed_success_and_refusal_after_write_are_uncertain() {
 
 #[tokio::test]
 async fn validated_write_refusal_is_typed_but_internal_outcomes_are_uncertain() {
-    for (kind, uncertain) in [
-        ("invalid_completion", false),
-        ("write_failed", true),
-        ("internal", true),
-        ("uncertain_write", true),
-    ] {
+    let policy: Value =
+        serde_json::from_str(include_str!("../src/client-policy-cases.json")).unwrap();
+    for case in policy["refusals"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|case| case["mutates"] == true)
+    {
+        let kind = case["kind"].as_str().unwrap();
+        let uncertain = case["uncertain"].as_bool().unwrap();
         let (url, worker) = host(
             json!({"protocol_version":7,"operation":"complete-verification","error":{"kind":kind}}),
             400,

@@ -40,6 +40,9 @@ fn operation_names_and_failure_statuses_are_explicit() {
             "begin-verification",
             "check-statement",
             "complete-verification",
+            "create-assertion",
+            "create-disposition",
+            "create-proposal",
             "create-requirement",
             "create-resolution",
             "create-rule",
@@ -48,7 +51,10 @@ fn operation_names_and_failure_statuses_are_explicit() {
             "get",
             "impact",
             "info",
+            "list-assertions",
+            "list-dispositions",
             "list-messages",
+            "list-proposals",
             "list-threads",
             "neighbors",
             "plan",
@@ -89,6 +95,9 @@ fn mcp_list_outputs_wrap_the_complete_http_array() {
         "verification-runs",
         "list-threads",
         "list-messages",
+        "list-proposals",
+        "list-dispositions",
+        "list-assertions",
     ] {
         let tool = mcp["tools"]
             .as_array()
@@ -137,6 +146,9 @@ fn mutation_classification_comes_from_the_catalog() {
                 "create-rule",
                 "add-source-reference",
                 "post-thread-message",
+                "create-proposal",
+                "create-assertion",
+                "create-disposition",
             ]
             .iter()
             .any(|name| path.ends_with(&format!("/{name}")));

@@ -1,10 +1,6 @@
-export type VerificationMethod =
-  | "exhaustion"
-  | "property"
-  | "examples"
-  | "conformance"
-  | "construction"
-  | "proof";
+import type { components } from "./generated/schema.js";
+
+export type VerificationMethod = components["schemas"]["EvidenceSuccessOutputVerificationMethod"];
 
 type AnyFunction = (...args: never[]) => unknown;
 

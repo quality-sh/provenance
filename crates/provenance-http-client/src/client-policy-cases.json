@@ -1,0 +1,45 @@
+{
+  "max_response_bytes": 16777216,
+  "refusals": [
+    {
+      "kind": "uncertain_write",
+      "mutates": false,
+      "uncertain": true
+    },
+    {
+      "kind": "uncertain_write",
+      "mutates": true,
+      "uncertain": true
+    },
+    {
+      "kind": "internal",
+      "mutates": false,
+      "uncertain": false
+    },
+    {
+      "kind": "internal",
+      "mutates": true,
+      "uncertain": true
+    },
+    {
+      "kind": "write_failed",
+      "mutates": false,
+      "uncertain": false
+    },
+    {
+      "kind": "write_failed",
+      "mutates": true,
+      "uncertain": true
+    },
+    {
+      "kind": "invalid_completion",
+      "mutates": false,
+      "uncertain": false
+    },
+    {
+      "kind": "invalid_completion",
+      "mutates": true,
+      "uncertain": false
+    }
+  ]
+}

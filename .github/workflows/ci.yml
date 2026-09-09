@@ -621,6 +621,7 @@ jobs:
       - run: node tools/operation-codegen/test-clients.mjs writes
       - run: node tools/operation-codegen/test-clients.mjs creation
       - run: node tools/operation-codegen/test-clients.mjs discussions
+      - run: node tools/operation-codegen/test-clients.mjs ideation
       - run: git diff --exit-code
 
   repository-file-access:

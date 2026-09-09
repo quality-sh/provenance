@@ -3,6 +3,8 @@ use provenance_core::protocol::failure::OperationFailure;
 use provenance_core::SDK_PROTOCOL_VERSION;
 use serde_json::json;
 
+mod ideation;
+
 #[tokio::test]
 async fn statements_return_the_exact_data_free_analyzer_report() {
     for statement in ["Install the cover.", "Arrêt; wait.", ""] {
@@ -185,7 +187,13 @@ fn baseline_operations_have_one_registered_contract_each() {
             "verification-bindings",
             "list-threads",
             "list-messages",
-            "post-thread-message"
+            "post-thread-message",
+            "list-proposals",
+            "list-dispositions",
+            "list-assertions",
+            "create-proposal",
+            "create-assertion",
+            "create-disposition"
         ]
     );
 }

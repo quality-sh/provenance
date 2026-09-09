@@ -4,29 +4,10 @@
 mod records;
 use provenance_core::{MessageRole, NodeType, ScopeId, StableId, ThreadParent};
 use provenance_store::state_store::{PostMessageInput, StateStore};
-use records::{call, Repository};
+use records::{call, scoped, writable_host, Repository};
 use serde_json::{json, Value};
 use std::fmt::Write;
 
-fn writable_host(repo: &Repository) -> provenance_transport::StatementHost {
-    use provenance_transport::fixture::{FixtureAccess, Target};
-    provenance_transport::StatementHost::with_fixture_access(
-        FixtureAccess::new(
-            vec![Target {
-                id: "selected".into(),
-                root: repo.dir.path().into(),
-            }],
-            vec![("selected".into(), "default".into())],
-            "fixture-secret",
-            "fixture.test",
-        )
-        .unwrap()
-        .allow_writes(),
-    )
-}
-fn scoped(request: &Value) -> Value {
-    json!({"context":{"repository":"selected","scope":"default"},"request":request})
-}
 fn input(body: &str) -> Value {
     json!({"scope_id":"default","parent":{"node_type":"requirement","node_id":"req_absent"},"role":"system","body":body})
 }

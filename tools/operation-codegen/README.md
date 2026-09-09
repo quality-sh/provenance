@@ -46,6 +46,7 @@ node tools/operation-codegen/test-clients.mjs evidence
 node tools/operation-codegen/test-clients.mjs writes
 node tools/operation-codegen/test-clients.mjs creation
 node tools/operation-codegen/test-clients.mjs discussions
+node tools/operation-codegen/test-clients.mjs ideation
 node tools/operation-codegen/generate.mjs --check
 ```
 
@@ -116,3 +117,10 @@ and validated uncertain/internal write outcomes remain uncertain. Response bodie
 are bounded to 16 MiB, and public error messages do not include raw bodies.
 The write fixture checks plan without mutation, apply, verification completion,
 ownership and completion refusals, and persisted records on an isolated host.
+
+`crates/provenance-http-client/src/client-policy-cases.json` is the shared client
+conformance inventory. The Rust runtime unit test and the TypeScript named-client
+test read the same cases for read/write refusal classification and the 16 MiB
+limit. A change to either language's policy must pass this inventory. The existing
+TypeScript stream tests also check that oversized responses stop reading. The inventory is
+included in the Rust package so its unit test remains usable after packaging.
