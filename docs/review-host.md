@@ -8,8 +8,13 @@ a specified port binds only to `127.0.0.1`.
 The CLI owns the listener. Ctrl-C or SIGTERM stops admission, waits for started
 operations, and closes the listener. After operations finish, HTTP connections
 have one second to drain. Incomplete headers or bodies cannot hold the process
-open. Closing stdin does not stop this interactive
-host. Native CLI and Rust calls still use their direct operation paths.
+open. Active operations have no time limit, because cancellation can interrupt
+a write. If a Git or filesystem operation does not finish, send a second Ctrl-C
+or SIGTERM to force process exit. The host prints a warning and exits with code 1.
+Forced exit does not wait for writes; their results can be incomplete or unknown.
+Check repository state before you retry a write. Closing stdin does not stop
+this interactive host. Native CLI and Rust calls still use their direct
+operation paths.
 
 ## Local caller and repository access
 
@@ -45,6 +50,11 @@ token; they retain the same destination and origin checks.
 Repository IDs are opaque names, not paths. The host resolves only its configured
 ID and refuses all other IDs. It refuses a different scope before it reads
 settings or prepares storage. Change repository or scope by restarting the host.
+Scope operations also check that the selected scope is still in the manifest.
+The repository-only `info` operation requires the credential and repository
+grant, but no scope grant. It returns version numbers and the configured target
+name. It does not read settings, prepare scope storage, or return graph data.
+Removal of the selected scope therefore does not disable `info`.
 
 ## Browser integration contract
 
@@ -60,6 +70,9 @@ procedure below for the supplied renderer.
 Path segments use ASCII letters, digits, dots, underscores, and hyphens. A
 segment must not start with a dot. Root names `metadata`, `review-config`, and
 `v` followed by digits are reserved for host routes.
+An asset file with exactly three path segments and `operations` as its second
+segment is also refused. The operation router matches this path shape for any
+first segment. For example, `assets/operations/app.js` is refused at build time.
 
 Without that build input, the binary embeds
 `crates/provenance-cli/review-assets/index.html`. This page states that the review

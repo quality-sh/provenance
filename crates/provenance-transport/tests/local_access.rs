@@ -259,3 +259,46 @@ async fn production_access_keeps_held_file_traversal_checks() {
     }
     host.shutdown().await;
 }
+
+#[tokio::test]
+async fn repository_info_does_not_require_a_scope_but_scope_operations_do() {
+    let repo = repository();
+    let host = StatementHost::with_access(Arc::new(access(repo.path())));
+    let layout = ProvenanceLayout::new(repo.path().to_str().unwrap());
+    let manifest = Manifest::default_with_scope(
+        ScopeId::new("replacement").unwrap(),
+        RepoPathPrefix::new("."),
+    );
+    std::fs::write(
+        layout.manifest_path(),
+        serde_json::to_vec(&manifest).unwrap(),
+    )
+    .unwrap();
+    // A repository-only request must not load settings or prepare scope storage.
+    std::fs::write(
+        layout.provenance_dir().join("settings.json"),
+        "invalid settings",
+    )
+    .unwrap();
+    let before = snapshot(repo.path());
+    let body = json!({"context":{"repository":"A"},"request":{}});
+    let (status, info) = invoke(&host, "info", &body, headers()).await;
+    assert_eq!(status, 200, "{info}");
+    assert_eq!(
+        info,
+        json!({
+            "repository":"A", "engine_version":env!("CARGO_PKG_VERSION"),
+            "protocol_version":provenance_core::SDK_PROTOCOL_VERSION,
+            "state_schema_version":provenance_core::SUPPORTED_SCHEMA_VERSION.0,
+        })
+    );
+    let denied = json!({"context":{"repository":"B"},"request":{}});
+    assert_eq!(invoke(&host, "info", &denied, headers()).await.0, 404);
+    assert_eq!(invoke(&host, "info", &body, HeaderMap::new()).await.0, 401);
+    let scoped = json!({"context":{"repository":"A","scope":"default"},"request":null});
+    let (status, failure) = invoke(&host, "list-threads", &scoped, headers()).await;
+    assert_eq!(status, 404, "{failure}");
+    assert_eq!(failure["error"]["kind"], "unknown_scope");
+    assert_eq!(snapshot(repo.path()), before);
+    host.shutdown().await;
+}

@@ -40,6 +40,8 @@ fn collect(root: &Path, dir: &Path, entries: &mut Vec<(String, String)>) -> io::
             || first.strip_prefix('v').is_some_and(|tail| {
                 !tail.is_empty() && tail.bytes().all(|byte| byte.is_ascii_digit())
             })
+            // The operation router matches any first segment, not only v<digits>.
+            || (kind.is_file() && segments.len() == 3 && segments[1] == "operations")
         {
             return Err(io::Error::other("invalid or reserved review asset path"));
         }

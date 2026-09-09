@@ -64,7 +64,7 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         )
         .fallback(assets::serve)
         .layer(middleware::from_fn_with_state(access, protect_origin));
-    let signal = shutdown_signal()?;
+    let mut signals = ShutdownSignals::new()?;
     println!(
         "{}",
         json!({
@@ -81,34 +81,59 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         .into_future();
     tokio::pin!(server);
     let result = tokio::select! {
-        result = &mut server => result,
-        () = signal => {
+        result = &mut server => Some(result),
+        () = signals.recv() => {
             let _ = stop.send(());
-            // Join started operations before limiting the remaining HTTP drain.
-            host.shutdown().await;
-            tokio::time::timeout(Duration::from_secs(1), &mut server)
-                .await
-                .unwrap_or(Ok(()))
+            None
         }
     };
-    host.shutdown().await;
+    eprintln!("Review host is stopping. Wait for active operations, or send a second signal to force exit; writes may be incomplete.");
+    let result = tokio::select! {
+        result = async {
+            // Join started operations before limiting the remaining HTTP drain.
+            host.shutdown().await;
+            match result {
+                Some(result) => result,
+                None => tokio::time::timeout(Duration::from_secs(1), &mut server)
+                    .await
+                    .unwrap_or(Ok(())),
+            }
+        } => result,
+        () = signals.recv() => {
+            eprintln!("Forced review host exit: writes may be incomplete. Check repository state before retrying a write.");
+            // Returning would still wait for blocked tasks when Tokio drops its runtime.
+            std::process::exit(1);
+        }
+    };
     result.context("review listener failed")
 }
 
-fn shutdown_signal() -> std::io::Result<impl std::future::Future<Output = ()>> {
+struct ShutdownSignals {
     #[cfg(unix)]
-    let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+    terminate: tokio::signal::unix::Signal,
     #[cfg(unix)]
-    let mut interrupt = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
-    Ok(async move {
+    interrupt: tokio::signal::unix::Signal,
+}
+
+impl ShutdownSignals {
+    fn new() -> std::io::Result<Self> {
+        Ok(Self {
+            #[cfg(unix)]
+            terminate: tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?,
+            #[cfg(unix)]
+            interrupt: tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?,
+        })
+    }
+
+    async fn recv(&mut self) {
         #[cfg(unix)]
         tokio::select! {
-            _ = terminate.recv() => {},
-            _ = interrupt.recv() => {},
+            _ = self.terminate.recv() => {},
+            _ = self.interrupt.recv() => {},
         }
         #[cfg(not(unix))]
         let _ = tokio::signal::ctrl_c().await;
-    })
+    }
 }
 
 async fn configuration(

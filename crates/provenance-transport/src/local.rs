@@ -154,6 +154,7 @@ impl ContextResolver for LocalAccess {
         }
         let root = self.root.clone().into();
         if scope.is_none() {
+            // Repository-only operations do not use the scope grant or scope storage.
             return Ok(PreparedContext::for_repository(PreparedRepository {
                 root,
                 requested_target: repository,

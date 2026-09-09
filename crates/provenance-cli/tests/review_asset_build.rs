@@ -51,3 +51,40 @@ fn rejects_file_and_directory_links() {
     symlink(dir.path(), assets.join("outside")).unwrap();
     assert!(review_assets::generate(&assets, &output).is_err());
 }
+
+#[test]
+fn rejects_operation_routes_with_any_version_segment() {
+    for version in ["assets", "vNext", "v7beta", "operations"] {
+        let dir = tempfile::tempdir().unwrap();
+        let assets = dir.path().join("assets");
+        std::fs::create_dir_all(assets.join(format!("{version}/operations"))).unwrap();
+        std::fs::write(assets.join("index.html"), "<!doctype html>").unwrap();
+        std::fs::write(assets.join(format!("{version}/operations/app.js")), "asset").unwrap();
+        let output = dir.path().join("bundle.rs");
+        assert!(
+            review_assets::generate(&assets, &output).is_err(),
+            "{version}"
+        );
+        assert!(!output.exists(), "no inventory is written after refusal");
+    }
+}
+
+#[test]
+fn accepts_paths_that_do_not_match_the_operation_route() {
+    let dir = tempfile::tempdir().unwrap();
+    let assets = dir.path().join("assets");
+    for path in [
+        "index.html",
+        "assets/operations.js",
+        "assets/operations/nested/app.js",
+        "assets/maps/operations/app.js",
+        "operations/assets/app.js",
+        "assets/Operations/app.js",
+        "vNext/app.js",
+    ] {
+        let file = assets.join(path);
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(file, "asset").unwrap();
+    }
+    review_assets::generate(&assets, &dir.path().join("bundle.rs")).unwrap();
+}
