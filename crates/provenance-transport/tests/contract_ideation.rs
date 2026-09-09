@@ -4,9 +4,12 @@
 #[path = "support/records.rs"]
 #[allow(dead_code)]
 mod records;
+#[path = "support/writes.rs"]
+mod writes;
 use provenance_core::ScopeId;
-use records::{call, scoped, writable_host, Repository};
+use records::{call, Repository};
 use serde_json::{json, Value};
+use writes::{scoped, writable_host};
 
 fn allow_actor(repo: &Repository, id: &str) {
     let mut manifest: Value =

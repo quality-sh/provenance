@@ -2,8 +2,11 @@
 #[path = "support/records.rs"]
 #[allow(dead_code)]
 mod records;
-use records::{call, scoped, writable_host, Repository};
+#[path = "support/writes.rs"]
+mod writes;
+use records::{call, Repository};
 use serde_json::{json, Value};
+use writes::{scoped, writable_host};
 
 fn source() -> Value {
     json!({"scope_id":"default","id":"source_created","name":"Policy","source_type":"policy","supersedes":[],"origin_thread":"thread_origin","origin_message":"message_origin"})

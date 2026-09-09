@@ -2,8 +2,11 @@
 #[path = "support/records.rs"]
 #[allow(dead_code)]
 mod records;
-use records::{call, host, scoped, writable_host, Repository};
+#[path = "support/writes.rs"]
+mod writes;
+use records::{call, host, Repository};
 use serde_json::json;
+use writes::{scoped, writable_host};
 
 #[tokio::test]
 async fn authoring_schema_failure_is_typed_and_preserves_graph() {

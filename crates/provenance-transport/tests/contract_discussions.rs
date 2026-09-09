@@ -2,11 +2,14 @@
 #[path = "support/records.rs"]
 #[allow(dead_code)]
 mod records;
+#[path = "support/writes.rs"]
+mod writes;
 use provenance_core::{MessageRole, NodeType, ScopeId, StableId, ThreadParent};
 use provenance_store::state_store::{PostMessageInput, StateStore};
-use records::{call, scoped, writable_host, Repository};
+use records::{call, Repository};
 use serde_json::{json, Value};
 use std::fmt::Write;
+use writes::{scoped, writable_host};
 
 fn input(body: &str) -> Value {
     json!({"scope_id":"default","parent":{"node_type":"requirement","node_id":"req_absent"},"role":"system","body":body})

@@ -192,7 +192,7 @@ jobs:
   fmt:
     name: Format
     needs: [changes, generate-operations]
-    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true'
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.contract == 'true'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v7
@@ -212,7 +212,7 @@ jobs:
   clippy:
     name: Clippy
     needs: [changes, generate-operations]
-    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true'
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.contract == 'true'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v7
@@ -241,7 +241,7 @@ jobs:
   test:
     name: Test (${{ matrix.os }})
     needs: [changes, generate-operations]
-    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true'
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.contract == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -581,11 +581,6 @@ jobs:
         shell: bash
         run: bash .github/scripts/release-smoke/test.sh
 
-  # The one status the branch ruleset requires. Conditional jobs skip when a
-  # pull request leaves their inputs untouched, and a skipped matrix job never
-  # reports its expanded name, so requiring the jobs directly deadlocks a
-  # state-only pull request. This job always runs and fails when any needed
-  # job failed or was cancelled; skipped counts as success.
   operation-contract:
     name: Operation contract
     needs: [changes, generate-operations]
@@ -607,12 +602,6 @@ jobs:
         with:
           node-version: 24
       - run: npm ci --prefix tools/operation-codegen
-      - run: cargo fmt --all --check
-      - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
-      - run: cargo test -p provenance-core -p provenance-ste100 -p provenance-store --features schema
-      - run: cargo test -p provenance-codegen -p provenance-http-client
-      - run: cargo test -p provenance-transport --all-features
-      - run: cargo test -p provenance-cli --test cli_sdk_check_statement --test cli_sdk_query_get --test cli_sdk_refuse_stale
       - run: node tools/operation-codegen/generate.mjs --check
       - run: npm test --prefix tools/operation-codegen
       - run: node tools/operation-codegen/test-clients.mjs statements
@@ -643,6 +632,11 @@ jobs:
           shared-key: repository-file-access-${{ matrix.target }}
       - run: cargo test --locked -p provenance-store --target ${{ matrix.target }} operations::files
 
+  # The one status the branch ruleset requires. Conditional jobs skip when a
+  # pull request leaves their inputs untouched, and a skipped matrix job never
+  # reports its expanded name, so requiring the jobs directly deadlocks a
+  # state-only pull request. This job always runs and fails when any needed
+  # job failed or was cancelled; skipped counts as success.
   ci-ok:
     name: CI OK
     needs:
