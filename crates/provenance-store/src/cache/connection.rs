@@ -14,7 +14,6 @@ use provenance_macros::rule;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 use sqlx::SqlitePool;
 use std::fs::{File, OpenOptions};
-use std::io::ErrorKind;
 use std::path::Path;
 use std::time::Duration;
 
@@ -270,7 +269,7 @@ async fn complete(pool: SqlitePool, immutable: bool) -> anyhow::Result<()> {
 
 /// Opens the close lock file and waits until this close holds it.
 ///
-/// Every attempt is a non-blocking `flock` that returns at once, so waiting
+/// Every attempt uses a non-blocking file lock and returns at once, so waiting
 /// for the lock never occupies a blocking worker; publication waiters can
 /// hold them all while this close waits.
 async fn acquire_close_lock(path: &Path) -> anyhow::Result<File> {
@@ -282,7 +281,7 @@ async fn acquire_close_lock(path: &Path) -> anyhow::Result<File> {
         .open(path)
         .with_context(|| format!("open cache close lock {}", path.display()))?;
     while let Err(error) = file.try_lock_exclusive() {
-        if error.kind() != ErrorKind::WouldBlock {
+        if error.raw_os_error() != fs2::lock_contended_error().raw_os_error() {
             return Err(anyhow::Error::new(error)
                 .context(format!("acquire cache close lock {}", path.display())));
         }
