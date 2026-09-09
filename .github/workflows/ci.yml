@@ -137,7 +137,7 @@ jobs:
           shared-key: build-cli
           add-job-id-key: "false"
           cache-on-failure: true
-          save-if: github.ref == 'refs/heads/main'
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo build --locked -p provenance-cli
       - run: cargo build --locked -p provenance-transport --features test-fixture --bin existing-root-host-fixture
       - name: Upload the CLI and isolated test host for the consumer jobs
@@ -177,7 +177,7 @@ jobs:
           shared-key: build-cli
           add-job-id-key: "false"
           cache-on-failure: true
-          save-if: github.ref == 'refs/heads/main'
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo build --locked -p provenance-cli
       - run: cargo build --locked -p provenance-transport --features test-fixture --bin existing-root-host-fixture
       - name: Upload the CLI and isolated test host for the consumer jobs
@@ -235,7 +235,7 @@ jobs:
           shared-key: clippy
           add-job-id-key: "false"
           cache-on-failure: true
-          save-if: github.ref == 'refs/heads/main'
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
   test:
@@ -261,10 +261,10 @@ jobs:
       - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
         with:
           prefix-key: v1
-          shared-key: rust
+          shared-key: test-all-features
           add-job-id-key: "false"
           cache-on-failure: true
-          save-if: github.ref == 'refs/heads/main'
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo test --workspace --all-features --no-fail-fast
 
   # Default-features lane: runs the dogfood absence tests, which assert the
@@ -282,10 +282,10 @@ jobs:
       - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
         with:
           prefix-key: v1
-          shared-key: rust
+          shared-key: test-default-features
           add-job-id-key: "false"
           cache-on-failure: true
-          save-if: github.ref == 'refs/heads/main'
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo test -p provenance-cli --no-fail-fast
 
   rule-coverage:
