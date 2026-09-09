@@ -28,6 +28,8 @@ const SESSION_ENV_VARS: &[&str] = &[
     "OPENCODE_SESSION_ID",
 ];
 
+mod triage;
+
 #[derive(Serialize, Deserialize)]
 struct Note {
     ts_ms: i64,
@@ -91,6 +93,7 @@ pub(super) fn handle(command: DogfoodCommand, quiet: bool) -> anyhow::Result<()>
         ),
         DogfoodCommand::List { format } => list(format),
         DogfoodCommand::Report { enrich, format } => report(enrich.as_ref(), format),
+        DogfoodCommand::Triage { command } => triage::handle(command, quiet),
     }
 }
 
