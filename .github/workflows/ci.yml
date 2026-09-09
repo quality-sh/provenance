@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  workflow_dispatch:
   pull_request:
   push:
     branches:
@@ -19,7 +20,7 @@ env:
 jobs:
   # Required checks skipped via `if:` count as passed for the main ruleset,
   # so jobs whose inputs are untouched can skip without renaming anything.
-  # Pushes to main always run every job; the filters only narrow PRs.
+  # Main pushes and manual runs execute every job; filters only narrow PRs.
   changes:
     name: Detect changes
     runs-on: blacksmith-4vcpu-ubuntu-2404
@@ -77,7 +78,7 @@ jobs:
               - *ci
               - "packages/**"
               - "examples/typescript-sdk/**"
-      # Pull requests run the Test job on Linux only; pushes to main add the
+      # Pull requests run the Test job on Linux only; other events add the
       # windows/macos legs. The packed-install matrix stays static on every
       # event: release_onboarding_structure.rs pins it to release-targets.json.
       - name: Select platform matrices for the event
@@ -152,7 +153,7 @@ jobs:
   build-cli-platforms:
     name: Build provenance-cli (${{ matrix.target }})
     needs: changes
-    if: github.event_name == 'push'
+    if: github.event_name != 'pull_request'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -464,7 +465,7 @@ jobs:
   typescript-sdk-packed-install:
     name: Packaged SDK install (${{ matrix.target }})
     needs: [changes, generate-operations, build-cli-linux, build-cli-platforms]
-    if: github.event_name == 'push'
+    if: github.event_name != 'pull_request'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

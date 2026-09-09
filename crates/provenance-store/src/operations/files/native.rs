@@ -4,12 +4,17 @@ use super::{validate_relative, FileAccessRefusal as Refusal, Utf8Path, Utf8PathB
 pub(super) fn relative(root: &Utf8Path, path: &Utf8Path) -> Result<Utf8PathBuf, Refusal> {
     #[cfg(windows)]
     if path.is_absolute() {
-        let relative = windows_relative(root.as_str(), path.as_str())?;
+        let relative = windows_relative(root.as_str(), path.as_str())
+            .or_else(|_| aliased_root_relative(root, path))?;
         validate_relative(&relative)?;
         return Ok(relative);
     }
     let path = if path.is_absolute() {
-        path.strip_prefix(root).map_err(|_| Refusal::Denied)?
+        if let Ok(relative) = path.strip_prefix(root) {
+            relative
+        } else {
+            return aliased_root_relative(root, path);
+        }
     } else {
         path
     };
@@ -24,6 +29,25 @@ pub(super) fn relative(root: &Utf8Path, path: &Utf8Path) -> Result<Utf8PathBuf, 
     let relative: Utf8PathBuf = parts.join("/").into();
     validate_relative(&relative)?;
     Ok(relative)
+}
+
+// Resolve only a spelling of the repository root. Descendants remain lexical
+// and the held-directory traversal checks them before file access.
+fn aliased_root_relative(root: &Utf8Path, path: &Utf8Path) -> Result<Utf8PathBuf, Refusal> {
+    if path
+        .components()
+        .any(|part| matches!(part, camino::Utf8Component::ParentDir))
+    {
+        return Err(Refusal::Denied);
+    }
+    let parent = path.parent().ok_or(Refusal::Denied)?;
+    for ancestor in parent.ancestors().collect::<Vec<_>>().into_iter().rev() {
+        if std::fs::canonicalize(ancestor).is_ok_and(|resolved| resolved == root.as_std_path()) {
+            let suffix = path.strip_prefix(ancestor).map_err(|_| Refusal::Denied)?;
+            return relative(root, suffix);
+        }
+    }
+    Err(Refusal::Denied)
 }
 
 #[cfg(any(windows, test))]
@@ -137,5 +161,31 @@ mod tests {
             .unwrap(),
             "Code.rs"
         );
+    }
+}
+
+#[cfg(all(test, unix))]
+mod alias_tests {
+    use super::*;
+
+    #[test]
+    fn root_alias_is_resolved_without_resolving_source_components() {
+        let temp = tempfile::tempdir().unwrap();
+        let base = Utf8PathBuf::from_path_buf(temp.path().canonicalize().unwrap()).unwrap();
+        let root = base.join("root");
+        let alias = base.join("alias");
+        std::fs::create_dir(&root).unwrap();
+        std::os::unix::fs::symlink(&root, &alias).unwrap();
+        assert_eq!(
+            relative(&root, &alias.join("src/missing.rs")).unwrap(),
+            "src/missing.rs"
+        );
+        std::os::unix::fs::symlink(&base, root.join("escape")).unwrap();
+        assert_eq!(
+            relative(&root, &alias.join("escape/outside.rs")).unwrap(),
+            "escape/outside.rs"
+        );
+        assert!(relative(&root, &base.join("outside.rs")).is_err());
+        assert!(relative(&root, &alias.join("../outside.rs")).is_err());
     }
 }

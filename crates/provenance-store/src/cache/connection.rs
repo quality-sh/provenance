@@ -14,9 +14,7 @@ use provenance_macros::rule;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 use sqlx::SqlitePool;
 use std::fs::{File, OpenOptions};
-use std::io::ErrorKind;
 use std::path::Path;
-use std::str::FromStr;
 use std::time::Duration;
 
 /// How often a close retries the close lock while another close holds it.
@@ -166,13 +164,13 @@ pub async fn open_cache_with(
     retry: WalSwitchRetry,
 ) -> anyhow::Result<CacheConnection> {
     std::fs::create_dir_all(layout.cache_dir())?;
-    CacheConnection::connect(cache_options(layout)?.create_if_missing(true), false, retry).await
+    CacheConnection::connect(cache_options(layout).create_if_missing(true), false, retry).await
 }
 
 /// Opens the cache database only when the file exists.
 pub async fn open_existing_cache(layout: &ProvenanceLayout) -> anyhow::Result<CacheConnection> {
     CacheConnection::connect(
-        cache_options(layout)?.create_if_missing(false),
+        cache_options(layout).create_if_missing(false),
         false,
         WalSwitchRetry::default(),
     )
@@ -184,7 +182,7 @@ pub async fn open_existing_cache(layout: &ProvenanceLayout) -> anyhow::Result<Ca
 /// file, and an immutable open needs neither.
 pub async fn open_immutable_cache(layout: &ProvenanceLayout) -> anyhow::Result<CacheConnection> {
     CacheConnection::connect(
-        cache_options(layout)?
+        cache_options(layout)
             .create_if_missing(false)
             .read_only(true)
             .immutable(true),
@@ -205,11 +203,10 @@ pub async fn open_stored_cache(layout: &ProvenanceLayout) -> anyhow::Result<Cach
     }
 }
 
-pub fn cache_options(layout: &ProvenanceLayout) -> anyhow::Result<SqliteConnectOptions> {
-    Ok(
-        SqliteConnectOptions::from_str(&format!("sqlite://{}", layout.cache_db_path()))?
-            .journal_mode(SqliteJournalMode::Wal),
-    )
+pub fn cache_options(layout: &ProvenanceLayout) -> SqliteConnectOptions {
+    SqliteConnectOptions::new()
+        .filename(layout.cache_db_path())
+        .journal_mode(SqliteJournalMode::Wal)
 }
 
 /// Connects, retrying while the switch to WAL is refused as busy. The
@@ -272,7 +269,7 @@ async fn complete(pool: SqlitePool, immutable: bool) -> anyhow::Result<()> {
 
 /// Opens the close lock file and waits until this close holds it.
 ///
-/// Every attempt is a non-blocking `flock` that returns at once, so waiting
+/// Every attempt uses a non-blocking file lock and returns at once, so waiting
 /// for the lock never occupies a blocking worker; publication waiters can
 /// hold them all while this close waits.
 async fn acquire_close_lock(path: &Path) -> anyhow::Result<File> {
@@ -284,7 +281,7 @@ async fn acquire_close_lock(path: &Path) -> anyhow::Result<File> {
         .open(path)
         .with_context(|| format!("open cache close lock {}", path.display()))?;
     while let Err(error) = file.try_lock_exclusive() {
-        if error.kind() != ErrorKind::WouldBlock {
+        if error.raw_os_error() != fs2::lock_contended_error().raw_os_error() {
             return Err(anyhow::Error::new(error)
                 .context(format!("acquire cache close lock {}", path.display())));
         }
@@ -357,5 +354,19 @@ pub fn permission_failure(layout: &ProvenanceLayout, error: &anyhow::Error) -> b
                 )
             }),
         _ => false,
+    }
+}
+
+#[cfg(test)]
+mod path_tests {
+    use super::*;
+
+    #[test]
+    fn database_filename_is_not_parsed_as_a_url() {
+        for root in [r"C:\repo?mode=ro", r"\\?\C:\repo", "/tmp/repo?mode=ro"] {
+            let layout = ProvenanceLayout::new(root);
+            let options = cache_options(&layout);
+            assert_eq!(options.get_filename(), layout.cache_db_path().as_std_path());
+        }
     }
 }

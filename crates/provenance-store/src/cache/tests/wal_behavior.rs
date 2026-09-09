@@ -201,7 +201,7 @@ async fn closing_waits_for_a_connection_already_returning_to_the_pool() {
                 })
             }
         })
-        .connect_with(cache_options(&layout).unwrap().create_if_missing(true))
+        .connect_with(cache_options(&layout).create_if_missing(true))
         .await
         .unwrap();
     let mut connection = pool.acquire().await.unwrap();

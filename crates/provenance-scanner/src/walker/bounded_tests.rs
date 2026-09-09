@@ -39,10 +39,10 @@ fn tree() -> (tempfile::TempDir, Utf8PathBuf) {
     (dir, root)
 }
 
-fn relative(root: &Utf8Path, files: &[super::FileScan]) -> Vec<String> {
+fn relative(root: &Utf8Path, files: &[super::FileScan]) -> Vec<Utf8PathBuf> {
     files
         .iter()
-        .map(|scan| scan.file_path.strip_prefix(root).unwrap().to_string())
+        .map(|scan| scan.file_path.strip_prefix(root).unwrap().to_path_buf())
         .collect()
 }
 
@@ -57,7 +57,7 @@ fn a_cut_scan_reads_the_same_files_twice() {
     assert_eq!(first, second);
     assert_eq!(
         relative(&root, &first),
-        ["a/first.rs", "a/second.py", "b/deep/inner.rs", "b/mid.ts"],
+        ["a/first.rs", "a/second.py", "b/deep/inner.rs", "b/mid.ts"].map(Utf8PathBuf::from),
         "the first four language files in sorted walk order; the note and the target tree never count"
     );
 }

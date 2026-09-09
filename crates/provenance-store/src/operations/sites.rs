@@ -85,6 +85,21 @@ fn typed_verification(binding: &VerificationBinding) -> VerificationSite {
 }
 
 pub(super) fn relative(repo: &Utf8Path, file: &Utf8Path) -> Utf8PathBuf {
-    file.strip_prefix(repo)
-        .map_or_else(|_| file.to_path_buf(), Utf8Path::to_path_buf)
+    super::files::native_relative(repo, file).unwrap_or_else(|_| file.to_path_buf())
+}
+
+#[cfg(all(test, windows))]
+mod path_tests {
+    use super::*;
+
+    #[test]
+    fn scanner_paths_use_portable_separators() {
+        assert_eq!(
+            relative(
+                Utf8Path::new(r"C:\repo"),
+                Utf8Path::new(r"C:\repo\src\pay.rs")
+            ),
+            "src/pay.rs"
+        );
+    }
 }

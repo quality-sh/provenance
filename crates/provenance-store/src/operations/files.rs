@@ -125,7 +125,7 @@ pub(crate) fn validate_relative(relative: &Utf8Path) -> Result<(), FileAccessRef
     Ok(())
 }
 
-/// Native absolute paths are converted lexically before the held open.
+/// Native paths resolve root aliases; source components remain lexical before the held open.
 pub(crate) fn native_relative(
     root: &Utf8Path,
     path: &Utf8Path,
