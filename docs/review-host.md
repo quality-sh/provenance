@@ -133,16 +133,19 @@ and [SDK contract](https://github.com/quality-sh/provenance-web/blob/93678e4a3a3
 Prepare a new directory outside source control, then build:
 
 ```sh
-python3 tools/review_assets.py /tmp/provenance-review-assets
+PROVENANCE_REVIEW_ASSETS_OUTPUT=/tmp/provenance-review-assets \
+  cargo test --locked -p provenance-cli --test review_bundle -- --ignored --nocapture
 PROVENANCE_REVIEW_ASSETS_DIR=/tmp/provenance-review-assets cargo build --locked -p provenance-cli --bin provenance
 ```
 
-Preparation uses authenticated `gh run download` for the pinned workflow
-artifact. It verifies the archive against the committed SHA-256 before it
-creates the output directory. To use a saved copy without GitHub access, add
-`--archive /path/to/provenance-review.tar.gz`. A sidecar alone cannot change the
-accepted hash. GitHub workflow artifacts can expire; retain the matching archive
-for reproducible builds. An unavailable download or changed checksum stops
+Preparation and validation are one ignored Rust test. It uses authenticated
+`gh run download` for the pinned workflow artifact. It verifies the archive
+against the committed SHA-256 before it creates any output directory. Set
+`PROVENANCE_REVIEW_ARCHIVE=/path/to/provenance-review.tar.gz` to use a saved
+copy without GitHub access. Set `PROVENANCE_REVIEW_BINARY_OUTPUT` to retain
+the validated standalone binary. A sidecar alone cannot change the accepted
+hash. GitHub workflow artifacts can expire; retain the matching archive for
+reproducible builds. An unavailable download or changed checksum stops
 preparation. No network access occurs in the Cargo asset build step or at runtime.
 
 `.2` supplies the production local host, authorization, explicit repository and
@@ -154,11 +157,10 @@ review mutations; `.6` owns Wiki removal. SDK/client package separation remains
 
 ## Validation
 
-Run `cargo test -p provenance-cli --test cli_review_host --test review_asset_build`
+Run `cargo test -p provenance-cli --test cli_review_host --test review_asset_build --test review_archive`
 and `cargo test -p provenance-transport --features test-fixture` after generation.
-Run `python3 -m unittest discover -s tools -p test_review_assets.py` for archive
-integrity checks. Run `python3 tools/test-review-bundle.py` to build with the
-pinned real archive, or supply `--archive` with the saved copy.
+Run `cargo test -p provenance-cli --test review_bundle -- --ignored` to build with the
+pinned real archive, or set `PROVENANCE_REVIEW_ARCHIVE` to the saved copy.
 
 The bundle check compares every served file with the verified archive. It copies
 the executable, deletes the build input, removes Node from its process search

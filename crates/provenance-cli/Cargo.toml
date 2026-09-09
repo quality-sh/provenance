@@ -59,9 +59,11 @@ dogfood = []
 
 [dev-dependencies]
 assert_cmd.workspace = true
+flate2.workspace = true
 insta.workspace = true
 pdf_oxide = { version = "=0.3.77", default-features = false, features = ["legacy-crypto"] }
 jsonschema.workspace = true
 tempfile.workspace = true
 predicates.workspace = true
 sha2.workspace = true
+tar.workspace = true
