@@ -1,8 +1,6 @@
-//! The scanner's verification methods, held to the macro and TypeScript SDK.
-//!
-//! `provenance-macros` validates `#[verifies]` method words at compile time.
-//! The TypeScript signature declares the same restriction, and the scanner
-//! parses those words later. These tests compare all three source lists.
+//! The scanner, macro, and canonical contract use the same method words.
+//! The SDK derives its method type from this contract. Its compiler fixtures
+//! check the public TypeScript type in both assignment directions.
 
 use std::str::FromStr;
 
@@ -60,29 +58,28 @@ fn macro_method_words() -> Vec<String> {
     words
 }
 
-fn typescript_method_words() -> Vec<String> {
-    let source = std::fs::read_to_string(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../packages/provenance/src/rules.ts"),
-    )
-    .expect("read TypeScript rules source");
-    let (_, declaration) = source
-        .split_once("export type VerificationMethod =")
-        .expect("TypeScript no longer declares VerificationMethod");
-    let (declaration, _) = declaration
-        .split_once(';')
-        .expect("VerificationMethod declaration is unterminated");
-    let words = declaration
-        .split('"')
-        .skip(1)
-        .step_by(2)
-        .map(str::to_string)
-        .collect::<Vec<_>>();
-    assert!(
-        !words.is_empty(),
-        "parsed no method words out of TypeScript VerificationMethod"
-    );
-    words
+fn core_method_words() -> Vec<String> {
+    use provenance_core::VerificationMethod;
+
+    let listed = [
+        VerificationMethod::Exhaustion,
+        VerificationMethod::Property,
+        VerificationMethod::Examples,
+        VerificationMethod::Conformance,
+        VerificationMethod::Construction,
+        VerificationMethod::Proof,
+    ];
+    for variant in listed {
+        match variant {
+            VerificationMethod::Exhaustion
+            | VerificationMethod::Property
+            | VerificationMethod::Examples
+            | VerificationMethod::Conformance
+            | VerificationMethod::Construction
+            | VerificationMethod::Proof => {}
+        }
+    }
+    listed.iter().map(ToString::to_string).collect()
 }
 
 #[test]
@@ -118,14 +115,14 @@ fn the_scanner_knows_no_method_word_the_macro_refuses() {
 
 #[test]
 #[verifies("rule_verification_method_words", conformance)]
-fn typescript_uses_exactly_the_macro_and_scanner_method_words() {
-    let typescript_words = typescript_method_words();
+fn core_uses_exactly_the_macro_and_scanner_method_words() {
+    let core_words = core_method_words();
     let macro_words = macro_method_words();
     let scanner_words = all_verifications()
         .into_iter()
         .map(|verification| verification.to_string())
         .collect::<Vec<_>>();
 
-    assert_eq!(typescript_words, macro_words);
-    assert_eq!(typescript_words, scanner_words);
+    assert_eq!(core_words, macro_words);
+    assert_eq!(core_words, scanner_words);
 }

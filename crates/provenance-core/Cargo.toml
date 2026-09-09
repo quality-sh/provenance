@@ -12,7 +12,11 @@ publish.workspace = true
 [lints]
 workspace = true
 
+[features]
+schema = ["dep:schemars"]
+
 [dependencies]
+schemars = { workspace = true, optional = true }
 anyhow.workspace = true
 camino.workspace = true
 provenance-macros.workspace = true
@@ -23,3 +27,4 @@ thiserror.workspace = true
 
 [dev-dependencies]
 trybuild.workspace = true
+jsonschema = { workspace = true, features = ["draft202012"] }

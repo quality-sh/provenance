@@ -1,7 +1,5 @@
 use crate::operations::reader::{Live, ReadContext};
-use provenance_core::protocol::{
-    ensure_limit, ensure_protocol_version, take_page, EvidenceQuery, EvidenceResult, StaleEvidence,
-};
+use provenance_core::protocol::{take_page, EvidenceQuery, EvidenceResult, StaleEvidence};
 use provenance_core::{ImplementationBinding, RequirementReview, StableId, VerificationBinding};
 use provenance_macros::rule;
 
@@ -18,8 +16,9 @@ pub(super) async fn evidence(
     ctx: &ReadContext,
     request: EvidenceQuery,
 ) -> anyhow::Result<EvidenceResult> {
-    ensure_protocol_version(request.protocol_version)?;
-    ensure_limit(request.limit)?;
+    request
+        .validate()
+        .map_err(provenance_core::protocol::QueryValidation::into_native)?;
     let rule = StableId::new(request.rule.clone())?;
     let scope = ctx.snapshot().scope().clone();
     let include_retired = request.include_retired;

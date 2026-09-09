@@ -4,8 +4,8 @@ use serde::Serialize;
 use std::fmt;
 
 #[derive(Debug)]
-pub(super) struct StatementWriteError {
-    pub(super) report: Report,
+pub struct StatementWriteError {
+    pub(crate) report: Report,
 }
 
 #[derive(Serialize)]

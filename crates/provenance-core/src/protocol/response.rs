@@ -14,6 +14,7 @@ use super::{AffectedRule, GraphNode, Neighbor, Stamp, Stamped, TracedNode, SDK_P
 /// recorded response can tell which contract produced it, `operation`
 /// names which primitive it came from, and `stamp` says what the answer
 /// reflects.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize)]
 // The envelope stays encode-only: `operation` is a static name.
 pub struct QueryResponse<Result> {
@@ -22,6 +23,8 @@ pub struct QueryResponse<Result> {
     pub stamp: Stamp,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub freshness_error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub freshness_cause: Option<super::read_failure::FreshnessCause>,
     #[serde(flatten)]
     pub result: Result,
 }
@@ -33,11 +36,13 @@ impl<Result> QueryResponse<Result> {
             operation,
             stamp: answer.stamp,
             freshness_error: answer.freshness_error,
+            freshness_cause: None,
             result: answer.result,
         }
     }
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct GetResult {
     pub found: bool,
@@ -45,6 +50,7 @@ pub struct GetResult {
     pub node: Option<GraphNode>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SearchResult {
     pub limit: usize,
@@ -52,6 +58,7 @@ pub struct SearchResult {
     pub nodes: Vec<GraphNode>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct NeighborsResult {
     pub id: String,
@@ -60,6 +67,7 @@ pub struct NeighborsResult {
     pub neighbors: Vec<Neighbor>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TraceResult {
     pub id: String,
@@ -69,6 +77,7 @@ pub struct TraceResult {
     pub nodes: Vec<TracedNode>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ImpactResult {
     pub id: String,
@@ -82,6 +91,7 @@ pub struct ImpactResult {
 }
 
 /// What a commit range did to the code carrying a Rule's evidence.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct StaleEvidence {
     pub base: String,
@@ -89,6 +99,7 @@ pub struct StaleEvidence {
     pub sites: Vec<EvidenceDiffSite>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[expect(
     clippy::struct_excessive_bools,
@@ -117,6 +128,7 @@ pub struct EvidenceResult {
     pub reviews_has_more: bool,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct StaleResult {
     pub base: String,
@@ -128,8 +140,10 @@ pub struct StaleResult {
     pub sites: Vec<EvidenceDiffSite>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ResolveSymbolResult {
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub file: Utf8PathBuf,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub symbol: Option<String>,

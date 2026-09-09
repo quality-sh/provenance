@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use super::ids::{SchemaVersion, ScopeId, StableId};
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ProjectionRow)]
 #[table("domains")]
 pub struct Domain {

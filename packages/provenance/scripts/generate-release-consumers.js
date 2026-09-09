@@ -6,7 +6,7 @@ const defaults = {
   package: fileURLToPath(new URL("../package.json", import.meta.url)),
   runtime: fileURLToPath(new URL("../src/engine-packages.ts", import.meta.url)),
 };
-const { check, paths } = parseArgs(process.argv.slice(2));
+const { check, runtimeOnly, paths } = parseArgs(process.argv.slice(2));
 const targets = JSON.parse(readFileSync(paths.targets, "utf8"));
 const packageManifest = JSON.parse(readFileSync(paths.package, "utf8"));
 const expectedDependencies = Object.fromEntries(
@@ -31,11 +31,12 @@ const runtimeOutput = [
   "",
 ].join("\n");
 
-if (check) {
+if (check || runtimeOnly) {
   if (sortedEntries(currentDependencies) !== sortedEntries(expectedDependencies)) {
     throw new Error(`generated release consumer is stale: ${paths.package}`);
   }
-  if (readFileSync(paths.runtime, "utf8").replaceAll("\r\n", "\n") !== runtimeOutput) {
+  if (runtimeOnly) writeFileSync(paths.runtime, runtimeOutput);
+  else if (readFileSync(paths.runtime, "utf8").replaceAll("\r\n", "\n") !== runtimeOutput) {
     throw new Error(`generated release consumer is stale: ${paths.runtime}`);
   }
 } else {
@@ -53,7 +54,13 @@ function sortedEntries(value) {
 function parseArgs(values) {
   const paths = { ...defaults };
   let check = false;
+  let runtimeOnly = false;
   for (let index = 0; index < values.length;) {
+    if (values[index] === "--runtime-only") {
+      runtimeOnly = true;
+      index += 1;
+      continue;
+    }
     if (values[index] === "--check") {
       check = true;
       index += 1;
@@ -62,10 +69,11 @@ function parseArgs(values) {
     const flag = values[index];
     const value = values[index + 1];
     if (!flag?.startsWith("--") || value === undefined || !(flag.slice(2) in paths)) {
-      throw new Error("arguments must be --check or --targets/--package/--runtime paths");
+      throw new Error("arguments must be --check, --runtime-only, or --targets/--package/--runtime paths");
     }
     paths[flag.slice(2)] = value;
     index += 2;
   }
-  return { check, paths };
+  if (check && runtimeOnly) throw new Error("--check and --runtime-only cannot be combined");
+  return { check, runtimeOnly, paths };
 }

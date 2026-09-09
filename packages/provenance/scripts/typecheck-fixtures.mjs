@@ -24,6 +24,9 @@ assert.equal(valid.status, 0, valid.stdout + valid.stderr);
 const queryEnvelope = typecheck("query-envelope");
 assert.equal(queryEnvelope.status, 0, queryEnvelope.stdout + queryEnvelope.stderr);
 
+const queryContract = typecheck("query-contract");
+assert.equal(queryContract.status, 0, queryContract.stdout + queryContract.stderr);
+
 const contextValid = typecheck("context-valid");
 assert.equal(contextValid.status, 0, contextValid.stdout + contextValid.stderr);
 
@@ -64,14 +67,16 @@ assert.notEqual(
 assert.match(sourceKindOutput, /TS2345/);
 // Both fluent builder surfaces close the kind: the top-level
 // `source(key).kind` and the spec-scoped `defineSpec(key).source(key).kind`.
-const closedKindErrors = sourceKindOutput
+const closedKindErrors = sourceKindOutput.replaceAll("\\", "/")
   .split("\n")
-  .filter((line) => line.includes("TS2345") && line.includes("SourceKind"));
-assert.equal(
-  closedKindErrors.length,
-  2,
-  "both fluent builder surfaces must reject an unsupported kind",
-);
+  .filter((line) => line.includes("error TS2345:"));
+assert.equal(closedKindErrors.length, 2, "exactly the two unsupported kinds must fail");
+for (const location of ["(8,39)", "(11,46)"]) {
+  const diagnostic = closedKindErrors.find(line =>
+    line.startsWith(`test/fixtures/source-kind-closed/provenance.spec.ts${location}:`));
+  assert.ok(diagnostic, `missing unsupported-kind rejection at ${location}`);
+  assert.match(diagnostic, /Argument of type.*"integration"/);
+}
 
 const contextCrossSpec = typecheck("context-cross-spec");
 assert.notEqual(contextCrossSpec.status, 0, "a Source unexpectedly crossed spec contexts");

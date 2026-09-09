@@ -26,8 +26,10 @@ jobs:
     outputs:
       rust: ${{ steps.filter.outputs.rust }}
       sdk: ${{ steps.filter.outputs.sdk }}
+      contract: ${{ steps.filter.outputs.contract }}
       release: ${{ steps.filter.outputs.release }}
       test-matrix: ${{ steps.matrices.outputs.test }}
+      file-access-matrix: ${{ steps.matrices.outputs.file_access }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
@@ -58,7 +60,20 @@ jobs:
               - "skills/**"
               - ".agents/skills/**"
               - ".claude/skills/**"
+            contract:
+              - *ci
+              - "crates/**"
+              - "Cargo.toml"
+              - "Cargo.lock"
+              - "tools/operation-codegen/**"
+              - "contracts/operations/**"
+              - "packages/provenance/**"
             sdk:
+              - "crates/provenance-core/**"
+              - "crates/provenance-ste100/**"
+              - "crates/provenance-store/**"
+              - "tools/operation-codegen/**"
+              - "contracts/operations/**"
               - *ci
               - "packages/**"
               - "examples/typescript-sdk/**"
@@ -68,11 +83,38 @@ jobs:
       - name: Select platform matrices for the event
         id: matrices
         run: |
+          echo "file_access=$(jq -c '{include: map({os: .smoke_os, target: .target})}' .github/release-targets.json)" >> "$GITHUB_OUTPUT"
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
             echo 'test={"os":["ubuntu-latest"]}' >> "$GITHUB_OUTPUT"
           else
             echo 'test={"os":["ubuntu-latest","macos-latest","windows-latest"]}' >> "$GITHUB_OUTPUT"
           fi
+
+  generate-operations:
+    name: Generate operation clients
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true' || needs.changes.outputs.contract == 'true'
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: npm ci --prefix tools/operation-codegen
+      - run: node tools/operation-codegen/check-source-control.mjs
+      - run: node tools/operation-codegen/generate.mjs
+      - name: Archive generated source for dependent jobs
+        run: |
+          mkdir -p target/operation-artifact
+          tar -czf target/operation-artifact/operation-generated.tar.gz contracts/operations packages/provenance/src/generated crates/provenance-http-client/src/generated
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: operation-generated
+          path: target/operation-artifact/operation-generated.tar.gz
+          retention-days: 1
 
   # One build per OS. Every job that only needs to drive the CLI downloads
   # this artifact instead of compiling the workspace itself; cargo test and
@@ -96,12 +138,15 @@ jobs:
           add-job-id-key: "false"
           cache-on-failure: true
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo build -p provenance-cli
-      - name: Upload the CLI for the consumer jobs
+      - run: cargo build --locked -p provenance-cli
+      - run: cargo build --locked -p provenance-transport --features test-fixture --bin existing-root-host-fixture
+      - name: Upload the CLI and isolated test host for the consumer jobs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: provenance-cli-x86_64-unknown-linux-gnu
-          path: target/debug/provenance
+          path: |
+            target/debug/provenance
+            target/debug/existing-root-host-fixture
           retention-days: 1
 
   build-cli-platforms:
@@ -116,9 +161,11 @@ jobs:
           - os: blacksmith-4vcpu-windows-2025
             target: x86_64-pc-windows-msvc
             binary: provenance.exe
+            fixture: existing-root-host-fixture.exe
           - os: blacksmith-6vcpu-macos-15
             target: aarch64-apple-darwin
             binary: provenance
+            fixture: existing-root-host-fixture
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
@@ -131,21 +178,31 @@ jobs:
           add-job-id-key: "false"
           cache-on-failure: true
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo build -p provenance-cli
-      - name: Upload the CLI for the consumer jobs
+      - run: cargo build --locked -p provenance-cli
+      - run: cargo build --locked -p provenance-transport --features test-fixture --bin existing-root-host-fixture
+      - name: Upload the CLI and isolated test host for the consumer jobs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: provenance-cli-${{ matrix.target }}
-          path: target/debug/${{ matrix.binary }}
+          path: |
+            target/debug/${{ matrix.binary }}
+            target/debug/${{ matrix.fixture }}
           retention-days: 1
 
   fmt:
     name: Format
-    needs: changes
-    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true'
+    needs: [changes, generate-operations]
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.contract == 'true'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: operation-generated
+          path: target/operation-artifact
+      - name: Restore generated operation source
+        shell: bash
+        run: tar -xzf target/operation-artifact/operation-generated.tar.gz
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
         with:
           toolchain: stable
@@ -154,11 +211,18 @@ jobs:
 
   clippy:
     name: Clippy
-    needs: changes
-    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true'
+    needs: [changes, generate-operations]
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.contract == 'true'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: operation-generated
+          path: target/operation-artifact
+      - name: Restore generated operation source
+        shell: bash
+        run: tar -xzf target/operation-artifact/operation-generated.tar.gz
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
         with:
           toolchain: stable
@@ -176,14 +240,21 @@ jobs:
 
   test:
     name: Test (${{ matrix.os }})
-    needs: changes
-    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true'
+    needs: [changes, generate-operations]
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.contract == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.changes.outputs.test-matrix) }}
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: operation-generated
+          path: target/operation-artifact
+      - name: Restore generated operation source
+        shell: bash
+        run: tar -xzf target/operation-artifact/operation-generated.tar.gz
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
         with:
           toolchain: stable
@@ -228,7 +299,7 @@ jobs:
         with:
           name: provenance-cli-x86_64-unknown-linux-gnu
           path: target/debug
-      - run: chmod +x target/debug/provenance
+      - run: chmod +x target/debug/provenance target/debug/existing-root-host-fixture
       - run: target/debug/provenance coverage scan --repo . --path crates --scope default --validate-rules --strict
       - name: Validate initializer Rule bindings
         run: target/debug/provenance coverage scan --repo . --path packages/create-provenance --scope default --validate-rules --strict
@@ -247,7 +318,7 @@ jobs:
         with:
           name: provenance-cli-x86_64-unknown-linux-gnu
           path: target/debug
-      - run: chmod +x target/debug/provenance
+      - run: chmod +x target/debug/provenance target/debug/existing-root-host-fixture
       - name: Run Rust fixture
         shell: bash
         run: |
@@ -272,11 +343,18 @@ jobs:
 
   typescript-sdk:
     name: TypeScript SDK
-    needs: [changes, build-cli-linux]
+    needs: [changes, generate-operations, build-cli-linux]
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: operation-generated
+          path: target/operation-artifact
+      - name: Restore generated operation source
+        shell: bash
+        run: tar -xzf target/operation-artifact/operation-generated.tar.gz
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -289,7 +367,7 @@ jobs:
         with:
           name: provenance-cli-x86_64-unknown-linux-gnu
           path: target/debug
-      - run: chmod +x target/debug/provenance
+      - run: chmod +x target/debug/provenance target/debug/existing-root-host-fixture
       - run: npm ci --no-audit --no-fund --prefix packages/provenance
       - run: npm test --prefix packages/provenance
       # Bun eliminates the calling frame of a tail call, so a verify call that
@@ -298,11 +376,18 @@ jobs:
 
   typescript-sdk-example:
     name: TypeScript SDK example
-    needs: [changes, build-cli-linux]
+    needs: [changes, generate-operations, build-cli-linux]
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: operation-generated
+          path: target/operation-artifact
+      - name: Restore generated operation source
+        shell: bash
+        run: tar -xzf target/operation-artifact/operation-generated.tar.gz
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -314,7 +399,7 @@ jobs:
         with:
           name: provenance-cli-x86_64-unknown-linux-gnu
           path: target/debug
-      - run: chmod +x target/debug/provenance
+      - run: chmod +x target/debug/provenance target/debug/existing-root-host-fixture
       - run: npm ci --no-audit --no-fund --prefix packages/provenance
       - run: npm run build --prefix packages/provenance
       - run: npm ci --no-audit --no-fund --prefix examples/typescript-sdk
@@ -323,8 +408,6 @@ jobs:
         run: |
           fixture_repo="$PWD/examples/typescript-sdk"
           target/debug/provenance init --path "$fixture_repo" --scope default --path-prefix .
-          PROVENANCE_BIN="$PWD/target/debug/provenance" \
-          PROVENANCE_REPO="$fixture_repo" \
           PROVENANCE_SPEC_OWNER="spec://typescript/share-links" \
           PROVENANCE_VERIFICATION_OWNER="ci://typescript-example" \
           npm test --prefix examples/typescript-sdk
@@ -380,7 +463,7 @@ jobs:
 
   typescript-sdk-packed-install:
     name: Packaged SDK install (${{ matrix.target }})
-    needs: [changes, build-cli-linux, build-cli-platforms]
+    needs: [changes, generate-operations, build-cli-linux, build-cli-platforms]
     if: github.event_name == 'push'
     runs-on: ${{ matrix.os }}
     strategy:
@@ -398,6 +481,13 @@ jobs:
             yarn-pnp: false
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: operation-generated
+          path: target/operation-artifact
+      - name: Restore generated operation source
+        shell: bash
+        run: tar -xzf target/operation-artifact/operation-generated.tar.gz
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -407,7 +497,7 @@ jobs:
         with:
           name: provenance-cli-${{ matrix.target }}
           path: target/debug
-      - run: chmod +x target/debug/provenance
+      - run: chmod +x target/debug/provenance target/debug/existing-root-host-fixture
         if: runner.os != 'Windows'
       - name: Enable Yarn Plug'n'Play test
         if: matrix.yarn-pnp
@@ -491,6 +581,57 @@ jobs:
         shell: bash
         run: bash .github/scripts/release-smoke/test.sh
 
+  operation-contract:
+    name: Operation contract
+    needs: [changes, generate-operations]
+    if: github.event_name != 'pull_request' || needs.changes.outputs.contract == 'true'
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: operation-generated
+          path: target/operation-artifact
+      - name: Restore generated operation source
+        shell: bash
+        run: tar -xzf target/operation-artifact/operation-generated.tar.gz
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+        with:
+          toolchain: stable
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - run: npm ci --prefix tools/operation-codegen
+      - run: node tools/operation-codegen/generate.mjs --check
+      - run: npm test --prefix tools/operation-codegen
+      - run: node tools/operation-codegen/test-clients.mjs statements
+      - run: node tools/operation-codegen/test-clients.mjs records
+      - run: node tools/operation-codegen/test-clients.mjs evidence
+      - run: node tools/operation-codegen/test-clients.mjs writes
+      - run: node tools/operation-codegen/test-clients.mjs creation
+      - run: node tools/operation-codegen/test-clients.mjs discussions
+      - run: node tools/operation-codegen/test-clients.mjs ideation
+      - run: git diff --exit-code
+
+  repository-file-access:
+    name: Repository file access (${{ matrix.target }})
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.changes.outputs.file-access-matrix) }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c
+        with:
+          shared-key: repository-file-access-${{ matrix.target }}
+      - run: cargo test --locked -p provenance-store --target ${{ matrix.target }} operations::files
+
   # The one status the branch ruleset requires. Conditional jobs skip when a
   # pull request leaves their inputs untouched, and a skipped matrix job never
   # reports its expanded name, so requiring the jobs directly deadlocks a
@@ -500,6 +641,7 @@ jobs:
     name: CI OK
     needs:
       - changes
+      - generate-operations
       - fmt
       - clippy
       - test
@@ -513,6 +655,8 @@ jobs:
       - initializer
       - typescript-sdk-packed-install
       - release-smoke-tools
+      - operation-contract
+      - repository-file-access
     if: always()
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:

@@ -45,6 +45,7 @@ pub use proposal_surfaces::{ProposalDemand, ProposalSurfaceReason, SurfacedPropo
 pub use requirement_reviews::{
     requirement_statement_changes, RequirementReviewInput, RequirementStatementChange,
 };
+pub(crate) use statement_policy::StatementWriteError;
 pub use typed_statement_policy::TypedSpecWriteError;
 
 use crate::{layout::ProvenanceLayout, shards};
@@ -97,6 +98,7 @@ pub struct IdeationLandingBatch {
 }
 
 #[derive(Debug, serde::Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct PostMessageResult {
     pub thread: Thread,
     pub message: Message,

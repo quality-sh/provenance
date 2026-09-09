@@ -60,7 +60,7 @@ where
     let _lock = AdvisoryLock::acquire(lock_path)?;
     let mut records = read_jsonl_unlocked(path)?;
     let result = mutate(&mut records)?;
-    write_jsonl_atomic_unlocked(path, &records)?;
+    write_jsonl_atomic_unlocked(path, &records).map_err(crate::write_error::publication_started)?;
     Ok(result)
 }
 
@@ -118,5 +118,64 @@ mod tests {
         let path = camino::Utf8PathBuf::from_path_buf(dir.path().join("records.jsonl")).unwrap();
         write_jsonl_atomic(&path, &[Record { id: "one" }]).unwrap();
         assert_eq!(std::fs::read_to_string(path).unwrap(), "{\"id\":\"one\"}\n");
+    }
+
+    #[test]
+    fn persistence_failure_after_mutation_reports_an_uncertain_outcome() {
+        use crate::write_error::{PublicationStarted, WriteError, WriteFailure};
+        let dir = tempfile::tempdir().unwrap();
+        let root = camino::Utf8Path::from_path(dir.path()).unwrap();
+        let path = root.join("records.jsonl");
+        let mut mutation_completed = false;
+        let error = mutate_jsonl_locked(
+            &path,
+            &root.join("records.lock"),
+            |records: &mut Vec<serde_json::Value>| {
+                records.push(serde_json::json!({"schema_version":provenance_core::SUPPORTED_SCHEMA_VERSION.0,"id":"one"}));
+                // A directory at the destination makes the real atomic replacement fail.
+                std::fs::create_dir(&path)?;
+                mutation_completed = true;
+                Ok(())
+            },
+        ).unwrap_err();
+        assert!(mutation_completed);
+        let publication = error.downcast_ref::<PublicationStarted>().unwrap();
+        assert!(publication
+            .0
+            .downcast_ref::<tempfile::PersistError>()
+            .is_some());
+        assert!(matches!(
+            WriteError(error).safe(),
+            WriteFailure::UncertainWrite
+        ));
+    }
+
+    #[test]
+    fn mutation_refusal_keeps_its_type_and_does_not_publish_in_memory_changes() {
+        use crate::write_error::{PublicationStarted, SourceFailure, WriteError, WriteFailure};
+        let dir = tempfile::tempdir().unwrap();
+        let root = camino::Utf8Path::from_path(dir.path()).unwrap();
+        let path = root.join("records.jsonl");
+        write_jsonl_atomic(&path, &[serde_json::json!({"schema_version":provenance_core::SUPPORTED_SCHEMA_VERSION.0,"id":"one"})]).unwrap();
+        let before = std::fs::read(&path).unwrap();
+        let error = mutate_jsonl_locked(
+            &path,
+            &root.join("records.lock"),
+            |records: &mut Vec<serde_json::Value>| -> anyhow::Result<()> {
+                records.clear();
+                Err(SourceFailure::wrap(
+                    WriteFailure::InvalidCompletion,
+                    anyhow::anyhow!("invalid completion fixture"),
+                ))
+            },
+        )
+        .unwrap_err();
+        assert!(error.downcast_ref::<PublicationStarted>().is_none());
+        assert_eq!(format!("{error:#}"), "invalid completion fixture");
+        assert!(matches!(
+            WriteError(error).safe(),
+            WriteFailure::InvalidCompletion
+        ));
+        assert_eq!(std::fs::read(&path).unwrap(), before);
     }
 }

@@ -1,14 +1,13 @@
 use crate::operations::reader::ReadContext;
-use provenance_core::protocol::{
-    ensure_limit, ensure_protocol_version, take_page, GetQuery, GetResult, SearchQuery,
-    SearchResult,
-};
+use provenance_core::protocol::{take_page, GetQuery, GetResult, SearchQuery, SearchResult};
 use provenance_core::{NodeType, StableId};
 
 use super::nodes;
 
 pub(super) async fn get(ctx: &ReadContext, request: GetQuery) -> anyhow::Result<GetResult> {
-    ensure_protocol_version(request.protocol_version)?;
+    request
+        .validate()
+        .map_err(provenance_core::protocol::QueryValidation::into_native)?;
     let id = StableId::new(request.id)?;
     let node = nodes::node(
         ctx.snapshot(),
@@ -31,11 +30,11 @@ pub(super) async fn search(
     ctx: &ReadContext,
     request: SearchQuery,
 ) -> anyhow::Result<SearchResult> {
-    ensure_protocol_version(request.protocol_version)?;
-    ensure_limit(request.limit)?;
+    request
+        .validate()
+        .map_err(provenance_core::protocol::QueryValidation::into_native)?;
     let text = request.text;
     let needle = text.trim().to_lowercase();
-    anyhow::ensure!(!needle.is_empty(), "search text must not be empty");
     // Protocol version 5 compatibility: a request that names no kinds gets
     // the six kinds version 5 always answered. Domains and boundaries are
     // opt-in through an explicit node_types entry, so a strict old client

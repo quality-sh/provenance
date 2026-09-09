@@ -23,3 +23,5 @@ mod test_probes;
 ///
 /// Increase this version when a validator change requires existing scopes to be checked again.
 pub const VALIDATION_VERSION: u32 = 1;
+
+pub mod write_error;

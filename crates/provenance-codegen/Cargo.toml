@@ -1,0 +1,24 @@
+[package]
+name = "provenance-codegen"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+provenance-core = { workspace = true, features = ["schema"] }
+provenance-store = { workspace = true, features = ["schema"] }
+provenance-ste100 = { workspace = true, features = ["schema"] }
+serde_json.workspace = true
+schemars.workspace = true
+schemars08 = { package = "schemars", version = "=0.8.22" }
+typify = { version = "=0.7.0", default-features = false }
+syn = { version = "=2.0.117", features = ["full"] }
+prettyplease = "=0.2.37"
+
+[dev-dependencies]
+jsonschema.workspace = true
+tempfile.workspace = true

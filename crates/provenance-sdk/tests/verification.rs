@@ -27,6 +27,9 @@ fn repository() -> (tempfile::TempDir, MutexGuard<'static, ()>) {
         .unwrap(),
     )
     .unwrap();
+    let source = root.join("crates/provenance-sdk/tests/verification.rs");
+    std::fs::create_dir_all(source.parent().unwrap()).unwrap();
+    std::fs::write(source, include_str!("verification.rs")).unwrap();
     std::env::set_var("PROVENANCE_REPO", root.as_str());
     (dir, guard)
 }

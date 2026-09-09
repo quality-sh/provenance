@@ -1,8 +1,7 @@
 use crate::cli::sdk::QueryArgs;
 use crate::output;
-use provenance_core::protocol::QueryResponse;
 use provenance_core::ScopeId;
-use provenance_store::operations::queries;
+use provenance_store::operations::catalog;
 
 /// Which structured query the caller asked for.
 #[derive(Debug, Clone, Copy)]
@@ -28,43 +27,60 @@ pub(super) async fn handle(operation: Operation, args: QueryArgs) -> anyhow::Res
     )?;
     let policy =
         provenance_store::operations::read_policy::ReadPolicy::resolve(&settings, args.freshness);
-    let repo = Some(root);
     let scope = ScopeId::new(args.scope)?;
     let format = args.format;
+    let context = catalog::PreparedContext::read(catalog::PreparedRead {
+        root,
+        scope: scope.clone(),
+        policy,
+        requested_target: String::new(),
+        external: false,
+    });
     match operation {
         Operation::Get => {
-            let result = queries::get(repo, &scope, policy, super::read_stdin_json()?).await?;
-            output::print(format, &QueryResponse::new("get", result))
+            let result =
+                catalog::invoke_typed::<catalog::Get>(context, super::read_stdin_json()?).await?;
+            output::print(format, &result)
         }
         Operation::Search => {
-            let result = queries::search(repo, &scope, policy, super::read_stdin_json()?).await?;
-            output::print(format, &QueryResponse::new("search", result))
+            let result =
+                catalog::invoke_typed::<catalog::Search>(context, super::read_stdin_json()?)
+                    .await?;
+            output::print(format, &result)
         }
         Operation::Neighbors => {
             let result =
-                queries::neighbors(repo, &scope, policy, super::read_stdin_json()?).await?;
-            output::print(format, &QueryResponse::new("neighbors", result))
+                catalog::invoke_typed::<catalog::Neighbors>(context, super::read_stdin_json()?)
+                    .await?;
+            output::print(format, &result)
         }
         Operation::Trace => {
-            let result = queries::trace(repo, &scope, policy, super::read_stdin_json()?).await?;
-            output::print(format, &QueryResponse::new("trace", result))
+            let result =
+                catalog::invoke_typed::<catalog::Trace>(context, super::read_stdin_json()?).await?;
+            output::print(format, &result)
         }
         Operation::Impact => {
-            let result = queries::impact(repo, &scope, policy, super::read_stdin_json()?).await?;
-            output::print(format, &QueryResponse::new("impact", result))
+            let result =
+                catalog::invoke_typed::<catalog::Impact>(context, super::read_stdin_json()?)
+                    .await?;
+            output::print(format, &result)
         }
         Operation::Evidence => {
-            let result = queries::evidence(repo, &scope, policy, super::read_stdin_json()?).await?;
-            output::print(format, &QueryResponse::new("evidence", result))
+            let result =
+                catalog::invoke_typed::<catalog::Evidence>(context, super::read_stdin_json()?)
+                    .await?;
+            output::print(format, &result)
         }
         Operation::Stale => {
-            let result = queries::stale(repo, &scope, policy, super::read_stdin_json()?).await?;
-            output::print(format, &QueryResponse::new("stale", result))
+            let result =
+                catalog::invoke_typed::<catalog::Stale>(context, super::read_stdin_json()?).await?;
+            output::print(format, &result)
         }
         Operation::ResolveSymbol => {
             let result =
-                queries::resolve_symbol(repo, &scope, policy, super::read_stdin_json()?).await?;
-            output::print(format, &QueryResponse::new("resolve-symbol", result))
+                catalog::invoke_typed::<catalog::ResolveSymbol>(context, super::read_stdin_json()?)
+                    .await?;
+            output::print(format, &result)
         }
     }
 }

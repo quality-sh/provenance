@@ -23,7 +23,14 @@ fn ids_of(keys: &[String], ids: &BTreeMap<String, StableId>) -> Vec<StableId> {
 fn canonical_ids(ids: &[String]) -> anyhow::Result<Vec<StableId>> {
     let mut resolved = ids
         .iter()
-        .map(|id| StableId::new(id.clone()))
+        .map(|id| {
+            StableId::new(id.clone()).map_err(|error| {
+                crate::write_error::SourceFailure::wrap(
+                    crate::write_error::WriteFailure::InvalidDeclaration,
+                    error,
+                )
+            })
+        })
         .collect::<anyhow::Result<Vec<_>>>()?;
     resolved.sort_by(|a, b| a.as_str().cmp(b.as_str()));
     resolved.dedup();
@@ -55,7 +62,12 @@ pub(super) fn apply_requirement(
         record.supersedes = ids_of(keys, requirement_ids);
     }
     if let Some(resolution) = &declaration.spawned_by {
-        record.spawned_by = Some(StableId::new(resolution.clone())?);
+        record.spawned_by = Some(StableId::new(resolution.clone()).map_err(|error| {
+            crate::write_error::SourceFailure::wrap(
+                crate::write_error::WriteFailure::InvalidDeclaration,
+                error,
+            )
+        })?);
     }
     Ok(())
 }
@@ -101,7 +113,8 @@ pub(in crate::state_store::typed_specs) fn ensure_acyclic(
             let mut stack: Vec<&StableId> = targets(start, name);
             let mut seen = Vec::new();
             while let Some(current) = stack.pop() {
-                anyhow::ensure!(
+                crate::write_error::ensure!(
+                    InvalidDeclaration,
                     current != start.id(),
                     "{name} from {} returns to itself",
                     start.id().as_str()

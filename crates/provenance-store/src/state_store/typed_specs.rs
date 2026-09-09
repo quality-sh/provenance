@@ -1,3 +1,4 @@
+use crate::write_error::{publication_started, SourceFailure, WriteFailure};
 mod adoption;
 mod identity;
 mod lifecycle;
@@ -93,7 +94,8 @@ fn desired_typed_ids(
         &input.rules,
         |key| sources.contains_key(key),
         |key| requirements.contains_key(key),
-    )?;
+    )
+    .map_err(|error| SourceFailure::wrap(WriteFailure::MissingReference, error))?;
     Ok(DesiredTypedIds {
         sources,
         requirements,
@@ -136,7 +138,8 @@ impl StateStore {
         mode: ReconcileMode,
     ) -> anyhow::Result<TypedSpecResult> {
         let (input, current) = self.prepare_typed_spec(scope_id, input)?;
-        let ids = desired_typed_ids(&input, &current)?;
+        let ids = desired_typed_ids(&input, &current)
+            .map_err(|error| SourceFailure::wrap(WriteFailure::InvalidDeclaration, error))?;
         let ownership = adoption::decide(scope_id, &input, &current, &ids)?;
         if !ownership.conflicts().is_empty() {
             if matches!(mode, ReconcileMode::Apply) {
@@ -214,19 +217,24 @@ impl StateStore {
 
         if matches!(mode, ReconcileMode::Apply) {
             super::typed_statement_policy::ensure_typed_spec_is_writable(&result)?;
-            replace_records(self, &shards::sources_path(&self.layout, scope_id), sources)?;
-            replace_records(
-                self,
-                &shards::requirements_path(&self.layout, scope_id),
-                requirements,
-            )?;
-            replace_records(self, &shards::rules_path(&self.layout, scope_id), rules)?;
-            replace_records(
-                self,
-                &shards::implementation_bindings_path(&self.layout, scope_id),
-                implementation_reconciliation.records,
-            )?;
-            self.raise_requirement_reviews(scope_id, &requirement_resources, &rule_resources)?;
+            (|| -> anyhow::Result<()> {
+                replace_records(self, &shards::sources_path(&self.layout, scope_id), sources)?;
+                crate::test_probes::at("typed_spec_sources_published")?;
+                replace_records(
+                    self,
+                    &shards::requirements_path(&self.layout, scope_id),
+                    requirements,
+                )?;
+                replace_records(self, &shards::rules_path(&self.layout, scope_id), rules)?;
+                replace_records(
+                    self,
+                    &shards::implementation_bindings_path(&self.layout, scope_id),
+                    implementation_reconciliation.records,
+                )?;
+                self.raise_requirement_reviews(scope_id, &requirement_resources, &rule_resources)?;
+                Ok(())
+            })()
+            .map_err(publication_started)?;
         }
 
         Ok(result)
@@ -316,7 +324,8 @@ impl StateStore {
         mut input: TypedSpecInput,
     ) -> anyhow::Result<(TypedSpecInput, CurrentTypedState)> {
         self.validate_typed_spec(scope_id, &input)?;
-        normalize_rule_relationships(&mut input.rules)?;
+        normalize_rule_relationships(&mut input.rules)
+            .map_err(|error| SourceFailure::wrap(WriteFailure::InvalidDeclaration, error))?;
         let current = self.current_typed_state(scope_id, &input.declared_by)?;
         Ok((input, current))
     }
@@ -326,17 +335,27 @@ impl StateStore {
         scope_id: &ScopeId,
         input: &TypedSpecInput,
     ) -> anyhow::Result<()> {
-        anyhow::ensure!(
-            input.schema_version == SUPPORTED_SCHEMA_VERSION.0,
-            "typed spec schema_version must be {}",
-            SUPPORTED_SCHEMA_VERSION.0
-        );
-        anyhow::ensure!(
+        if input.schema_version != SUPPORTED_SCHEMA_VERSION.0 {
+            return Err(SourceFailure::wrap(
+                WriteFailure::SchemaVersion,
+                anyhow::anyhow!(
+                    "typed spec schema_version must be {}",
+                    SUPPORTED_SCHEMA_VERSION.0
+                ),
+            ));
+        }
+        crate::write_error::ensure!(
+            InvalidDeclaration,
             !input.declared_by.trim().is_empty(),
             "declared_by must not be empty"
         );
-        anyhow::ensure!(!input.spec.trim().is_empty(), "spec must not be empty");
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            InvalidDeclaration,
+            !input.spec.trim().is_empty(),
+            "spec must not be empty"
+        );
+        crate::write_error::ensure!(
+            InvalidDeclaration,
             self.manifest()?
                 .scopes
                 .iter()

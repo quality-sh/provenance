@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 /// `canonical` (canonical shards), `scanned_sites` (a working-tree scan),
 /// `verification_runs` (cache JSONL), and `diff` (git). A stamp never
 /// implies freshness for anything it does not list.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Stamp {
     pub serial: i64,
@@ -25,6 +26,7 @@ pub struct Stamp {
 }
 
 /// The freshness step a read ran before it answered.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StampPolicy {

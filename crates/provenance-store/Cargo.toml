@@ -12,7 +12,12 @@ publish.workspace = true
 [lints]
 workspace = true
 
+[features]
+schema = ["dep:schemars", "provenance-core/schema", "provenance-ste100/schema"]
+
 [dependencies]
+serde_path_to_error = "=0.1.20"
+schemars = { workspace = true, optional = true }
 anyhow.workspace = true
 camino.workspace = true
 fs2.workspace = true
@@ -30,6 +35,15 @@ thiserror.workspace = true
 tokio = { workspace = true, features = ["time"] }
 uuid.workspace = true
 
+[target.'cfg(unix)'.dependencies]
+rustix.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+fs_at.workspace = true
+windows-sys.workspace = true
+
 [dev-dependencies]
+fs_at.workspace = true
+jsonschema = { workspace = true, features = ["draft202012"] }
 filetime.workspace = true
 trybuild.workspace = true
