@@ -11,7 +11,11 @@ export function portableFile(file: string, localRoot: string | undefined): strin
   const target = resolve(root, file);
   let path = relative(root, target);
   if (!inside(path)) {
-    path = relative(realpathSync(root), target);
+    try {
+      path = relative(realpathSync(root), target);
+    } catch (cause) {
+      throw new Error('Local file is outside the configured project root', { cause });
+    }
   }
   if (!inside(path)) throw new Error('Local file is outside the configured project root');
   return path.split(sep).join('/');
