@@ -43,14 +43,16 @@ const { join } = require("node:path");
 
 const [root, version] = process.argv.slice(2);
 const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
-if (manifest.devDependencies?.["@quality-sh/provenance"] !==
-    `npm:@quality-sh/provenance@${version}`) {
-  process.exit(1);
+const dependency = manifest.devDependencies?.["@quality-sh/provenance"];
+if (dependency !== version) {
+  throw new Error(`Deno: expected SDK dependency ${version}, got ${JSON.stringify(dependency)}`);
 }
 const state = JSON.parse(
   readFileSync(join(root, ".provenance", "state", "manifest.json"), "utf8"),
 );
-if (state.scopes?.[0]?.path_prefix !== ".") process.exit(1);
+if (state.scopes?.[0]?.path_prefix !== ".") {
+  throw new Error("Deno: expected the default scope at the repository root");
+}
 JS
 
 assert_initialized_repository "$channel" "$fixture"
