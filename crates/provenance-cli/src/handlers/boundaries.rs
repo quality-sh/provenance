@@ -7,8 +7,12 @@ use provenance_store::{
     state_store::{CreateBoundaryInput, StateStore},
 };
 
-pub(super) fn handle(command: BoundariesCommand) -> anyhow::Result<()> {
+pub(super) async fn handle(command: BoundariesCommand) -> anyhow::Result<()> {
     match command {
+        BoundariesCommand::Update(args) => {
+            super::updates::handle::<provenance_store::operations::catalog::UpdateBoundary>(args)
+                .await?;
+        }
         BoundariesCommand::Create {
             repo,
             scope,

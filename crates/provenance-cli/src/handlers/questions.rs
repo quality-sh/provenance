@@ -5,11 +5,11 @@ use crate::output;
 use provenance_core::{ArtifactLink, QuestionStatus, ResolutionMethod, ScopeId, StableId};
 use provenance_store::{
     layout::ProvenanceLayout,
-    state_store::{CreateQuestionInput, StateStore, UpdateQuestionInput},
+    state_store::{CreateQuestionInput, StateStore},
 };
 
 #[allow(clippy::too_many_lines)]
-pub(super) fn handle(command: QuestionsCommand, quiet: bool) -> anyhow::Result<()> {
+pub(super) async fn handle(command: QuestionsCommand, quiet: bool) -> anyhow::Result<()> {
     match command {
         QuestionsCommand::Create {
             repo,
@@ -58,29 +58,43 @@ pub(super) fn handle(command: QuestionsCommand, quiet: bool) -> anyhow::Result<(
             scope,
             id,
             method,
+            question,
             status,
             links_json,
             resolution_id,
+            fields_json,
             format,
         } => {
             warn_if_skills_missing(&repo, quiet)?;
-            let question = StateStore::new(ProvenanceLayout::new(repo)).update_question(
-                UpdateQuestionInput {
-                    scope_id: ScopeId::new(scope)?,
-                    id: StableId::new(id)?,
-                    resolution_method: method
-                        .map(|value| ResolutionMethod::parse(&value))
-                        .transpose()?,
-                    status: status
-                        .map(|value| QuestionStatus::parse(&value))
-                        .transpose()?,
-                    links: links_json
-                        .map(|value| parse_json_arg::<Vec<ArtifactLink>>("links-json", &value))
-                        .transpose()?,
-                    resolution_id: resolution_id.map(StableId::new).transpose()?,
+            let fields_json = if let Some(fields) = fields_json {
+                fields
+            } else {
+                anyhow::ensure!(
+                    method.is_some()
+                        || question.is_some()
+                        || status.is_some()
+                        || links_json.is_some()
+                        || resolution_id.is_some(),
+                    "at least one question field must be updated"
+                );
+                serde_json::to_string(&serde_json::json!({
+                    "question": question,
+                    "resolution_method": method.map(|m| ResolutionMethod::parse(&m)).transpose()?,
+                    "status": status.map(|s| QuestionStatus::parse(&s)).transpose()?,
+                    "links": links_json.map(|s| parse_json_arg::<Vec<ArtifactLink>>("links-json", &s)).transpose()?,
+                    "resolution_id": resolution_id,
+                }))?
+            };
+            super::updates::handle::<provenance_store::operations::catalog::UpdateQuestion>(
+                crate::cli::updates::UpdateArgs {
+                    repo,
+                    scope,
+                    id,
+                    fields_json,
+                    format,
                 },
-            )?;
-            output::print(format, &question)?;
+            )
+            .await?;
         }
         QuestionsCommand::Claim {
             repo,

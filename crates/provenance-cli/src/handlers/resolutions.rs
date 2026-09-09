@@ -8,8 +8,12 @@ use provenance_store::{
     state_store::{CreateResolutionInput, StateStore},
 };
 
-pub(super) fn handle(command: ResolutionsCommand) -> anyhow::Result<()> {
+pub(super) async fn handle(command: ResolutionsCommand) -> anyhow::Result<()> {
     match command {
+        ResolutionsCommand::Update(args) => {
+            super::updates::handle::<provenance_store::operations::catalog::UpdateResolution>(args)
+                .await?;
+        }
         ResolutionsCommand::Create {
             repo,
             scope,

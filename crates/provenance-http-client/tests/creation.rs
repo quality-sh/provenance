@@ -39,6 +39,21 @@ async fn generated_creation_methods_preserve_records_and_refusals() {
         serde_json::to_value(linked).unwrap()["source_refs"],
         json!([{"source_id":"source_rs","clause":"1"}])
     );
+    let changed = client.update_source(&serde_json::from_value(json!({"context":context,"request":{"scope_id":"default","id":"source_rs","url":"https://example.test/new","reference":"section 2","commit_pin":"abcdef0123456789"}})).unwrap()).await.unwrap();
+    assert_eq!(
+        serde_json::to_value(changed).unwrap()["origin_thread"],
+        "thread_origin"
+    );
+    let cleared = client.update_source(&serde_json::from_value(json!({"context":context,"request":{"scope_id":"default","id":"source_rs","clear_fields":["reference","commit_pin"]}})).unwrap()).await.unwrap();
+    let cleared = serde_json::to_value(cleared).unwrap();
+    assert_eq!(cleared["url"], "https://example.test/new");
+    assert!(cleared.get("reference").is_none());
+    assert!(cleared.get("commit_pin").is_none());
+    let approved = client.update_resolution(&serde_json::from_value(json!({"context":context,"request":{"scope_id":"default","id":"res_rs","status":"approved","approved_by":"reviewer","approved_at":1234,"inputs":[{"input_type":"source_material","reference":"source_rs","summary":"Later evidence"}]}})).unwrap()).await.unwrap();
+    let approved = serde_json::to_value(approved).unwrap();
+    assert_eq!(approved["approved_at"], 1234);
+    assert_eq!(approved["approved_by"], "reviewer");
+    assert_eq!(approved["requirement_ids"], json!(["req_rs"]));
     match client
         .create_source(&serde_json::from_value(source).unwrap())
         .await

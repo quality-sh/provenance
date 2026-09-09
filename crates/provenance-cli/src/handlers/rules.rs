@@ -70,8 +70,12 @@ fn statement_preview(statement: &str) -> String {
     }
 }
 
-pub(super) fn handle(command: RulesCommand) -> anyhow::Result<()> {
+pub(super) async fn handle(command: RulesCommand) -> anyhow::Result<()> {
     match command {
+        RulesCommand::Update(args) => {
+            super::updates::handle::<provenance_store::operations::catalog::UpdateRule>(args)
+                .await?;
+        }
         RulesCommand::Create {
             repo,
             scope,

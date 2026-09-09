@@ -7,6 +7,8 @@ use clap::Subcommand;
 // `Create` carries every field of a source; the reference verbs carry four flags.
 #[allow(clippy::large_enum_variant)]
 pub enum SourcesCommand {
+    /// Edit existing fields. Omitted fields retain their values.
+    Update(crate::cli::updates::UpdateArgs),
     Create {
         #[arg(long, default_value = ".")]
         repo: Utf8PathBuf,
@@ -47,6 +49,8 @@ pub enum SourcesCommand {
 
 #[derive(Subcommand)]
 pub enum RequirementsCommand {
+    /// Edit existing fields. Omitted fields retain their values.
+    Update(crate::cli::updates::UpdateArgs),
     Create {
         #[arg(long, default_value = ".")]
         repo: Utf8PathBuf,
@@ -154,6 +158,8 @@ pub enum FogCommand {
 
 #[derive(Subcommand)]
 pub enum DomainsCommand {
+    /// Edit existing fields. Omitted fields retain their values.
+    Update(crate::cli::updates::UpdateArgs),
     Create {
         #[arg(long, default_value = ".")]
         repo: Utf8PathBuf,
@@ -182,6 +188,8 @@ pub enum DomainsCommand {
 
 #[derive(Subcommand)]
 pub enum BoundariesCommand {
+    /// Edit existing fields. Omitted fields retain their values.
+    Update(crate::cli::updates::UpdateArgs),
     Create {
         #[arg(long, default_value = ".")]
         repo: Utf8PathBuf,

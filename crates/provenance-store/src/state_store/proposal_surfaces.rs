@@ -65,6 +65,7 @@ impl ProposalDemand {
     }
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "trigger", rename_all = "snake_case")]
 pub enum ProposalSurfaceReason {
@@ -72,12 +73,14 @@ pub enum ProposalSurfaceReason {
     Territory { target: IdeationTarget },
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct SurfacedProposal {
     pub proposal: ProposalCard,
     pub reasons: Vec<ProposalSurfaceReason>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct TopicClaim {
     #[serde(flatten)]

@@ -4,7 +4,7 @@
 use provenance_core::{QuestionStatus, TopicStatus};
 use provenance_macros::verifies;
 
-use super::{claim_blocking_status, claim_survives, ShapingStatus};
+use super::claims::{claim_blocking_status, claim_survives, ShapingStatus};
 
 // The variant lists are derived from exhaustive matches so that adding a
 // TopicStatus or QuestionStatus variant fails compilation until the new

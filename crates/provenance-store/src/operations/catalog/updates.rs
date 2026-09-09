@@ -1,0 +1,109 @@
+//! Edits use the same scoped writer adapter as creation.
+use super::creation::creation;
+use super::{ExecutionNeed, ExecutionNeeds, Operation, OperationFuture, PreparedContext};
+use crate::{
+    layout::ProvenanceLayout,
+    state_store::{
+        CreateBoundaryInput, CreateDomainInput, CreateQuestionInput, CreateTopicInput,
+        EditQuestionInput, StateStore, UpdateBoundaryInput, UpdateDomainInput,
+        UpdateRequirementInput, UpdateResolutionInput, UpdateRuleInput, UpdateSourceInput,
+        UpdateTopicInput,
+    },
+    write_error::{SourceFailure, WriteError, WriteFailure},
+};
+creation!(
+    UpdateSource,
+    "update-source",
+    UpdateSourceInput,
+    provenance_core::Source,
+    update_source,
+    [GraphStorage]
+);
+creation!(
+    UpdateResolution,
+    "update-resolution",
+    UpdateResolutionInput,
+    provenance_core::Resolution,
+    update_resolution,
+    [GraphStorage]
+);
+creation!(
+    UpdateRequirement,
+    "update-requirement",
+    UpdateRequirementInput,
+    provenance_core::Requirement,
+    update_requirement,
+    [GraphStorage, Dictionary]
+);
+creation!(
+    UpdateRule,
+    "update-rule",
+    UpdateRuleInput,
+    provenance_core::Rule,
+    update_rule,
+    [GraphStorage, Dictionary]
+);
+creation!(
+    UpdateDomain,
+    "update-domain",
+    UpdateDomainInput,
+    provenance_core::Domain,
+    update_domain,
+    [GraphStorage]
+);
+creation!(
+    UpdateBoundary,
+    "update-boundary",
+    UpdateBoundaryInput,
+    provenance_core::Boundary,
+    update_boundary,
+    [GraphStorage]
+);
+creation!(
+    UpdateTopic,
+    "update-topic",
+    UpdateTopicInput,
+    provenance_core::Topic,
+    edit_topic,
+    [GraphStorage]
+);
+creation!(
+    UpdateQuestion,
+    "update-question",
+    EditQuestionInput,
+    provenance_core::Question,
+    edit_question,
+    [GraphStorage]
+);
+creation!(
+    CreateDomain,
+    "create-domain",
+    CreateDomainInput,
+    provenance_core::Domain,
+    create_domain,
+    [GraphStorage]
+);
+creation!(
+    CreateBoundary,
+    "create-boundary",
+    CreateBoundaryInput,
+    provenance_core::Boundary,
+    create_boundary,
+    [GraphStorage]
+);
+creation!(
+    CreateTopic,
+    "create-topic",
+    CreateTopicInput,
+    provenance_core::Topic,
+    create_topic,
+    [GraphStorage]
+);
+creation!(
+    CreateQuestion,
+    "create-question",
+    CreateQuestionInput,
+    provenance_core::Question,
+    create_question,
+    [GraphStorage]
+);
