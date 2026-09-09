@@ -1,6 +1,7 @@
 import { connection, context, type SdkSettings } from './settings.js';
 import { portableFile } from './portable-file.js';
 import type { DeclarationAddress } from './protocol.js';
+import type { components } from './generated/schema.js';
 import type { VerificationMethod } from './rules.js';
 
 export interface VerifyOptions {
@@ -9,9 +10,11 @@ export interface VerifyOptions {
   url?: string;
   symbol?: string;
 }
+type VerificationRequest = components['schemas']['BeginVerificationRequestInput']['request'];
+type DeclarationReference = NonNullable<VerificationRequest['declaration']>;
 export type VerificationTarget =
-  | { rule: string }
-  | { declaration: { declared_by: string; address: DeclarationAddress } };
+  | { rule: NonNullable<VerificationRequest['rule']> }
+  | { declaration: Omit<DeclarationReference, 'address'> & { address: DeclarationAddress } };
 
 export async function runVerification(
   settings: SdkSettings,

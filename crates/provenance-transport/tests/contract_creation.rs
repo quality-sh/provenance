@@ -2,30 +2,9 @@
 #[path = "support/records.rs"]
 #[allow(dead_code)]
 mod records;
-use records::{call, Repository};
+use records::{call, scoped, writable_host, Repository};
 use serde_json::{json, Value};
 
-fn writable_host(repo: &Repository) -> provenance_transport::StatementHost {
-    use provenance_transport::fixture::{FixtureAccess, Target};
-    provenance_transport::StatementHost::with_fixture_access(
-        FixtureAccess::new(
-            vec![Target {
-                id: "selected".into(),
-                root: repo.dir.path().into(),
-            }],
-            vec![("selected".into(), "default".into())],
-            "fixture-secret",
-            "fixture.test",
-        )
-        .unwrap()
-        .allow_writes(),
-    )
-}
-fn scoped(request: Value) -> Value {
-    let mut call = json!({"context":{"repository":"selected","scope":"default"}});
-    call["request"] = request;
-    call
-}
 fn source() -> Value {
     json!({"scope_id":"default","id":"source_created","name":"Policy","source_type":"policy","supersedes":[],"origin_thread":"thread_origin","origin_message":"message_origin"})
 }
@@ -33,16 +12,16 @@ fn source() -> Value {
 async fn creation_preserves_native_source_and_rejects_duplicate_and_scope_escape() {
     let repo = Repository::new("The shared graph is readable.");
     let host = writable_host(&repo);
-    let (status, result) = call(&host, "create-source", scoped(source())).await;
+    let (status, result) = call(&host, "create-source", scoped(&source())).await;
     assert_eq!(status, 200, "{result}");
     assert_eq!(result["origin_thread"], "thread_origin");
     assert_eq!(result["origin_message"], "message_origin");
-    let (status, failure) = call(&host, "create-source", scoped(source())).await;
+    let (status, failure) = call(&host, "create-source", scoped(&source())).await;
     assert_eq!(status, 409, "{failure}");
     assert_eq!(failure["error"]["kind"], "already_exists");
     let mut input = source();
     input["scope_id"] = json!("other");
-    let (status, failure) = call(&host, "create-source", scoped(input)).await;
+    let (status, failure) = call(&host, "create-source", scoped(&input)).await;
     assert_eq!(status, 400, "{failure}");
     assert_eq!(failure["error"]["kind"], "scope_mismatch");
     host.shutdown().await;
@@ -81,7 +60,7 @@ async fn creation_and_attachment_match_native_records() {
     ];
     for (operation, request) in requests {
         let expected = native_creation(&store, operation, request.clone());
-        let (status, result) = call(&host, operation, scoped(request)).await;
+        let (status, result) = call(&host, operation, scoped(&request)).await;
         assert_eq!(status, 200, "{operation}: {result}");
         assert_eq!(result, expected);
     }
@@ -161,7 +140,7 @@ async fn known_creation_refusals_preserve_graph_records() {
     };
     let before = snapshot();
     for (operation, input, kind) in cases {
-        let (status, failure) = call(&host, operation, scoped(input)).await;
+        let (status, failure) = call(&host, operation, scoped(&input)).await;
         assert_eq!(status, 400, "{operation}: {failure}");
         assert_eq!(failure["error"]["kind"], kind);
         assert_eq!(snapshot(), before);
@@ -188,7 +167,7 @@ async fn mcp_creation_uses_explicit_write_grants_and_native_records() {
         let result = client
             .call_tool(
                 CallToolRequestParams::new("create-source").with_arguments(
-                    json!({"protocol_version":7,"call":scoped(source())})
+                    json!({"protocol_version":7,"call":scoped(&source())})
                         .as_object()
                         .unwrap()
                         .clone(),
@@ -233,7 +212,7 @@ async fn mcp_creation_uses_explicit_write_grants_and_native_records() {
                 let result = client
                     .call_tool(
                         CallToolRequestParams::new(name).with_arguments(
-                            json!({"protocol_version":7,"call":scoped(request)})
+                            json!({"protocol_version":7,"call":scoped(&request)})
                                 .as_object()
                                 .unwrap()
                                 .clone(),

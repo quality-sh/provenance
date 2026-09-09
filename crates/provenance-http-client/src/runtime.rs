@@ -191,3 +191,28 @@ fn validators() -> &'static BTreeMap<String, jsonschema::JSONSchema> {
         }).collect()
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{uncertain_kind, MAX_RESPONSE_BYTES};
+    use serde_json::{json, Value};
+
+    #[test]
+    fn shared_client_policy_cases() {
+        let policy: Value = serde_json::from_str(include_str!("client-policy-cases.json")).unwrap();
+        assert_eq!(
+            MAX_RESPONSE_BYTES as u64,
+            policy["max_response_bytes"].as_u64().unwrap()
+        );
+        for case in policy["refusals"].as_array().unwrap() {
+            assert_eq!(
+                uncertain_kind(
+                    &json!({"error":{"kind":case["kind"]}}),
+                    case["mutates"].as_bool().unwrap()
+                ),
+                case["uncertain"].as_bool().unwrap(),
+                "{case}"
+            );
+        }
+    }
+}

@@ -139,3 +139,27 @@ for (const mutates of [false, true]) test(`oversized response is bounded for ${m
   assert.equal(cancelled, true);
   assert.ok(pulls <= module.MAX_RESPONSE_BYTES / (1024 * 1024) + 2);
 });
+
+test('both clients conform to the shared refusal and response-size policy', async () => {
+  const policy = JSON.parse(await readFile(new URL('../../crates/provenance-http-client/src/client-policy-cases.json', import.meta.url), 'utf8'));
+  for (const mutates of [false, true]) {
+    const module = await generatedClient(mutates);
+    assert.equal(module.MAX_RESPONSE_BYTES, policy.max_response_bytes);
+    for (const entry of policy.refusals.filter(entry => entry.mutates === mutates)) {
+      const failure = { protocol_version: module.PROTOCOL_VERSION, operation: 'complete-verification', error: { kind: entry.kind } };
+      let submissions = 0;
+      const fetcher = async (_url, init) => {
+        if (init.method !== 'POST') return Response.json({ engine_version: 'test', protocol_version: module.PROTOCOL_VERSION });
+        submissions++;
+        return Response.json(failure, { status: 400 });
+      };
+      const client = await module.HttpClient.connect('http://fixture.test', fetcher);
+      await assert.rejects(client.completeVerification({ context: { repository: 'fixture', scope: 'default' }, request: { run: 'run_fixture', status: 'passed' } }), error => {
+        assert.ok(error instanceof (entry.uncertain ? module.UncertainWriteError : module.OperationError), JSON.stringify(entry));
+        assert.deepEqual(error.failure, failure);
+        return true;
+      });
+      assert.equal(submissions, 1);
+    }
+  }
+});
