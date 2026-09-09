@@ -99,7 +99,16 @@ fn release_workflow_publishes_rust_crates_in_dependency_order() {
     assert!(workflow.contains("name: Publish Rust crates"));
     assert!(workflow.contains("environment: crates-io"));
     assert!(workflow.contains("publish-cargo-if-missing.sh"));
-    assert!(workflow.contains("run: cargo package --workspace --locked"));
+    let package = workflow
+        .find("cargo package --workspace --locked --allow-dirty")
+        .unwrap();
+    assert!(workflow.find("git diff --exit-code HEAD --").unwrap() < package);
+    assert!(
+        workflow
+            .find("git ls-files --others --exclude-standard")
+            .unwrap()
+            < package
+    );
     assert!(workflow.contains("toolchain: 1.98.0"));
     assert!(!workflow.contains("run: cargo publish"));
 }
@@ -236,13 +245,13 @@ mod publish_helper {
         assert!(calls.contains("/provenance-core/0.2.0"));
         assert!(
             calls.contains(
-                "cargo token=unset publish --registry crates-io --dry-run --locked --package provenance-core",
+                "cargo token=unset publish --registry crates-io --dry-run --locked --allow-dirty --package provenance-core",
             ),
             "{calls}",
         );
         assert!(
             calls.contains(
-                "cargo token=test-token publish --registry crates-io --no-verify --locked --package provenance-core",
+                "cargo token=test-token publish --registry crates-io --no-verify --locked --allow-dirty --package provenance-core",
             ),
             "{calls}",
         );
