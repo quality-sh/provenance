@@ -364,6 +364,52 @@ pub enum DogfoodCommand {
         #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
         format: OutputFormat,
     },
+    /// Dev-build-only triage of captured notes: mark them handled or reopen
+    /// them. State lives beside the spool; the capture history is never
+    /// rewritten.
+    Triage {
+        #[command(subcommand)]
+        command: TriageCommand,
+    },
+}
+
+/// Dev-build-only triage state for captured notes. Every state change is an
+/// append to a sibling state file, so the note spool stays untouched.
+#[cfg(feature = "dogfood")]
+#[derive(Subcommand)]
+pub enum TriageCommand {
+    /// Mark one note handled.
+    Handle {
+        /// Note id, or an unambiguous prefix of one, as shown by
+        /// `provenance dogfood triage list`.
+        id: String,
+        /// Why the note is handled: a short reason or an issue reference.
+        #[arg(long)]
+        reason: Option<String>,
+    },
+    /// Return a handled note to the unhandled state.
+    Reopen {
+        /// Note id, or an unambiguous prefix of one, as shown by
+        /// `provenance dogfood triage list`.
+        id: String,
+    },
+    /// Show every captured note with its identifier and triage state.
+    List {
+        /// Only show notes in this triage state.
+        #[arg(long, value_enum, default_value_t = TriageFilter::All)]
+        status: TriageFilter,
+        #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
+        format: OutputFormat,
+    },
+}
+
+/// Which triage state a `dogfood triage list` view shows.
+#[cfg(feature = "dogfood")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum TriageFilter {
+    Unhandled,
+    Handled,
+    All,
 }
 
 #[cfg(feature = "dogfood")]

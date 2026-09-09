@@ -59,6 +59,29 @@ provenance dogfood report --enrich sessions.json
 `report` aggregates counts by `surface` × `category` × `severity` and emits
 the full notes.
 
+## Triage
+
+Triage marks a note handled, or returns it to the unhandled state, without
+changing the capture history:
+
+```sh
+provenance dogfood triage list                          # every note: id, status, reason
+provenance dogfood triage list --status unhandled       # or --status handled / all
+provenance dogfood triage handle <id> --reason "fixed by provenance-9mvv"
+provenance dogfood triage reopen <id>
+```
+
+- `<id>` is the note identifier shown by `triage list`. A prefix is enough
+  when it matches one note. An identifier that matches no note, or more
+  than one note, is an error that writes no state.
+- The identifier is a digest of the note content. Notes captured before
+  triage existed get identifiers without a migration. Report enrichment
+  and position in a filtered list do not change an identifier.
+- Triage state lives in `triage.jsonl` beside the spool. Every state
+  change is one appended record; the newest record for a note wins, so
+  concurrent triage commands do not lose updates. `notes.jsonl` is never
+  rewritten, and `list`/`report` output stays as it was.
+
 ## Enrichment contract: `provenance-dogfood-enrichment/v1`
 
 The note deliberately carries only a session-id join key. Ground truth about
