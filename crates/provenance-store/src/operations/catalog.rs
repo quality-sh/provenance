@@ -7,6 +7,7 @@ mod discussions;
 mod entry;
 mod evidence;
 mod failures;
+mod ideation;
 mod invoke;
 mod records;
 #[cfg(feature = "schema")]
@@ -24,6 +25,10 @@ pub use creation::{
 };
 pub use discussions::{ListMessages, ListThreads};
 pub use entry::{Operation, OperationFuture, WireSchema};
+pub use ideation::{
+    CreateAssertion, CreateDisposition, CreateProposal, ListAssertions, ListDispositions,
+    ListProposals,
+};
 pub use invoke::{invoke, invoke_typed, invoke_with};
 #[cfg(feature = "schema")]
 pub use schema::{bind_response_identity, definitions, Definition};

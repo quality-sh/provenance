@@ -14,22 +14,25 @@ import { checkEvidence } from './test-evidence.mjs';
 import { checkWrites } from './test-writes.mjs';
 import { checkDiscussions } from './test-discussions.mjs';
 import { checkCreation } from './test-creation.mjs';
+import { checkIdeation } from './test-ideation.mjs';
 
 const family = process.argv[2];
-const checks = { statements: checkStatements, records: checkRecords, evidence: checkEvidence, writes: checkWrites, creation: checkCreation, discussions: checkDiscussions };
-if (!checks[family]) throw new Error('Expected statements, records, evidence, writes, creation, or discussions');
+const checks = { statements: checkStatements, records: checkRecords, evidence: checkEvidence, writes: checkWrites, creation: checkCreation, discussions: checkDiscussions, ideation: checkIdeation };
+if (!checks[family]) throw new Error('Expected statements, records, evidence, writes, creation, discussions, or ideation');
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 function run(args, env = process.env) {
   const child = spawnSync('cargo', args, { cwd: root, env, stdio: 'inherit' });
   if (child.status !== 0) throw new Error(`cargo ${args.join(' ')} failed`);
 }
 await ensureGenerated();
-const binary = ['writes', 'creation', 'discussions'].includes(family) ? 'existing-root-host-fixture' : family === 'statements' ? 'statement-host-fixture' : 'records-host-fixture';
+const binary = ['writes', 'creation', 'discussions', 'ideation'].includes(family) ? 'existing-root-host-fixture' : family === 'statements' ? 'statement-host-fixture' : 'records-host-fixture';
 const hostBinary = buildBinary(root, ['--locked', '-p', 'provenance-transport', '--features', 'test-fixture', '--bin', binary], binary);
 const temporary = await mkdtemp(join(tmpdir(), 'provenance-clients-'));
-if (['writes', 'creation', 'discussions'].includes(family)) {
+if (['writes', 'creation', 'discussions', 'ideation'].includes(family)) {
   const cliBinary = buildBinary(root, ['--locked', '-p', 'provenance-cli', '--bin', 'provenance'], 'provenance');
-  const result = spawnSync(cliBinary, ['init', '--path', temporary, '--scope', 'default', '--path-prefix', '.'], { encoding: 'utf8' });
+  const init = ['init', '--path', temporary, '--scope', 'default', '--path-prefix', '.'];
+  if (family === 'ideation') init.push('--disposition-actor-id', 'reviewer');
+  const result = spawnSync(cliBinary, init, { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
   await writeFile(join(temporary, 'check.rs'), 'fn check() {}\n');
 }

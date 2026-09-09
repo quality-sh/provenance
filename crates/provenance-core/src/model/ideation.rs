@@ -12,6 +12,7 @@ use super::ids::StableId;
 use super::parsing::normalize_enum_value;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum IdeationTargetType {
     #[serde(rename = "source")]
     Source,
@@ -67,6 +68,7 @@ impl From<IdeationTargetType> for NodeType {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum CanonicalArtifactType {
     #[serde(rename = "source")]
     Source,
@@ -93,6 +95,7 @@ impl CanonicalArtifactType {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum IdentityType {
     #[serde(rename = "human")]
     Human,
@@ -114,6 +117,7 @@ impl IdentityType {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum IdeationEvidenceType {
     #[serde(rename = "source")]
     Source,
@@ -207,6 +211,7 @@ pub enum EvidenceQuality {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum ProposalType {
     #[serde(rename = "requirement_candidate")]
     RequirementCandidate,
@@ -237,6 +242,7 @@ impl ProposalType {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum PromotionState {
     #[serde(rename = "proposed")]
     Proposed,
@@ -272,6 +278,7 @@ impl PromotionState {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum DispositionDecision {
     #[serde(rename = "accepted")]
     Accepted,
@@ -293,6 +300,7 @@ impl DispositionDecision {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct IdeationTarget {
     #[serde(alias = "artifactType")]
@@ -302,6 +310,7 @@ pub struct IdeationTarget {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct IdeationEvidenceReference {
     #[serde(alias = "referenceId")]

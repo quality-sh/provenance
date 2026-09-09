@@ -101,5 +101,11 @@ pub(super) fn entries() -> Vec<Entry> {
         register::<super::ListThreads>(),
         register::<super::ListMessages>(),
         register::<super::PostThreadMessage>(),
+        register::<super::ListProposals>(),
+        register::<super::ListDispositions>(),
+        register::<super::ListAssertions>(),
+        register::<super::CreateProposal>(),
+        register::<super::CreateAssertion>(),
+        register::<super::CreateDisposition>(),
     ]
 }

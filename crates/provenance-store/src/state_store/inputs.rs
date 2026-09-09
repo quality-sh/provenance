@@ -327,6 +327,9 @@ pub struct CreateSynthesisPacketInput {
     pub required_human_decisions: Vec<RequiredHumanDecision>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CreateProposalCardInput {
     pub scope_id: ScopeId,
     pub id: StableId,
@@ -342,6 +345,9 @@ pub struct CreateProposalCardInput {
     pub superseded_by: Option<StableId>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CreateDispositionInput {
     pub scope_id: ScopeId,
     pub id: StableId,
@@ -353,6 +359,9 @@ pub struct CreateDispositionInput {
     pub external_action: Option<provenance_core::ExternalActionCorrelation>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CreateAssertionInput {
     pub scope_id: ScopeId,
     pub id: provenance_core::AssertionId,

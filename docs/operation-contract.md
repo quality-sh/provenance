@@ -10,7 +10,9 @@ The catalog contains `check-statement`, `info`, `get`, `search`, `neighbors`,
 `verification-bindings`, `plan`, `apply`, `begin-verification`,
 `complete-verification`, `create-source`, `create-requirement`,
 `create-resolution`, `create-rule`, `add-source-reference`, `list-threads`,
-`list-messages`, and `post-thread-message`. The statement
+`list-messages`, `post-thread-message`, `list-proposals`, `list-dispositions`,
+`list-assertions`, `create-proposal`, `create-assertion`, and
+`create-disposition`. The statement
 handler returns the existing ASD-STE100 analyzer report. A finding is a successful report result.
 The operation does not open a repository, load settings, or use a dictionary.
 
@@ -159,6 +161,44 @@ reopen action, new parent kind, or proposal association. Native CLI and Rust
 calls remain direct and do not need an HTTP server. Generated SDKs only call
 an existing host and do not start or manage it.
 
+## Proposal lifecycle records
+
+`list-proposals`, `list-dispositions`, and `list-assertions` use the selected
+repository and scope with a `null` request. They return the complete native
+record arrays in native order. `list-proposals` returns the validated native
+effective-state projection: each row reports the state that recorded
+assertions and dispositions reach, not the state the row claims. The stored
+definition stays immutable. MCP wraps each array in `result`, as it does for
+the other list operations.
+
+`create-proposal`, `create-assertion`, and `create-disposition` accept the
+existing Store input fields and return the existing ProposalCard,
+AssertionRecord, or DispositionRecord. The request retains `scope_id`; it must
+equal the scope in the authorized call context. The operation does not replace
+it with a default.
+
+These operations call the existing writers. Each write takes the repository
+publication lock and then the scope lifecycle lock, and keeps the native
+validation order: aggregate validation, the disposition write gate, the
+canonical-artifact check, and single-shard publication. An acceptance rests on
+a prior assertion, unless a human actor names a canonical artifact they
+ratified; that exception stays as native. The disposition actor is record
+data. The manifest `disposition_actor_ids` allowlist and its empty-list
+refusal decide who may record a disposition; the call context grants no
+authority. A disposition rationale must not be empty. Proposal definitions
+and one authoritative assertion and disposition stay immutable.
+
+An unclassified refusal before publication reports `write_failed`. These
+writers publish one shard, so a write that starts and fails reports
+`uncertain_write`.
+
+The catalog exposes no other native proposal operations. `surface_proposals`,
+`land_ideation_batch`, `create_asserted_proposal`, and
+`assert_proposal_after_human_decision` stay native-only. The audited Phase 7
+and Phase 8 history and content behaviors stay out of scope; they are not
+awaiting model approval. Bulk landing and convenience landing stay out of
+scope.
+
 ## Current operation limits
 
 The catalog exposes existing native operations. It does not implement
@@ -204,12 +244,13 @@ with linked discussion history.
 
 ### Proposal and disposition records
 
-The catalog does not yet expose the native proposal lifecycle. Its read
-surface is `StateStore::list_proposal_cards`, `list_proposal_definitions`,
-`list_dispositions`, and `list_assertion_records`
-(`crates/provenance-store/src/state_store.rs`). Writers live in
-`crates/provenance-store/src/state_store/proposal_writers.rs`. Exposure must
-preserve their existing inputs, results, validation, and lifecycle locks.
+The six proposal-lifecycle operations expose
+`StateStore::list_proposal_cards`, `list_dispositions`,
+`list_assertion_records` (`crates/provenance-store/src/state_store.rs`), and
+the writers in `crates/provenance-store/src/state_store/proposal_writers.rs`.
+They preserve the existing inputs, results, validation, and lifecycle locks.
+The catalog does not expose contribution or synthesis-packet writers, the
+proposal surfacing projection, or the ideation landing batches.
 
 ## Write failures and task ownership
 
@@ -294,6 +335,7 @@ node tools/operation-codegen/test-clients.mjs evidence
 node tools/operation-codegen/test-clients.mjs writes
 node tools/operation-codegen/test-clients.mjs creation
 node tools/operation-codegen/test-clients.mjs discussions
+node tools/operation-codegen/test-clients.mjs ideation
 ```
 
 The adapters bound request bodies and concurrent work. Blocking operation work
@@ -304,7 +346,8 @@ started work. Shutdown stops admission and joins started work.
 
 The operation protocol advances from 6 to 7. The TypeScript SDK uses the
 generated HTTP client for the original sixteen operations. The generated client
-also exposes five creation and attachment operations and three discussion operations.
+also exposes five creation and attachment operations, three discussion
+operations, and the six proposal-lifecycle operations.
 Configure `endpoint`,
 `bearer`, `repositoryId`, and `scope`; configure `localRoot` separately when
 converting local implementation or verification paths. The SDK rejects the old
