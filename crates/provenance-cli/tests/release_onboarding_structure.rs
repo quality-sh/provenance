@@ -385,8 +385,12 @@ fn post_release_smoke_controls_deno_against_the_current_engine() {
     assert!(workflow.contains("  deno-registry:"));
     assert!(workflow.contains("deno-registry.sh \"$VERSION\""));
     assert!(script.contains("@quality-sh/create-provenance@$version"));
-    assert!(script.contains("npm:@quality-sh/provenance@${version}"));
+    assert!(script.contains(r#"node - "$fixture" "$version" <<'JS'"#));
+    assert!(script.contains("assert_initialized_repository"));
     assert!(script.contains("assert_provenance_check"));
+    assert!(script.contains("assert_binary_version"));
+    assert!(script
+        .contains(r#""$channel" "$version" provenance "$fixture/node_modules/.bin/provenance""#));
 }
 
 fn cargo_metadata() -> Value {
