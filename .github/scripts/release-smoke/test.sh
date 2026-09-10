@@ -204,4 +204,52 @@ jq -e -s '
 ' < <(jq -R . "$contract_output") >/dev/null ||
   fail "release contract did not emit one version and both target matrices"
 
+# Run the Deno script's manifest checks without registry access.
+node - "$script_directory/deno-registry.sh" "$temporary/deno-fixture" <<'JS'
+const assert = require("node:assert/strict");
+const { spawnSync } = require("node:child_process");
+const { mkdirSync, readFileSync, writeFileSync } = require("node:fs");
+const { join } = require("node:path");
+
+const [scriptPath, fixture] = process.argv.slice(2);
+const script = readFileSync(scriptPath, "utf8");
+const validation = script.match(/^node - "\$fixture" "\$version" <<'JS'\n([\s\S]*?)\nJS$/m);
+assert.ok(validation, "Deno smoke script must run its manifest checks");
+mkdirSync(join(fixture, ".provenance", "state"), { recursive: true });
+
+function checkManifest(version, devDependencies, scopes) {
+  writeFileSync(join(fixture, "package.json"), JSON.stringify({ devDependencies }));
+  writeFileSync(
+    join(fixture, ".provenance", "state", "manifest.json"),
+    JSON.stringify({ scopes }),
+  );
+  const result = spawnSync(process.execPath, ["-", fixture, version], {
+    input: validation[1],
+    encoding: "utf8",
+  });
+  assert.ifError(result.error);
+  assert.equal(result.signal, null, "Deno manifest check must exit normally");
+  return result;
+}
+
+const rootScope = [{ path_prefix: "." }];
+for (const version of ["0.2.2", "1.0.0-rc.1"]) {
+  const result = checkManifest(version, { "@quality-sh/provenance": version }, rootScope);
+  assert.equal(result.status, 0, result.stderr);
+}
+for (const dependency of ["npm:@quality-sh/provenance@0.2.2", "^0.2.2", "0.2.1", undefined]) {
+  const result = checkManifest("0.2.2", { "@quality-sh/provenance": dependency }, rootScope);
+  assert.notEqual(result.status, 0, `Deno accepted dependency ${dependency}`);
+  assert.match(result.stderr, /Deno: expected SDK dependency 0\.2\.2, got/);
+}
+const missingDependencies = checkManifest("0.2.2", undefined, rootScope);
+assert.notEqual(missingDependencies.status, 0, "Deno accepted missing devDependencies");
+assert.match(missingDependencies.stderr, /Deno: expected SDK dependency 0\.2\.2, got undefined/);
+for (const scopes of [[{ path_prefix: "src" }], [], undefined]) {
+  const result = checkManifest("0.2.2", { "@quality-sh/provenance": "0.2.2" }, scopes);
+  assert.notEqual(result.status, 0, "Deno accepted an invalid default scope");
+  assert.match(result.stderr, /Deno: expected the default scope at the repository root/);
+}
+JS
+
 printf 'release smoke helper tests passed\n'
