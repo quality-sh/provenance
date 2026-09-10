@@ -86,6 +86,7 @@ fn catalog_inventory_matches_the_existing_operation_contract() {
         "create-disposition",
         "info",
         "get",
+        "read-document",
         "search",
         "neighbors",
         "trace",

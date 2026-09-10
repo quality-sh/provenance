@@ -87,6 +87,7 @@ fn operation_names_are_explicit() {
             "neighbors",
             "plan",
             "post-thread-message",
+            "read-document",
             "release-question",
             "release-topic",
             "resolve-symbol",
@@ -133,6 +134,107 @@ fn operation_failure_statuses_and_repository_context_are_explicit() {
         .unwrap();
     assert_eq!(resolved["required"], json!(["repository"]));
     assert!(resolved["properties"].get("scope").is_none());
+}
+
+#[test]
+fn document_read_has_a_scoped_request_and_complete_stamped_output() {
+    let (document, mcp) = provenance_codegen::documents();
+    let version = provenance_core::SDK_PROTOCOL_VERSION;
+    let route = &document["paths"][format!("/v{version}/operations/read-document")]["post"];
+    assert_eq!(route["operationId"], "readDocument");
+    assert_eq!(route["x-operation-mutates"], false);
+    assert_eq!(
+        route["responses"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect::<Vec<_>>(),
+        ["200", "400", "401", "403", "404", "409", "500", "503"]
+    );
+    assert_eq!(
+        route["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/ReadDocumentSuccessOutput"
+    );
+    let tool = mcp["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|tool| tool["name"] == "read-document")
+        .unwrap();
+    let input = jsonschema::JSONSchema::options()
+        .with_draft(jsonschema::Draft::Draft202012)
+        .compile(&tool["inputSchema"])
+        .unwrap();
+    let request = json!({"protocol_version":version,"call":{
+        "context":{"repository":"selected","scope":"default"},"request":{"id":"req_shared"}
+    }});
+    assert!(input.is_valid(&request));
+    for pointer in [
+        "/call/context/repository",
+        "/call/context/scope",
+        "/call/request/id",
+    ] {
+        let mut missing = request.clone();
+        let (parent, field) = pointer.rsplit_once('/').unwrap();
+        missing
+            .pointer_mut(parent)
+            .unwrap()
+            .as_object_mut()
+            .unwrap()
+            .remove(field);
+        assert!(!input.is_valid(&missing), "{pointer}");
+    }
+    let mut paged = request;
+    paged["call"]["request"]["limit"] = json!(1);
+    assert!(!input.is_valid(&paged));
+    let output = &document["components"]["schemas"]["ReadDocumentSuccessOutput"];
+    assert_eq!(output["properties"]["operation"]["const"], "read-document");
+    for field in [
+        "root_id",
+        "stamp",
+        "protocol_version",
+        "operation",
+        "requirements",
+        "resolutions",
+        "rules",
+        "sources",
+        "topics",
+        "questions",
+        "threads",
+        "messages",
+    ] {
+        assert!(
+            output["required"]
+                .as_array()
+                .unwrap()
+                .contains(&json!(field)),
+            "{field}"
+        );
+        assert!(
+            tool["outputSchema"]["required"]
+                .as_array()
+                .unwrap()
+                .contains(&json!(field)),
+            "{field}"
+        );
+    }
+    for family in [
+        "requirements",
+        "resolutions",
+        "rules",
+        "sources",
+        "topics",
+        "questions",
+        "threads",
+        "messages",
+    ] {
+        assert_eq!(output["properties"][family]["type"], "array", "{family}");
+        assert!(
+            output["properties"][family].get("maxItems").is_none(),
+            "{family}"
+        );
+    }
 }
 
 #[test]

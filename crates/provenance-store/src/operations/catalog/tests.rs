@@ -219,6 +219,7 @@ fn baseline_operations_have_one_registered_contract_each() {
             "complete-verification",
             "info",
             "get",
+            "read-document",
             "search",
             "neighbors",
             "trace",

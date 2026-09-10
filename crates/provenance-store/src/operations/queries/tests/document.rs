@@ -128,7 +128,11 @@ async fn document_keeps_graph_and_discussions_at_one_revision_during_publication
 
 #[tokio::test]
 async fn document_retains_retired_identity_and_references() {
+    use crate::cache::tests::fixtures::{attach_source, create_rule_of, create_source};
     let (dir, store, scope) = seeded_store();
+    create_source(&store, &scope, "source_retired");
+    create_rule_of(&store, &scope, "rule_retired", "req_overtime");
+    attach_source(&store, &scope, "req_overtime", "source_retired");
     let path = crate::shards::requirements_path(&store.layout, &scope);
     let mut retired =
         serde_json::to_value(store.list_requirements(&scope).unwrap()[0].clone()).unwrap();
@@ -136,13 +140,41 @@ async fn document_retains_retired_identity_and_references() {
     retired["retired"] = json!(true);
     retired["refines"] = json!("req_overtime");
     crate::cache::tests::fixtures::append_record(&path, &retired);
+    let mut declarations = vec![("requirements", retired)];
+    for (family, path, mut record) in [
+        (
+            "sources",
+            crate::shards::sources_path(&store.layout, &scope),
+            json!(store.list_sources(&scope).unwrap()[0]),
+        ),
+        (
+            "rules",
+            crate::shards::rules_path(&store.layout, &scope),
+            json!(store.list_rules(&scope).unwrap()[0]),
+        ),
+    ] {
+        record["retired"] = json!(true);
+        std::fs::write(path, format!("{record}\n")).unwrap();
+        declarations.push((family, record));
+    }
     let answer = read(root_of(&dir)).await;
-    let record = answer["requirements"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|row| row["id"] == "req_retired")
-        .unwrap();
-    assert_eq!(record["retired"], true);
-    assert_eq!(record["refines"], "req_overtime");
+    for (family, expected) in declarations {
+        let record = answer[family]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["id"] == expected["id"])
+            .unwrap();
+        assert_eq!(record, &expected, "{family}");
+        assert_eq!(record["retired"], true);
+    }
+    assert_eq!(
+        answer["requirements"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["id"] == "req_overtime")
+            .unwrap()["source_refs"][0]["source_id"],
+        "source_retired"
+    );
 }
