@@ -1,0 +1,20 @@
+[profile.default]
+# Bound process concurrency even when the runner receives extra CPUs.
+test-threads = 8
+
+[test-groups.cargo]
+max-threads = 1
+
+[[profile.default.overrides]]
+# PDF imports can cause HTTP timeouts under CPU contention. The mutex in
+# this binary cannot serialize separate nextest processes.
+filter = 'binary(cli_ste_onboarding)'
+threads-required = "num-test-threads"
+priority = 100
+
+[[profile.default.overrides]]
+# These tests invoke Cargo. The derive tests also share trybuild output.
+filter = 'binary(cargo_nested_sdk) | binary(compile_fail) | binary(relation_derive_refusals) | binary(projection_row_refusals)'
+test-group = "cargo"
+threads-required = 4
+priority = 90
