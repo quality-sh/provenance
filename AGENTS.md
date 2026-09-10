@@ -49,6 +49,20 @@ pull requests, commit messages, and agent handoffs.
 - Do not claim full ASD-STE100 conformance from a clean automated report. The
   report covers only the standard rules that the checker currently implements.
 
+## Research and review reports
+
+Do not commit research reports, code-review reports, or session decision summaries
+into repository files or PR diffs unless the user explicitly requests that location.
+Publish retained reports as secret GitHub Gists by default. Link the exact Gist
+revision from a Provenance Source and from the relevant Resolution input. Keep
+accepted product and architecture obligations in the graph; a report does not
+replace those records or approve all of its alternatives.
+
+Keep task order, worker status, validation handoffs, and release prerequisites in
+Beads. Put a concise change description and validation summary in the PR body.
+When moving a report out of the repository, remove its file from the PR and update
+all graph and bead references. Do not leave a broken repository-path citation.
+
 ## Quick Reference
 
 ```bash
