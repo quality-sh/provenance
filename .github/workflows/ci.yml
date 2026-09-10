@@ -298,7 +298,7 @@ jobs:
           shared-key: test-all-features
           add-job-id-key: "false"
           cache-on-failure: true
-          save-if: ${{ github.ref == 'refs/heads/main' || github.head_ref == 'codex/cargo-ci-baseline' }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Install nextest
         if: runner.os == 'Linux'
         uses: taiki-e/install-action@c3ec0de9ae7f1019cea21aa96aa0a895b9552063 # v2
@@ -306,7 +306,7 @@ jobs:
           tool: nextest@0.9.143
       - name: Test concurrently on Linux
         if: runner.os == 'Linux'
-        run: cargo nextest run --workspace --all-features --no-fail-fast --cargo-profile test --timings
+        run: cargo nextest run --profile ci --workspace --all-features --no-fail-fast --cargo-profile test --timings
       - name: Test documentation on Linux
         if: runner.os == 'Linux'
         run: cargo test --workspace --all-features --doc --no-fail-fast

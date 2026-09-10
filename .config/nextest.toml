@@ -1,4 +1,4 @@
-[profile.default]
+[profile.ci]
 # Bound process concurrency even when the runner receives extra CPUs.
 test-threads = 8
 

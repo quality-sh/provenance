@@ -51,6 +51,13 @@ For full variable inspection in a debugger, use
 `CARGO_PROFILE_TEST_DEBUG=2 cargo test`. See the
 [operation generation guide](tools/operation-codegen/README.md) before a workspace build.
 
+For parallel test execution, install [cargo-nextest](https://nexte.st/docs/installation/)
+and run `cargo nextest run --workspace --all-features`. Run
+`cargo test --workspace --all-features --doc` for doctests. The repository
+configuration serializes PDF onboarding and limits tests that invoke Cargo.
+Linux CI uses the `ci` profile with eight test slots. Ordinary `cargo test`
+continues to work.
+
 ### Quick start
 
 ```sh
