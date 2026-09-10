@@ -8,8 +8,8 @@ use std::process::Command as StdCommand;
 #[test]
 #[verifies("rule_cargo_init_preserves_sdk_dependency", examples)]
 fn registry_requirements_and_patch_leave_the_manifest_and_lock_unchanged() {
-    for requirement in ["=0.2.2", "^0.2.0"] {
-        let fixture = CargoProject::new("0.2.2");
+    for requirement in ["=0.2.3", "^0.2.0"] {
+        let fixture = CargoProject::new("0.2.3");
         fixture.write_registry_dependency(requirement);
         fixture.generate_lockfile();
         let manifest = fixture.manifest();
@@ -26,14 +26,14 @@ fn registry_requirements_and_patch_leave_the_manifest_and_lock_unchanged() {
 #[verifies("rule_cargo_init_preserves_sdk_dependency", examples)]
 #[verifies("rule_cargo_init_adds_exact_sdk", examples)]
 fn missing_dependency_is_added_with_an_exact_requirement_by_real_cargo() {
-    let fixture = CargoProject::new("0.2.2");
+    let fixture = CargoProject::new("0.2.3");
     fixture.write_missing_dependency();
 
     fixture.init().success();
 
     let manifest = String::from_utf8(fixture.manifest()).unwrap();
     assert!(
-        manifest.contains("provenance-sdk = \"=0.2.2\""),
+        manifest.contains("provenance-sdk = \"=0.2.3\""),
         "{manifest}"
     );
 }
@@ -41,7 +41,7 @@ fn missing_dependency_is_added_with_an_exact_requirement_by_real_cargo() {
 #[test]
 #[verifies("rule_cargo_init_preserves_sdk_dependency", examples)]
 fn onboarding_conflict_leaves_missing_dependency_and_repository_state_unchanged() {
-    let fixture = CargoProject::new("0.2.2");
+    let fixture = CargoProject::new("0.2.3");
     fixture.write_missing_dependency();
     let skill = fixture
         .root
@@ -70,7 +70,7 @@ fn onboarding_conflict_leaves_missing_dependency_and_repository_state_unchanged(
 #[test]
 #[verifies("rule_init_validates_planned_repository", examples)]
 fn planned_repository_validation_failure_precedes_cargo_and_onboarding_writes() {
-    let fixture = CargoProject::new("0.2.2");
+    let fixture = CargoProject::new("0.2.3");
     fixture.write_missing_dependency();
     let manifest = fixture.manifest();
     let original_scope = fixture.root.join(".provenance/state/scopes/unexpected");
@@ -98,7 +98,7 @@ fn planned_repository_validation_failure_precedes_cargo_and_onboarding_writes() 
 #[test]
 #[verifies("rule_cargo_init_preserves_sdk_dependency", examples)]
 fn path_dependency_is_preserved_without_creating_a_lockfile() {
-    let fixture = CargoProject::new("0.2.2");
+    let fixture = CargoProject::new("0.2.3");
     fixture.write_path_dependency();
     let manifest = fixture.manifest();
 
@@ -111,7 +111,7 @@ fn path_dependency_is_preserved_without_creating_a_lockfile() {
 #[test]
 #[verifies("rule_cargo_init_preserves_sdk_dependency", examples)]
 fn git_dependency_is_preserved_without_creating_a_lockfile() {
-    let fixture = CargoProject::new("0.2.2");
+    let fixture = CargoProject::new("0.2.3");
     fixture.commit_sdk();
     fixture.write_git_dependency();
     let manifest = fixture.manifest();
@@ -134,7 +134,7 @@ fn incompatible_registry_requirement_fails_without_any_repository_mutation() {
         .failure()
         .stderr(predicate::str::contains("requires provenance-sdk =0.1.9"))
         .stderr(predicate::str::contains(
-            "not compatible with provenance-cli 0.2.2",
+            "not compatible with provenance-cli 0.2.3",
         ));
 
     assert_eq!(fixture.manifest(), manifest);
@@ -183,11 +183,11 @@ impl CargoProject {
         let registry = self.root.join("registry");
         let archive = b"fixture crate archive";
         std::fs::create_dir_all(registry.join("index/pr/ov")).unwrap();
-        std::fs::write(registry.join("provenance-sdk-0.2.2.crate"), archive).unwrap();
+        std::fs::write(registry.join("provenance-sdk-0.2.3.crate"), archive).unwrap();
         std::fs::write(
             registry.join("index/pr/ov/provenance-sdk"),
             format!(
-                "{{\"name\":\"provenance-sdk\",\"vers\":\"0.2.2\",\"deps\":[],\"cksum\":\"{:x}\",\"features\":{{}},\"yanked\":false}}\n",
+                "{{\"name\":\"provenance-sdk\",\"vers\":\"0.2.3\",\"deps\":[],\"cksum\":\"{:x}\",\"features\":{{}},\"yanked\":false}}\n",
                 Sha256::digest(archive)
             ),
         )

@@ -70,7 +70,7 @@ fn main() {
             if std::path::Path::new(&env::var_os("FAKE_CARGO_DEPENDENCY_STATE").unwrap()).exists() {
                 metadata = metadata.replace(
                     "\"dependencies\":[]",
-                    "\"dependencies\":[{\"name\":\"provenance-sdk\",\"req\":\"=0.2.2\"}]",
+                    "\"dependencies\":[{\"name\":\"provenance-sdk\",\"req\":\"=0.2.3\"}]",
                 );
             }
             print!("{metadata}");
@@ -81,7 +81,7 @@ fn main() {
             let workspace = std::path::Path::new(&workspace_path);
             let mut manifest = fs::read_to_string(&manifest_path).unwrap();
             if !manifest.contains("provenance-sdk") {
-                manifest.push_str("\n[dependencies]\nprovenance-sdk = \"=0.2.2\"\n");
+                manifest.push_str("\n[dependencies]\nprovenance-sdk = \"=0.2.3\"\n");
                 fs::write(&manifest_path, manifest).unwrap();
             }
             fs::write(env::var_os("FAKE_CARGO_LOCK").unwrap(), "version = 4\n").unwrap();
