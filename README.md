@@ -45,6 +45,12 @@ cargo build --release -p provenance-cli --features scanner
 The binaries land at `target/release/provenance` and
 `target/release/cargo-provenance`. Put them on your PATH.
 
+Development builds and tests retain file and line information for backtraces.
+For full variable inspection in a debugger, use
+`CARGO_PROFILE_DEV_DEBUG=2 cargo build` or
+`CARGO_PROFILE_TEST_DEBUG=2 cargo test`. See the
+[operation generation guide](tools/operation-codegen/README.md) before a workspace build.
+
 ### Quick start
 
 ```sh

@@ -13,6 +13,11 @@ members = [
 ]
 resolver = "2"
 
+# Keep file and line information for backtraces without full variable debug data.
+# The test profile inherits this setting. Release settings are unchanged.
+[profile.dev]
+debug = "line-tables-only"
+
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }

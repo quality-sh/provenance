@@ -16,6 +16,9 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # Apply the same debug setting to temporary Cargo workspaces used by tests.
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+  CARGO_PROFILE_TEST_DEBUG: line-tables-only
 
 jobs:
   # Required checks skipped via `if:` count as passed for the main ruleset,
@@ -101,6 +104,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
         with:
           toolchain: stable
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+        with:
+          prefix-key: v1
+          shared-key: operation-codegen
+          add-job-id-key: "false"
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: actions/setup-node@v7
         with:
           node-version: 24
@@ -139,8 +149,7 @@ jobs:
           add-job-id-key: "false"
           cache-on-failure: true
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo build --locked -p provenance-cli
-      - run: cargo build --locked -p provenance-transport --features test-fixture --bin existing-root-host-fixture
+      - run: cargo build --locked -p provenance-cli -p provenance-transport --features provenance-transport/test-fixture --bins --timings
       - name: Upload the CLI and isolated test host for the consumer jobs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -149,6 +158,14 @@ jobs:
             target/debug/provenance
             target/debug/existing-root-host-fixture
           retention-days: 1
+      - name: Save Cargo timing reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cargo-timings-build-cli-linux
+          path: target/cargo-timings/*.html
+          if-no-files-found: warn
+          retention-days: 30
 
   build-cli-platforms:
     name: Build provenance-cli (${{ matrix.target }})
@@ -179,8 +196,7 @@ jobs:
           add-job-id-key: "false"
           cache-on-failure: true
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo build --locked -p provenance-cli
-      - run: cargo build --locked -p provenance-transport --features test-fixture --bin existing-root-host-fixture
+      - run: cargo build --locked -p provenance-cli -p provenance-transport --features provenance-transport/test-fixture --bins --timings
       - name: Upload the CLI and isolated test host for the consumer jobs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -189,6 +205,14 @@ jobs:
             target/debug/${{ matrix.binary }}
             target/debug/${{ matrix.fixture }}
           retention-days: 1
+      - name: Save Cargo timing reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cargo-timings-build-cli-${{ matrix.target }}
+          path: target/cargo-timings/*.html
+          if-no-files-found: warn
+          retention-days: 30
 
   fmt:
     name: Format
@@ -237,7 +261,15 @@ jobs:
           add-job-id-key: "false"
           cache-on-failure: true
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - run: cargo clippy --workspace --all-targets --all-features --timings -- -D warnings
+      - name: Save Cargo timing reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cargo-timings-clippy
+          path: target/cargo-timings/*.html
+          if-no-files-found: warn
+          retention-days: 30
 
   test:
     name: Test (${{ matrix.os }})
@@ -266,7 +298,15 @@ jobs:
           add-job-id-key: "false"
           cache-on-failure: true
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo test --workspace --all-features --no-fail-fast
+      - run: cargo test --workspace --all-features --no-fail-fast --timings
+      - name: Save Cargo timing reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cargo-timings-test-${{ matrix.os }}
+          path: target/cargo-timings/*.html
+          if-no-files-found: warn
+          retention-days: 30
 
   # Default-features lane: runs the dogfood absence tests, which assert the
   # dev-only command does not exist in feature-less builds.
@@ -287,7 +327,15 @@ jobs:
           add-job-id-key: "false"
           cache-on-failure: true
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo test -p provenance-cli --no-fail-fast
+      - run: cargo test -p provenance-cli --no-fail-fast --timings
+      - name: Save Cargo timing reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cargo-timings-test-default-features
+          path: target/cargo-timings/*.html
+          if-no-files-found: warn
+          retention-days: 30
 
   rule-coverage:
     name: Rule Coverage
@@ -599,6 +647,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
         with:
           toolchain: stable
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+        with:
+          prefix-key: v1
+          shared-key: operation-contract
+          add-job-id-key: "false"
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: actions/setup-node@v6
         with:
           node-version: 24

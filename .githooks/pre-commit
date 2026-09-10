@@ -15,8 +15,3 @@ if ! cargo clippy --workspace --all-targets -- -D warnings; then
     echo "pre-commit: cargo clippy --workspace --all-targets -- -D warnings failed" >&2
     exit 1
 fi
-
-if ! cargo check --workspace --all-targets; then
-    echo "pre-commit: cargo check --workspace --all-targets failed" >&2
-    exit 1
-fi

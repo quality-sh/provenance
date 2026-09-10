@@ -39,7 +39,7 @@ async function generate(temporary, generator) {
 
 const temporary = await mkdtemp(join(tmpdir(), 'provenance-codegen-'));
 try {
-  const generator = buildBinary(root, ['--locked', '--quiet', '-p', 'provenance-codegen', '--all-targets'], 'provenance-codegen');
+  const generator = buildBinary(root, ['--locked', '--quiet', '-p', 'provenance-codegen', '--bin', 'provenance-codegen'], 'provenance-codegen');
   const first = join(temporary, 'first');
   await generate(first, generator);
   if (process.argv.includes('--check')) {
