@@ -14,7 +14,7 @@ function spec() {
   }));
 }
 function named(name: string) { return (error: unknown) => error instanceof Error && error.constructor.name === name; }
-async function recordingHost(initialVersion = 7) {
+async function recordingHost(initialVersion = 8) {
   let version = initialVersion;
   const requests: { path: string; authorization?: string; body: unknown }[] = [];
   const server = createServer(async (request, response) => {
@@ -31,7 +31,7 @@ async function recordingHost(initialVersion = 7) {
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   assert.ok(address && typeof address !== "string");
-  return { endpoint: `http://127.0.0.1:${address.port}`, requests, repair() { version = 7; }, async close() { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); } };
+  return { endpoint: `http://127.0.0.1:${address.port}`, requests, repair() { version = 8; }, async close() { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); } };
 }
 
 // @provenance verification: examples
