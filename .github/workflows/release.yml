@@ -1,6 +1,8 @@
 name: Release
 
 on:
+  # Manual runs build and package artifacts without publication.
+  workflow_dispatch:
   push:
     tags:
       - "v[0-9]*.[0-9]*.[0-9]*"
@@ -29,6 +31,7 @@ jobs:
       # matrix. Refuse to build unless that run finished green on this exact
       # commit, so a red platform leg cannot ship unnoticed.
       - name: Gate the release on a green CI run
+        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -65,10 +68,14 @@ jobs:
         run: |
           node packages/provenance/scripts/generate-release-consumers.js --runtime-only
           node packages/provenance/scripts/generate-release-consumers.js --check
-          version="${GITHUB_REF_NAME#v}"
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            version=$(node -p "require('./packages/provenance/package.json').version")
+          else
+            version="${GITHUB_REF_NAME#v}"
+          fi
           source .github/scripts/release-smoke/lib.sh
           validate_version "$version"
-          bash .github/scripts/verify-release-versions.sh "$GITHUB_REF_NAME"
+          bash .github/scripts/verify-release-versions.sh "v$version"
           python3 .github/scripts/release-contract.py \
             "$version" .github/release-targets.json >> "$GITHUB_OUTPUT"
 
@@ -105,7 +112,7 @@ jobs:
       - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
         with:
           key: ${{ matrix.target }}
-      - run: cargo build --release -p provenance-cli --features scanner --target ${{ matrix.target }}
+      - run: cargo build --release -p provenance-cli --features scanner --target ${{ matrix.target }} --timings
       - name: The release binary must not contain dogfood
         shell: bash
         run: |
@@ -155,7 +162,17 @@ jobs:
             dist/quality-sh-provenance-*.tgz
           if-no-files-found: error
 
+      - name: Save Cargo timing reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cargo-timings-release-${{ matrix.target }}
+          path: target/cargo-timings/*.html
+          if-no-files-found: warn
+          retention-days: 30
+
   publish:
+    if: github.event_name == 'push'
     name: Publish GitHub Release
     runs-on: blacksmith-4vcpu-ubuntu-2404
     needs:
@@ -183,6 +200,7 @@ jobs:
           prerelease: ${{ fromJSON(needs.preflight.outputs.prerelease) }}
 
   publish-crates:
+    if: github.event_name == 'push'
     name: Publish Rust crates
     runs-on: blacksmith-4vcpu-ubuntu-2404
     needs:
@@ -240,6 +258,7 @@ jobs:
           done
 
   publish-npm:
+    if: github.event_name == 'push'
     name: Publish npm packages
     # npm provenance rejects the self-hosted identity of third-party runners.
     runs-on: ubuntu-latest
@@ -305,6 +324,7 @@ jobs:
             "./dist/quality-sh-create-provenance-${RELEASE_VERSION}.tgz" "$NPM_TAG"
 
   smoke:
+    if: github.event_name == 'push'
     name: Verify released installations
     needs:
       - preflight

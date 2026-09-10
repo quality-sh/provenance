@@ -1,6 +1,6 @@
 [
   {
-    "build_os": "ubuntu-latest",
+    "build_os": "blacksmith-8vcpu-ubuntu-2404",
     "smoke_os": "ubuntu-latest",
     "target": "x86_64-unknown-linux-gnu",
     "archive": "tar.gz",
@@ -19,7 +19,7 @@
     }
   },
   {
-    "build_os": "windows-latest",
+    "build_os": "blacksmith-8vcpu-windows-2025",
     "smoke_os": "windows-latest",
     "target": "x86_64-pc-windows-msvc",
     "archive": "zip",
@@ -35,7 +35,7 @@
     }
   },
   {
-    "build_os": "macos-latest",
+    "build_os": "blacksmith-12vcpu-macos-latest",
     "smoke_os": "macos-15",
     "target": "aarch64-apple-darwin",
     "archive": "tar.gz",

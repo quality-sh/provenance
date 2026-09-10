@@ -164,3 +164,15 @@ agent feedback capture) and must never ship in a released binary;
 `--all-features` would compile it in. CI enforces this by building the
 release binary with the release feature set and asserting it contains no
 `dogfood` marker string.
+
+## Build without publication
+
+Run `gh workflow run release.yml --ref main` to build and package all release
+targets at the version in the source manifests. Manual runs upload archives,
+npm engine packages, and Cargo timing reports as workflow artifacts. They skip
+publication and the checks of published installations. Tag pushes retain the
+CI gate and the publication sequence.
+
+A manual run on `main` can populate release build caches for later tag runs.
+Caches from a tag are scoped to that tag; later tags can restore caches from
+`main`, but cannot restore another tag's cache.
