@@ -15,11 +15,13 @@ use provenance_core::ScopeId;
 use super::read_policy::ReadPolicy;
 use super::reader::{self, ReadContext, ReadFuture};
 
+pub(crate) mod cursor;
 mod document;
 pub use document::read_document;
 mod evidence;
 mod impact;
 mod nodes;
+mod page;
 mod records;
 mod stale;
 mod symbols;
@@ -60,6 +62,7 @@ pub async fn search(
         Box::pin(async move { records::search(ctx, request).await })
     })
     .await
+    .and_then(|answer| page::checked("search", answer))
 }
 
 pub async fn neighbors(

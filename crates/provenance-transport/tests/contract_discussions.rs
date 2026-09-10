@@ -133,7 +133,7 @@ async fn mcp_discussions_use_explicit_write_grants_and_complete_native_lists() {
         let result = client
             .call_tool(
                 CallToolRequestParams::new("post-thread-message").with_arguments(
-                    json!({"protocol_version":7,"call":scoped(&input("MCP"))})
+                    json!({"protocol_version":8,"call":scoped(&input("MCP"))})
                         .as_object()
                         .unwrap()
                         .clone(),
@@ -168,7 +168,7 @@ async fn mcp_discussions_use_explicit_write_grants_and_complete_native_lists() {
             let result = client
                 .call_tool(
                     CallToolRequestParams::new(name).with_arguments(
-                        json!({"protocol_version":7,"call":scoped(&Value::Null)})
+                        json!({"protocol_version":8,"call":scoped(&Value::Null)})
                             .as_object()
                             .unwrap()
                             .clone(),

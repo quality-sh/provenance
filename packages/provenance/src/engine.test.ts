@@ -25,7 +25,7 @@ async function recordingHost(initialVersion = 7) {
     if (request.url === "/metadata") response.end(JSON.stringify({ engine_version: "fixture", protocol_version: version }));
     else {
       response.statusCode = 403;
-      response.end(JSON.stringify({ protocol_version: 7, operation: "plan", error: { kind: "access_denied" } }));
+      response.end(JSON.stringify({ protocol_version: 8, operation: "plan", error: { kind: "access_denied" } }));
     }
   });
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
@@ -53,7 +53,7 @@ test("failed compatibility checks do not poison a repaired endpoint", async () =
     await assert.rejects(plan(spec()), named("ProtocolMismatchError"));
     host.repair();
     await assert.rejects(plan(spec()), named("OperationError"));
-    assert.deepEqual(host.requests.map(request => request.path), ["/metadata", "/metadata", "/v7/operations/plan"]);
+    assert.deepEqual(host.requests.map(request => request.path), ["/metadata", "/metadata", "/v8/operations/plan"]);
   } finally { await host.close(); }
 });
 
@@ -64,7 +64,7 @@ test("endpoint switching sends credentials and the opaque repository to the sele
     for (const [host, bearer, repositoryId] of [[first, "first-token", "first"], [second, "second-token", "second"]] as const) {
       configureHttp({ endpoint: host.endpoint, bearer, repositoryId, localRoot: process.cwd(), scope: "selected" });
       await assert.rejects(plan(spec()), named("OperationError"));
-      assert.deepEqual(host.requests.map(request => request.path), ["/metadata", "/v7/operations/plan"]);
+      assert.deepEqual(host.requests.map(request => request.path), ["/metadata", "/v8/operations/plan"]);
       assert.ok(host.requests.every(request => request.authorization === `Bearer ${bearer}`));
       assert.deepEqual((host.requests[1].body as { context: unknown }).context, { repository: repositoryId, scope: "selected" });
     }

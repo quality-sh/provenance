@@ -34,22 +34,6 @@ fn active_clause<K: ProjectionRow>(include_retired: bool) -> &'static str {
 }
 
 impl<K: ProjectionRow> Table<'_, K> {
-    /// All scope records, including retired records, in canonical ID order.
-    pub async fn all(&self) -> anyhow::Result<Vec<K>> {
-        let sql = format!(
-            "SELECT {} FROM {} WHERE scope_id = ? ORDER BY id",
-            select_columns::<K>(),
-            quoted(K::TABLE)
-        );
-        let mut tx = self.snapshot().connection().await;
-        let rows = sqlx::query(&sql)
-            .bind(self.snapshot().scope().as_str())
-            .fetch_all(&mut **tx)
-            .await?;
-        drop(tx);
-        rows.iter().map(decode::<K>).collect()
-    }
-
     /// One record by id, retired or not.
     pub async fn record(&self, id: &StableId) -> anyhow::Result<Option<K>> {
         let sql = format!(

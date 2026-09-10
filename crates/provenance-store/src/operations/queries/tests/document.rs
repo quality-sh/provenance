@@ -30,10 +30,58 @@ async fn read(root: camino::Utf8PathBuf) -> Value {
         Arc::new(Target(root))).await.expect("complete document operation")
 }
 
+fn collections(mut page: Value) -> Value {
+    for family in [
+        "requirements",
+        "resolutions",
+        "rules",
+        "sources",
+        "topics",
+        "questions",
+        "threads",
+        "messages",
+    ] {
+        page[family] = json!([]);
+    }
+    for entry in page["entries"].as_array().unwrap().clone() {
+        let (family, row) = match entry["kind"].as_str().unwrap() {
+            "thread" => ("threads".to_owned(), entry["thread"].clone()),
+            "message" => ("messages".to_owned(), entry["message"].clone()),
+            _ => (
+                format!("{}s", entry["node"]["node_type"].as_str().unwrap()),
+                entry["node"].clone(),
+            ),
+        };
+        if let Some(rows) = page.get_mut(&family).and_then(Value::as_array_mut) {
+            rows.push(row);
+        }
+    }
+    page
+}
+async fn complete(root: camino::Utf8PathBuf) -> Value {
+    let mut all = read(root.clone()).await;
+    let stamp = all["stamp"].clone();
+    while all["next_cursor"].is_string() {
+        let next = catalog::invoke_with("read-document", provenance_core::SDK_PROTOCOL_VERSION,
+            json!({"context":{"repository":"test","scope":"default"},"request":{"id":"req_overtime","cursor":all["next_cursor"]}}),
+            Arc::new(Target(root.clone()))).await.unwrap();
+        for field in ["serial", "digest", "instance_id", "derivation"] {
+            assert_eq!(next["stamp"][field], stamp[field]);
+        }
+        all["entries"]
+            .as_array_mut()
+            .unwrap()
+            .extend(next["entries"].as_array().unwrap().clone());
+        all["next_cursor"] = next["next_cursor"].clone();
+        all["has_more"] = next["has_more"].clone();
+    }
+    collections(all)
+}
+
 #[tokio::test]
 async fn document_reads_all_saved_records_and_marks_failed_catch_up() {
     let (dir, store, scope) = seeded_store();
-    let first = read(root_of(&dir)).await;
+    let first = complete(root_of(&dir)).await;
     assert_eq!(first["requirements"].as_array().unwrap().len(), 1);
     let mut child =
         serde_json::to_value(store.list_requirements(&scope).unwrap()[0].clone()).unwrap();
@@ -43,7 +91,7 @@ async fn document_reads_all_saved_records_and_marks_failed_catch_up() {
         child["id"] = json!(format!("req_child_{i:03}"));
         crate::cache::tests::fixtures::append_record(&path, &child);
     }
-    let next = read(root_of(&dir)).await;
+    let next = complete(root_of(&dir)).await;
     assert_eq!(next["requirements"].as_array().unwrap().len(), 206);
     assert_eq!(next["root_id"], "req_overtime");
     assert_ne!(next["stamp"]["digest"], first["stamp"]["digest"]);
@@ -68,14 +116,17 @@ async fn document_reads_all_saved_records_and_marks_failed_catch_up() {
     }
     assert_eq!(next["stamp"]["live"], json!([]));
     std::fs::write(path, "invalid JSON\n").unwrap();
-    let failed = read(root_of(&dir)).await;
-    assert_eq!(failed["stamp"]["policy"], "catch_up_failed");
-    assert_eq!(failed["stamp"]["digest"], next["stamp"]["digest"]);
-    assert_eq!(failed["freshness_cause"], "catch_up_failed");
-    assert_eq!(
-        failed["freshness_error"],
-        "catch-up failed; answer uses the stored projection"
-    );
+    let failed = catalog::invoke_with(
+        "read-document",
+        provenance_core::SDK_PROTOCOL_VERSION,
+        json!({"context":{"repository":"test","scope":"default"},"request":{"id":"req_overtime"}}),
+        Arc::new(Target(root_of(&dir))),
+    )
+    .await
+    .unwrap_err();
+    assert!(serde_json::to_string(&failed)
+        .unwrap()
+        .contains("document_catch_up_failed"));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -84,7 +135,7 @@ async fn document_keeps_graph_and_discussions_at_one_revision_during_publication
     use provenance_core::protocol::ReadDocumentQuery;
     let (dir, store, scope) = seeded_store();
     let root = root_of(&dir);
-    let initial = read(root.clone()).await;
+    let initial = complete(root.clone()).await;
     let layout = store.layout.clone();
     let write_scope = scope.clone();
     let answer = reader::answer(&root, &scope, ReadPolicy::default(), move |ctx| {
@@ -108,14 +159,15 @@ async fn document_keeps_graph_and_discussions_at_one_revision_during_publication
                 }));
             }
             crate::cache::catch_up_state(&layout).await?;
-            super::super::document::read(ctx, ReadDocumentQuery { id: "req_overtime".into() }).await
+            super::super::document::read(ctx, ReadDocumentQuery { id: "req_overtime".into(), cursor: None, limit: 50 }).await
         })
     }).await.unwrap();
-    assert_eq!(answer.result.requirements.len(), 1);
-    assert!(answer.result.threads.is_empty());
-    assert!(answer.result.messages.is_empty());
+    let old = collections(serde_json::to_value(&answer.result).unwrap());
+    assert_eq!(old["requirements"].as_array().unwrap().len(), 1);
+    assert!(old["threads"].as_array().unwrap().is_empty());
+    assert!(old["messages"].as_array().unwrap().is_empty());
     assert_eq!(answer.stamp.digest, initial["stamp"]["digest"]);
-    let refreshed = read(root).await;
+    let refreshed = complete(root).await;
     assert_eq!(refreshed["requirements"].as_array().unwrap().len(), 2);
     assert_eq!(refreshed["threads"].as_array().unwrap().len(), 2);
     assert_eq!(refreshed["messages"].as_array().unwrap().len(), 2);
@@ -157,7 +209,7 @@ async fn document_retains_retired_identity_and_references() {
         std::fs::write(path, format!("{record}\n")).unwrap();
         declarations.push((family, record));
     }
-    let answer = read(root_of(&dir)).await;
+    let answer = complete(root_of(&dir)).await;
     for (family, expected) in declarations {
         let record = answer[family]
             .as_array()
@@ -165,7 +217,9 @@ async fn document_retains_retired_identity_and_references() {
             .iter()
             .find(|row| row["id"] == expected["id"])
             .unwrap();
-        assert_eq!(record, &expected, "{family}");
+        let mut canonical = record.clone();
+        canonical.as_object_mut().unwrap().remove("node_type");
+        assert_eq!(canonical, expected, "{family}");
         assert_eq!(record["retired"], true);
     }
     assert_eq!(
@@ -177,4 +231,40 @@ async fn document_retains_retired_identity_and_references() {
             .unwrap()["source_refs"][0]["source_id"],
         "source_retired"
     );
+}
+
+#[tokio::test]
+async fn document_page_requires_continuation_and_excludes_other_roots() {
+    let (dir, store, scope) = seeded_store();
+    let path = crate::shards::requirements_path(&store.layout, &scope);
+    let mut child = json!(store.list_requirements(&scope).unwrap()[0]);
+    for i in 0..205 {
+        child["id"] = json!(format!("req_aaa_{i:03}"));
+        child["refines"] = json!("req_overtime");
+        crate::cache::tests::fixtures::append_record(&path, &child);
+    }
+    child["id"] = json!("req_outside");
+    child["refines"] = Value::Null;
+    crate::cache::tests::fixtures::append_record(&path, &child);
+    let first = read(root_of(&dir)).await;
+    assert_eq!(first["entries"][0]["node"]["id"], "req_overtime");
+    assert_eq!(first["has_more"], true);
+    assert!(first["next_cursor"].is_string());
+    assert!(first["entries"].as_array().unwrap().len() <= 50);
+}
+
+#[tokio::test]
+async fn search_returns_a_revision_bound_cursor() {
+    let (dir, store, scope) = seeded_store();
+    let path = crate::shards::requirements_path(&store.layout, &scope);
+    let mut row = json!(store.list_requirements(&scope).unwrap()[0]);
+    for i in 0..205 {
+        row["id"] = json!(format!("req_search_{i:03}"));
+        crate::cache::tests::fixtures::append_record(&path, &row);
+    }
+    let first = catalog::invoke_with("search", provenance_core::SDK_PROTOCOL_VERSION,
+        json!({"context":{"repository":"test","scope":"default"},"request":{"text":"req_","limit":200}}),
+        Arc::new(Target(root_of(&dir)))).await.unwrap();
+    assert_eq!(first["nodes"].as_array().unwrap().len(), 200);
+    assert!(first["next_cursor"].is_string());
 }

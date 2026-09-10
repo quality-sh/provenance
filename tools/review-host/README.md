@@ -13,7 +13,10 @@ Mutation controls are unavailable. Adapter write methods throw a read-only
 error, and no review acceptance is inferred from lifecycle state.
 
 Build the SDK in this repository and build the web renderer against that exact
-local SDK. The published SDK 0.2.2 does not have `readDocument`.
+local SDK. The published SDK 0.2.2 does not have the protocol 8 cursor contract.
+The renderer must consume the generated page entries and continuation fields.
+See [the backend handoff](../../docs/cursor-reads.md).
+An older whole-scope renderer cannot consume these responses.
 
 ```sh
 npm ci --prefix tools/operation-codegen

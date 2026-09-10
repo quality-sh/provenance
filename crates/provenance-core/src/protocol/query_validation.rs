@@ -128,6 +128,7 @@ impl super::StaleQuery {
 
 impl super::ReadDocumentQuery {
     pub fn validate(&self) -> Result<(), QueryValidation> {
+        check("limit", super::ensure_limit(self.limit))?;
         id(&self.id)
     }
 }

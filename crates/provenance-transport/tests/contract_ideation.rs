@@ -346,7 +346,7 @@ async fn mcp_ideation_advertises_reads_and_refuses_writes_without_a_write_grant(
             let result = client
                 .call_tool(
                     CallToolRequestParams::new((*name).to_owned()).with_arguments(
-                        json!({"protocol_version":7,"call":body})
+                        json!({"protocol_version":8,"call":body})
                             .as_object()
                             .unwrap()
                             .clone(),
@@ -391,7 +391,7 @@ async fn mcp_ideation_advertises_reads_and_refuses_writes_without_a_write_grant(
             let result = client
                 .call_tool(
                     CallToolRequestParams::new((*name).to_owned()).with_arguments(
-                        json!({"protocol_version":7,"call":scoped(&Value::Null)})
+                        json!({"protocol_version":8,"call":scoped(&Value::Null)})
                             .as_object()
                             .unwrap()
                             .clone(),

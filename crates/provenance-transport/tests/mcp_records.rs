@@ -9,7 +9,7 @@ use serde_json::{json, Value};
 
 fn tool(operation: &str, call: &Value) -> CallToolRequestParams {
     CallToolRequestParams::new(operation.to_owned()).with_arguments(
-        json!({"protocol_version":7,"call":call})
+        json!({"protocol_version":8,"call":call})
             .as_object()
             .unwrap()
             .clone(),
@@ -117,6 +117,36 @@ async fn real_mcp_preserves_each_registered_read_and_full_http_stamp() {
     host.shutdown().await;
 }
 
+fn collection(answer: &Value, family: &str) -> Value {
+    let mut rows: Vec<Value> = answer["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|entry| {
+            if family == "threads" {
+                return entry.get("thread").cloned();
+            }
+            if family == "messages" {
+                return entry.get("message").cloned();
+            }
+            let node = entry.get("node")?;
+            let kind = node["node_type"].as_str()?;
+            let plural = if kind == "boundary" {
+                "boundaries".to_owned()
+            } else {
+                format!("{kind}s")
+            };
+            (plural == family).then(|| {
+                let mut row = node.clone();
+                row.as_object_mut().unwrap().remove("node_type");
+                row
+            })
+        })
+        .collect();
+    rows.sort_by(|a, b| a["id"].as_str().cmp(&b["id"].as_str()));
+    json!(rows)
+}
+
 fn assert_document_matches_store(answer: &Value, store: &StateStore, scope: &ScopeId) {
     assert_eq!(answer["operation"], "read-document");
     assert_eq!(
@@ -131,21 +161,31 @@ fn assert_document_matches_store(answer: &Value, store: &StateStore, scope: &Sco
         ),
         ("resolutions", json!(store.list_resolutions(scope).unwrap())),
         ("rules", json!(store.list_rules(scope).unwrap())),
-        ("sources", json!(store.list_sources(scope).unwrap())),
+        ("domains", json!(store.list_domains(scope).unwrap())),
+        ("boundaries", json!(store.list_boundaries(scope).unwrap())),
         ("topics", json!(store.list_topics(scope).unwrap())),
         ("questions", json!(store.list_questions(scope).unwrap())),
         ("threads", json!(store.list_threads(scope).unwrap())),
         ("messages", json!(store.list_messages(scope).unwrap())),
     ] {
         assert!(!rows.as_array().unwrap().is_empty(), "{family}");
-        assert_eq!(answer[family], rows, "{family}");
+        assert_eq!(collection(answer, family), rows, "{family}");
     }
+    assert_eq!(
+        collection(answer, "sources"),
+        json!([]),
+        "unrelated sources stay outside the document"
+    );
+    assert_eq!(answer["next_cursor"], Value::Null);
     assert_eq!(answer["stamp"]["policy"], "catch_up");
     assert_eq!(
         answer["stamp"]["attested"],
         json!([
+            "boundaries",
+            "domains",
             "messages",
             "questions",
+            "relations",
             "requirements",
             "resolutions",
             "rules",
@@ -171,10 +211,10 @@ async fn document_transports_preserve_scope_freshness_and_refusals() {
     let (status, first) = call(&host, "read-document", request.clone()).await;
     assert_eq!(status, 200, "{first}");
     assert_eq!(
-        first["rules"][0]["statement"],
+        collection(&first, "rules")[0]["statement"],
         "The other graph is readable."
     );
-    assert_eq!(first["rules"][0]["scope_id"], "other");
+    assert_eq!(collection(&first, "rules")[0]["scope_id"], "other");
     for (body, status, kind) in [
         (
             json!({"context":{"repository":"missing","scope":"other"},"request":{"id":"req_shared"}}),
@@ -192,7 +232,7 @@ async fn document_transports_preserve_scope_freshness_and_refusals() {
             "invalid_input",
         ),
         (
-            json!({"context":{"repository":"selected","scope":"other"},"request":{"id":"req_shared","limit":1}}),
+            json!({"context":{"repository":"selected","scope":"other"},"request":{"id":"req_shared","limit":0}}),
             400,
             "invalid_input",
         ),
@@ -223,7 +263,7 @@ async fn document_transports_preserve_scope_freshness_and_refusals() {
     let (status, refreshed) = call(&host, "read-document", request.clone()).await;
     assert_eq!(status, 200, "{refreshed}");
     assert_eq!(
-        refreshed["rules"][0]["statement"],
+        collection(&refreshed, "rules")[0]["statement"],
         "The saved edit is readable."
     );
     assert_ne!(refreshed["stamp"]["digest"], first["stamp"]["digest"]);
@@ -240,20 +280,14 @@ async fn document_transports_preserve_scope_freshness_and_refusals() {
     )
     .unwrap();
     let (status, failed) = call(&host, "read-document", request.clone()).await;
-    assert_eq!(status, 200, "{failed}");
-    assert_eq!(failed["stamp"]["policy"], "catch_up_failed");
-    assert_eq!(failed["stamp"]["digest"], refreshed["stamp"]["digest"]);
-    assert_eq!(failed["rules"], refreshed["rules"]);
-    assert_eq!(failed["freshness_cause"], "catch_up_failed");
-    assert_eq!(
-        failed["freshness_error"],
-        "catch-up failed; answer uses the stored projection"
-    );
+    assert_eq!(status, 409, "{failed}");
+    assert_eq!(failed["error"]["kind"], "document_catch_up_failed");
+    assert!(failed.get("entries").is_none());
     let actual = client
         .call_tool(tool("read-document", &request))
         .await
         .unwrap();
-    assert_ne!(actual.is_error, Some(true));
+    assert_eq!(actual.is_error, Some(true));
     assert_eq!(actual.structured_content.unwrap(), failed);
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();

@@ -156,6 +156,47 @@ async fn all_bounded_methods_preserve_cuts_defaults_and_stamps() {
     );
     assert_eq!(search["has_more"], true);
     assert_eq!(search["nodes"].as_array().unwrap().len(), 1);
+    let next = compare!(
+        f,
+        search,
+        json!({"context":f.context(),
+        "request":{"text":"shared","limit":1,"cursor":search["next_cursor"]}})
+    );
+    assert_ne!(search["nodes"][0]["id"], next["nodes"][0]["id"]);
+    refuses!(
+        f,
+        search,
+        json!({"context":f.context(),
+        "request":{"text":"other","limit":1,"cursor":search["next_cursor"]}}),
+        409,
+        "cursor_invalid"
+    );
+    let mut cursor = Value::Null;
+    let mut ids = std::collections::BTreeSet::new();
+    loop {
+        let call =
+            json!({"context":f.context(),"request":{"id":"req_shared","limit":2,"cursor":cursor}});
+        let (status, expected) = f.raw("read-document", &call).await;
+        assert_eq!(status, 200, "{expected}");
+        let actual = f
+            .client
+            .read_document(&serde_json::from_value(call).unwrap())
+            .await
+            .unwrap();
+        let actual = serde_json::to_value(actual).unwrap();
+        assert_eq!(actual, expected);
+        for entry in actual["entries"].as_array().unwrap() {
+            assert!(ids.insert(format!(
+                "{}:{}:{}",
+                entry["kind"], entry["node"]["node_type"], entry["node"]["id"]
+            )));
+        }
+        cursor = actual["next_cursor"].clone();
+        if cursor.is_null() {
+            break;
+        }
+    }
+    assert!(ids.len() >= 6);
     let defaults = compare!(
         f,
         search,

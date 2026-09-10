@@ -10,7 +10,7 @@ test('each Rust operation owns its method file as the catalog grows', async () =
   doc.paths = Object.fromEntries(Array.from({ length: 32 }, (_, i) => {
     const entry = structuredClone(route);
     entry.post.operationId = `operation${i}`;
-    return [`/v7/operations/operation-${i}`, entry];
+    return [`/v8/operations/operation-${i}`, entry];
   }));
   const files = templates.rustClientFiles(doc);
   for (let i = 0; i < 32; i++) {

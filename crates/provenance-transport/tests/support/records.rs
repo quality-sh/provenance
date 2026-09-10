@@ -40,7 +40,7 @@ pub async fn call(
     let response = host
         .router()
         .oneshot(
-            Request::post(format!("/v7/operations/{operation}"))
+            Request::post(format!("/v8/operations/{operation}"))
                 .header("host", "fixture.test")
                 .header("authorization", "Bearer fixture-secret")
                 .body(Body::from(body.to_string()))

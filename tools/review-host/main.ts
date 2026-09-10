@@ -32,7 +32,11 @@ access.addEventListener('submit', async event => {
       !('scope' in config) || typeof config.scope !== 'string') throw new Error('Invalid configuration');
     const client = await HttpClient.connectWithBearer(location.origin, bearer);
     const context = { repository: config.repositoryId, scope: config.scope, freshness: 'catch_up' as const };
-    load = () => loadReviewStore(() => client.readDocument({ context, request: { id: requirement.value.trim() } }));
+    load = () => {
+      const id = requirement.value.trim();
+      return loadReviewStore((cursor?: string | null) =>
+        client.readDocument({ context, request: { id, limit: 50, cursor } }));
+    };
     access.hidden = true;
     selection.hidden = false;
     status.textContent = `Read-only · ${config.repositoryId} / ${config.scope}`;

@@ -34,6 +34,8 @@ tempfile.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["time"] }
 uuid.workspace = true
+hmac = "0.12.1"
+base64 = "0.22.1"
 
 [target.'cfg(unix)'.dependencies]
 rustix.workspace = true

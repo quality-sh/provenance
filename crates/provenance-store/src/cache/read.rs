@@ -7,7 +7,9 @@
 //! one transaction.
 
 mod discussions;
+mod document;
 mod front;
+pub(crate) mod page;
 mod records;
 mod rows;
 
