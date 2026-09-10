@@ -23,8 +23,8 @@ fn statement_documents_have_named_operation_and_closed_call_schema() {
 }
 
 #[test]
-fn operation_names_and_failure_statuses_are_explicit() {
-    let (document, mcp) = provenance_codegen::documents();
+fn operation_names_are_explicit() {
+    let (_, mcp) = provenance_codegen::documents();
     let mut names = mcp["tools"]
         .as_array()
         .unwrap()
@@ -35,18 +35,46 @@ fn operation_names_and_failure_statuses_are_explicit() {
     assert_eq!(
         names,
         [
+            "add-requirement-depends-on",
+            "add-requirement-supersedes",
+            "add-resolution-requirement",
+            "add-resolution-supersedes",
+            "add-rule-requirement",
+            "add-rule-resolution",
             "add-source-reference",
+            "add-source-supersedes",
+            "answer-question",
             "apply",
             "begin-verification",
             "check-statement",
+            "claim-question",
+            "claim-topic",
+            "clear-question-contradicts",
+            "clear-requirement-depends-on",
+            "clear-requirement-refines",
+            "clear-requirement-spawned-by",
+            "clear-requirement-supersedes",
+            "clear-resolution-requirement",
+            "clear-resolution-supersedes",
+            "clear-rule-requirement",
+            "clear-rule-resolution",
+            "clear-source-reference",
+            "clear-source-supersedes",
+            "close-topic",
             "complete-verification",
             "create-assertion",
+            "create-boundary",
+            "create-contribution",
             "create-disposition",
+            "create-domain",
             "create-proposal",
+            "create-question",
             "create-requirement",
             "create-resolution",
             "create-rule",
             "create-source",
+            "create-synthesis-packet",
+            "create-topic",
             "evidence",
             "get",
             "impact",
@@ -59,14 +87,34 @@ fn operation_names_and_failure_statuses_are_explicit() {
             "neighbors",
             "plan",
             "post-thread-message",
+            "release-question",
+            "release-topic",
             "resolve-symbol",
             "search",
+            "set-question-contradicts",
+            "set-requirement-refines",
+            "set-requirement-spawned-by",
             "stale",
             "trace",
+            "update-boundary",
+            "update-domain",
+            "update-question",
+            "update-requirement",
+            "update-resolution",
+            "update-rule",
+            "update-source",
+            "update-topic",
+            "upsert-contribution",
+            "upsert-synthesis-packet",
             "verification-bindings",
-            "verification-runs"
+            "verification-runs",
         ]
     );
+}
+
+#[test]
+fn operation_failure_statuses_and_repository_context_are_explicit() {
+    let (document, _) = provenance_codegen::documents();
     let paths = &document["paths"];
     let version = provenance_core::protocol::SDK_PROTOCOL_VERSION;
     assert!(
@@ -137,6 +185,49 @@ fn mutation_classification_comes_from_the_catalog() {
     for (path, route) in document["paths"].as_object().unwrap() {
         if let Some(operation) = route.get("post") {
             let expected = [
+                "create-contribution",
+                "upsert-contribution",
+                "create-synthesis-packet",
+                "upsert-synthesis-packet",
+                "set-requirement-refines",
+                "clear-requirement-refines",
+                "add-requirement-depends-on",
+                "clear-requirement-depends-on",
+                "add-requirement-supersedes",
+                "clear-requirement-supersedes",
+                "set-requirement-spawned-by",
+                "clear-requirement-spawned-by",
+                "add-rule-requirement",
+                "clear-rule-requirement",
+                "add-rule-resolution",
+                "clear-rule-resolution",
+                "add-resolution-requirement",
+                "clear-resolution-requirement",
+                "add-resolution-supersedes",
+                "clear-resolution-supersedes",
+                "add-source-supersedes",
+                "clear-source-supersedes",
+                "set-question-contradicts",
+                "clear-question-contradicts",
+                "clear-source-reference",
+                "claim-topic",
+                "release-topic",
+                "close-topic",
+                "claim-question",
+                "release-question",
+                "answer-question",
+                "update-source",
+                "update-resolution",
+                "update-requirement",
+                "update-rule",
+                "update-domain",
+                "update-boundary",
+                "update-topic",
+                "update-question",
+                "create-domain",
+                "create-boundary",
+                "create-topic",
+                "create-question",
                 "apply",
                 "begin-verification",
                 "complete-verification",
