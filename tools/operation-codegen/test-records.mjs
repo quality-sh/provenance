@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 export async function checkRecords({ HttpClient, OperationError, PROTOCOL_VERSION }, fixture) {
   const client = await HttpClient.connectWithBearer(fixture.url, fixture.bearer);
   const context = { repository: fixture.targets.first, scope: 'default' };
+  await checkCursorReads(client, context);
   const raw = async (operation, call) => {
     const response = await fetch(`${fixture.url}/v${PROTOCOL_VERSION}/operations/${operation}`, {
       method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${fixture.bearer}` }, body: JSON.stringify(call),
@@ -72,4 +73,28 @@ export async function checkRecords({ HttpClient, OperationError, PROTOCOL_VERSIO
   assert.equal(typeof stale.error.instance_id, 'string');
   assert.ok(stale.error.moved.length > 0);
   await refuses('get', { ...selected(fixture.unmaterialized_target, 'default'), context: { repository: fixture.unmaterialized_target, scope: 'default', freshness: 'annotate_only' } }, call => client.get(call), 409, 'no_projection');
+}
+
+export async function checkCursorReads(client, context) {
+  const seen = new Set();
+  let cursor = null;
+  do {
+    const page = await client.readDocument({ context, request: { id: 'req_shared', limit: 2, cursor } });
+    assert.equal(page.operation, 'read-document');
+    assert.ok(page.entries.length <= 2);
+    for (const entry of page.entries) {
+      const record = entry.node ?? entry.thread ?? entry.message;
+      const key = `${entry.kind}:${record.node_type ?? ''}:${record.id}`;
+      assert.equal(seen.has(key), false, 'pages do not repeat identities');
+      seen.add(key);
+    }
+    cursor = page.next_cursor;
+    assert.equal(page.has_more, cursor !== null);
+  } while (cursor !== null);
+  assert.ok(seen.has('member:requirement:req_shared'));
+  const first = await client.search({ context, request: { text: 'shared', limit: 1 } });
+  const next = await client.search({ context, request: { text: 'shared', limit: 1, cursor: first.next_cursor } });
+  assert.notEqual(first.nodes[0].id, next.nodes[0].id);
+  await assert.rejects(client.search({ context, request: { text: 'other', limit: 1, cursor: first.next_cursor } }),
+    error => error.failure.error.kind === 'cursor_invalid');
 }

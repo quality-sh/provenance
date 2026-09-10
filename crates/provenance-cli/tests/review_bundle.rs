@@ -118,7 +118,7 @@ fn body(response: ureq::Response) -> Vec<u8> {
 
 fn call_operation(host: &Value, target: &str) -> ureq::Response {
     response(
-        request(host, "POST", "/v7/operations/list-threads", true)
+        request(host, "POST", "/v8/operations/list-threads", true)
             .set("Content-Type", "application/json")
             .send_string(
                 &json!({"context":{"repository":target,"scope":"default"},"request":null})

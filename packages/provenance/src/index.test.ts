@@ -218,7 +218,7 @@ test("plan sends the finalized spec to the read-only HTTP operation", async (t) 
   const recorder = await recordingHost({
     info: {
       engine_version: "0.1.0",
-      protocol_version: 7,
+      protocol_version: 8,
       state_schema_version: STATE_SCHEMA_VERSION,
       repository: "/project",
     },

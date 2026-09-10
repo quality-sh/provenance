@@ -11,7 +11,7 @@ const stamp: Stamp = {
 };
 
 const stamped: GetResponse = {
-  protocol_version: 7,
+  protocol_version: 8,
   operation: "get",
   found: false,
   stamp,

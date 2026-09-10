@@ -19,7 +19,7 @@ The operation does not open a repository, load settings, or use a dictionary.
 
 ## Statement calls
 
-HTTP uses `POST /v7/operations/check-statement` with a JSON body:
+HTTP uses `POST /v8/operations/check-statement` with a JSON body:
 
 ```json
 {"request":{"statement":"Stop; wait."}}
@@ -28,7 +28,7 @@ HTTP uses `POST /v7/operations/check-statement` with a JSON body:
 MCP uses the `check-statement` tool with these arguments:
 
 ```json
-{"protocol_version":7,"call":{"request":{"statement":"Stop; wait."}}}
+{"protocol_version":8,"call":{"request":{"statement":"Stop; wait."}}}
 ```
 
 Both calls return the full report, including integer `issue: 9` and UTF-8 byte
@@ -63,8 +63,8 @@ An absent or null freshness setting uses `ReadPolicy::resolve`: the request
 setting precedes the repository setting, which precedes the built-in default.
 `catch_up` includes saved graph edits. `annotate_only` reads the stored
 projection. `refuse_stale` refuses a changed projection. Every successful
-structured read retains its full stamp and operation identity. Pages remain
-bounded at 200, with `has_more` and no cursor.
+structured read retains its full stamp and operation identity. Pages remain bounded at 200. Search adds revision-bound continuation. Other
+bounded reads retain their existing cut flags.
 
 External validation uses the same semantic checks as native queries, but runs
 before host preparation. Native queries retain validation after the freshness
@@ -349,7 +349,10 @@ started work. Shutdown stops admission and joins started work.
 
 ## Compatibility
 
-The operation protocol advances from 6 to 7. The TypeScript SDK uses the
+The operation protocol advances from 7 to 8. This is a breaking change to
+`read-document`, search continuation, and typed read refusals. Version 7
+requests receive a protocol mismatch. No version 8 package is published by
+this implementation. The TypeScript SDK uses the
 generated HTTP client for the original sixteen operations. The generated client
 also exposes creation, attachment, discussion, proposal-lifecycle, and
 [record update operations](record-updates.md).
@@ -373,3 +376,31 @@ window. State schema, read derivation, and `graph-reference-v1` remain separate.
 See [repository evidence access](operation-file-access.md) for held-file behavior,
 MCP list wrapping, and the control-data trust assumptions. See
 [local review host](review-host.md) for production hosting and asset packaging.
+
+## Bounded working-copy document reads
+
+`read-document` accepts `{id, limit?, cursor?}` in the scoped context. It returns
+`root_id`, `entries`, `limit`, `has_more`, and `next_cursor` in the normal stamped
+envelope. It replaces the unpublished whole-scope collection result.
+
+The selected root is an active Requirement. Each entry identifies a member,
+reference, Thread, or Message. Members follow active refinement and production
+relationships. Ancestors and other branches remain references. Retired records
+cannot expand membership or supply citations. Discussion pages retain all
+independent Threads at member parents and their Messages, in logical order.
+
+Search retains substring matching and kind filters. Its optional cursor binds
+the normalized query, order, page limit, target, scope, and complete projection
+revision. Both operations bound records, bytes, and query work in the shared
+engine. Invalid cursors and changed revisions are typed refusals. Each call
+passes authorization again and uses a short transaction.
+
+Only a terminal sequence establishes completeness. A short or empty page can
+still require continuation. `read-document` refuses a failed catch-up with
+`document_catch_up_failed`. Search retains the existing annotated failed-catch-up
+behavior; clients must not present that result as current.
+
+See the [cursor contract and integration handoff](cursor-reads.md)
+for exact inclusion rules, budgets, generated types, examples, and publication
+prerequisites. Complete-list discussion and proposal operations retain their
+complete-list behavior.

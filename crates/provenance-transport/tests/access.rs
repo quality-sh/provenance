@@ -47,7 +47,7 @@ async fn credential_host_and_origin_checks_precede_body_decode_and_storage() {
             "access_denied",
         ),
     ] {
-        let mut request = Request::post("/v7/operations/get")
+        let mut request = Request::post("/v8/operations/get")
             .header("host", authority)
             .header("authorization", credential);
         if let Some(origin) = origin {

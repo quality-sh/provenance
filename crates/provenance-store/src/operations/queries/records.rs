@@ -1,5 +1,5 @@
 use crate::operations::reader::ReadContext;
-use provenance_core::protocol::{take_page, GetQuery, GetResult, SearchQuery, SearchResult};
+use provenance_core::protocol::{GetQuery, GetResult, SearchQuery, SearchResult};
 use provenance_core::{NodeType, StableId};
 
 use super::nodes;
@@ -22,52 +22,105 @@ pub(super) async fn get(ctx: &ReadContext, request: GetQuery) -> anyhow::Result<
     })
 }
 
-/// Visits the wanted kinds in rank order, each table once, and stops
-/// reading once the page and its cut flag are decided. The table's
-/// `instr` match is over the joined pieces, so a needle spanning two
-/// pieces can come back; the per-piece `contains` decides.
+/// Search keeps canonical kind and ID order within the engine page budgets.
 pub(super) async fn search(
     ctx: &ReadContext,
     request: SearchQuery,
 ) -> anyhow::Result<SearchResult> {
+    ctx.snapshot().bound_page_work().await?;
+    search_page(ctx, request)
+        .await
+        .map_err(crate::operations::reader::page_error)
+}
+
+async fn search_page(ctx: &ReadContext, request: SearchQuery) -> anyhow::Result<SearchResult> {
+    use crate::operations::reader::{Cursor, Position};
+    use crate::operations::reader::{PAGE_BYTES, RECORD_BYTES};
+    use provenance_core::protocol::read_failure::ReadFailure;
     request
         .validate()
         .map_err(provenance_core::protocol::QueryValidation::into_native)?;
-    let text = request.text;
-    let needle = text.trim().to_lowercase();
-    // Protocol version 5 compatibility: a request that names no kinds gets
-    // the six kinds version 5 always answered. Domains and boundaries are
-    // opt-in through an explicit node_types entry, so a strict old client
-    // never meets a kind it cannot read.
+    let needle = request.text.trim().to_lowercase();
     let mut wanted = if request.node_types.is_empty() {
         PROTOCOL_FIVE_DEFAULT_KINDS.to_vec()
     } else {
         request.node_types.clone()
     };
     wanted.sort_by_key(|kind| rank(*kind));
-    wanted.dedup_by_key(|kind| rank(*kind));
+    wanted.dedup();
+    let (cursor, mut position) = Cursor::open(
+        ctx,
+        "search",
+        &(&needle, &wanted, request.include_retired, request.limit),
+        request.cursor.as_deref(),
+    )?;
     let mut matched = Vec::new();
-    for kind in wanted {
-        if matched.len() > request.limit {
-            break;
+    let mut bytes = 0;
+    let mut scanned = 0;
+    let mut has_more = false;
+    'kinds: for kind in wanted {
+        if kind.rank() < position.rank {
+            continue;
         }
-        let room = request.limit + 1 - matched.len();
-        let rows = nodes::search(ctx.snapshot(), kind, &needle, request.include_retired).await?;
-        matched.extend(
-            rows.into_iter()
-                .filter(|node| {
-                    node.searchable_text()
-                        .iter()
-                        .any(|text| text.to_lowercase().contains(&needle))
-                })
-                .take(room),
-        );
+        let mut after = if kind.rank() == position.rank {
+            position.id.clone()
+        } else {
+            String::new()
+        };
+        loop {
+            let count = (request.limit + 1 - matched.len()).min(512 - scanned);
+            let ids =
+                nodes::search_ids(ctx.snapshot(), kind, request.include_retired, &after, count)
+                    .await?;
+            let exhausted = ids.len() < count;
+            for id in ids {
+                let node = nodes::page_node(ctx.snapshot(), kind, &id)
+                    .await?
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("search candidate disappeared inside snapshot")
+                    })?;
+                let contains_text = node
+                    .searchable_text()
+                    .iter()
+                    .any(|text| text.to_lowercase().contains(&needle));
+                if contains_text {
+                    let size = serde_json::to_vec(&node)?.len();
+                    if size > RECORD_BYTES {
+                        return Err(ReadFailure::PageRecordTooLarge.into());
+                    }
+                    if matched.len() == request.limit || bytes + size > PAGE_BYTES {
+                        has_more = true;
+                        break 'kinds;
+                    }
+                    bytes += size;
+                    matched.push(node);
+                }
+                scanned += 1;
+                after.clone_from(&id);
+                position = Position {
+                    rank: kind.rank(),
+                    id,
+                    ..Position::default()
+                };
+                if scanned == 512 {
+                    has_more = true;
+                    break 'kinds;
+                }
+            }
+            if exhausted {
+                break;
+            }
+        }
     }
-    let (nodes, has_more) = take_page(matched, request.limit);
     Ok(SearchResult {
         limit: request.limit,
         has_more,
-        nodes,
+        nodes: matched,
+        next_cursor: if has_more {
+            Some(cursor.encode(ctx, position)?)
+        } else {
+            None
+        },
     })
 }
 

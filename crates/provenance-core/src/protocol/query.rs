@@ -58,6 +58,8 @@ pub struct GetQuery {
 pub struct SearchQuery {
     #[serde(default)]
     pub protocol_version: Option<u32>,
+    #[serde(default)]
+    pub cursor: Option<String>,
     pub text: String,
     #[serde(default)]
     pub node_types: Vec<NodeType>,

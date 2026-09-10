@@ -28,6 +28,9 @@ impl ReadError {
         }
     }
     fn safe(&self) -> ReadFailure {
+        if let Some(error) = self.0.downcast_ref::<ReadFailure>() {
+            return error.clone();
+        }
         if let Some(error) = self.0.downcast_ref::<crate::stale::git::GitRefusal>() {
             return match error {
                 crate::stale::git::GitRefusal::Unavailable { .. } => ReadFailure::GitUnavailable,

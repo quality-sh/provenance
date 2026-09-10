@@ -17,7 +17,8 @@ use sqlx::SqliteConnection;
 ///   operations, `prime`, and the `impact` command, so a source cited under
 ///   two clauses is reached once; the trace and impact `seen` sets keyed by
 ///   kind and id, so one id under two kinds is two records.
-pub const READ_DERIVATION: u32 = 1;
+/// - 2: revision-bound search pages and root-relative document membership.
+pub const READ_DERIVATION: u32 = 2;
 
 /// The latest `projection_revision` row and the `projection_instance` row.
 #[derive(Debug, Clone, PartialEq, Eq)]

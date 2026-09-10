@@ -89,7 +89,7 @@ fn snapshot(root: &Path) -> BTreeMap<String, Vec<u8>> {
 }
 
 async fn get(host: &StatementHost, target: &str, scope: &str) -> (u16, Value) {
-    let mut request = Request::post("/v7/operations/get")
+    let mut request = Request::post("/v8/operations/get")
         .body(Body::from(
             json!({
                 "context":{"repository":target,"scope":scope,"freshness":"catch_up"},
@@ -171,7 +171,7 @@ async fn invoke(
     body: &Value,
     headers: HeaderMap,
 ) -> (u16, Value) {
-    let mut request = Request::post(format!("/v7/operations/{operation}"))
+    let mut request = Request::post(format!("/v8/operations/{operation}"))
         .body(Body::from(body.to_string()))
         .unwrap();
     *request.headers_mut() = headers;

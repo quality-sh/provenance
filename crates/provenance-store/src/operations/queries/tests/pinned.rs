@@ -159,6 +159,7 @@ async fn answers() -> Vec<Value> {
     for request in request_set(&base) {
         let mut answer = served_value(&store, &request, policy).await;
         strip_additive(&mut answer);
+        normalize_cursor(&mut answer);
         answers.push(json!({
             "operation": request.operation(),
             "request": request.describe(),
@@ -166,6 +167,27 @@ async fn answers() -> Vec<Value> {
         }));
     }
     answers
+}
+
+// Cursor authentication and target binding have dedicated behavioral tests.
+// The golden file retains the revision digest, serial, derivation, and position;
+// only random instance, temporary repository identity, and signature vary.
+fn normalize_cursor(answer: &mut Value) {
+    use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+    let Some(token) = answer.get("next_cursor").and_then(Value::as_str) else {
+        return;
+    };
+    let (body, signature) = token.split_once('.').expect("authenticated cursor framing");
+    assert_eq!(URL_SAFE_NO_PAD.decode(signature).unwrap().len(), 32);
+    let mut payload: Value =
+        serde_json::from_slice(&URL_SAFE_NO_PAD.decode(body).unwrap()).unwrap();
+    assert!(payload["identity"]
+        .as_str()
+        .is_some_and(|id| id.len() == 64));
+    assert!(uuid::Uuid::parse_str(payload["instance"].as_str().unwrap()).is_ok());
+    payload["identity"] = json!("<query identity>");
+    payload["instance"] = json!("<projection instance>");
+    answer["next_cursor"] = payload;
 }
 
 fn digest(answers: &[Value]) -> String {

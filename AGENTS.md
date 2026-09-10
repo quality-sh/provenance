@@ -24,6 +24,11 @@ use Git's standard `git commit --no-verify` option.
 
 ## Code standards
 
+Browser UI tests do not belong in this repository. Keep Rust host, authorization,
+asset, and API tests, and non-UI session tests here. `provenance-web` owns
+Storybook component tests and its one small browser smoke test of built assets.
+Do not add a browser suite here or move a broad suite into `provenance-web`.
+
 **No Rust file in this repo may exceed 500 lines.** Unreadable code is not accepted.
 
 - New files must be designed under the limit from the start; split by responsibility, not by line count.

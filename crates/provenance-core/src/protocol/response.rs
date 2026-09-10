@@ -53,6 +53,7 @@ pub struct GetResult {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SearchResult {
+    pub next_cursor: Option<String>,
     pub limit: usize,
     pub has_more: bool,
     pub nodes: Vec<GraphNode>,

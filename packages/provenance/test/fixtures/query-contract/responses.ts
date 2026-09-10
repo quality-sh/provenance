@@ -9,13 +9,13 @@ const stamp: Stamp = {
 
 // Current responses always carry a stamp and their exact operation identity.
 // @ts-expect-error A historical unstamped response is not a current response.
-const missingStamp: GetResponse = { protocol_version: 7, operation: "get", found: false };
+const missingStamp: GetResponse = { protocol_version: 8, operation: "get", found: false };
 // @ts-expect-error A search result cannot satisfy the get contract.
-const wrongOperation: GetResponse = { protocol_version: 7, operation: "search", found: false, stamp };
+const wrongOperation: GetResponse = { protocol_version: 8, operation: "search", found: false, stamp };
 
 // @ts-expect-error The current evidence result always includes all four cut flags.
 const missingCuts: EvidenceResponse = {
-  protocol_version: 7, operation: "evidence", stamp, rule_id: "rule_a",
+  protocol_version: 8, operation: "evidence", stamp, rule_id: "rule_a",
   limit: 200, has_more: false, implementation_bindings: [], verification_bindings: [],
   verification_runs: [], review_required: false, reviews: [], stale: null,
 };

@@ -85,33 +85,32 @@ release order before the CLI. It uses the shared workspace release version.
 
 The asset entry is `/index.html`, also served at `/`. Relative local dependencies
 retain their paths. Missing assets return 404; no repository file is served.
-`/metadata` and `/v7/operations/:operation` retain their existing contracts.
+`/metadata` reports protocol 8. `/v8/operations/:operation` uses the current
+[operation contract](operation-contract.md).
 The host reserves `/review-config` for authenticated runtime configuration:
 
 ```json
-{"endpoint":"http://127.0.0.1:PORT","repositoryId":"A","scope":"default","protocolVersion":7,"sdkVersion":"0.2.2"}
+{"endpoint":"http://127.0.0.1:PORT","repositoryId":"A","scope":"default","protocolVersion":8,"sdkVersion":"0.2.2"}
 ```
 
-The merged renderer does not read credentials, fetch configuration, load an SDK,
-or mount itself. Its `index.html` is an empty shell with a stylesheet and a root
-element. The consumer owns credential entry and transport, loading and error
-handling, the concrete SDK-to-view adapter, and this call:
+The generic renderer does not read credentials, fetch host configuration, or
+mount itself. Its index is an empty shell. The reusable read adapter lives in
+Provenance Web. The concrete application in [tools/review-host](../tools/review-host/README.md)
+supplies credential entry, the generated client, explicit Requirement selection,
+refresh, and error handling, then calls `mountReview(element, { store })`.
 
-```js
-import { mountReview } from './review.js';
-const unmount = mountReview(element, { store, initialSelectedId });
-```
+Build that application with the matching renderer and generated SDK to replace
+the shell with the local host entry. The credential stays in page memory and is
+sent only in the Authorization header to the current origin. It does not enter
+URLs, logs, assets, or browser storage. The password input is cleared after each
+connection attempt. A failed refresh removes the previous document; a superseded
+request cannot replace a later result.
 
-`store` must satisfy the renderer's `ReviewStore` interface. The return value
-unmounts the view. The document ticket (`provenance-boc5.3`) owns that bootstrap,
-the complete document adapter, and real read integration. It must keep the
-credential in memory, send it only in the Authorization header to the exact
-local endpoint, and prevent it from entering URLs, logs, or browser storage.
-If a later launcher uses a fragment for credential delivery, its consumer must
-remove that fragment immediately. This host does not issue such a URL.
-
-The browser entry is `@quality-sh/provenance/client`, exact SDK version `0.2.2`,
-operation protocol `7`. The generated client calls an existing host; it does not
+The browser entry remains `@quality-sh/provenance/client`, protocol `7`.
+Published SDK `0.2.2` does not contain `readDocument`. The new application is
+locally verified against the generated SDK in this change. The linked build
+guide states the exact publication prerequisites.
+The generated client calls an existing host; it does not
 start one. Asset code must use the same origin and local dependencies. Response
 policy permits local scripts, styles, fonts, images, and connections. It blocks
 framing, inline scripts, external connections, and service workers.
