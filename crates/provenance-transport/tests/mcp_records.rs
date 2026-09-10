@@ -1,6 +1,8 @@
 #![cfg(feature = "test-fixture")]
 #[path = "support/records.rs"]
 mod records;
+use provenance_core::{MessageRole, NodeType, ScopeId, StableId, ThreadParent};
+use provenance_store::state_store::{PostMessageInput, StateStore};
 use records::{call, get_call, host, Repository};
 use rmcp::{model::CallToolRequestParams, ServiceExt};
 use serde_json::{json, Value};
@@ -16,8 +18,6 @@ fn tool(operation: &str, call: &Value) -> CallToolRequestParams {
 
 #[tokio::test]
 async fn real_mcp_preserves_each_registered_read_and_full_http_stamp() {
-    use provenance_core::{MessageRole, NodeType, ScopeId, StableId, ThreadParent};
-    use provenance_store::state_store::{PostMessageInput, StateStore};
     let repo = Repository::new("The shared graph is readable.");
     repo.all_kinds();
     let scope = ScopeId::new("default").unwrap();
@@ -97,46 +97,7 @@ async fn real_mcp_preserves_each_registered_read_and_full_http_stamp() {
         let (status, expected) = call(&host, operation, request.clone()).await;
         assert_eq!(status, 200, "{expected}");
         if operation == "read-document" {
-            assert_eq!(expected["operation"], operation);
-            assert_eq!(
-                expected["protocol_version"],
-                provenance_core::SDK_PROTOCOL_VERSION
-            );
-            assert_eq!(expected["root_id"], "req_shared");
-            for (family, rows) in [
-                (
-                    "requirements",
-                    json!(store.list_requirements(&scope).unwrap()),
-                ),
-                (
-                    "resolutions",
-                    json!(store.list_resolutions(&scope).unwrap()),
-                ),
-                ("rules", json!(store.list_rules(&scope).unwrap())),
-                ("sources", json!(store.list_sources(&scope).unwrap())),
-                ("topics", json!(store.list_topics(&scope).unwrap())),
-                ("questions", json!(store.list_questions(&scope).unwrap())),
-                ("threads", json!(store.list_threads(&scope).unwrap())),
-                ("messages", json!(store.list_messages(&scope).unwrap())),
-            ] {
-                assert!(!rows.as_array().unwrap().is_empty(), "{family}");
-                assert_eq!(expected[family], rows, "{family}");
-            }
-            assert_eq!(expected["stamp"]["policy"], "catch_up");
-            assert_eq!(
-                expected["stamp"]["attested"],
-                json!([
-                    "messages",
-                    "questions",
-                    "requirements",
-                    "resolutions",
-                    "rules",
-                    "sources",
-                    "threads",
-                    "topics"
-                ])
-            );
-            assert_eq!(expected["stamp"]["live"], json!([]));
+            assert_document_matches_store(&expected, &store, &scope);
         }
         let actual = client.call_tool(tool(operation, &request)).await.unwrap();
         assert_ne!(actual.is_error, Some(true));
@@ -154,6 +115,46 @@ async fn real_mcp_preserves_each_registered_read_and_full_http_stamp() {
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
     host.shutdown().await;
+}
+
+fn assert_document_matches_store(answer: &Value, store: &StateStore, scope: &ScopeId) {
+    assert_eq!(answer["operation"], "read-document");
+    assert_eq!(
+        answer["protocol_version"],
+        provenance_core::SDK_PROTOCOL_VERSION
+    );
+    assert_eq!(answer["root_id"], "req_shared");
+    for (family, rows) in [
+        (
+            "requirements",
+            json!(store.list_requirements(scope).unwrap()),
+        ),
+        ("resolutions", json!(store.list_resolutions(scope).unwrap())),
+        ("rules", json!(store.list_rules(scope).unwrap())),
+        ("sources", json!(store.list_sources(scope).unwrap())),
+        ("topics", json!(store.list_topics(scope).unwrap())),
+        ("questions", json!(store.list_questions(scope).unwrap())),
+        ("threads", json!(store.list_threads(scope).unwrap())),
+        ("messages", json!(store.list_messages(scope).unwrap())),
+    ] {
+        assert!(!rows.as_array().unwrap().is_empty(), "{family}");
+        assert_eq!(answer[family], rows, "{family}");
+    }
+    assert_eq!(answer["stamp"]["policy"], "catch_up");
+    assert_eq!(
+        answer["stamp"]["attested"],
+        json!([
+            "messages",
+            "questions",
+            "requirements",
+            "resolutions",
+            "rules",
+            "sources",
+            "threads",
+            "topics"
+        ])
+    );
+    assert_eq!(answer["stamp"]["live"], json!([]));
 }
 
 #[tokio::test]
