@@ -1,6 +1,6 @@
 {
   "name": "@quality-sh/provenance",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Typed traceability declarations backed by the Provenance Rust engine",
   "license": "BUSL-1.1",
   "repository": {
@@ -49,9 +49,9 @@
     "node": ">=20"
   },
   "optionalDependencies": {
-    "@quality-sh/provenance-darwin-arm64": "0.2.2",
-    "@quality-sh/provenance-linux-x64-gnu": "0.2.2",
-    "@quality-sh/provenance-win32-x64-msvc": "0.2.2"
+    "@quality-sh/provenance-linux-x64-gnu": "0.2.3",
+    "@quality-sh/provenance-win32-x64-msvc": "0.2.3",
+    "@quality-sh/provenance-darwin-arm64": "0.2.3"
   },
   "dependencies": {
     "typescript": "^5.9.3"

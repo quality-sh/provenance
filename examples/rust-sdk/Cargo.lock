@@ -1486,7 +1486,7 @@ dependencies = [
 
 [[package]]
 name = "provenance-core"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "anyhow",
  "camino",
@@ -1499,7 +1499,7 @@ dependencies = [
 
 [[package]]
 name = "provenance-macros"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1508,7 +1508,7 @@ dependencies = [
 
 [[package]]
 name = "provenance-scanner"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "anyhow",
  "camino",
@@ -1520,7 +1520,7 @@ dependencies = [
 
 [[package]]
 name = "provenance-sdk"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "anyhow",
  "camino",
@@ -1531,7 +1531,7 @@ dependencies = [
 
 [[package]]
 name = "provenance-ste100"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "fs2",
  "pdf_oxide",
@@ -1543,7 +1543,7 @@ dependencies = [
 
 [[package]]
 name = "provenance-store"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "anyhow",
  "base64",

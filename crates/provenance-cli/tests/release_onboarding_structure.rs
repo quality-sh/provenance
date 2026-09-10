@@ -232,13 +232,13 @@ fn native_archives_include_cargo_provenance_but_npm_engines_do_not() {
 }
 
 #[test]
-fn workspace_release_versions_are_unified_at_0_2_2() {
+fn workspace_release_versions_are_unified_at_0_2_3() {
     let metadata = cargo_metadata();
     assert!(metadata["packages"]
         .as_array()
         .unwrap()
         .iter()
-        .all(|package| package["version"] == "0.2.2"));
+        .all(|package| package["version"] == "0.2.3"));
 
     let workspace = workspace_root();
     let sdk: Value = serde_json::from_slice(
@@ -249,8 +249,8 @@ fn workspace_release_versions_are_unified_at_0_2_2() {
         &fs::read(workspace.join("packages/create-provenance/package.json")).unwrap(),
     )
     .unwrap();
-    assert_eq!(sdk["version"], "0.2.2");
-    assert_eq!(initializer["version"], "0.2.2");
+    assert_eq!(sdk["version"], "0.2.3");
+    assert_eq!(initializer["version"], "0.2.3");
     let targets: Value =
         serde_json::from_slice(&fs::read(workspace.join(".github/release-targets.json")).unwrap())
             .unwrap();
@@ -273,7 +273,7 @@ fn workspace_release_versions_are_unified_at_0_2_2() {
         .as_object()
         .unwrap()
         .values()
-        .all(|version| version == "0.2.2"));
+        .all(|version| version == "0.2.3"));
 }
 
 #[test]
@@ -313,7 +313,7 @@ fn release_version_preflight_gates_every_artifact_build() {
     {
         let output = Command::new("bash")
             .arg(script)
-            .arg("v0.2.2")
+            .arg("v0.2.3")
             .current_dir(workspace)
             .output()
             .expect("run release version preflight");
