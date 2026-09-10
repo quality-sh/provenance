@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import copy
 import json
+import re
 import subprocess
 import tempfile
 import unittest
@@ -41,6 +42,25 @@ def run_contract(targets: list, version: str = "0.2.2") -> subprocess.CompletedP
 
 
 class ReleaseContractTests(unittest.TestCase):
+    def test_manual_release_runs_cannot_publish(self) -> None:
+        workflow = RELEASE_WORKFLOW.read_text()
+        self.assertIn("  workflow_dispatch:", workflow)
+        for job in ("publish", "publish-crates", "publish-npm", "smoke"):
+            block = re.split(r"\n  [a-z][a-z-]*:\n", workflow.split(f"\n  {job}:\n", 1)[1])[0]
+            self.assertIn("    if: github.event_name == 'push'", block)
+
+    def test_accepts_blacksmith_build_runners(self) -> None:
+        targets = copy.deepcopy(TARGETS)
+        runners = {
+            "x86_64-unknown-linux-gnu": "blacksmith-8vcpu-ubuntu-2404",
+            "x86_64-pc-windows-msvc": "blacksmith-8vcpu-windows-2025",
+            "aarch64-apple-darwin": "blacksmith-12vcpu-macos-latest",
+        }
+        for target in targets:
+            target["build_os"] = runners[target["target"]]
+        result = run_contract(targets)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_generated_consumers_gate_every_publication_path_in_preflight(self) -> None:
         workflow = RELEASE_WORKFLOW.read_text()
         preflight = workflow.split("\n  build:", 1)[0]
@@ -164,17 +184,18 @@ class ReleaseContractTests(unittest.TestCase):
 
     def test_rejects_runners_from_the_wrong_os_family(self) -> None:
         for runner_field in ("build_os", "smoke_os"):
-            with self.subTest(runner_field=runner_field):
-                targets = copy.deepcopy(TARGETS)
-                linux = next(
-                    target
-                    for target in targets
-                    if target["target"] == "x86_64-unknown-linux-gnu"
-                )
-                linux[runner_field] = "macos-latest"
-                result = run_contract(targets)
-                self.assertNotEqual(result.returncode, 0, result.stdout)
-                self.assertIn(f"{runner_field} must use an ubuntu runner", result.stderr)
+            for runner in ("macos-latest", "blacksmith-12vcpu-macos-latest"):
+                with self.subTest(runner_field=runner_field, runner=runner):
+                    targets = copy.deepcopy(TARGETS)
+                    linux = next(
+                        target
+                        for target in targets
+                        if target["target"] == "x86_64-unknown-linux-gnu"
+                    )
+                    linux[runner_field] = runner
+                    result = run_contract(targets)
+                    self.assertNotEqual(result.returncode, 0, result.stdout)
+                    self.assertIn(f"{runner_field} must use an ubuntu runner", result.stderr)
 
     def test_rejects_redundant_binary_and_unsafe_version_components(self) -> None:
         target = valid_target()
