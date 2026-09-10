@@ -12,6 +12,7 @@ use provenance_core::{
 mod comparison;
 mod concurrent;
 mod dangling_targets;
+mod document;
 mod evidence;
 mod front_equivalence;
 mod impact;

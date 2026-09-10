@@ -373,3 +373,42 @@ window. State schema, read derivation, and `graph-reference-v1` remain separate.
 See [repository evidence access](operation-file-access.md) for held-file behavior,
 MCP list wrapping, and the control-data trust assumptions. See
 [local review host](review-host.md) for production hosting and asset packaging.
+
+## Complete working-copy document read
+
+`read-document` accepts a scoped context and an explicit Requirement ID:
+
+```json
+{"context":{"repository":"first","scope":"default","freshness":"catch_up"},"request":{"id":"req_example"}}
+```
+
+The result contains `root_id` and complete `requirements`, `resolutions`, `rules`,
+`sources`, `topics`, `questions`, `threads`, and `messages` collections for the
+selected scope. The normal query envelope supplies operation identity, freshness
+status, and one projection stamp. Each collection comes from the same pinned
+SQLite read transaction. All eight families appear in `stamp.attested`;
+`stamp.live` is empty. The result contains no page limit, cursor, or `has_more`.
+Existing bounded queries retain their 200-record limit.
+
+The scope bundle lets the renderer determine nesting and inspect references
+without duplicating its placement policy in Rust. It also supplies records
+outside the current lineage, so a Requirement reference can open another
+complete document. The operation does not require the root to exist: a missing
+root remains distinguishable from a missing collection. The view refuses a
+missing or retired root before mounting.
+
+Catch-up includes saved uncommitted graph files. A publication after the read
+transaction starts cannot mix new records or discussions into that result.
+The next refresh can observe that publication. This operation reuses the normal
+freshness policies and the sanitized `catch_up_failed` envelope. The review
+adapter requires `catch_up` and all eight attestations. It refuses a failed
+catch-up or an incomplete attestation, and the host removes the previous view
+before refresh. A response above the generated client's 16 MiB limit is refused;
+no partial collection becomes a document.
+
+Retired records remain in the bundle with their canonical IDs and retirement
+flags. Active document placement excludes retired declarations under ADR 0004.
+Retirement does not mean lifecycle deprecation or deletion. The renderer does
+not infer review acceptance from lifecycle status. Each Thread remains a separate
+discussion at its canonical parent. Thread and Message creation values are
+logical counters, ordered by counter and canonical ID, not calendar dates.

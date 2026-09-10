@@ -62,6 +62,14 @@ macro_rules! query {
         }
     };
 }
+query!(
+    ReadDocument,
+    "read-document",
+    ReadDocumentQuery,
+    ReadDocumentResult,
+    read_document,
+    graph_needs
+);
 query!(Get, "get", GetQuery, GetResult, get, graph_needs);
 query!(
     Search,

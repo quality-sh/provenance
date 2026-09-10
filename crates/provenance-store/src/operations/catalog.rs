@@ -46,7 +46,7 @@ pub use statement::CheckStatement;
 #[cfg(test)]
 mod tests;
 
-pub use records::{Get, Info, Neighbors, Search, Trace};
+pub use records::{Get, Info, Neighbors, ReadDocument, Search, Trace};
 
 /// Lookup uses registry identities without deriving or cloning wire schemas.
 pub fn contains(operation: &str) -> bool {

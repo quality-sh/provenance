@@ -1,3 +1,5 @@
+mod document;
+pub use document::{ReadDocumentQuery, ReadDocumentResult};
 pub mod failure;
 mod node;
 mod query;

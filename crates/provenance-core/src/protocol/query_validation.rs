@@ -125,3 +125,9 @@ impl super::StaleQuery {
         Ok(())
     }
 }
+
+impl super::ReadDocumentQuery {
+    pub fn validate(&self) -> Result<(), QueryValidation> {
+        id(&self.id)
+    }
+}

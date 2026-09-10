@@ -165,6 +165,7 @@ fn authorization_precedes_body_decode_and_rejects_unrelated_origins() {
     for path in [
         "/v7/operations/post-thread-message",
         "/v7/operations/list-threads",
+        "/v7/operations/read-document",
     ] {
         assert_eq!(
             response(request(&host, "POST", path, false).send_string("invalid")).status(),
@@ -387,4 +388,34 @@ fn launch_url_and_responses_do_not_disclose_the_credential() {
         .status(),
         401
     );
+}
+
+#[test]
+fn complete_document_reads_keep_target_and_scope_access_checks() {
+    let repo = repository();
+    let host = start(repo.path());
+    for (target, scope, authorized, expected) in [
+        ("A", "default", false, 401),
+        ("other", "default", true, 404),
+        ("A", "other", true, 403),
+        ("A", "default", true, 200),
+    ] {
+        let result = response(
+            request(&host, "POST", "/v7/operations/read-document", authorized)
+                .set("Content-Type", "application/json")
+                .send_string(
+                    &json!({
+                        "context":{"repository":target,"scope":scope,"freshness":"catch_up"},
+                        "request":{"id":"req_absent"}
+                    })
+                    .to_string(),
+                ),
+        );
+        assert_eq!(result.status(), expected);
+        if expected == 200 {
+            let body: Value = serde_json::from_str(&result.into_string().unwrap()).unwrap();
+            assert_eq!(body["requirements"], json!([]));
+            assert_eq!(body["stamp"]["policy"], "catch_up");
+        }
+    }
 }

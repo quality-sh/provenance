@@ -15,6 +15,8 @@ use provenance_core::ScopeId;
 use super::read_policy::ReadPolicy;
 use super::reader::{self, ReadContext, ReadFuture};
 
+mod document;
+pub use document::read_document;
 mod evidence;
 mod impact;
 mod nodes;

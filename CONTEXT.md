@@ -177,3 +177,10 @@ The canonical graph saved in a selected repository, including saved changes that
 The person who starts a local review host and the clients to which that person
 gives access. They share access to the repository target and scope selected for
 that host session.
+
+## Review document
+
+A view of one explicit Requirement and the records related to it through
+refinement, production, and citation. A record keeps its canonical identity
+when more than one relationship refers to it. Each discussion keeps its own
+identity and parent.
