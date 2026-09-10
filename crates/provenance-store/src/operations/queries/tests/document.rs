@@ -4,6 +4,8 @@ use crate::operations::catalog::{
 };
 use crate::operations::read_policy::ReadPolicy;
 use provenance_core::protocol::failure::OperationFailure;
+use provenance_core::protocol::{read_failure::ReadFailure, ReadDocumentQuery};
+use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::sync::Arc;
 
@@ -127,6 +129,104 @@ async fn document_reads_all_saved_records_and_marks_failed_catch_up() {
     assert!(serde_json::to_string(&failed)
         .unwrap()
         .contains("document_catch_up_failed"));
+}
+
+#[tokio::test]
+#[verifies("rule_review_partial_reads_remain_explicit", examples)]
+async fn document_failed_catch_up_precedes_missing_root_in_old_projection() {
+    use crate::cache::tests::fixtures::create_requirement;
+    use crate::operations::read_policy::FreshnessPolicy;
+
+    let (dir, store, scope) = seeded_store();
+    read(root_of(&dir)).await;
+    create_requirement(
+        &store,
+        &scope,
+        "req_new",
+        provenance_core::RequirementStatus::Active,
+    );
+    let path = crate::shards::domains_path(&store.layout, &scope);
+    let saved = std::fs::read(&path).unwrap();
+    std::fs::write(&path, "invalid JSON\n").unwrap();
+    let request = ReadDocumentQuery {
+        id: "req_new".into(),
+        cursor: None,
+        limit: 50,
+    };
+    let stale = super::super::read_document(
+        Some(root_of(&dir)),
+        &scope,
+        ReadPolicy::with_freshness(FreshnessPolicy::AnnotateOnly),
+        request.clone(),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(
+        stale.downcast_ref::<ReadFailure>(),
+        Some(&ReadFailure::DocumentRootMissing)
+    );
+
+    let failed = catalog::invoke_with(
+        "read-document", provenance_core::SDK_PROTOCOL_VERSION,
+        json!({"context":{"repository":"test","scope":"default","freshness":"catch_up"},"request":{"id":"req_new"}}),
+        Arc::new(Target(root_of(&dir))),
+    ).await.unwrap_err();
+    assert_eq!(failed.error, json!({"kind":"document_catch_up_failed"}));
+
+    std::fs::write(path, saved).unwrap();
+    let recovered =
+        super::super::read_document(Some(root_of(&dir)), &scope, ReadPolicy::default(), request)
+            .await
+            .unwrap();
+    assert_eq!(recovered.result.root_id.as_str(), "req_new");
+    assert_eq!(
+        recovered.stamp.policy,
+        provenance_core::protocol::StampPolicy::CatchUp
+    );
+}
+
+#[tokio::test]
+async fn document_valid_freshness_preserves_page_refusals() {
+    use crate::operations::read_policy::FreshnessPolicy;
+
+    let (dir, store, scope) = seeded_store();
+    let mut retired = json!(store.list_requirements(&scope).unwrap()[0]);
+    retired["id"] = json!("req_retired");
+    retired["retired"] = json!(true);
+    crate::cache::tests::fixtures::append_record(
+        &crate::shards::requirements_path(&store.layout, &scope),
+        &retired,
+    );
+    read(root_of(&dir)).await;
+    for freshness in [
+        FreshnessPolicy::CatchUp,
+        FreshnessPolicy::AnnotateOnly,
+        FreshnessPolicy::RefuseStale,
+    ] {
+        for (id, cursor, expected) in [
+            ("req_absent", None, ReadFailure::DocumentRootMissing),
+            ("req_retired", None, ReadFailure::DocumentRootRetired),
+            ("req_overtime", Some("invalid"), ReadFailure::CursorInvalid),
+        ] {
+            let error = super::super::read_document(
+                Some(root_of(&dir)),
+                &scope,
+                ReadPolicy::with_freshness(freshness),
+                ReadDocumentQuery {
+                    id: id.into(),
+                    cursor: cursor.map(str::to_owned),
+                    limit: 50,
+                },
+            )
+            .await
+            .unwrap_err();
+            assert_eq!(
+                error.downcast_ref::<ReadFailure>(),
+                Some(&expected),
+                "{freshness:?}: {id}"
+            );
+        }
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

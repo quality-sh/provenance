@@ -17,13 +17,21 @@ pub async fn read_document(
     request: ReadDocumentQuery,
 ) -> anyhow::Result<Stamped<ReadDocumentResult>> {
     let answer = served(repo, scope, policy, move |ctx| {
-        Box::pin(async move { read(ctx, request).await })
+        // Keep page errors until the freshness policy is checked.
+        Box::pin(async move { Ok(read(ctx, request).await) })
     })
     .await?;
     if answer.stamp.policy == StampPolicy::CatchUpFailed {
         return Err(ReadFailure::DocumentCatchUpFailed.into());
     }
-    super::page::checked("read-document", answer)
+    super::page::checked(
+        "read-document",
+        Stamped {
+            result: answer.result?,
+            stamp: answer.stamp,
+            freshness_error: answer.freshness_error,
+        },
+    )
 }
 
 pub(super) async fn read(
