@@ -2,7 +2,8 @@
 
 The default host has no repository targets. The `test-fixture` feature supplies
 isolated targets and explicit target/scope grants. These tests do not authorize
-real repository hosting. Production access and release decisions remain open.
+real repository hosting. The [local review host](review-host.md) defines the
+production caller and repository access contract.
 
 The catalog adds `impact`, `resolve-symbol`, `evidence`, `stale`,
 `verification-runs`, and `verification-bindings`. The four structured reads use
@@ -89,8 +90,8 @@ publication and recovery paths, settings, project dictionary references, and the
 machine dictionary index remain trusted control data. These paths still use
 existing storage readers and writers. Their owners, ancestor directories,
 symlinks, and configuration must be trusted. Target/scope grants alone do not
-make malicious control-directory paths safe. Production exposure must review
-this assumption separately.
+make malicious control-directory paths safe. The local review host requires
+these control paths and their owners to be trusted.
 
 Git executable selection, local config/includes, object storage, alternates,
 worktree gitdirs, and mount topology remain trusted. The read command seam removes

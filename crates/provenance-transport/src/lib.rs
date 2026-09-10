@@ -1,15 +1,18 @@
 //! Isolated adapters for the shared operation contract.
 //!
-//! This crate does not open a listener. The optional fixture binary exists only
-//! for contract tests. Production exposure remains subject to the host review.
+//! This library does not open a listener. The CLI owns the local review listener.
 mod access;
 mod execution;
 mod failure;
 #[cfg(feature = "test-fixture")]
 pub mod fixture;
 mod http;
+mod local;
 mod mcp;
 mod mcp_io;
+
+pub use access::HostAccess;
+pub use local::LocalAccess;
 
 use execution::Execution;
 use provenance_core::protocol::failure::{ErasedFailure as FailureEnvelope, OperationFailure};
@@ -40,6 +43,13 @@ impl Default for StatementHost {
 }
 
 impl StatementHost {
+    /// Use an explicit caller and repository access policy.
+    pub fn with_access(access: Arc<dyn HostAccess>) -> Self {
+        Self {
+            access,
+            ..Self::default()
+        }
+    }
     #[cfg(feature = "test-fixture")]
     pub fn with_fixture_access(access: fixture::FixtureAccess) -> Self {
         Self {

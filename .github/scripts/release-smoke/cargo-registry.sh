@@ -25,6 +25,7 @@ crates_are_visible() {
     provenance-store \
     provenance-sdk \
     provenance-http-client \
+    provenance-transport \
     provenance-cli
   do
     curl --fail --silent --show-error \

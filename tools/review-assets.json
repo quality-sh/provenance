@@ -1,0 +1,10 @@
+{
+  "repository": "quality-sh/provenance-web",
+  "commit": "93678e4a3a3308b01300c57cc613788af4d54def",
+  "authorCommit": "3efad03e2e2d5c46eea4b14043d674b62d1c1d63",
+  "run": 34346002187,
+  "artifact": "provenance-review-93678e4a3a3308b01300c57cc613788af4d54def",
+  "archive": "provenance-review.tar.gz",
+  "sha256": "138da3a6722348ec8d382304509c0822b38da46a8afd57f050af0d5263345207",
+  "sdkVersion": "0.2.2"
+}
