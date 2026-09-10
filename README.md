@@ -55,7 +55,7 @@ For parallel test execution, install [cargo-nextest](https://nexte.st/docs/insta
 and run `cargo nextest run --workspace --all-features`. Run
 `cargo test --workspace --all-features --doc` for doctests. The repository
 configuration serializes PDF onboarding and limits tests that invoke Cargo.
-Linux CI uses the `ci` profile with eight test slots. Ordinary `cargo test`
+CI uses the `ci` profile with eight test slots. Ordinary `cargo test`
 continues to work.
 
 ### Quick start
