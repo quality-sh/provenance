@@ -6,8 +6,12 @@ use provenance_store::{
     state_store::{CreateDomainInput, StateStore},
 };
 
-pub(super) fn handle(command: DomainsCommand) -> anyhow::Result<()> {
+pub(super) async fn handle(command: DomainsCommand) -> anyhow::Result<()> {
     match command {
+        DomainsCommand::Update(args) => {
+            super::updates::handle::<provenance_store::operations::catalog::UpdateDomain>(args)
+                .await?;
+        }
         DomainsCommand::Create {
             repo,
             scope,

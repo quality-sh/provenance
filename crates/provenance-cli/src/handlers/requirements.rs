@@ -14,8 +14,14 @@ struct FogView {
     fog: Option<String>,
 }
 
-pub(super) fn handle(command: RequirementsCommand) -> anyhow::Result<()> {
+pub(super) async fn handle(command: RequirementsCommand) -> anyhow::Result<()> {
     match command {
+        RequirementsCommand::Update(args) => {
+            super::updates::handle::<provenance_store::operations::catalog::UpdateRequirement>(
+                args,
+            )
+            .await?;
+        }
         RequirementsCommand::Create {
             repo,
             scope,

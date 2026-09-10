@@ -85,3 +85,5 @@ creation!(
     post_thread_message,
     [GraphStorage]
 );
+
+pub(super) use creation;

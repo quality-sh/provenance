@@ -7,8 +7,12 @@ use provenance_store::{
     state_store::{CreateTopicInput, StateStore},
 };
 
-pub(super) fn handle(command: TopicsCommand) -> anyhow::Result<()> {
+pub(super) async fn handle(command: TopicsCommand) -> anyhow::Result<()> {
     match command {
+        TopicsCommand::Update(args) => {
+            super::updates::handle::<provenance_store::operations::catalog::UpdateTopic>(args)
+                .await?;
+        }
         TopicsCommand::Create {
             repo,
             scope,

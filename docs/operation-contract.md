@@ -12,7 +12,8 @@ The catalog contains `check-statement`, `info`, `get`, `search`, `neighbors`,
 `create-resolution`, `create-rule`, `add-source-reference`, `list-threads`,
 `list-messages`, `post-thread-message`, `list-proposals`, `list-dispositions`,
 `list-assertions`, `create-proposal`, `create-assertion`, and
-`create-disposition`. The statement
+`create-disposition`. Additional edits and native actions are listed in
+[record updates](record-updates.md). The statement
 handler returns the existing ASD-STE100 analyzer report. A finding is a successful report result.
 The operation does not open a repository, load settings, or use a dictionary.
 
@@ -201,7 +202,9 @@ scope.
 
 ## Current operation limits
 
-The catalog exposes existing native operations. It does not implement
+The catalog exposes existing native operations and typed record updates.
+See [record updates](record-updates.md) for fields, clearing, ownership,
+shaping actions, and relationship operations. It does not implement
 text-edit history linked to discussions or Source-content editing.
 
 ### Graph text and discussion history
@@ -211,9 +214,9 @@ entries contain `field`, `before`, and `after`, but the report is transient.
 These operations do not provide a general record editor or stored edit history.
 
 `StateStore::update_question`
-(`crates/provenance-store/src/state_store/shaping_writers.rs`) changes only
-`resolution_method`, `status`, `links`, and `resolution_id`. It does not edit
-record text.
+(`crates/provenance-store/src/state_store/shaping_writers.rs`) retains its existing partial-state input and delegates to the shared question
+edit writer. The catalog and CLI also expose question text edits and explicit
+reference clearing.
 
 `RequirementReview` records
 (`crates/provenance-store/src/state_store/requirement_reviews.rs`) retain
@@ -249,8 +252,9 @@ The six proposal-lifecycle operations expose
 `list_assertion_records` (`crates/provenance-store/src/state_store.rs`), and
 the writers in `crates/provenance-store/src/state_store/proposal_writers.rs`.
 They preserve the existing inputs, results, validation, and lifecycle locks.
-The catalog does not expose contribution or synthesis-packet writers, the
-proposal surfacing projection, or the ideation landing batches.
+The catalog also exposes native contribution and synthesis-packet creation
+and upsert writers. The proposal surfacing projection and ideation landing
+batches stay native-only.
 
 ## Write failures and task ownership
 
@@ -347,8 +351,8 @@ started work. Shutdown stops admission and joins started work.
 
 The operation protocol advances from 6 to 7. The TypeScript SDK uses the
 generated HTTP client for the original sixteen operations. The generated client
-also exposes five creation and attachment operations, three discussion
-operations, and the six proposal-lifecycle operations.
+also exposes creation, attachment, discussion, proposal-lifecycle, and
+[record update operations](record-updates.md).
 Configure `endpoint`,
 `bearer`, `repositoryId`, and `scope`; configure `localRoot` separately when
 converting local implementation or verification paths. The SDK rejects the old

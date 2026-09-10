@@ -117,7 +117,8 @@ impl StateStore {
             self.mutate_jsonl_records(path, |records: &mut Vec<T>| {
                 if let Some(target) = &target {
                     if decl.target == T::OWNER {
-                        anyhow::ensure!(
+                        crate::write_error::ensure!(
+                            InvalidUpdate,
                             !forms_cycle(records, name, owner, target),
                             "{name} from {} to {} would form a cycle",
                             owner.as_str(),
@@ -129,11 +130,14 @@ impl StateStore {
                     .iter_mut()
                     .find(|record| record.id() == owner)
                     .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "{} {} does not exist ({})",
-                            kind_word(T::OWNER),
-                            owner.as_str(),
-                            owner_flag(T::OWNER)
+                        crate::write_error::SourceFailure::wrap(
+                            crate::write_error::WriteFailure::MissingReference,
+                            anyhow::anyhow!(
+                                "{} {} does not exist ({})",
+                                kind_word(T::OWNER),
+                                owner.as_str(),
+                                owner_flag(T::OWNER)
+                            ),
                         )
                     })?;
                 *field(record) = target;
@@ -160,7 +164,8 @@ impl StateStore {
             self.ensure_node_exists(scope_id, decl.target, &target, "--target-id")?;
             self.mutate_jsonl_records(path, |records: &mut Vec<T>| {
                 if decl.target == T::OWNER {
-                    anyhow::ensure!(
+                    crate::write_error::ensure!(
+                        InvalidUpdate,
                         !forms_cycle(records, name, owner, &target),
                         "{name} from {} to {} would form a cycle",
                         owner.as_str(),
@@ -171,11 +176,14 @@ impl StateStore {
                     .iter_mut()
                     .find(|record| record.id() == owner)
                     .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "{} {} does not exist ({})",
-                            kind_word(T::OWNER),
-                            owner.as_str(),
-                            owner_flag(T::OWNER)
+                        crate::write_error::SourceFailure::wrap(
+                            crate::write_error::WriteFailure::MissingReference,
+                            anyhow::anyhow!(
+                                "{} {} does not exist ({})",
+                                kind_word(T::OWNER),
+                                owner.as_str(),
+                                owner_flag(T::OWNER)
+                            ),
                         )
                     })?;
                 let list = field(record);
@@ -207,11 +215,14 @@ impl StateStore {
                     .iter_mut()
                     .find(|record| record.id() == owner)
                     .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "{} {} does not exist ({})",
-                            kind_word(T::OWNER),
-                            owner.as_str(),
-                            owner_flag(T::OWNER)
+                        crate::write_error::SourceFailure::wrap(
+                            crate::write_error::WriteFailure::MissingReference,
+                            anyhow::anyhow!(
+                                "{} {} does not exist ({})",
+                                kind_word(T::OWNER),
+                                owner.as_str(),
+                                owner_flag(T::OWNER)
+                            ),
                         )
                     })?;
                 let list = field(record);
@@ -219,16 +230,20 @@ impl StateStore {
                     .iter()
                     .position(|entry| entry == target)
                     .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "{} {} does not name {} {} under {}",
-                            kind_word(T::OWNER),
-                            owner.as_str(),
-                            kind_word(decl.target),
-                            target.as_str(),
-                            decl.name
+                        crate::write_error::SourceFailure::wrap(
+                            crate::write_error::WriteFailure::InvalidUpdate,
+                            anyhow::anyhow!(
+                                "{} {} does not name {} {} under {}",
+                                kind_word(T::OWNER),
+                                owner.as_str(),
+                                kind_word(decl.target),
+                                target.as_str(),
+                                decl.name
+                            ),
                         )
                     })?;
-                anyhow::ensure!(
+                crate::write_error::ensure!(
+                    InvalidUpdate,
                     !(decl.required && list.len() == 1),
                     "{}",
                     required_refusal(decl)

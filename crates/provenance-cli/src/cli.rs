@@ -6,6 +6,7 @@ pub mod policy;
 pub mod references;
 pub mod sdk;
 pub mod shaping;
+pub mod updates;
 pub mod workspace;
 
 pub use ideation::{IdeationArtifactKind, SchemaCommand};

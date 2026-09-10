@@ -8,8 +8,12 @@ use provenance_store::{
     state_store::{CreateSourceInput, StateStore},
 };
 
-pub(super) fn handle(command: SourcesCommand) -> anyhow::Result<()> {
+pub(super) async fn handle(command: SourcesCommand) -> anyhow::Result<()> {
     match command {
+        SourcesCommand::Update(args) => {
+            super::updates::handle::<provenance_store::operations::catalog::UpdateSource>(args)
+                .await?;
+        }
         SourcesCommand::Create {
             repo,
             scope,
