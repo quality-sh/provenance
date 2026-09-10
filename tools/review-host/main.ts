@@ -1,6 +1,7 @@
 import { HttpClient } from '@quality-sh/provenance/client';
+import type { components } from '@quality-sh/provenance/client';
 import { loadReviewStore, mountReview, DocumentUnavailableError } from 'review-renderer';
-import type { ReviewStore } from 'review-renderer';
+import type { CursorReviewStore, DocumentLoader } from 'review-renderer';
 import { createSession } from './session.ts';
 
 const root = document.getElementById('root')!;
@@ -9,12 +10,12 @@ const selection = document.getElementById('selection') as HTMLFormElement;
 const credential = document.getElementById('credential') as HTMLInputElement;
 const requirement = document.getElementById('requirement') as HTMLInputElement;
 const status = document.getElementById('status')!;
-const session = createSession<ReviewStore>({
+const session = createSession<CursorReviewStore>({
   failure: error => error instanceof DocumentUnavailableError ? error.message : undefined,
   mount: store => mountReview(root, { store }),
   status: message => { status.textContent = message; },
 });
-let load: (() => Promise<ReviewStore>) | undefined;
+let load: (() => Promise<CursorReviewStore>) | undefined;
 
 access.addEventListener('submit', async event => {
   event.preventDefault();
@@ -31,11 +32,20 @@ access.addEventListener('submit', async event => {
       !('repositoryId' in config) || typeof config.repositoryId !== 'string' ||
       !('scope' in config) || typeof config.scope !== 'string') throw new Error('Invalid configuration');
     const client = await HttpClient.connectWithBearer(location.origin, bearer);
-    const context = { repository: config.repositoryId, scope: config.scope, freshness: 'catch_up' as const };
+    const repository = config.repositoryId;
+    const scope = config.scope;
     load = () => {
       const id = requirement.value.trim();
-      return loadReviewStore((cursor?: string | null) =>
-        client.readDocument({ context, request: { id, limit: 50, cursor } }));
+      const context = { repository, scope };
+      const loaderFor = (id: string): DocumentLoader => cursor => client.readDocument({
+        context: { ...context, freshness: cursor ? 'annotate_only' : 'catch_up' },
+        request: { id, limit: 50, cursor },
+      });
+      const search = (request: components['schemas']['SearchRequestInput']['request']) => client.search({
+        context: { ...context, freshness: request.cursor ? 'annotate_only' : 'catch_up' },
+        request: { ...request, limit: 50 },
+      });
+      return loadReviewStore(loaderFor(id), { openDocument: loaderFor, search });
     };
     access.hidden = true;
     selection.hidden = false;

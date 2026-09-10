@@ -40,6 +40,15 @@ Open the printed credential-free URL. Enter the session token, then enter a
 Requirement ID. `Open / Refresh` reads the saved working-copy graph each time.
 A failed refresh clears the old document. A later request supersedes an earlier
 request, even when the earlier response arrives last.
+The session disposes a store that finishes loading after a later refresh.
+Renderer cleanup disposes each mounted store when the session removes its view.
+
+Each refresh captures the selected Requirement and the authorized repository and
+scope. Each document loader fixes its root and page limit at 50. The first read
+uses `catch_up`; continuation uses `annotate_only`. Opening another Requirement
+creates a loader for that root. Shared search uses the same repository and scope,
+page limit, and freshness policy. The renderer shows read status, including
+partial pages and refusals. A mounted view does not establish completeness.
 
 ```sh
 node --test tools/review-host/session.test.ts
@@ -64,3 +73,10 @@ version, or replace the existing PR 10 renderer pin. Production packaging needs:
 The current `tools/review-assets.json` names the older empty-shell renderer. It
 does not claim to supply this application. Local verification uses the actual
 source builds and their content hashes; it is not an end-to-end release.
+
+The backend and SDK release can precede web publication. The release workflow
+builds the CLI with its committed fallback page; it does not compose or download
+the renderer. That page states that the review page is unavailable. This release
+can supply the protocol 8 SDK that the web dependency update needs. A later
+renderer publication and pin update can then enable the composed review page.
+The fallback build does not establish that a compatible renderer is released.
