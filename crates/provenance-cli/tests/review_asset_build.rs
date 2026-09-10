@@ -71,8 +71,6 @@ fn rejects_operation_routes_with_any_version_segment() {
 
 #[test]
 fn accepts_paths_that_do_not_match_the_operation_route() {
-    let dir = tempfile::tempdir().unwrap();
-    let assets = dir.path().join("assets");
     for path in [
         "index.html",
         "assets/operations.js",
@@ -82,9 +80,16 @@ fn accepts_paths_that_do_not_match_the_operation_route() {
         "assets/Operations/app.js",
         "vNext/app.js",
     ] {
+        // Separate roots prevent Operations and operations from sharing a directory.
+        let dir = tempfile::tempdir().unwrap();
+        let assets = dir.path().join("assets");
         let file = assets.join(path);
         std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(assets.join("index.html"), "<!doctype html>").unwrap();
         std::fs::write(file, "asset").unwrap();
+        let output = dir.path().join("bundle.rs");
+        review_assets::generate(&assets, &output).unwrap_or_else(|error| panic!("{path}: {error}"));
+        let inventory = std::fs::read_to_string(output).unwrap();
+        assert!(inventory.contains(&format!("\"/{path}\"")), "{path}");
     }
-    review_assets::generate(&assets, &dir.path().join("bundle.rs")).unwrap();
 }
