@@ -6,8 +6,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = dirname(fileURLToPath(import.meta.url));
-const [rendererArg, sdkArg, outputArg] = process.argv.slice(2);
-if (!rendererArg || !sdkArg || !outputArg) throw new Error('Usage: node build.ts WEB_ASSETS SDK_PACKAGE NEW_OUTPUT');
+const [rendererArg, sdkArg, outputArg, pinArg] = process.argv.slice(2);
+if (!rendererArg || !sdkArg || !outputArg) throw new Error('Usage: node build.ts WEB_ASSETS SDK_PACKAGE NEW_OUTPUT [PIN]');
 const renderer = resolve(rendererArg);
 const sdk = resolve(sdkArg);
 const output = resolve(outputArg);
@@ -26,6 +26,12 @@ const declarations = join(renderer, 'types/browser/main.d.ts');
 await readFile(declarations);
 const sdkSchema = await readFile(join(sdk, 'dist/generated/schema.d.ts'));
 const rendererInfo = JSON.parse(await readFile(join(renderer, 'build-info.json'), 'utf8'));
+if (pinArg) {
+  const pin = JSON.parse(await readFile(resolve(pinArg), 'utf8'));
+  if (rendererInfo.formatVersion !== 1 || rendererInfo.commit !== pin.commit || rendererInfo.dirty !== false) {
+    throw new Error('Renderer identity does not match the clean pinned commit');
+  }
+}
 if (rendererInfo.sdkSchemaSha256 !== hash(sdkSchema)) throw new Error('Renderer and host require the same generated SDK contract');
 const options: ts.CompilerOptions = {
   noEmit: true, strict: true, target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext,

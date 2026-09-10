@@ -303,7 +303,7 @@ fn release_version_preflight_gates_every_artifact_build() {
         .split_once("  publish:")
         .unwrap()
         .0;
-    assert!(build_job.contains("needs: preflight"));
+    assert!(build_job.contains("needs: [preflight, review-assets]"));
     assert_eq!(workflow.matches("verify-release-versions.sh").count(), 1);
     let verifier = fs::read_to_string(&script).unwrap();
     assert!(verifier.contains(".github/release-targets.json"));

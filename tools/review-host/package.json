@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "node build.ts",
-    "test": "node --test session.test.ts"
+    "test": "node --test *.test.ts"
   },
   "devDependencies": {
     "esbuild": "0.28.2",

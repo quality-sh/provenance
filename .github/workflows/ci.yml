@@ -47,6 +47,9 @@ jobs:
               - ".gitattributes"
               - ".github/release-targets.json"
               - ".github/workflows/release.yml"
+              - ".github/workflows/review-assets.yml"
+              - "tools/review-host/**"
+              - "tools/review-assets.json"
               - ".github/workflows/release-smoke.yml"
               - ".github/scripts/**/*.sh"
               - ".github/scripts/**/*.py"
@@ -128,6 +131,11 @@ jobs:
           path: target/operation-artifact/operation-generated.tar.gz
           retention-days: 1
 
+  review-assets:
+    needs: [changes, generate-operations]
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true'
+    uses: ./.github/workflows/review-assets.yml
+
   # One build per OS. Every job that only needs to drive the CLI downloads
   # this artifact instead of compiling the workspace itself; cargo test and
   # clippy still build their own profiles. The linux build is its own job so
@@ -135,7 +143,7 @@ jobs:
   # matrix needs both.
   build-cli-linux:
     name: Build provenance-cli (linux)
-    needs: changes
+    needs: [changes, review-assets]
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
@@ -150,7 +158,19 @@ jobs:
           add-job-id-key: "false"
           cache-on-failure: true
           save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: review-composed
+          path: target/review-artifact
+      - name: Restore composed review assets
+        shell: bash
+        run: tar -xzf target/review-artifact/review-composed.tar.gz
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
       - run: cargo build --locked -p provenance-cli -p provenance-transport --features provenance-transport/test-fixture --bins --timings
+      - name: Verify embedded review assets and SDK reads
+        run: node tools/review-host/verify-native.ts target/debug/provenance crates/provenance-cli/review-assets-generated target/review-sdk
       - name: Upload the CLI and isolated test host for the consumer jobs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -170,7 +190,7 @@ jobs:
 
   build-cli-platforms:
     name: Build provenance-cli (${{ matrix.target }})
-    needs: changes
+    needs: [changes, review-assets]
     if: github.event_name != 'pull_request'
     runs-on: ${{ matrix.os }}
     strategy:
@@ -197,7 +217,19 @@ jobs:
           add-job-id-key: "false"
           cache-on-failure: true
           save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: review-composed
+          path: target/review-artifact
+      - name: Restore composed review assets
+        shell: bash
+        run: tar -xzf target/review-artifact/review-composed.tar.gz
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
       - run: cargo build --locked -p provenance-cli -p provenance-transport --features provenance-transport/test-fixture --bins --timings
+      - name: Verify embedded review assets and SDK reads
+        run: node tools/review-host/verify-native.ts target/debug/${{ matrix.binary }} crates/provenance-cli/review-assets-generated target/review-sdk
       - name: Upload the CLI and isolated test host for the consumer jobs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -719,6 +751,7 @@ jobs:
     needs:
       - changes
       - generate-operations
+      - review-assets
       - fmt
       - clippy
       - test
