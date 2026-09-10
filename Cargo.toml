@@ -23,7 +23,7 @@ must_use_candidate = "allow"
 module_name_repetitions = "allow"
 
 [workspace.package]
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 license = "BUSL-1.1"
 repository = "https://github.com/quality-sh/provenance"
@@ -66,11 +66,11 @@ uuid = { version = "1.10", features = ["v4"] }
 toml = "0.8"
 trybuild = "1.0"
 predicates = "3.1"
-provenance-core = { path = "crates/provenance-core", version = "0.2.2" }
-provenance-macros = { path = "crates/provenance-macros", version = "0.2.2" }
-provenance-scanner = { path = "crates/provenance-scanner", version = "0.2.2" }
-provenance-ste100 = { path = "crates/provenance-ste100", version = "0.2.2" }
-provenance-store = { path = "crates/provenance-store", version = "0.2.2" }
+provenance-core = { path = "crates/provenance-core", version = "0.2.3" }
+provenance-macros = { path = "crates/provenance-macros", version = "0.2.3" }
+provenance-scanner = { path = "crates/provenance-scanner", version = "0.2.3" }
+provenance-ste100 = { path = "crates/provenance-ste100", version = "0.2.3" }
+provenance-store = { path = "crates/provenance-store", version = "0.2.3" }
 walkdir = "2.5"
 windows-sys = { version = "0.52", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
 

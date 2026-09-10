@@ -35,7 +35,7 @@ provenance-macros.workspace = true
 provenance-scanner.workspace = true
 provenance-ste100.workspace = true
 provenance-store.workspace = true
-provenance-transport = { path = "../provenance-transport", version = "0.2.2" }
+provenance-transport = { path = "../provenance-transport", version = "0.2.3" }
 remove_dir_all.workspace = true
 rustix.workspace = true
 same-file.workspace = true
