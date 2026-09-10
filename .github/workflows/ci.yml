@@ -648,7 +648,7 @@ jobs:
     name: Operation contract
     needs: [changes, generate-operations]
     if: github.event_name != 'pull_request' || needs.changes.outputs.contract == 'true'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: blacksmith-8vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -674,14 +674,27 @@ jobs:
       - run: npm ci --prefix tools/operation-codegen
       - run: node tools/operation-codegen/generate.mjs --check
       - run: npm test --prefix tools/operation-codegen
-      - run: node tools/operation-codegen/test-clients.mjs statements
-      - run: node tools/operation-codegen/test-clients.mjs records
-      - run: node tools/operation-codegen/test-clients.mjs evidence
-      - run: node tools/operation-codegen/test-clients.mjs writes
-      - run: node tools/operation-codegen/test-clients.mjs creation
-      - run: node tools/operation-codegen/test-clients.mjs discussions
-      - run: node tools/operation-codegen/test-clients.mjs ideation
+      - name: Test generated clients against isolated hosts
+        shell: bash
+        run: |
+          families=(statements records evidence writes creation discussions ideation)
+          test_args=()
+          for family in "${families[@]}"; do
+            test_args+=(--test "$family")
+          done
+          cargo test --locked -p provenance-http-client "${test_args[@]}" --no-run --timings
+          # Each family has a separate temporary repository and host port.
+          # Cargo locks the shared build directory during fixture builds.
+          printf '%s\0' "${families[@]}" | xargs -0 -n 1 -P 4 node tools/operation-codegen/test-clients.mjs
       - run: git diff --exit-code
+      - name: Save Cargo timing reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cargo-timings-operation-contract
+          path: target/cargo-timings/*.html
+          if-no-files-found: warn
+          retention-days: 30
 
   repository-file-access:
     name: Repository file access (${{ matrix.target }})
