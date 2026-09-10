@@ -18,11 +18,13 @@
 //! `complete` method is the read's one completion point: whatever
 //! the answer is, the connection closes in order before it leaves.
 
+mod cursor;
 mod freshness;
 mod live;
 mod refuse_stale;
 mod snapshot;
 
+pub(crate) use cursor::{Cursor, Position};
 pub(crate) use freshness::is_missing_table;
 pub use live::{Disturbed, Live, LiveHandle};
 pub use refuse_stale::MovedUnit;

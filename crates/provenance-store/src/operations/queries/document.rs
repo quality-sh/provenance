@@ -1,4 +1,5 @@
-use super::{cursor::Cursor, nodes, served, ReadContext, ReadPolicy};
+use super::{nodes, served, ReadContext, ReadPolicy};
+use crate::operations::reader::Cursor;
 use camino::Utf8PathBuf;
 use provenance_core::protocol::{
     read_failure::ReadFailure, DocumentEntry, ReadDocumentQuery, ReadDocumentResult, StampPolicy,

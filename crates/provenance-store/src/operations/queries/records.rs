@@ -34,7 +34,7 @@ pub(super) async fn search(
 }
 
 async fn search_page(ctx: &ReadContext, request: SearchQuery) -> anyhow::Result<SearchResult> {
-    use super::cursor::{Cursor, Position};
+    use crate::operations::reader::{Cursor, Position};
     use crate::operations::reader::{PAGE_BYTES, RECORD_BYTES};
     use provenance_core::protocol::read_failure::ReadFailure;
     request

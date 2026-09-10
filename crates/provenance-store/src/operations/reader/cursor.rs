@@ -28,7 +28,7 @@ struct Payload {
     position: Position,
 }
 
-pub(super) struct Cursor {
+pub struct Cursor {
     identity: String,
     key: Vec<u8>,
 }

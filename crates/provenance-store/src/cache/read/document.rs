@@ -1,6 +1,5 @@
 //! Root-related key selection. Payload reads use the same bounded snapshot.
-use crate::operations::queries::cursor::Position;
-use crate::operations::reader::ReadSnapshot;
+use crate::operations::reader::{Position, ReadSnapshot};
 use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_macros::rule;
 use sqlx::Row;

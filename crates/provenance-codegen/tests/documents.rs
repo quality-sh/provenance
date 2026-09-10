@@ -137,7 +137,7 @@ fn operation_failure_statuses_and_repository_context_are_explicit() {
 }
 
 #[test]
-fn document_read_has_a_scoped_request_and_complete_stamped_output() {
+fn document_read_has_a_scoped_cursor_request() {
     let (document, mcp) = provenance_codegen::documents();
     let version = provenance_core::SDK_PROTOCOL_VERSION;
     let route = &document["paths"][format!("/v{version}/operations/read-document")]["post"];
@@ -186,8 +186,34 @@ fn document_read_has_a_scoped_request_and_complete_stamped_output() {
         assert!(!input.is_valid(&missing), "{pointer}");
     }
     let mut paged = request;
+    for limit in [1, 50, 200] {
+        paged["call"]["request"]["limit"] = json!(limit);
+        assert!(input.is_valid(&paged));
+    }
+    for limit in [0, 201] {
+        paged["call"]["request"]["limit"] = json!(limit);
+        assert!(!input.is_valid(&paged));
+    }
     paged["call"]["request"]["limit"] = json!(1);
+    paged["call"]["request"]["cursor"] = json!("opaque-continuation");
+    assert!(input.is_valid(&paged));
+    paged["call"]["request"]["cursor"] = json!(17);
     assert!(!input.is_valid(&paged));
+    paged["call"]["request"]["cursor"] = json!(null);
+    assert!(input.is_valid(&paged));
+    paged["call"]["request"]["offset"] = json!(1);
+    assert!(!input.is_valid(&paged));
+}
+
+#[test]
+fn document_read_has_a_stamped_page_output() {
+    let (document, mcp) = provenance_codegen::documents();
+    let tool = mcp["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|tool| tool["name"] == "read-document")
+        .unwrap();
     let output = &document["components"]["schemas"]["ReadDocumentSuccessOutput"];
     assert_eq!(output["properties"]["operation"]["const"], "read-document");
     for field in [
@@ -195,14 +221,10 @@ fn document_read_has_a_scoped_request_and_complete_stamped_output() {
         "stamp",
         "protocol_version",
         "operation",
-        "requirements",
-        "resolutions",
-        "rules",
-        "sources",
-        "topics",
-        "questions",
-        "threads",
-        "messages",
+        "limit",
+        "has_more",
+        "next_cursor",
+        "entries",
     ] {
         assert!(
             output["required"]
@@ -229,11 +251,28 @@ fn document_read_has_a_scoped_request_and_complete_stamped_output() {
         "threads",
         "messages",
     ] {
-        assert_eq!(output["properties"][family]["type"], "array", "{family}");
-        assert!(
-            output["properties"][family].get("maxItems").is_none(),
-            "{family}"
-        );
+        assert!(output["properties"].get(family).is_none(), "{family}");
+    }
+    assert_eq!(output["properties"]["entries"]["type"], "array");
+    assert_eq!(
+        output["properties"]["entries"]["items"]["$ref"],
+        "#/components/schemas/ReadDocumentSuccessOutputDocumentEntry"
+    );
+    for entry in [
+        &document["components"]["schemas"]["ReadDocumentSuccessOutputDocumentEntry"],
+        &tool["outputSchema"]["$defs"]["DocumentEntry"],
+    ] {
+        let variants = entry["oneOf"].as_array().unwrap();
+        assert_eq!(variants.len(), 4);
+        for (variant, (kind, payload)) in variants.iter().zip([
+            ("member", "node"),
+            ("reference", "node"),
+            ("thread", "thread"),
+            ("message", "message"),
+        ]) {
+            assert_eq!(variant["properties"]["kind"]["const"], kind);
+            assert_eq!(variant["required"], json!(["kind", payload]));
+        }
     }
 }
 

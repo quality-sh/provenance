@@ -15,7 +15,6 @@ use provenance_core::ScopeId;
 use super::read_policy::ReadPolicy;
 use super::reader::{self, ReadContext, ReadFuture};
 
-pub(crate) mod cursor;
 mod document;
 pub use document::read_document;
 mod evidence;

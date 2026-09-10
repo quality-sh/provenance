@@ -4,13 +4,11 @@
   "type": "module",
   "scripts": {
     "build": "node build.ts",
-    "test": "node --test session.test.ts",
-    "test:integration": "node --test integration.test.ts"
+    "test": "node --test session.test.ts"
   },
   "devDependencies": {
     "esbuild": "0.28.2",
     "typescript": "5.9.3",
-    "@types/node": "22.20.1",
-    "@playwright/test": "1.58.2"
+    "@types/node": "22.20.1"
   }
 }

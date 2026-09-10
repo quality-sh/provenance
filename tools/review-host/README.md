@@ -43,16 +43,11 @@ request, even when the earlier response arrives last.
 
 ```sh
 node --test tools/review-host/session.test.ts
-PROVENANCE_REVIEW_TEST_BINARY=/absolute/provenance \
-  PROVENANCE_REVIEW_REAL_REPO=/absolute/provenance-repository \
-  node --test tools/review-host/integration.test.ts
 ```
 
-The integration test uses local Chromium from Playwright. It creates a temporary
-Git repository, saves canonical graph files, and checks the actual host through
-the browser. It retains its temporary repository and screenshot for inspection.
-The optional second test reads `req_review_page_replaces_wiki` from the selected
-existing repository without changing its canonical graph.
+This repository tests the host, authorization, assets, and API in Rust, and
+session behavior without a browser. `provenance-web` owns Storybook component
+tests and its one small browser smoke test of built assets.
 
 ## Publication prerequisites
 

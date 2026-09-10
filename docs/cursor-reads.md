@@ -240,5 +240,8 @@ the host's refresh generation check, credential handling, and read-only controls
 
 Production publication still needs the SDK release, a genuine web dependency
 and lockfile update to that available release, a validated renderer archive and
-exact checksum pin, then host composition and final embedded-browser tests.
+exact checksum pin, then host composition. `provenance-web` owns Storybook
+component tests and its one small browser smoke test of built assets. This
+repository retains Rust host, authorization, asset, and API tests, and non-UI
+session tests.
 Local generated-client tests establish none of those publication facts.
