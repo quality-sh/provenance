@@ -1,13 +1,15 @@
 #![cfg(feature = "test-fixture")]
 #[path = "support/records.rs"]
 mod records;
+use provenance_core::{MessageRole, NodeType, ScopeId, StableId, ThreadParent};
+use provenance_store::state_store::{PostMessageInput, StateStore};
 use records::{call, get_call, host, Repository};
 use rmcp::{model::CallToolRequestParams, ServiceExt};
 use serde_json::{json, Value};
 
 fn tool(operation: &str, call: &Value) -> CallToolRequestParams {
     CallToolRequestParams::new(operation.to_owned()).with_arguments(
-        json!({"protocol_version":7,"call":call})
+        json!({"protocol_version":8,"call":call})
             .as_object()
             .unwrap()
             .clone(),
@@ -18,6 +20,19 @@ fn tool(operation: &str, call: &Value) -> CallToolRequestParams {
 async fn real_mcp_preserves_each_registered_read_and_full_http_stamp() {
     let repo = Repository::new("The shared graph is readable.");
     repo.all_kinds();
+    let scope = ScopeId::new("default").unwrap();
+    let store = StateStore::new(repo.layout.clone());
+    store
+        .post_thread_message(PostMessageInput {
+            scope_id: scope.clone(),
+            parent: ThreadParent {
+                node_type: NodeType::Requirement,
+                node_id: StableId::new("req_shared").unwrap(),
+            },
+            role: MessageRole::User,
+            body: "Read the complete document.".into(),
+        })
+        .unwrap();
     let host = host(&[("first", &repo)], &["first"]);
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
     let server_host = host.clone();
@@ -34,6 +49,7 @@ async fn real_mcp_preserves_each_registered_read_and_full_http_stamp() {
             "plan",
             "info",
             "get",
+            "read-document",
             "search",
             "neighbors",
             "trace",
@@ -67,6 +83,7 @@ async fn real_mcp_preserves_each_registered_read_and_full_http_stamp() {
         requests.push(("get", json!({"context":{"repository":"first","scope":"default"},"request":{"node_type":kind,"id":id}})));
     }
     for (operation, request) in [
+        ("read-document", json!({"id":"req_shared"})),
         ("search", json!({"text":"shared","limit":1})),
         ("neighbors", json!({"id":"req_shared","limit":1})),
         ("trace", json!({"id":"rule_shared","limit":1})),
@@ -79,6 +96,9 @@ async fn real_mcp_preserves_each_registered_read_and_full_http_stamp() {
     for (operation, request) in requests {
         let (status, expected) = call(&host, operation, request.clone()).await;
         assert_eq!(status, 200, "{expected}");
+        if operation == "read-document" {
+            assert_document_matches_store(&expected, &store, &scope);
+        }
         let actual = client.call_tool(tool(operation, &request)).await.unwrap();
         assert_ne!(actual.is_error, Some(true));
         assert_eq!(actual.structured_content.unwrap(), expected, "{operation}");
@@ -92,6 +112,183 @@ async fn real_mcp_preserves_each_registered_read_and_full_http_stamp() {
         denied.structured_content.unwrap()["error"]["kind"],
         "unknown_target"
     );
+    client.cancel().await.unwrap();
+    server.await.unwrap().cancel().await.unwrap();
+    host.shutdown().await;
+}
+
+fn collection(answer: &Value, family: &str) -> Value {
+    let mut rows: Vec<Value> = answer["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|entry| {
+            if family == "threads" {
+                return entry.get("thread").cloned();
+            }
+            if family == "messages" {
+                return entry.get("message").cloned();
+            }
+            let node = entry.get("node")?;
+            let kind = node["node_type"].as_str()?;
+            let plural = if kind == "boundary" {
+                "boundaries".to_owned()
+            } else {
+                format!("{kind}s")
+            };
+            (plural == family).then(|| {
+                let mut row = node.clone();
+                row.as_object_mut().unwrap().remove("node_type");
+                row
+            })
+        })
+        .collect();
+    rows.sort_by(|a, b| a["id"].as_str().cmp(&b["id"].as_str()));
+    json!(rows)
+}
+
+fn assert_document_matches_store(answer: &Value, store: &StateStore, scope: &ScopeId) {
+    assert_eq!(answer["operation"], "read-document");
+    assert_eq!(
+        answer["protocol_version"],
+        provenance_core::SDK_PROTOCOL_VERSION
+    );
+    assert_eq!(answer["root_id"], "req_shared");
+    for (family, rows) in [
+        (
+            "requirements",
+            json!(store.list_requirements(scope).unwrap()),
+        ),
+        ("resolutions", json!(store.list_resolutions(scope).unwrap())),
+        ("rules", json!(store.list_rules(scope).unwrap())),
+        ("domains", json!(store.list_domains(scope).unwrap())),
+        ("boundaries", json!(store.list_boundaries(scope).unwrap())),
+        ("topics", json!(store.list_topics(scope).unwrap())),
+        ("questions", json!(store.list_questions(scope).unwrap())),
+        ("threads", json!(store.list_threads(scope).unwrap())),
+        ("messages", json!(store.list_messages(scope).unwrap())),
+    ] {
+        assert!(!rows.as_array().unwrap().is_empty(), "{family}");
+        assert_eq!(collection(answer, family), rows, "{family}");
+    }
+    assert_eq!(
+        collection(answer, "sources"),
+        json!([]),
+        "unrelated sources stay outside the document"
+    );
+    assert_eq!(answer["next_cursor"], Value::Null);
+    assert_eq!(answer["stamp"]["policy"], "catch_up");
+    assert_eq!(
+        answer["stamp"]["attested"],
+        json!([
+            "boundaries",
+            "domains",
+            "messages",
+            "questions",
+            "relations",
+            "requirements",
+            "resolutions",
+            "rules",
+            "sources",
+            "threads",
+            "topics"
+        ])
+    );
+    assert_eq!(answer["stamp"]["live"], json!([]));
+}
+
+#[tokio::test]
+async fn document_transports_preserve_scope_freshness_and_refusals() {
+    let repo = Repository::new("The default graph is readable.");
+    repo.add_scope("other", "The other graph is readable.");
+    let host = host(&[("selected", &repo)], &["selected"]);
+    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
+    let server_host = host.clone();
+    let server = tokio::spawn(async move { server_host.serve_mcp(server_io).await.unwrap() });
+    let client = ().serve(client_io).await.unwrap();
+    let request =
+        json!({"context":{"repository":"selected","scope":"other"},"request":{"id":"req_shared"}});
+    let (status, first) = call(&host, "read-document", request.clone()).await;
+    assert_eq!(status, 200, "{first}");
+    assert_eq!(
+        collection(&first, "rules")[0]["statement"],
+        "The other graph is readable."
+    );
+    assert_eq!(collection(&first, "rules")[0]["scope_id"], "other");
+    for (body, status, kind) in [
+        (
+            json!({"context":{"repository":"missing","scope":"other"},"request":{"id":"req_shared"}}),
+            404,
+            "unknown_target",
+        ),
+        (
+            json!({"context":{"repository":"selected","scope":"denied"},"request":{"id":"req_shared"}}),
+            403,
+            "access_denied",
+        ),
+        (
+            json!({"context":{"repository":"selected","scope":"other"},"request":{"id":""}}),
+            400,
+            "invalid_input",
+        ),
+        (
+            json!({"context":{"repository":"selected","scope":"other"},"request":{"id":"req_shared","limit":0}}),
+            400,
+            "invalid_input",
+        ),
+    ] {
+        let (actual_status, expected) = call(&host, "read-document", body.clone()).await;
+        assert_eq!(actual_status, status, "{expected}");
+        assert_eq!(expected["error"]["kind"], kind);
+        let actual = client
+            .call_tool(tool("read-document", &body))
+            .await
+            .unwrap();
+        assert_eq!(actual.is_error, Some(true));
+        assert_eq!(actual.structured_content.unwrap(), expected);
+    }
+    repo.edit("other", "The saved edit is readable.");
+    let mut stale_request = request.clone();
+    stale_request["context"]["freshness"] = json!("refuse_stale");
+    let (status, stale) = call(&host, "read-document", stale_request.clone()).await;
+    assert_eq!(status, 409, "{stale}");
+    assert_eq!(stale["error"]["kind"], "stale");
+    assert_eq!(stale["error"]["digest"], first["stamp"]["digest"]);
+    let actual = client
+        .call_tool(tool("read-document", &stale_request))
+        .await
+        .unwrap();
+    assert_eq!(actual.is_error, Some(true));
+    assert_eq!(actual.structured_content.unwrap(), stale);
+    let (status, refreshed) = call(&host, "read-document", request.clone()).await;
+    assert_eq!(status, 200, "{refreshed}");
+    assert_eq!(
+        collection(&refreshed, "rules")[0]["statement"],
+        "The saved edit is readable."
+    );
+    assert_ne!(refreshed["stamp"]["digest"], first["stamp"]["digest"]);
+    let actual = client
+        .call_tool(tool("read-document", &request))
+        .await
+        .unwrap();
+    assert_ne!(actual.is_error, Some(true));
+    assert_eq!(actual.structured_content.unwrap(), refreshed);
+    let scope = provenance_core::ScopeId::new("other").unwrap();
+    std::fs::write(
+        provenance_store::shards::rules_path(&repo.layout, &scope),
+        "invalid JSON\n",
+    )
+    .unwrap();
+    let (status, failed) = call(&host, "read-document", request.clone()).await;
+    assert_eq!(status, 409, "{failed}");
+    assert_eq!(failed["error"]["kind"], "document_catch_up_failed");
+    assert!(failed.get("entries").is_none());
+    let actual = client
+        .call_tool(tool("read-document", &request))
+        .await
+        .unwrap();
+    assert_eq!(actual.is_error, Some(true));
+    assert_eq!(actual.structured_content.unwrap(), failed);
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
     host.shutdown().await;

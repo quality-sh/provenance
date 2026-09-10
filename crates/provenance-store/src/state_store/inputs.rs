@@ -46,6 +46,9 @@ pub struct CreateRequirementInput {
     pub origin_message: Option<StableId>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CreateDomainInput {
     pub scope_id: ScopeId,
     pub id: StableId,
@@ -64,6 +67,9 @@ pub struct AddSourceReferenceInput {
     pub clause: Option<String>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CreateBoundaryInput {
     pub scope_id: ScopeId,
     pub id: StableId,
@@ -72,6 +78,9 @@ pub struct CreateBoundaryInput {
     pub source_ref: Option<SourceReference>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CreateTopicInput {
     pub scope_id: ScopeId,
     pub id: StableId,
@@ -81,6 +90,9 @@ pub struct CreateTopicInput {
     pub links: Vec<ArtifactLink>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CreateQuestionInput {
     pub scope_id: ScopeId,
     pub id: StableId,
@@ -294,6 +306,9 @@ pub struct PostMessageInput {
     pub body: String,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CreateContributionInput {
     pub scope_id: ScopeId,
     pub id: StableId,
@@ -312,6 +327,9 @@ pub struct CreateContributionInput {
     pub open_questions: Vec<String>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CreateSynthesisPacketInput {
     pub scope_id: ScopeId,
     pub id: StableId,

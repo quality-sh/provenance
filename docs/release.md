@@ -30,6 +30,7 @@ The workflow publishes these Rust crates to crates.io:
 - `provenance-store`
 - `provenance-sdk`
 - `provenance-http-client`
+- `provenance-transport`
 - `provenance-cli`
 
 The `crates-io` GitHub environment protects publication. Each crate must trust

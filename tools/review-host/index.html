@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Provenance review</title>
+  <link rel="stylesheet" href="./review.css">
+  <link rel="stylesheet" href="./host.css">
+</head>
+<body>
+  <div class="host">
+    <form id="access">
+      <label for="credential">Local access token</label>
+      <input id="credential" type="password" autocomplete="off" required>
+      <button type="submit">Connect</button>
+      <p>Use the token from the running review host. It stays in this page's memory.</p>
+    </form>
+    <form id="selection" hidden>
+      <label for="requirement">Requirement ID</label>
+      <input id="requirement" autocomplete="off" required>
+      <button type="submit">Open / Refresh</button>
+    </form>
+    <p id="status" role="status" aria-live="polite">Read-only review</p>
+  </div>
+  <div id="root"></div>
+  <script type="module" src="./host.js"></script>
+</body>
+</html>

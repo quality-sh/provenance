@@ -1,9 +1,15 @@
 //! Typed operation dispatch shared by native and network callers.
 
+mod actions;
 mod authoring;
+mod relationships;
+pub use actions::*;
+pub use relationships::*;
 mod context;
 mod creation;
 mod discussions;
+mod drafts;
+pub use drafts::*;
 mod entry;
 mod evidence;
 mod failures;
@@ -14,6 +20,8 @@ mod records;
 mod schema;
 mod scoped_list;
 mod statement;
+mod updates;
+pub use updates::*;
 
 pub use authoring::{Apply, BeginVerification, CompleteVerification, Plan};
 pub use context::{
@@ -38,7 +46,7 @@ pub use statement::CheckStatement;
 #[cfg(test)]
 mod tests;
 
-pub use records::{Get, Info, Neighbors, Search, Trace};
+pub use records::{Get, Info, Neighbors, ReadDocument, Search, Trace};
 
 /// Lookup uses registry identities without deriving or cloning wire schemas.
 pub fn contains(operation: &str) -> bool {

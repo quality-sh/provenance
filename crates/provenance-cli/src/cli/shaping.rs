@@ -32,6 +32,8 @@ pub enum ThreadCommand {
 
 #[derive(Subcommand)]
 pub enum TopicsCommand {
+    /// Edit existing fields. Omitted fields retain their values.
+    Update(crate::cli::updates::UpdateArgs),
     Create {
         #[arg(long, default_value = ".")]
         repo: Utf8PathBuf,
@@ -153,6 +155,11 @@ pub enum QuestionsCommand {
         /// Resolution method: grill, prototype, research, verify, or task.
         #[arg(long)]
         method: Option<String>,
+        #[arg(long)]
+        question: Option<String>,
+        /// Changed fields as JSON or @file, including `clear_fields`.
+        #[arg(long, conflicts_with_all = ["method", "question", "status", "links_json", "resolution_id"])]
+        fields_json: Option<String>,
         /// Status: open, `blocked_on_human`, or answered. Hyphens are accepted.
         #[arg(long)]
         status: Option<String>,

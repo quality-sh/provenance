@@ -140,21 +140,25 @@ pub(super) async fn counting(
     Ok(found)
 }
 
-/// The records of one kind whose search text holds the needle, in id
-/// order, under the view.
-pub(super) async fn search(
+/// Bounded candidate IDs for canonical substring search.
+pub(super) async fn search_ids(
     snapshot: &ReadSnapshot,
     node_type: NodeType,
-    needle: &str,
-    include_retired: bool,
-) -> anyhow::Result<Vec<GraphNode>> {
-    Ok(for_kind!(node_type, K, wrap => {
-        snapshot
-            .table::<K>()
-            .search(needle, include_retired)
-            .await?
-            .into_iter()
-            .map(wrap)
-            .collect()
-    }))
+    retired: bool,
+    after: &str,
+    limit: usize,
+) -> anyhow::Result<Vec<String>> {
+    for_kind!(node_type, K => {
+        snapshot.table::<K>().search_ids(retired, after, limit).await
+    })
+}
+
+pub(super) async fn page_node(
+    snapshot: &ReadSnapshot,
+    kind: NodeType,
+    id: &str,
+) -> anyhow::Result<Option<GraphNode>> {
+    for_kind!(kind, K, wrap => {
+        Ok(snapshot.table::<K>().page_record(id).await?.map(wrap))
+    })
 }

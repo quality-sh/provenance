@@ -7,6 +7,8 @@ use clap::Subcommand;
 // `Create` carries every field of a resolution; the reference verbs carry four flags.
 #[allow(clippy::large_enum_variant)]
 pub enum ResolutionsCommand {
+    /// Edit existing fields. Omitted fields retain their values.
+    Update(crate::cli::updates::UpdateArgs),
     Create {
         #[arg(long, default_value = ".")]
         repo: Utf8PathBuf,
@@ -69,6 +71,8 @@ pub enum ResolutionsCommand {
 // `Create` carries every field of a rule; the read verbs carry three flags.
 #[allow(clippy::large_enum_variant)]
 pub enum RulesCommand {
+    /// Edit existing fields. Omitted fields retain their values.
+    Update(crate::cli::updates::UpdateArgs),
     /// Write a new rule into the scope.
     Create {
         /// Repository holding the `.provenance` directory.

@@ -6,6 +6,7 @@ pub mod policy;
 pub mod references;
 pub mod sdk;
 pub mod shaping;
+pub mod updates;
 pub mod workspace;
 
 pub use ideation::{IdeationArtifactKind, SchemaCommand};
@@ -107,6 +108,8 @@ pub enum Command {
         #[command(subcommand)]
         command: workspace::WikiCommand,
     },
+    /// Serve local review assets and authorized repository operations.
+    Review(crate::review::Options),
     Materialize {
         #[arg(long, default_value = ".")]
         repo: Utf8PathBuf,

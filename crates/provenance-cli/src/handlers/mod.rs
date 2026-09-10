@@ -40,6 +40,7 @@ mod synthesis_packets;
 mod thread;
 mod topics;
 mod traceability;
+mod updates;
 mod validate;
 mod wiki;
 
@@ -105,29 +106,30 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
         Command::Wiki { command } => {
             wiki::handle(command).await?;
         }
+        Command::Review(options) => crate::review::run(options).await?,
         Command::Materialize { repo, format } => {
             materialize::handle(repo, format).await?;
         }
         Command::Sources { command } => {
-            sources::handle(command)?;
+            sources::handle(command).await?;
         }
         Command::Requirements { command } => {
-            requirements::handle(command)?;
+            requirements::handle(command).await?;
         }
         Command::GraphReference { command } => {
             graph_reference::handle(command)?;
         }
         Command::Domains { command } => {
-            domains::handle(command)?;
+            domains::handle(command).await?;
         }
         Command::Boundaries { command } => {
-            boundaries::handle(command)?;
+            boundaries::handle(command).await?;
         }
         Command::Topics { command } => {
-            topics::handle(command)?;
+            topics::handle(command).await?;
         }
         Command::Questions { command } => {
-            questions::handle(command, quiet)?;
+            questions::handle(command, quiet).await?;
         }
         Command::Graph {
             requirement_id,
@@ -138,10 +140,10 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
             graph::handle(requirement_id, repo, scope, format)?;
         }
         Command::Resolutions { command } => {
-            resolutions::handle(command)?;
+            resolutions::handle(command).await?;
         }
         Command::Rules { command } => {
-            rules::handle(command)?;
+            rules::handle(command).await?;
         }
         Command::Traceability {
             rule_id,

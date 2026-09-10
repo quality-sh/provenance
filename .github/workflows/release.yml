@@ -231,6 +231,7 @@ jobs:
             provenance-store \
             provenance-sdk \
             provenance-http-client \
+            provenance-transport \
             provenance-cli
           do
             bash .github/scripts/publish-cargo-if-missing.sh \

@@ -12,13 +12,14 @@ The catalog contains `check-statement`, `info`, `get`, `search`, `neighbors`,
 `create-resolution`, `create-rule`, `add-source-reference`, `list-threads`,
 `list-messages`, `post-thread-message`, `list-proposals`, `list-dispositions`,
 `list-assertions`, `create-proposal`, `create-assertion`, and
-`create-disposition`. The statement
+`create-disposition`. Additional edits and native actions are listed in
+[record updates](record-updates.md). The statement
 handler returns the existing ASD-STE100 analyzer report. A finding is a successful report result.
 The operation does not open a repository, load settings, or use a dictionary.
 
 ## Statement calls
 
-HTTP uses `POST /v7/operations/check-statement` with a JSON body:
+HTTP uses `POST /v8/operations/check-statement` with a JSON body:
 
 ```json
 {"request":{"statement":"Stop; wait."}}
@@ -27,7 +28,7 @@ HTTP uses `POST /v7/operations/check-statement` with a JSON body:
 MCP uses the `check-statement` tool with these arguments:
 
 ```json
-{"protocol_version":7,"call":{"request":{"statement":"Stop; wait."}}}
+{"protocol_version":8,"call":{"request":{"statement":"Stop; wait."}}}
 ```
 
 Both calls return the full report, including integer `issue: 9` and UTF-8 byte
@@ -62,8 +63,8 @@ An absent or null freshness setting uses `ReadPolicy::resolve`: the request
 setting precedes the repository setting, which precedes the built-in default.
 `catch_up` includes saved graph edits. `annotate_only` reads the stored
 projection. `refuse_stale` refuses a changed projection. Every successful
-structured read retains its full stamp and operation identity. Pages remain
-bounded at 200, with `has_more` and no cursor.
+structured read retains its full stamp and operation identity. Pages remain bounded at 200. Search adds revision-bound continuation. Other
+bounded reads retain their existing cut flags.
 
 External validation uses the same semantic checks as native queries, but runs
 before host preparation. Native queries retain validation after the freshness
@@ -132,9 +133,9 @@ fields describe the supplied record and do not authenticate a human actor.
 uses one existing Store operation. Several calls do not form one transaction.
 
 No unified discussion outcome, fuzzy matching, default placement policy,
-edit history, content journal, or new persisted relationship is added. All
-repository listeners remain explicit isolated fixtures pending production
-access control.
+edit history, content journal, or new persisted relationship is added. The CLI
+review host can expose these operations for its explicitly configured local
+caller. See [local review host](review-host.md).
 
 ## Existing discussions
 
@@ -201,7 +202,9 @@ scope.
 
 ## Current operation limits
 
-The catalog exposes existing native operations. It does not implement
+The catalog exposes existing native operations and typed record updates.
+See [record updates](record-updates.md) for fields, clearing, ownership,
+shaping actions, and relationship operations. It does not implement
 text-edit history linked to discussions or Source-content editing.
 
 ### Graph text and discussion history
@@ -211,9 +214,9 @@ entries contain `field`, `before`, and `after`, but the report is transient.
 These operations do not provide a general record editor or stored edit history.
 
 `StateStore::update_question`
-(`crates/provenance-store/src/state_store/shaping_writers.rs`) changes only
-`resolution_method`, `status`, `links`, and `resolution_id`. It does not edit
-record text.
+(`crates/provenance-store/src/state_store/shaping_writers.rs`) retains its existing partial-state input and delegates to the shared question
+edit writer. The catalog and CLI also expose question text edits and explicit
+reference clearing.
 
 `RequirementReview` records
 (`crates/provenance-store/src/state_store/requirement_reviews.rs`) retain
@@ -249,8 +252,9 @@ The six proposal-lifecycle operations expose
 `list_assertion_records` (`crates/provenance-store/src/state_store.rs`), and
 the writers in `crates/provenance-store/src/state_store/proposal_writers.rs`.
 They preserve the existing inputs, results, validation, and lifecycle locks.
-The catalog does not expose contribution or synthesis-packet writers, the
-proposal surfacing projection, or the ideation landing batches.
+The catalog also exposes native contribution and synthesis-packet creation
+and upsert writers. The proposal surfacing projection and ideation landing
+batches stay native-only.
 
 ## Write failures and task ownership
 
@@ -274,8 +278,9 @@ that uncertainty and must not retry a mutation automatically.
 
 ## Fixture access
 
-Repository host construction is available only with the `test-fixture`
-feature and an explicit `FixtureAccess` policy. Each policy has a fixed map
+Test repository host construction uses the `test-fixture` feature and an
+explicit `FixtureAccess` policy. Production construction uses `LocalAccess`
+through the CLI review host. Each fixture policy has a fixed map
 of opaque targets to configured roots, explicit target/scope grants, a
 credential, and an expected Host value. Requests cannot supply filesystem
 roots. Duplicate or malformed target configuration is refused at startup.
@@ -289,9 +294,9 @@ Denied calls leave repository file bytes and directory entries unchanged.
 Caller-owned MCP fixture streams represent the configured test principal;
 unavailable or denied tools are not advertised and direct selection refuses.
 
-The default host remains data-free. This fixture policy does not implement
-production RBAC or authorize a real repository listener. Production repository
-exposure remains unavailable pending the approved access implementation.
+The default host remains data-free. Fixture access does not authorize a
+production listener. The [local review host](review-host.md) defines production
+caller authentication, one repository and scope grant, and same-origin access.
 
 ## Generation
 
@@ -324,8 +329,8 @@ paths in the Git index.
 
 ## Development host
 
-The listeners are isolated test fixtures. The client test runner starts each
-fixture explicitly, waits
+The client test listeners are isolated fixtures. The client test runner starts
+each fixture explicitly, waits
 for its selected loopback address, runs both clients, and stops the fixture.
 
 ```sh
@@ -344,10 +349,13 @@ started work. Shutdown stops admission and joins started work.
 
 ## Compatibility
 
-The operation protocol advances from 6 to 7. The TypeScript SDK uses the
+The operation protocol advances from 7 to 8. This is a breaking change to
+`read-document`, search continuation, and typed read refusals. Version 7
+requests receive a protocol mismatch. No version 8 package is published by
+this implementation. The TypeScript SDK uses the
 generated HTTP client for the original sixteen operations. The generated client
-also exposes five creation and attachment operations, three discussion
-operations, and the six proposal-lifecycle operations.
+also exposes creation, attachment, discussion, proposal-lifecycle, and
+[record update operations](record-updates.md).
 Configure `endpoint`,
 `bearer`, `repositoryId`, and `scope`; configure `localRoot` separately when
 converting local implementation or verification paths. The SDK rejects the old
@@ -357,13 +365,42 @@ they lose a mutation response or cannot decode it. They never replay the write.
 
 Package installation still supplies the native engine and binary shim. Packed
 tests connect explicitly to a source-checkout fixture host; they do not prove a
-production repository host is available from the installed package. The host
-configuration and access milestones must pass before releasing this migration.
+complete review document is available from the installed package. The CLI now
+provides the production local host; the browser bundle and document integration
+have separate delivery contracts.
 
 The operation-protocol change does not change legacy disposition grants or
 consume their migration window. The later `provenance-cvs` release owns that
 window. State schema, read derivation, and `graph-reference-v1` remain separate.
 
 See [repository evidence access](operation-file-access.md) for held-file behavior,
-MCP list wrapping, and the control-data trust assumptions. Real repository
-hosting remains gated.
+MCP list wrapping, and the control-data trust assumptions. See
+[local review host](review-host.md) for production hosting and asset packaging.
+
+## Bounded working-copy document reads
+
+`read-document` accepts `{id, limit?, cursor?}` in the scoped context. It returns
+`root_id`, `entries`, `limit`, `has_more`, and `next_cursor` in the normal stamped
+envelope. It replaces the unpublished whole-scope collection result.
+
+The selected root is an active Requirement. Each entry identifies a member,
+reference, Thread, or Message. Members follow active refinement and production
+relationships. Ancestors and other branches remain references. Retired records
+cannot expand membership or supply citations. Discussion pages retain all
+independent Threads at member parents and their Messages, in logical order.
+
+Search retains substring matching and kind filters. Its optional cursor binds
+the normalized query, order, page limit, target, scope, and complete projection
+revision. Both operations bound records, bytes, and query work in the shared
+engine. Invalid cursors and changed revisions are typed refusals. Each call
+passes authorization again and uses a short transaction.
+
+Only a terminal sequence establishes completeness. A short or empty page can
+still require continuation. `read-document` refuses a failed catch-up with
+`document_catch_up_failed`. Search retains the existing annotated failed-catch-up
+behavior; clients must not present that result as current.
+
+See the [cursor contract and integration handoff](cursor-reads.md)
+for exact inclusion rules, budgets, generated types, examples, and publication
+prerequisites. Complete-list discussion and proposal operations retain their
+complete-list behavior.

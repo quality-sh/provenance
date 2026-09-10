@@ -5,6 +5,20 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ReadFailure {
+    #[error("invalid cursor; restart the query")]
+    CursorInvalid,
+    #[error("projection revision changed; restart the query")]
+    CursorRevisionChanged,
+    #[error("page read work exceeds the engine budget")]
+    PageBudgetExceeded,
+    #[error("canonical record exceeds the page record budget")]
+    PageRecordTooLarge,
+    #[error("document root is missing")]
+    DocumentRootMissing,
+    #[error("document root is retired")]
+    DocumentRootRetired,
+    #[error("catch-up failed; restart the document read")]
+    DocumentCatchUpFailed,
     #[error("repository file access denied")]
     FileAccessDenied,
     #[error("secure repository file access unavailable")]

@@ -331,6 +331,15 @@ The universal floor in every language remains the comment channel:
 `@provenance verification: <method>` for a verification site. Comments scan alongside
 native bindings, but are honestly the weaker tier: they can drift away from the symbol.
 
+## Local review host
+
+Run `provenance review --repo /absolute/repository --repository-id A --scope default`
+to serve the embedded review assets and existing Rust operations on loopback.
+The CLI prints a URL and a session credential. Keep that output private.
+Ctrl-C stops the host. See [local review host](review-host.md) for access checks,
+runtime configuration, and the browser asset build contract. Native calls do
+not require this host. The Wiki commands remain available.
+
 ## Wiki publication safety
 
 `provenance wiki build` renders the complete corpus into a sibling staging

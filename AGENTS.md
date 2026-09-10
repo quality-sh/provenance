@@ -24,6 +24,11 @@ use Git's standard `git commit --no-verify` option.
 
 ## Code standards
 
+Browser UI tests do not belong in this repository. Keep Rust host, authorization,
+asset, and API tests, and non-UI session tests here. `provenance-web` owns
+Storybook component tests and its one small browser smoke test of built assets.
+Do not add a browser suite here or move a broad suite into `provenance-web`.
+
 **No Rust file in this repo may exceed 500 lines.** Unreadable code is not accepted.
 
 - New files must be designed under the limit from the start; split by responsibility, not by line count.
@@ -48,6 +53,20 @@ pull requests, commit messages, and agent handoffs.
   statements when that checker is available in the workflow.
 - Do not claim full ASD-STE100 conformance from a clean automated report. The
   report covers only the standard rules that the checker currently implements.
+
+## Research and review reports
+
+Do not commit research reports, code-review reports, or session decision summaries
+into repository files or PR diffs unless the user explicitly requests that location.
+Publish retained reports as secret GitHub Gists by default. Link the exact Gist
+revision from a Provenance Source and from the relevant Resolution input. Keep
+accepted product and architecture obligations in the graph; a report does not
+replace those records or approve all of its alternatives.
+
+Keep task order, worker status, validation handoffs, and release prerequisites in
+Beads. Put a concise change description and validation summary in the PR body.
+When moving a report out of the repository, remove its file from the PR and update
+all graph and bead references. Do not leave a broken repository-path citation.
 
 ## Quick Reference
 

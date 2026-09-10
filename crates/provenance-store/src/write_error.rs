@@ -18,6 +18,8 @@ pub enum WriteFailure {
         report: provenance_ste100::Report,
     },
     InvalidDeclaration,
+    InvalidUpdate,
+    RecordOwnershipConflict,
     OwnershipConflict {
         conflicts: Vec<ReconciledResource>,
     },
@@ -123,7 +125,8 @@ impl WriteError {
             WriteFailure::WriteFailed | WriteFailure::UncertainWrite => 500,
             WriteFailure::FileAccessDenied => 403,
             WriteFailure::FileUnavailable => 503,
-            WriteFailure::AlreadyExists
+            WriteFailure::RecordOwnershipConflict
+            | WriteFailure::AlreadyExists
             | WriteFailure::OwnershipConflict { .. }
             | WriteFailure::AlreadyComplete
             | WriteFailure::RetiredRule => 409,

@@ -6,7 +6,10 @@
 //! Nothing here touches a pool: every statement runs on the snapshot's
 //! one transaction.
 
+mod discussions;
+mod document;
 mod front;
+pub(crate) mod page;
 mod records;
 mod rows;
 

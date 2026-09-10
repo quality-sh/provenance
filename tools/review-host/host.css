@@ -1,0 +1,6 @@
+.host { max-width: 592px; margin: 24px auto 0; padding: 0 24px; font: 13px/1.5 'Fragment Mono', monospace; }
+.host form:not([hidden]) { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.host input { flex: 1; min-width: 150px; }
+.host input, .host button { font: inherit; padding: 8px; color: inherit; background: transparent; border: 1px solid currentColor; border-radius: 3px; }
+.host button { cursor: pointer; }
+.host p { margin: 10px 0; }

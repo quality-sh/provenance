@@ -134,6 +134,7 @@ pub enum IdeationEvidenceType {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum ContributionStance {
     #[serde(rename = "support")]
     Support,
@@ -158,6 +159,7 @@ impl ContributionStance {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum ArtifactChangeType {
     #[serde(rename = "create")]
     Create,
@@ -170,6 +172,7 @@ pub enum ArtifactChangeType {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum SpeculationMarker {
     #[serde(rename = "unsupported")]
     Unsupported,
@@ -178,6 +181,7 @@ pub enum SpeculationMarker {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum UncertaintyLevel {
     #[serde(rename = "low")]
     Low,
@@ -199,6 +203,7 @@ impl UncertaintyLevel {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum EvidenceQuality {
     #[serde(rename = "strong")]
     Strong,

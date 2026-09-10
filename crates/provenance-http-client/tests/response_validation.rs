@@ -11,7 +11,7 @@ fn host(body: Value, status: u16) -> (String, thread::JoinHandle<()>) {
     let url = format!("http://{}", listener.local_addr().unwrap());
     let worker = thread::spawn(move || {
         for payload in [
-            json!({"engine_version":"fixture","protocol_version":7}),
+            json!({"engine_version":"fixture","protocol_version":8}),
             body,
         ] {
             let (mut socket, _) = listener.accept().unwrap();
@@ -95,7 +95,7 @@ async fn validated_write_refusal_is_typed_but_internal_outcomes_are_uncertain() 
         let kind = case["kind"].as_str().unwrap();
         let uncertain = case["uncertain"].as_bool().unwrap();
         let (url, worker) = host(
-            json!({"protocol_version":7,"operation":"complete-verification","error":{"kind":kind}}),
+            json!({"protocol_version":8,"operation":"complete-verification","error":{"kind":kind}}),
             400,
         );
         let client = HttpClient::connect(&url).await.unwrap();
