@@ -5,7 +5,15 @@ mod review_assets;
 fn main() {
     println!("cargo:rerun-if-env-changed=PROVENANCE_REVIEW_ASSETS_DIR");
     let root = std::env::var_os("PROVENANCE_REVIEW_ASSETS_DIR").map_or_else(
-        || std::path::PathBuf::from("review-assets"),
+        || {
+            let generated = std::path::PathBuf::from("review-assets-generated");
+            println!("cargo:rerun-if-changed=review-assets-generated");
+            if generated.is_dir() {
+                generated
+            } else {
+                std::path::PathBuf::from("review-assets")
+            }
+        },
         std::path::PathBuf::from,
     );
     let output =

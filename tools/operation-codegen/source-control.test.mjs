@@ -24,3 +24,16 @@ test('rejects generated files even when force staged, but permits handwritten te
   git('add', '-f', 'contracts/operations/openapi.json');
   assert.deepEqual(checkSourceControl(root), ['contracts/operations/openapi.json']);
 });
+
+
+test('rejects a generated renderer even when force staged', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'provenance-renderer-index-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  spawnSync('git', ['init', '-q'], { cwd: root });
+  const path = 'crates/provenance-cli/review-assets-generated/host.js';
+  await mkdir(join(root, 'crates/provenance-cli/review-assets-generated'), { recursive: true });
+  await writeFile(join(root, path), 'generated renderer');
+  const staged = spawnSync('git', ['add', '-f', path], { cwd: root });
+  assert.equal(staged.status, 0);
+  assert.deepEqual(checkSourceControl(root), [path]);
+});

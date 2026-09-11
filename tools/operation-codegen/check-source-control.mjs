@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { generatedPaths } from './artifacts.mjs';
 
 export function checkSourceControl(root) {
-  const result = spawnSync('git', ['ls-files', '-z', '--', ...generatedPaths], { cwd: root, encoding: 'utf8' });
+  const result = spawnSync('git', ['ls-files', '-z', '--', ...generatedPaths, 'crates/provenance-cli/review-assets-generated'], { cwd: root, encoding: 'utf8' });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(result.stderr || 'Cannot inspect Git index');
   return result.stdout.split('\0').filter(Boolean);

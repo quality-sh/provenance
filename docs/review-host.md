@@ -74,12 +74,15 @@ An asset file with exactly three path segments and `operations` as its second
 segment is also refused. The operation router matches this path shape for any
 first segment. For example, `assets/operations/app.js` is refused at build time.
 
-Without that build input, the binary embeds
+Without an explicit asset directory, the build uses
+`crates/provenance-cli/review-assets-generated` when that directory exists.
+CI and release preparation compose the pinned renderer and host into this
+directory. Cargo packages include these assets for installation from source.
+If neither input exists, the binary embeds
 `crates/provenance-cli/review-assets/index.html`. This page states that the review
 bundle is unavailable. It contains no review records, fixture data, or simulated
 mutations. This fallback is not the review UI. Builds that need the supplied
-renderer must set the asset input explicitly. This change does not change all
-release jobs to fetch the renderer automatically.
+renderer must first run the [application build](../tools/review-host/README.md).
 The CLI's production dependency `provenance-transport` is included in the Cargo
 release order before the CLI. It uses the shared workspace release version.
 
@@ -90,7 +93,7 @@ retain their paths. Missing assets return 404; no repository file is served.
 The host reserves `/review-config` for authenticated runtime configuration:
 
 ```json
-{"endpoint":"http://127.0.0.1:PORT","repositoryId":"A","scope":"default","protocolVersion":8,"sdkVersion":"0.2.2"}
+{"endpoint":"http://127.0.0.1:PORT","repositoryId":"A","scope":"default","protocolVersion":8,"sdkVersion":"0.2.3"}
 ```
 
 The generic renderer does not read credentials, fetch host configuration, or
@@ -106,10 +109,10 @@ URLs, logs, assets, or browser storage. The password input is cleared after each
 connection attempt. A failed refresh removes the previous document; a superseded
 request cannot replace a later result.
 
-The browser entry remains `@quality-sh/provenance/client`, protocol `7`.
-Published SDK `0.2.2` does not contain `readDocument`. The new application is
-locally verified against the generated SDK in this change. The linked build
-guide states the exact publication prerequisites.
+The browser entry is `@quality-sh/provenance/client`, protocol `8`.
+Published SDK `0.2.3` supplies `readDocument`. The pinned renderer and the local
+SDK use the same generated schema. The composer checks this schema before it
+builds the application.
 The generated client calls an existing host; it does not
 start one. Asset code must use the same origin and local dependencies. Response
 policy permits local scripts, styles, fonts, images, and connections. It blocks
@@ -127,11 +130,12 @@ this host has no dependency on provenance-boc5.6.
 The pin in [`tools/review-assets.json`](../tools/review-assets.json) identifies:
 
 - Source repository: `quality-sh/provenance-web`.
-- Merged commit: `93678e4a3a3308b01300c57cc613788af4d54def` (PR 10).
-- Validated author commit: `3efad03e2e2d5c46eea4b14043d674b62d1c1d63`.
-- Successful [Review assets run 34346002187](https://github.com/quality-sh/provenance-web/actions/runs/34346002187).
+- Merged commit: `e795fcee703ffc1b4c69af08ceedaf0c72876817` (PR 11).
+- Validated author commit: `ecf7db6a5836b29b8374ae090a88e411d8c65430`.
+- Successful [Review assets run 34538158110](https://github.com/quality-sh/provenance-web/actions/runs/34538158110).
 - Archive: `provenance-review.tar.gz`.
-- SHA-256: `138da3a6722348ec8d382304509c0822b38da46a8afd57f050af0d5263345207`.
+- Public [archive download](https://github.com/quality-sh/provenance/releases/download/renderer-e795fcee703f/provenance-review.tar.gz).
+- SHA-256: `44590144c929085453a57539c99afa9da65e32a08035bcdc294f72b6cab3f7c1`.
 
 The upstream entry is `src/browser/main.tsx`; `vite.review.config.ts` builds
 `dist-review`. `scripts/package-review.mjs` archives that directory with stable
@@ -139,40 +143,43 @@ metadata and emits a checksum sidecar. The archive includes `review.js`,
 `review.css`, local fonts under `assets/`, the empty `index.html`,
 `build-info.json`, and `licenses/provenance.txt`. Its renderer does not contain
 an SDK runtime or a configured application. See the merged
-[browser contract](https://github.com/quality-sh/provenance-web/blob/93678e4a3a3308b01300c57cc613788af4d54def/src/browser/README.md)
-and [SDK contract](https://github.com/quality-sh/provenance-web/blob/93678e4a3a3308b01300c57cc613788af4d54def/src/review/sdk-contract.md).
+[browser contract](https://github.com/quality-sh/provenance-web/blob/e795fcee703ffc1b4c69af08ceedaf0c72876817/src/browser/README.md)
+and [SDK contract](https://github.com/quality-sh/provenance-web/blob/e795fcee703ffc1b4c69af08ceedaf0c72876817/src/review/sdk-contract.md).
 
-Prepare a new directory outside source control, then build:
+After the SDK and build dependencies are ready, prepare the application and build:
 
 ```sh
-PROVENANCE_REVIEW_ASSETS_OUTPUT=/tmp/provenance-review-assets \
-  cargo test --locked -p provenance-cli --test review_bundle -- --ignored --nocapture
-PROVENANCE_REVIEW_ASSETS_DIR=/tmp/provenance-review-assets cargo build --locked -p provenance-cli --bin provenance
+node tools/review-host/prepare.ts packages/provenance crates/provenance-cli/review-assets-generated
+cargo build --locked -p provenance-cli --bin provenance
 ```
 
-Preparation and validation are one ignored Rust test. It uses authenticated
-`gh run download` for the pinned workflow artifact. It verifies the archive
-against the committed SHA-256 before it creates any output directory. Set
+The [application build guide](../tools/review-host/README.md) gives the dependency
+commands. The output directory must not exist. Preparation downloads the public
+archive without credentials and checks its SHA-256 before extraction. Set
 `PROVENANCE_REVIEW_ARCHIVE=/path/to/provenance-review.tar.gz` to use a saved
-copy without GitHub access. Set `PROVENANCE_REVIEW_BINARY_OUTPUT` to retain
-the validated standalone binary. A sidecar alone cannot change the accepted
-hash. GitHub workflow artifacts can expire; retain the matching archive for
-reproducible builds. An unavailable download or changed checksum stops
+copy without GitHub access. A sidecar alone cannot change the accepted hash.
+The public release contains only the renderer and is separate from CLI releases.
+It supplies the exact pinned bytes independently of the private Actions artifact.
+An unavailable download or changed checksum stops
 preparation. No network access occurs in the Cargo asset build step or at runtime.
 
-`.2` supplies the production local host, authorization, explicit repository and
-scope access, embedded static serving, shutdown, and this verified build-input
-contract. Serving the generic shell does not demonstrate a connected review
-experience. `.3` owns the remaining document integration. `.5` owns persistent
-review mutations; `.6` owns Wiki removal. SDK/client package separation remains
-`provenance-cftl` and is outside this change.
+The composed application supplies explicit Requirement selection and paged
+document reads. The host supplies authorization, repository and scope access,
+embedded assets, and shutdown. Persistent review mutations remain separate.
 
 ## Validation
 
 Run `cargo test -p provenance-cli --test cli_review_host --test review_asset_build --test review_archive`
 and `cargo test -p provenance-transport --features test-fixture` after generation.
-Run `cargo test -p provenance-cli --test review_bundle -- --ignored` to build with the
-pinned real archive, or set `PROVENANCE_REVIEW_ARCHIVE` to the saved copy.
+Run `node --test tools/review-host/*.test.ts` for composition and session checks.
+Run `node tools/review-host/verify-native.ts BINARY COMPOSED_ASSETS SDK_PACKAGE`
+to check a built executable. Release validation runs this check on executables
+extracted from each native archive and npm engine package.
+
+The separate raw renderer check is
+`cargo test -p provenance-cli --test review_bundle -- --ignored`.
+Set `PROVENANCE_REVIEW_ARCHIVE` to a saved copy of the public archive for this
+check. Its legacy download path uses authenticated access to the private run.
 
 The bundle check compares every served file with the verified archive. It copies
 the executable, deletes the build input, removes Node from its process search

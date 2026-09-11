@@ -1,0 +1,59 @@
+name: Compose review assets
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  compose:
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: operation-generated
+          path: target/operation-artifact
+      - run: tar -xzf target/operation-artifact/operation-generated.tar.gz
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
+      - run: npm ci --prefix tools/operation-codegen
+      - run: npm ci --prefix tools/review-host
+      - run: npm ci --prefix packages/provenance
+      - run: npm run build --prefix packages/provenance
+      - name: Compose the pinned renderer and host
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node tools/review-host/prepare.ts packages/provenance crates/provenance-cli/review-assets-generated
+      - run: node --test tools/review-host/*.test.ts
+      - name: Check Cargo asset inclusion
+        run: |
+          cargo package --locked --allow-dirty -p provenance-cli --list > target/review-package-files
+          node --input-type=module <<'JS'
+          import { readFileSync, readdirSync } from 'node:fs';
+          const listed = new Set(readFileSync('target/review-package-files', 'utf8').split('\n'));
+          for (const file of readdirSync('crates/provenance-cli/review-assets-generated', { recursive: true, withFileTypes: true })) {
+            if (!file.isFile()) continue;
+            const name = `${file.parentPath}/${file.name}`.replace('crates/provenance-cli/', '');
+            if (!listed.has(name)) throw new Error(`Cargo package omits ${name}`);
+          }
+          JS
+      - name: Archive composed assets and the matching SDK for native checks
+        run: |
+          mkdir -p target/review-sdk/dist target/review-artifact
+          cp -rf packages/provenance/dist/. target/review-sdk/dist/
+          cp -f packages/provenance/package.json target/review-sdk/
+          tar -czf target/review-artifact/review-composed.tar.gz crates/provenance-cli/review-assets-generated target/review-sdk
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: review-composed
+          path: target/review-artifact/review-composed.tar.gz
+          if-no-files-found: error
+          retention-days: 30
