@@ -90,6 +90,7 @@ pub(super) async fn load_rows(
         ProjectionFamily::VerificationBindings => {
             load_kind::<VerificationBinding>(tx, bytes, None).await
         }
+        ProjectionFamily::ReviewJournal => crate::review::cache::load_rows(tx, bytes).await,
         ProjectionFamily::RequirementReviews => {
             load_kind::<RequirementReview>(tx, bytes, None).await
         }

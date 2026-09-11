@@ -86,6 +86,15 @@ pub fn ensure_supported_record_version(
     line_number: usize,
     value: &serde_json::Value,
 ) -> anyhow::Result<()> {
+    if value["schema_version"] == 3
+        && path.file_name() == Some("req.jsonl")
+        && path.parent().and_then(Utf8Path::file_name) == Some("requirements")
+        && serde_json::from_value::<provenance_core::Requirement>(value.clone()).is_ok()
+    {
+        deserialize_closed::<provenance_core::Requirement>(&serde_json::to_string(value)?)
+            .with_context(|| format!("{path} line {line_number}: invalid enrolled Requirement"))?;
+        return Ok(());
+    }
     let Some((id, version)) = first_unsupported_record(value) else {
         return Ok(());
     };

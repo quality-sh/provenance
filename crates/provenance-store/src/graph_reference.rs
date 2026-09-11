@@ -411,7 +411,8 @@ fn ensure_graph_schema_version(
     kind: &str,
     version: SchemaVersion,
 ) -> Result<(), GraphReferenceError> {
-    ensure_supported_schema_version(kind, version).map_err(|_| {
+    let record_kind = kind.split_whitespace().next().unwrap_or(kind);
+    ensure_supported_schema_version(record_kind, version).map_err(|_| {
         incomplete(format!(
             "{kind} has unsupported schema_version {}; expected {}",
             version.0, SUPPORTED_SCHEMA_VERSION.0

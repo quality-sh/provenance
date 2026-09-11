@@ -197,6 +197,20 @@ pub(super) fn change_one_record(
 ) {
     let path = family.shard_path(layout, scope);
     match family {
+        ProjectionFamily::ReviewJournal => {
+            let store = StateStore::new(layout.clone());
+            let id = provenance_core::StableId::new("req_schads_overtime").unwrap();
+            let etag = store.requirement_edit_state(scope, &id).unwrap().etag;
+            store
+                .save_requirement(
+                    serde_json::from_value(json!({
+                        "request_id":"fixture_review", "actor":"reviewer", "expected_etag":etag,
+                        "update":{"scope_id":scope,"id":id},"relationships":null
+                    }))
+                    .unwrap(),
+                )
+                .unwrap();
+        }
         ProjectionFamily::AssertionRecords => {
             let content = std::fs::read_to_string(&path).unwrap();
             std::fs::write(path, content.replace("assertion_base", "assertion_moved")).unwrap();

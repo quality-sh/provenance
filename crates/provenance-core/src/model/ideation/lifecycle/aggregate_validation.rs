@@ -10,12 +10,7 @@ use provenance_macros::rule;
 use serde::Serialize;
 use std::collections::BTreeMap;
 
-/// The only record layout this codebase knows.
-///
-/// Every guard that refuses a record for its version reads this one value:
-/// the ideation guard below, `provenance-store`'s read guard, the pinned
-/// graph's per-record check, and the CLI's artifact validator. There is no
-/// second copy of the number to update.
+/// The legacy record version. Enrollment advances only participating records.
 pub const SUPPORTED_SCHEMA_VERSION: SchemaVersion = SchemaVersion(2);
 
 // The record kinds the guard names, single-homed so a call site and the
@@ -26,22 +21,13 @@ const PROPOSAL_KIND: &str = "proposal";
 const DISPOSITION_KIND: &str = "disposition";
 pub(super) const ASSERTION_KIND: &str = "assertion";
 
-/// Records are read only at schema version 1.
-///
-/// Every ideation record carries a `schema_version`, and a later version will
-/// mean a different layout: a field moved, dropped, or read with a new
-/// meaning. Today's structs would deserialize such a record on whatever
-/// fields still line up and misread the rest without saying so, and the
-/// validated aggregate would then rest on a record nobody here understood.
-/// Version 1 is the only layout this code knows, so anything else is refused
-/// at the door rather than half-read.
-///
-/// `kind` names the record in the message and is the only thing that differs
-/// between the call sites; the test they all state is the same one.
+/// Reads legacy records and the enrolled manifest and Requirement versions.
 #[rule("rule_schema_version_one")]
 pub fn ensure_supported_schema_version(kind: &str, version: SchemaVersion) -> anyhow::Result<()> {
     anyhow::ensure!(
-        version == SUPPORTED_SCHEMA_VERSION,
+        version == SUPPORTED_SCHEMA_VERSION
+            || (version == crate::review::REVIEW_SCHEMA_VERSION
+                && matches!(kind, "manifest" | "requirement")),
         "{kind} schema_version must be {}",
         SUPPORTED_SCHEMA_VERSION.0
     );

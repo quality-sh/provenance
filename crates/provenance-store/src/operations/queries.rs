@@ -20,7 +20,7 @@ pub use document::read_document;
 mod evidence;
 mod impact;
 mod nodes;
-mod page;
+pub(crate) mod page;
 mod records;
 mod stale;
 mod symbols;

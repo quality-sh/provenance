@@ -46,7 +46,10 @@ pub fn to_stable_json<T: Serialize>(value: &T) -> anyhow::Result<String> {
 }
 
 pub fn write_jsonl_atomic<T: Serialize>(path: &Utf8Path, records: &[T]) -> anyhow::Result<()> {
-    write_jsonl_atomic_unlocked(path, records)
+    with_state_publication(path, || {
+        crate::review::guard::protect_rows(path, records)?;
+        write_jsonl_atomic_unlocked(path, records)
+    })
 }
 
 pub fn mutate_jsonl_locked<T, R>(
@@ -57,11 +60,15 @@ pub fn mutate_jsonl_locked<T, R>(
 where
     T: DeserializeOwned + Serialize,
 {
-    let _lock = AdvisoryLock::acquire(lock_path)?;
-    let mut records = read_jsonl_unlocked(path)?;
-    let result = mutate(&mut records)?;
-    write_jsonl_atomic_unlocked(path, &records).map_err(crate::write_error::publication_started)?;
-    Ok(result)
+    with_state_publication(path, || {
+        let _lock = AdvisoryLock::acquire(lock_path)?;
+        let mut records = read_jsonl_unlocked(path)?;
+        let result = mutate(&mut records)?;
+        crate::review::guard::protect_rows(path, &records)?;
+        write_jsonl_atomic_unlocked(path, &records)
+            .map_err(crate::write_error::publication_started)?;
+        Ok(result)
+    })
 }
 
 /// The read a write is built on, guarded the same way an ordinary read is.
@@ -102,6 +109,23 @@ fn write_jsonl_atomic_unlocked<T: Serialize>(path: &Utf8Path, records: &[T]) -> 
     }
     temp.persist(path)?;
     Ok(())
+}
+
+fn with_state_publication<R>(
+    path: &Utf8Path,
+    run: impl FnOnce() -> anyhow::Result<R>,
+) -> anyhow::Result<R> {
+    if let Some(state) = path.ancestors().find(|p| {
+        p.file_name() == Some("state")
+            && p.parent().and_then(Utf8Path::file_name) == Some(".provenance")
+    }) {
+        let layout = crate::layout::ProvenanceLayout::new(
+            state.parent().and_then(Utf8Path::parent).unwrap(),
+        );
+        crate::publication::with_repository_publication(&layout, run)
+    } else {
+        run()
+    }
 }
 
 #[cfg(test)]

@@ -63,3 +63,52 @@ fn run_requests_and_results_use_the_real_wire_types() {
         "file":"src/lib.rs"}),
     );
 }
+
+#[test]
+fn update_requests_keep_empty_clear_lists_omitted() {
+    use provenance_store::state_store::{
+        EditQuestionInput, UpdateBoundaryInput, UpdateDomainInput, UpdateRequirementInput,
+        UpdateResolutionInput, UpdateRuleInput, UpdateSourceInput, UpdateTopicInput,
+    };
+
+    fn check<T: JsonSchema + DeserializeOwned + Serialize>() {
+        let value = json!({"scope_id":"default", "id":"record_a"});
+        validate::<T>(Contract::Deserialize, &value);
+        let schema = SchemaSettings::draft2020_12()
+            .with(|s| s.contract = Contract::Deserialize)
+            .into_generator()
+            .into_root_schema_for::<T>();
+        let schema = serde_json::to_value(schema).unwrap();
+        assert!(schema["properties"]["clear_fields"]
+            .get("default")
+            .is_none());
+        for clear in [None, Some(json!([]))] {
+            let mut input = value.clone();
+            if let Some(clear) = clear {
+                input["clear_fields"] = clear;
+            }
+            let decoded: T = serde_json::from_value(input).unwrap();
+            assert!(serde_json::to_value(decoded)
+                .unwrap()
+                .get("clear_fields")
+                .is_none());
+        }
+    }
+
+    check::<UpdateSourceInput>();
+    check::<UpdateResolutionInput>();
+    check::<UpdateRequirementInput>();
+    check::<UpdateRuleInput>();
+    check::<UpdateDomainInput>();
+    check::<UpdateBoundaryInput>();
+    check::<UpdateTopicInput>();
+    check::<EditQuestionInput>();
+
+    let value = json!({"scope_id":"default", "id":"req_a",
+        "clear_fields":["description", "fog", "domain_id"]});
+    let decoded: UpdateRequirementInput = serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(
+        serde_json::to_value(decoded).unwrap()["clear_fields"],
+        value["clear_fields"]
+    );
+}
