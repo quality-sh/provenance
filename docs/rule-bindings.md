@@ -34,6 +34,12 @@ returns nothing. Neither helper registers global state or changes application
 behavior. Keep `rule("id",` on one line. Put `verifies("id", "method")` in a
 named function or in a function-valued `const`.
 
+The scanner binds only a free `rule(` or `verifies(` call. A method call such
+as `requirement.rule("expiry", { ... })` declares a Rule in the SDK's test
+graph. It is not an implementation binding, and the scanner does not report
+it. Import the helper from the `rules` subpath and call it without a
+receiver.
+
 The top-level `rule("local-key")` export is the authoring builder. Import the
 Implementation binding helper only from the `rules` subpath.
 
@@ -100,6 +106,44 @@ final class PayrollRules {
 The scanner recognizes `rule("id",` after a plain or qualified helper name and
 uses the assigned field as the item name. Java verification helpers are not
 recognized.
+
+## What the repository scan covers
+
+A scan of a directory tree covers the files a repository tracks. Three
+directory names always stay out: `.git`, `node_modules`, and `target`. The
+scan also prunes the generated output trees that the repository itself
+declares: a `.gitignore` file in the scanned root, or in any directory below
+it, keeps its ignored directories out of the scan. The scan reads
+`.gitignore` rules itself, and it implements a working subset of the
+gitignore grammar: comments, blank lines, `!` negation, a trailing `/`, and
+the `*`, `**`, and `?` globs.
+
+The walk prunes directories only. A `.gitignore` rule that names one file
+does not hide that file from the scan. Escaped characters, character
+classes, and `.gitignore` files above the scanned root have no effect.
+A directory name alone never marks output: an unignored `dist` directory of
+hand-written source stays in the scan. Naming the generated tree as the scan
+root (`--path dist`) overrides the ignore rules and scans it.
+
+## Rust attribute forms
+
+`#[rule("id")]` and `#[verifies("id", method)]` bind in three spellings:
+plain, qualified through the macros crate
+(`#[provenance_macros::rule("id")]`, and any `path::rule` or `path::verifies`
+name), and wrapped across lines the way rustfmt formats long arguments:
+
+```rust
+#[verifies(
+    "rule_this_is_a_long_id_after_rustfmt",
+    examples
+)]
+fn wrapped() {}
+```
+
+The wrapped form closes within sixteen lines and holds no comments. A
+string, a raw string, or a block comment that contains attribute text never
+binds. The scanner stays line-oriented: it does not parse a full Rust syntax
+tree, and it does not read `cfg_attr` rewrites.
 
 ## Universal comment floor
 

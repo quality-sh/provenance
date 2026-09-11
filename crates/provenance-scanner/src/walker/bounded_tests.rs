@@ -77,3 +77,35 @@ fn a_sub_limit_scan_matches_scan_path() {
     assert!(cut, "the sixth file is met and the walk says so");
     assert_eq!(exact.len(), 5);
 }
+
+#[test]
+fn a_bounded_scan_skips_ignored_generated_output_too() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
+    for (path, content) in [
+        (".gitignore", "dist\n"),
+        ("src/kept.rs", "#[rule(\"rule_kept\")]\nfn kept() {}\n"),
+        ("dist/generated.js", "// @provenance rule: rule_generated\n"),
+        (
+            "target/skipped.rs",
+            "#[rule(\"rule_skipped\")]\nfn skipped() {}\n",
+        ),
+    ] {
+        let file = root.join(path);
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(file, content).unwrap();
+    }
+
+    let (bounded, cut) = scan_path_bounded(&root, 10).unwrap();
+    assert!(!cut);
+    assert_eq!(
+        relative(&root, &bounded),
+        [Utf8PathBuf::from("src/kept.rs")]
+    );
+    let whole = scan_path(&root).unwrap();
+    let (limited, _) = scan_path_bounded(&root, usize::MAX).unwrap();
+    assert_eq!(
+        limited, whole,
+        "the bounded walk prunes what scan_path prunes"
+    );
+}
