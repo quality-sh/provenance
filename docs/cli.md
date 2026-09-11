@@ -138,13 +138,17 @@ when the step refused and the answer is at the stored revision with the error
 text in `freshness_error`.
 
 The eight query commands read `.provenance/settings.json` on every call.
-This tracked JSON file accepts `read.freshness_policy` and `read.scan_limit`:
+This tracked JSON file accepts `read.freshness_policy`, `read.scan_limit`, and
+`coverage.binding_findings`:
 
 ```json
 {
   "read": {
     "freshness_policy": "catch_up",
     "scan_limit": 5000
+  },
+  "coverage": {
+    "binding_findings": "warning"
   }
 }
 ```
@@ -164,6 +168,18 @@ files; it has no flag or request field. An invalid value, an unknown key at
 either level, or an unreadable file causes a settings refusal before a query
 opens the projection. The error names the path and, for an invalid setting,
 the key and permitted values. No answer or `freshness_error` accompanies it.
+
+`coverage.binding_findings` selects how `provenance coverage scan` treats a
+Rule binding finding: `warning`, the default, reports the finding and lets the
+command succeed, and `error` reports the finding and fails the command. The
+findings it governs are an active Rule with no current verification binding,
+and a current implementation or verification binding to a deprecated or
+archived Rule. A retired historical binding is not current evidence and
+produces no such finding. The key does not govern other scan warnings, such as
+an active Rule with no implementation, an unknown Rule id, or a second primary
+implementation. Rule severity metadata is a separate field and never selects
+the command result. An invalid value causes the same settings refusal as the
+read keys, and the scan reports it instead of falling back to a default.
 
 `attested` names the projection tables behind the answer. `live` names what
 the stamp does not cover, from a closed list: `canonical` (canonical shards),
@@ -258,9 +274,22 @@ A narrower scan still validates every binding it encounters, including unknown R
 and duplicate primary implementations, but it cannot claim that a binding is absent from
 the rest of the repository.
 
+Some findings are Rule binding findings in the sense of
+`coverage.binding_findings`: an active Rule with no current verification, and a
+current implementation or verification binding to a deprecated or archived Rule.
+The scan reports each of them with `binding_finding` set in the JSON report, from
+scanned markers and typed graph bindings alike. A retired historical binding is
+readable but not current, so it neither satisfies verification nor produces the
+finding. `coverage.binding_findings` selects `warning` (report and succeed) or
+`error` (report and fail); the default is `warning`, so a repository that plans
+active Rules ahead of their code keeps them visible without blocking. Rule
+severity metadata stays a record field and never selects the command result.
+
 `--strict` exits non-zero when the report holds any warning; the report still prints
 first. That is the dial each repository sets for itself: strict in CI once a repository
-wants every active rule verified, plain while it is still filling them in.
+wants every active rule verified, plain while it is still filling them in. `--strict`
+overrides the configured policy by failing on every warning, while the configured
+policy decides whether a Rule binding finding fails without `--strict`.
 
 Each annotation and binding in a scan report keeps `file_path` and `line` and adds a
 durable `anchor`: the enclosing symbol plus a SHA-256 hash of the cited line's trimmed

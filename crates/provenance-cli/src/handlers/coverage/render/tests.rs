@@ -190,6 +190,7 @@ fn a_warning_without_a_location_is_rendered_without_one() {
             file_path: None,
             line: None,
             message: "active rule `rule_overtime` has no verification".to_string(),
+            binding_finding: true,
         }],
     );
 
@@ -211,6 +212,7 @@ fn a_warning_about_no_rule_is_rendered_without_an_empty_id() {
             file_path: Some(Utf8PathBuf::from("src/payroll.rs")),
             line: Some(4),
             message: "legacy marker `@statesman` is deprecated".to_string(),
+            binding_finding: false,
         }],
     );
 
@@ -230,6 +232,7 @@ fn a_warning_with_a_location_still_shows_it() {
             file_path: Some(Utf8PathBuf::from("src/payroll.rs")),
             line: Some(4),
             message: "unknown rule".to_string(),
+            binding_finding: false,
         }],
     );
 

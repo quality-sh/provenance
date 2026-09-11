@@ -443,6 +443,7 @@ fn ambiguity_warning<S: AnchoredSite>(
         file_path: Some(first.file_path().to_path_buf()),
         line: Some(first.line()),
         message,
+        binding_finding: false,
     }
 }
 
@@ -473,5 +474,6 @@ fn warning(
         file_path: Some(file_path.to_path_buf()),
         line: Some(line),
         message: format!("anchored {kind} site is gone"),
+        binding_finding: false,
     }
 }

@@ -104,6 +104,12 @@ pub struct EvidenceDiffReport {
 /// `file_path` and `line` are `None` when the warning is about an absence.
 /// An unverified rule has no site to point at, and naming one anyway sends a
 /// reader to a file that says nothing about the problem.
+///
+/// `binding_finding` marks the warnings the Rule binding lifecycle policy
+/// governs: an active Rule with no current verification, and a current
+/// implementation or verification binding to a deprecated or archived Rule.
+/// Repository configuration selects warning or error severity for these
+/// findings; every other warning stays report-only unless `--strict` runs.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub struct ValidationWarning {
     pub rule_id: String,
@@ -112,6 +118,8 @@ pub struct ValidationWarning {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub line: Option<usize>,
     pub message: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub binding_finding: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
