@@ -152,11 +152,11 @@ fn evidence_refuses_an_internal_junction() {
     let snapshots = path.parent().unwrap();
     let moved = snapshots.with_file_name("moved");
     std::fs::rename(snapshots, &moved).unwrap();
-    assert!(std::process::Command::new("cmd")
-        .args(["/C", "mklink", "/J", snapshots.as_str(), moved.as_str()])
+    let output = std::process::Command::new("cmd")
+        .current_dir(snapshots.parent().unwrap())
+        .args(["/D", "/C", "mklink", "/J", "snapshots", "moved"])
         .output()
-        .unwrap()
-        .status
-        .success());
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
     assert_denied(&layout, &path);
 }
