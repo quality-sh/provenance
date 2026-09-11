@@ -59,7 +59,7 @@
     "@quality-sh/provenance-win32-x64-msvc": "0.2.3"
   },
   "dependencies": {
-    "typescript": "^5.9.3"
+    "typescript": "^7.0.2"
   },
   "scripts": {
     "build": "npm run prepare:generated && node scripts/clean-build.js && node scripts/generate-release-consumers.js --check && tsc -p tsconfig.json && node scripts/copy-client-validators.js",
