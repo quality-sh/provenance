@@ -49,7 +49,8 @@ const VERIFICATION_METHODS: [&str; 6] = [
 /// `property` (generated inputs checked against a stated property),
 /// `examples` (hand-picked cases), `conformance` (an independent expression
 /// of the Rule is checked against its primary implementation), `construction`
-/// (a type or constraint makes violation impossible; goes on the type, not a test),
+/// (a type or constraint makes violation impossible; goes on the type, not a
+/// test — the attribute refuses it on any function at compile time),
 /// `proof` (a machine-checked proof outside this test runner backs the rule;
 /// the marked site is the bridge that pins the implementation to the proved
 /// model, such as a golden-vector test shared with a Lean theorem).
@@ -58,11 +59,13 @@ const VERIFICATION_METHODS: [&str; 6] = [
 /// reported by the scanner, never written.
 #[proc_macro_attribute]
 pub fn verifies(attr: TokenStream, item: TokenStream) -> TokenStream {
-    validate_verifies_args(&attr);
-    item
+    match check_verifies(&attr, &item) {
+        Ok(()) => item,
+        Err(error) => error.into_compile_error().into(),
+    }
 }
 
-fn validate_verifies_args(attr: &TokenStream) {
+fn check_verifies(attr: &TokenStream, item: &TokenStream) -> syn::Result<()> {
     let tokens: Vec<TokenTree> = attr.clone().into_iter().collect();
     match tokens.as_slice() {
         [TokenTree::Literal(literal), TokenTree::Punct(punct), TokenTree::Ident(method)]
@@ -79,8 +82,88 @@ fn validate_verifies_args(attr: &TokenStream) {
                 "unknown verification method `{method}`; expected one of: {}",
                 VERIFICATION_METHODS.join(", ")
             );
+            if method == "construction" {
+                construction_must_not_mark_a_function(item)?;
+            }
+            Ok(())
         }
         _ => panic!("verifies takes a rule id string literal and a method word"),
+    }
+}
+
+/// The leading tokens of an item under inspection.
+type Tokens = std::iter::Peekable<proc_macro::token_stream::IntoIter>;
+
+/// `construction` says a type makes the violation impossible, so no function
+/// — a test included — can carry it. The check reads the item's leading
+/// tokens: attributes, visibility, and function qualifiers hide nothing else,
+/// and `fn` is the only item keyword that can follow them.
+fn construction_must_not_mark_a_function(item: &TokenStream) -> syn::Result<()> {
+    let mut tokens = item.clone().into_iter().peekable();
+    skip_attributes(&mut tokens);
+    skip_visibility(&mut tokens);
+    skip_function_qualifiers(&mut tokens);
+    let Some(TokenTree::Ident(word)) = tokens.peek().cloned() else {
+        return Ok(());
+    };
+    if word.to_string() != "fn" {
+        return Ok(());
+    }
+    tokens.next();
+    let name = match tokens.next() {
+        Some(TokenTree::Ident(name)) => name.to_string(),
+        _ => String::new(),
+    };
+    let tail = if name.is_empty() {
+        "it cannot mark a function.".to_string()
+    } else {
+        format!("it cannot mark the function `{name}`.")
+    };
+    Err(syn::Error::new(
+        word.span().into(),
+        format!(
+            "`construction` marks a type whose construction makes the violation \
+             impossible; {tail} Put the marker on the type, or use the method \
+             that matches the evidence."
+        ),
+    ))
+}
+
+fn skip_attributes(tokens: &mut Tokens) {
+    while matches!(tokens.peek(), Some(TokenTree::Punct(punct)) if punct.as_char() == '#') {
+        tokens.next();
+        if matches!(tokens.peek(), Some(TokenTree::Group(_))) {
+            tokens.next();
+        }
+    }
+}
+
+fn skip_visibility(tokens: &mut Tokens) {
+    if matches!(tokens.peek(), Some(TokenTree::Ident(ident)) if ident.to_string() == "pub") {
+        tokens.next();
+        if matches!(tokens.peek(), Some(TokenTree::Group(group)) if group.delimiter() == proc_macro::Delimiter::Parenthesis)
+        {
+            tokens.next();
+        }
+    }
+}
+
+fn skip_function_qualifiers(tokens: &mut Tokens) {
+    loop {
+        let Some(TokenTree::Ident(ident)) = tokens.peek().cloned() else {
+            return;
+        };
+        match ident.to_string().as_str() {
+            "const" | "async" | "unsafe" | "extern" | "default" => {
+                tokens.next();
+                if ident.to_string() == "extern"
+                    && matches!(tokens.peek(), Some(TokenTree::Literal(_)))
+                {
+                    tokens.next();
+                }
+            }
+            _ => return,
+        }
     }
 }
 

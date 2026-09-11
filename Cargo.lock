@@ -2246,9 +2246,12 @@ dependencies = [
 name = "provenance-macros"
 version = "0.2.3"
 dependencies = [
+ "camino",
  "proc-macro2",
+ "provenance-scanner",
  "quote",
  "syn 2.0.117",
+ "trybuild",
 ]
 
 [[package]]

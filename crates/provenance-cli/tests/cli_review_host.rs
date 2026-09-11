@@ -1,3 +1,4 @@
+use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::{
     io::{BufRead, BufReader},
@@ -108,6 +109,7 @@ fn call(host: &Host, target: &str, scope: &str) -> ureq::Response {
 }
 
 #[test]
+#[verifies("rule_cli_serves_review_assets", examples)]
 fn serves_assets_configuration_and_only_the_selected_graph() {
     let repo = repository();
     let other = repository();

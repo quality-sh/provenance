@@ -1,0 +1,5 @@
+error: `construction` marks a type whose construction makes the violation impossible; it cannot mark the function `sample`. Put the marker on the type, or use the method that matches the evidence.
+ --> $WORKSPACE/fixtures/provenance-macros/construction_on_function.rs
+  |
+  | fn sample(value: u32) -> u32 {
+  | ^^
