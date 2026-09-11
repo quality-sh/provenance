@@ -1,5 +1,5 @@
 use assert_cmd::Command;
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
+use provenance_core::{review::REVIEW_SCHEMA_VERSION, SUPPORTED_SCHEMA_VERSION};
 use provenance_macros::verifies;
 use serde_json::Value;
 
@@ -123,7 +123,7 @@ fn init_rerun_refuses_a_future_manifest_version() {
     let repo = temp.path().join("repo");
     init(&repo, &["--scope", "default"]).success();
     let mut original = read_manifest(&repo);
-    original["schema_version"] = serde_json::json!(SUPPORTED_SCHEMA_VERSION.0 + 1);
+    original["schema_version"] = serde_json::json!(REVIEW_SCHEMA_VERSION.0 + 1);
     write_manifest(&repo, &original);
 
     init(&repo, &[])

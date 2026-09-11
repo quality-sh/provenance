@@ -20,7 +20,7 @@ macro_rules! update_input {
             pub scope_id: ScopeId,
             pub id: StableId,
             $(pub $field: Option<$ty>,)*
-            #[serde(default)]
+            #[serde(default, skip_serializing_if = "Vec::is_empty")]
             pub clear_fields: Vec<$clear>,
         }
     };
