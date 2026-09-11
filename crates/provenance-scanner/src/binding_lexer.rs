@@ -4,32 +4,10 @@ pub fn call_arguments<'a>(
     starts_in_block_comment: bool,
     function: &str,
 ) -> Option<&'a str> {
-    call_position(line, starts_in_block_comment, function)
-        .map(|(start, marker_len)| &line[start + marker_len..])
-}
-
-/// Finds a free call — one that is not a method on a receiver — outside
-/// strings and comments in one source line. In the TypeScript SDK a
-/// `receiver.rule("id", ...)` call declares a Rule in a test graph; only a
-/// free `rule("id", implementation)` call binds code to it.
-pub fn free_call_arguments<'a>(
-    line: &'a str,
-    starts_in_block_comment: bool,
-    function: &str,
-) -> Option<&'a str> {
-    let (start, marker_len) = call_position(line, starts_in_block_comment, function)?;
-    (!line[..start].ends_with('.')).then(|| &line[start + marker_len..])
-}
-
-fn call_position(
-    line: &str,
-    starts_in_block_comment: bool,
-    function: &str,
-) -> Option<(usize, usize)> {
     let marker = format!("{function}(");
     scan_line(line, starts_in_block_comment, Some(&marker), false)
         .0
-        .map(|start| (start, marker.len()))
+        .map(|start| &line[start + marker.len()..])
 }
 
 /// Carries C-style block-comment state between source lines.

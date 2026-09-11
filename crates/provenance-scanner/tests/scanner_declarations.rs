@@ -17,6 +17,74 @@ fn typed_rule_declaration_call_is_not_an_implementation_binding() {
 }
 
 #[test]
+fn namespace_imported_helpers_bind_their_implementation_and_verification() {
+    // The exact binding lines of the packed-consumer fixture this
+    // repository ships to npm consumers.
+    let scan = scan_file(
+        Utf8Path::new("rule-bindings.ts"),
+        Language::TypeScript,
+        r#"import * as ruleBindings from "@quality-sh/provenance/rules";
+
+const implementation = (hours: number): boolean => hours > 38;
+const paysOvertime: (hours: number) => boolean = ruleBindings.rule("rule_packed_consumer_overtime", implementation);
+
+function overtimeExamples(): void {
+  ruleBindings.verifies("rule_packed_consumer_overtime", "examples");
+}"#,
+    );
+
+    assert_eq!(scan.bindings.len(), 2);
+    assert_eq!(scan.bindings[0].rule_id, "rule_packed_consumer_overtime");
+    assert_eq!(scan.bindings[0].verification, None);
+    assert_eq!(scan.bindings[0].item_name.as_deref(), Some("paysOvertime"));
+    assert_eq!(scan.bindings[1].verification, Some(Verification::Examples));
+    assert_eq!(
+        scan.bindings[1].item_name.as_deref(),
+        Some("overtimeExamples")
+    );
+}
+
+#[test]
+fn the_shipped_packed_consumer_fixture_scans_both_sites() {
+    let fixture = Utf8Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../packages/provenance/test/fixtures/packed-consumer/rule-bindings.ts.fixture");
+    let source = std::fs::read_to_string(&fixture)
+        .expect("packed consumer fixture ships beside the scanner crate");
+    let scan = scan_file(
+        Utf8Path::new("rule-bindings.ts"),
+        Language::TypeScript,
+        &source,
+    );
+
+    let sites: Vec<(String, Option<&str>, Option<Verification>)> = scan
+        .bindings
+        .iter()
+        .map(|binding| {
+            (
+                binding.rule_id.clone(),
+                binding.item_name.as_deref(),
+                binding.verification,
+            )
+        })
+        .collect();
+    assert_eq!(
+        sites,
+        vec![
+            (
+                "rule_packed_consumer_overtime".to_string(),
+                Some("paysOvertime"),
+                None
+            ),
+            (
+                "rule_packed_consumer_overtime".to_string(),
+                Some("overtimeExamples"),
+                Some(Verification::Examples)
+            ),
+        ]
+    );
+}
+
+#[test]
 fn tracked_sdk_declaration_shapes_never_bind() {
     for source in [
         r#"const expiry = sharing.rule("expiry", {
@@ -24,6 +92,7 @@ fn tracked_sdk_declaration_shapes_never_bind() {
 });"#,
         r#"expiry: sharing.rule("expiry", { statement: "Share links expire" });"#,
         r#"const shareExpiry = sharing.rule("expiry").statement("Share links expire");"#,
+        r#"() => escapedRequirement?.rule("late", {})"#,
     ] {
         let scan = scan_file(Utf8Path::new("spec.ts"), Language::TypeScript, source);
 

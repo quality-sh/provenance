@@ -34,11 +34,12 @@ returns nothing. Neither helper registers global state or changes application
 behavior. Keep `rule("id",` on one line. Put `verifies("id", "method")` in a
 named function or in a function-valued `const`.
 
-The scanner binds only a free `rule(` or `verifies(` call. A method call such
-as `requirement.rule("expiry", { ... })` declares a Rule in the SDK's test
-graph. It is not an implementation binding, and the scanner does not report
-it. Import the helper from the `rules` subpath and call it without a
-receiver.
+The scanner reads the call's payload. A `rule(` call whose second argument is
+a Rule-options object, as in `requirement.rule("expiry", { statement })`,
+declares a Rule in the SDK's test graph. It is not an implementation binding,
+and the scanner does not report it. A `rule(` call whose second argument is an
+implementation function or value binds, and a named or namespace import of
+the `rules` subpath works the same way.
 
 The top-level `rule("local-key")` export is the authoring builder. Import the
 Implementation binding helper only from the `rules` subpath.

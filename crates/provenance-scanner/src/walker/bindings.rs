@@ -8,7 +8,7 @@
 use std::str::FromStr;
 
 use super::Language;
-use crate::binding_lexer::{call_arguments, free_call_arguments};
+use crate::binding_lexer::call_arguments;
 use crate::parser::Verification;
 
 /// A recognized binding site: the rule id, the verification method for a
@@ -63,7 +63,7 @@ fn parse_python_decorator(line: &str) -> Option<(String, Option<Verification>)> 
 }
 
 fn parse_script_call(line: &str, in_block_comment: bool) -> Option<ParsedBinding> {
-    if let Some(rest) = free_call_arguments(line, in_block_comment, "verifies") {
+    if let Some(rest) = call_arguments(line, in_block_comment, "verifies") {
         let (rule_id, after_id) = quoted_literal(rest)?;
         let method = argument_after_comma(after_id)?;
         return Some(one_line(
@@ -71,15 +71,15 @@ fn parse_script_call(line: &str, in_block_comment: bool) -> Option<ParsedBinding
             Some(Verification::from_str(method).ok()?),
         ));
     }
-    // A `receiver.rule("id", ...)` call declares a Rule in the SDK's test
-    // graph; only a free `rule("id", implementation)` call binds production
-    // code to that Rule.
-    let rest = free_call_arguments(line, in_block_comment, "rule")?;
+    // A Rule-options object after the id marks the SDK's typed Rule
+    // declaration (`requirement.rule("key", { statement })`), which builds a
+    // test graph and never binds production code. The binding helper — free
+    // or through a namespace import — passes an implementation function or
+    // value, so any other payload binds.
+    let rest = call_arguments(line, in_block_comment, "rule")?;
     let (rule_id, after_id) = quoted_literal(rest)?;
-    after_id
-        .trim_start()
-        .starts_with(',')
-        .then(|| one_line(rule_id, None))
+    let payload = after_id.trim_start().strip_prefix(',')?.trim_start();
+    (!payload.starts_with('{')).then(|| one_line(rule_id, None))
 }
 
 fn parse_rule_call(line: &str, in_block_comment: bool) -> Option<ParsedBinding> {
