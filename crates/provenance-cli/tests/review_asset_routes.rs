@@ -5,6 +5,8 @@ use std::{
     time::Duration,
 };
 
+use provenance_macros::verifies;
+
 include!(concat!(env!("OUT_DIR"), "/review_assets.rs"));
 
 struct Host(Child);
@@ -45,6 +47,9 @@ fn start(repo: &std::path::Path) -> (Host, serde_json::Value) {
 }
 
 #[test]
+// Every compiled asset is in the finite inventory above, and the loop tries
+// each one over GET and HEAD, byte for byte.
+#[verifies("rule_cli_serves_review_assets", exhaustion)]
 fn accepted_inventory_uses_the_composed_router_and_origin_checks() {
     let repo = tempfile::tempdir().unwrap();
     let layout = provenance_store::layout::ProvenanceLayout::new(repo.path().to_str().unwrap());

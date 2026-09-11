@@ -1,4 +1,4 @@
-use provenance_macros::rule;
+use provenance_macros::{rule, verifies};
 use serde::{de::Error, Deserialize, Deserializer, Serialize};
 
 /// Every id in the graph is non-empty and uses only lowercase ASCII letters,
@@ -34,6 +34,7 @@ pub struct SchemaVersion(pub u32);
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(transparent)]
 #[cfg_attr(feature = "schema", schemars(extend("pattern" = "^[a-z0-9_-]+$")))]
+#[verifies("rule_id_charset", construction)]
 pub struct ScopeId(String);
 
 impl ScopeId {
@@ -70,6 +71,7 @@ impl<'de> Deserialize<'de> for ScopeId {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(transparent)]
 #[cfg_attr(feature = "schema", schemars(extend("pattern" = "^[a-z0-9_-]+$")))]
+#[verifies("rule_id_charset", construction)]
 pub struct StableId(String);
 
 impl StableId {
@@ -217,15 +219,13 @@ mod tests {
         assert!(ScopeId::new("").is_err());
     }
 
-    // The tests below are marked `construction` rather than `examples`: they
-    // do not sample a check that could be forgotten somewhere else, they walk
-    // every route by which a value can become a `StableId` or a `ScopeId` and
-    // show each one runs the predicate. The routes are enumerable because the
-    // inner `String` is private to this module and this module holds nothing
-    // but the two types.
+    // The construction claim lives on the two types above, whose private
+    // interior and lone constructor make a violating id unrepresentable. The
+    // tests below sample the routes in by hand or with generated strings, so
+    // each carries the method its body supports.
 
     #[test]
-    #[verifies("rule_id_charset", construction)]
+    #[verifies("rule_id_charset", examples)]
     fn the_constructor_is_the_only_public_route_in() {
         assert!(StableId::new("source_codebase").is_ok());
         assert!(StableId::new("source/codebase").is_err());
@@ -234,7 +234,7 @@ mod tests {
     }
 
     #[test]
-    #[verifies("rule_id_charset", construction)]
+    #[verifies("rule_id_charset", property)]
     fn deserialization_runs_the_same_predicate_as_the_constructor() {
         let mut generator = Generator(0x5eed_1234_abcd_0004);
         for _ in 0..2000 {
@@ -254,7 +254,7 @@ mod tests {
     }
 
     #[test]
-    #[verifies("rule_id_charset", construction)]
+    #[verifies("rule_id_charset", examples)]
     fn a_serialized_id_deserializes_back_into_an_id() {
         for value in ["a", "0", "_", "-", "a-b_c9", &"z".repeat(4096)] {
             let id = StableId::new(value).unwrap();

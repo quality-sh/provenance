@@ -4,9 +4,15 @@ use axum::{
     http::{Method, StatusCode},
     response::{IntoResponse, Response},
 };
+use provenance_macros::rule;
 
 include!(concat!(env!("OUT_DIR"), "/review_assets.rs"));
 
+/// Answers every asset path the review page asks for from the bundle this
+/// package was compiled with. The `include!` above embeds that bundle at
+/// compile time, so the bytes handed out are the bytes the package carries,
+/// and a path outside the bundle gets no reply from disk.
+#[rule("rule_cli_serves_review_assets")]
 pub(super) async fn serve(request: Request) -> Response {
     if !matches!(*request.method(), Method::GET | Method::HEAD) {
         return StatusCode::METHOD_NOT_ALLOWED.into_response();

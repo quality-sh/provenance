@@ -103,7 +103,7 @@ fn explicit_commit_issues_from_pin_despite_relevant_staged_and_worktree_changes(
 }
 
 #[test]
-#[verifies("rule_pinned_graph_families", construction)]
+#[verifies("rule_pinned_graph_families", examples)]
 fn exact_export_contains_only_canonical_graph_families() {
     let temp = committed_store();
     let proposal_dir = temp
