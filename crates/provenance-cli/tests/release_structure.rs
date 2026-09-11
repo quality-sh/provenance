@@ -176,15 +176,14 @@ fn cli_package_contains_its_embedded_skills() {
         String::from_utf8_lossy(&output.stderr),
     );
     let files = String::from_utf8(output.stdout).expect("package file list is UTF-8");
+    // Cargo can list files with the platform's path separators.
+    let files: Vec<_> = files.lines().map(Path::new).collect();
     for file in [
         "build/review_assets.rs",
         "review-assets/index.html",
         "src/review.rs",
     ] {
-        assert!(
-            files.lines().any(|entry| entry == file),
-            "CLI package omits {file}"
-        );
+        assert!(files.contains(&Path::new(file)), "CLI package omits {file}");
     }
     for skill in [
         "provenance-fork-tournament",
@@ -193,9 +192,7 @@ fn cli_package_contains_its_embedded_skills() {
         "provenance-swarm-backtrace",
     ] {
         assert!(
-            files
-                .lines()
-                .any(|file| file == format!("skills/{skill}/SKILL.md")),
+            files.contains(&Path::new(&format!("skills/{skill}/SKILL.md"))),
             "CLI package omits {skill}",
         );
     }
