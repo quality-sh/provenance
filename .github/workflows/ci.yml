@@ -335,6 +335,54 @@ jobs:
         uses: taiki-e/install-action@c3ec0de9ae7f1019cea21aa96aa0a895b9552063 # v2
         with:
           tool: nextest@0.9.143
+      - name: Fetch the parent manifest for comparison
+        if: runner.os == 'Windows'
+        run: git fetch --depth=2 origin 196408fb8ac65ba4e8a655cd7f64a3d918e91679
+      - name: Inspect Windows Cargo package paths
+        if: runner.os == 'Windows'
+        shell: python
+        run: |
+          import pathlib
+          import subprocess
+          import tarfile
+          subprocess.run(["cargo", "--version"], check=True)
+          listing = subprocess.check_output([
+              "cargo", "package", "--locked", "--no-verify", "--allow-dirty",
+              "--package", "provenance-cli", "--list",
+          ]).decode("utf-8").splitlines()
+          expected = ["build/review_assets.rs", "review-assets/index.html", "src/review.rs"]
+          expected += [f"skills/{skill}/SKILL.md" for skill in [
+              "provenance-fork-tournament", "provenance-grounded-writing",
+              "provenance-shaping", "provenance-swarm-backtrace",
+          ]]
+          for path in expected:
+              matches = [entry for entry in listing if entry.replace(chr(92), "/") == path]
+              print(f"LIST expected={path!r} raw={matches!r} string_equal={path in listing}", flush=True)
+          subprocess.run([
+              "cargo", "package", "--workspace", "--locked", "--no-verify", "--allow-dirty",
+          ], check=True)
+          archive = next(pathlib.Path("target/package").glob("provenance-cli-*.crate"))
+          with tarfile.open(archive) as package:
+              names = package.getnames()
+              for path in expected:
+                  member = f"{archive.stem}/{path}"
+                  print(f"ARCHIVE expected={member!r} present={member in names}", flush=True)
+                  assert member in names, member
+          manifest = pathlib.Path("crates/provenance-cli/Cargo.toml")
+          merged_manifest = manifest.read_bytes()
+          try:
+              manifest.write_bytes(subprocess.check_output([
+                  "git", "show", "196408fb8ac65ba4e8a655cd7f64a3d918e91679^:crates/provenance-cli/Cargo.toml",
+              ]))
+              parent_listing = subprocess.check_output([
+                  "cargo", "package", "--locked", "--no-verify", "--allow-dirty",
+                  "--package", "provenance-cli", "--list",
+              ]).decode("utf-8").splitlines()
+              for path in expected:
+                  matches = [entry for entry in parent_listing if entry.replace(chr(92), "/") == path]
+                  print(f"PARENT MANIFEST expected={path!r} raw={matches!r} string_equal={path in parent_listing}", flush=True)
+          finally:
+              manifest.write_bytes(merged_manifest)
       - name: Test concurrently
         run: cargo nextest run --profile ci --workspace --all-features --no-fail-fast --cargo-profile test --timings
       - name: Test documentation
