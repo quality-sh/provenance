@@ -56,11 +56,14 @@ try {
   }
   await writeFile(join(temporary, 'validators.mjs'), await readFile(join(root, 'packages/provenance/src/generated/validators.mjs')));
   const module = await import(join(temporary, 'client.js'));
-  await checks[family](module, fixture);
-  run(['test', '--locked', '-p', 'provenance-http-client', '--test', family, '--', '--ignored'], {
-    ...process.env, PROVENANCE_TEST_HOST: fixture.url, PROVENANCE_RECORDS_FIXTURE: JSON.stringify(fixture),
-  });
-  console.log(`Both generated clients passed against the real ${family} host.`);
+  const clientModule = process.argv.includes('--effect') ? (await import('./effect-host.mjs')).effectModule(module) : module;
+  await checks[family](clientModule, fixture);
+  if (!process.argv.includes('--effect')) {
+    run(['test', '--locked', '-p', 'provenance-http-client', '--test', family, '--', '--ignored'], {
+      ...process.env, PROVENANCE_TEST_HOST: fixture.url, PROVENANCE_RECORDS_FIXTURE: JSON.stringify(fixture),
+    });
+  }
+  console.log(`${process.argv.includes('--effect') ? 'Effect client' : 'Promise and Rust clients'} passed against the real ${family} host.`);
 } finally {
   const exited = host.exitCode === null ? once(host, 'exit') : Promise.resolve([host.exitCode]);
   host.stdin.end();

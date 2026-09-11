@@ -12,3 +12,5 @@ export async function typescriptFiles(document) {
     ...await validators(document),
   };
 }
+
+export { effectFiles } from './effect.mjs';

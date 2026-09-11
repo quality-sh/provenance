@@ -14,10 +14,10 @@ export function responseSchemas(document) {
   return [...names].sort();
 }
 
-export async function validators(document) {
+export async function validators(document, names = responseSchemas(document), prefix = 'validators', compatibility = true) {
   const schemas = structuredClone(document.components.schemas);
   // Compatibility is checked after validating the metadata's shape.
-  delete schemas.MetadataOutput.properties.protocol_version.const;
+  if (compatibility) delete schemas.MetadataOutput.properties.protocol_version.const;
   const ajv = new Ajv({ code: { source: true, esm: true }, strict: true, allowUnionTypes: true });
   addFormats(ajv);
   for (const format of ['int64', 'int32', 'uint64', 'uint32', 'uint16', 'uint8', 'uint', 'int', 'float', 'double']) ajv.addFormat(format, true);
@@ -25,11 +25,11 @@ export async function validators(document) {
   ajv.addKeyword({ keyword: 'x-provenance-model-family', schemaType: 'string', valid: true });
   const id = 'urn:provenance:operation-responses';
   ajv.addSchema({ $id: id, components: { schemas } });
-  const exports = Object.fromEntries(responseSchemas(document).map(name => [name, `${id}#/components/schemas/${name}`]));
+  const exports = Object.fromEntries(names.map(name => [name, `${id}#/components/schemas/${name}`]));
   const code = standaloneCode(ajv, exports);
   const bundled = await build({ stdin: { contents: code, resolveDir: import.meta.dirname, sourcefile: 'validators.js' }, bundle: true, platform: 'browser', format: 'esm', write: false, minify: true, legalComments: 'none' });
   return {
-    'validators.mjs': '// Generated from OpenAPI. Do not edit.\n' + bundled.outputFiles[0].text,
-    'validators.d.mts': '// Generated from OpenAPI. Do not edit.\n' + responseSchemas(document).map(name => `export declare function ${name}(value: unknown): boolean;`).join('\n') + '\n',
+    [`${prefix}.mjs`]: '// Generated from OpenAPI. Do not edit.\n' + bundled.outputFiles[0].text,
+    [`${prefix}.d.mts`]: '// Generated from OpenAPI. Do not edit.\n' + names.map(name => `export declare function ${name}(value: unknown): boolean;`).join('\n') + '\n',
   };
 }

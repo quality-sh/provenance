@@ -124,3 +124,38 @@ test read the same cases for read/write refusal classification and the 16 MiB
 limit. A change to either language's policy must pass this inventory. The existing
 TypeScript stream tests also check that oversized responses stop reading. The inventory is
 included in the Rust package so its unit test remains usable after packaging.
+
+## Effect output
+
+The generator also emits the Effect v4 contract and methods into the existing
+ignored TypeScript source directory. The official `@effect/openapi-generator`,
+Effect, and its platform dependencies use `4.0.0-rc.113`. Generation warnings
+stop the build. Runtime wire validators preserve the production fixture values
+without object stripping or default insertion. The existing response validators
+are shared by the Promise and Effect clients.
+
+Build the SDK before running the Effect host scenarios:
+
+```sh
+npm ci --prefix packages/provenance
+npm run build --prefix packages/provenance
+node tools/operation-codegen/test-clients.mjs statements --effect
+node tools/operation-codegen/test-clients.mjs records --effect
+node tools/operation-codegen/test-clients.mjs evidence --effect
+node tools/operation-codegen/test-clients.mjs writes --effect
+node tools/operation-codegen/test-clients.mjs creation --effect
+node tools/operation-codegen/test-clients.mjs discussions --effect
+node tools/operation-codegen/test-clients.mjs ideation --effect
+npm run test:effect:packed --prefix packages/provenance
+```
+
+The default host pass runs the Promise and Rust clients. The `--effect` pass
+runs the Effect client against the same scenarios without repeating the Rust
+tests. The Promise and Effect test suites share the cases in `client-policy.mjs`
+for response validation, failure classification, credentials, and redirects.
+
+The installed-package check uses the existing CLI and fixture executables in
+`target/debug`. CI supplies those executables as artifacts. The applications it
+installs do not build Rust or run code generation. See the
+[Effect SDK guide](../../docs/effect-sdk.md) for setup, atoms, error handling,
+wire schema limits, and downstream prerequisites.
