@@ -109,6 +109,16 @@ fn store_scan_matches_every_rust_rule_and_verification_attribute() {
     assert_eq!(found, expected);
 }
 
+/// Every attribute spelling the repository uses: plain, and qualified
+/// through the macros crate. A wrapped attribute counts at its opening
+/// line, which is the line the scanner reports.
+const BINDING_PREFIXES: [&str; 4] = [
+    "#[rule(",
+    "#[verifies(",
+    "#[provenance_macros::rule(",
+    "#[provenance_macros::verifies(",
+];
+
 fn grep_binding_sites(root: &Utf8Path) -> BTreeSet<(Utf8PathBuf, usize, bool)> {
     walkdir::WalkDir::new(root)
         .into_iter()
@@ -123,13 +133,10 @@ fn grep_binding_sites(root: &Utf8Path) -> BTreeSet<(Utf8PathBuf, usize, bool)> {
                 .enumerate()
                 .filter_map(move |(line, text)| {
                     let text = text.trim_start();
-                    if text.starts_with("#[rule(") {
-                        Some((path.clone(), line + 1, false))
-                    } else if text.starts_with("#[verifies(") {
-                        Some((path.clone(), line + 1, true))
-                    } else {
-                        None
-                    }
+                    BINDING_PREFIXES
+                        .iter()
+                        .find(|prefix| text.starts_with(**prefix))
+                        .map(|prefix| (path.clone(), line + 1, prefix.contains("verifies")))
                 })
                 .collect::<Vec<_>>()
         })
