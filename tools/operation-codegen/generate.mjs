@@ -4,7 +4,7 @@ import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
-import { typescriptFiles } from './typescript.mjs';
+import { typescriptFiles, effectFiles } from './typescript.mjs';
 import { responseSchemas } from './validators.mjs';
 import { compareTrees } from './inventory.mjs';
 import { rustClientFiles } from './templates.mjs';
@@ -21,7 +21,7 @@ async function generate(temporary, generator) {
   const openapiPath = join(temporary, directories[0], 'openapi.json');
   const document = JSON.parse(await readFile(openapiPath, 'utf8'));
   const tsDir = join(temporary, directories[1]);
-  for (const [path, source] of Object.entries(await typescriptFiles(document))) await writeFile(join(tsDir, path), source);
+  for (const [path, source] of Object.entries({ ...await typescriptFiles(document), ...await effectFiles(document) })) await writeFile(join(tsDir, path), source);
   const rustDir = join(temporary, directories[2]);
   run(generator, ['rust', openapiPath, rustDir]);
   await writeFile(join(rustDir, 'responses.json'), JSON.stringify({ components: document.components, response_schemas: responseSchemas(document) }) + '\n');

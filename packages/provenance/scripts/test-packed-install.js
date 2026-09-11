@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import {
+  existsSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
@@ -93,6 +94,8 @@ npm(
   ],
   { cwd: application },
 );
+
+assert.equal(existsSync(join(application, "node_modules", "effect")), false, "The normal Promise package install does not install Effect");
 
 // Initialize the isolated project through the installed package bin.
 provenance(["--quiet", "init", "--path", ".", "--scope", "default", "--path-prefix", "."], application);

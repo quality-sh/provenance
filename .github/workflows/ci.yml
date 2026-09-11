@@ -700,6 +700,8 @@ jobs:
       - run: npm ci --prefix tools/operation-codegen
       - run: node tools/operation-codegen/generate.mjs --check
       - run: npm test --prefix tools/operation-codegen
+      - run: npm ci --prefix packages/provenance
+      - run: npm run build --prefix packages/provenance
       - name: Test generated clients against isolated hosts
         shell: bash
         run: |
@@ -712,6 +714,9 @@ jobs:
           # Each family has a separate temporary repository and host port.
           # Cargo locks the shared build directory during fixture builds.
           printf '%s\0' "${families[@]}" | xargs -0 -n 1 -P 4 node tools/operation-codegen/test-clients.mjs
+          for family in "${families[@]}"; do
+            node tools/operation-codegen/test-clients.mjs "$family" --effect
+          done
       - run: git diff --exit-code
       - name: Save Cargo timing reports
         if: always()

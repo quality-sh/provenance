@@ -8,12 +8,12 @@ export function typescriptClient(document) {
     const success = op.responses['200'].content['application/json'].schema.$ref.split('/').at(-1);
     const failure = op.responses['400'].content['application/json'].schema.$ref.split('/').at(-1);
     const mutates = op['x-operation-mutates'] === true;
-    return `  async ${op.operationId}(call: components['schemas']['${request}']): Promise<components['schemas']['${success}']> {
+    return `  async ${op.operationId}(call: components['schemas']['${request}'], options: { signal?: AbortSignal } = {}): Promise<components['schemas']['${success}']> {
     const body = JSON.stringify(call);
     const response = await send(this.fetcher, this.baseUrl + '${path}', {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body,
+      method: 'POST', headers: { 'content-type': 'application/json' }, body, signal: options.signal,
     }, '${op.operationId}', ${mutates});
-    const value = await readJson(response, '${op.operationId}', ${mutates});
+    const value = await readJson(response, '${op.operationId}', ${mutates}, options.signal);
     if (!response.ok) {
       checked(value, validate.${failure}, '${op.operationId}', ${mutates});
       const failure = value as components['schemas']['${failure}'];
@@ -34,7 +34,7 @@ export const PROTOCOL_VERSION = ${version};
 export type OperationFailure = ${failureTypes.map(name => `components['schemas']['${name}']`).join(' | ')};
 export class HttpClient {
   private constructor(private readonly baseUrl: string, private readonly fetcher: typeof fetch) {}
-  static async connectWithBearer(baseUrl: string, bearer: string, fetcher: typeof fetch = fetch): Promise<HttpClient> {
+  static async connectWithBearer(baseUrl: string, bearer: string, fetcher: typeof fetch = fetch, options: { signal?: AbortSignal } = {}): Promise<HttpClient> {
     const origin = new URL(baseUrl).origin;
     const authenticated: typeof fetch = (input, init) => {
       const target = input instanceof Request ? input.url : input.toString();
@@ -43,15 +43,15 @@ export class HttpClient {
       headers.set('authorization', 'Bearer ' + bearer);
       return fetcher(input, { ...init, headers, redirect: 'error' });
     };
-    return HttpClient.connect(baseUrl, authenticated);
+    return HttpClient.connect(baseUrl, authenticated, options);
   }
-  static async connect(baseUrl: string, fetcher: typeof fetch = fetch): Promise<HttpClient> {
+  static async connect(baseUrl: string, fetcher: typeof fetch = fetch, options: { signal?: AbortSignal } = {}): Promise<HttpClient> {
     const url = new URL(baseUrl);
     if (!['http:', 'https:'].includes(url.protocol) || url.search || url.hash || url.username || url.password) throw new Error('Invalid HTTP host URL');
     const client = new HttpClient(baseUrl.replace(/\\/$/, ''), fetcher);
-    const response = await send(fetcher, client.baseUrl + '/metadata', {}, 'metadata', false);
+    const response = await send(fetcher, client.baseUrl + '/metadata', { signal: options.signal }, 'metadata', false);
     if (!response.ok) { await response.body?.cancel(); throw new ConnectionError(); }
-    const value = await readJson(response, 'metadata', false);
+    const value = await readJson(response, 'metadata', false, options.signal);
     checked(value, validate.MetadataOutput, 'metadata', false);
     const metadata = value as { protocol_version: number };
     if (metadata.protocol_version !== PROTOCOL_VERSION) throw new ProtocolMismatchError(PROTOCOL_VERSION, metadata.protocol_version);

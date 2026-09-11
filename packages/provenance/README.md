@@ -420,3 +420,14 @@ match. CI supplies this output as a build artifact to npm-only jobs.
 Published npm packages contain compiled clients and validators. Installing or
 using a published package does not run the generator or require Rust or a host
 server toolchain. The explicit CLI remains a separate packaged executable.
+
+## Effect HTTP calls
+
+The `@quality-sh/provenance/effect` entry supplies generated Effect operations,
+runtime wire schemas, and `ProvenanceApi`. Applications install the exact peer
+`effect@4.0.0-rc.113`. The existing Promise client requires no Effect setup.
+Use an explicitly connected `EffectHttpClient` through `ProvenanceClient` with
+`Atom.runtime` to preserve the shared client policy. Keep the client while
+mutation outcomes remain unresolved. See the
+[Effect SDK guide](https://github.com/quality-sh/provenance/blob/main/docs/effect-sdk.md)
+for examples and the integration handoff.

@@ -43,15 +43,20 @@
       "types": "./dist/client.d.ts",
       "import": "./dist/client.js",
       "default": "./dist/client.js"
+    },
+    "./effect": {
+      "types": "./dist/effect.d.ts",
+      "import": "./dist/effect.js",
+      "default": "./dist/effect.js"
     }
   },
   "engines": {
     "node": ">=20"
   },
   "optionalDependencies": {
+    "@quality-sh/provenance-darwin-arm64": "0.2.3",
     "@quality-sh/provenance-linux-x64-gnu": "0.2.3",
-    "@quality-sh/provenance-win32-x64-msvc": "0.2.3",
-    "@quality-sh/provenance-darwin-arm64": "0.2.3"
+    "@quality-sh/provenance-win32-x64-msvc": "0.2.3"
   },
   "dependencies": {
     "typescript": "^5.9.3"
@@ -60,14 +65,25 @@
     "build": "npm run prepare:generated && node scripts/clean-build.js && node scripts/generate-release-consumers.js --check && tsc -p tsconfig.json && node scripts/copy-client-validators.js",
     "generate:release-consumers": "node scripts/generate-release-consumers.js",
     "prepack": "npm run build && node -e \"require('node:fs').copyFileSync('../../LICENSE', 'LICENSE')\"",
-    "test": "npm run build && npm run test:runtime && npm run test:types && npm run test:packed",
+    "test": "npm run build && npm run test:runtime && npm run test:types && npm run test:packed && npm run test:effect:packed",
     "test:runtime": "npm run prepare:generated && node scripts/clean-build.js .test-dist && tsc -p tsconfig.test.json && node scripts/copy-client-validators.js .test-dist && node --test .test-dist/*.test.js scripts/*.test.js",
     "test:types": "npm run prepare:generated && node scripts/typecheck-fixtures.mjs",
     "test:bun": "npm run build && bun test test/bun/tail-call.test.ts",
     "test:packed": "npm run prepare:generated && node scripts/test-packed-install.js",
-    "prepare:generated": "node scripts/prepare-generated.js"
+    "prepare:generated": "node scripts/prepare-generated.js",
+    "test:effect:packed": "npm run prepare:generated && node scripts/test-effect-install.js"
   },
   "devDependencies": {
-    "@types/node": "^26.2.0"
+    "@types/node": "^26.2.0",
+    "effect": "4.0.0-rc.113",
+    "esbuild": "0.25.11"
+  },
+  "peerDependencies": {
+    "effect": "4.0.0-rc.113"
+  },
+  "peerDependenciesMeta": {
+    "effect": {
+      "optional": true
+    }
   }
 }

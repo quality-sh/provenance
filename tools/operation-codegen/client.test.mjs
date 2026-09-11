@@ -163,3 +163,26 @@ test('both clients conform to the shared refusal and response-size policy', asyn
     }
   }
 });
+
+test('an aborted read cancels a response stream and releases its lock', async () => {
+  const { HttpClient, PROTOCOL_VERSION } = await generatedClient();
+  let cancelled = false;
+  let body;
+  let started;
+  const reading = new Promise(resolve => { started = resolve; });
+  const fetcher = async (_url, init) => {
+    if (init.method !== 'POST') return Response.json({ engine_version: 'test', protocol_version: PROTOCOL_VERSION });
+    body = new ReadableStream({ pull() { started(); }, cancel() { cancelled = true; } });
+    return new Response(body);
+  };
+  const client = await HttpClient.connect('http://localhost', fetcher);
+  const controller = new AbortController();
+  const result = client.checkStatement({ request: { statement: 'Stop.' } }, { signal: controller.signal });
+  const rejected = assert.rejects(result, { name: 'ConnectionError' });
+  await reading;
+  controller.abort();
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(cancelled, true);
+  await rejected;
+  assert.equal(body.locked, false);
+});
