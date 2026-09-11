@@ -11,7 +11,7 @@ pub const RECORD_BYTES: usize = 65_536;
 pub const PAGE_BYTES: usize = 1_048_576;
 
 impl ReadSnapshot {
-    /// Limits SQLite work in this page transaction, including joins and sorts.
+    /// Limits `SQLite` work in this page transaction, including joins and sorts.
     #[rule("rule_query_pages_bound_shared_reads")]
     pub(crate) async fn bound_page_work(&self) -> anyhow::Result<()> {
         let mut tx = self.connection().await;

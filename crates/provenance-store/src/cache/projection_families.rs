@@ -15,7 +15,7 @@ use provenance_core::ScopeId;
 
 /// One family of records the projection stores.
 ///
-/// The variant list is the rule: eighteen stored families, no more, each
+/// The variant list is the rule: nineteen stored families, no more, each
 /// sharded per scope. Fifteen come from the original cache tables;
 /// implementation bindings, verification bindings, and requirement reviews
 /// joined when the canonical halves of impact, evidence, and resolve-symbol
@@ -41,6 +41,7 @@ pub enum ProjectionFamily {
     ImplementationBindings,
     VerificationBindings,
     RequirementReviews,
+    ReviewJournal,
 }
 
 macro_rules! canonical_records {
@@ -91,6 +92,9 @@ macro_rules! canonical_records {
                 Self::VerificationBindings => {
                     sorted_bytes(store.list_verification_bindings(scope)?, |r| r.id.as_str())
                 }
+                Self::ReviewJournal => {
+                    sorted_bytes(store.validated_review_entries(scope)?, |r| r.id.as_str())
+                }
                 Self::RequirementReviews => {
                     sorted_bytes(store.list_requirement_reviews(scope)?, |r| r.id.as_str())
                 }
@@ -100,7 +104,7 @@ macro_rules! canonical_records {
 }
 
 impl ProjectionFamily {
-    pub const ALL: [Self; 18] = [
+    pub const ALL: [Self; 19] = [
         Self::Sources,
         Self::Domains,
         Self::Requirements,
@@ -119,6 +123,7 @@ impl ProjectionFamily {
         Self::ImplementationBindings,
         Self::VerificationBindings,
         Self::RequirementReviews,
+        Self::ReviewJournal,
     ];
 
     /// The family's cache table name and its digest-row key.
@@ -142,6 +147,7 @@ impl ProjectionFamily {
             Self::ImplementationBindings => "implementation_bindings",
             Self::VerificationBindings => "verification_bindings",
             Self::RequirementReviews => "requirement_reviews",
+            Self::ReviewJournal => "review_journal",
         }
     }
 
@@ -167,6 +173,10 @@ impl ProjectionFamily {
             Self::ImplementationBindings => shards::implementation_bindings_path(layout, scope),
             Self::VerificationBindings => shards::verification_bindings_path(layout, scope),
             Self::RequirementReviews => shards::requirement_reviews_path(layout, scope),
+            Self::ReviewJournal => layout
+                .scopes_dir()
+                .join(scope.as_str())
+                .join("review/journal"),
         }
     }
 

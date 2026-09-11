@@ -4,17 +4,17 @@ use provenance_core::{
     ResolutionStatus, RuleSeverity, RuleStatus, ScopeId, SourceReference, SourceType, StableId,
     TopicStatus,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 macro_rules! update_input {
     ($name:ident, $clear:ident { $($variant:ident),* }, { $($field:ident: $ty:ty),* }) => {
         #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
         #[serde(rename_all = "snake_case")]
         pub enum $clear { $($variant),* }
 
         #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-        #[derive(Deserialize)]
+        #[derive(Serialize, Deserialize)]
         #[serde(deny_unknown_fields)]
         pub struct $name {
             pub scope_id: ScopeId,

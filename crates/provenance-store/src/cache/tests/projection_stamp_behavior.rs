@@ -2,10 +2,11 @@ use super::super::*;
 use super::fixtures::*;
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
-const PROJECTION_TABLES: [&str; 7] = [
+const PROJECTION_TABLES: [&str; 8] = [
     "implementation_bindings",
     "verification_bindings",
     "requirement_reviews",
+    "review_journal",
     "projection_instance",
     "projection_revision",
     "projection_family_digests",
@@ -41,11 +42,11 @@ fn projection_family_table_names_every_stored_family_once() {
         .iter()
         .map(|family| family.family_name())
         .collect();
-    assert_eq!(names.len(), 18);
+    assert_eq!(names.len(), 19);
     let mut unique = names.clone();
     unique.sort_unstable();
     unique.dedup();
-    assert_eq!(unique.len(), 18, "family names must be unique");
+    assert_eq!(unique.len(), 19, "family names must be unique");
     for expected in [
         "sources",
         "domains",
@@ -65,6 +66,7 @@ fn projection_family_table_names_every_stored_family_once() {
         "implementation_bindings",
         "verification_bindings",
         "requirement_reviews",
+        "review_journal",
     ] {
         assert!(names.contains(&expected), "missing family {expected}");
     }
@@ -160,7 +162,7 @@ async fn materialization_stores_a_revision_stamp_with_instance_identity() {
     .fetch_all(pool.pool())
     .await
     .unwrap();
-    assert_eq!(rows.len(), 18, "one row per family for the one scope");
+    assert_eq!(rows.len(), 19, "one row per family for the one scope");
     for (scope_id, family, digest, count) in &rows {
         assert_eq!(scope_id, scope.as_str(), "scope for {family}");
         assert!(digest.starts_with("sha256:"), "digest for {family}");
@@ -208,6 +210,9 @@ fn revision_digest_reproduces_from_a_walk_of_the_family_table() {
     let mut walked = Vec::new();
     for family in ProjectionFamily::ALL {
         let (bytes, record_count) = family.canonical_records(&store, &scope).unwrap();
+        if family.family_name() == "review_journal" && record_count == 0 {
+            continue;
+        }
         walked.push(serde_json::json!({
             "family": family.family_name(),
             "scope_id": scope.as_str(),

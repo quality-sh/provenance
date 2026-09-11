@@ -5,10 +5,7 @@ use std::io::{self, Write};
 
 pub(super) const RESPONSE_BYTES: usize = 1_114_112;
 
-pub(super) fn checked<R: Serialize>(
-    operation: &str,
-    answer: Stamped<R>,
-) -> anyhow::Result<Stamped<R>> {
+pub fn checked<R: Serialize>(operation: &str, answer: Stamped<R>) -> anyhow::Result<Stamped<R>> {
     #[derive(Serialize)]
     struct Envelope<'a, R> {
         protocol_version: u32,

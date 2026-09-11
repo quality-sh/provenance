@@ -1,3 +1,4 @@
+use crate::review::guard::protect_requirements;
 use crate::write_error::{publication_started, SourceFailure, WriteFailure};
 mod adoption;
 mod identity;
@@ -217,6 +218,7 @@ impl StateStore {
 
         if matches!(mode, ReconcileMode::Apply) {
             super::typed_statement_policy::ensure_typed_spec_is_writable(&result)?;
+            protect_requirements(&self.layout, scope_id, &requirements)?;
             (|| -> anyhow::Result<()> {
                 replace_records(self, &shards::sources_path(&self.layout, scope_id), sources)?;
                 crate::test_probes::at("typed_spec_sources_published")?;

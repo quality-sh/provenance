@@ -28,7 +28,8 @@ pub const RECORD_COLUMNS_MIGRATION_ID: &str = "022";
 pub const VALIDATION_VERSION_MIGRATION_ID: &str = "023";
 /// The last migration `run_migrations` applies. A reader under
 /// `annotate_only` refuses a database that lacks it.
-pub const LATEST_MIGRATION_ID: &str = VALIDATION_VERSION_MIGRATION_ID;
+pub const REVIEW_JOURNAL_MIGRATION_ID: &str = "024";
+pub const LATEST_MIGRATION_ID: &str = REVIEW_JOURNAL_MIGRATION_ID;
 const INITIAL_SQL: &str = include_str!("../migrations/001_initial_cache.sql");
 const SOURCE_REQUIREMENT_SQL: &str =
     include_str!("../migrations/002_sources_requirements_edges.sql");
@@ -115,6 +116,10 @@ pub async fn run_migrations(
         (RELATIONS_TABLE_MIGRATION_ID, RELATIONS_TABLE_SQL),
         (RECORD_COLUMNS_MIGRATION_ID, RECORD_COLUMNS_SQL),
         (VALIDATION_VERSION_MIGRATION_ID, VALIDATION_VERSION_SQL),
+        (
+            REVIEW_JOURNAL_MIGRATION_ID,
+            include_str!("../migrations/024_review_journal.sql"),
+        ),
     ] {
         let already_applied: Option<String> =
             sqlx::query_scalar("SELECT id FROM _schema_migrations WHERE id = ?")
@@ -220,7 +225,7 @@ mod tests {
             run_migrations(&pool, &layout).await.unwrap(),
             vec![
                 "001", "002", "003", "004", "005", "006", "007", "008", "009", "010", "011", "012",
-                "013", "014", "015", "016", "017", "018", "019", "020", "021", "022", "023"
+                "013", "014", "015", "016", "017", "018", "019", "020", "021", "022", "023", "024"
             ]
         );
         assert!(run_migrations(&pool, &layout).await.unwrap().is_empty());
@@ -232,7 +237,7 @@ mod tests {
             applied_migrations(&pool).await.unwrap(),
             vec![
                 "001", "002", "003", "004", "005", "006", "007", "008", "009", "010", "011", "012",
-                "013", "014", "015", "016", "017", "018", "019", "020", "021", "022", "023"
+                "013", "014", "015", "016", "017", "018", "019", "020", "021", "022", "023", "024"
             ]
         );
     }

@@ -65,7 +65,7 @@ impl StateStore {
     /// Refuses an id no record of the kind holds. `named_by` is the
     /// user-facing slot the id came from: the flag on a command, the
     /// field on a declaration.
-    pub(super) fn ensure_node_exists(
+    pub(crate) fn ensure_node_exists(
         &self,
         scope_id: &ScopeId,
         kind: NodeType,
