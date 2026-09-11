@@ -6,10 +6,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import ts from 'typescript';
 import { typescriptFiles } from './typescript.mjs';
+import { clientPolicyTests } from './client-policy.mjs';
 
-async function generatedClient(mutates = false) {
+async function generatedClient() {
   const document = JSON.parse(await readFile(new URL('../../contracts/operations/openapi.json', import.meta.url), 'utf8'));
-  for (const route of Object.values(document.paths)) if (route.post) route.post['x-operation-mutates'] = mutates;
   const root = await mkdtemp(join(tmpdir(), 'operation-client-'));
   const path = join(root, 'client.js');
   await writeFile(join(root, 'package.json'), '{"type":"module"}');
@@ -22,6 +22,8 @@ async function generatedClient(mutates = false) {
   return module;
 }
 
+const clientModule = await generatedClient();
+
 async function host(handler, action) {
   const server = createServer(handler);
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -29,18 +31,8 @@ async function host(handler, action) {
   finally { await new Promise(resolve => server.close(resolve)); }
 }
 
-test('client rejects metadata protocol mismatch before submitting an operation', async () => {
-  const { HttpClient, ProtocolMismatchError } = await generatedClient();
-  let posts = 0;
-  await host((request, response) => {
-    if (request.method === 'POST') posts++;
-    response.end(JSON.stringify({ engine_version: 'test', protocol_version: 0 }));
-  }, async url => { await assert.rejects(HttpClient.connect(url), ProtocolMismatchError); });
-  assert.equal(posts, 0);
-});
-
 test('typed refusal is preserved and operation is sent once', async () => {
-  const { HttpClient, OperationError, PROTOCOL_VERSION } = await generatedClient();
+  const { HttpClient, OperationError, PROTOCOL_VERSION } = clientModule;
   const failure = { protocol_version: PROTOCOL_VERSION, operation: 'check-statement', error: { kind: 'invalid_input', field: 'statement', reason: 'required' } };
   let posts = 0;
   await host((request, response) => {
@@ -56,7 +48,7 @@ test('typed refusal is preserved and operation is sent once', async () => {
 });
 
 test('bearer connection authenticates metadata and operation requests', async () => {
-  const { HttpClient, PROTOCOL_VERSION } = await generatedClient();
+  const { HttpClient, PROTOCOL_VERSION } = clientModule;
   const observed = [];
   const report = { standard: 'ASD-STE100', issue: 9, analyzer_version: 'test', findings: [] };
   await host((request, response) => {
@@ -69,103 +61,8 @@ test('bearer connection authenticates metadata and operation requests', async ()
   assert.deepEqual(observed, ['Bearer fixture-secret', 'Bearer fixture-secret']);
 });
 
-for (const status of [200, 400]) test(`read rejects valid JSON with the wrong ${status} shape`, async () => {
-  const { HttpClient, PROTOCOL_VERSION } = await generatedClient();
-  await host((request, response) => {
-    if (request.method === 'GET') response.end(JSON.stringify({ engine_version: 'test', protocol_version: PROTOCOL_VERSION }));
-    else { response.writeHead(status); response.end('{"unexpected":"value"}'); }
-  }, async url => {
-    const client = await HttpClient.connect(url);
-    await assert.rejects(client.checkStatement({ request: { statement: 'Stop.' } }), error => error.name === 'MalformedResponseError');
-  });
-});
-
-for (const status of [200, 400]) test(`malformed ${status} after a write remains uncertain`, async () => {
-  const { HttpClient, PROTOCOL_VERSION, UncertainWriteError } = await generatedClient(true);
-  let submissions = 0;
-  await host((request, response) => {
-    if (request.method === 'GET') response.end(JSON.stringify({ engine_version: 'test', protocol_version: PROTOCOL_VERSION }));
-    else { submissions++; response.writeHead(status); response.end('{"unexpected":"value"}'); }
-  }, async url => {
-    const client = await HttpClient.connect(url);
-    await assert.rejects(client.checkStatement({ request: { statement: 'Stop.' } }), UncertainWriteError);
-  });
-  assert.equal(submissions, 1);
-});
-
-test('lost write response is uncertain and is not retried', async () => {
-  const { HttpClient, PROTOCOL_VERSION, UncertainWriteError } = await generatedClient(true);
-  let submissions = 0;
-  await host((request, response) => {
-    if (request.method === 'GET') response.end(JSON.stringify({ engine_version: 'test', protocol_version: PROTOCOL_VERSION }));
-    else { submissions++; request.socket.destroy(); }
-  }, async url => {
-    const client = await HttpClient.connect(url);
-    await assert.rejects(client.checkStatement({ request: { statement: 'Stop.' } }), UncertainWriteError);
-  });
-  assert.equal(submissions, 1);
-});
-
-test('write redirects do not replay or disclose credentials', async () => {
-  const { HttpClient, PROTOCOL_VERSION, UncertainWriteError } = await generatedClient(true);
-  let submissions = 0;
-  let forwarded = 0;
-  await host((request, response) => { forwarded++; response.end('{}'); }, async destination => {
-    await host((request, response) => {
-      if (request.method === 'GET') response.end(JSON.stringify({ engine_version: 'test', protocol_version: PROTOCOL_VERSION }));
-      else { submissions++; response.writeHead(307, { location: destination }); response.end(); }
-    }, async url => {
-      const client = await HttpClient.connectWithBearer(url, 'private-secret');
-      await assert.rejects(client.checkStatement({ request: { statement: 'Stop.' } }), UncertainWriteError);
-    });
-  });
-  assert.equal(submissions, 1);
-  assert.equal(forwarded, 0);
-});
-
-for (const mutates of [false, true]) test(`oversized response is bounded for ${mutates ? 'writes' : 'reads'}`, async () => {
-  const module = await generatedClient(mutates);
-  let cancelled = false;
-  let pulls = 0;
-  const fetcher = async (_url, init) => {
-    if (init.method !== 'POST') return Response.json({ engine_version: 'test', protocol_version: module.PROTOCOL_VERSION });
-    return new Response(new ReadableStream({
-      pull(controller) { pulls++; controller.enqueue(new Uint8Array(1024 * 1024)); },
-      cancel() { cancelled = true; },
-    }));
-  };
-  const client = await module.HttpClient.connect('http://fixture.test', fetcher);
-  await assert.rejects(client.checkStatement({ request: { statement: 'Stop.' } }), mutates ? module.UncertainWriteError : module.MalformedResponseError);
-  assert.equal(cancelled, true);
-  assert.ok(pulls <= module.MAX_RESPONSE_BYTES / (1024 * 1024) + 2);
-});
-
-test('both clients conform to the shared refusal and response-size policy', async () => {
-  const policy = JSON.parse(await readFile(new URL('../../crates/provenance-http-client/src/client-policy-cases.json', import.meta.url), 'utf8'));
-  for (const mutates of [false, true]) {
-    const module = await generatedClient(mutates);
-    assert.equal(module.MAX_RESPONSE_BYTES, policy.max_response_bytes);
-    for (const entry of policy.refusals.filter(entry => entry.mutates === mutates)) {
-      const failure = { protocol_version: module.PROTOCOL_VERSION, operation: 'complete-verification', error: { kind: entry.kind } };
-      let submissions = 0;
-      const fetcher = async (_url, init) => {
-        if (init.method !== 'POST') return Response.json({ engine_version: 'test', protocol_version: module.PROTOCOL_VERSION });
-        submissions++;
-        return Response.json(failure, { status: 400 });
-      };
-      const client = await module.HttpClient.connect('http://fixture.test', fetcher);
-      await assert.rejects(client.completeVerification({ context: { repository: 'fixture', scope: 'default' }, request: { run: 'run_fixture', status: 'passed' } }), error => {
-        assert.ok(error instanceof (entry.uncertain ? module.UncertainWriteError : module.OperationError), JSON.stringify(entry));
-        assert.deepEqual(error.failure, failure);
-        return true;
-      });
-      assert.equal(submissions, 1);
-    }
-  }
-});
-
 test('an aborted read cancels a response stream and releases its lock', async () => {
-  const { HttpClient, PROTOCOL_VERSION } = await generatedClient();
+  const { HttpClient, PROTOCOL_VERSION } = clientModule;
   let cancelled = false;
   let body;
   let started;
@@ -186,3 +83,14 @@ test('an aborted read cancels a response stream and releases its lock', async ()
   await rejected;
   assert.equal(body.locked, false);
 });
+
+clientPolicyTests('Promise', async ({ baseUrl, bearer, fetch }) => {
+  const client = bearer === undefined
+    ? await clientModule.HttpClient.connect(baseUrl, fetch)
+    : await clientModule.HttpClient.connectWithBearer(baseUrl, bearer, fetch);
+  const context = { repository: 'fixture', scope: 'default' };
+  return {
+    read: () => client.plan({ context, request: { schema_version: 2, spec: 'fixture', declared_by: 'spec://fixture', requirements: [] } }),
+    write: () => client.completeVerification({ context, request: { run: 'run_x', status: 'passed' } }),
+  };
+}, clientModule.PROTOCOL_VERSION, clientModule.MAX_RESPONSE_BYTES);

@@ -166,6 +166,7 @@ are not reopened by this change.
 
 The pinned Effect release has unresolved names in its published declaration
 files. TypeScript consumers use `skipLibCheck: true`; application and generated
-source remain checked in strict mode. Installed-package checks cover both browser
-owners, browser bundles that execute without Node globals, a Promise consumer
-without Effect, real host reads and writes, and a persisted mutation whose result is lost before the caller receives it.
+source remain checked in strict mode. One installed browser consumer checks the
+shared package contract used by both browser owners. Its bundle executes without
+Node globals and checks host reads, writes, atoms, and a persisted mutation whose
+response is lost. A separate Promise consumer checks installation without Effect.
