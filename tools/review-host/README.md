@@ -29,9 +29,8 @@ cargo build -p provenance-cli --bin provenance
 ```
 
 Set `PROVENANCE_REVIEW_ARCHIVE` to a saved copy of the pinned archive for an
-offline renderer input. With no saved copy, the preparation script uses the
-pin's HTTPS `url`, when present, or authenticated `gh run download` for the
-pinned run. The latter checks that the run passed on the pinned commit.
+offline renderer input. With no saved copy, the preparation script downloads
+the pin's public HTTPS `url` without credentials and checks its SHA-256.
 A local SDK build and the published SDK 0.2.3 have the same schema for this pin.
 
 For an unpinned local renderer build, use `build.ts WEB_ASSETS SDK_PACKAGE
@@ -90,8 +89,8 @@ node --test tools/review-host/*.test.ts
 node tools/review-host/verify-native.ts /absolute/provenance crates/provenance-cli/review-assets-generated packages/provenance
 ```
 
-The upstream Actions artifact is in a private repository and expires on
-2026-12-09. Authenticated retrieval is sufficient for local validation. Backend
-CI and repeatable future packaging need a durable download URL for the exact
-pinned bytes. A renderer URL must be supplied before this packaging path can
-run with the backend workflow token. The pin does not imply publication.
+The [public renderer archive](https://github.com/quality-sh/provenance/releases/download/renderer-e795fcee703f/provenance-review.tar.gz)
+contains the exact bytes from the pinned upstream build. The release contains
+only the renderer. It is separate from the CLI releases and is not the latest
+CLI release. CI and release preparation use this archive without access to the
+private web repository.

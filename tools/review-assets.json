@@ -5,6 +5,7 @@
   "run": 34538158110,
   "artifact": "provenance-review-e795fcee703ffc1b4c69af08ceedaf0c72876817",
   "archive": "provenance-review.tar.gz",
+  "url": "https://github.com/quality-sh/provenance/releases/download/renderer-e795fcee703f/provenance-review.tar.gz",
   "sha256": "44590144c929085453a57539c99afa9da65e32a08035bcdc294f72b6cab3f7c1",
   "sdkVersion": "0.2.3"
 }
