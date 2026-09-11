@@ -1,7 +1,7 @@
 use crate::{canonical_digest, layout::ProvenanceLayout, state_store::StateStore};
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::review::{
-    RequirementSnapshot, ReviewEntry, SnapshotRef, REVIEW_SCHEMA_VERSION,
+    JournalEntry, RequirementSnapshot, ReviewEntry, SnapshotRef, REVIEW_SCHEMA_VERSION,
 };
 use provenance_core::{Requirement, ScopeId, StableId};
 use serde::{de::DeserializeOwned, Serialize};
@@ -38,9 +38,27 @@ pub(super) fn read_entry(
     layout: &ProvenanceLayout,
     path: &Utf8Path,
 ) -> anyhow::Result<ReviewEntry> {
-    let entry: ReviewEntry = read_bounded(layout, path, ENTRY_BYTES)?;
+    let JournalEntry::Requirement(entry) = read_journal_entry(layout, path)? else {
+        anyhow::bail!("request ID belongs to a Discussion write");
+    };
     anyhow::ensure!(
         entry.schema_version == REVIEW_SCHEMA_VERSION,
+        "unsupported review journal version"
+    );
+    Ok(*entry)
+}
+
+pub(super) fn read_journal_entry(
+    layout: &ProvenanceLayout,
+    path: &Utf8Path,
+) -> anyhow::Result<JournalEntry> {
+    let entry: JournalEntry = read_bounded(layout, path, ENTRY_BYTES)?;
+    let version = match &entry {
+        JournalEntry::Requirement(e) => e.schema_version,
+        JournalEntry::Discussion(e) => e.schema_version,
+    };
+    anyhow::ensure!(
+        version == REVIEW_SCHEMA_VERSION,
         "unsupported review journal version"
     );
     Ok(entry)
@@ -130,6 +148,17 @@ pub(super) fn etag(record: &Requirement, occurrence: Option<&StableId>) -> anyho
 
 impl StateStore {
     pub(crate) fn review_entries(&self, scope: &ScopeId) -> anyhow::Result<Vec<ReviewEntry>> {
+        Ok(self
+            .journal_entries(scope)?
+            .into_iter()
+            .filter_map(|e| match e {
+                JournalEntry::Requirement(e) => Some(*e),
+                JournalEntry::Discussion(_) => None,
+            })
+            .collect())
+    }
+
+    pub(super) fn journal_entries(&self, scope: &ScopeId) -> anyhow::Result<Vec<JournalEntry>> {
         let dir = directory(&self.layout, scope).join("journal");
         if !dir.try_exists()? {
             return Ok(Vec::new());
@@ -139,10 +168,10 @@ impl StateStore {
             let file = file?;
             let path = Utf8PathBuf::from_path_buf(file.path())
                 .map_err(|_| anyhow::anyhow!("non-UTF-8 review path"))?;
-            let entry = read_entry(&self.layout, &path)?;
+            let entry = read_journal_entry(&self.layout, &path)?;
             anyhow::ensure!(
-                entry.scope_id == *scope
-                    && path == entry_path(&self.layout, scope, &entry.request_id),
+                *entry.scope_id() == *scope
+                    && path == entry_path(&self.layout, scope, entry.request_id()),
                 "review entry address mismatch"
             );
             entries.push(entry);
@@ -176,10 +205,13 @@ impl StateStore {
         scope: &ScopeId,
         id: &StableId,
     ) -> anyhow::Result<Requirement> {
-        self.list_requirements(scope)?
-            .into_iter()
-            .find(|r| r.id == *id)
-            .ok_or_else(|| anyhow::anyhow!("Requirement does not exist"))
+        let records = self.list_requirements(scope)?;
+        let matches = records.iter().filter(|r| r.id == *id).collect::<Vec<_>>();
+        anyhow::ensure!(
+            matches.len() == 1 && matches[0].scope_id == *scope,
+            "Requirement does not exist uniquely in this scope"
+        );
+        Ok(matches[0].clone())
     }
 
     /// Full-scope import and export cannot yet carry review history.

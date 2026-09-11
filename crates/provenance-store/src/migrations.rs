@@ -29,7 +29,8 @@ pub const VALIDATION_VERSION_MIGRATION_ID: &str = "023";
 /// The last migration `run_migrations` applies. A reader under
 /// `annotate_only` refuses a database that lacks it.
 pub const REVIEW_JOURNAL_MIGRATION_ID: &str = "024";
-pub const LATEST_MIGRATION_ID: &str = REVIEW_JOURNAL_MIGRATION_ID;
+pub const DISCUSSION_JOURNAL_MIGRATION_ID: &str = "025";
+pub const LATEST_MIGRATION_ID: &str = DISCUSSION_JOURNAL_MIGRATION_ID;
 const INITIAL_SQL: &str = include_str!("../migrations/001_initial_cache.sql");
 const SOURCE_REQUIREMENT_SQL: &str =
     include_str!("../migrations/002_sources_requirements_edges.sql");
@@ -119,6 +120,10 @@ pub async fn run_migrations(
         (
             REVIEW_JOURNAL_MIGRATION_ID,
             include_str!("../migrations/024_review_journal.sql"),
+        ),
+        (
+            DISCUSSION_JOURNAL_MIGRATION_ID,
+            include_str!("../migrations/025_discussion_journal.sql"),
         ),
     ] {
         let already_applied: Option<String> =
@@ -225,7 +230,8 @@ mod tests {
             run_migrations(&pool, &layout).await.unwrap(),
             vec![
                 "001", "002", "003", "004", "005", "006", "007", "008", "009", "010", "011", "012",
-                "013", "014", "015", "016", "017", "018", "019", "020", "021", "022", "023", "024"
+                "013", "014", "015", "016", "017", "018", "019", "020", "021", "022", "023", "024",
+                "025"
             ]
         );
         assert!(run_migrations(&pool, &layout).await.unwrap().is_empty());
@@ -237,7 +243,8 @@ mod tests {
             applied_migrations(&pool).await.unwrap(),
             vec![
                 "001", "002", "003", "004", "005", "006", "007", "008", "009", "010", "011", "012",
-                "013", "014", "015", "016", "017", "018", "019", "020", "021", "022", "023", "024"
+                "013", "014", "015", "016", "017", "018", "019", "020", "021", "022", "023", "024",
+                "025"
             ]
         );
     }

@@ -1,3 +1,7 @@
+mod discussion_chain;
+mod discussions;
+pub use discussions::*;
+
 use crate::{StableId, Thread, ThreadParent, ThreadStatus};
 use provenance_macros::rule;
 
@@ -291,3 +295,6 @@ mod tests {
         assert!(choose_canonical_active_thread(&[]).is_none());
     }
 }
+
+#[cfg(test)]
+mod discussion_tests;

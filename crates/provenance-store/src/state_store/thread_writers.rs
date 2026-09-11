@@ -10,10 +10,23 @@ impl StateStore {
         &self,
         input: PostMessageInput,
     ) -> anyhow::Result<PostMessageResult> {
-        self.with_repository_publication(|| self.write_thread_message(input))
+        self.with_repository_publication(|| {
+            anyhow::ensure!(
+                !self
+                    .list_threads(&input.scope_id)?
+                    .iter()
+                    .any(|t| t.parent == input.parent
+                        && t.schema_version == provenance_core::review::REVIEW_SCHEMA_VERSION),
+                "enrolled Thread requires an addressed Discussion write"
+            );
+            self.write_thread_message(input)
+        })
     }
 
-    fn write_thread_message(&self, input: PostMessageInput) -> anyhow::Result<PostMessageResult> {
+    pub(crate) fn write_thread_message(
+        &self,
+        input: PostMessageInput,
+    ) -> anyhow::Result<PostMessageResult> {
         let PostMessageInput {
             scope_id,
             parent,
@@ -81,35 +94,51 @@ impl StateStore {
             Ok(thread)
         })?;
 
-        let messages_path = shards::messages_path(&self.layout, &scope_id);
-        let message = self
-            .mutate_jsonl_records(&messages_path, |messages: &mut Vec<Message>| {
-                let created_at = messages
-                    .iter()
-                    .map(|message| message.created_at)
-                    .max()
-                    .unwrap_or(0)
-                    + 1;
-                let message = Message {
-                    schema_version: SUPPORTED_SCHEMA_VERSION,
-                    scope_id: scope_id.clone(),
-                    id: StableId::new(format!("msg_{created_at:06}"))?,
-                    thread_id: thread.id.clone(),
-                    role,
-                    body,
-                    created_at,
-                    ai_metadata: None,
-                };
-                messages.push(message.clone());
-                messages.sort_by(|a, b| {
-                    a.created_at
-                        .cmp(&b.created_at)
-                        .then(a.id.as_str().cmp(b.id.as_str()))
-                });
-                Ok(message)
-            })
-            .map_err(publication_started)?;
+        let message = self.append_discussion_message(&scope_id, &thread.id, role, body)?;
+
         Ok(PostMessageResult { thread, message })
+    }
+    pub(crate) fn append_discussion_message(
+        &self,
+        scope_id: &provenance_core::ScopeId,
+        thread_id: &StableId,
+        role: provenance_core::MessageRole,
+        body: String,
+    ) -> anyhow::Result<Message> {
+        let existing = self.list_messages(scope_id)?;
+        let created_at = existing
+            .iter()
+            .map(|m| m.created_at)
+            .max()
+            .unwrap_or(0)
+            .checked_add(1)
+            .ok_or_else(|| anyhow::anyhow!("Message timestamp overflow"))?;
+        let id = StableId::new(format!("msg_{created_at:06}"))?;
+        anyhow::ensure!(
+            !existing.iter().any(|m| m.id == id),
+            "Message identity already exists in a legacy shard"
+        );
+        let messages_path = shards::messages_path(&self.layout, scope_id);
+        self.mutate_jsonl_records(&messages_path, |messages: &mut Vec<Message>| {
+            let message = Message {
+                schema_version: SUPPORTED_SCHEMA_VERSION,
+                scope_id: scope_id.clone(),
+                id,
+                thread_id: thread_id.clone(),
+                role,
+                body,
+                created_at,
+                ai_metadata: None,
+            };
+            messages.push(message.clone());
+            messages.sort_by(|a, b| {
+                a.created_at
+                    .cmp(&b.created_at)
+                    .then(a.id.as_str().cmp(b.id.as_str()))
+            });
+            Ok(message)
+        })
+        .map_err(publication_started)
     }
 }
 

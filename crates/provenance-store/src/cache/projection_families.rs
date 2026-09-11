@@ -93,7 +93,7 @@ macro_rules! canonical_records {
                     sorted_bytes(store.list_verification_bindings(scope)?, |r| r.id.as_str())
                 }
                 Self::ReviewJournal => {
-                    sorted_bytes(store.validated_review_entries(scope)?, |r| r.id.as_str())
+                    sorted_bytes(store.validated_journal_entries(scope)?, |r| r.id().as_str())
                 }
                 Self::RequirementReviews => {
                     sorted_bytes(store.list_requirement_reviews(scope)?, |r| r.id.as_str())

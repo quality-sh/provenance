@@ -29,7 +29,7 @@ pub struct CreateSourceInput {
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Deserialize)]
+#[derive(serde::Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CreateRequirementInput {
     pub scope_id: ScopeId,

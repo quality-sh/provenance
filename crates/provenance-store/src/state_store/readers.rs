@@ -87,6 +87,17 @@ pub fn ensure_supported_record_version(
     value: &serde_json::Value,
 ) -> anyhow::Result<()> {
     if value["schema_version"] == 3
+        && path.parent().and_then(Utf8Path::file_name) == Some("threads")
+    {
+        let text = serde_json::to_string(value)?;
+        if path.file_name() == Some("threads.jsonl") {
+            deserialize_closed::<provenance_core::Thread>(&text)?;
+        } else {
+            deserialize_closed::<provenance_core::Message>(&text)?;
+        }
+        return Ok(());
+    }
+    if value["schema_version"] == 3
         && path.file_name() == Some("req.jsonl")
         && path.parent().and_then(Utf8Path::file_name) == Some("requirements")
         && serde_json::from_value::<provenance_core::Requirement>(value.clone()).is_ok()
