@@ -212,7 +212,7 @@ fn the_error_policy_fails_on_a_deprecated_rule_with_a_current_typed_verification
         .iter()
         .find(|warning| warning["rule_id"] == "rule_old_gate")
         .expect("the current binding to a deprecated rule must be reported");
-    assert!(finding["binding_finding"] == json!(true));
+    assert_eq!(finding["binding_finding"], json!(true));
     assert!(
         finding["message"]
             .as_str()
