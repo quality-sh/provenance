@@ -88,6 +88,11 @@ pub fn ensure_supported_record_version(
 ) -> anyhow::Result<()> {
     if value["schema_version"] == 3
         && path.parent().and_then(Utf8Path::file_name) == Some("threads")
+        && if path.file_name() == Some("threads.jsonl") {
+            serde_json::from_value::<provenance_core::Thread>(value.clone()).is_ok()
+        } else {
+            serde_json::from_value::<provenance_core::Message>(value.clone()).is_ok()
+        }
     {
         let text = serde_json::to_string(value)?;
         if path.file_name() == Some("threads.jsonl") {

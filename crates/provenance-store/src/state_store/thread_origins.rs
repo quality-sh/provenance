@@ -21,28 +21,56 @@ impl StateStore {
         thread: Option<&StableId>,
         message: Option<&StableId>,
     ) -> anyhow::Result<()> {
-        let (thread, message) = match (thread, message) {
-            (None, None) => return Ok(()),
-            (Some(thread), Some(message)) => (thread, message),
-            _ => anyhow::bail!("Requirement origin needs both Thread and Message"),
-        };
+        if thread.is_none() && message.is_none() {
+            return Ok(());
+        }
+        let messages = self.list_messages(scope)?;
+        let origin_message = message
+            .map(|id| {
+                let mut matches = messages.iter().filter(|m| m.id == *id);
+                let record = matches
+                    .next()
+                    .filter(|m| m.scope_id == *scope)
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("origin Message does not exist in this scope")
+                    })?;
+                anyhow::ensure!(
+                    matches.next().is_none(),
+                    "origin Message identity is not unique"
+                );
+                Ok::<_, anyhow::Error>(record)
+            })
+            .transpose()?;
+        let thread = thread
+            .or_else(|| origin_message.map(|m| &m.thread_id))
+            .expect("an origin supplies a Thread or Message");
         let threads = self.list_threads(scope)?;
-        let container = threads
-            .iter()
-            .find(|t| t.id == *thread && t.scope_id == *scope)
+        let mut matches = threads.iter().filter(|t| t.id == *thread);
+        let container = matches
+            .next()
+            .filter(|t| t.scope_id == *scope)
             .ok_or_else(|| anyhow::anyhow!("origin Thread does not exist in this scope"))?;
+        anyhow::ensure!(
+            matches.next().is_none(),
+            "origin Thread identity is not unique"
+        );
         self.ensure_node_exists(
             scope,
             container.parent.node_type,
             &container.parent.node_id,
             "origin parent",
         )?;
-        anyhow::ensure!(
-            self.list_messages(scope)?
-                .iter()
-                .any(|m| m.id == *message && m.thread_id == *thread && m.scope_id == *scope),
-            "origin Message does not belong to this Thread and scope"
-        );
+        if let Some(message) = origin_message {
+            anyhow::ensure!(
+                message.thread_id == *thread,
+                "origin Message does not belong to this Thread and scope"
+            );
+        } else {
+            anyhow::ensure!(
+                container.schema_version != provenance_core::review::REVIEW_SCHEMA_VERSION,
+                "an enrolled origin Thread requires a Discussion and Message outcome"
+            );
+        }
         Ok(())
     }
 }

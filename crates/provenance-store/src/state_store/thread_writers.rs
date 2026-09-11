@@ -94,7 +94,9 @@ impl StateStore {
             Ok(thread)
         })?;
 
-        let message = self.append_discussion_message(&scope_id, &thread.id, role, body)?;
+        let message = self
+            .append_discussion_message(&scope_id, &thread.id, role, body)
+            .map_err(publication_started)?;
 
         Ok(PostMessageResult { thread, message })
     }
@@ -138,7 +140,6 @@ impl StateStore {
             });
             Ok(message)
         })
-        .map_err(publication_started)
     }
 }
 
