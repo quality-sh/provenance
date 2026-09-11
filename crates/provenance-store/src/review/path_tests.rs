@@ -82,12 +82,11 @@ fn evidence_must_be_a_regular_file() {
 fn evidence_refuses_fifo_and_socket_without_opening_for_content() {
     let (_temp, layout, path) = tree();
     std::fs::remove_file(&path).unwrap();
-    rustix::fs::mkfifoat(
-        rustix::fs::CWD,
-        path.as_std_path(),
-        rustix::fs::Mode::RUSR | rustix::fs::Mode::WUSR,
-    )
-    .unwrap();
+    assert!(std::process::Command::new("mkfifo")
+        .arg(&path)
+        .status()
+        .unwrap()
+        .success());
     assert_denied(&layout, &path);
     std::fs::remove_file(&path).unwrap();
     let socket_path = layout.root().join("socket.json");
