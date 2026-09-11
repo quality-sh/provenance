@@ -38,6 +38,7 @@ function value(node: Node): unknown {
 
 test('every catalog method is lazy and preserves its generated request, success, and failure family', async () => {
   verifies('rule_sdk_bindings_derive_from_openapi', 'conformance');
+  verifies('rule_generated_sdk_operations_use_http', 'examples');
   const schemas = sdk as unknown as Record<string, Schema.Codec<unknown>>;
   for (const [path, route] of Object.entries(document.paths)) {
     if (!route.post) continue;

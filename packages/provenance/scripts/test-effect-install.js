@@ -29,7 +29,7 @@ try {
   run(cli, ['init', '--path', repo, '--scope', 'default', '--path-prefix', '.']);
   const host = await startFixtureHost({ root: repo, binary: hostBinary });
   try {
-    for (const name of ['web', 'cli-browser', 'promise']) {
+    for (const name of ['browser', 'promise']) {
       const application = join(temporary, name);
       mkdirSync(application);
       writeFileSync(join(application, 'package.json'), JSON.stringify({ name: `installed-${name}`, private: true, type: 'module', dependencies: {

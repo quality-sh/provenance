@@ -7,23 +7,8 @@ import { EffectHttpClient, PROTOCOL_VERSION, ProvenanceClient } from './effect.j
 import { verifies } from './rules.js';
 
 const metadata = () => Response.json({ engine_version: 'test', protocol_version: PROTOCOL_VERSION });
-const report = { standard: 'ASD-STE100', issue: 9, analyzer_version: 'test', findings: [] };
 const call = { request: { statement: 'Stop.' } };
 const write = { context: { repository: 'fixture', scope: 'default' }, request: { id: 'req_x', scope_id: 'default', statement: 'The record retains its fields.' } };
-
-test('Effect calls are lazy and the service uses the same connected client', async () => {
-  verifies('rule_generated_sdk_operations_use_http', 'examples');
-  let posts = 0;
-  const client = await Effect.runPromise(EffectHttpClient.connect({ baseUrl: 'http://localhost', fetch: async (_url, init) => {
-    if (init?.method !== 'POST') return metadata();
-    posts++; return Response.json(report);
-  } }));
-  const operation = client.checkStatement(call);
-  assert.equal(posts, 0);
-  assert.deepEqual(await Effect.runPromise(operation), report);
-  assert.deepEqual(await Effect.runPromise(Effect.flatMap(ProvenanceClient, sdk => sdk.checkStatement(call)).pipe(Effect.provideService(ProvenanceClient, client))), report);
-  assert.equal(posts, 2);
-});
 
 test('interrupting a read waits for body cancellation and releases the lock', async () => {
   verifies('rule_sdk_read_interruption_releases_resources', 'examples');

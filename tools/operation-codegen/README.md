@@ -149,6 +149,11 @@ node tools/operation-codegen/test-clients.mjs ideation --effect
 npm run test:effect:packed --prefix packages/provenance
 ```
 
+The default host pass runs the Promise and Rust clients. The `--effect` pass
+runs the Effect client against the same scenarios without repeating the Rust
+tests. The Promise and Effect test suites share the cases in `client-policy.mjs`
+for response validation, failure classification, credentials, and redirects.
+
 The installed-package check uses the existing CLI and fixture executables in
 `target/debug`. CI supplies those executables as artifacts. The applications it
 installs do not build Rust or run code generation. See the
