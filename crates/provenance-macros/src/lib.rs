@@ -83,9 +83,7 @@ fn check_verifies(attr: &TokenStream, item: &TokenStream) -> syn::Result<()> {
                 VERIFICATION_METHODS.join(", ")
             );
             if method == "construction" {
-                if let Some(error) = construction_must_not_mark_a_function(item) {
-                    return Err(error);
-                }
+                construction_must_not_mark_a_function(item)?;
             }
             Ok(())
         }
@@ -93,48 +91,54 @@ fn check_verifies(attr: &TokenStream, item: &TokenStream) -> syn::Result<()> {
     }
 }
 
+/// The leading tokens of an item under inspection.
+type Tokens = std::iter::Peekable<proc_macro::token_stream::IntoIter>;
+
 /// `construction` says a type makes the violation impossible, so no function
 /// — a test included — can carry it. The check reads the item's leading
 /// tokens: attributes, visibility, and function qualifiers hide nothing else,
 /// and `fn` is the only item keyword that can follow them.
-fn construction_must_not_mark_a_function(item: &TokenStream) -> Option<syn::Error> {
+fn construction_must_not_mark_a_function(item: &TokenStream) -> syn::Result<()> {
     let mut tokens = item.clone().into_iter().peekable();
     skip_attributes(&mut tokens);
     skip_visibility(&mut tokens);
     skip_function_qualifiers(&mut tokens);
-    let TokenTree::Ident(word) = tokens.peek().cloned()? else {
-        return None;
+    let Some(TokenTree::Ident(word)) = tokens.peek().cloned() else {
+        return Ok(());
     };
     if word.to_string() != "fn" {
-        return None;
+        return Ok(());
     }
-    let message = match tokens.nth(1) {
-        Some(TokenTree::Ident(name)) => format!(
-            "`construction` marks a type whose construction makes the violation \
-             impossible; it cannot mark the function `{name}`. Put the marker on \
-             the type, or use the method that matches the evidence."
-        ),
-        _ => "`construction` marks a type whose construction makes the violation \
-              impossible; it cannot mark a function. Put the marker on the type, \
-              or use the method that matches the evidence."
-            .to_string(),
+    tokens.next();
+    let name = match tokens.next() {
+        Some(TokenTree::Ident(name)) => name.to_string(),
+        _ => String::new(),
     };
-    Some(syn::Error::new(word.span().into(), message))
+    let tail = if name.is_empty() {
+        "it cannot mark a function.".to_string()
+    } else {
+        format!("it cannot mark the function `{name}`.")
+    };
+    Err(syn::Error::new(
+        word.span().into(),
+        format!(
+            "`construction` marks a type whose construction makes the violation \
+             impossible; {tail} Put the marker on the type, or use the method \
+             that matches the evidence."
+        ),
+    ))
 }
 
-fn skip_attributes(tokens: &mut std::iter::Peekable<proc_macro::token_stream::IntoIter>) {
+fn skip_attributes(tokens: &mut Tokens) {
     while matches!(tokens.peek(), Some(TokenTree::Punct(punct)) if punct.as_char() == '#') {
         tokens.next();
-        if matches!(tokens.peek(), Some(TokenTree::Punct(punct)) if punct.as_char() == '!') {
-            tokens.next();
-        }
         if matches!(tokens.peek(), Some(TokenTree::Group(_))) {
             tokens.next();
         }
     }
 }
 
-fn skip_visibility(tokens: &mut std::iter::Peekable<proc_macro::token_stream::IntoIter>) {
+fn skip_visibility(tokens: &mut Tokens) {
     if matches!(tokens.peek(), Some(TokenTree::Ident(ident)) if ident.to_string() == "pub") {
         tokens.next();
         if matches!(tokens.peek(), Some(TokenTree::Group(group)) if group.delimiter() == proc_macro::Delimiter::Parenthesis)
@@ -144,7 +148,7 @@ fn skip_visibility(tokens: &mut std::iter::Peekable<proc_macro::token_stream::In
     }
 }
 
-fn skip_function_qualifiers(tokens: &mut std::iter::Peekable<proc_macro::token_stream::IntoIter>) {
+fn skip_function_qualifiers(tokens: &mut Tokens) {
     loop {
         let Some(TokenTree::Ident(ident)) = tokens.peek().cloned() else {
             return;

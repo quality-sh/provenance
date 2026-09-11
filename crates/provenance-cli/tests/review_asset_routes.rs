@@ -47,8 +47,7 @@ fn start(repo: &std::path::Path) -> (Host, serde_json::Value) {
 }
 
 #[test]
-// Every compiled asset is in the finite inventory above, and the loop tries
-// each one over GET and HEAD, byte for byte.
+// The loop tries every compiled asset over GET and HEAD, byte for byte.
 #[verifies("rule_cli_serves_review_assets", exhaustion)]
 fn accepted_inventory_uses_the_composed_router_and_origin_checks() {
     let repo = tempfile::tempdir().unwrap();
