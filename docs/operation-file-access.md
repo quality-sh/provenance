@@ -74,6 +74,12 @@ original directory identity; it does not switch to a replacement pathname.
 This is a handle identity guarantee, not a promise that a file remains beneath
 the root's current text pathname after a concurrent rename.
 
+Review journal and snapshot reads also use this held-file seam. These reads
+resolve only the configured repository root, so a trusted root or parent alias
+is accepted. Each internal path component, including `.provenance`, must pass
+the no-follow checks. Review reads use the returned regular-file handle for
+metadata and content; they do not open the selected path again.
+
 The threat model excludes hostile mount changes and the ability to create
 arbitrary device nodes. A privileged device replacement during the metadata/open
 interval could have device-open effects before held metadata rejects it.

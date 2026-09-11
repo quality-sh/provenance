@@ -32,7 +32,7 @@ pub(super) fn evidence(
     offset: u64,
 ) -> anyhow::Result<EvidencePage> {
     let path = journal::snapshot_path(&store.layout, scope, &reference.id);
-    let mut file = journal::regular_file(&path)?;
+    let mut file = journal::regular_file(&store.layout, &path)?;
     anyhow::ensure!(
         file.metadata()?.len() == reference.bytes,
         "immutable snapshot length mismatch"

@@ -110,6 +110,24 @@ fn process_crashes_reopen_as_complete_old_or_new_state() {
 fn failed_rollback_retains_recovery_material() {
     let temp = fixture();
     let root = Utf8Path::from_path(temp.path()).unwrap();
+    assert_failed_rollback(root);
+}
+
+#[cfg(any(unix, windows))]
+#[test]
+fn failed_rollback_recovers_through_a_symlinked_repository_parent() {
+    let temp = fixture();
+    let aliases = tempfile::tempdir().unwrap();
+    let physical = Utf8Path::from_path(temp.path()).unwrap();
+    let alias = Utf8Path::from_path(aliases.path()).unwrap().join("parent");
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(physical.parent().unwrap(), &alias).unwrap();
+    #[cfg(windows)]
+    std::os::windows::fs::symlink_dir(physical.parent().unwrap(), &alias).unwrap();
+    assert_failed_rollback(&alias.join(physical.file_name().unwrap()));
+}
+
+fn assert_failed_rollback(root: &Utf8Path) {
     let store = open(root);
     let input = input(&store, "failed");
     test_probes::crash_at("state_before_install");

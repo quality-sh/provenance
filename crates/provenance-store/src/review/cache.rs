@@ -38,7 +38,7 @@ impl StateStore {
                 continue;
             }
             let path = super::journal::snapshot_path(&self.layout, scope, &reference.id);
-            let mut file = super::journal::regular_file(&path)?;
+            let mut file = super::journal::regular_file(&self.layout, &path)?;
             anyhow::ensure!(
                 file.metadata()?.len() == reference.bytes,
                 "review snapshot length differs from its immutable reference"

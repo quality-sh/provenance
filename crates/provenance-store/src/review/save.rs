@@ -48,7 +48,7 @@ impl StateStore {
             super::owner_matches(&record, input.update.declared_by.as_deref())?;
             let receipt_path = journal::entry_path(&self.layout, scope, &input.request_id);
             if receipt_path.try_exists()? {
-                let receipt = journal::read_entry(&receipt_path)?;
+                let receipt = journal::read_entry(&self.layout, &receipt_path)?;
                 anyhow::ensure!(
                     receipt.scope_id == *scope
                         && receipt.request_id == input.request_id

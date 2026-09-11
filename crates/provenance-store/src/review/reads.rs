@@ -145,7 +145,7 @@ impl StateStore {
             if !path.try_exists()? {
                 return Ok(None);
             }
-            let entry = journal::read_entry(&path)?;
+            let entry = journal::read_entry(&self.layout, &path)?;
             anyhow::ensure!(
                 entry.request_id == *request
                     && entry.scope_id == *scope

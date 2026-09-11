@@ -26,3 +26,6 @@ mod snapshot;
 
 #[cfg(test)]
 mod recovery_tests;
+
+#[cfg(all(test, any(unix, windows)))]
+mod path_tests;

@@ -34,8 +34,11 @@ pub(super) fn snapshot_path(
         .join(format!("{}.json", id.as_str()))
 }
 
-pub(super) fn read_entry(path: &Utf8Path) -> anyhow::Result<ReviewEntry> {
-    let entry: ReviewEntry = read_bounded(path, ENTRY_BYTES)?;
+pub(super) fn read_entry(
+    layout: &ProvenanceLayout,
+    path: &Utf8Path,
+) -> anyhow::Result<ReviewEntry> {
+    let entry: ReviewEntry = read_bounded(layout, path, ENTRY_BYTES)?;
     anyhow::ensure!(
         entry.schema_version == REVIEW_SCHEMA_VERSION,
         "unsupported review journal version"
@@ -43,8 +46,12 @@ pub(super) fn read_entry(path: &Utf8Path) -> anyhow::Result<ReviewEntry> {
     Ok(entry)
 }
 
-pub(super) fn read_bounded<T: DeserializeOwned>(path: &Utf8Path, limit: u64) -> anyhow::Result<T> {
-    let mut file = regular_file(path)?;
+pub(super) fn read_bounded<T: DeserializeOwned>(
+    layout: &ProvenanceLayout,
+    path: &Utf8Path,
+    limit: u64,
+) -> anyhow::Result<T> {
+    let mut file = regular_file(layout, path)?;
     anyhow::ensure!(
         file.metadata()?.len() <= limit,
         "review entry exceeds the byte budget"
@@ -58,20 +65,18 @@ pub(super) fn read_bounded<T: DeserializeOwned>(path: &Utf8Path, limit: u64) -> 
     Ok(serde_json::from_slice(&bytes)?)
 }
 
-pub(super) fn regular_file(path: &Utf8Path) -> anyhow::Result<std::fs::File> {
-    for component in path.ancestors() {
-        let meta = std::fs::symlink_metadata(component)?;
-        anyhow::ensure!(
-            !meta.file_type().is_symlink(),
-            "review path contains a symlink: {component}"
-        );
-    }
-    let file = std::fs::File::open(path)?;
-    anyhow::ensure!(
-        file.metadata()?.is_file(),
-        "review evidence is not a regular file"
-    );
-    Ok(file)
+pub(super) fn regular_file(
+    layout: &ProvenanceLayout,
+    path: &Utf8Path,
+) -> anyhow::Result<std::fs::File> {
+    use crate::operations::files::{native_relative, RepositoryFiles};
+
+    // Resolve only the trusted repository root. Evidence components stay lexical
+    // and open relative to held directories, with no symlink or reparse traversal.
+    let relative = path.strip_prefix(layout.root())?;
+    let root = layout.root().canonicalize_utf8()?;
+    let relative = native_relative(&root, relative)?;
+    Ok(RepositoryFiles::open(&root)?.open_file(&relative)?.file)
 }
 
 pub(super) fn write_new<T: Serialize>(path: &Utf8Path, value: &T) -> anyhow::Result<()> {
@@ -134,7 +139,7 @@ impl StateStore {
             let file = file?;
             let path = Utf8PathBuf::from_path_buf(file.path())
                 .map_err(|_| anyhow::anyhow!("non-UTF-8 review path"))?;
-            let entry = read_entry(&path)?;
+            let entry = read_entry(&self.layout, &path)?;
             anyhow::ensure!(
                 entry.scope_id == *scope
                     && path == entry_path(&self.layout, scope, &entry.request_id),
