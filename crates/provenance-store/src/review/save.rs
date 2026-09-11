@@ -4,6 +4,7 @@ use provenance_core::review::{
     RequirementEditState, ReviewEntry, SaveOutcome, REVIEW_SCHEMA_VERSION,
 };
 use provenance_core::{Requirement, ScopeId, StableId};
+use provenance_macros::rule;
 
 impl StateStore {
     pub fn requirement_edit_state(
@@ -30,6 +31,10 @@ impl StateStore {
         self.save_requirement_with_origin(input, None)
     }
 
+    /// Saves a Requirement edit as a Discussion outcome and keeps the previous
+    /// text with it, so the outcome shows the change from the record's earlier
+    /// state through the Before snapshot rather than a link to the latest text.
+    #[rule("rule_discussion_outcome_shows_record_change")]
     pub fn save_requirement_from_discussion(
         &self,
         input: SaveRequirement,

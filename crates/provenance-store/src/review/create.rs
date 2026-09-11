@@ -10,6 +10,7 @@ use provenance_core::{
     threads::DiscussionOrigin,
     Requirement,
 };
+use provenance_macros::rule;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -22,7 +23,10 @@ pub struct CreateReviewRequirement {
 }
 
 impl StateStore {
-    /// Publishes creation, immutable origin, After evidence, and the receipt together.
+    /// Creates a Requirement from a Discussion comment and keeps that comment
+    /// as the created record's origin. The origin Thread and Message must
+    /// exist in an addressed Discussion before the record is published.
+    #[rule("rule_comment_created_record_retains_discussion_origin")]
     pub fn create_review_requirement(
         &self,
         mut input: CreateReviewRequirement,

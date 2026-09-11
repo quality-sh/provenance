@@ -3,7 +3,7 @@ use crate::state_store::StateStore;
 use provenance_core::{
     review::JournalEntry,
     threads::{DiscussionEntry, DiscussionOrigin},
-    NodeType, ScopeId,
+    Message, NodeType, Requirement, ScopeId, Thread,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -26,6 +26,30 @@ impl StateStore {
         let entries = self.discussion_entries(scope)?;
         let threads = self.list_threads(scope)?;
         let messages = self.list_messages(scope)?;
+        let requirements = self.list_requirements(scope)?;
+        // Index each shard once. Entry validation below runs one pass over
+        // these maps instead of one shard scan per entry, which kept
+        // validation quadratic as Discussions and Messages accumulated.
+        let mut threads_by_key = BTreeMap::<(&str, &str), &Thread>::new();
+        for thread in &threads {
+            threads_by_key
+                .entry((thread.id.as_str(), thread.scope_id.as_str()))
+                .or_insert(thread);
+        }
+        let mut messages_by_id = BTreeMap::<&str, Vec<&Message>>::new();
+        for message in &messages {
+            messages_by_id
+                .entry(message.id.as_str())
+                .or_default()
+                .push(message);
+        }
+        let mut requirements_by_id = BTreeMap::<&str, Vec<&Requirement>>::new();
+        for requirement in &requirements {
+            requirements_by_id
+                .entry(requirement.id.as_str())
+                .or_default()
+                .push(requirement);
+        }
         let mut chains = BTreeMap::<&str, Vec<&DiscussionEntry>>::new();
         let mut ids = BTreeSet::new();
         let mut membership = BTreeSet::new();
@@ -35,33 +59,38 @@ impl StateStore {
                 "duplicate Discussion entry identity"
             );
             anyhow::ensure!(!entry.actor.trim().is_empty(), "invalid Discussion actor");
-            let thread = threads
-                .iter()
-                .find(|t| t.id == entry.thread_id && t.scope_id == *scope)
+            let thread = threads_by_key
+                .get(&(entry.thread_id.as_str(), scope.as_str()))
+                .copied()
                 .ok_or_else(|| anyhow::anyhow!("Discussion Thread is missing"))?;
             anyhow::ensure!(
                 thread.parent == entry.parent && entry.parent.node_type == NodeType::Requirement,
                 "Discussion parent mismatch"
             );
-            self.requirement(scope, &entry.parent.node_id)?;
+            let matches = requirements_by_id
+                .get(entry.parent.node_id.as_str())
+                .is_some_and(|records| records.len() == 1 && records[0].scope_id == *scope);
+            anyhow::ensure!(matches, "Requirement does not exist uniquely in this scope");
             if let Some(id) = &entry.message_id {
                 anyhow::ensure!(
                     membership.insert(id.as_str()),
                     "Message belongs to multiple Discussion entries"
                 );
-                anyhow::ensure!(
-                    messages.iter().filter(|m| m.id == *id).count() == 1
-                        && messages.iter().any(|m| m.id == *id
-                            && m.scope_id == *scope
-                            && m.thread_id == entry.thread_id),
-                    "Discussion Message membership mismatch"
-                );
+                let matches = messages_by_id.get(id.as_str()).is_some_and(|candidates| {
+                    candidates.len() == 1
+                        && candidates
+                            .iter()
+                            .any(|m| m.scope_id == *scope && m.thread_id == entry.thread_id)
+                });
+                anyhow::ensure!(matches, "Discussion Message membership mismatch");
             }
             chains
                 .entry(entry.discussion_id.as_str())
                 .or_default()
                 .push(entry);
         }
+        let entry_thread_ids: BTreeSet<&str> =
+            entries.iter().map(|e| e.thread_id.as_str()).collect();
         for message in messages
             .iter()
             .filter(|m| m.schema_version == provenance_core::review::REVIEW_SCHEMA_VERSION)
@@ -76,7 +105,7 @@ impl StateStore {
             .filter(|t| t.schema_version == provenance_core::review::REVIEW_SCHEMA_VERSION)
         {
             anyhow::ensure!(
-                entries.iter().any(|e| e.thread_id == thread.id),
+                entry_thread_ids.contains(thread.id.as_str()),
                 "enrolled Thread has no Discussion history"
             );
         }
@@ -99,8 +128,20 @@ impl StateStore {
         origin: &DiscussionOrigin,
     ) -> anyhow::Result<()> {
         self.discussion_heads(scope)?;
+        let entries = self.discussion_entries(scope)?;
+        self.validate_discussion_origin_among(scope, origin, &entries)
+    }
+
+    /// Checks one origin against already-read Discussion entries, so callers
+    /// that validated the Discussion state once need not revalidate per origin.
+    pub(super) fn validate_discussion_origin_among(
+        &self,
+        scope: &ScopeId,
+        origin: &DiscussionOrigin,
+        entries: &[DiscussionEntry],
+    ) -> anyhow::Result<()> {
         anyhow::ensure!(
-            self.discussion_entries(scope)?
+            entries
                 .iter()
                 .any(|e| e.discussion_id == origin.discussion_id
                     && e.thread_id == origin.thread_id

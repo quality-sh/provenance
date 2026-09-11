@@ -11,10 +11,11 @@ impl StateStore {
         scope: &ScopeId,
     ) -> anyhow::Result<Vec<JournalEntry>> {
         let entries = self.validated_review_entries(scope)?;
+        let discussion = self.discussion_entries(scope)?;
         self.discussion_heads(scope)?;
         for entry in &entries {
             if let Some(origin) = &entry.origin {
-                self.validate_discussion_origin(scope, origin)?;
+                self.validate_discussion_origin_among(scope, origin, &discussion)?;
             }
         }
         self.journal_entries(scope)

@@ -1,10 +1,13 @@
 mod discussion_support;
 use discussion_support::*;
 use provenance_core::{review::SaveOutcome, threads::DiscussionOrigin};
+use provenance_macros::verifies;
 use provenance_store::{layout::ProvenanceLayout, review::CreateReviewRequirement};
 use serde_json::json;
 
 #[test]
+#[verifies("rule_comment_created_record_retains_discussion_origin", examples)]
+#[verifies("rule_discussion_outcome_shows_record_change", examples)]
 fn creation_and_edits_retain_origin_and_immutable_evidence() {
     let (temp, store) = fixture();
     let a = start(&store, "root");

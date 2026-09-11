@@ -215,16 +215,34 @@ async fn complete_cache_rebuild_retains_resolved_groups_and_outcomes() {
 }
 
 #[tokio::test]
-async fn bounded_message_pages_refuse_oversized_encoded_rows_without_truncation() {
+async fn oversized_discussion_messages_are_refused_before_publication() {
+    let (_temp, store) = fixture();
+    // The encoded Message of this body exceeds the page record budget, so the
+    // write must fail before anything is staged or published. A record that
+    // the bounded page reader refuses would otherwise be unwritable-by-read:
+    // persisted once and unreadable forever.
+    let refused = store.write_discussion(write(
+        "oversized",
+        json!({"kind":"start","role":"user","body":"a".repeat(70_000)}),
+    ));
+    assert!(refused.is_err());
+    assert!(store.list_messages(&scope()).unwrap().is_empty());
+    assert!(store.list_threads(&scope()).unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn large_but_legal_discussion_messages_stay_readable() {
     let (temp, store) = fixture();
     let root = camino::Utf8Path::from_path(temp.path()).unwrap();
+    // 60,000 unescaped bytes plus the Message envelope stay under the
+    // 65,536-byte record budget, so the bounded page reader must return them.
     let a = store
         .write_discussion(write(
             "large",
-            json!({"kind":"start","role":"user","body":"\"".repeat(40_000)}),
+            json!({"kind":"start","role":"user","body":"a".repeat(60_000)}),
         ))
         .unwrap();
-    let result = read_discussion_messages(
+    let page = read_discussion_messages(
         root,
         &scope(),
         ReadPolicy::default(),
@@ -237,7 +255,35 @@ async fn bounded_message_pages_refuse_oversized_encoded_rows_without_truncation(
             cursor: None,
         },
     )
-    .await;
-    assert!(result.is_err());
-    assert_eq!(store.list_messages(&scope()).unwrap()[0].body.len(), 40_000);
+    .await
+    .unwrap();
+    assert_eq!(page.result.entries.len(), 1);
+    assert_eq!(page.result.entries[0].body.len(), 60_000);
+}
+
+#[tokio::test]
+async fn legacy_message_appends_refuse_oversized_bodies() {
+    let (_temp, store) = fixture();
+    let refused = store.post_thread_message(
+        serde_json::from_value(json!({
+            "scope_id":"default",
+            "parent":{"node_type":"requirement","node_id":"req_a"},
+            "role":"user",
+            "body":"a".repeat(70_000)
+        }))
+        .unwrap(),
+    );
+    assert!(refused.is_err());
+    assert!(store.list_messages(&scope()).unwrap().is_empty());
+    store
+        .post_thread_message(
+            serde_json::from_value(json!({
+                "scope_id":"default",
+                "parent":{"node_type":"requirement","node_id":"req_a"},
+                "role":"user",
+                "body":"The system keeps messages readable."
+            }))
+            .unwrap(),
+        )
+        .unwrap();
 }
