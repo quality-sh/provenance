@@ -68,41 +68,7 @@ fn coverage_scan_against(
             ));
         }
     }
-    let annotations = scans
-        .iter()
-        .flat_map(|scan| &scan.annotations)
-        .map(|location| provenance_core::coverage::AnnotationResult {
-            rule_id: location.annotation.rule.clone(),
-            file_path: location.file_path.clone(),
-            line: location.line,
-            function_name: location.function_name.clone(),
-            coverage: location.annotation.coverage.to_string(),
-            confidence: location.annotation.confidence,
-            verification: location
-                .annotation
-                .verification
-                .map(|method| method.to_string()),
-            anchor: Some(location.anchor.clone()),
-            anchor_state: provenance_core::coverage::AnchorState::New,
-            original_line: None,
-            original_file_path: None,
-        })
-        .collect::<Vec<_>>();
-    let bindings = scans
-        .iter()
-        .flat_map(|scan| &scan.bindings)
-        .map(|binding| provenance_core::coverage::BindingResult {
-            rule_id: binding.rule_id.clone(),
-            file_path: binding.file_path.clone(),
-            line: binding.line,
-            item_name: binding.item_name.clone(),
-            verification: binding.verification.map(|method| method.to_string()),
-            anchor: Some(binding.anchor.clone()),
-            anchor_state: provenance_core::coverage::AnchorState::New,
-            original_line: None,
-            original_file_path: None,
-        })
-        .collect::<Vec<_>>();
+    let results = provenance_scanner::coverage_results(&scans);
     let scanned_files = scanned
         .iter()
         .map(|file| provenance_core::coverage::ScannedFile {
@@ -114,8 +80,8 @@ fn coverage_scan_against(
         report: provenance_core::coverage::CoverageReport::new(
             commit,
             scans.len(),
-            annotations,
-            bindings,
+            results.annotations,
+            results.bindings,
             warnings,
         ),
         scanned_files,

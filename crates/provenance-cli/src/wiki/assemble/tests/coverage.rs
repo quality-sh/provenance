@@ -5,6 +5,7 @@ use crate::wiki::render::render_rule;
 use camino::Utf8PathBuf;
 use provenance_core::coverage::{
     AnchorState, AnnotationResult, BindingResult, CoverageReport, CoverageScan, ScannedFile,
+    SiteCore,
 };
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_core::{
@@ -20,15 +21,17 @@ fn binding(
     verification: Option<&str>,
 ) -> BindingResult {
     BindingResult {
-        rule_id: "rule_001".to_string(),
-        file_path: Utf8PathBuf::from(file_path),
-        line,
+        site: SiteCore {
+            rule_id: "rule_001".to_string(),
+            file_path: Utf8PathBuf::from(file_path),
+            line,
+            verification: verification.map(str::to_string),
+            anchor: None,
+            anchor_state: AnchorState::Unchanged,
+            original_line: None,
+            original_file_path: None,
+        },
         item_name: Some(item_name.to_string()),
-        verification: verification.map(str::to_string),
-        anchor: None,
-        anchor_state: AnchorState::Unchanged,
-        original_line: None,
-        original_file_path: None,
     }
 }
 
@@ -39,17 +42,19 @@ fn annotation(
     verification: Option<&str>,
 ) -> AnnotationResult {
     AnnotationResult {
-        rule_id: "rule_001".to_string(),
-        file_path: Utf8PathBuf::from(file_path),
-        line,
+        site: SiteCore {
+            rule_id: "rule_001".to_string(),
+            file_path: Utf8PathBuf::from(file_path),
+            line,
+            verification: verification.map(str::to_string),
+            anchor: None,
+            anchor_state: AnchorState::Unchanged,
+            original_line: None,
+            original_file_path: None,
+        },
         function_name: Some(function_name.to_string()),
         coverage: "full".to_string(),
         confidence: 1.0,
-        verification: verification.map(str::to_string),
-        anchor: None,
-        anchor_state: AnchorState::Unchanged,
-        original_line: None,
-        original_file_path: None,
     }
 }
 
