@@ -10,9 +10,9 @@
 use crate::catalog::DiagnosticCode;
 use crate::envelope::{
     is_repo_relative_path, BaselineCompatibility, BindingPresence, CommitRole, Comparison, Finding,
-    Severity, Site, SiteRole, Subject, SubjectKind,
+    Relevance, Severity, Site, SiteRole, Subject, SubjectKind,
 };
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8Path;
 use provenance_core::coverage::{EvidenceDiffReport, EvidenceDiffState, EvidenceSiteKind};
 use provenance_core::{ImplementationBinding, Requirement, Rule, VerificationBinding};
 use provenance_scanner::FileScan;
@@ -24,13 +24,13 @@ pub(super) struct BaselineView {
 }
 
 impl BaselineView {
-    fn compatible(ids: BTreeSet<String>) -> Self {
+    const fn compatible(ids: BTreeSet<String>) -> Self {
         Self {
             existed_at_base: Some(ids),
         }
     }
 
-    fn uncertain() -> Self {
+    const fn uncertain() -> Self {
         Self {
             existed_at_base: None,
         }
@@ -85,7 +85,7 @@ fn finding(
         comparison,
         binding_presence: presence,
         statement: None,
-        relevance: Default::default(),
+        relevance: Relevance::default(),
         sites: Vec::new(),
         removed_sites: Vec::new(),
         affected_rule_id: None,
@@ -165,8 +165,9 @@ pub(super) fn inactive_current_findings(
         .iter()
         .filter(|rule| !rule.retired)
         .filter_map(|rule| match rule.status {
-            provenance_core::RuleStatus::Deprecated => Some(rule.id.as_str()),
-            provenance_core::RuleStatus::Archived => Some(rule.id.as_str()),
+            provenance_core::RuleStatus::Deprecated | provenance_core::RuleStatus::Archived => {
+                Some(rule.id.as_str())
+            }
             _ => None,
         })
         .collect();
@@ -201,7 +202,7 @@ pub(super) fn inactive_current_findings(
                 let method = binding
                     .verification
                     .as_ref()
-                    .map(|method| method.to_string());
+                    .map(std::string::ToString::to_string);
                 if let Some(marker) = site(repo, &binding.file_path, binding.line, role, method) {
                     events
                         .entry(binding.rule_id.clone())
@@ -227,8 +228,7 @@ pub(super) fn inactive_current_findings(
     }
     events
         .into_iter()
-        .map(|(subject_id, mut sites)| {
-            sites.sort_by(crate::render::order::compare_sites);
+        .map(|(subject_id, sites)| {
             let mut current = finding(
                 DiagnosticCode::InactiveRuleCurrentBinding,
                 SubjectKind::Rule,
@@ -271,8 +271,7 @@ pub(super) fn evidence_site_findings(report: &EvidenceDiffReport) -> Vec<Finding
                 BindingPresence::Present,
             );
             if site.state == EvidenceDiffState::Moved {
-                if let Some(current) = site_at(CommitRole::Head, site.file_path.clone(), site.line)
-                {
+                if let Some(current) = site_at(CommitRole::Head, &site.file_path, site.line) {
                     finding.sites.push(current);
                 }
             }
@@ -281,7 +280,7 @@ pub(super) fn evidence_site_findings(report: &EvidenceDiffReport) -> Vec<Finding
                 .clone()
                 .unwrap_or_else(|| site.file_path.clone());
             let origin_line = site.original_line.or(site.line);
-            if let Some(removed) = site_at(CommitRole::Base, origin, origin_line) {
+            if let Some(removed) = site_at(CommitRole::Base, &origin, origin_line) {
                 finding.removed_sites.push(removed);
             }
             finding
@@ -289,7 +288,7 @@ pub(super) fn evidence_site_findings(report: &EvidenceDiffReport) -> Vec<Finding
         .collect()
 }
 
-fn site_at(commit: CommitRole, path: Utf8PathBuf, line: Option<usize>) -> Option<Site> {
+fn site_at(commit: CommitRole, path: &Utf8Path, line: Option<usize>) -> Option<Site> {
     let line = u32::try_from(line?).ok()?;
     Some(Site {
         commit,
@@ -331,7 +330,10 @@ pub(super) fn statement_change_findings(
     }
     for record in head_rules {
         if changed_statement(&base_statements, record.id.as_str(), &record.statement) {
-            let affected = record.requirement_ids.first().map(|id| id.as_str());
+            let affected = record
+                .requirement_ids
+                .first()
+                .map(provenance_core::StableId::as_str);
             findings.push(statement_finding(
                 SubjectKind::Rule,
                 record.id.as_str(),

@@ -12,7 +12,7 @@
 
 use crate::envelope::{
     BaselineCompatibility, Completeness, PolicyMode, PolicyResult, ReportEnvelope, ScanFacts,
-    Severity, SUPPORTED_SCHEMA_VERSION,
+    SUPPORTED_SCHEMA_VERSION,
 };
 use crate::render;
 use anyhow::Context;
@@ -44,11 +44,13 @@ pub struct BuildInput<'a> {
     pub repository: &'a str,
 }
 
-/// Build one schema-1 envelope from the repository state. The same state at
-/// the same two commits produces a byte-identical envelope: every emitted
-/// collection is sorted into the renderer's canonical order before return.
+/// Build one schema-1 envelope from the repository state.
+///
+/// The same state at the same two commits produces a byte-identical
+/// envelope: the renderer's canonical normalization sorts every emitted
+/// collection before return.
 #[rule("rule_report_envelope_states_only_known_facts")]
-pub fn build_envelope(input: BuildInput<'_>) -> anyhow::Result<ReportEnvelope> {
+pub fn build_envelope(input: &BuildInput<'_>) -> anyhow::Result<ReportEnvelope> {
     let scope = ScopeId::new(input.scope)?;
     let (base, head) = git::resolve_range(
         input.repo,
@@ -57,91 +59,40 @@ pub fn build_envelope(input: BuildInput<'_>) -> anyhow::Result<ReportEnvelope> {
         None,
     )?;
     let layout = ProvenanceLayout::new(input.repo.to_path_buf());
-
-    let scans = provenance_scanner::scan_path_with_content(input.scan_path)?;
-    let files_scanned = scans.len() as u64;
-    let scans: Vec<_> = scans.into_iter().map(|file| file.scan).collect();
-    let complete_scan =
-        scan_covers_repository(input.repo, input.scan_path) && working_tree_is_clean(input.repo)?;
-    let (completeness, incompleteness_reason) =
-        scan_completeness(input.repo, input.scan_path, complete_scan, &head);
-
-    let base_read = graph_snapshots::read_snapshot(input.repo, &base, &scope)?;
-    let head_snapshot = match graph_snapshots::read_snapshot(input.repo, &head, &scope)? {
-        SnapshotRead::Present(snapshot) => snapshot,
-        SnapshotRead::Absent => GraphSnapshot::default(),
-        SnapshotRead::Incompatible(reason) => {
-            anyhow::bail!("graph records at head commit {head} do not parse: {reason}")
-        }
-    };
-    let (baseline, baseline_reason, base_snapshot) = match base_read {
-        SnapshotRead::Present(snapshot) => (BaselineCompatibility::Compatible, None, snapshot),
-        SnapshotRead::Absent => (
-            BaselineCompatibility::Missing,
-            Some(format!(
-                "no Provenance graph records exist at base commit {base}"
-            )),
-            GraphSnapshot::default(),
-        ),
-        SnapshotRead::Incompatible(reason) => (
-            BaselineCompatibility::Incompatible,
-            Some(format!(
-                "graph records at base commit {base} do not parse: {reason}"
-            )),
-            GraphSnapshot::default(),
-        ),
-    };
-
-    let (verifications, implementations) =
-        graph_snapshots::read_bindings(input.repo, &head, &scope)?;
-    let rules = &head_snapshot.rules;
-    // Comparison labels come from the rules that existed at the base
-    // commit, never from the head snapshot: a rule that exists only at
-    // head is new in this range.
-    let baseline_view = BaselineView::for_rules(baseline, &base_snapshot.rules);
     let configured = settings::Settings::load(&layout)
         .context("read repository settings for the policy outcome")?
         .coverage
         .binding_findings;
-    let binding_severity = match configured {
-        settings::BindingFindingsSeverity::Warning => Severity::Warning,
-        settings::BindingFindingsSeverity::Error => Severity::Error,
-    };
 
-    // Absence needs a complete scan: an incomplete scan cannot clear an
-    // absence, so it never reports one either.
-    let mut finding_records = Vec::new();
-    if completeness == Completeness::Complete {
-        finding_records.extend(findings::absence_findings(
-            rules,
-            &scans,
-            &verifications,
-            &baseline_view,
-            binding_severity,
-        ));
-    }
-    finding_records.extend(findings::inactive_current_findings(
-        rules,
-        &scans,
-        &implementations,
-        &verifications,
-        &baseline_view,
-        binding_severity,
-        input.repo,
-    ));
-    if baseline == BaselineCompatibility::Compatible {
-        finding_records.extend(findings::statement_change_findings(
-            &base_snapshot.requirements,
-            &head_snapshot.requirements,
-            &base_snapshot.rules,
-            &head_snapshot.rules,
-        ));
-        if completeness == Completeness::Complete {
-            finding_records.extend(evidence_site_findings(
-                input.repo, &base, &head, &scope, &layout,
-            )?);
-        }
-    }
+    let scans = provenance_scanner::scan_path_with_content(input.scan_path)?;
+    let files_scanned = scans.len() as u64;
+    let scans: Vec<_> = scans.into_iter().map(|file| file.scan).collect();
+    let scan_covers = scan_covers_repository(input.repo, input.scan_path);
+    let (completeness, incompleteness_reason) =
+        scan_completeness(input.repo, input.scan_path, scan_covers, &head)?;
+    let complete_scan = completeness == Completeness::Complete;
+
+    let (baseline, baseline_reason, base_snapshot, head_snapshot) =
+        read_snapshots(input.repo, &base, &head, &scope)?;
+    let (verifications, implementations) =
+        graph_snapshots::read_bindings(input.repo, &head, &scope)?;
+
+    let finding_records = collect_findings(&FindingInput {
+        repo: input.repo,
+        base: &base,
+        head: &head,
+        scope: &scope,
+        layout: &layout,
+        scans: &scans,
+        verifications: &verifications,
+        implementations: &implementations,
+        base_snapshot: &base_snapshot,
+        head_snapshot: &head_snapshot,
+        baseline,
+        baseline_view: &BaselineView::for_rules(baseline, &base_snapshot.rules),
+        binding_severity: binding_severity(configured),
+        complete_scan,
+    })?;
     let governed = finding_records
         .iter()
         .filter(|finding| {
@@ -149,20 +100,10 @@ pub fn build_envelope(input: BuildInput<'_>) -> anyhow::Result<ReportEnvelope> {
                 || finding.code == "inactive_rule_current_binding"
         })
         .count();
-
     let graph_changes = if baseline == BaselineCompatibility::Compatible {
         graph_snapshots::diff_snapshots(&base_snapshot, &head_snapshot)
     } else {
         Vec::new()
-    };
-    let policy_mode = match configured {
-        settings::BindingFindingsSeverity::Warning => PolicyMode::Warning,
-        settings::BindingFindingsSeverity::Error => PolicyMode::Error,
-    };
-    let policy_result = if configured == settings::BindingFindingsSeverity::Error && governed > 0 {
-        PolicyResult::Failure
-    } else {
-        PolicyResult::Success
     };
 
     let envelope = ReportEnvelope {
@@ -180,8 +121,8 @@ pub fn build_envelope(input: BuildInput<'_>) -> anyhow::Result<ReportEnvelope> {
             failure: None,
         },
         policy: Some(crate::envelope::PolicyOutcome {
-            mode: policy_mode,
-            result: policy_result,
+            mode: policy_mode(configured),
+            result: policy_result(configured, governed),
         }),
         graph_changes,
         findings: finding_records,
@@ -190,6 +131,140 @@ pub fn build_envelope(input: BuildInput<'_>) -> anyhow::Result<ReportEnvelope> {
         verification_runs: Vec::new(),
     };
     Ok(render::normalize(&envelope))
+}
+
+/// Read both committed snapshots. The head must parse: the report describes
+/// the head state, and an unreadable head is an operation error. The base
+/// read produces a compatibility verdict instead.
+type SnapshotPair = (
+    BaselineCompatibility,
+    Option<String>,
+    GraphSnapshot,
+    GraphSnapshot,
+);
+
+fn read_snapshots(
+    repo: &Utf8Path,
+    base: &str,
+    head: &str,
+    scope: &ScopeId,
+) -> anyhow::Result<SnapshotPair> {
+    let head_snapshot = match graph_snapshots::read_snapshot(repo, head, scope) {
+        SnapshotRead::Present(snapshot) => snapshot,
+        SnapshotRead::Absent => GraphSnapshot::default(),
+        SnapshotRead::Incompatible(reason) => {
+            anyhow::bail!("graph records at head commit {head} do not parse: {reason}")
+        }
+    };
+    let (baseline, baseline_reason, base_snapshot) =
+        match graph_snapshots::read_snapshot(repo, base, scope) {
+            SnapshotRead::Present(snapshot) => (BaselineCompatibility::Compatible, None, snapshot),
+            SnapshotRead::Absent => (
+                BaselineCompatibility::Missing,
+                Some(format!(
+                    "no Provenance graph records exist at base commit {base}"
+                )),
+                GraphSnapshot::default(),
+            ),
+            SnapshotRead::Incompatible(reason) => (
+                BaselineCompatibility::Incompatible,
+                Some(format!(
+                    "graph records at base commit {base} do not parse: {reason}"
+                )),
+                GraphSnapshot::default(),
+            ),
+        };
+    Ok((baseline, baseline_reason, base_snapshot, head_snapshot))
+}
+
+/// Gather every finding the layers support under the current scan and
+/// baseline facts. Absence needs a complete scan: an incomplete scan cannot
+/// clear an absence, so it never reports one. Comparative findings need a
+/// compatible baseline.
+fn collect_findings(input: &FindingInput<'_>) -> anyhow::Result<Vec<crate::envelope::Finding>> {
+    let rules = &input.head_snapshot.rules;
+    let mut finding_records = Vec::new();
+    if input.complete_scan {
+        finding_records.extend(findings::absence_findings(
+            rules,
+            input.scans,
+            input.verifications,
+            input.baseline_view,
+            input.binding_severity,
+        ));
+    }
+    finding_records.extend(findings::inactive_current_findings(
+        rules,
+        input.scans,
+        input.implementations,
+        input.verifications,
+        input.baseline_view,
+        input.binding_severity,
+        input.repo,
+    ));
+    if input.baseline == BaselineCompatibility::Compatible {
+        finding_records.extend(findings::statement_change_findings(
+            &input.base_snapshot.requirements,
+            &input.head_snapshot.requirements,
+            &input.base_snapshot.rules,
+            &input.head_snapshot.rules,
+        ));
+        if input.complete_scan {
+            finding_records.extend(evidence_site_findings(
+                input.repo,
+                input.base,
+                input.head,
+                input.scope,
+                input.layout,
+            )?);
+        }
+    }
+    Ok(finding_records)
+}
+
+/// The gathered facts one finding pass reads.
+struct FindingInput<'a> {
+    repo: &'a Utf8Path,
+    base: &'a str,
+    head: &'a str,
+    scope: &'a ScopeId,
+    layout: &'a ProvenanceLayout,
+    scans: &'a [provenance_scanner::FileScan],
+    verifications: &'a [provenance_core::VerificationBinding],
+    implementations: &'a [provenance_core::ImplementationBinding],
+    base_snapshot: &'a GraphSnapshot,
+    head_snapshot: &'a GraphSnapshot,
+    baseline: BaselineCompatibility,
+    baseline_view: &'a BaselineView,
+    binding_severity: crate::envelope::Severity,
+    complete_scan: bool,
+}
+
+const fn binding_severity(
+    configured: settings::BindingFindingsSeverity,
+) -> crate::envelope::Severity {
+    match configured {
+        settings::BindingFindingsSeverity::Warning => crate::envelope::Severity::Warning,
+        settings::BindingFindingsSeverity::Error => crate::envelope::Severity::Error,
+    }
+}
+
+const fn policy_mode(configured: settings::BindingFindingsSeverity) -> PolicyMode {
+    match configured {
+        settings::BindingFindingsSeverity::Warning => PolicyMode::Warning,
+        settings::BindingFindingsSeverity::Error => PolicyMode::Error,
+    }
+}
+
+const fn policy_result(
+    configured: settings::BindingFindingsSeverity,
+    governed: usize,
+) -> PolicyResult {
+    if matches!(configured, settings::BindingFindingsSeverity::Error) && governed > 0 {
+        PolicyResult::Failure
+    } else {
+        PolicyResult::Success
+    }
 }
 
 /// The evidence-diff facts for a complete scan over a compatible baseline.
@@ -240,14 +315,14 @@ fn working_tree_is_clean(repo: &Utf8Path) -> anyhow::Result<bool> {
 fn scan_completeness(
     repo: &Utf8Path,
     scan_path: &Utf8Path,
-    complete_scan: bool,
+    scan_covers: bool,
     head: &str,
-) -> (Completeness, Option<String>) {
-    if complete_scan {
-        return (Completeness::Complete, None);
+) -> anyhow::Result<(Completeness, Option<String>)> {
+    let clean = scan_covers && working_tree_is_clean(repo)?;
+    if clean {
+        return Ok((Completeness::Complete, None));
     }
-    let covers = scan_covers_repository(repo, scan_path);
-    let reason = if covers {
+    let reason = if scan_covers {
         format!(
             "the working tree has uncommitted changes; scanned source facts do not \
              pin to head commit {head}"
@@ -258,5 +333,5 @@ fn scan_completeness(
              facts are not established for the whole tree"
         )
     };
-    (Completeness::Incomplete, Some(reason))
+    Ok((Completeness::Incomplete, Some(reason)))
 }

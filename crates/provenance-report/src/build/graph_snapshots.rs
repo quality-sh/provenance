@@ -35,15 +35,6 @@ pub(super) enum SnapshotRead {
 /// The sorted relation key used for diffs: relation name, target kind, id.
 type RelationKey = (String, RecordKind, String);
 
-impl GraphSnapshot {
-    pub(super) fn is_empty(&self) -> bool {
-        self.requirements.is_empty()
-            && self.rules.is_empty()
-            && self.resolutions.is_empty()
-            && self.sources.is_empty()
-    }
-}
-
 /// Read one shard file at a commit. `Ok(None)` says the file is absent, the
 /// normal state for a scope that did not exist yet.
 fn read_shard<T: serde::de::DeserializeOwned>(
@@ -120,12 +111,9 @@ pub(super) fn read_bindings(
     Ok((verifications, implementations))
 }
 
-/// Read the four report-relevant families at a commit.
-pub(super) fn read_snapshot(
-    repo: &Utf8Path,
-    commit: &str,
-    scope: &ScopeId,
-) -> anyhow::Result<SnapshotRead> {
+/// Read the four report-relevant families at a commit. A read can always
+/// produce a verdict: absence and incompatibility are verdicts, not errors.
+pub(super) fn read_snapshot(repo: &Utf8Path, commit: &str, scope: &ScopeId) -> SnapshotRead {
     let requirements = read_shard::<Requirement>(repo, commit, scope, "requirements/req.jsonl");
     let rules = read_shard::<Rule>(repo, commit, scope, "rules/rule.jsonl");
     let resolutions = read_shard::<Resolution>(repo, commit, scope, "resolutions/res.jsonl");
@@ -136,7 +124,7 @@ pub(super) fn read_snapshot(
         && matches!(sources, Ok(None));
     if all_absent {
         // No shard file existed at this commit: the store did not exist yet.
-        return Ok(SnapshotRead::Absent);
+        return SnapshotRead::Absent;
     }
     let mut failure: Option<String> = None;
     let snapshot = GraphSnapshot {
@@ -146,9 +134,9 @@ pub(super) fn read_snapshot(
         sources: unwrap_family(sources, "sources", &mut failure),
     };
     if let Some(reason) = failure {
-        return Ok(SnapshotRead::Incompatible(reason));
+        return SnapshotRead::Incompatible(reason);
     }
-    Ok(SnapshotRead::Present(snapshot))
+    SnapshotRead::Present(snapshot)
 }
 
 /// Unwrap one family read, recording the first failure as an
@@ -211,7 +199,8 @@ pub(super) fn diff_snapshots(base: &GraphSnapshot, head: &GraphSnapshot) -> Vec<
         source_relations,
         &mut changes,
     );
-    changes.sort_by(crate::render::order::compare_graph_changes);
+    // The renderer's canonical normalization sorts every emitted collection,
+    // so no local order leaks into the envelope bytes.
     changes
 }
 
@@ -230,7 +219,7 @@ fn diff_records<'a, T>(
     changes: &mut Vec<GraphChange>,
 ) {
     let base_by_id: BTreeMap<&str, &T> = base.iter().map(|record| (id(record), record)).collect();
-    let head_ids: BTreeSet<&str> = head.iter().map(|record| id(record)).collect();
+    let head_ids: BTreeSet<&str> = head.iter().map(&id).collect();
     for record in head {
         let record_id = id(record);
         let after_statement = statement(record);
@@ -293,6 +282,7 @@ fn diff_records<'a, T>(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn change_with(
     kind: RecordKind,
     change: ChangeKind,
