@@ -148,10 +148,9 @@ fn fog(command: FogCommand) -> anyhow::Result<()> {
                 .find(|requirement| requirement.id == requirement_id)
                 .ok_or_else(|| anyhow::anyhow!("requirement does not exist"))?;
             output::print_json(&FogView {
-                    requirement_id: requirement.id.as_str().to_string(),
-                    fog: requirement.fog,
-                },
-            )?;
+                requirement_id: requirement.id.as_str().to_string(),
+                fog: requirement.fog,
+            })?;
         }
         FogCommand::Clear {
             repo,
