@@ -5,12 +5,15 @@
 //! report reads committed families. All collection order comes from sorted
 //! sets, so shard line order never reaches the diff.
 
-use crate::envelope::{ChangeKind, GraphChange, RecordKind, RelationChange};
+use crate::envelope::{ChangeKind, CommitRole, GraphChange, RecordKind, RelationChange};
 use anyhow::Context;
 use camino::Utf8Path;
 use provenance_core::{Requirement, Resolution, Rule, ScopeId, Source};
 use std::collections::{BTreeMap, BTreeSet};
 use std::process::Command;
+
+#[cfg(test)]
+mod tests;
 
 /// One commit's graph record families for one scope.
 #[derive(Debug, Default)]
@@ -42,6 +45,7 @@ fn read_shard<T: serde::de::DeserializeOwned>(
     commit: &str,
     scope: &ScopeId,
     shard: &str,
+    role: CommitRole,
 ) -> anyhow::Result<Option<Vec<T>>> {
     let path = format!(".provenance/state/scopes/{}/{}", scope.as_str(), shard);
     let listing = Command::new("git")
@@ -68,16 +72,32 @@ fn read_shard<T: serde::de::DeserializeOwned>(
     );
     let text = String::from_utf8(output.stdout)?;
     let mut records = Vec::new();
-    for line in text.lines().filter(|line| !line.trim().is_empty()) {
-        records.push(
-            serde_json::from_str::<T>(line)
-                .with_context(|| format!("record in {path} at commit {commit} does not parse"))?,
-        );
+    for (index, line) in text
+        .lines()
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
+    {
+        let line_number = index + 1;
+        let context =
+            || format!("record in {path} line {line_number} at commit {commit} does not parse");
+        let value: serde_json::Value = serde_json::from_str(line).with_context(context)?;
+        // Mirror the store reader's admission check. Historical bases stay readable.
+        if role == CommitRole::Head && value.get("retired").is_some() {
+            let name = value
+                .get("id")
+                .and_then(serde_json::Value::as_str)
+                .map_or_else(|| "record".to_string(), |id| format!("record {id}"));
+            anyhow::bail!(
+                "{path} line {line_number} at commit {commit}: {name} contains legacy field `retired`; \
+                 canonical JSONL requires record-deletion migration 026 before this build can read it"
+            );
+        }
+        records.push(serde_json::from_value::<T>(value).with_context(context)?);
     }
     Ok(Some(records))
 }
 
-/// Read the typed evidence bindings at a commit. A missing shard file is
+/// Read the typed evidence bindings at the head commit. A missing shard file is
 /// the normal state for a store that never recorded bindings.
 pub(super) fn read_bindings(
     repo: &Utf8Path,
@@ -92,6 +112,7 @@ pub(super) fn read_bindings(
         commit,
         scope,
         "verifications/binding.jsonl",
+        CommitRole::Head,
     )?
     .unwrap_or_default();
     let implementations = read_shard::<provenance_core::ImplementationBinding>(
@@ -99,6 +120,7 @@ pub(super) fn read_bindings(
         commit,
         scope,
         "implementations/binding.jsonl",
+        CommitRole::Head,
     )?
     .unwrap_or_default();
     Ok((verifications, implementations))
@@ -106,11 +128,17 @@ pub(super) fn read_bindings(
 
 /// Read the four report-relevant families at a commit. A read can always
 /// produce a verdict: absence and incompatibility are verdicts, not errors.
-pub(super) fn read_snapshot(repo: &Utf8Path, commit: &str, scope: &ScopeId) -> SnapshotRead {
-    let requirements = read_shard::<Requirement>(repo, commit, scope, "requirements/req.jsonl");
-    let rules = read_shard::<Rule>(repo, commit, scope, "rules/rule.jsonl");
-    let resolutions = read_shard::<Resolution>(repo, commit, scope, "resolutions/res.jsonl");
-    let sources = read_shard::<Source>(repo, commit, scope, "sources/source.jsonl");
+pub(super) fn read_snapshot(
+    repo: &Utf8Path,
+    commit: &str,
+    scope: &ScopeId,
+    role: CommitRole,
+) -> SnapshotRead {
+    let requirements =
+        read_shard::<Requirement>(repo, commit, scope, "requirements/req.jsonl", role);
+    let rules = read_shard::<Rule>(repo, commit, scope, "rules/rule.jsonl", role);
+    let resolutions = read_shard::<Resolution>(repo, commit, scope, "resolutions/res.jsonl", role);
+    let sources = read_shard::<Source>(repo, commit, scope, "sources/source.jsonl", role);
     let all_absent = matches!(requirements, Ok(None))
         && matches!(rules, Ok(None))
         && matches!(resolutions, Ok(None))
