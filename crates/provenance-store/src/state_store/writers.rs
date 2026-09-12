@@ -60,7 +60,23 @@ impl StateStore {
     }
 
     pub fn create_requirement(&self, input: CreateRequirementInput) -> anyhow::Result<Requirement> {
-        self.with_repository_publication(|| self.write_requirement(input))
+        self.with_repository_publication(|| {
+            self.validate_requirement_origin(
+                &input.scope_id,
+                input.origin_thread.as_ref(),
+                input.origin_message.as_ref(),
+            )?;
+            if self.origin_requires_review(&input.scope_id, input.origin_message.as_ref())? {
+                anyhow::ensure!(
+                    crate::review::guard::writer_allows(
+                        &shards::requirements_path(&self.layout, &input.scope_id),
+                        input.id.as_str()
+                    ),
+                    "addressed Requirement creation requires an immutable review outcome"
+                );
+            }
+            self.write_requirement(input)
+        })
     }
 
     fn write_requirement(&self, input: CreateRequirementInput) -> anyhow::Result<Requirement> {

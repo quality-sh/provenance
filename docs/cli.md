@@ -311,6 +311,44 @@ gone; when the survivors cannot be told apart, they stay at their current coordi
 as unchanged and the scan warns that the group lost instances. Identical sites
 shuffled within one file with none lost stay silent.
 
+## Pull request report rendering
+
+`provenance report render` turns a versioned report envelope into bounded
+Markdown or normalized JSON. The command consumes structured facts only. It
+performs no network write, calls no language model, and reads no
+conversational history.
+
+```sh
+provenance report render --input report-envelope.json
+provenance report render --input report-envelope.json --format json
+provenance report render --input report-envelope.json --output report.md
+```
+
+The envelope is a JSON document with `schema_version` 1. It carries the
+repository identity, the provenance scope, the comparison base and head
+commits, scan completeness and baseline compatibility, the policy outcome,
+graph changes, grouped findings with stable diagnostic codes, and optional
+verification-run facts. It excludes scanned source contents. The renderer
+sorts every collection first, so equivalent input with reordered records,
+relationships, findings, or evidence sites renders byte-identical Markdown.
+
+Untrusted text is data. Graph statements, ids, paths, and reasons are
+escaped, so report text cannot create a mention, raw HTML, a link, an image,
+a code fence, an extra table column, or a workflow command. Repository links
+are built only from an immutable commit plus a validated
+repository-relative path; a complete author-supplied URL is never accepted.
+Output is bounded: budgets cut findings, graph rows, site lists, run lists,
+and long text, and every cut is stated in the report.
+
+`--format json` prints the normalized envelope, so a later publisher can
+consume structure instead of scraping Markdown. `--output` writes the result
+to a file for CI artifacts. The command exits non-zero with a named
+diagnostic when the envelope breaks its contract: an unknown schema version
+or diagnostic code, a duplicate identity with a differing payload, an
+absence claimed by an incomplete scan, new or resolved labels without a
+compatible baseline, commits that are not full immutable hashes, a missing
+required reason, or a repository identity that is not `owner/name`.
+
 ## Diff evidence gate
 
 `stale` is the read-only answer to “does this diff intersect evidence in the graph?” Give

@@ -141,10 +141,10 @@ impl GuardedStore<'_> {
 }
 
 impl GuardedStore<'_> {
-    pub(crate) fn validated_review_entries(
+    pub(crate) fn validated_journal_entries(
         &self,
         scope: &ScopeId,
-    ) -> anyhow::Result<Vec<provenance_core::review::ReviewEntry>> {
-        self.store.validated_review_entries(scope)
+    ) -> anyhow::Result<Vec<provenance_core::review::JournalEntry>> {
+        self.store.validated_journal_entries(scope)
     }
 }

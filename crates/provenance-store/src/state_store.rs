@@ -17,6 +17,7 @@ mod requirement_reviews;
 mod rule_writers;
 mod shaping_writers;
 mod statement_policy;
+mod thread_origins;
 mod thread_writers;
 pub(super) mod typed_specs;
 mod typed_statement_policy;

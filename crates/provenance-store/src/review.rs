@@ -29,3 +29,17 @@ mod recovery_tests;
 
 #[cfg(all(test, any(unix, windows)))]
 mod path_tests;
+
+mod discussion_input;
+pub use discussion_input::{DiscussionAction, WriteDiscussion};
+mod discussion_state;
+mod discussion_writes;
+
+mod create;
+pub use create::CreateReviewRequirement;
+mod discussion_messages;
+mod discussion_reads;
+pub use discussion_messages::read_discussion_messages;
+pub use discussion_reads::read_discussions;
+#[cfg(test)]
+mod discussion_recovery_tests;
