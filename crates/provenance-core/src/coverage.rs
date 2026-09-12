@@ -165,7 +165,7 @@ pub trait AnchoredSite: Clone + Deref<Target = SiteCore> + DerefMut {
         original_line: Option<usize>,
         original_file_path: Option<Utf8PathBuf>,
     ) {
-        let site = self.deref_mut();
+        let site = &mut **self;
         site.anchor_state = state;
         site.original_line = original_line;
         site.original_file_path = original_file_path;
