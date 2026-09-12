@@ -114,6 +114,11 @@ function verifyExactDevelopmentDependency(manager, command, args, environment) {
   assert.deepEqual(invocations.slice(1), [
     {
       command: "/provenance-engine",
+      args: ["init", "--help"],
+      capture: true,
+    },
+    {
+      command: "/provenance-engine",
       args: [
         "init", "--path", project, "--scope", "default", "--path-prefix", ".",
         "--invocation-channel", "typescript", "--package-manager", manager,
@@ -137,7 +142,38 @@ test("the initializer reports failure when the installed engine rejects init", (
     }),
     /Provenance initialization failed with exit code 23/,
   );
-  assert.equal(invocation, 2);
+  assert.equal(invocation, 3);
+});
+
+test("an engine without the current init surface receives only bare init flags", () => {
+  const project = projectDirectory({ packageManager: "npm@1.0.0" });
+  const invocations = [];
+
+  initializeProject({
+    projectDirectory: project,
+    packageVersion,
+    enginePath: "/provenance-engine",
+    execute(invocation) {
+      invocations.push(invocation);
+      if (invocation.args.at(-2) === "init" && invocation.args.at(-1) === "--help") {
+        return { status: 0, stdout: "Usage: provenance init [OPTIONS]\n" };
+      }
+      return { status: 0, stdout: "" };
+    },
+  });
+
+  assert.deepEqual(invocations.slice(1), [
+    {
+      command: "/provenance-engine",
+      args: ["init", "--help"],
+      capture: true,
+    },
+    {
+      command: "/provenance-engine",
+      args: ["init", "--path", project, "--scope", "default", "--path-prefix", "."],
+      capture: false,
+    },
+  ]);
 });
 
 const lockfiles = [
@@ -314,11 +350,11 @@ test("the installed SDK engine is resolved after dependency installation", () =>
   });
 
   assert.equal(resolvedAfterInstallation, true);
-  assert.deepEqual(invocations[1].args.slice(0, 2), [
+  assert.deepEqual(invocations[2].args.slice(0, 2), [
     "/project/node_modules/@quality-sh/provenance/bin/provenance.mjs",
     "init",
   ]);
-  assert.equal(invocations.length, 2);
+  assert.equal(invocations.length, 3);
 });
 
 test("Yarn Plug'n'Play resolves the installed SDK through its project loader", () => {
@@ -393,6 +429,12 @@ function projectDirectory(manifest = {}) {
 function recordingExecutor(invocations) {
   return (invocation) => {
     invocations.push(invocation);
+    if (invocation.capture && invocation.args.at(-1) === "--help") {
+      return {
+        status: 0,
+        stdout: "--ste-pdf",
+      };
+    }
     return { status: 0, stdout: "" };
   };
 }

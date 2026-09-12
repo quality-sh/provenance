@@ -12,8 +12,8 @@ async fn generated_authoring_methods_persist_and_preserve_declared_refusals() {
             .unwrap();
     let context = json!({"repository":"fixture","scope":"default"});
     let request = json!({"schema_version":2,"spec":"rust","declared_by":"fixture-rust",
-        "requirements":[{"key":"ready","statement":"The system is ready."}],
-        "rules":[{"key":"ready","requirement":"ready","statement":"The system is ready."}]});
+        "requirements":[{"key":"ready","statement":"The system is prepared."}],
+        "rules":[{"key":"ready","requirement":"ready","statement":"The system is prepared."}]});
     let call = json!({"context":context,"request":request});
     let planned = client
         .plan(&serde_json::from_value(call.clone()).unwrap())

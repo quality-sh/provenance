@@ -19,7 +19,7 @@ async fn generated_creation_methods_preserve_records_and_refusals() {
     let created = serde_json::to_value(created).unwrap();
     assert_eq!(created["origin_thread"], "thread_origin");
     assert_eq!(created["origin_message"], "message_origin");
-    let requirement = client.create_requirement(&serde_json::from_value(json!({"context":context,"request":{"scope_id":"default","id":"req_rs","statement":"The system is ready.","status":"discovery","depends_on":[],"supersedes":[]}})).unwrap()).await.unwrap();
+    let requirement = client.create_requirement(&serde_json::from_value(json!({"context":context,"request":{"scope_id":"default","id":"req_rs","statement":"The system is prepared.","status":"discovery","depends_on":[],"supersedes":[]}})).unwrap()).await.unwrap();
     assert_eq!(
         serde_json::to_value(requirement).unwrap()["status"],
         "discovery"
@@ -29,7 +29,7 @@ async fn generated_creation_methods_preserve_records_and_refusals() {
         serde_json::to_value(resolution).unwrap()["requirement_ids"],
         json!(["req_rs"])
     );
-    let rule = client.create_rule(&serde_json::from_value(json!({"context":context,"request":{"scope_id":"default","id":"rule_rs","statement":"The system is ready.","requirement_ids":["req_rs"],"resolution_ids":["res_rs"],"status":"draft","severity":"high"}})).unwrap()).await.unwrap();
+    let rule = client.create_rule(&serde_json::from_value(json!({"context":context,"request":{"scope_id":"default","id":"rule_rs","statement":"The system is prepared.","requirement_ids":["req_rs"],"resolution_ids":["res_rs"],"status":"draft","severity":"high"}})).unwrap()).await.unwrap();
     assert_eq!(
         serde_json::to_value(rule).unwrap()["resolution_ids"],
         json!(["res_rs"])

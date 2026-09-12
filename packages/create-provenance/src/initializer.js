@@ -69,25 +69,42 @@ export function initializeProject({
   const engine = enginePath === undefined
     ? resolveEngine(directory)
     : { command: enginePath, args: engineArguments };
-  runChecked(run, {
+  const initArgs = [
+    ...engine.args,
+    "init",
+    "--path",
+    directory,
+    "--scope",
+    "default",
+    "--path-prefix",
+    ".",
+  ];
+  const help = run({
     command: engine.command,
-    args: [
-      ...engine.args,
-      "init",
-      "--path",
-      directory,
-      "--scope",
-      "default",
-      "--path-prefix",
-      ".",
+    args: [...engine.args, "init", "--help"],
+    capture: true,
+  });
+  if (supportsInvocationMetadata(help)) {
+    initArgs.push(
       "--invocation-channel",
       "typescript",
       "--package-manager",
       selectedManager,
-    ],
+    );
+  }
+  runChecked(run, {
+    command: engine.command,
+    args: initArgs,
     capture: false,
   }, "Provenance initialization");
   return { packageManager: selectedManager };
+}
+
+function supportsInvocationMetadata(help) {
+  // The channel and package-manager flags ship with the current init surface
+  // and are hidden from help, so the visible --ste-pdf marker stands in for
+  // them. Older engines advertise none of it and receive bare init flags.
+  return help.status === 0 && help.stdout.includes("--ste-pdf");
 }
 
 function installedEngineCommand(directory) {
