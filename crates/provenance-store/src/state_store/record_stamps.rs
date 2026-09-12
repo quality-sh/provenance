@@ -8,7 +8,7 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 use super::StateStore;
 
-pub(super) trait GraphRecord:
+pub(crate) trait GraphRecord:
     RelationOwner + Clone + PartialEq + DeserializeOwned + Serialize
 {
     fn validate_write(&self, _previous: Option<&Self>) -> anyhow::Result<()> {
@@ -95,7 +95,7 @@ impl StateStore {
         Ok(())
     }
 
-    pub(super) fn mutate_graph_record<T: GraphRecord>(
+    pub(crate) fn mutate_graph_record<T: GraphRecord>(
         &self,
         path: &Utf8Path,
         mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<T>,

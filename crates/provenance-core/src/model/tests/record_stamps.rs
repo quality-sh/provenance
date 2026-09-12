@@ -86,3 +86,111 @@ fn equality_ignores_stamps_on_all_four_record_kinds() {
         "title",
     );
 }
+
+#[cfg(feature = "schema")]
+fn schema_fields<T: schemars::JsonSchema>() -> std::collections::BTreeSet<String> {
+    serde_json::to_value(schemars::schema_for!(T)).unwrap()["properties"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .cloned()
+        .collect()
+}
+
+#[cfg(feature = "schema")]
+fn assert_equality_fields<T: schemars::JsonSchema>(fields: &[&str]) {
+    let mut expected = fields
+        .iter()
+        .chain(["created", "updated"].iter())
+        .map(|field| (*field).to_string())
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(schema_fields::<T>(), expected);
+    expected.remove("created");
+    expected.remove("updated");
+    assert_eq!(
+        expected.len(),
+        fields.len(),
+        "equality fields must be unique"
+    );
+}
+
+#[cfg(feature = "schema")]
+#[test]
+fn equality_field_lists_cover_each_serialized_record_field_except_stamps() {
+    assert_equality_fields::<Source>(&[
+        "schema_version",
+        "scope_id",
+        "id",
+        "declared_by",
+        "declaration_address",
+        "name",
+        "source_type",
+        "url",
+        "reference",
+        "commit_pin",
+        "effective_date",
+        "review_date",
+        "supersedes",
+        "origin_thread",
+        "origin_message",
+    ]);
+    assert_equality_fields::<Requirement>(&[
+        "schema_version",
+        "scope_id",
+        "id",
+        "declared_by",
+        "declaration_address",
+        "statement",
+        "description",
+        "fog",
+        "status",
+        "domain_id",
+        "source_refs",
+        "refines",
+        "depends_on",
+        "supersedes",
+        "spawned_by",
+        "origin_thread",
+        "origin_message",
+    ]);
+    assert_equality_fields::<Rule>(&[
+        "schema_version",
+        "scope_id",
+        "id",
+        "declared_by",
+        "declaration_address",
+        "name",
+        "description",
+        "statement",
+        "status",
+        "archived_in_commit",
+        "severity",
+        "requirement_ids",
+        "resolution_ids",
+        "source_document",
+        "source_section",
+        "origin_thread",
+        "origin_message",
+    ]);
+    assert_equality_fields::<Resolution>(&[
+        "schema_version",
+        "scope_id",
+        "id",
+        "title",
+        "position",
+        "rationale",
+        "status",
+        "context",
+        "enforcement",
+        "confidence",
+        "inputs",
+        "made_by",
+        "approved_by",
+        "approved_at",
+        "requirement_ids",
+        "supersedes",
+        "review_on",
+        "origin_thread",
+        "origin_message",
+    ]);
+}

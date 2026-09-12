@@ -8,3 +8,4 @@ ALTER TABLE rules ADD COLUMN updated TEXT;
 ALTER TABLE rules ADD COLUMN archived_in_commit TEXT;
 ALTER TABLE resolutions ADD COLUMN created TEXT;
 ALTER TABLE resolutions ADD COLUMN updated TEXT;
+ALTER TABLE projection_unit_digests ADD COLUMN stored_digest TEXT NOT NULL DEFAULT '';

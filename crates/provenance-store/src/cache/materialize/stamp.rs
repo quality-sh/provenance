@@ -61,12 +61,16 @@ pub(super) async fn upsert_content_row(
 pub(super) async fn upsert_unit_row(
     tx: &mut Transaction<'_, Sqlite>,
     unit: &str,
-    digest: &str,
+    digests: &super::units::UnitDigests,
 ) -> anyhow::Result<()> {
-    sqlx::query("INSERT OR REPLACE INTO projection_unit_digests (unit, digest) VALUES (?, ?)")
-        .bind(unit)
-        .bind(digest)
-        .execute(&mut **tx)
-        .await?;
+    sqlx::query(
+        "INSERT OR REPLACE INTO projection_unit_digests (unit, digest, stored_digest) \
+         VALUES (?, ?, ?)",
+    )
+    .bind(unit)
+    .bind(&digests.content)
+    .bind(&digests.stored)
+    .execute(&mut **tx)
+    .await?;
     Ok(())
 }

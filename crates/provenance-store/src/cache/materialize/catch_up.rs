@@ -13,6 +13,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 type ContentKey = (String, String);
 type ContentValue = (String, i64);
+type UnitValue = units::UnitDigests;
 
 /// What one catch-up pass did.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -64,7 +65,7 @@ pub async fn catch_up_with_guard(
 
     let (stored_units, mut content) = load_stored_digests(pool).await?;
     let mut reader = validation::UnitReader::new(guard);
-    let (manifest, global_digest) = reader.global(stored_units.get("global"))?;
+    let (manifest, global_digests) = reader.global(stored_units.get("global"))?;
     let scope_ids: Vec<ScopeId> = manifest
         .scopes
         .iter()
@@ -84,20 +85,31 @@ pub async fn catch_up_with_guard(
 
     let live = units::units_for(&scope_ids);
     let mut changed = remove_departed_scopes(&mut tx, &stored_units, &live, &mut content).await?;
-    if stored_units.get("global") != Some(&global_digest) {
+    if stored_units.get("global") != Some(&global_digests) {
         changed = true;
-        stamp::upsert_unit_row(&mut tx, "global", &global_digest).await?;
+        stamp::upsert_unit_row(&mut tx, "global", &global_digests).await?;
     }
     for unit in &live {
         let Unit::Scope(scope) = unit else { continue };
-        let digest = reader.hash(unit)?;
-        if stored_units.get(&unit.name()) == Some(&digest) {
+        let digests = reader.hash(unit)?;
+        if stored_units.get(&unit.name()) == Some(&digests) {
             continue;
         }
-        let (records, digest) = reader.scope(scope, digest)?;
+        let metadata_changed = stored_units
+            .get(&unit.name())
+            .is_none_or(|stored| stored.stored != digests.stored);
+        let (records, digests) = reader.scope(scope, digests)?;
         changed = true;
-        rederive_scope(&mut tx, &records, scope, &mut content, &mut report).await?;
-        stamp::upsert_unit_row(&mut tx, &unit.name(), &digest).await?;
+        rederive_scope(
+            &mut tx,
+            &records,
+            scope,
+            metadata_changed,
+            &mut content,
+            &mut report,
+        )
+        .await?;
+        stamp::upsert_unit_row(&mut tx, &unit.name(), &digests).await?;
     }
     report.units_hashed = reader.units_hashed;
 
@@ -127,13 +139,18 @@ pub async fn catch_up_with_guard(
 
 async fn load_stored_digests(
     pool: &sqlx::SqlitePool,
-) -> anyhow::Result<(BTreeMap<String, String>, BTreeMap<ContentKey, ContentValue>)> {
-    let units: BTreeMap<String, String> =
-        sqlx::query_as::<_, (String, String)>("SELECT unit, digest FROM projection_unit_digests")
-            .fetch_all(pool)
-            .await?
-            .into_iter()
-            .collect();
+) -> anyhow::Result<(
+    BTreeMap<String, UnitValue>,
+    BTreeMap<ContentKey, ContentValue>,
+)> {
+    let units: BTreeMap<String, UnitValue> = sqlx::query_as::<_, (String, String, String)>(
+        "SELECT unit, digest, stored_digest FROM projection_unit_digests",
+    )
+    .fetch_all(pool)
+    .await?
+    .into_iter()
+    .map(|(unit, content, stored)| (unit, UnitValue { content, stored }))
+    .collect();
     let content: BTreeMap<ContentKey, ContentValue> =
         sqlx::query_as::<_, (String, String, String, i64)>(
             "SELECT scope_id, family, content_digest, record_count FROM projection_family_digests",
@@ -150,7 +167,7 @@ async fn load_stored_digests(
 /// manifest does not name. Returns whether anything departed.
 async fn remove_departed_scopes(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
-    stored_units: &BTreeMap<String, String>,
+    stored_units: &BTreeMap<String, UnitValue>,
     live: &[Unit],
     content: &mut BTreeMap<ContentKey, ContentValue>,
 ) -> anyhow::Result<bool> {
@@ -198,6 +215,7 @@ async fn rederive_scope(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     records: &validation::ScopeRecords,
     scope: &ScopeId,
+    metadata_changed: bool,
     content: &mut BTreeMap<ContentKey, ContentValue>,
     report: &mut CatchUpReport,
 ) -> anyhow::Result<()> {
@@ -209,13 +227,14 @@ async fn rederive_scope(
             i64::try_from(records.count)?,
         );
         let key = (scope.as_str().to_string(), family.family_name().to_string());
-        if content.get(&key) == Some(&fresh) {
+        let content_changed = content.get(&key) != Some(&fresh);
+        if !content_changed && !(metadata_changed && family.has_record_stamps()) {
             continue;
         }
         family_rows::delete_rows(tx, family, scope).await?;
         report.rows_written += family_rows::load_rows(tx, family, &records.bytes).await?;
         report.families_rederived += 1;
-        owner_moved |= RELATION_OWNERS.contains(&family);
+        owner_moved |= content_changed && RELATION_OWNERS.contains(&family);
         content.insert(key, fresh);
     }
     if owner_moved {

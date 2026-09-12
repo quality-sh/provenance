@@ -151,6 +151,13 @@ impl ProjectionFamily {
         }
     }
 
+    pub(crate) const fn has_record_stamps(self) -> bool {
+        matches!(
+            self,
+            Self::Sources | Self::Requirements | Self::Resolutions | Self::Rules
+        )
+    }
+
     /// The canonical shard file the family's records live in.
     #[cfg(test)]
     pub(crate) fn shard_path(self, layout: &ProvenanceLayout, scope: &ScopeId) -> Utf8PathBuf {

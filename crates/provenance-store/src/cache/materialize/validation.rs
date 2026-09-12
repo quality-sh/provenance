@@ -35,31 +35,34 @@ impl<'g> UnitReader<'g> {
         }
     }
 
-    pub fn hash(&mut self, unit: &units::Unit) -> anyhow::Result<String> {
+    pub fn hash(&mut self, unit: &units::Unit) -> anyhow::Result<units::UnitDigests> {
         hash(&self.state_dir, unit, &mut self.units_hashed)
     }
 
     /// A global change validates every scope. Other passes validate only changed scopes.
     #[rule("rule_catch_up_validates_changed_units_only")]
-    pub fn global(&mut self, stored: Option<&String>) -> anyhow::Result<(Manifest, String)> {
+    pub fn global(
+        &mut self,
+        stored: Option<&units::UnitDigests>,
+    ) -> anyhow::Result<(Manifest, units::UnitDigests)> {
         let unit = units::Unit::Global;
         let path = self.state_dir.join("manifest.json");
         let mut manifest_bytes = None;
         self.units_hashed += 1;
         crate::test_probes::at("catch_up_unit_hashed")?;
-        let digest = units::digest_with(&self.state_dir, &unit, |read_path, bytes| {
+        let digests = units::digests_with(&self.state_dir, &unit, |read_path, bytes| {
             if read_path == path {
                 manifest_bytes = Some(bytes.to_vec());
             }
         })?;
         crate::test_probes::at("catch_up_global_before_parse")?;
         crate::test_probes::record_read(&path);
-        if stored == Some(&digest) {
+        if stored == Some(&digests) {
             let bytes =
                 manifest_bytes.ok_or_else(|| anyhow::anyhow!("missing manifest: {path}"))?;
-            return Ok((crate::state_store::manifest_from_bytes(&bytes)?, digest));
+            return Ok((crate::state_store::manifest_from_bytes(&bytes)?, digests));
         }
-        stable(&self.state_dir, &unit, digest, || {
+        stable(&self.state_dir, &unit, digests, || {
             let manifest = self.store.manifest()?;
             for scope in &manifest.scopes {
                 validate(&self.store, &scope.id)?;
@@ -68,11 +71,15 @@ impl<'g> UnitReader<'g> {
         })
     }
 
-    pub fn scope(&self, scope: &ScopeId, digest: String) -> anyhow::Result<(ScopeRecords, String)> {
+    pub fn scope(
+        &self,
+        scope: &ScopeId,
+        digests: units::UnitDigests,
+    ) -> anyhow::Result<(ScopeRecords, units::UnitDigests)> {
         stable(
             &self.state_dir,
             &units::Unit::Scope(scope.clone()),
-            digest,
+            digests,
             || {
                 crate::test_probes::at("catch_up_before_parse")?;
                 validate(&self.store, scope)?;
@@ -99,10 +106,14 @@ fn validate(store: &GuardedStore<'_>, scope: &ScopeId) -> anyhow::Result<()> {
     store.validate_graph_scope(scope)
 }
 
-fn hash(state_dir: &Utf8Path, unit: &units::Unit, hashes: &mut u64) -> anyhow::Result<String> {
+fn hash(
+    state_dir: &Utf8Path,
+    unit: &units::Unit,
+    hashes: &mut u64,
+) -> anyhow::Result<units::UnitDigests> {
     *hashes += 1;
     crate::test_probes::at("catch_up_unit_hashed")?;
-    Ok(units::unit_digest(state_dir, unit)?)
+    Ok(units::unit_digests(state_dir, unit)?)
 }
 
 /// A parsed unit is used only when its hashes before and after parsing match.
@@ -110,16 +121,16 @@ fn hash(state_dir: &Utf8Path, unit: &units::Unit, hashes: &mut u64) -> anyhow::R
 fn stable<T>(
     state_dir: &Utf8Path,
     unit: &units::Unit,
-    mut digest: String,
+    mut digests: units::UnitDigests,
     mut parse: impl FnMut() -> anyhow::Result<T>,
-) -> anyhow::Result<(T, String)> {
+) -> anyhow::Result<(T, units::UnitDigests)> {
     for _ in 0..3 {
         let records = parse();
-        let after = units::unit_digest(state_dir, unit)?;
-        if after == digest {
-            return records.map(|records| (records, digest));
+        let after = units::unit_digests(state_dir, unit)?;
+        if after == digests {
+            return records.map(|records| (records, digests));
         }
-        digest = after;
+        digests = after;
     }
     anyhow::bail!(
         "canonical state changed during catch-up under {}",

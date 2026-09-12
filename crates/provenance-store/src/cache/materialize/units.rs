@@ -18,6 +18,12 @@ pub enum Unit {
     Scope(ScopeId),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct UnitDigests {
+    pub content: String,
+    pub stored: String,
+}
+
 impl Unit {
     pub fn name(&self) -> String {
         match self {
@@ -82,27 +88,42 @@ pub fn units_for(scopes: &[ScopeId]) -> Vec<Unit> {
 
 /// The digest of one unit's canonical bytes under `state_dir`.
 pub fn unit_digest(state_dir: &Utf8Path, unit: &Unit) -> Result<String, UnitHashError> {
-    digest_with(state_dir, unit, |_, _| {})
+    Ok(digests_with(state_dir, unit, |_, _| {})?.content)
 }
 
+#[cfg(test)]
 pub(super) fn digest_with(
     state_dir: &Utf8Path,
     unit: &Unit,
-    mut retain: impl FnMut(&Utf8Path, &[u8]),
+    retain: impl FnMut(&Utf8Path, &[u8]),
 ) -> Result<String, UnitHashError> {
+    Ok(digests_with(state_dir, unit, retain)?.content)
+}
+
+pub(super) fn unit_digests(
+    state_dir: &Utf8Path,
+    unit: &Unit,
+) -> Result<UnitDigests, UnitHashError> {
+    digests_with(state_dir, unit, |_, _| {})
+}
+
+pub(super) fn digests_with(
+    state_dir: &Utf8Path,
+    unit: &Unit,
+    mut retain: impl FnMut(&Utf8Path, &[u8]),
+) -> Result<UnitDigests, UnitHashError> {
     let files = unit_files(state_dir, unit)?;
     crate::test_probes::at("unit_files_collected")
         .map_err(|error| UnitHashError::at(state_dir, error))?;
-    let mut framed = Vec::new();
+    let mut content = Vec::new();
+    let mut stored = Vec::new();
     for (relative, path) in &files {
         let bytes = std::fs::read(path).map_err(|error| UnitHashError::at(path, error))?;
         retain(path, &bytes);
-        let bytes =
+        frame(&mut stored, relative, &bytes);
+        let content_bytes =
             content::hash_bytes(path, &bytes).map_err(|error| UnitHashError::at(path, error))?;
-        framed.extend_from_slice(relative.as_bytes());
-        framed.push(0);
-        framed.extend_from_slice(&(bytes.len() as u64).to_le_bytes());
-        framed.extend_from_slice(&bytes);
+        frame(&mut content, relative, &content_bytes);
     }
     let after = unit_files(state_dir, unit)?;
     if files != after {
@@ -120,7 +141,17 @@ pub(super) fn digest_with(
             anyhow::anyhow!("canonical file list changed during hashing"),
         ));
     }
-    Ok(crate::canonical_digest::digest(&framed))
+    Ok(UnitDigests {
+        content: crate::canonical_digest::digest(&content),
+        stored: crate::canonical_digest::digest(&stored),
+    })
+}
+
+fn frame(target: &mut Vec<u8>, relative: &str, bytes: &[u8]) {
+    target.extend_from_slice(relative.as_bytes());
+    target.push(0);
+    target.extend_from_slice(&(bytes.len() as u64).to_le_bytes());
+    target.extend_from_slice(bytes);
 }
 
 fn unit_files(

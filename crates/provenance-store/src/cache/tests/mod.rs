@@ -20,6 +20,7 @@ mod record_columns;
 mod relation_rows_behavior;
 mod reporting_behavior;
 mod scope_locality_guard;
+mod stamp_catch_up;
 mod traceability_behavior;
 mod unit_digest_behavior;
 pub mod validation_version_behavior;

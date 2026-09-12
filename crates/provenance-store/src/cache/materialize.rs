@@ -54,14 +54,14 @@ pub(super) async fn materialize_with_guard(
     layout: &ProvenanceLayout,
 ) -> anyhow::Result<MaterializeReport> {
     let mut reader = validation::UnitReader::new(guard);
-    let (manifest, global_digest) = reader.global(None)?;
+    let (manifest, global_digests) = reader.global(None)?;
     let connection = open_cache(layout).await?;
     let outcome = rebuild_rows(
         connection.pool(),
         &mut reader,
         layout,
         manifest,
-        global_digest,
+        global_digests,
     )
     .await;
     connection.settle(outcome).await
@@ -74,7 +74,7 @@ async fn rebuild_rows(
     reader: &mut validation::UnitReader<'_>,
     layout: &ProvenanceLayout,
     manifest: provenance_core::Manifest,
-    global_digest: String,
+    global_digests: units::UnitDigests,
 ) -> anyhow::Result<MaterializeReport> {
     crate::test_probes::at("run_migrations_under_guard")?;
     let migrations_applied = migrations::run_migrations(pool, layout).await?;
@@ -85,7 +85,7 @@ async fn rebuild_rows(
     let mut tx = pool.begin().await?;
     clear_cache(&mut tx).await?;
 
-    stamp::upsert_unit_row(&mut tx, "global", &global_digest).await?;
+    stamp::upsert_unit_row(&mut tx, "global", &global_digests).await?;
     let mut records_loaded = 0;
     let scopes: Vec<_> = manifest
         .scopes
@@ -94,8 +94,8 @@ async fn rebuild_rows(
         .collect();
     for unit in units::units_for(&scopes) {
         let Unit::Scope(scope) = &unit else { continue };
-        let digest = reader.hash(&unit)?;
-        let (records, digest) = reader.scope(scope, digest)?;
+        let digests = reader.hash(&unit)?;
+        let (records, digests) = reader.scope(scope, digests)?;
         for records in &records.families {
             records_loaded +=
                 family_rows::load_rows(&mut tx, records.family, &records.bytes).await?;
@@ -109,7 +109,7 @@ async fn rebuild_rows(
             .await?;
         }
         relation_rows::load_rows(&mut tx, &records.relations, scope).await?;
-        stamp::upsert_unit_row(&mut tx, &unit.name(), &digest).await?;
+        stamp::upsert_unit_row(&mut tx, &unit.name(), &digests).await?;
     }
     stamp::write_stamp(&mut tx, stored_serial + 1).await?;
     crate::test_probes::at("materialize_before_commit")?;

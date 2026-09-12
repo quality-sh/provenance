@@ -4,6 +4,16 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 pub const COMMIT_PATTERN: &str = "^([0-9a-f]{40}|[0-9a-f]{64})$";
 
+/// Serializes record content without repository-local creation and update stamps.
+pub fn content_value<T: Serialize>(record: &T) -> serde_json::Result<serde_json::Value> {
+    let mut value = serde_json::to_value(record)?;
+    if let Some(fields) = value.as_object_mut() {
+        fields.remove("created");
+        fields.remove("updated");
+    }
+    Ok(value)
+}
+
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

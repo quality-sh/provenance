@@ -28,7 +28,24 @@ pub struct ExactExport {
 /// this hash over the same canonical bytes. Holders outside this crate need it
 /// to say what digest a graph in their hands should carry.
 pub fn graph_digest(graph: &GraphExport) -> Result<String, GraphReferenceError> {
-    Ok(digest(&canonical_bytes(graph)?))
+    let mut content = graph.clone();
+    for record in &mut content.sources {
+        record.created = None;
+        record.updated = None;
+    }
+    for record in &mut content.requirements {
+        record.created = None;
+        record.updated = None;
+    }
+    for record in &mut content.resolutions {
+        record.created = None;
+        record.updated = None;
+    }
+    for record in &mut content.rules {
+        record.created = None;
+        record.updated = None;
+    }
+    Ok(digest(&canonical_bytes(&content)?))
 }
 
 impl ExactExport {

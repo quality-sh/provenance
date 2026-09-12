@@ -458,4 +458,34 @@ fn accepts_any_graph_whose_records_all_sit_in_the_claimed_scope() {
     }
 }
 
+#[test]
+fn graph_digest_ignores_record_stamps() {
+    let scope = ScopeId::new("default").unwrap();
+    let families = all_families();
+    let graph = graph_in_scope(&scope, &families);
+    let mut stamped = graph.clone();
+    let created = provenance_core::Stamp {
+        commit: "a".repeat(40),
+        at: "2026-09-12T00:00:00Z".into(),
+    };
+    let updated = provenance_core::Stamp {
+        commit: "b".repeat(40),
+        at: "2026-09-12T01:00:00Z".into(),
+    };
+    stamped.sources[0].created = Some(created.clone());
+    stamped.sources[0].updated = Some(updated.clone());
+    stamped.requirements[0].created = Some(created.clone());
+    stamped.requirements[0].updated = Some(updated.clone());
+    stamped.resolutions[0].created = Some(created.clone());
+    stamped.resolutions[0].updated = Some(updated.clone());
+    stamped.rules[0].created = Some(created);
+    stamped.rules[0].updated = Some(updated);
+
+    assert_eq!(graph, stamped, "record equality must ignore stamps");
+    assert_eq!(
+        crate::graph_reference::graph_digest(&graph).unwrap(),
+        crate::graph_reference::graph_digest(&stamped).unwrap()
+    );
+}
+
 mod review;
