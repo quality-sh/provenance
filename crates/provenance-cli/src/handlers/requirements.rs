@@ -2,11 +2,11 @@ use super::common::stable_ids;
 use super::refs::{self, RequirementList, RequirementSingle};
 use crate::cli::knowledge::{FogCommand, RequirementsCommand, SourceRefCommand};
 use crate::output;
+use crate::store::Store;
 use provenance_core::{RequirementStatus, ScopeId, StableId};
 use provenance_store::{
-    layout::ProvenanceLayout,
     operations::catalog,
-    state_store::{AddSourceReferenceInput, CreateRequirementInput, StateStore},
+    state_store::{AddSourceReferenceInput, CreateRequirementInput},
 };
 
 #[derive(serde::Serialize)]
@@ -39,22 +39,20 @@ pub(super) async fn handle(command: RequirementsCommand) -> anyhow::Result<()> {
             origin_message,
             format: _,
         } => {
-            let requirement = StateStore::new(ProvenanceLayout::new(repo)).create_requirement(
-                CreateRequirementInput {
-                    scope_id: ScopeId::new(scope)?,
-                    id: StableId::new(id)?,
-                    statement,
-                    description,
-                    status: RequirementStatus::parse(&status)?,
-                    domain_id: domain_id.map(StableId::new).transpose()?,
-                    refines: refines.map(StableId::new).transpose()?,
-                    depends_on: stable_ids(depends_on)?,
-                    supersedes: stable_ids(supersedes)?,
-                    spawned_by: spawned_by.map(StableId::new).transpose()?,
-                    origin_thread: origin_thread.map(StableId::new).transpose()?,
-                    origin_message: origin_message.map(StableId::new).transpose()?,
-                },
-            )?;
+            let requirement = Store::open(repo).create_requirement(CreateRequirementInput {
+                scope_id: ScopeId::new(scope)?,
+                id: StableId::new(id)?,
+                statement,
+                description,
+                status: RequirementStatus::parse(&status)?,
+                domain_id: domain_id.map(StableId::new).transpose()?,
+                refines: refines.map(StableId::new).transpose()?,
+                depends_on: stable_ids(depends_on)?,
+                supersedes: stable_ids(supersedes)?,
+                spawned_by: spawned_by.map(StableId::new).transpose()?,
+                origin_thread: origin_thread.map(StableId::new).transpose()?,
+                origin_message: origin_message.map(StableId::new).transpose()?,
+            })?;
             output::print_json(&requirement)?;
         }
         RequirementsCommand::SourceRef { command } => source_ref(command).await?,
@@ -85,14 +83,12 @@ async fn source_ref(command: SourceRefCommand) -> anyhow::Result<()> {
             clause,
             format: _,
         } => {
-            let requirement = StateStore::new(ProvenanceLayout::new(repo)).add_source_reference(
-                AddSourceReferenceInput {
-                    scope_id: ScopeId::new(scope)?,
-                    source_id: StableId::new(source_id)?,
-                    requirement_id: StableId::new(requirement_id)?,
-                    clause,
-                },
-            )?;
+            let requirement = Store::open(repo).add_source_reference(AddSourceReferenceInput {
+                scope_id: ScopeId::new(scope)?,
+                source_id: StableId::new(source_id)?,
+                requirement_id: StableId::new(requirement_id)?,
+                clause,
+            })?;
             output::print_json(&requirement)?;
         }
         SourceRefCommand::Clear {
@@ -128,7 +124,7 @@ fn fog(command: FogCommand) -> anyhow::Result<()> {
             text,
             format: _,
         } => {
-            let requirement = StateStore::new(ProvenanceLayout::new(repo)).set_requirement_fog(
+            let requirement = Store::open(repo).set_requirement_fog(
                 &ScopeId::new(scope)?,
                 &StableId::new(requirement_id)?,
                 Some(text),
@@ -142,11 +138,8 @@ fn fog(command: FogCommand) -> anyhow::Result<()> {
             format: _,
         } => {
             let requirement_id = StableId::new(requirement_id)?;
-            let requirement = StateStore::new(ProvenanceLayout::new(repo))
-                .list_requirements(&ScopeId::new(scope)?)?
-                .into_iter()
-                .find(|requirement| requirement.id == requirement_id)
-                .ok_or_else(|| anyhow::anyhow!("requirement does not exist"))?;
+            let requirement =
+                Store::open(repo).requirement(&ScopeId::new(scope)?, &requirement_id)?;
             output::print_json(&FogView {
                 requirement_id: requirement.id.as_str().to_string(),
                 fog: requirement.fog,
@@ -158,7 +151,7 @@ fn fog(command: FogCommand) -> anyhow::Result<()> {
             requirement_id,
             format: _,
         } => {
-            let requirement = StateStore::new(ProvenanceLayout::new(repo)).set_requirement_fog(
+            let requirement = Store::open(repo).set_requirement_fog(
                 &ScopeId::new(scope)?,
                 &StableId::new(requirement_id)?,
                 None,

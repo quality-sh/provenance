@@ -1,6 +1,6 @@
 use super::index::CheckIndex;
+use crate::store::{ScopeSnapshot, Store};
 use provenance_core::{Scope, ScopeId, StableId};
-use provenance_store::state_store::StateStore;
 use std::collections::BTreeSet;
 
 mod collaboration;
@@ -9,22 +9,20 @@ mod ideation;
 
 struct ScopeRecords {
     scope_id: ScopeId,
-    core: core::Records,
-    collaboration: collaboration::Records,
-    ideation: ideation::Records,
+    snapshot: ScopeSnapshot,
 }
 
 impl ScopeRecords {
     fn load(
-        store: &StateStore,
+        store: &Store,
         scope_id: &ScopeId,
         disposition_actor_ids: &[String],
     ) -> anyhow::Result<Self> {
+        store.validate_ideation_scope_with_actor_ids(scope_id, disposition_actor_ids)?;
+        store.validate_graph_scope(scope_id)?;
         Ok(Self {
             scope_id: scope_id.clone(),
-            core: core::Records::load(store, scope_id)?,
-            collaboration: collaboration::Records::load(store, scope_id)?,
-            ideation: ideation::Records::load(store, scope_id, disposition_actor_ids)?,
+            snapshot: store.snapshot(scope_id)?,
         })
     }
 
@@ -33,11 +31,14 @@ impl ScopeRecords {
         manifest_scopes: &BTreeSet<String>,
         findings: &mut Vec<String>,
     ) {
-        self.core.validate_scope_ownership(&self.scope_id, findings);
-        self.collaboration
-            .validate_scope_ownership(manifest_scopes, &self.scope_id, findings);
-        self.ideation
+        core::Records::load(self.snapshot.graph_records())
             .validate_scope_ownership(&self.scope_id, findings);
+        collaboration::Records::load(&self.snapshot).validate_scope_ownership(
+            manifest_scopes,
+            &self.scope_id,
+            findings,
+        );
+        ideation::Records::load(&self.snapshot).validate_scope_ownership(&self.scope_id, findings);
     }
 }
 
@@ -59,7 +60,7 @@ fn check_scope_ownership(
 }
 
 pub(super) fn validate(
-    store: &StateStore,
+    store: &Store,
     scopes: &[Scope],
     disposition_actor_ids: &[String],
     manifest_scopes: &BTreeSet<String>,
@@ -82,16 +83,23 @@ pub(super) fn validate(
     );
 
     for scope in &records {
-        scope.core.add_to(index);
-        scope.collaboration.add_to(index);
-        scope.ideation.add_to(index);
+        core::Records::load(scope.snapshot.graph_records()).add_to(index);
+        collaboration::Records::load(&scope.snapshot).add_to(index);
+        ideation::Records::load(&scope.snapshot).add_to(index);
     }
     for scope in &records {
-        scope.core.validate(index, &scope.scope_id, dangling);
-        scope
-            .collaboration
-            .validate(index, manifest_scopes, &scope.scope_id, dangling);
-        scope.ideation.validate(index, &scope.scope_id, dangling);
+        core::Records::load(scope.snapshot.graph_records()).validate(
+            index,
+            &scope.scope_id,
+            dangling,
+        );
+        collaboration::Records::load(&scope.snapshot).validate(
+            index,
+            manifest_scopes,
+            &scope.scope_id,
+            dangling,
+        );
+        ideation::Records::load(&scope.snapshot).validate(index, &scope.scope_id, dangling);
     }
 
     Ok(())

@@ -2,11 +2,9 @@ use super::common::stable_ids;
 use super::refs::{self, RuleList};
 use crate::cli::policy::RulesCommand;
 use crate::output;
+use crate::store::Store;
 use provenance_core::{Rule, RuleSeverity, RuleStatus, ScopeId, StableId};
-use provenance_store::{
-    layout::ProvenanceLayout,
-    state_store::{CreateRuleInput, StateStore},
-};
+use provenance_store::state_store::CreateRuleInput;
 
 /// How much of a statement a list line carries.
 ///
@@ -93,22 +91,21 @@ pub(super) async fn handle(command: RulesCommand) -> anyhow::Result<()> {
             origin_message,
             ..
         } => {
-            let rule =
-                StateStore::new(ProvenanceLayout::new(repo)).create_rule(CreateRuleInput {
-                    scope_id: ScopeId::new(scope)?,
-                    id: StableId::new(id)?,
-                    name,
-                    description,
-                    requirement_ids: stable_ids(requirement_id)?,
-                    resolution_ids: stable_ids(resolution_id)?,
-                    statement,
-                    status: RuleStatus::parse(&status)?,
-                    severity: RuleSeverity::parse(&severity)?,
-                    source_document,
-                    source_section,
-                    origin_thread: origin_thread.map(StableId::new).transpose()?,
-                    origin_message: origin_message.map(StableId::new).transpose()?,
-                })?;
+            let rule = Store::open(repo).create_rule(CreateRuleInput {
+                scope_id: ScopeId::new(scope)?,
+                id: StableId::new(id)?,
+                name,
+                description,
+                requirement_ids: stable_ids(requirement_id)?,
+                resolution_ids: stable_ids(resolution_id)?,
+                statement,
+                status: RuleStatus::parse(&status)?,
+                severity: RuleSeverity::parse(&severity)?,
+                source_document,
+                source_section,
+                origin_thread: origin_thread.map(StableId::new).transpose()?,
+                origin_message: origin_message.map(StableId::new).transpose()?,
+            })?;
             output::print_json(&rule)?;
         }
         RulesCommand::Requirement { command } => {
@@ -118,7 +115,7 @@ pub(super) async fn handle(command: RulesCommand) -> anyhow::Result<()> {
             refs::rule_list(RuleList::Resolution, command).await?;
         }
         RulesCommand::List { repo, scope, .. } => {
-            let rules = StateStore::new(ProvenanceLayout::new(repo))
+            let rules = Store::open(repo)
                 .list_rules(&ScopeId::new(scope)?)?
                 .iter()
                 .map(RuleSummary::of)
@@ -129,11 +126,7 @@ pub(super) async fn handle(command: RulesCommand) -> anyhow::Result<()> {
             repo, scope, id, ..
         } => {
             let id = StableId::new(id)?;
-            let rule = StateStore::new(ProvenanceLayout::new(repo))
-                .list_rules(&ScopeId::new(scope)?)?
-                .into_iter()
-                .find(|rule| rule.id == id)
-                .ok_or_else(|| anyhow::anyhow!("rule `{}` not found in scope", id.as_str()))?;
+            let rule = Store::open(repo).rule(&ScopeId::new(scope)?, &id)?;
             output::print_json(&rule)?;
         }
     }

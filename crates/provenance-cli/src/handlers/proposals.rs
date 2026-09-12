@@ -3,13 +3,13 @@ use super::common::{
 };
 use crate::cli::ideation::ProposalsCommand;
 use crate::output;
+use crate::store::Store;
 use provenance_core::{
     AssertionId, IdeationEvidenceReference, PromotionState, ProposalTraceability, ProposalType,
     ScopeId, StableId,
 };
-use provenance_store::{
-    layout::ProvenanceLayout,
-    state_store::{CreateAssertionInput, CreateProposalCardInput, ProposalDemand, StateStore},
+use provenance_store::state_store::{
+    CreateAssertionInput, CreateProposalCardInput, ProposalDemand,
 };
 
 #[allow(clippy::too_many_lines)]
@@ -35,7 +35,7 @@ pub(super) fn handle(command: ProposalsCommand, quiet: bool) -> anyhow::Result<(
             ..
         } => {
             warn_if_skills_missing(&repo, quiet)?;
-            let store = StateStore::new(ProvenanceLayout::new(repo));
+            let store = Store::open(repo);
             let scope_id = ScopeId::new(scope)?;
             let proposal_id = StableId::new(id)?;
             let supporting_claim_ids = stable_ids(supporting_claim_id)?;
@@ -92,7 +92,7 @@ pub(super) fn handle(command: ProposalsCommand, quiet: bool) -> anyhow::Result<(
             ..
         } => {
             warn_if_skills_missing(&repo, quiet)?;
-            let store = StateStore::new(ProvenanceLayout::new(repo));
+            let store = Store::open(repo);
             let input = CreateAssertionInput {
                 scope_id: ScopeId::new(scope)?,
                 id: AssertionId::new(id)?,
@@ -110,8 +110,7 @@ pub(super) fn handle(command: ProposalsCommand, quiet: bool) -> anyhow::Result<(
         }
         ProposalsCommand::List { repo, scope, .. } => {
             warn_if_skills_missing(&repo, quiet)?;
-            let proposals = StateStore::new(ProvenanceLayout::new(repo))
-                .list_proposal_cards(&ScopeId::new(scope)?)?;
+            let proposals = Store::open(repo).list_proposal_cards(&ScopeId::new(scope)?)?;
             output::print_json(&proposals)?;
         }
         ProposalsCommand::Surface {
@@ -138,7 +137,7 @@ pub(super) fn handle(command: ProposalsCommand, quiet: bool) -> anyhow::Result<(
                 .map(|(target_type, target_id)| ideation_target(&target_type, target_id))
                 .transpose()?
                 .map_or_else(Vec::new, |target| vec![target]);
-            let surfaced = StateStore::new(ProvenanceLayout::new(repo)).surface_proposals(
+            let surfaced = Store::open(repo).surface_proposals(
                 &ScopeId::new(scope)?,
                 &ProposalDemand::new(changed_path, targets),
             )?;

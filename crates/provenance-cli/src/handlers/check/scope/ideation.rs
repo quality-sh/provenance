@@ -1,29 +1,23 @@
 use crate::handlers::check::index::CheckIndex;
 use crate::handlers::check::references::{check_ideation_target, check_scoped_reference};
+use crate::store::ScopeSnapshot;
 use provenance_core::{Contribution, DispositionRecord, ProposalCard, ScopeId, SynthesisPacket};
-use provenance_store::state_store::StateStore;
 
-pub(super) struct Records {
-    contributions: Vec<Contribution>,
-    synthesis_packets: Vec<SynthesisPacket>,
-    proposal_cards: Vec<ProposalCard>,
-    dispositions: Vec<DispositionRecord>,
+pub(super) struct Records<'a> {
+    contributions: &'a [Contribution],
+    synthesis_packets: &'a [SynthesisPacket],
+    proposal_cards: &'a [ProposalCard],
+    dispositions: &'a [DispositionRecord],
 }
 
-impl Records {
-    pub(super) fn load(
-        store: &StateStore,
-        scope_id: &ScopeId,
-        disposition_actor_ids: &[String],
-    ) -> anyhow::Result<Self> {
-        store.validate_ideation_scope_with_actor_ids(scope_id, disposition_actor_ids)?;
-        Ok(Self {
-            contributions: store.list_contributions(scope_id)?,
-            synthesis_packets: store.list_synthesis_packets(scope_id)?,
-            proposal_cards: store
-                .list_proposal_cards_with_actor_ids(scope_id, disposition_actor_ids)?,
-            dispositions: store.list_dispositions(scope_id)?,
-        })
+impl<'a> Records<'a> {
+    pub(super) fn load(snapshot: &'a ScopeSnapshot) -> Self {
+        Self {
+            contributions: &snapshot.contributions,
+            synthesis_packets: &snapshot.synthesis_packets,
+            proposal_cards: &snapshot.proposal_cards,
+            dispositions: &snapshot.dispositions,
+        }
     }
 
     pub(super) fn validate_scope_ownership(
@@ -45,14 +39,14 @@ impl Records {
             };
         }
 
-        check_records!(&self.contributions, "contribution");
-        check_records!(&self.synthesis_packets, "synthesis packet");
-        check_records!(&self.proposal_cards, "proposal");
-        check_records!(&self.dispositions, "disposition");
+        check_records!(self.contributions, "contribution");
+        check_records!(self.synthesis_packets, "synthesis packet");
+        check_records!(self.proposal_cards, "proposal");
+        check_records!(self.dispositions, "disposition");
     }
 
     pub(super) fn add_to(&self, index: &mut CheckIndex) {
-        for proposal in &self.proposal_cards {
+        for proposal in self.proposal_cards {
             index.add_node(&proposal.scope_id, "proposal", &proposal.id);
         }
     }
@@ -63,7 +57,7 @@ impl Records {
         scope_id: &ScopeId,
         dangling: &mut Vec<String>,
     ) {
-        for contribution in &self.contributions {
+        for contribution in self.contributions {
             check_ideation_target(
                 index,
                 dangling,
@@ -72,7 +66,7 @@ impl Records {
                 &contribution.target,
             );
         }
-        for synthesis_packet in &self.synthesis_packets {
+        for synthesis_packet in self.synthesis_packets {
             check_ideation_target(
                 index,
                 dangling,
@@ -81,7 +75,7 @@ impl Records {
                 &synthesis_packet.target,
             );
         }
-        for proposal in &self.proposal_cards {
+        for proposal in self.proposal_cards {
             let owner = format!("proposal {}", proposal.id.as_str());
             check_ideation_target(
                 index,
@@ -124,7 +118,7 @@ impl Records {
                 );
             }
         }
-        for disposition in &self.dispositions {
+        for disposition in self.dispositions {
             check_scoped_reference(
                 index,
                 dangling,
