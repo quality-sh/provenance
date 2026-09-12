@@ -1,7 +1,7 @@
 //! The add, set, and clear commands for reference fields. The owner flag
 //! names the owner kind; `--target-id` names the record the field points at.
 
-use crate::output::OutputFormat;
+use crate::output::JsonFormat;
 use camino::Utf8PathBuf;
 use clap::{Args, Subcommand};
 
@@ -15,8 +15,8 @@ pub struct RequirementTarget {
     pub requirement_id: String,
     #[arg(long)]
     pub target_id: String,
-    #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-    pub format: OutputFormat,
+    #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+    pub format: JsonFormat,
 }
 
 #[derive(Args)]
@@ -27,8 +27,8 @@ pub struct RequirementOnly {
     pub scope: String,
     #[arg(long)]
     pub requirement_id: String,
-    #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-    pub format: OutputFormat,
+    #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+    pub format: JsonFormat,
 }
 
 #[derive(Args)]
@@ -41,8 +41,8 @@ pub struct RuleTarget {
     pub rule_id: String,
     #[arg(long)]
     pub target_id: String,
-    #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-    pub format: OutputFormat,
+    #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+    pub format: JsonFormat,
 }
 
 #[derive(Args)]
@@ -55,8 +55,8 @@ pub struct ResolutionTarget {
     pub resolution_id: String,
     #[arg(long)]
     pub target_id: String,
-    #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-    pub format: OutputFormat,
+    #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+    pub format: JsonFormat,
 }
 
 #[derive(Args)]
@@ -69,8 +69,8 @@ pub struct SourceTarget {
     pub source_id: String,
     #[arg(long)]
     pub target_id: String,
-    #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-    pub format: OutputFormat,
+    #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+    pub format: JsonFormat,
 }
 
 #[derive(Args)]
@@ -83,8 +83,8 @@ pub struct QuestionTarget {
     pub id: String,
     #[arg(long)]
     pub target_id: String,
-    #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-    pub format: OutputFormat,
+    #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+    pub format: JsonFormat,
 }
 
 #[derive(Args)]
@@ -95,8 +95,8 @@ pub struct QuestionOnly {
     pub scope: String,
     #[arg(long)]
     pub id: String,
-    #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-    pub format: OutputFormat,
+    #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+    pub format: JsonFormat,
 }
 
 /// `requirements refines` and `requirements spawned-by`: one target at most.

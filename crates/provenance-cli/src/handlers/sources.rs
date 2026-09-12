@@ -28,7 +28,7 @@ pub(super) async fn handle(command: SourcesCommand) -> anyhow::Result<()> {
             supersedes,
             origin_thread,
             origin_message,
-            format,
+            ..
         } => {
             let source =
                 StateStore::new(ProvenanceLayout::new(repo)).create_source(CreateSourceInput {
@@ -45,7 +45,7 @@ pub(super) async fn handle(command: SourcesCommand) -> anyhow::Result<()> {
                     origin_thread: origin_thread.map(StableId::new).transpose()?,
                     origin_message: origin_message.map(StableId::new).transpose()?,
                 })?;
-            output::print(format, &source)?;
+            output::print_json(&source)?;
         }
         SourcesCommand::Supersedes { command } => refs::source_supersedes(command).await?,
     }

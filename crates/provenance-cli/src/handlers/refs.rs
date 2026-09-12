@@ -12,7 +12,7 @@ use crate::cli::references::{
     RequirementSingleCommand, RequirementTarget, ResolutionListCommand, ResolutionTarget,
     RuleListCommand, RuleTarget, SourceListCommand, SourceTarget,
 };
-use crate::output::{self, OutputFormat};
+use crate::output;
 use camino::Utf8PathBuf;
 use provenance_core::{ScopeId, StableId};
 use provenance_store::operations::catalog;
@@ -52,7 +52,6 @@ trait RefCommand {
     fn scope(&self) -> &str;
     /// The flag that names the record which owns the field.
     fn owner(&self) -> &str;
-    fn format(&self) -> OutputFormat;
 }
 
 /// A command that also names the record the field points at.
@@ -69,9 +68,6 @@ impl RefCommand for RequirementTarget {
     }
     fn owner(&self) -> &str {
         &self.requirement_id
-    }
-    fn format(&self) -> OutputFormat {
-        self.format
     }
 }
 impl WithTarget for RequirementTarget {
@@ -90,9 +86,6 @@ impl RefCommand for RequirementOnly {
     fn owner(&self) -> &str {
         &self.requirement_id
     }
-    fn format(&self) -> OutputFormat {
-        self.format
-    }
 }
 
 impl RefCommand for RuleTarget {
@@ -104,9 +97,6 @@ impl RefCommand for RuleTarget {
     }
     fn owner(&self) -> &str {
         &self.rule_id
-    }
-    fn format(&self) -> OutputFormat {
-        self.format
     }
 }
 impl WithTarget for RuleTarget {
@@ -125,9 +115,6 @@ impl RefCommand for ResolutionTarget {
     fn owner(&self) -> &str {
         &self.resolution_id
     }
-    fn format(&self) -> OutputFormat {
-        self.format
-    }
 }
 impl WithTarget for ResolutionTarget {
     fn target(&self) -> &str {
@@ -144,9 +131,6 @@ impl RefCommand for SourceTarget {
     }
     fn owner(&self) -> &str {
         &self.source_id
-    }
-    fn format(&self) -> OutputFormat {
-        self.format
     }
 }
 impl WithTarget for SourceTarget {
@@ -165,9 +149,6 @@ impl RefCommand for QuestionTarget {
     fn owner(&self) -> &str {
         &self.id
     }
-    fn format(&self) -> OutputFormat {
-        self.format
-    }
 }
 impl WithTarget for QuestionTarget {
     fn target(&self) -> &str {
@@ -185,9 +166,6 @@ impl RefCommand for QuestionOnly {
     fn owner(&self) -> &str {
         &self.id
     }
-    fn format(&self) -> OutputFormat {
-        self.format
-    }
 }
 
 /// Runs an operation whose request names the owner and the target, and
@@ -203,7 +181,7 @@ where
         target_id: StableId::new(args.target())?,
     };
     let record = invoke_native::<O>(args.repo().clone(), scope, request).await?;
-    output::print(args.format(), &record)
+    output::print_json(&record)
 }
 
 /// Runs an operation whose request names only the owner, and prints the
@@ -218,7 +196,7 @@ where
         id: StableId::new(args.owner())?,
     };
     let record = invoke_native::<O>(args.repo().clone(), scope, request).await?;
-    output::print(args.format(), &record)
+    output::print_json(&record)
 }
 
 /// `requirements refines` and `requirements spawned-by`: one target at most.

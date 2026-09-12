@@ -1,10 +1,7 @@
 use super::validate::{
     validate_contribution_record, validate_proposal_card_record, validate_synthesis_packet_record,
 };
-use crate::{
-    cli::ideation::SwarmBacktraceCommand,
-    output::{self, OutputFormat},
-};
+use crate::{cli::ideation::SwarmBacktraceCommand, output};
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{
@@ -26,8 +23,8 @@ pub(super) fn handle(command: SwarmBacktraceCommand) -> anyhow::Result<()> {
             scope,
             run_dir,
             replace,
-            format,
-        } => land(repo, scope, &run_dir, replace, format),
+            ..
+        } => land(repo, scope, &run_dir, replace),
     }
 }
 
@@ -63,13 +60,7 @@ type MergeRecords = (
     Vec<DispositionRecord>,
 );
 
-fn land(
-    repo: Utf8PathBuf,
-    scope: String,
-    run_dir: &Utf8Path,
-    replace: bool,
-    format: OutputFormat,
-) -> anyhow::Result<()> {
+fn land(repo: Utf8PathBuf, scope: String, run_dir: &Utf8Path, replace: bool) -> anyhow::Result<()> {
     anyhow::ensure!(run_dir.is_dir(), "--run-dir must be an existing directory");
     let scope_id = ScopeId::new(scope)?;
     let contributions = read_contributions(run_dir)?;
@@ -153,17 +144,14 @@ fn land(
         replace,
     )?;
 
-    output::print(
-        format,
-        &LandReport {
-            run_dir: run_dir.to_string(),
-            contributions: contribution_count,
-            synthesis_packets: synthesis_count,
-            proposals: proposal_count,
-            assertions: assertion_count,
-            replace,
-        },
-    )
+    output::print_json(&LandReport {
+        run_dir: run_dir.to_string(),
+        contributions: contribution_count,
+        synthesis_packets: synthesis_count,
+        proposals: proposal_count,
+        assertions: assertion_count,
+        replace,
+    })
 }
 
 fn read_contributions(run_dir: &Utf8Path) -> anyhow::Result<Vec<Contribution>> {

@@ -28,7 +28,6 @@ pub(super) async fn handle(operation: Operation, args: QueryArgs) -> anyhow::Res
     let policy =
         provenance_store::operations::read_policy::ReadPolicy::resolve(&settings, args.freshness);
     let scope = ScopeId::new(args.scope)?;
-    let format = args.format;
     let context = catalog::PreparedContext::read(catalog::PreparedRead {
         root,
         scope: scope.clone(),
@@ -40,47 +39,47 @@ pub(super) async fn handle(operation: Operation, args: QueryArgs) -> anyhow::Res
         Operation::Get => {
             let result =
                 catalog::invoke_typed::<catalog::Get>(context, super::read_stdin_json()?).await?;
-            output::print(format, &result)
+            output::print_json(&result)
         }
         Operation::Search => {
             let result =
                 catalog::invoke_typed::<catalog::Search>(context, super::read_stdin_json()?)
                     .await?;
-            output::print(format, &result)
+            output::print_json(&result)
         }
         Operation::Neighbors => {
             let result =
                 catalog::invoke_typed::<catalog::Neighbors>(context, super::read_stdin_json()?)
                     .await?;
-            output::print(format, &result)
+            output::print_json(&result)
         }
         Operation::Trace => {
             let result =
                 catalog::invoke_typed::<catalog::Trace>(context, super::read_stdin_json()?).await?;
-            output::print(format, &result)
+            output::print_json(&result)
         }
         Operation::Impact => {
             let result =
                 catalog::invoke_typed::<catalog::Impact>(context, super::read_stdin_json()?)
                     .await?;
-            output::print(format, &result)
+            output::print_json(&result)
         }
         Operation::Evidence => {
             let result =
                 catalog::invoke_typed::<catalog::Evidence>(context, super::read_stdin_json()?)
                     .await?;
-            output::print(format, &result)
+            output::print_json(&result)
         }
         Operation::Stale => {
             let result =
                 catalog::invoke_typed::<catalog::Stale>(context, super::read_stdin_json()?).await?;
-            output::print(format, &result)
+            output::print_json(&result)
         }
         Operation::ResolveSymbol => {
             let result =
                 catalog::invoke_typed::<catalog::ResolveSymbol>(context, super::read_stdin_json()?)
                     .await?;
-            output::print(format, &result)
+            output::print_json(&result)
         }
     }
 }

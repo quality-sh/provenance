@@ -18,5 +18,5 @@ pub(super) async fn handle<O: Operation<Failure = WriteError>>(
     let request = serde_json::from_value(fields.into())?;
     let result =
         super::native::invoke_native::<O>(args.repo, ScopeId::new(args.scope)?, request).await?;
-    output::print(args.format, &result)
+    output::print_json(&result)
 }

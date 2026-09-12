@@ -23,7 +23,7 @@ pub(super) async fn handle(command: QuestionsCommand, quiet: bool) -> anyhow::Re
             links_json,
             resolution_id,
             contradicts,
-            format,
+            format: _,
         } => {
             warn_if_skills_missing(&repo, quiet)?;
             let question = StateStore::new(ProvenanceLayout::new(repo)).create_question(
@@ -40,18 +40,18 @@ pub(super) async fn handle(command: QuestionsCommand, quiet: bool) -> anyhow::Re
                     contradicts: contradicts.map(StableId::new).transpose()?,
                 },
             )?;
-            output::print(format, &question)?;
+            output::print_json(&question)?;
         }
         QuestionsCommand::Contradicts { command } => refs::question_contradicts(command).await?,
         QuestionsCommand::List {
             repo,
             scope,
-            format,
+            format: _,
         } => {
             warn_if_skills_missing(&repo, quiet)?;
             let questions = StateStore::new(ProvenanceLayout::new(repo))
                 .list_questions(&ScopeId::new(scope)?)?;
-            output::print(format, &questions)?;
+            output::print_json(&questions)?;
         }
         QuestionsCommand::Update {
             repo,
@@ -63,7 +63,7 @@ pub(super) async fn handle(command: QuestionsCommand, quiet: bool) -> anyhow::Re
             links_json,
             resolution_id,
             fields_json,
-            format,
+            format: _,
         } => {
             warn_if_skills_missing(&repo, quiet)?;
             let fields_json = if let Some(fields) = fields_json {
@@ -91,7 +91,7 @@ pub(super) async fn handle(command: QuestionsCommand, quiet: bool) -> anyhow::Re
                     scope,
                     id,
                     fields_json,
-                    format,
+                    format: output::JsonFormat::Json,
                 },
             )
             .await?;
@@ -101,7 +101,7 @@ pub(super) async fn handle(command: QuestionsCommand, quiet: bool) -> anyhow::Re
             scope,
             id,
             actor,
-            format,
+            format: _,
         } => {
             warn_if_skills_missing(&repo, quiet)?;
             let question = StateStore::new(ProvenanceLayout::new(repo)).claim_question(
@@ -109,18 +109,18 @@ pub(super) async fn handle(command: QuestionsCommand, quiet: bool) -> anyhow::Re
                 &StableId::new(id)?,
                 &actor,
             )?;
-            output::print(format, &question)?;
+            output::print_json(&question)?;
         }
         QuestionsCommand::Release {
             repo,
             scope,
             id,
-            format,
+            format: _,
         } => {
             warn_if_skills_missing(&repo, quiet)?;
             let question = StateStore::new(ProvenanceLayout::new(repo))
                 .release_question(&ScopeId::new(scope)?, &StableId::new(id)?)?;
-            output::print(format, &question)?;
+            output::print_json(&question)?;
         }
         QuestionsCommand::Answer {
             repo,
@@ -128,7 +128,7 @@ pub(super) async fn handle(command: QuestionsCommand, quiet: bool) -> anyhow::Re
             id,
             answer,
             resolution_id,
-            format,
+            format: _,
         } => {
             warn_if_skills_missing(&repo, quiet)?;
             let question = StateStore::new(ProvenanceLayout::new(repo)).answer_question(
@@ -137,7 +137,7 @@ pub(super) async fn handle(command: QuestionsCommand, quiet: bool) -> anyhow::Re
                 answer,
                 resolution_id.map(StableId::new).transpose()?,
             )?;
-            output::print(format, &question)?;
+            output::print_json(&question)?;
         }
     }
     Ok(())

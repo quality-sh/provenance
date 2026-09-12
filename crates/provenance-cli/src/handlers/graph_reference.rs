@@ -15,28 +15,19 @@ pub(super) fn handle(command: GraphReferenceCommand) -> anyhow::Result<()> {
                 .map(|(system, key)| ExternalCorrelation { system, key });
             let reference =
                 GraphReferences::open(&repo)?.issue(&scope, commit.as_deref(), correlation)?;
-            output::print(crate::output::OutputFormat::Json, &reference)?;
+            output::print_json(&reference)?;
         }
         GraphReferenceCommand::Show { repo, reference } => {
             let reference = read_reference(&reference)?;
-            output::print(
-                crate::output::OutputFormat::Json,
-                &GraphReferences::open(&repo)?.show(&reference)?,
-            )?;
+            output::print_json(&GraphReferences::open(&repo)?.show(&reference)?)?;
         }
         GraphReferenceCommand::Verify { repo, reference } => {
             let reference = read_reference(&reference)?;
-            output::print(
-                crate::output::OutputFormat::Json,
-                &GraphReferences::open(&repo)?.verify(&reference)?,
-            )?;
+            output::print_json(&GraphReferences::open(&repo)?.verify(&reference)?)?;
         }
         GraphReferenceCommand::ExactExport { repo, reference } => {
             let reference = read_reference(&reference)?;
-            output::print(
-                crate::output::OutputFormat::Json,
-                &GraphReferences::open(&repo)?.exact_export(&reference)?,
-            )?;
+            output::print_json(&GraphReferences::open(&repo)?.exact_export(&reference)?)?;
         }
     }
     Ok(())

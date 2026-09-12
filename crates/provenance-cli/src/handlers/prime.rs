@@ -1,4 +1,4 @@
-use crate::output::{self, OutputFormat};
+use crate::output::{self, ReportFormat};
 use crate::skills;
 use camino::Utf8PathBuf;
 use provenance_core::ScopeId;
@@ -14,7 +14,7 @@ struct PrimeOutput {
 pub(super) fn handle(
     repo: Utf8PathBuf,
     scope: String,
-    format: OutputFormat,
+    format: ReportFormat,
     include_threads: bool,
 ) -> anyhow::Result<()> {
     let skill_status = skills::install_status(repo.as_std_path())?;
@@ -23,18 +23,18 @@ pub(super) fn handle(
         &ScopeId::new(scope)?,
         include_threads,
     )?;
-    if matches!(format, OutputFormat::Markdown | OutputFormat::Toon) {
-        let mut rendered = cache::render_prime_markdown(&view);
-        rendered.push_str(&skills::render_status_markdown(&skill_status));
-        println!("{rendered}");
-    } else {
-        output::print(
-            format,
-            &PrimeOutput {
+    match format {
+        ReportFormat::Markdown => {
+            let mut rendered = cache::render_prime_markdown(&view);
+            rendered.push_str(&skills::render_status_markdown(&skill_status));
+            println!("{rendered}");
+        }
+        ReportFormat::Json => {
+            output::print_json(&PrimeOutput {
                 view,
                 skills: skill_status,
-            },
-        )?;
+            })?;
+        }
     }
     Ok(())
 }

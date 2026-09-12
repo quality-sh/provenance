@@ -15,7 +15,7 @@ pub(super) fn handle(command: ThreadCommand) -> anyhow::Result<()> {
             parent_id,
             role,
             body,
-            format,
+            ..
         } => {
             let result = StateStore::new(ProvenanceLayout::new(repo)).post_thread_message(
                 PostMessageInput {
@@ -28,16 +28,12 @@ pub(super) fn handle(command: ThreadCommand) -> anyhow::Result<()> {
                     body,
                 },
             )?;
-            output::print(format, &result)?;
+            output::print_json(&result)?;
         }
-        ThreadCommand::List {
-            repo,
-            scope,
-            format,
-        } => {
+        ThreadCommand::List { repo, scope, .. } => {
             let threads =
                 StateStore::new(ProvenanceLayout::new(repo)).list_threads(&ScopeId::new(scope)?)?;
-            output::print(format, &threads)?;
+            output::print_json(&threads)?;
         }
     }
     Ok(())

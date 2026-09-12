@@ -28,7 +28,7 @@ pub(super) fn handle(command: DispositionsCommand) -> anyhow::Result<()> {
             external_scope,
             external_kind,
             external_key,
-            format,
+            ..
         } => {
             let disposition = StateStore::new(ProvenanceLayout::new(repo)).create_disposition(
                 CreateDispositionInput {
@@ -67,13 +67,9 @@ pub(super) fn handle(command: DispositionsCommand) -> anyhow::Result<()> {
                     },
                 },
             )?;
-            output::print(format, &disposition)?;
+            output::print_json(&disposition)?;
         }
-        DispositionsCommand::List {
-            repo,
-            scope,
-            format,
-        } => {
+        DispositionsCommand::List { repo, scope, .. } => {
             let store = StateStore::new(ProvenanceLayout::new(repo));
             let scope_id = ScopeId::new(scope)?;
             let dispositions = store.with_repository_publication(|| {
@@ -81,7 +77,7 @@ pub(super) fn handle(command: DispositionsCommand) -> anyhow::Result<()> {
                 store.validate_graph_scope(&scope_id)?;
                 store.list_dispositions(&scope_id)
             })?;
-            output::print(format, &dispositions)?;
+            output::print_json(&dispositions)?;
         }
     }
     Ok(())

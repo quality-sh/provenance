@@ -1,4 +1,4 @@
-use crate::output::{self, OutputFormat};
+use crate::output;
 use camino::Utf8PathBuf;
 use provenance_core::{NodeType, ScopeId, StableId};
 use provenance_store::{cache, layout::ProvenanceLayout};
@@ -10,7 +10,6 @@ pub(super) fn handle(
     node_type: &str,
     max_hops: u32,
     follow_indirect: bool,
-    format: OutputFormat,
 ) -> anyhow::Result<()> {
     let view = cache::analyze_impact(
         &ProvenanceLayout::new(repo),
@@ -22,6 +21,6 @@ pub(super) fn handle(
             follow_indirect,
         },
     )?;
-    output::print(format, &view)?;
+    output::print_json(&view)?;
     Ok(())
 }

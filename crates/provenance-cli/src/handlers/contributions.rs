@@ -33,7 +33,7 @@ pub(super) fn handle(command: ContributionsCommand, quiet: bool) -> anyhow::Resu
             uncertainty_rationale,
             open_questions_json,
             replace,
-            format,
+            ..
         } => {
             warn_if_skills_missing(&repo, quiet)?;
             let store = StateStore::new(ProvenanceLayout::new(repo));
@@ -77,17 +77,13 @@ pub(super) fn handle(command: ContributionsCommand, quiet: bool) -> anyhow::Resu
             } else {
                 store.create_contribution(input)?
             };
-            output::print(format, &contribution)?;
+            output::print_json(&contribution)?;
         }
-        ContributionsCommand::List {
-            repo,
-            scope,
-            format,
-        } => {
+        ContributionsCommand::List { repo, scope, .. } => {
             warn_if_skills_missing(&repo, quiet)?;
             let contributions = StateStore::new(ProvenanceLayout::new(repo))
                 .list_contributions(&ScopeId::new(scope)?)?;
-            output::print(format, &contributions)?;
+            output::print_json(&contributions)?;
         }
     }
     Ok(())
