@@ -126,29 +126,29 @@ fn point_read_refusals_keep_the_command_messages() {
 
     assert_not_found(
         store.requirement(&scope, &missing_requirement),
-        NotFound::Requirement,
+        &NotFound::Requirement,
         "requirement does not exist",
     );
     assert_not_found(
         store.rule(&scope, &missing_rule),
-        NotFound::Rule(missing_rule),
+        &NotFound::Rule(missing_rule),
         "rule `rule_missing` not found in scope",
     );
     assert_not_found(
         store.source(&scope, &missing_source),
-        NotFound::Source,
+        &NotFound::Source,
         "source does not exist",
     );
 }
 
 fn assert_not_found<T: std::fmt::Debug>(
     result: anyhow::Result<T>,
-    expected: NotFound,
+    expected: &NotFound,
     message: &str,
 ) {
     let error = result.unwrap_err();
     assert_eq!(error.to_string(), message);
-    assert_eq!(error.downcast_ref::<NotFound>(), Some(&expected));
+    assert_eq!(error.downcast_ref::<NotFound>(), Some(expected));
 }
 
 #[test]
