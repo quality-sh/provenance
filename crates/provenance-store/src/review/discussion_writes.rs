@@ -68,8 +68,11 @@ impl StateStore {
     }
 
     /// Changes one Discussion without changing siblings or its Thread status.
+    ///
+    /// Decision-cycle feedback reuses this under its own staged publication so
+    /// the disposition and the feedback Message publish together or not at all.
     #[rule("rule_reply_threads_resolve_independently")]
-    fn commit_discussion(
+    pub(super) fn commit_discussion(
         &self,
         input: WriteDiscussion,
         head: Option<DiscussionEntry>,

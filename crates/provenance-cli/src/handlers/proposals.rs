@@ -63,6 +63,9 @@ pub(super) fn handle(command: ProposalsCommand, quiet: bool) -> anyhow::Result<(
                 promotion_state: PromotionState::Proposed,
                 duplicate_of: None,
                 superseded_by: None,
+                record_revision: None,
+                revises: None,
+                revises_rejection: None,
             };
             let proposal = match (assertion_id, synthesis_packet_id) {
                 (Some(assertion_id), Some(synthesis_packet_id)) => store.create_asserted_proposal(
