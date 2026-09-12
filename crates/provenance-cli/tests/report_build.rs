@@ -82,7 +82,7 @@ fn create_rule(repo: &Path, id: &str, requirement: &str, statement: &str) {
 
 /// A real repository with two commits: the base commit holds one Requirement
 /// and one active Rule; the head commit adds a Resolution, a second Rule and
-/// the produced_by relation. The working tree stays clean at head.
+/// the `produced_by` relation. The working tree stays clean at head.
 fn two_commit_repo() -> (tempfile::TempDir, String, String) {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path().to_path_buf();
@@ -151,8 +151,8 @@ fn build_envelope(repo: &Path, base: &str, head: &str) -> Value {
 #[test]
 #[verifies("rule_report_envelope_states_only_known_facts", examples)]
 fn graph_only_change_between_two_real_commits_lists_added_records() {
-    let (_dir, base, head) = two_commit_repo();
-    let repo = _dir.path();
+    let (dir, base, head) = two_commit_repo();
+    let repo = dir.path();
     let envelope = build_envelope(repo, &base, &head);
 
     assert_eq!(envelope["schema_version"], 1);
@@ -186,7 +186,7 @@ fn graph_only_change_between_two_real_commits_lists_added_records() {
     // not appear as added or changed between the two commits.
     assert!(
         !changes.iter().any(|change| change["id"] == "rule_anchor"
-            && matches!(change["change"].as_str(), Some("added") | Some("changed"))),
+            && matches!(change["change"].as_str(), Some("added" | "changed"))),
         "the unchanged anchor rule must not be reported as changed"
     );
 }
@@ -194,14 +194,14 @@ fn graph_only_change_between_two_real_commits_lists_added_records() {
 #[test]
 #[verifies("rule_report_envelope_states_only_known_facts", examples)]
 fn active_rule_without_verification_is_reported_and_no_run_is_invented() {
-    let (_dir, base, head) = two_commit_repo();
-    let repo = _dir.path();
+    let (dir, base, head) = two_commit_repo();
+    let repo = dir.path();
     let envelope = build_envelope(repo, &base, &head);
 
     assert!(
         envelope["verification_runs"]
             .as_array()
-            .map_or(true, |runs| runs.is_empty()),
+            .is_none_or(Vec::is_empty),
         "the builder must never fabricate a verification run"
     );
 
@@ -230,8 +230,8 @@ fn active_rule_without_verification_is_reported_and_no_run_is_invented() {
 #[test]
 #[verifies("rule_report_envelope_states_only_known_facts", examples)]
 fn repeated_builds_of_the_same_state_are_byte_identical() {
-    let (_dir, base, head) = two_commit_repo();
-    let repo = _dir.path();
+    let (dir, base, head) = two_commit_repo();
+    let repo = dir.path();
     let first = provenance(repo)
         .args([
             "report",
@@ -300,7 +300,7 @@ fn missing_baseline_facts_are_labelled_honestly() {
     assert!(
         envelope["graph_changes"]
             .as_array()
-            .map_or(true, |changes| changes.is_empty()),
+            .is_none_or(Vec::is_empty),
         "a missing baseline cannot establish graph changes"
     );
     let findings = envelope["findings"].as_array().cloned().unwrap_or_default();
@@ -315,8 +315,8 @@ fn missing_baseline_facts_are_labelled_honestly() {
 #[test]
 #[verifies("rule_report_envelope_states_only_known_facts", examples)]
 fn an_uncommitted_working_tree_is_labelled_incomplete_with_a_reason() {
-    let (_dir, base, head) = two_commit_repo();
-    let repo = _dir.path();
+    let (dir, base, head) = two_commit_repo();
+    let repo = dir.path();
     write(repo, "src/lib.rs", "pub fn anchor() -> u32 { 1 }\n");
 
     let envelope = build_envelope(repo, &base, &head);
@@ -340,11 +340,11 @@ fn an_uncommitted_working_tree_is_labelled_incomplete_with_a_reason() {
 #[test]
 #[verifies("rule_report_envelope_states_only_known_facts", examples)]
 fn builder_output_feeds_the_renderer_and_passes_its_checks() {
-    let (_dir, base, head) = two_commit_repo();
-    let repo = _dir.path();
+    let (dir, base, head) = two_commit_repo();
+    let repo = dir.path();
     let envelope = build_envelope(repo, &base, &head);
 
-    let envelope_path = _dir.path().join("envelope.json");
+    let envelope_path = dir.path().join("envelope.json");
     std::fs::write(
         &envelope_path,
         serde_json::to_vec_pretty(&envelope).unwrap(),
