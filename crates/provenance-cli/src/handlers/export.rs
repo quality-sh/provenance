@@ -1,7 +1,7 @@
 use crate::output::OutputFormat;
+use crate::store::{ScopeSnapshot, Store};
 use camino::Utf8PathBuf;
 use provenance_core::ScopeId;
-use provenance_store::{layout::ProvenanceLayout, state_store::StateStore};
 use serde::Serialize;
 
 #[derive(Serialize, serde::Deserialize)]
@@ -38,33 +38,42 @@ pub struct ScopeExport {
     pub dispositions: Vec<provenance_core::DispositionRecord>,
 }
 
+impl ScopeExport {
+    fn from_snapshot(scope: String, snapshot: ScopeSnapshot) -> Self {
+        Self {
+            scope,
+            sources: snapshot.sources,
+            domains: snapshot.domains,
+            requirements: snapshot.requirements,
+            boundaries: snapshot.boundaries,
+            topics: snapshot.topics,
+            questions: snapshot.questions,
+            resolutions: snapshot.resolutions,
+            rules: snapshot.rules,
+            verification_bindings: snapshot.verification_bindings,
+            implementation_bindings: snapshot.implementation_bindings,
+            threads: snapshot.threads,
+            messages: snapshot.messages,
+            contributions: snapshot.contributions,
+            synthesis_packets: snapshot.synthesis_packets,
+            proposal_cards: snapshot.proposal_cards,
+            assertion_records: snapshot.assertion_records,
+            dispositions: snapshot.dispositions,
+        }
+    }
+}
+
 pub fn export_scope(repo: Utf8PathBuf, scope: String) -> anyhow::Result<ScopeExport> {
     let scope_id = ScopeId::new(scope.clone())?;
-    let store = StateStore::new(ProvenanceLayout::new(repo));
+    let store = Store::open(repo);
     store.with_repository_publication(|| {
         store.ensure_review_portable(&scope_id)?;
         store.validate_ideation_scope(&scope_id)?;
         store.validate_graph_scope(&scope_id)?;
-        Ok(ScopeExport {
+        Ok(ScopeExport::from_snapshot(
             scope,
-            sources: store.list_sources(&scope_id)?,
-            domains: store.list_domains(&scope_id)?,
-            requirements: store.list_requirements(&scope_id)?,
-            boundaries: store.list_boundaries(&scope_id)?,
-            topics: store.list_topics(&scope_id)?,
-            questions: store.list_questions(&scope_id)?,
-            resolutions: store.list_resolutions(&scope_id)?,
-            rules: store.list_rules(&scope_id)?,
-            verification_bindings: store.list_verification_bindings(&scope_id)?,
-            implementation_bindings: store.list_implementation_bindings(&scope_id)?,
-            threads: store.list_threads(&scope_id)?,
-            messages: store.list_messages(&scope_id)?,
-            contributions: store.list_contributions(&scope_id)?,
-            synthesis_packets: store.list_synthesis_packets(&scope_id)?,
-            proposal_cards: store.list_proposal_definitions(&scope_id)?,
-            assertion_records: store.list_assertion_records(&scope_id)?,
-            dispositions: store.list_dispositions(&scope_id)?,
-        })
+            store.snapshot(&scope_id)?,
+        ))
     })
 }
 
