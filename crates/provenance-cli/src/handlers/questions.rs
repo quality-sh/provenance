@@ -1,5 +1,5 @@
 use super::common::{parse_json_arg, warn_if_skills_missing};
-use super::references;
+use super::refs;
 use crate::cli::shaping::QuestionsCommand;
 use crate::output;
 use provenance_core::{ArtifactLink, QuestionStatus, ResolutionMethod, ScopeId, StableId};
@@ -42,7 +42,7 @@ pub(super) async fn handle(command: QuestionsCommand, quiet: bool) -> anyhow::Re
             )?;
             output::print(format, &question)?;
         }
-        QuestionsCommand::Contradicts { command } => references::question_contradicts(command)?,
+        QuestionsCommand::Contradicts { command } => refs::question_contradicts(command).await?,
         QuestionsCommand::List {
             repo,
             scope,
