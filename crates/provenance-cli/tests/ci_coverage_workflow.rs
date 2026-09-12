@@ -79,23 +79,31 @@ fn the_rule_coverage_job_runs_for_policy_changes() {
     );
 }
 
-/// A policy-only pull request skips the rust and sdk jobs, so every job
-/// whose artifact `rule-coverage` downloads must run for the same change
-/// set: the linux CLI build, and the review assets its build restores.
+/// A policy-only pull request skips the rust and sdk jobs, so every job in
+/// the chain rule-coverage hangs from must run for the same change set:
+/// generate-operations builds the operation source review-assets composes
+/// from, review-assets composes the review assets the CLI build restores,
+/// and build-cli-linux produces the CLI artifact rule-coverage downloads.
 #[test]
 fn a_policy_only_change_builds_the_artifacts_rule_coverage_downloads() {
     let workflow = workflow();
-    let build = job_block(&workflow, "  build-cli-linux:", "\n  build-cli-platforms:");
-    let build_condition = condition_between(&build, "runs-on:");
+    let generate = job_block(&workflow, "  generate-operations:", "\n  review-assets:");
+    let generate_condition = condition_between(&generate, "runs-on:");
     assert!(
-        build_condition.contains("needs.changes.outputs.policy == 'true'"),
-        "the linux CLI build must produce the artifact whenever rule-coverage can run: {build_condition}"
+        generate_condition.contains("needs.changes.outputs.policy == 'true'"),
+        "review-assets composes from the operation-generated artifact, so its source must build too: {generate_condition}"
     );
     let review = job_block(&workflow, "\n  review-assets:", "\n  # One build per OS.");
     let review_condition = condition_between(&review, "uses:");
     assert!(
         review_condition.contains("needs.changes.outputs.policy == 'true'"),
         "the CLI build restores the composed review assets, so their job must run too: {review_condition}"
+    );
+    let build = job_block(&workflow, "  build-cli-linux:", "\n  build-cli-platforms:");
+    let build_condition = condition_between(&build, "runs-on:");
+    assert!(
+        build_condition.contains("needs.changes.outputs.policy == 'true'"),
+        "the linux CLI build must produce the artifact whenever rule-coverage can run: {build_condition}"
     );
     let coverage = rule_coverage_job(&workflow);
     assert!(

@@ -108,7 +108,11 @@ jobs:
   generate-operations:
     name: Generate operation clients
     needs: changes
-    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true' || needs.changes.outputs.contract == 'true'
+    # Policy-only pull requests skip the rust, sdk, and contract jobs, but
+    # review-assets composes from this job's operation-generated artifact,
+    # so the same policy trigger keeps the chain that feeds rule-coverage
+    # intact.
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true' || needs.changes.outputs.contract == 'true' || needs.changes.outputs.policy == 'true'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v7
