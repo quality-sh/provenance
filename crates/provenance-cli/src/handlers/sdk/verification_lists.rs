@@ -17,11 +17,7 @@ where
 {
     let root = operations::discover_repository(repo)?;
     let rule = rule.map(StableId::new).transpose()?;
-    let result = invoke_native::<O>(
-        root,
-        ScopeId::new(scope)?,
-        VerificationListRequest { rule },
-    )
-    .await?;
+    let result =
+        invoke_native::<O>(root, ScopeId::new(scope)?, VerificationListRequest { rule }).await?;
     output::print(format, &result)
 }

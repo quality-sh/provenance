@@ -16,6 +16,7 @@ use crate::output::{self, OutputFormat};
 use camino::Utf8PathBuf;
 use provenance_core::{ScopeId, StableId};
 use provenance_store::operations::catalog;
+use provenance_store::write_error::WriteError;
 
 /// Which field a requirement single-target command addresses.
 #[derive(Clone, Copy)]
@@ -193,7 +194,7 @@ impl RefCommand for QuestionOnly {
 /// prints the record it returns.
 async fn targeted<O>(args: &impl WithTarget) -> anyhow::Result<()>
 where
-    O: catalog::Operation<Request = catalog::ReferenceActionInput>,
+    O: catalog::Operation<Request = catalog::ReferenceActionInput, Failure = WriteError>,
 {
     let scope = ScopeId::new(args.scope())?;
     let request = catalog::ReferenceActionInput {
@@ -209,7 +210,7 @@ where
 /// record it returns.
 async fn owner_only<O>(args: &impl RefCommand) -> anyhow::Result<()>
 where
-    O: catalog::Operation<Request = catalog::RecordActionInput>,
+    O: catalog::Operation<Request = catalog::RecordActionInput, Failure = WriteError>,
 {
     let scope = ScopeId::new(args.scope())?;
     let request = catalog::RecordActionInput {
@@ -263,10 +264,7 @@ pub(super) async fn requirement_list(
 }
 
 /// `rules requirement` and `rules resolution`.
-pub(super) async fn rule_list(
-    field: RuleList,
-    command: RuleListCommand,
-) -> anyhow::Result<()> {
+pub(super) async fn rule_list(field: RuleList, command: RuleListCommand) -> anyhow::Result<()> {
     match (field, command) {
         (RuleList::Requirement, RuleListCommand::Add(args)) => {
             targeted::<catalog::AddRuleRequirement>(&args).await
@@ -315,7 +313,9 @@ pub(super) async fn source_supersedes(command: SourceListCommand) -> anyhow::Res
 /// `questions contradicts`.
 pub(super) async fn question_contradicts(command: QuestionSingleCommand) -> anyhow::Result<()> {
     match command {
-        QuestionSingleCommand::Set(args) => targeted::<catalog::SetQuestionContradicts>(&args).await,
+        QuestionSingleCommand::Set(args) => {
+            targeted::<catalog::SetQuestionContradicts>(&args).await
+        }
         QuestionSingleCommand::Clear(args) => {
             owner_only::<catalog::ClearQuestionContradicts>(&args).await
         }
