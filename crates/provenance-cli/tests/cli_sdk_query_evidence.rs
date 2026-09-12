@@ -74,33 +74,3 @@ fn a_verification_run_after_the_change_clears_the_review() {
     assert_eq!(answer["review_required"], false);
     assert_eq!(answer["verification_runs"].as_array().unwrap().len(), 2);
 }
-
-#[test]
-fn evidence_leaves_out_retired_bindings_until_the_caller_asks_for_them() {
-    let directory = init_repo();
-    let repo = directory.path().to_str().unwrap();
-    let ids = apply_shared_rule(&directory);
-    let mut without_implementation = fixtures::shared_rule_spec();
-    without_implementation["rules"][0]
-        .as_object_mut()
-        .unwrap()
-        .remove("implementation");
-    sdk(repo, "apply", &without_implementation);
-
-    let active = sdk(repo, "evidence", &json!({"rule": ids.rule.as_str()}));
-    assert_eq!(active["implementation_bindings"], json!([]));
-
-    let including = sdk(
-        repo,
-        "evidence",
-        &json!({"rule": ids.rule, "include_retired": true}),
-    );
-    assert_eq!(
-        including["implementation_bindings"]
-            .as_array()
-            .unwrap()
-            .len(),
-        1
-    );
-    assert_eq!(including["implementation_bindings"][0]["retired"], true);
-}

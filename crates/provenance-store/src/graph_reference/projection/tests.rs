@@ -69,12 +69,14 @@ fn stable_id(family: RecordFamily) -> StableId {
 
 fn source_record(scope: &ScopeId) -> Source {
     Source {
+        created: None,
+        updated: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: stable_id(RecordFamily::Source),
         declared_by: None,
         declaration_address: None,
-        retired: false,
+
         name: "Pinned source".into(),
         source_type: SourceType::Policy,
         url: None,
@@ -101,12 +103,14 @@ fn domain_record(scope: &ScopeId) -> Domain {
 
 fn requirement_record(scope: &ScopeId) -> Requirement {
     Requirement {
+        created: None,
+        updated: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: stable_id(RecordFamily::Requirement),
         declared_by: None,
         declaration_address: None,
-        retired: false,
+
         statement: "Pinned requirement".into(),
         description: None,
         fog: None,
@@ -168,6 +172,8 @@ fn question_record(scope: &ScopeId) -> Question {
 
 fn resolution_record(scope: &ScopeId) -> Resolution {
     Resolution {
+        created: None,
+        updated: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: stable_id(RecordFamily::Resolution),
@@ -192,12 +198,15 @@ fn resolution_record(scope: &ScopeId) -> Resolution {
 
 fn rule_record(scope: &ScopeId) -> Rule {
     Rule {
+        created: None,
+        updated: None,
+        archived_in_commit: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
         id: stable_id(RecordFamily::Rule),
         declared_by: None,
         declaration_address: None,
-        retired: false,
+
         name: None,
         description: None,
         statement: "Pinned rule".into(),
@@ -221,7 +230,7 @@ fn verification_binding_record(scope: &ScopeId) -> VerificationBinding {
         key: "pinned-check".into(),
         method: provenance_core::VerificationMethod::Examples,
         declared_by: "ci://typescript".into(),
-        retired: false,
+
         file: "tests/pinned.test.ts".into(),
         symbol: Some("pinned check".into()),
     }
@@ -234,7 +243,7 @@ fn implementation_binding_record(scope: &ScopeId) -> ImplementationBinding {
         id: stable_id(RecordFamily::ImplementationBinding),
         rule_id: stable_id(RecordFamily::Rule),
         declared_by: "spec://typescript/pinned".into(),
-        retired: false,
+
         file: "src/pinned.ts".into(),
         symbol: "pinnedImplementation".into(),
     }

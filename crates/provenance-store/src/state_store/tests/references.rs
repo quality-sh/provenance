@@ -216,6 +216,7 @@ fn a_required_list_keeps_its_last_entry() {
         .unwrap();
     store
         .create_rule(CreateRuleInput {
+            archived_in_commit: None,
             scope_id: scope.clone(),
             id: sid("rule_pay"),
             name: None,
@@ -252,6 +253,7 @@ fn a_create_with_no_requirement_is_refused() {
     let (_dir, store, scope) = seeded_requirement_store();
     let error = store
         .create_rule(CreateRuleInput {
+            archived_in_commit: None,
             scope_id: scope.clone(),
             id: sid("rule_orphan"),
             name: None,

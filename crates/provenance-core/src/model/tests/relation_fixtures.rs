@@ -22,12 +22,13 @@ pub(super) fn ids(values: &[&str]) -> Vec<StableId> {
 
 pub(super) fn source(id: &str, supersedes: &[&str]) -> Source {
     Source {
+created: None, updated: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid(id),
         declared_by: None,
         declaration_address: None,
-        retired: false,
+
         name: id.to_string(),
         source_type: SourceType::Policy,
         url: None,
@@ -43,12 +44,13 @@ pub(super) fn source(id: &str, supersedes: &[&str]) -> Source {
 
 pub(super) fn requirement(id: &str, domain_id: Option<&str>, cites: &[&str]) -> Requirement {
     Requirement {
+created: None, updated: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid(id),
         declared_by: None,
         declaration_address: None,
-        retired: false,
+
         statement: format!("{id} statement"),
         description: None,
         fog: None,
@@ -117,12 +119,13 @@ pub(super) fn topic(id: &str, requirement_id: &str, links: &[(&str, ArtifactLink
 
 pub(super) fn rule(id: &str, requirements: &[&str], resolutions: &[&str]) -> Rule {
     Rule {
+created: None, updated: None, archived_in_commit: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid(id),
         declared_by: None,
         declaration_address: None,
-        retired: false,
+
         name: None,
         description: None,
         statement: format!("{id} statement"),
@@ -150,6 +153,7 @@ pub(super) struct Fixture {
 
 pub(super) fn resolution(id: &str, requirements: &[&str], supersedes: &[&str]) -> Resolution {
     Resolution {
+created: None, updated: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid(id),

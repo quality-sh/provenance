@@ -99,6 +99,7 @@ fn rule_input(
     requirement_id: &StableId,
 ) -> CreateRuleInput {
     CreateRuleInput {
+        archived_in_commit: None,
         scope_id: scope.clone(),
         id: StableId::new(id).unwrap(),
         name: None,

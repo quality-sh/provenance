@@ -170,33 +170,3 @@ fn a_deleted_test_file_leaves_its_verification_binding_gone() {
     assert_eq!(sites[0]["subject_id"], "rule_start");
     assert_eq!(sites[0]["state"], "gone");
 }
-
-#[test]
-fn a_retired_verification_binding_is_not_a_stale_site() {
-    let directory = init_repo();
-    write(
-        directory.path(),
-        "tests/expiry.test.ts",
-        "// exercises start\n",
-    );
-    let base = commit(directory.path(), "add the test");
-    verify(
-        directory.path(),
-        "rule_start",
-        "expiry",
-        "tests/expiry.test.ts",
-    );
-    verify(
-        directory.path(),
-        "rule_resume",
-        "expiry",
-        "tests/expiry.test.ts",
-    );
-    std::fs::remove_file(directory.path().join("tests/expiry.test.ts")).unwrap();
-    let head = commit(directory.path(), "remove the test");
-
-    let sites = verification_sites(directory.path(), &base, &head);
-
-    assert_eq!(sites.len(), 1);
-    assert_eq!(sites[0]["subject_id"], "rule_resume");
-}

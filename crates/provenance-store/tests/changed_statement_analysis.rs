@@ -8,6 +8,8 @@ use provenance_store::statement_analysis::{analyze_changed_statements, Statement
 
 fn requirement(id: &str, statement: &str) -> Requirement {
     Requirement {
+        created: None,
+        updated: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: ScopeId::new("default").unwrap(),
         id: StableId::new(id).unwrap(),
@@ -17,7 +19,7 @@ fn requirement(id: &str, statement: &str) -> Requirement {
         description: None,
         fog: None,
         status: RequirementStatus::Active,
-        retired: false,
+
         domain_id: None,
         source_refs: Vec::new(),
         refines: None,
@@ -31,6 +33,9 @@ fn requirement(id: &str, statement: &str) -> Requirement {
 
 fn rule(id: &str, statement: &str) -> Rule {
     Rule {
+        created: None,
+        updated: None,
+        archived_in_commit: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: ScopeId::new("default").unwrap(),
         id: StableId::new(id).unwrap(),
@@ -40,7 +45,7 @@ fn rule(id: &str, statement: &str) -> Rule {
         description: None,
         statement: statement.to_owned(),
         status: RuleStatus::Active,
-        retired: false,
+
         severity: RuleSeverity::High,
         source_document: None,
         source_section: None,

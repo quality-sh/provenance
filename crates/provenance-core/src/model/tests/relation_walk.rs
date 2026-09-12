@@ -76,12 +76,13 @@ const LINK_TARGET: &str = "target_id";
 fn every_source_reference_key_is_declared_or_allowed() {
     assert_walk(
         &Source {
+created: None, updated: None,
             schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: ScopeId::new("default").unwrap(),
             id: sid("source_award"),
             declared_by: Some("spec".into()),
             declaration_address: Some(DeclarationAddress::new(["spec", "source", "award"]).unwrap()),
-            retired: true,
+
             name: "Award".into(),
             source_type: SourceType::Policy,
             url: Some("https://example.test".into()),
@@ -102,12 +103,13 @@ fn every_source_reference_key_is_declared_or_allowed() {
 fn every_requirement_reference_key_is_declared_or_allowed() {
     assert_walk(
         &Requirement {
+created: None, updated: None,
             schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: ScopeId::new("default").unwrap(),
             id: sid("req_overtime"),
             declared_by: Some("spec".into()),
             declaration_address: Some(DeclarationAddress::new(["spec", "requirement", "overtime"]).unwrap()),
-            retired: true,
+
             statement: "Overtime is paid".into(),
             description: Some("Description".into()),
             fog: Some("Fog".into()),
@@ -130,6 +132,7 @@ fn every_requirement_reference_key_is_declared_or_allowed() {
 fn every_resolution_reference_key_is_declared_or_allowed() {
     assert_walk(
         &Resolution {
+created: None, updated: None,
             schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: ScopeId::new("default").unwrap(),
             id: sid("res_threshold"),
@@ -163,12 +166,13 @@ fn every_resolution_reference_key_is_declared_or_allowed() {
 fn every_rule_reference_key_is_declared_or_allowed() {
     assert_walk(
         &Rule {
+created: None, updated: None, archived_in_commit: None,
             schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: ScopeId::new("default").unwrap(),
             id: sid("rule_pay"),
             declared_by: Some("spec".into()),
             declaration_address: Some(DeclarationAddress::new(["spec", "rule", "pay"]).unwrap()),
-            retired: true,
+
             name: Some("Pay".into()),
             description: Some("Description".into()),
             statement: "Pay overtime".into(),

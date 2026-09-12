@@ -58,6 +58,7 @@ fn store_with_unowned_rule() -> (tempfile::TempDir, StateStore, ScopeId) {
         .unwrap();
     store
         .create_rule(CreateRuleInput {
+            archived_in_commit: None,
             scope_id: scope.clone(),
             id: StableId::new("rule_existing").unwrap(),
             name: None,
@@ -154,6 +155,7 @@ fn rule_adoption_preserves_a_resolution_relationship_outside_the_typed_surface()
         .unwrap();
     store
         .create_rule(CreateRuleInput {
+            archived_in_commit: None,
             scope_id: scope.clone(),
             id: StableId::new("rule_existing").unwrap(),
             name: None,

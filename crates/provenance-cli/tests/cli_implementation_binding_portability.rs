@@ -108,12 +108,11 @@ fn scope_export_import_round_trip_preserves_implementation_bindings() {
     let reexported_path = directory.path().join("round-trip.json");
     init(&source);
     create_rule(&source, "rule_start");
-    let mut retired = binding("implementation_binding_start", "rule_start");
-    retired["retired"] = json!(true);
-    write_implementation_bindings(&source, &[retired.clone()]);
+    let saved = binding("implementation_binding_start", "rule_start");
+    write_implementation_bindings(&source, &[saved.clone()]);
 
     let exported = export(&source, &exported_path);
-    assert_eq!(exported["implementation_bindings"], json!([retired]));
+    assert_eq!(exported["implementation_bindings"], json!([saved]));
 
     init(&target);
     provenance()

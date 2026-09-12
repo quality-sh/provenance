@@ -101,19 +101,6 @@ pub fn sdk_rows() -> Vec<Row> {
                 pointer: "/declared_by",
                 expect: json!("spec://map"),
             },
-            clear: Clear::Sdk("apply", spec("", false, false), json!("spec://map")),
-        },
-        Row {
-            number: 38,
-            relation: "retired",
-            owner: "requirement",
-            act: Act::Derived("the apply in the row above omitted the requirement"),
-            read: Read::Record {
-                kind: "requirement",
-                id: "{spec_req}",
-                pointer: "/retired",
-                expect: json!(true),
-            },
             clear: Clear::None,
         },
         Row {

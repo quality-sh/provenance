@@ -352,19 +352,15 @@ fn merging_multiple_local_candidates_requires_an_explicit_existing_id() {
             .path()
             .join(".provenance/state/scopes/default/rules/rule.jsonl"),
     );
-    assert_eq!(records.len(), 2);
-    assert!(records
-        .iter()
-        .any(|record| record["id"] == sharing_id && record.get("retired").is_none()));
-    assert!(records
-        .iter()
-        .any(|record| record["id"] == sessions_id && record["retired"] == true));
+    assert_eq!(records.len(), 1);
+    assert!(records.iter().any(|record| record["id"] == sharing_id));
+    assert!(!records.iter().any(|record| record["id"] == sessions_id));
     assert_eq!(
         records
             .iter()
             .map(|record| record["requirement_ids"].as_array().map_or(0, Vec::len))
             .sum::<usize>(),
-        3
+        2
     );
 }
 

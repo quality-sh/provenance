@@ -43,7 +43,6 @@ async fn a_completed_read_leaves_no_wal_files() {
                 protocol_version: Some(SDK_PROTOCOL_VERSION),
                 node_type: NodeType::Requirement,
                 id: "req_schads_overtime".into(),
-                include_retired: false,
             },
         )
         .await

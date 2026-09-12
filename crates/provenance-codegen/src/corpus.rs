@@ -95,7 +95,7 @@ fn wire_fixtures() -> Value {
     )
     .unwrap();
     let plan: provenance_store::operations::TypedSpecPlan = serde_json::from_value(json!({"declared_by":"test","created":0,
-        "updated":0,"moved":0,"retired":0,"conflicts":0,"unchanged":0,"resources":[],"affected_rules":[]})).unwrap();
+        "updated":0,"moved":0,"deleted":0,"conflicts":0,"unchanged":0,"resources":[],"affected_rules":[]})).unwrap();
     let run: VerificationRun = serde_json::from_value(json!({"schema_version":1,"scope_id":"default","id":"run_a",
         "rule_id":"rule_a","binding_id":"binding_a","method":"examples","declared_by":"test","status":"running","started_at":1})).unwrap();
     json!({"GetOutput":get,"EvidenceOutput":evidence,"GraphNodeOutput":node,"PlanOutput":plan,

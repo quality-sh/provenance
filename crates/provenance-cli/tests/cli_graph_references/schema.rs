@@ -27,7 +27,7 @@ fn graph_reference_schemas_are_exposed() {
         ])
         .assert()
         .success()
-        .stdout(predicate::str::contains("\"retired\""));
+        .stdout(predicate::str::contains("\"declaration_address\""));
 }
 
 #[test]

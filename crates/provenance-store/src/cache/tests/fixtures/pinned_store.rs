@@ -1,11 +1,10 @@
 //! The frozen store behind the pinned answers test and the comparison tests:
-//! every kind and every relation, retired records that reference and are
-//! referenced, a diamond over a retired requirement, a source cited under
+//! every kind and every relation, a requirement diamond, a source cited under
 //! two clauses, a `links` pair naming one id under two kinds, lists past
 //! the limit, a cleared review, and one source file with scanner sites.
 //! It never reads `.provenance/state`, which moves on most pull requests.
 
-use super::{attach_source, create_resolution, create_rule_of, create_source, empty_layout, sid};
+use super::{create_resolution, create_rule_of, create_source, empty_layout, sid};
 use crate::layout::ProvenanceLayout;
 use crate::shards;
 use crate::state_store::{
@@ -27,13 +26,6 @@ pub fn pinned_store_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
     seed_graph(&store, &scope);
     seed_shaping(&store, &scope);
     seed_integrations(&layout, &scope);
-    for id in ["req_old_overtime", "req_right"] {
-        mark_retired(&shards::requirements_path(&layout, &scope), id);
-    }
-    mark_retired(
-        &shards::sources_path(&layout, &scope),
-        "source_retired_note",
-    );
     let source = layout.root().join("src/pay.rs");
     std::fs::create_dir_all(source.parent().unwrap()).unwrap();
     std::fs::write(
@@ -72,7 +64,6 @@ fn seed_graph(store: &StateStore, scope: &ScopeId) {
         })
         .unwrap();
     create_source(store, scope, "source_award_2019");
-    create_source(store, scope, "source_retired_note");
     store
         .create_source(CreateSourceInput {
             scope_id: scope.clone(),
@@ -102,13 +93,9 @@ fn seed_graph(store: &StateStore, scope: &ScopeId) {
             })
             .unwrap();
     }
-    attach_source(store, scope, "req_overtime", "source_retired_note");
-    store
-        .create_requirement(requirement("req_old_overtime", Some("req_overtime"), &[]))
-        .unwrap();
     store
         .create_requirement(CreateRequirementInput {
-            supersedes: vec![sid("req_old_overtime")],
+            supersedes: Vec::new(),
             ..requirement("req_penalty", Some("req_overtime"), &["req_overtime"])
         })
         .unwrap();
@@ -131,6 +118,7 @@ fn seed_graph(store: &StateStore, scope: &ScopeId) {
     create_resolution(store, scope, "res_penalty", "req_penalty");
     store
         .create_rule(crate::state_store::CreateRuleInput {
+            archived_in_commit: None,
             scope_id: scope.clone(),
             id: sid("rule_overtime_001"),
             name: Some("Overtime threshold".into()),
@@ -155,7 +143,6 @@ fn seed_graph(store: &StateStore, scope: &ScopeId) {
         );
     }
     create_rule_of(store, scope, "rule_penalty_001", "req_penalty");
-    create_rule_of(store, scope, "rule_old_001", "req_old_overtime");
     create_rule_of(store, scope, TWIN_ID, "req_top");
 }
 
@@ -212,40 +199,15 @@ fn seed_integrations(layout: &ProvenanceLayout, scope: &ScopeId) {
     let version = SUPPORTED_SCHEMA_VERSION.0;
     let scope_word = scope.as_str();
     let implementations = [
-        (
-            "bind_impl_a",
-            "rule_overtime_001",
-            "src/pay.rs",
-            "pay",
-            false,
-        ),
-        (
-            "bind_impl_b",
-            "rule_overtime_001",
-            "src/rates.rs",
-            "rate",
-            false,
-        ),
-        (
-            "bind_impl_c",
-            "rule_overtime_001",
-            "src/audit.rs",
-            "audit",
-            true,
-        ),
-        (
-            "bind_impl_d",
-            "rule_penalty_001",
-            "src/rates.rs",
-            "penalty",
-            false,
-        ),
+        ("bind_impl_a", "rule_overtime_001", "src/pay.rs", "pay"),
+        ("bind_impl_b", "rule_overtime_001", "src/rates.rs", "rate"),
+        ("bind_impl_d", "rule_penalty_001", "src/rates.rs", "penalty"),
     ];
     let lines: Vec<String> = implementations
         .iter()
-        .map(|(id, rule, file, symbol, retired)| {
+        .map(|(id, rule, file, symbol)| {
             format!(
-                r#"{{"schema_version":{version},"scope_id":"{scope_word}","id":"{id}","rule_id":"{rule}","declared_by":"spec://pinned","retired":{retired},"file":"{file}","symbol":"{symbol}"}}"#
+                r#"{{"schema_version":{version},"scope_id":"{scope_word}","id":"{id}","rule_id":"{rule}","declared_by":"spec://pinned","file":"{file}","symbol":"{symbol}"}}"#
             )
         })
         .collect();
@@ -314,13 +276,4 @@ fn seed_integrations(layout: &ProvenanceLayout, scope: &ScopeId) {
 fn write_lines(path: &camino::Utf8Path, lines: &[String]) {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(path, format!("{}\n", lines.join("\n"))).unwrap();
-}
-
-/// Marks one record retired in place, as a retire would leave it.
-pub fn mark_retired(path: &camino::Utf8Path, id: &str) {
-    super::rewrite_records(path, |record| {
-        if record["id"] == id {
-            record["retired"] = serde_json::Value::Bool(true);
-        }
-    });
 }
