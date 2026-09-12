@@ -11,7 +11,7 @@ pub(super) fn handle(command: ReportCommand) -> anyhow::Result<()> {
             input,
             format,
             output,
-        } => render_handler(&input, format, &output),
+        } => render_handler(&input, format, output.as_ref()),
         ReportCommand::Build {
             repo,
             base,
@@ -40,9 +40,9 @@ pub(super) fn handle(command: ReportCommand) -> anyhow::Result<()> {
 fn render_handler(
     input: &Utf8PathBuf,
     format: OutputFormat,
-    output: &Option<Utf8PathBuf>,
+    output: Option<&Utf8PathBuf>,
 ) -> anyhow::Result<()> {
-    let raw = std::fs::read_to_string(&input).with_context(|| format!("failed to read {input}"))?;
+    let raw = std::fs::read_to_string(input).with_context(|| format!("failed to read {input}"))?;
     let envelope: ReportEnvelope = serde_json::from_str(&raw)
         .with_context(|| format!("failed to parse report envelope {input}"))?;
     envelope
@@ -52,10 +52,10 @@ fn render_handler(
         .map_err(|message| anyhow::anyhow!("invalid report envelope: {message}"))?;
     let normalized = render::normalize(&envelope);
     match format {
-        OutputFormat::Markdown => emit(&render::render_markdown(&normalized), output.as_ref()),
+        OutputFormat::Markdown => emit(&render::render_markdown(&normalized), output),
         OutputFormat::Json => {
             let json = serde_json::to_string_pretty(&normalized)?;
-            emit(&json, output.as_ref())
+            emit(&json, output)
         }
         other => {
             anyhow::bail!("unsupported format {other:?} for report render; use markdown or json")
