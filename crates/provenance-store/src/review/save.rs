@@ -4,6 +4,7 @@ use provenance_core::review::{
     RequirementEditState, ReviewEntry, SaveOutcome, REVIEW_SCHEMA_VERSION,
 };
 use provenance_core::{Requirement, ScopeId, StableId};
+use provenance_macros::rule;
 
 impl StateStore {
     pub fn requirement_edit_state(
@@ -26,7 +27,27 @@ impl StateStore {
     }
 
     /// Publishes a Requirement edit, its evidence, and its request receipt together.
-    pub fn save_requirement(&self, mut input: SaveRequirement) -> anyhow::Result<ReviewEntry> {
+    pub fn save_requirement(&self, input: SaveRequirement) -> anyhow::Result<ReviewEntry> {
+        self.save_requirement_with_origin(input, None)
+    }
+
+    /// Saves a Requirement edit as a Discussion outcome and keeps the previous
+    /// text with it, so the outcome shows the change from the record's earlier
+    /// state through the Before snapshot rather than a link to the latest text.
+    #[rule("rule_discussion_outcome_shows_record_change")]
+    pub fn save_requirement_from_discussion(
+        &self,
+        input: SaveRequirement,
+        origin: provenance_core::threads::DiscussionOrigin,
+    ) -> anyhow::Result<ReviewEntry> {
+        self.save_requirement_with_origin(input, Some(origin))
+    }
+
+    fn save_requirement_with_origin(
+        &self,
+        mut input: SaveRequirement,
+        origin: Option<provenance_core::threads::DiscussionOrigin>,
+    ) -> anyhow::Result<ReviewEntry> {
         anyhow::ensure!(
             !input.actor.trim().is_empty(),
             "invalid review request identity"
@@ -36,7 +57,10 @@ impl StateStore {
             "review request exceeds the operation byte budget"
         );
         input.normalize();
-        let intent_digest = canonical_digest::digest(&canonical_digest::canonical_bytes(&input)?);
+        let intent_digest = canonical_digest::digest(&match &origin {
+            Some(origin) => canonical_digest::canonical_bytes(&(&input, origin))?,
+            None => canonical_digest::canonical_bytes(&input)?,
+        });
         self.with_repository_publication(|| {
             let scope_id = input.update.scope_id.clone();
             let scope = &scope_id;
@@ -59,6 +83,9 @@ impl StateStore {
                 );
                 return Ok(receipt);
             }
+            if let Some(origin) = &origin {
+                self.validate_discussion_origin(scope, origin)?;
+            }
             self.validated_review_entries(scope)?;
             let head = self.head(&record)?;
             let current_etag = head
@@ -74,7 +101,7 @@ impl StateStore {
                 let path = shards::requirements_path(layout, scope);
                 let record_id = record.id.clone();
                 guard::with_writer(&path, record_id.as_str(), || {
-                    staged.commit_requirement(input, &record, head, intent_digest)
+                    staged.commit_requirement(input, &record, head, intent_digest, origin)
                 })
             })
         })
@@ -86,6 +113,7 @@ impl StateStore {
         before: &Requirement,
         head: Option<ReviewEntry>,
         intent_digest: String,
+        origin: Option<provenance_core::threads::DiscussionOrigin>,
     ) -> anyhow::Result<ReviewEntry> {
         let scope = before.scope_id.clone();
         let id = before.id.clone();
@@ -152,6 +180,7 @@ impl StateStore {
             intent_digest,
             etag,
             outcome,
+            origin,
         };
         anyhow::ensure!(
             serde_json::to_vec(&entry)?.len() as u64 <= journal::ENTRY_BYTES,

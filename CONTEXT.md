@@ -199,3 +199,23 @@ in other Requirement branches can be references without becoming members.
 
 The state in which all member, reference, and discussion pages have been read
 at one unchanged projection revision. A failed refresh does not establish it.
+
+## Thread container
+
+A record's collection of collaboration history. Its active, resolved, or archived
+status is separate from the status of each Discussion that it contains.
+
+## Discussion
+
+One concern identified by a root Message and its replies inside one Thread.
+Its version identifies the current membership and active or resolved status.
+
+## Legacy group
+
+Messages in a Thread whose Discussion membership is unknown. A legacy group
+does not assign those Messages to an inferred root.
+
+## Requirement outcome
+
+An immutable record of a Requirement creation or edit, with its origin and
+After evidence. An edit also has Before evidence; creation has none.

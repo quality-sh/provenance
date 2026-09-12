@@ -27,6 +27,7 @@ pub struct SnapshotField {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SaveOutcome {
+    Created,
     Enrolled,
     Changed,
     LifecycleOnly,
@@ -53,6 +54,8 @@ pub struct ReviewEntry {
     pub intent_digest: String,
     pub etag: String,
     pub outcome: SaveOutcome,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<crate::threads::DiscussionOrigin>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -106,4 +109,32 @@ pub struct EvidenceQuery {
     pub field: Option<String>,
     #[serde(default)]
     pub offset: u64,
+}
+
+/// R1 Requirement entries keep their original representation in the shared journal.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum JournalEntry {
+    Requirement(Box<ReviewEntry>),
+    Discussion(Box<crate::threads::DiscussionEntry>),
+}
+impl JournalEntry {
+    pub const fn id(&self) -> &StableId {
+        match self {
+            Self::Requirement(e) => &e.id,
+            Self::Discussion(e) => &e.id,
+        }
+    }
+    pub const fn scope_id(&self) -> &ScopeId {
+        match self {
+            Self::Requirement(e) => &e.scope_id,
+            Self::Discussion(e) => &e.scope_id,
+        }
+    }
+    pub const fn request_id(&self) -> &StableId {
+        match self {
+            Self::Requirement(e) => &e.request_id,
+            Self::Discussion(e) => &e.request_id,
+        }
+    }
 }
