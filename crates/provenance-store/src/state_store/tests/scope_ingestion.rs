@@ -37,7 +37,7 @@ fn scope_import_writes_only_the_imported_shards() {
             family,
             ProjectionFamily::RequirementReviews | ProjectionFamily::ReviewJournal
         ) {
-            assert!(!path.exists(), "{} must stay outside scope import", path);
+            assert!(!path.exists(), "{path} must stay outside scope import");
         } else {
             assert!(std::fs::read(path).unwrap().is_empty());
         }
