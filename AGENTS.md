@@ -68,6 +68,19 @@ Beads. Put a concise change description and validation summary in the PR body.
 When moving a report out of the repository, remove its file from the PR and update
 all graph and bead references. Do not leave a broken repository-path citation.
 
+## Pull requests
+
+Opening a pull request is not the end of the work. Do not abandon the PR at open.
+
+- Stay with the PR and watch CI until every required check finishes. Use
+  `gh pr checks <number> --watch` or read `gh pr view <number>` in a later turn.
+- If a check fails, fix the branch and push to the same PR. Do not open a
+  replacement PR or leave the failure for someone else.
+- A PR is safe to sign off only when all required checks pass on the latest
+  commit. Cite the passing run in your handoff.
+- If you cannot watch CI to the end, say so in your handoff and mark the PR as
+  not verified. Never report a PR as done while checks run or fail.
+
 ## Quick Reference
 
 ```bash
