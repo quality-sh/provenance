@@ -1,15 +1,19 @@
 mod contradiction;
 mod dangling;
 mod frontier;
+mod graph_index;
+mod graph_joins;
 pub mod graph_query;
 mod ideation_targets;
 mod model;
+mod record_ref;
 mod state_adapter;
 
 use provenance_macros::rule;
 
 pub use graph_query::{GapGraph, GraphQuery};
 pub use model::{node_type_word, GapItem, GapKind};
+pub use record_ref::RecordRef;
 pub use state_adapter::find_gaps;
 pub(in crate::cache) use state_adapter::GraphRecords;
 
