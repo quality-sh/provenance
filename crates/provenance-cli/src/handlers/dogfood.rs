@@ -28,6 +28,7 @@ const SESSION_ENV_VARS: &[&str] = &[
     "OPENCODE_SESSION_ID",
 ];
 
+mod simulate;
 mod triage;
 
 #[derive(Serialize, Deserialize)]
@@ -94,6 +95,7 @@ pub(super) fn handle(command: DogfoodCommand, quiet: bool) -> anyhow::Result<()>
         DogfoodCommand::List { format } => list(format),
         DogfoodCommand::Report { enrich, format } => report(enrich.as_ref(), format),
         DogfoodCommand::Triage { command } => triage::handle(command, quiet),
+        DogfoodCommand::Simulate { keep, dir } => simulate::handle(keep, dir.as_deref()),
     }
 }
 
