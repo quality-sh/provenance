@@ -1,10 +1,11 @@
 use super::common::stable_ids;
-use super::references::{self, RequirementList, RequirementSingle};
+use super::refs::{self, RequirementList, RequirementSingle};
 use crate::cli::knowledge::{FogCommand, RequirementsCommand, SourceRefCommand};
 use crate::output;
 use provenance_core::{RequirementStatus, ScopeId, StableId};
 use provenance_store::{
     layout::ProvenanceLayout,
+    operations::catalog,
     state_store::{AddSourceReferenceInput, CreateRequirementInput, StateStore},
 };
 
@@ -56,25 +57,25 @@ pub(super) async fn handle(command: RequirementsCommand) -> anyhow::Result<()> {
             )?;
             output::print(format, &requirement)?;
         }
-        RequirementsCommand::SourceRef { command } => source_ref(command)?,
+        RequirementsCommand::SourceRef { command } => source_ref(command).await?,
         RequirementsCommand::Refines { command } => {
-            references::requirement_single(RequirementSingle::Refines, command)?;
+            refs::requirement_single(RequirementSingle::Refines, command).await?;
         }
         RequirementsCommand::DependsOn { command } => {
-            references::requirement_list(RequirementList::DependsOn, command)?;
+            refs::requirement_list(RequirementList::DependsOn, command).await?;
         }
         RequirementsCommand::Supersedes { command } => {
-            references::requirement_list(RequirementList::Supersedes, command)?;
+            refs::requirement_list(RequirementList::Supersedes, command).await?;
         }
         RequirementsCommand::SpawnedBy { command } => {
-            references::requirement_single(RequirementSingle::SpawnedBy, command)?;
+            refs::requirement_single(RequirementSingle::SpawnedBy, command).await?;
         }
         RequirementsCommand::Fog { command } => fog(command)?,
     }
     Ok(())
 }
 
-fn source_ref(command: SourceRefCommand) -> anyhow::Result<()> {
+async fn source_ref(command: SourceRefCommand) -> anyhow::Result<()> {
     match command {
         SourceRefCommand::Add {
             repo,
@@ -101,11 +102,17 @@ fn source_ref(command: SourceRefCommand) -> anyhow::Result<()> {
             source_id,
             format,
         } => {
-            let requirement = StateStore::new(ProvenanceLayout::new(repo)).clear_source_reference(
-                &ScopeId::new(scope)?,
-                &StableId::new(requirement_id)?,
-                &StableId::new(source_id)?,
-            )?;
+            let scope_id = ScopeId::new(&scope)?;
+            let requirement = super::native::invoke_native::<catalog::ClearSourceReference>(
+                repo,
+                scope_id.clone(),
+                catalog::ReferenceActionInput {
+                    scope_id,
+                    id: StableId::new(&requirement_id)?,
+                    target_id: StableId::new(&source_id)?,
+                },
+            )
+            .await?;
             output::print(format, &requirement)?;
         }
     }

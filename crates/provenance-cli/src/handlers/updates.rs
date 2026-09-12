@@ -1,10 +1,7 @@
 //! Native updates use the typed catalog without an HTTP host.
 use crate::{cli::updates::UpdateArgs, output};
 use provenance_core::ScopeId;
-use provenance_store::{
-    operations::catalog::{invoke_typed, Operation, PreparedContext, PreparedScope},
-    write_error::WriteError,
-};
+use provenance_store::{operations::catalog::Operation, write_error::WriteError};
 
 pub(super) async fn handle<O: Operation<Failure = WriteError>>(
     args: UpdateArgs,
@@ -19,11 +16,7 @@ pub(super) async fn handle<O: Operation<Failure = WriteError>>(
     fields.insert("scope_id".into(), args.scope.clone().into());
     fields.insert("id".into(), args.id.into());
     let request = serde_json::from_value(fields.into())?;
-    let context = PreparedContext::for_scope(PreparedScope {
-        root: args.repo,
-        scope: ScopeId::new(args.scope)?,
-        requested_target: "native".into(),
-    });
-    let result = invoke_typed::<O>(context, request).await?;
+    let result =
+        super::native::invoke_native::<O>(args.repo, ScopeId::new(args.scope)?, request).await?;
     output::print(args.format, &result)
 }
