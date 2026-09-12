@@ -37,7 +37,7 @@ pub(super) async fn handle(command: RequirementsCommand) -> anyhow::Result<()> {
             supersedes,
             origin_thread,
             origin_message,
-            format,
+            format: _,
         } => {
             let requirement = StateStore::new(ProvenanceLayout::new(repo)).create_requirement(
                 CreateRequirementInput {
@@ -55,7 +55,7 @@ pub(super) async fn handle(command: RequirementsCommand) -> anyhow::Result<()> {
                     origin_message: origin_message.map(StableId::new).transpose()?,
                 },
             )?;
-            output::print(format, &requirement)?;
+            output::print_json(&requirement)?;
         }
         RequirementsCommand::SourceRef { command } => source_ref(command).await?,
         RequirementsCommand::Refines { command } => {
@@ -83,7 +83,7 @@ async fn source_ref(command: SourceRefCommand) -> anyhow::Result<()> {
             requirement_id,
             source_id,
             clause,
-            format,
+            format: _,
         } => {
             let requirement = StateStore::new(ProvenanceLayout::new(repo)).add_source_reference(
                 AddSourceReferenceInput {
@@ -93,14 +93,14 @@ async fn source_ref(command: SourceRefCommand) -> anyhow::Result<()> {
                     clause,
                 },
             )?;
-            output::print(format, &requirement)?;
+            output::print_json(&requirement)?;
         }
         SourceRefCommand::Clear {
             repo,
             scope,
             requirement_id,
             source_id,
-            format,
+            format: _,
         } => {
             let scope_id = ScopeId::new(&scope)?;
             let requirement = super::native::invoke_native::<catalog::ClearSourceReference>(
@@ -113,7 +113,7 @@ async fn source_ref(command: SourceRefCommand) -> anyhow::Result<()> {
                 },
             )
             .await?;
-            output::print(format, &requirement)?;
+            output::print_json(&requirement)?;
         }
     }
     Ok(())
@@ -126,20 +126,20 @@ fn fog(command: FogCommand) -> anyhow::Result<()> {
             scope,
             requirement_id,
             text,
-            format,
+            format: _,
         } => {
             let requirement = StateStore::new(ProvenanceLayout::new(repo)).set_requirement_fog(
                 &ScopeId::new(scope)?,
                 &StableId::new(requirement_id)?,
                 Some(text),
             )?;
-            output::print(format, &requirement)?;
+            output::print_json(&requirement)?;
         }
         FogCommand::Show {
             repo,
             scope,
             requirement_id,
-            format,
+            format: _,
         } => {
             let requirement_id = StableId::new(requirement_id)?;
             let requirement = StateStore::new(ProvenanceLayout::new(repo))
@@ -147,9 +147,7 @@ fn fog(command: FogCommand) -> anyhow::Result<()> {
                 .into_iter()
                 .find(|requirement| requirement.id == requirement_id)
                 .ok_or_else(|| anyhow::anyhow!("requirement does not exist"))?;
-            output::print(
-                format,
-                &FogView {
+            output::print_json(&FogView {
                     requirement_id: requirement.id.as_str().to_string(),
                     fog: requirement.fog,
                 },
@@ -159,14 +157,14 @@ fn fog(command: FogCommand) -> anyhow::Result<()> {
             repo,
             scope,
             requirement_id,
-            format,
+            format: _,
         } => {
             let requirement = StateStore::new(ProvenanceLayout::new(repo)).set_requirement_fog(
                 &ScopeId::new(scope)?,
                 &StableId::new(requirement_id)?,
                 None,
             )?;
-            output::print(format, &requirement)?;
+            output::print_json(&requirement)?;
         }
     }
     Ok(())
