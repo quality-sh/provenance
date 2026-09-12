@@ -230,6 +230,8 @@ pub enum ProposalType {
     Question,
     #[serde(rename = "no_action")]
     NoAction,
+    #[serde(rename = "record_revision")]
+    RecordRevision,
 }
 
 impl ProposalType {
@@ -241,7 +243,8 @@ impl ProposalType {
             "source_gap" => Ok(Self::SourceGap),
             "question" => Ok(Self::Question),
             "no_action" => Ok(Self::NoAction),
-            _ => anyhow::bail!("proposal type must be requirement_candidate, resolution_candidate, rule_candidate, source_gap, question, or no_action"),
+            "record_revision" => Ok(Self::RecordRevision),
+            _ => anyhow::bail!("proposal type must be requirement_candidate, resolution_candidate, rule_candidate, source_gap, question, no_action, or record_revision"),
         }
     }
 }

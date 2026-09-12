@@ -48,6 +48,9 @@ fn modern_lifecycle_coexists_with_frozen_shipped_records() {
             builds_on: vec![],
             duplicate_of: None,
             superseded_by: None,
+            record_revision: None,
+            revises: None,
+            revises_rejection: None,
         })
         .unwrap();
     close_the_evidence_gap(&store, &scope);

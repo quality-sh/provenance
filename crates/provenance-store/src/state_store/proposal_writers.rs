@@ -5,7 +5,7 @@ use super::{
 use crate::shards;
 use provenance_core::{
     validate_optional_confidence_score, AssertionRecord, DispositionRecord, PromotionState,
-    ProposalCard, ScopeId, StableId, SUPPORTED_SCHEMA_VERSION,
+    ProposalCard, ProposalType, ScopeId, StableId, SUPPORTED_SCHEMA_VERSION,
 };
 use provenance_macros::rule;
 
@@ -177,6 +177,14 @@ impl StateStore {
 
     fn write_proposal_card(&self, input: CreateProposalCardInput) -> anyhow::Result<ProposalCard> {
         let candidate = proposal_from_input(input)?;
+        anyhow::ensure!(
+            candidate.proposal_type != ProposalType::RecordRevision
+                || crate::review::guard::writer_allows(
+                    &shards::proposal_cards_path(&self.layout, &candidate.scope_id),
+                    "*"
+                ),
+            "review submissions go through the review seam"
+        );
         let mut proposals = self.list_proposal_definitions(&candidate.scope_id)?;
         proposals.push(candidate.clone());
         provenance_core::validate_ideation_aggregate(provenance_core::IdeationAggregate {
@@ -238,6 +246,20 @@ impl StateStore {
         let proposals = self.list_proposal_definitions(&scope_id)?;
         let assertions = self.list_assertion_records(&scope_id)?;
         let mut dispositions = self.list_dispositions(&scope_id)?;
+        if let Some(target) = proposals
+            .iter()
+            .find(|proposal| proposal.id == disposition.proposal_id)
+        {
+            if target.proposal_type == ProposalType::RecordRevision {
+                anyhow::ensure!(
+                    crate::review::guard::writer_allows(
+                        &shards::dispositions_path(&self.layout, &scope_id),
+                        "*"
+                    ),
+                    "decisions on review submissions go through the review seam"
+                );
+            }
+        }
         validate_disposition_write_gate(
             &disposition,
             &proposals,
@@ -290,6 +312,11 @@ impl StateStore {
         scope_id: &ScopeId,
         existing: &ProposalCard,
     ) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            existing.proposal_type != ProposalType::RecordRevision,
+            "review submission {} belongs to the review cycle; withdraw it instead of replacing it",
+            existing.id.as_str()
+        );
         let decisions = self
             .list_dispositions(scope_id)?
             .into_iter()
@@ -397,6 +424,9 @@ fn proposal_from_input(input: CreateProposalCardInput) -> anyhow::Result<Proposa
         builds_on: input.builds_on,
         duplicate_of: input.duplicate_of,
         superseded_by: input.superseded_by,
+        record_revision: input.record_revision,
+        revises: input.revises,
+        revises_rejection: input.revises_rejection,
     };
     provenance_core::validate_proposal_intrinsic(&proposal)?;
     Ok(proposal)

@@ -22,14 +22,15 @@ pub use model::{
     IdeationAggregate, IdeationEvidenceReference, IdeationEvidenceType, IdeationTarget,
     IdeationTargetType, IdentityType, ImplementationBinding, LegacyProposalPolicy, Manifest,
     MaterialClaim, Message, MessageRole, MinorityObjection, NodeType, PromotionState, Proposal,
-    ProposalCard, ProposalTraceability, ProposalType, Question, QuestionStatus, RepoPathPrefix,
-    RequiredHumanDecision, Requirement, RequirementReview, RequirementStatus, Resolution,
-    ResolutionInput, ResolutionInputType, ResolutionMethod, ResolutionStatus, Rule, RuleSeverity,
-    RuleStatus, SchemaVersion, Scope, ScopeId, Source, SourceReference, SourceType,
-    SpeculationMarker, StableId, SuggestedArtifact, SuggestedArtifactChange, SynthesisPacket,
-    Thread, ThreadParent, ThreadStatus, Topic, TopicStatus, UncertaintyLevel, UncertaintyRating,
-    UnsupportedRecommendation, UnsupportedSpeculation, VerificationBinding, VerificationMethod,
-    VerificationRun, VerificationRunStatus, SUPPORTED_SCHEMA_VERSION,
+    ProposalCard, ProposalTraceability, ProposalType, Question, QuestionStatus,
+    RecordRevisionBinding, RepoPathPrefix, RequiredHumanDecision, Requirement, RequirementReview,
+    RequirementStatus, Resolution, ResolutionInput, ResolutionInputType, ResolutionMethod,
+    ResolutionStatus, Rule, RuleSeverity, RuleStatus, SchemaVersion, Scope, ScopeId, Source,
+    SourceReference, SourceType, SpeculationMarker, StableId, SuggestedArtifact,
+    SuggestedArtifactChange, SynthesisPacket, Thread, ThreadParent, ThreadStatus, Topic,
+    TopicStatus, UncertaintyLevel, UncertaintyRating, UnsupportedRecommendation,
+    UnsupportedSpeculation, VerificationBinding, VerificationMethod, VerificationRun,
+    VerificationRunStatus, SUPPORTED_SCHEMA_VERSION,
 };
 pub use protocol::{EngineInfo, SDK_PROTOCOL_VERSION};
 

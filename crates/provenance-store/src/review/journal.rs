@@ -1,7 +1,7 @@
 use crate::{canonical_digest, layout::ProvenanceLayout, state_store::StateStore};
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::review::{
-    JournalEntry, RequirementSnapshot, ReviewEntry, SnapshotRef, REVIEW_SCHEMA_VERSION,
+    CycleEntry, JournalEntry, RequirementSnapshot, ReviewEntry, SnapshotRef, REVIEW_SCHEMA_VERSION,
 };
 use provenance_core::{Requirement, ScopeId, StableId};
 use serde::{de::DeserializeOwned, Serialize};
@@ -39,7 +39,7 @@ pub(super) fn read_entry(
     path: &Utf8Path,
 ) -> anyhow::Result<ReviewEntry> {
     let JournalEntry::Requirement(entry) = read_journal_entry(layout, path)? else {
-        anyhow::bail!("request ID belongs to a Discussion write");
+        anyhow::bail!("request ID belongs to a Discussion or decision-cycle write");
     };
     anyhow::ensure!(
         entry.schema_version == REVIEW_SCHEMA_VERSION,
@@ -56,6 +56,7 @@ pub(super) fn read_journal_entry(
     let version = match &entry {
         JournalEntry::Requirement(e) => e.schema_version,
         JournalEntry::Discussion(e) => e.schema_version,
+        JournalEntry::Cycle(e) => e.schema_version,
     };
     anyhow::ensure!(
         version == REVIEW_SCHEMA_VERSION,
@@ -153,7 +154,18 @@ impl StateStore {
             .into_iter()
             .filter_map(|e| match e {
                 JournalEntry::Requirement(e) => Some(*e),
-                JournalEntry::Discussion(_) => None,
+                _ => None,
+            })
+            .collect())
+    }
+
+    pub(super) fn cycle_entries(&self, scope: &ScopeId) -> anyhow::Result<Vec<CycleEntry>> {
+        Ok(self
+            .journal_entries(scope)?
+            .into_iter()
+            .filter_map(|e| match e {
+                JournalEntry::Cycle(e) => Some(*e),
+                _ => None,
             })
             .collect())
     }

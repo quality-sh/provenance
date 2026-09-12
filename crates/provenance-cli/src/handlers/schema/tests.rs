@@ -123,7 +123,8 @@ fn assert_proposal_type_array_is_exhaustive(value: ProposalType) {
         | ProposalType::RuleCandidate
         | ProposalType::SourceGap
         | ProposalType::Question
-        | ProposalType::NoAction => {}
+        | ProposalType::NoAction
+        | ProposalType::RecordRevision => {}
     }
 }
 

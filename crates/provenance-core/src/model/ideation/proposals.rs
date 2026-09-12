@@ -56,6 +56,35 @@ pub struct ProposalCard {
         skip_serializing_if = "Option::is_none"
     )]
     pub superseded_by: Option<StableId>,
+    /// The exact reviewed state a `record_revision` submission binds to.
+    #[serde(
+        default,
+        alias = "recordRevision",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub record_revision: Option<RecordRevisionBinding>,
+    /// The rejected predecessor this resubmission revises. Assertion lineage
+    /// stays in `builds_on`; this link answers a rejection, not evidence.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub revises: Option<StableId>,
+    /// The rejection disposition of the proposal named by `revises`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub revises_rejection: Option<StableId>,
 }
 
 pub type Proposal = ProposalCard;
+
+/// The exact reviewed state a `record_revision` submission binds to.
+///
+/// `revision` names the immutable review revision the agent submitted, and
+/// `content_digest` digests the review-content fields of the record at
+/// submission time. A decision checks both under the publication lock, so an
+/// edit that moved the record on refuses the decision instead of approving
+/// text nobody reviewed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct RecordRevisionBinding {
+    pub revision: StableId,
+    pub content_digest: String,
+}

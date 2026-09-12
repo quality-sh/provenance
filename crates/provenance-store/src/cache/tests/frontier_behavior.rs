@@ -114,6 +114,9 @@ fn ordinary_prime_does_not_expand_into_a_global_proposal_queue() {
             promotion_state: PromotionState::Proposed,
             duplicate_of: None,
             superseded_by: None,
+            record_revision: None,
+            revises: None,
+            revises_rejection: None,
         })
         .unwrap();
 
