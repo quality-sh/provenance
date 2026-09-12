@@ -7,9 +7,7 @@
 //! stamped.
 
 use crate::state_store::{GuardedStore, StateStore};
-#[cfg(test)]
 use crate::{layout::ProvenanceLayout, shards};
-#[cfg(test)]
 use camino::Utf8PathBuf;
 use provenance_core::ScopeId;
 
@@ -152,7 +150,6 @@ impl ProjectionFamily {
     }
 
     /// The canonical shard file the family's records live in.
-    #[cfg(test)]
     pub(crate) fn shard_path(self, layout: &ProvenanceLayout, scope: &ScopeId) -> Utf8PathBuf {
         match self {
             Self::Sources => shards::sources_path(layout, scope),
