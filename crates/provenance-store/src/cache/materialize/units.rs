@@ -92,10 +92,7 @@ pub fn unit_digest(state_dir: &Utf8Path, unit: &Unit) -> Result<String, UnitHash
 }
 
 /// The digest of the exact stored bytes in one unit.
-pub fn unit_stored_digest(
-    state_dir: &Utf8Path,
-    unit: &Unit,
-) -> Result<String, UnitHashError> {
+pub fn unit_stored_digest(state_dir: &Utf8Path, unit: &Unit) -> Result<String, UnitHashError> {
     stored_digest_with(state_dir, unit, |_, _| {})
 }
 
