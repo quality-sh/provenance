@@ -4,6 +4,7 @@ pub mod ideation;
 pub mod knowledge;
 pub mod policy;
 pub mod references;
+pub mod report;
 pub mod sdk;
 pub mod shaping;
 pub mod updates;
@@ -260,6 +261,11 @@ pub enum Command {
     Coverage {
         #[command(subcommand)]
         command: workspace::CoverageCommand,
+    },
+    /// Deterministic report rendering from a versioned report envelope.
+    Report {
+        #[command(subcommand)]
+        command: report::ReportCommand,
     },
     /// Typed language façade protocol.
     Sdk {

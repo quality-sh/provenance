@@ -27,6 +27,7 @@ mod proposals;
 mod questions;
 mod references;
 mod repo;
+mod report;
 mod requirements;
 mod resolutions;
 mod rules;
@@ -229,6 +230,9 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
         }
         Command::Coverage { command } => {
             coverage::handle(command)?;
+        }
+        Command::Report { command } => {
+            report::handle(command)?;
         }
         Command::Sdk { command } => {
             sdk::handle(command).await?;
