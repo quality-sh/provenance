@@ -10,35 +10,27 @@ use std::collections::BTreeMap;
 
 use provenance_macros::rule;
 
-/// Which rules the marker findings name, and why: a status that withdrew the
-/// Rule from current coverage. A retired Rule keeps its markers with the
-/// separate retired-record check, so only the deprecated and archived
-/// statuses apply to markers here.
+/// The withdrawal word for a Rule the graph retired.
+const RETIRED: &str = "retired";
+
+/// Which Rules the lifecycle findings name, and why: every Rule that current
+/// coverage withdrew, with the withdrawal word as the value. Retirement is
+/// checked first because it is the strongest withdrawal, so a retired Rule
+/// is named `retired` whatever its status also says.
 fn inactive_rules(rules: &[provenance_core::Rule]) -> BTreeMap<&str, &'static str> {
     rules
         .iter()
-        .filter(|rule| !rule.retired)
-        .filter_map(|rule| match rule.status {
-            provenance_core::RuleStatus::Deprecated => Some((rule.id.as_str(), "deprecated")),
-            provenance_core::RuleStatus::Archived => Some((rule.id.as_str(), "archived")),
-            _ => None,
+        .filter_map(|rule| {
+            if rule.retired {
+                return Some((rule.id.as_str(), RETIRED));
+            }
+            match rule.status {
+                provenance_core::RuleStatus::Deprecated => Some((rule.id.as_str(), "deprecated")),
+                provenance_core::RuleStatus::Archived => Some((rule.id.as_str(), "archived")),
+                _ => None,
+            }
         })
         .collect()
-}
-
-/// Which rules the typed findings name: every Rule whose status or retirement
-/// withdrew it from current coverage. A retired Rule joins the deprecated and
-/// archived statuses, because a current typed binding to it is the same live
-/// claim on withdrawn ground.
-fn typed_inactive_rules(rules: &[provenance_core::Rule]) -> BTreeMap<&str, &'static str> {
-    let mut inactive = inactive_rules(rules);
-    inactive.extend(
-        rules
-            .iter()
-            .filter(|rule| rule.retired)
-            .map(|rule| (rule.id.as_str(), "retired")),
-    );
-    inactive
 }
 
 /// Current implementation or verification bindings to deprecated or archived
@@ -51,9 +43,10 @@ pub(super) fn inactive_rule_binding_warnings(
     typed_implementations: &[provenance_core::ImplementationBinding],
     typed_verifications: &[provenance_core::VerificationBinding],
 ) -> Vec<provenance_core::coverage::ValidationWarning> {
-    let mut findings = marker_findings(&inactive_rules(rules), scans);
+    let inactive = inactive_rules(rules);
+    let mut findings = marker_findings(&inactive, scans);
     findings.extend(typed_findings(
-        &typed_inactive_rules(rules),
+        &inactive,
         typed_implementations,
         typed_verifications,
     ));
@@ -64,6 +57,10 @@ fn marker_findings(
     inactive: &BTreeMap<&str, &'static str>,
     scans: &[provenance_scanner::FileScan],
 ) -> Vec<provenance_core::coverage::ValidationWarning> {
+    // A marker citing a retired Rule keeps its separate retired-record
+    // check, so the lifecycle marker findings take only the deprecated and
+    // archived statuses: entries labeled `retired` are skipped here, and a
+    // retired Rule's current typed bindings join the findings instead.
     scans
         .iter()
         .flat_map(|scan| {
@@ -72,6 +69,7 @@ fn marker_findings(
                 .filter_map(|location| {
                     inactive
                         .get(location.annotation.rule.as_str())
+                        .filter(|status| **status != RETIRED)
                         .map(|status| {
                             binding_finding(
                                 &location.annotation.rule,
@@ -83,15 +81,18 @@ fn marker_findings(
                         })
                 })
                 .chain(scan.bindings.iter().filter_map(|binding| {
-                    inactive.get(binding.rule_id.as_str()).map(|status| {
-                        binding_finding(
-                            &binding.rule_id,
-                            status,
-                            "marker",
-                            Some(binding.file_path.clone()),
-                            Some(binding.line),
-                        )
-                    })
+                    inactive
+                        .get(binding.rule_id.as_str())
+                        .filter(|status| **status != RETIRED)
+                        .map(|status| {
+                            binding_finding(
+                                &binding.rule_id,
+                                status,
+                                "marker",
+                                Some(binding.file_path.clone()),
+                                Some(binding.line),
+                            )
+                        })
                 }))
         })
         .collect()
