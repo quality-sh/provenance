@@ -23,6 +23,7 @@ export async function validators(document, names = responseSchemas(document), pr
   for (const format of ['int64', 'int32', 'uint64', 'uint32', 'uint16', 'uint8', 'uint', 'int', 'float', 'double']) ajv.addFormat(format, true);
   ajv.addKeyword({ keyword: 'components', schemaType: 'object', valid: true });
   ajv.addKeyword({ keyword: 'x-provenance-model-family', schemaType: 'string', valid: true });
+  ajv.addKeyword({ keyword: 'x-provenance-validation-only-any-of', schemaType: 'boolean', valid: true });
   const id = 'urn:provenance:operation-responses';
   ajv.addSchema({ $id: id, components: { schemas } });
   const exports = Object.fromEntries(names.map(name => [name, `${id}#/components/schemas/${name}`]));
