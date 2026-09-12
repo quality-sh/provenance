@@ -106,9 +106,10 @@ pub struct EvidenceDiffReport {
 /// reader to a file that says nothing about the problem.
 ///
 /// `binding_finding` marks the warnings the Rule binding lifecycle policy
-/// governs: an active Rule with no current verification, and a current
-/// implementation or verification binding to a deprecated or archived Rule.
-/// Repository configuration selects warning or error severity for these
+/// governs: an active Rule with no current verification, a current
+/// implementation or verification binding to a deprecated or archived Rule,
+/// and a current typed implementation or verification binding to a retired
+/// Rule. Repository configuration selects warning or error severity for these
 /// findings; every other warning stays report-only unless `--strict` runs.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub struct ValidationWarning {

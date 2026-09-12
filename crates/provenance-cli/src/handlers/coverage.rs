@@ -46,8 +46,9 @@ fn coverage_scan_against(
         // A marker citing a retired Rule is a fact about a line the scan
         // read, so it stands even when the scan covers part of the tree.
         // Derived absence needs the whole repository to be honest. The same
-        // holds for a current binding to a deprecated or archived Rule: the
-        // graph and the scanned lines say it exists.
+        // holds for a current binding to a deprecated or archived Rule, and
+        // for a current typed binding to a retired Rule: the graph and the
+        // scanned lines say it exists.
         warnings.extend(retired::stale_rule_warnings(&validation.rules, &scans));
         warnings.extend(inactive_rule_binding_warnings(
             &validation.rules,

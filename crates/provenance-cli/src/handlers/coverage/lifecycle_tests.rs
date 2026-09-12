@@ -204,6 +204,75 @@ fn scanned_attribute_bindings_citing_inactive_rules_are_lifecycle_findings() {
 }
 
 #[test]
+fn a_retired_rule_with_a_current_typed_implementation_binding_warns() {
+    let retired = Rule {
+        retired: true,
+        ..rule("rule_withdrawn", RuleStatus::Active)
+    };
+
+    let warnings = inactive_rule_binding_warnings(
+        std::slice::from_ref(&retired),
+        &[],
+        &[typed_implementation("rule_withdrawn", false)],
+        &[],
+    );
+
+    assert_eq!(warnings.len(), 1, "{warnings:#?}");
+    assert_eq!(warnings[0].rule_id, "rule_withdrawn");
+    assert!(warnings[0].message.contains("retired"), "{warnings:#?}");
+    assert!(warnings[0].binding_finding);
+}
+
+#[test]
+fn a_retired_rule_with_a_current_typed_verification_binding_warns() {
+    let retired = Rule {
+        retired: true,
+        ..rule("rule_withdrawn", RuleStatus::Active)
+    };
+
+    let warnings = inactive_rule_binding_warnings(
+        std::slice::from_ref(&retired),
+        &[],
+        &[],
+        &[typed_verification("rule_withdrawn", false)],
+    );
+
+    assert_eq!(warnings.len(), 1, "{warnings:#?}");
+    assert_eq!(warnings[0].rule_id, "rule_withdrawn");
+    assert!(warnings[0].message.contains("retired"), "{warnings:#?}");
+    assert!(warnings[0].binding_finding);
+}
+
+#[test]
+fn a_retired_rule_without_current_bindings_stays_silent() {
+    let retired = Rule {
+        retired: true,
+        ..rule("rule_withdrawn", RuleStatus::Active)
+    };
+
+    let warnings = inactive_rule_binding_warnings(std::slice::from_ref(&retired), &[], &[], &[]);
+
+    assert!(warnings.is_empty(), "{warnings:#?}");
+}
+
+#[test]
+fn a_retired_binding_to_a_retired_rule_is_not_current_evidence() {
+    let retired = Rule {
+        retired: true,
+        ..rule("rule_withdrawn", RuleStatus::Active)
+    };
+
+    let warnings = inactive_rule_binding_warnings(
+        std::slice::from_ref(&retired),
+        &[],
+        &[typed_implementation("rule_withdrawn", true)],
+        &[typed_verification("rule_withdrawn", true)],
+    );
+
+    assert!(warnings.is_empty(), "{warnings:#?}");
+}
+
+#[test]
 fn retired_rules_stay_with_the_separate_retired_record_check() {
     let retired_deprecated = Rule {
         retired: true,
@@ -222,11 +291,19 @@ fn retired_rules_stay_with_the_separate_retired_record_check() {
         std::slice::from_ref(&marker),
     );
 
-    assert!(lifecycle.is_empty(), "{lifecycle:#?}");
+    // The marker keeps its separate retired-record warning; the lifecycle
+    // findings take only the current typed binding, once.
     assert_eq!(retired.len(), 1, "{retired:#?}");
     assert!(
         !retired[0].binding_finding,
         "the retired check stays separate"
+    );
+    assert_eq!(lifecycle.len(), 1, "{lifecycle:#?}");
+    assert!(lifecycle[0].binding_finding);
+    assert!(lifecycle[0].message.contains("typed implementation"));
+    assert_eq!(
+        lifecycle[0].line, None,
+        "the marker is not a lifecycle finding"
     );
 }
 

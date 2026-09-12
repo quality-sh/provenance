@@ -174,8 +174,9 @@ the key and permitted values. No answer or `freshness_error` accompanies it.
 Rule binding finding: `warning`, the default, reports the finding and lets the
 command succeed, and `error` reports the finding and fails the command. The
 findings it governs are an active Rule with no current verification binding,
-and a current implementation or verification binding to a deprecated or
-archived Rule. A retired historical binding is not current evidence and
+a current implementation or verification binding to a deprecated or archived
+Rule, and a current typed implementation or verification binding to a retired
+Rule. A retired historical binding is not current evidence and
 produces no such finding. The key does not govern other scan warnings, such as
 an active Rule with no implementation, an unknown Rule id, or a second primary
 implementation. Rule severity metadata is a separate field and never selects
@@ -276,10 +277,13 @@ and duplicate primary implementations, but it cannot claim that a binding is abs
 the rest of the repository.
 
 Some findings are Rule binding findings in the sense of
-`coverage.binding_findings`: an active Rule with no current verification, and a
-current implementation or verification binding to a deprecated or archived Rule.
+`coverage.binding_findings`: an active Rule with no current verification, a
+current implementation or verification binding to a deprecated or archived Rule,
+and a current typed implementation or verification binding to a retired Rule.
 The scan reports each of them with `binding_finding` set in the JSON report, from
-scanned markers and typed graph bindings alike. A retired historical binding is
+scanned markers and typed graph bindings alike. A marker that cites a retired
+Rule stays with the separate retired-record warning, which the severity setting
+does not govern. A retired historical binding is
 readable but not current, so it neither satisfies verification nor produces the
 finding. `coverage.binding_findings` selects `warning` (report and succeed) or
 `error` (report and fail); the default is `warning`, so a repository that plans

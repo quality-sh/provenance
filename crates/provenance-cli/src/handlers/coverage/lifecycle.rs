@@ -1,19 +1,19 @@
 //! Findings the Rule binding lifecycle policy governs: current bindings to
-//! deprecated or archived Rules.
+//! deprecated or archived Rules, and current typed bindings to retired Rules.
 //!
 //! A marker the scan read and a typed binding the graph stores are both
 //! current evidence, so both produce a finding. A retired historical binding
-//! stays readable in the graph without counting as current, and a deprecated
-//! or archived Rule with no current binding produces no finding at all.
+//! stays readable in the graph without counting as current, and a Rule with
+//! no current binding produces no finding at all.
 
 use std::collections::BTreeMap;
 
 use provenance_macros::rule;
 
-/// Which rules the lifecycle findings name, and why: every rule whose status
-/// or retirement withdrew it from current coverage. A retired rule keeps the
-/// separate retired-record check, so the lifecycle findings take only the
-/// deprecated and archived statuses.
+/// Which rules the marker findings name, and why: a status that withdrew the
+/// Rule from current coverage. A retired Rule keeps its markers with the
+/// separate retired-record check, so only the deprecated and archived
+/// statuses apply to markers here.
 fn inactive_rules(rules: &[provenance_core::Rule]) -> BTreeMap<&str, &'static str> {
     rules
         .iter()
@@ -26,8 +26,24 @@ fn inactive_rules(rules: &[provenance_core::Rule]) -> BTreeMap<&str, &'static st
         .collect()
 }
 
+/// Which rules the typed findings name: every Rule whose status or retirement
+/// withdrew it from current coverage. A retired Rule joins the deprecated and
+/// archived statuses, because a current typed binding to it is the same live
+/// claim on withdrawn ground.
+fn typed_inactive_rules(rules: &[provenance_core::Rule]) -> BTreeMap<&str, &'static str> {
+    let mut inactive = inactive_rules(rules);
+    inactive.extend(
+        rules
+            .iter()
+            .filter(|rule| rule.retired)
+            .map(|rule| (rule.id.as_str(), "retired")),
+    );
+    inactive
+}
+
 /// Current implementation or verification bindings to deprecated or archived
-/// Rules, from scanned markers and typed graph bindings alike.
+/// Rules, from scanned markers and typed graph bindings alike, plus current
+/// typed bindings to retired Rules.
 #[rule("rule_inactive_rules_have_no_current_bindings")]
 pub(super) fn inactive_rule_binding_warnings(
     rules: &[provenance_core::Rule],
@@ -35,10 +51,9 @@ pub(super) fn inactive_rule_binding_warnings(
     typed_implementations: &[provenance_core::ImplementationBinding],
     typed_verifications: &[provenance_core::VerificationBinding],
 ) -> Vec<provenance_core::coverage::ValidationWarning> {
-    let inactive = inactive_rules(rules);
-    let mut findings = marker_findings(&inactive, scans);
+    let mut findings = marker_findings(&inactive_rules(rules), scans);
     findings.extend(typed_findings(
-        &inactive,
+        &typed_inactive_rules(rules),
         typed_implementations,
         typed_verifications,
     ));

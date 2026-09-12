@@ -135,6 +135,178 @@ fn begin_verification(repo: &Path, rule: &str, key: &str, file: &str) {
         .success();
 }
 
+/// One spec-owned Rule the retirement document later withdraws.
+fn spec_document(owner: &str) -> Value {
+    json!({
+        "schema_version": 2,
+        "spec": "retirement",
+        "declared_by": owner,
+        "sources": [],
+        "requirements": [{
+            "key": "withdrawn",
+            "statement": "The withdrawn obligation holds",
+            "sources": []
+        }],
+        "rules": [{
+            "key": "withdrawn",
+            "requirement": "withdrawn",
+            "statement": "The covered obligation holds"
+        }]
+    })
+}
+
+fn empty_spec_document(owner: &str) -> Value {
+    json!({
+        "schema_version": 2,
+        "spec": "retirement",
+        "declared_by": owner,
+        "sources": [],
+        "requirements": [],
+        "rules": []
+    })
+}
+
+fn apply_spec(repo: &Path, document: &Value) -> Value {
+    let output = provenance()
+        .args([
+            "sdk",
+            "apply",
+            "--repo",
+            repo.to_str().unwrap(),
+            "--scope",
+            "default",
+            "--format",
+            "json",
+        ])
+        .write_stdin(serde_json::to_vec(document).unwrap())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    serde_json::from_slice(&output.stdout).unwrap()
+}
+
+fn spec_rule_id(applied: &Value) -> String {
+    applied["resources"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|resource| resource["kind"] == "rule" && resource["key"] == "withdrawn")
+        .unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_string()
+}
+
+/// A current typed verification binding to a Rule the graph later retires:
+/// the binding was created while the Rule stood, and the withdrawal leaves
+/// the binding in place.
+fn retire_a_rule_with_a_current_verification(repo: &Path) {
+    let owner = "spec://tests/retirement";
+    let applied = apply_spec(repo, &spec_document(owner));
+    let rule_id = spec_rule_id(&applied);
+    begin_verification(repo, &rule_id, "withdrawn-check", "tests/withdrawn.test.ts");
+    apply_spec(repo, &empty_spec_document(owner));
+}
+
+#[test]
+#[verifies("rule_inactive_rules_have_no_current_bindings", examples)]
+fn the_warning_policy_reports_a_current_binding_to_a_retired_rule_without_failing() {
+    let repo = init_repo();
+    retire_a_rule_with_a_current_verification(repo.path());
+
+    let output = full_scan(repo.path()).output().unwrap();
+
+    assert!(output.status.success());
+    let finding = warnings(&output.stdout)
+        .into_iter()
+        .find(|warning| {
+            warning["rule_id"]
+                .as_str()
+                .unwrap_or("")
+                .starts_with("rule_")
+        })
+        .expect("the current binding to a retired rule must be reported");
+    assert_eq!(finding["binding_finding"], json!(true));
+    assert!(
+        finding["message"]
+            .as_str()
+            .is_some_and(|message| message.contains("retired")),
+        "{finding}"
+    );
+}
+
+#[test]
+#[verifies("rule_binding_finding_uses_configured_severity", examples)]
+fn the_error_policy_fails_on_a_current_binding_to_a_retired_rule_after_printing_the_report() {
+    let repo = init_repo();
+    retire_a_rule_with_a_current_verification(repo.path());
+    set_binding_policy(repo.path(), "error");
+
+    let output = full_scan(repo.path()).output().unwrap();
+
+    assert!(!output.status.success());
+    let finding = warnings(&output.stdout)
+        .into_iter()
+        .find(|warning| warning["binding_finding"] == json!(true))
+        .expect("the report still prints before the failure");
+    assert!(
+        finding["message"]
+            .as_str()
+            .is_some_and(|message| message.contains("retired")),
+        "{finding}"
+    );
+}
+
+#[test]
+#[verifies("rule_inactive_rules_have_no_current_bindings", examples)]
+fn the_error_policy_passes_for_a_retired_rule_without_current_bindings() {
+    let repo = init_repo();
+    let owner = "spec://tests/retirement";
+    apply_spec(repo.path(), &spec_document(owner));
+    apply_spec(repo.path(), &empty_spec_document(owner));
+    set_binding_policy(repo.path(), "error");
+
+    full_scan(repo.path()).assert().success();
+}
+
+#[test]
+#[verifies("rule_inactive_rules_have_no_current_bindings", examples)]
+fn a_retired_binding_to_a_retired_rule_is_not_current_evidence() {
+    let repo = init_repo();
+    let owner = "spec://tests/retirement";
+    let applied = apply_spec(repo.path(), &spec_document(owner));
+    let retired_rule = spec_rule_id(&applied);
+    begin_verification(
+        repo.path(),
+        &retired_rule,
+        "withdrawn-check",
+        "tests/withdrawn.test.ts",
+    );
+    // The same owner, file, and key now vouch for the standing rule, so the
+    // binding to the spec rule retires in place before the rule retires.
+    create_rule(repo.path(), "rule_standing", "active");
+    begin_verification(
+        repo.path(),
+        "rule_standing",
+        "withdrawn-check",
+        "tests/withdrawn.test.ts",
+    );
+    apply_spec(repo.path(), &empty_spec_document(owner));
+    set_binding_policy(repo.path(), "error");
+
+    let output = full_scan(repo.path()).output().unwrap();
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
 #[test]
 #[verifies("rule_active_rule_requires_verification", examples)]
 fn the_default_policy_reports_an_unverified_active_rule_without_failing() {

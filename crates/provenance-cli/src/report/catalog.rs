@@ -9,7 +9,7 @@
 pub enum DiagnosticCode {
     /// An active Rule has no current verification binding.
     ActiveRuleMissingVerification,
-    /// A deprecated or archived Rule still has a current binding.
+    /// A deprecated, archived, or retired Rule still has a current binding.
     InactiveRuleCurrentBinding,
     /// A verification site is gone while other evidence may remain.
     VerificationSiteRemoved,
