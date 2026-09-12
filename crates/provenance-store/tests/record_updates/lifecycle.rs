@@ -91,6 +91,8 @@ async fn rule(fixture: &Fixture, status: &str, archive: Option<Value>) -> Result
 }
 
 #[tokio::test]
+#[provenance_macros::verifies("rule_archived_rule_requires_commit", examples)]
+#[provenance_macros::verifies("rule_archived_rule_is_terminal", examples)]
 async fn archive_requires_a_permalink_and_refuses_every_exit() {
     let fixture = Fixture::new();
     fixture.requirement().await;

@@ -81,6 +81,8 @@ fn deserialize_optional_at<'de, D: Deserializer<'de>>(
 }
 
 impl super::Rule {
+    /// Requires an archive commit exactly when the Rule has archived status.
+    #[provenance_macros::rule("rule_archived_rule_requires_commit")]
     pub fn validate_archive(&self) -> anyhow::Result<()> {
         anyhow::ensure!(
             (self.status == super::RuleStatus::Archived) == self.archived_in_commit.is_some(),
@@ -95,6 +97,8 @@ impl super::Rule {
         Ok(())
     }
 
+    /// Refuses every transition from archived status to another status.
+    #[provenance_macros::rule("rule_archived_rule_is_terminal")]
     pub fn validate_transition(&self, previous: &Self) -> anyhow::Result<()> {
         anyhow::ensure!(
             previous.status != super::RuleStatus::Archived
