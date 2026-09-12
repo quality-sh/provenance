@@ -1,4 +1,3 @@
--- Applied as migration 027 because 007 is already present in the migration history.
 ALTER TABLE sources ADD COLUMN created TEXT;
 ALTER TABLE sources ADD COLUMN updated TEXT;
 ALTER TABLE requirements ADD COLUMN created TEXT;

@@ -86,6 +86,7 @@ pub fn ensure_supported_record_version(
     line_number: usize,
     value: &serde_json::Value,
 ) -> anyhow::Result<()> {
+    ensure_no_legacy_retirement(path, line_number, value)?;
     if value["schema_version"] == 3
         && path.parent().and_then(Utf8Path::file_name) == Some("threads")
         && if path.file_name() == Some("threads.jsonl") {
@@ -119,6 +120,27 @@ pub fn ensure_supported_record_version(
         "{path} line {line_number}: {record} has schema_version {version}, \
          but this build reads schema_version {} only",
         SUPPORTED_SCHEMA_VERSION.0
+    )
+}
+
+fn ensure_no_legacy_retirement(
+    path: &Utf8Path,
+    line_number: usize,
+    value: &serde_json::Value,
+) -> anyhow::Result<()> {
+    let Some(record) = value.as_object() else {
+        return Ok(());
+    };
+    if !record.contains_key("retired") {
+        return Ok(());
+    }
+    let name = record
+        .get("id")
+        .and_then(serde_json::Value::as_str)
+        .map_or_else(|| "record".to_string(), |id| format!("record {id}"));
+    anyhow::bail!(
+        "{path} line {line_number}: {name} contains legacy field `retired`; \
+         canonical JSONL requires record-deletion migration 026 before this build can read it"
     )
 }
 

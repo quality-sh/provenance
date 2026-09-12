@@ -133,7 +133,7 @@ pub async fn run_migrations(
         ),
         (
             RECORD_STAMPS_MIGRATION_ID,
-            include_str!("../migrations/007_record_stamps.sql"),
+            include_str!("../migrations/027_record_stamps.sql"),
         ),
     ] {
         let already_applied: Option<String> =
