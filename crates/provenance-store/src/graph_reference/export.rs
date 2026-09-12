@@ -117,6 +117,7 @@ impl ExactExport {
         validate_prefixed_hash("graph_digest", &document.graph_digest, "sha256:", 64)?;
         ensure_graph_schema_version("graph", SchemaVersion(document.graph.schema_version))?;
         document.graph.validate_schema_versions()?;
+        document.graph.validate_rule_archives()?;
         document.graph.validate_no_collaboration_fields()?;
         projection::validate_scope_ownership(&document.graph, &document.graph.scope.id)?;
         let graph_digest = graph_digest(&document.graph)?;
@@ -130,5 +131,37 @@ impl ExactExport {
             graph_digest,
             graph: document.graph,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn exact_export_refuses_an_archive_inconsistent_rule() {
+        let graph = serde_json::json!({
+            "schema_version": 2,
+            "scope": {"id":"default","path_prefix":"."},
+            "sources": [], "domains": [], "requirements": [], "boundaries": [],
+            "topics": [], "questions": [], "resolutions": [],
+            "rules": [{
+                "schema_version": 2, "scope_id": "default", "id": "rule_bad_archive",
+                "statement": "The rule remains active.", "status": "active",
+                "archived_in_commit": {"commit": "a".repeat(40)}, "severity": "high"
+            }]
+        });
+        let decoded: GraphExport = serde_json::from_value(graph.clone()).unwrap();
+        let document = serde_json::json!({
+            "schema_version": 2,
+            "operation": "exact-export",
+            "reference_id": format!("grf1_{}", "a".repeat(64)),
+            "graph_digest": graph_digest(&decoded).unwrap(),
+            "graph": graph,
+        });
+
+        let error = ExactExport::from_json(&serde_json::to_vec(&document).unwrap()).unwrap_err();
+
+        assert!(error.to_string().contains("archived_in_commit"), "{error}");
     }
 }

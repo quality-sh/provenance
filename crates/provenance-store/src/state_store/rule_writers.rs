@@ -156,6 +156,7 @@ impl StateStore {
                 origin_thread,
                 origin_message,
             };
+            rule.validate_archive()?;
             crate::write_error::ensure!(
                 AlreadyExists,
                 !records.iter().any(|record| record.id == rule.id),

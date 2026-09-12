@@ -2,7 +2,9 @@
 use provenance_core::{VerificationBinding, VerificationRun};
 use provenance_store::{
     operations::TypedSpecPlan,
-    state_store::{BeginVerificationInput, CompleteVerificationInput, TypedSpecResult},
+    state_store::{
+        BeginVerificationInput, CompleteVerificationInput, CreateRuleInput, TypedSpecResult,
+    },
 };
 use schemars::{
     generate::{Contract, SchemaSettings},
@@ -139,4 +141,16 @@ fn rule_contract_requires_the_archive_permalink_and_validates_stamps() {
             .get("archived_in_commit")
             .is_none()
     );
+
+    let input_schema = serde_json::to_value(schemars::schema_for!(CreateRuleInput)).unwrap();
+    let input_contract = jsonschema::JSONSchema::options()
+        .with_draft(jsonschema::Draft::Draft202012)
+        .compile(&input_schema)
+        .unwrap();
+    let mut input = json!({"scope_id":"default","id":"rule_one","statement":"The system saves records.","status":"draft","severity":"medium","requirement_ids":["req_one"],"resolution_ids":[]});
+    assert!(input_contract.is_valid(&input));
+    input["archived_in_commit"] = json!({"commit":"a".repeat(40)});
+    assert!(!input_contract.is_valid(&input));
+    input["status"] = json!("archived");
+    assert!(input_contract.is_valid(&input));
 }

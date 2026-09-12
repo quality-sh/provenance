@@ -95,10 +95,20 @@ async fn archive_requires_a_permalink_and_refuses_every_exit() {
     let fixture = Fixture::new();
     fixture.requirement().await;
     assert!(rule(&fixture, "archived", None).await.is_err());
+    let rule_path = fixture
+        .dir
+        .path()
+        .join(".provenance/state/scopes/default/rules/rule.jsonl");
+    assert!(std::fs::read_to_string(&rule_path)
+        .unwrap_or_default()
+        .is_empty());
     let permalink = json!({"commit":"a".repeat(40),"at":"2026-09-12T00:00:00Z"});
     assert!(rule(&fixture, "draft", Some(permalink.clone()))
         .await
         .is_err());
+    assert!(std::fs::read_to_string(&rule_path)
+        .unwrap_or_default()
+        .is_empty());
     rule(&fixture, "draft", None).await.unwrap();
     assert!(fixture
         .call(
