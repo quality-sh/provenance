@@ -420,14 +420,20 @@ jobs:
           fi
           count=$(jq '.warnings | length' provenance-coverage-report.json)
           governed=$(jq '[.warnings[] | select(.binding_finding)] | length' provenance-coverage-report.json)
-          jq -r '.warnings[]
-            | select(.binding_finding)
+          # GitHub renders at most ten warning annotations per step, so the
+          # stream stops there; the tail names where every finding lives.
+          jq -r '.warnings
+            | map(select(.binding_finding))
+            | .[:10][]
             | (if .file_path then
                 (if .line then "file=\(.file_path),line=\(.line),"
                  else "file=\(.file_path)," end)
                else "" end) as $location
             | "::warning \($location)title=Rule binding finding::\(.rule_id): \(.message)"' \
             provenance-coverage-report.json
+          if [ "$governed" -gt 10 ]; then
+            echo "::warning title=Rule binding finding::$((governed - 10)) more Rule binding finding(s) after the first 10; the job summary and the coverage report artifact list them all"
+          fi
           {
             echo "## Rule binding findings"
             echo ""

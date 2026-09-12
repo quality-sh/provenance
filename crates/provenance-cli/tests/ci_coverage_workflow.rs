@@ -154,3 +154,23 @@ fn binding_findings_become_annotations_and_a_job_summary() {
         "the machine-readable report feeds the reporting step: {job}"
     );
 }
+
+/// GitHub renders at most ten warning annotations per step, and the
+/// repository holds more findings than that. The step stops at the cap and
+/// the tail annotation names where the full list lives.
+#[test]
+fn annotations_stop_at_the_github_cap_and_name_where_the_rest_live() {
+    let job = rule_coverage_job(&workflow());
+    let reporting = job
+        .split_once("Rule binding findings")
+        .expect("a reporting step names the findings")
+        .1;
+    assert!(
+        reporting.contains(".[:10]"),
+        "annotations must stop at the ten GitHub renders per step: {reporting}"
+    );
+    assert!(
+        reporting.contains("more Rule binding finding"),
+        "the tail must say how many findings the summary and artifact hold: {reporting}"
+    );
+}
