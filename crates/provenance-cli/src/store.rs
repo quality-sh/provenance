@@ -7,34 +7,30 @@ use provenance_core::{
 use provenance_store::{layout::ProvenanceLayout, state_store::StateStore};
 
 #[derive(Debug)]
-pub(super) struct Store {
+pub struct Store {
     layout: ProvenanceLayout,
     state: StateStore,
 }
 
 impl Store {
-    pub(super) fn open(repo: impl AsRef<Utf8Path>) -> Self {
+    pub fn open(repo: impl AsRef<Utf8Path>) -> Self {
         let layout = ProvenanceLayout::new(repo.as_ref().to_path_buf());
         let state = StateStore::new(layout.clone());
         Self { layout, state }
     }
 
-    pub(super) const fn layout(&self) -> &ProvenanceLayout {
+    pub const fn layout(&self) -> &ProvenanceLayout {
         &self.layout
     }
 
-    pub(super) fn requirement(
-        &self,
-        scope: &ScopeId,
-        id: &StableId,
-    ) -> anyhow::Result<Requirement> {
+    pub fn requirement(&self, scope: &ScopeId, id: &StableId) -> anyhow::Result<Requirement> {
         self.list_requirements(scope)?
             .into_iter()
             .find(|record| record.id == *id)
             .ok_or_else(|| anyhow::Error::new(NotFound::Requirement))
     }
 
-    pub(super) fn rule(&self, scope: &ScopeId, id: &StableId) -> anyhow::Result<Rule> {
+    pub fn rule(&self, scope: &ScopeId, id: &StableId) -> anyhow::Result<Rule> {
         self.list_rules(scope)?
             .into_iter()
             .find(|record| record.id == *id)
@@ -42,14 +38,14 @@ impl Store {
     }
 
     #[allow(dead_code)]
-    pub(super) fn source(&self, scope: &ScopeId, id: &StableId) -> anyhow::Result<Source> {
+    pub fn source(&self, scope: &ScopeId, id: &StableId) -> anyhow::Result<Source> {
         self.list_sources(scope)?
             .into_iter()
             .find(|record| record.id == *id)
             .ok_or_else(|| anyhow::Error::new(NotFound::Source))
     }
 
-    pub(super) fn snapshot(&self, scope: &ScopeId) -> anyhow::Result<ScopeSnapshot> {
+    pub fn snapshot(&self, scope: &ScopeId) -> anyhow::Result<ScopeSnapshot> {
         self.with_repository_publication(|| {
             Ok(ScopeSnapshot {
                 sources: self.list_sources(scope)?,
@@ -83,7 +79,7 @@ impl std::ops::Deref for Store {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) enum NotFound {
+pub enum NotFound {
     Requirement,
     Rule(StableId),
     Source,
@@ -102,28 +98,28 @@ impl std::fmt::Display for NotFound {
 impl std::error::Error for NotFound {}
 
 #[derive(Debug)]
-pub(super) struct ScopeSnapshot {
-    pub(super) sources: Vec<Source>,
-    pub(super) domains: Vec<Domain>,
-    pub(super) requirements: Vec<Requirement>,
-    pub(super) boundaries: Vec<Boundary>,
-    pub(super) topics: Vec<Topic>,
-    pub(super) questions: Vec<Question>,
-    pub(super) resolutions: Vec<Resolution>,
-    pub(super) rules: Vec<Rule>,
-    pub(super) verification_bindings: Vec<VerificationBinding>,
-    pub(super) implementation_bindings: Vec<ImplementationBinding>,
-    pub(super) threads: Vec<Thread>,
-    pub(super) messages: Vec<Message>,
-    pub(super) contributions: Vec<Contribution>,
-    pub(super) synthesis_packets: Vec<SynthesisPacket>,
-    pub(super) proposal_cards: Vec<ProposalCard>,
-    pub(super) assertion_records: Vec<AssertionRecord>,
-    pub(super) dispositions: Vec<DispositionRecord>,
+pub struct ScopeSnapshot {
+    pub sources: Vec<Source>,
+    pub domains: Vec<Domain>,
+    pub requirements: Vec<Requirement>,
+    pub boundaries: Vec<Boundary>,
+    pub topics: Vec<Topic>,
+    pub questions: Vec<Question>,
+    pub resolutions: Vec<Resolution>,
+    pub rules: Vec<Rule>,
+    pub verification_bindings: Vec<VerificationBinding>,
+    pub implementation_bindings: Vec<ImplementationBinding>,
+    pub threads: Vec<Thread>,
+    pub messages: Vec<Message>,
+    pub contributions: Vec<Contribution>,
+    pub synthesis_packets: Vec<SynthesisPacket>,
+    pub proposal_cards: Vec<ProposalCard>,
+    pub assertion_records: Vec<AssertionRecord>,
+    pub dispositions: Vec<DispositionRecord>,
 }
 
 impl ScopeSnapshot {
-    pub(super) fn graph_records(&self) -> GraphRecords<'_> {
+    pub fn graph_records(&self) -> GraphRecords<'_> {
         GraphRecords {
             sources: &self.sources,
             domains: &self.domains,
@@ -140,17 +136,17 @@ impl ScopeSnapshot {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(super) struct GraphRecords<'a> {
-    pub(super) sources: &'a [Source],
-    pub(super) domains: &'a [Domain],
-    pub(super) requirements: &'a [Requirement],
-    pub(super) boundaries: &'a [Boundary],
-    pub(super) topics: &'a [Topic],
-    pub(super) questions: &'a [Question],
-    pub(super) resolutions: &'a [Resolution],
-    pub(super) rules: &'a [Rule],
-    pub(super) verification_bindings: &'a [VerificationBinding],
-    pub(super) implementation_bindings: &'a [ImplementationBinding],
+pub struct GraphRecords<'a> {
+    pub sources: &'a [Source],
+    pub domains: &'a [Domain],
+    pub requirements: &'a [Requirement],
+    pub boundaries: &'a [Boundary],
+    pub topics: &'a [Topic],
+    pub questions: &'a [Question],
+    pub resolutions: &'a [Resolution],
+    pub rules: &'a [Rule],
+    pub verification_bindings: &'a [VerificationBinding],
+    pub implementation_bindings: &'a [ImplementationBinding],
 }
 
 #[cfg(test)]
