@@ -11,7 +11,7 @@ pub(super) fn handle(command: ReportCommand) -> anyhow::Result<()> {
             input,
             format,
             output,
-        } => render_handler(input, format, output),
+        } => render_handler(&input, format, &output),
         ReportCommand::Build {
             repo,
             base,
@@ -38,9 +38,9 @@ pub(super) fn handle(command: ReportCommand) -> anyhow::Result<()> {
 }
 
 fn render_handler(
-    input: Utf8PathBuf,
+    input: &Utf8PathBuf,
     format: OutputFormat,
-    output: Option<Utf8PathBuf>,
+    output: &Option<Utf8PathBuf>,
 ) -> anyhow::Result<()> {
     let raw = std::fs::read_to_string(&input).with_context(|| format!("failed to read {input}"))?;
     let envelope: ReportEnvelope = serde_json::from_str(&raw)
