@@ -12,8 +12,14 @@ use provenance_core::ScopeId;
 use std::collections::{BTreeMap, BTreeSet};
 
 type ContentKey = (String, String);
-type ContentValue = (String, i64);
 type UnitValue = units::UnitDigests;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ContentValue {
+    content: String,
+    stored: String,
+    count: i64,
+}
 
 /// What one catch-up pass did.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -95,20 +101,9 @@ pub async fn catch_up_with_guard(
         if stored_units.get(&unit.name()) == Some(&digests) {
             continue;
         }
-        let metadata_changed = stored_units
-            .get(&unit.name())
-            .is_none_or(|stored| stored.stored != digests.stored);
         let (records, digests) = reader.scope(scope, digests)?;
         changed = true;
-        rederive_scope(
-            &mut tx,
-            &records,
-            scope,
-            metadata_changed,
-            &mut content,
-            &mut report,
-        )
-        .await?;
+        rederive_scope(&mut tx, &records, scope, &mut content, &mut report).await?;
         stamp::upsert_unit_row(&mut tx, &unit.name(), &digests).await?;
     }
     report.units_hashed = reader.units_hashed;
@@ -118,13 +113,26 @@ pub async fn catch_up_with_guard(
         return Ok(report);
     }
 
-    for ((scope_id, family), (digest, count)) in &content {
-        stamp::upsert_content_row(&mut tx, scope_id, family, digest, *count).await?;
+    for ((scope_id, family), value) in &content {
+        stamp::upsert_content_row(
+            &mut tx,
+            scope_id,
+            family,
+            &value.content,
+            &value.stored,
+            value.count,
+        )
+        .await?;
     }
     let rows: Vec<(String, String, String, i64)> = content
         .iter()
-        .map(|((scope_id, family), (digest, count))| {
-            (scope_id.clone(), family.clone(), digest.clone(), *count)
+        .map(|((scope_id, family), value)| {
+            (
+                scope_id.clone(),
+                family.clone(),
+                value.content.clone(),
+                value.count,
+            )
         })
         .collect();
     report.digest = revision_digest_from_stored_rows(&rows)?;
@@ -152,13 +160,23 @@ async fn load_stored_digests(
     .map(|(unit, content, stored)| (unit, UnitValue { content, stored }))
     .collect();
     let content: BTreeMap<ContentKey, ContentValue> =
-        sqlx::query_as::<_, (String, String, String, i64)>(
-            "SELECT scope_id, family, content_digest, record_count FROM projection_family_digests",
+        sqlx::query_as::<_, (String, String, String, String, i64)>(
+            "SELECT scope_id, family, content_digest, stored_digest, record_count \
+         FROM projection_family_digests",
         )
         .fetch_all(pool)
         .await?
         .into_iter()
-        .map(|(scope_id, family, digest, count)| ((scope_id, family), (digest, count)))
+        .map(|(scope_id, family, content, stored, count)| {
+            (
+                (scope_id, family),
+                ContentValue {
+                    content,
+                    stored,
+                    count,
+                },
+            )
+        })
         .collect();
     Ok((units, content))
 }
@@ -215,22 +233,25 @@ async fn rederive_scope(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     records: &validation::ScopeRecords,
     scope: &ScopeId,
-    metadata_changed: bool,
     content: &mut BTreeMap<ContentKey, ContentValue>,
     report: &mut CatchUpReport,
 ) -> anyhow::Result<()> {
     let mut owner_moved = false;
     for records in &records.families {
         let family = records.family;
-        let fresh = (
-            family.content_digest(&records.bytes)?,
-            i64::try_from(records.count)?,
-        );
+        let fresh = ContentValue {
+            content: family.content_digest(&records.bytes)?,
+            stored: crate::canonical_digest::digest(&records.bytes),
+            count: i64::try_from(records.count)?,
+        };
         let key = (scope.as_str().to_string(), family.family_name().to_string());
-        let content_changed = content.get(&key) != Some(&fresh);
-        if !(content_changed || metadata_changed && family.has_record_stamps()) {
+        let previous = content.get(&key);
+        if previous == Some(&fresh) {
             continue;
         }
+        let content_changed = previous.is_none_or(|previous| {
+            previous.content != fresh.content || previous.count != fresh.count
+        });
         family_rows::delete_rows(tx, family, scope).await?;
         report.rows_written += family_rows::load_rows(tx, family, &records.bytes).await?;
         report.families_rederived += 1;

@@ -91,6 +91,14 @@ pub fn unit_digest(state_dir: &Utf8Path, unit: &Unit) -> Result<String, UnitHash
     Ok(digests_with(state_dir, unit, |_, _| {})?.content)
 }
 
+/// The digest of the exact stored bytes in one unit.
+pub fn unit_stored_digest(
+    state_dir: &Utf8Path,
+    unit: &Unit,
+) -> Result<String, UnitHashError> {
+    stored_digest_with(state_dir, unit, |_, _| {})
+}
+
 #[cfg(test)]
 pub(super) fn digest_with(
     state_dir: &Utf8Path,
@@ -125,26 +133,53 @@ pub(super) fn digests_with(
             content::hash_bytes(path, &bytes).map_err(|error| UnitHashError::at(path, error))?;
         frame(&mut content, relative, &content_bytes);
     }
-    let after = unit_files(state_dir, unit)?;
-    if files != after {
-        let changed = files
-            .iter()
-            .find(|entry| after.binary_search(entry).is_err())
-            .or_else(|| {
-                after
-                    .iter()
-                    .find(|entry| files.binary_search(entry).is_err())
-            })
-            .expect("different file lists have a changed entry");
-        return Err(UnitHashError::at(
-            &changed.1,
-            anyhow::anyhow!("canonical file list changed during hashing"),
-        ));
-    }
+    ensure_file_list_unchanged(state_dir, unit, &files)?;
     Ok(UnitDigests {
         content: crate::canonical_digest::digest(&content),
         stored: crate::canonical_digest::digest(&stored),
     })
+}
+
+fn stored_digest_with(
+    state_dir: &Utf8Path,
+    unit: &Unit,
+    mut retain: impl FnMut(&Utf8Path, &[u8]),
+) -> Result<String, UnitHashError> {
+    let files = unit_files(state_dir, unit)?;
+    crate::test_probes::at("unit_files_collected")
+        .map_err(|error| UnitHashError::at(state_dir, error))?;
+    let mut stored = Vec::new();
+    for (relative, path) in &files {
+        let bytes = std::fs::read(path).map_err(|error| UnitHashError::at(path, error))?;
+        retain(path, &bytes);
+        frame(&mut stored, relative, &bytes);
+    }
+    ensure_file_list_unchanged(state_dir, unit, &files)?;
+    Ok(crate::canonical_digest::digest(&stored))
+}
+
+fn ensure_file_list_unchanged(
+    state_dir: &Utf8Path,
+    unit: &Unit,
+    files: &[(String, Utf8PathBuf)],
+) -> Result<(), UnitHashError> {
+    let after = unit_files(state_dir, unit)?;
+    if files == after {
+        return Ok(());
+    }
+    let changed = files
+        .iter()
+        .find(|entry| after.binary_search(entry).is_err())
+        .or_else(|| {
+            after
+                .iter()
+                .find(|entry| files.binary_search(entry).is_err())
+        })
+        .expect("different file lists have a changed entry");
+    Err(UnitHashError::at(
+        &changed.1,
+        anyhow::anyhow!("canonical file list changed during hashing"),
+    ))
 }
 
 fn frame(target: &mut Vec<u8>, relative: &str, bytes: &[u8]) {

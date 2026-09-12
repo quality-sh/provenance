@@ -1,7 +1,7 @@
 use super::super::comparison::{served_stamped, test_stores};
 use super::super::pinned::request_set;
 use super::get_through;
-use crate::cache::{catch_up_state, open_cache, unit_digest, Unit};
+use crate::cache::{catch_up_state, open_cache, unit_stored_digest, Unit};
 use crate::operations::read_policy::{FreshnessPolicy, ReadPolicy};
 use crate::operations::reader::ReadRefusal;
 use provenance_core::protocol::StampPolicy;
@@ -48,9 +48,9 @@ async fn refuse_stale_refuses_and_names_the_moved_unit() {
     let store = test_stores::seeded_queries();
     let before = get_through(&store, ReadPolicy::default()).await.unwrap();
     let unit = Unit::Scope(store.scope.clone());
-    let stored = unit_digest(&store.layout().state_dir(), &unit).unwrap();
+    let stored = unit_stored_digest(&store.layout().state_dir(), &unit).unwrap();
     edit(&store);
-    let live = unit_digest(&store.layout().state_dir(), &unit).unwrap();
+    let live = unit_stored_digest(&store.layout().state_dir(), &unit).unwrap();
     let error = get_through(&store, policy()).await.unwrap_err();
     let Some(ReadRefusal::Stale {
         database,

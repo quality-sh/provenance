@@ -367,7 +367,11 @@ const fn typed_kind(kind: NodeType) -> Option<TypedResourceKind> {
         NodeType::Source => Some(TypedResourceKind::Source),
         NodeType::Requirement => Some(TypedResourceKind::Requirement),
         NodeType::Rule => Some(TypedResourceKind::Rule),
-        _ => None,
+        NodeType::Resolution
+        | NodeType::Topic
+        | NodeType::Question
+        | NodeType::Domain
+        | NodeType::Boundary => None,
     }
 }
 

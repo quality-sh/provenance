@@ -10,6 +10,7 @@ mod validation;
 pub use catch_up::catch_up_with_guard;
 pub use catch_up::{catch_up_state, CatchUpReport};
 pub use record_rows::SEARCH_TEXT;
+pub use units::unit_stored_digest;
 pub use units::{scope_ids, unit_digest, units_for, Unit, UnitHashError};
 
 use super::{open_cache, MaterializeReport};
@@ -104,6 +105,7 @@ async fn rebuild_rows(
                 scope.as_str(),
                 records.family.family_name(),
                 &records.family.content_digest(&records.bytes)?,
+                &crate::canonical_digest::digest(&records.bytes),
                 i64::try_from(records.count)?,
             )
             .await?;

@@ -43,15 +43,17 @@ pub(super) async fn upsert_content_row(
     scope_id: &str,
     family: &str,
     content_digest: &str,
+    stored_digest: &str,
     record_count: i64,
 ) -> anyhow::Result<()> {
     sqlx::query(
         "INSERT OR REPLACE INTO projection_family_digests \
-         (scope_id, family, content_digest, record_count) VALUES (?, ?, ?, ?)",
+         (scope_id, family, content_digest, stored_digest, record_count) VALUES (?, ?, ?, ?, ?)",
     )
     .bind(scope_id)
     .bind(family)
     .bind(content_digest)
+    .bind(stored_digest)
     .bind(record_count)
     .execute(&mut **tx)
     .await?;

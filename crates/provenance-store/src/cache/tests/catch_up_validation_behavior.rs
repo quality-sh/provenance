@@ -92,13 +92,14 @@ async fn a_schema_move_routes_catch_up_to_a_full_rebuild() {
     let pool = open_cache(&layout).await.unwrap();
     for statement in [
         "DROP TABLE projection_unit_digests",
+        "ALTER TABLE projection_family_digests DROP COLUMN stored_digest",
         "ALTER TABLE projection_family_digests ADD COLUMN digest TEXT NOT NULL DEFAULT ''",
         "ALTER TABLE projection_family_digests ADD COLUMN size_bytes INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE projection_family_digests ADD COLUMN mtime_ns INTEGER NOT NULL DEFAULT 0",
     ] {
         sqlx::query(statement).execute(pool.pool()).await.unwrap();
     }
-    sqlx::query("DELETE FROM _schema_migrations WHERE id = '020'")
+    sqlx::query("DELETE FROM _schema_migrations WHERE id IN ('020', '028')")
         .execute(pool.pool())
         .await
         .unwrap();

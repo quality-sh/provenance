@@ -35,6 +35,8 @@ async fn catch_up_refreshes_stamp_columns_without_changing_the_semantic_digest()
     let report = catch_up_state(&layout).await.unwrap();
     assert!(report.revision_committed);
     assert_eq!(report.digest, digest);
+    assert_eq!(report.families_rederived, 1, "{report:?}");
+    assert_eq!(report.rows_written, 1, "{report:?}");
     let pool = open_cache(&layout).await.unwrap();
     let (created, updated): (String, String) =
         sqlx::query_as("SELECT created, updated FROM sources WHERE id = 'source_schads'")
