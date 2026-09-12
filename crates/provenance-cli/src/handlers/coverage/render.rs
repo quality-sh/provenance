@@ -18,7 +18,7 @@ enum ReportSite<'a> {
 }
 
 impl<'a> ReportSite<'a> {
-    fn core(self) -> &'a SiteCore {
+    const fn core(self) -> &'a SiteCore {
         match self {
             Self::Annotation(site) => &site.site,
             Self::Binding(site) => &site.site,
