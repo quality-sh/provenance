@@ -27,13 +27,12 @@ pub(super) async fn impact(
         .validate()
         .map_err(provenance_core::protocol::QueryValidation::into_native)?;
     let id = StableId::new(request.id.clone())?;
-    let include_retired = request.include_retired;
     let snapshot = ctx.snapshot();
     let mut rules = BTreeSet::new();
-    if snapshot.table::<Rule>().live(&id, include_retired).await? {
+    if snapshot.table::<Rule>().live(&id).await? {
         rules.insert(id.as_str().to_string());
     }
-    let mut frontier: Vec<(NodeType, StableId)> = kind_of(snapshot, &id, include_retired)
+    let mut frontier: Vec<(NodeType, StableId)> = kind_of(snapshot, &id)
         .await?
         .map(|node_type| vec![(node_type, id)])
         .unwrap_or_default();
@@ -50,13 +49,13 @@ pub(super) async fn impact(
         for (origin_type, origin) in &frontier {
             for step in flow_neighbors(&front, *origin_type, origin, true) {
                 // Marked seen before the record is checked, so a second
-                // path to a retired or dangling record is skipped too.
+                // path to a missing record is skipped too.
                 if seen.insert(nodes::key(step.endpoint.node_type, &step.endpoint.id)) {
                     candidates.push((step.endpoint.node_type, step.endpoint.id));
                 }
             }
         }
-        frontier = nodes::counting(snapshot, &candidates, include_retired).await?;
+        frontier = nodes::counting(snapshot, &candidates).await?;
         for (node_type, id) in &frontier {
             if *node_type == NodeType::Rule {
                 rules.insert(id.as_str().to_string());
@@ -75,11 +74,11 @@ pub(super) async fn impact(
         (
             snapshot
                 .table::<ImplementationBinding>()
-                .by_field("rule_id", &rule_ids, include_retired)
+                .by_field("rule_id", &rule_ids)
                 .await?,
             snapshot
                 .table::<VerificationBinding>()
-                .by_field("rule_id", &rule_ids, include_retired)
+                .by_field("rule_id", &rule_ids)
                 .await?,
         )
     };

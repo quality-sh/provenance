@@ -21,7 +21,5 @@ pub(super) fn changed_fields(
 }
 
 pub(super) fn changes_revision(fields: &[String]) -> bool {
-    fields
-        .iter()
-        .any(|field| !matches!(field.as_str(), "status" | "retired"))
+    fields.iter().any(|field| field != "status")
 }

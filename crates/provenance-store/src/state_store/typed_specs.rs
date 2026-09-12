@@ -1,8 +1,9 @@
-use crate::review::guard::protect_requirements;
-use crate::write_error::{publication_started, SourceFailure, WriteFailure};
+use crate::write_error::{SourceFailure, WriteFailure};
 mod adoption;
+mod cascade;
+mod deletion;
 mod identity;
-mod lifecycle;
+mod publication;
 mod reconcile;
 mod rule_addresses;
 
@@ -19,7 +20,6 @@ use super::{
     ReconcileState, ReconciledResource, StateStore, TypedDeclarationKind, TypedFieldChange,
     TypedRuleInput, TypedSpecInput, TypedSpecResult,
 };
-use crate::shards;
 use identity::{
     declaration_ids, normalize_rule_relationships, owned_declaration_ids, requirement_identity,
     rule_declaration_ids, source_identity, validate_references,
@@ -107,7 +107,7 @@ fn desired_typed_ids(
 impl StateStore {
     /// Reconciles one language-owned desired-state document with canonical state.
     ///
-    /// Omitted owned records retire in place, while records from another owner
+    /// Omitted owned records are deleted, while records from another owner
     /// remain untouched. Moves replace only active relationships owned by this
     /// spec, so applying one spec cannot take over another integration's or a
     /// human's records.
@@ -159,7 +159,7 @@ impl StateStore {
 
         let rule_relationships = input.rules.clone();
         let spec = input.spec;
-        let (sources, source_resources) = reconcile_sources(
+        let (mut sources, source_resources) = reconcile_sources(
             current.sources,
             &spec,
             scope_id,
@@ -167,7 +167,7 @@ impl StateStore {
             input.sources,
             &ids.sources,
         )?;
-        let (requirements, requirement_resources) = reconcile_requirements(
+        let (mut requirements, requirement_resources) = reconcile_requirements(
             current.requirements,
             &spec,
             scope_id,
@@ -176,7 +176,7 @@ impl StateStore {
             &ids.requirements,
             &ids.sources,
         )?;
-        let (rules, mut rule_resources) = reconcile_rules(
+        let (mut rules, mut rule_resources) = reconcile_rules(
             current.rules,
             &spec,
             scope_id,
@@ -184,6 +184,20 @@ impl StateStore {
             input.rules,
             &ids.rules,
             &ids.requirements,
+        )?;
+        let deleted_resources = [
+            source_resources.as_slice(),
+            requirement_resources.as_slice(),
+            rule_resources.as_slice(),
+        ]
+        .concat();
+        let cascade = cascade::Cascade::prepare(
+            self,
+            scope_id,
+            &deleted_resources,
+            &mut sources,
+            &mut requirements,
+            &mut rules,
         )?;
         ensure_resolutions_exist(self, scope_id, &requirements, &rules)?;
         ensure_acyclic(&requirements)?;
@@ -193,13 +207,16 @@ impl StateStore {
             rules: &rule_relationships,
             rule_ids: &ids.rules,
         };
-        let implementation_reconciliation = super::implementation_bindings::reconcile(
+        let mut implementation_reconciliation = super::implementation_bindings::reconcile(
             self,
             scope_id,
             graph,
             &rules,
             &adopted_rule_ids,
         )?;
+        implementation_reconciliation
+            .records
+            .retain(|r| !cascade.rules.contains(r.rule_id.as_str()));
         attach_implementation_changes(&mut rule_resources, &implementation_reconciliation.changes);
         let mut result = spec_result(
             input.declared_by.clone(),
@@ -208,38 +225,41 @@ impl StateStore {
             rule_resources.clone(),
             implementation_reconciliation.active,
         );
-        let dictionary = crate::dictionary_reference::load_project_dictionary(&self.layout);
-        result.diagnostics = super::typed_statement_policy::analyze_typed_statements(
-            &result.resources,
-            &requirements,
-            &rules,
-            dictionary.as_ref(),
-        );
+        self.analyze_typed_result(&mut result, &requirements, &rules);
 
         if matches!(mode, ReconcileMode::Apply) {
-            super::typed_statement_policy::ensure_typed_spec_is_writable(&result)?;
-            protect_requirements(&self.layout, scope_id, &requirements)?;
-            (|| -> anyhow::Result<()> {
-                replace_records(self, &shards::sources_path(&self.layout, scope_id), sources)?;
-                crate::test_probes::at("typed_spec_sources_published")?;
-                replace_records(
-                    self,
-                    &shards::requirements_path(&self.layout, scope_id),
-                    requirements,
-                )?;
-                replace_records(self, &shards::rules_path(&self.layout, scope_id), rules)?;
-                replace_records(
-                    self,
-                    &shards::implementation_bindings_path(&self.layout, scope_id),
-                    implementation_reconciliation.records,
-                )?;
-                self.raise_requirement_reviews(scope_id, &requirement_resources, &rule_resources)?;
-                Ok(())
-            })()
-            .map_err(publication_started)?;
+            publication::Replacement {
+                sources,
+                requirements,
+                rules,
+                implementations: implementation_reconciliation.records,
+                cascade,
+            }
+            .publish(
+                self,
+                scope_id,
+                &result,
+                &requirement_resources,
+                &rule_resources,
+            )?;
         }
 
         Ok(result)
+    }
+
+    fn analyze_typed_result(
+        &self,
+        result: &mut TypedSpecResult,
+        requirements: &[Requirement],
+        rules: &[Rule],
+    ) {
+        let dictionary = crate::dictionary_reference::load_project_dictionary(&self.layout);
+        result.diagnostics = super::typed_statement_policy::analyze_typed_statements(
+            &result.resources,
+            requirements,
+            rules,
+            dictionary.as_ref(),
+        );
     }
 
     /// Puts the evidence of every Rule under a restated Requirement up for review.
@@ -396,7 +416,7 @@ fn spec_result(
         created: count_state(&resources, ReconcileState::Created),
         updated: count_state(&resources, ReconcileState::Updated),
         moved: count_state(&resources, ReconcileState::Moved),
-        retired: count_state(&resources, ReconcileState::Retired),
+        deleted: count_state(&resources, ReconcileState::Deleted),
         conflicts: count_state(&resources, ReconcileState::Conflict),
         unchanged: count_state(&resources, ReconcileState::Unchanged),
         resources,

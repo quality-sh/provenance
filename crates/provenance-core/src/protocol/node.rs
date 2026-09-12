@@ -54,23 +54,6 @@ impl GraphNode {
         }
     }
 
-    /// Whether an active view should leave this record out.
-    ///
-    /// Only the record kinds that retire in place carry the flag; the shaping
-    /// kinds have their own status words and are never retired.
-    pub const fn retired(&self) -> bool {
-        match self {
-            Self::Source(record) => record.retired,
-            Self::Requirement(record) => record.retired,
-            Self::Rule(record) => record.retired,
-            Self::Resolution(_)
-            | Self::Topic(_)
-            | Self::Question(_)
-            | Self::Domain(_)
-            | Self::Boundary(_) => false,
-        }
-    }
-
     /// The words a text search reads on this record.
     pub fn searchable_text(&self) -> Vec<&str> {
         let mut text = vec![self.id().as_str()];

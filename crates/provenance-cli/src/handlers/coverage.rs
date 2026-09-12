@@ -7,7 +7,6 @@ use std::collections::BTreeSet;
 
 mod lifecycle;
 mod render;
-mod retired;
 mod verification_state;
 use lifecycle::inactive_rule_binding_warnings;
 use render::render_coverage;
@@ -43,12 +42,6 @@ fn coverage_scan_against(
     let mut warnings = parse_warnings(&scans);
     warnings.extend(validation.warnings);
     if validate_rules {
-        // A marker citing a retired Rule is a fact about a line the scan
-        // read, so it stands even when the scan covers part of the tree.
-        // Derived absence needs the whole repository to be honest. The same
-        // holds for a current binding to a deprecated or archived Rule: the
-        // graph and the scanned lines say it exists.
-        warnings.extend(retired::stale_rule_warnings(&validation.rules, &scans));
         warnings.extend(inactive_rule_binding_warnings(
             &validation.rules,
             &scans,
@@ -186,7 +179,7 @@ fn unimplemented_rule_warnings(
     );
     rules
         .iter()
-        .filter(|rule| rule.status == provenance_core::RuleStatus::Active && !rule.retired)
+        .filter(|rule| rule.status == provenance_core::RuleStatus::Active)
         .filter(|rule| !implementations.contains(rule.id.as_str()))
         .map(|rule| provenance_core::coverage::ValidationWarning {
             rule_id: rule.id.as_str().to_string(),

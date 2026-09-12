@@ -412,8 +412,7 @@ pub enum Comparison {
     Uncertain,
 }
 
-/// Whether a current binding names the subject now. A historical retired
-/// relationship is not presence.
+/// Whether a current binding names the subject.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BindingPresence {

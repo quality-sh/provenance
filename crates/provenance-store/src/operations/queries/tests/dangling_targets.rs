@@ -36,7 +36,6 @@ async fn a_read_over_an_old_dangling_target_still_answers() {
             protocol_version: Some(SDK_PROTOCOL_VERSION),
             node_type: NodeType::Requirement,
             id: "req_overtime".into(),
-            include_retired: false,
         },
     )
     .await

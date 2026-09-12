@@ -24,21 +24,20 @@ fn pinned_path() -> PathBuf {
         .join("src/operations/queries/tests/pinned_answers.json")
 }
 
-fn get(kind: NodeType, id: &str, include_retired: bool) -> Request {
+fn get(kind: NodeType, id: &str) -> Request {
     Request::Get(GetQuery {
         protocol_version: Some(SDK_PROTOCOL_VERSION),
         node_type: kind,
         id: id.into(),
-        include_retired,
     })
 }
 
-fn impact(id: &str, include_retired: bool, limit: usize) -> Request {
+fn impact(id: &str, limit: usize) -> Request {
     Request::Impact(ImpactQuery {
         protocol_version: Some(SDK_PROTOCOL_VERSION),
         id: id.into(),
         node_type: None,
-        include_retired,
+
         limit,
     })
 }
@@ -49,7 +48,7 @@ fn resolve(file: &str, symbol: Option<&str>, line: Option<usize>) -> Request {
         file: file.into(),
         symbol: symbol.map(str::to_string),
         line,
-        include_retired: false,
+
         limit: 50,
     })
 }
@@ -58,18 +57,18 @@ fn resolve(file: &str, symbol: Option<&str>, line: Option<usize>) -> Request {
 /// is fixed by the store's fixed author and dates.
 pub(super) fn request_set(base: &str) -> Vec<Request> {
     let mut set = vec![
-        get(NodeType::Domain, "domain_payroll", false),
-        get(NodeType::Source, "source_schads", false),
-        get(NodeType::Requirement, "req_overtime", false),
-        get(NodeType::Resolution, "res_overtime", false),
-        get(NodeType::Rule, "rule_overtime_001", false),
-        get(NodeType::Topic, "topic_rates", false),
-        get(NodeType::Question, "question_threshold", false),
-        get(NodeType::Boundary, "boundary_no_backpay", false),
-        get(NodeType::Requirement, "req_old_overtime", false),
-        get(NodeType::Requirement, "req_old_overtime", true),
-        get(NodeType::Requirement, "twin_record", false),
-        get(NodeType::Rule, "twin_record", false),
+        get(NodeType::Domain, "domain_payroll"),
+        get(NodeType::Source, "source_schads"),
+        get(NodeType::Requirement, "req_overtime"),
+        get(NodeType::Resolution, "res_overtime"),
+        get(NodeType::Rule, "rule_overtime_001"),
+        get(NodeType::Topic, "topic_rates"),
+        get(NodeType::Question, "question_threshold"),
+        get(NodeType::Boundary, "boundary_no_backpay"),
+        get(NodeType::Requirement, "req_old_overtime"),
+        get(NodeType::Requirement, "req_old_overtime"),
+        get(NodeType::Requirement, "twin_record"),
+        get(NodeType::Rule, "twin_record"),
         Request::Search(requests::search("over", Vec::new())),
         Request::Search(requests::search(
             "pay",
@@ -77,41 +76,38 @@ pub(super) fn request_set(base: &str) -> Vec<Request> {
         )),
         Request::Search(requests::search("e", Vec::new())),
     ];
-    let mut with_retired = requests::search("over", Vec::new());
-    with_retired.include_retired = true;
-    set.push(Request::Search(with_retired));
     set.extend([
-        Request::Neighbors(requests::neighbors("req_overtime", false, 5)),
-        Request::Neighbors(requests::neighbors("req_overtime", true, 50)),
-        Request::Neighbors(requests::neighbors("source_schads", false, 50)),
-        Request::Neighbors(requests::neighbors("topic_rates", false, 50)),
-        Request::Neighbors(requests::neighbors("req_old_overtime", true, 50)),
-        Request::Neighbors(requests::neighbors("question_threshold", false, 50)),
-        Request::Neighbors(requests::neighbors("twin_record", false, 50)),
+        Request::Neighbors(requests::neighbors("req_overtime", 5)),
+        Request::Neighbors(requests::neighbors("req_overtime", 50)),
+        Request::Neighbors(requests::neighbors("source_schads", 50)),
+        Request::Neighbors(requests::neighbors("topic_rates", 50)),
+        Request::Neighbors(requests::neighbors("req_old_overtime", 50)),
+        Request::Neighbors(requests::neighbors("question_threshold", 50)),
+        Request::Neighbors(requests::neighbors("twin_record", 50)),
     ]);
-    let mut retired_origin = requests::neighbors("req_right", false, 50);
-    retired_origin.node_type = Some(NodeType::Requirement);
-    set.push(Request::Neighbors(retired_origin));
-    let mut by_relation = requests::neighbors("req_penalty", false, 50);
+    let mut named_origin = requests::neighbors("req_right", 50);
+    named_origin.node_type = Some(NodeType::Requirement);
+    set.push(Request::Neighbors(named_origin));
+    let mut by_relation = requests::neighbors("req_penalty", 50);
     by_relation.relations = vec!["contradicts".into(), "refines".into()];
     set.push(Request::Neighbors(by_relation));
     let mut outward = NeighborsQuery {
         direction: provenance_core::protocol::Direction::Out,
-        ..requests::neighbors("req_overtime", false, 50)
+        ..requests::neighbors("req_overtime", 50)
     };
     outward.limit = 50;
     set.push(Request::Neighbors(outward));
     set.extend([
-        Request::Trace(requests::trace("req_top", false, 50)),
-        Request::Trace(requests::trace("req_top", true, 50)),
-        Request::Trace(requests::trace("req_overtime", false, 3)),
-        Request::Trace(requests::trace("twin_record", false, 50)),
-        impact("source_schads", false, 50),
-        impact("req_overtime", false, 5),
-        impact("rule_overtime_001", false, 50),
-        impact("req_top", false, 50),
-        impact("req_top", true, 50),
-        impact("res_overtime", false, 50),
+        Request::Trace(requests::trace("req_top", 50)),
+        Request::Trace(requests::trace("req_top", 50)),
+        Request::Trace(requests::trace("req_overtime", 3)),
+        Request::Trace(requests::trace("twin_record", 50)),
+        impact("source_schads", 50),
+        impact("req_overtime", 5),
+        impact("rule_overtime_001", 50),
+        impact("req_top", 50),
+        impact("req_top", 50),
+        impact("res_overtime", 50),
     ]);
     let mut short = requests::evidence("rule_overtime_001", None);
     short.limit = 2;
@@ -124,9 +120,6 @@ pub(super) fn request_set(base: &str) -> Vec<Request> {
         "rule_penalty_001",
         None,
     )));
-    let mut with_retired = requests::evidence("rule_overtime_001", None);
-    with_retired.include_retired = true;
-    set.push(Request::Evidence(with_retired));
     set.push(Request::Evidence(requests::evidence(
         "rule_overtime_001",
         Some(base.to_string()),
@@ -136,7 +129,7 @@ pub(super) fn request_set(base: &str) -> Vec<Request> {
         base: base.to_string(),
         head: None,
         rules: Vec::new(),
-        include_retired: false,
+
         limit: 50,
     }));
     set.extend([

@@ -78,15 +78,14 @@ fn kind_word(kind: NodeType) -> String {
         .to_string()
 }
 
-/// Up to `PER_KIND` records of each kind, in the served order, retired
-/// ones included: one served search per kind, under `annotate_only`
+/// Up to `PER_KIND` records of each kind, in the served order:
+/// one served search per kind, under `annotate_only`
 /// because the caller has already caught the projection up.
 pub async fn for_store(store: &TestStore) -> Vec<Request> {
     let policy = ReadPolicy::with_freshness(FreshnessPolicy::AnnotateOnly);
     let mut sample: Vec<GraphNode> = Vec::new();
     for (kind, needle) in SAMPLE_NEEDLE {
         let mut query = search(needle, vec![kind]);
-        query.include_retired = true;
         query.limit = PER_KIND;
         let answer = queries::search(Some(store.root.clone()), &store.scope, policy, query)
             .await
@@ -100,23 +99,13 @@ pub async fn for_store(store: &TestStore) -> Vec<Request> {
             protocol_version: Some(SDK_PROTOCOL_VERSION),
             node_type: node.node_type(),
             id: id.clone(),
-            include_retired: false,
         }));
-        if node.retired() {
-            requests.push(Request::Get(GetQuery {
-                protocol_version: Some(SDK_PROTOCOL_VERSION),
-                node_type: node.node_type(),
-                id: id.clone(),
-                include_retired: true,
-            }));
-        }
-        requests.push(Request::Neighbors(neighbors(&id, node.retired(), 50)));
-        requests.push(Request::Trace(trace(&id, node.retired(), 50)));
+        requests.push(Request::Neighbors(neighbors(&id, 50)));
+        requests.push(Request::Trace(trace(&id, 50)));
         requests.push(Request::Impact(ImpactQuery {
             protocol_version: Some(SDK_PROTOCOL_VERSION),
             id: id.clone(),
             node_type: None,
-            include_retired: node.retired(),
             limit: 50,
         }));
         if node.node_type() == NodeType::Rule {
@@ -128,8 +117,8 @@ pub async fn for_store(store: &TestStore) -> Vec<Request> {
     }
     if let Some(first) = sample.first() {
         let id = first.id().as_str().to_string();
-        requests.push(Request::Neighbors(neighbors(&id, false, 1)));
-        requests.push(Request::Trace(trace(&id, false, 2)));
+        requests.push(Request::Neighbors(neighbors(&id, 1)));
+        requests.push(Request::Trace(trace(&id, 2)));
     }
     for needle in ["pay", "over", "e"] {
         requests.push(Request::Search(search(needle, Vec::new())));
@@ -144,7 +133,7 @@ pub async fn for_store(store: &TestStore) -> Vec<Request> {
             base: base.clone(),
             head: None,
             rules: Vec::new(),
-            include_retired: false,
+
             limit: 50,
         }));
     }
@@ -171,26 +160,26 @@ pub async fn for_store(store: &TestStore) -> Vec<Request> {
             file: file.into(),
             symbol: None,
             line: None,
-            include_retired: false,
+
             limit: 50,
         }));
     }
     requests
 }
 
-pub fn neighbors(id: &str, include_retired: bool, limit: usize) -> NeighborsQuery {
+pub fn neighbors(id: &str, limit: usize) -> NeighborsQuery {
     NeighborsQuery {
         protocol_version: Some(SDK_PROTOCOL_VERSION),
         id: id.to_string(),
         node_type: None,
         direction: Direction::Both,
         relations: Vec::new(),
-        include_retired,
+
         limit,
     }
 }
 
-pub fn trace(id: &str, include_retired: bool, limit: usize) -> TraceQuery {
+pub fn trace(id: &str, limit: usize) -> TraceQuery {
     TraceQuery {
         protocol_version: Some(SDK_PROTOCOL_VERSION),
         id: id.to_string(),
@@ -198,7 +187,7 @@ pub fn trace(id: &str, include_retired: bool, limit: usize) -> TraceQuery {
         direction: Direction::Both,
         relations: Vec::new(),
         max_depth: 3,
-        include_retired,
+
         limit,
     }
 }
@@ -209,7 +198,7 @@ pub fn evidence(rule: &str, base: Option<String>) -> EvidenceQuery {
         rule: rule.to_string(),
         base,
         head: None,
-        include_retired: false,
+
         limit: 50,
     }
 }
@@ -220,7 +209,7 @@ pub fn search(text: &str, node_types: Vec<NodeType>) -> SearchQuery {
         protocol_version: Some(SDK_PROTOCOL_VERSION),
         text: text.to_string(),
         node_types,
-        include_retired: false,
+
         limit: 10,
     }
 }

@@ -78,17 +78,11 @@ impl<K: ProjectionRow> Table<'_, K> {
     /// Reads at most `limit` candidate IDs strictly after the previous key.
     pub(crate) async fn search_ids(
         &self,
-        retired: bool,
         after: &str,
         limit: usize,
     ) -> anyhow::Result<Vec<String>> {
-        let active = if K::COLUMNS.contains(&"retired") && !retired {
-            " AND retired = 0"
-        } else {
-            ""
-        };
         let sql = format!(
-            "SELECT CASE WHEN length(CAST(id AS BLOB)) <= 1024 THEN id END AS id FROM {} WHERE scope_id = ? AND id > ?{active} ORDER BY id LIMIT ?",
+            "SELECT CASE WHEN length(CAST(id AS BLOB)) <= 1024 THEN id END AS id FROM {} WHERE scope_id = ? AND id > ? ORDER BY id LIMIT ?",
             quoted(K::TABLE)
         );
         let mut tx = self.snapshot().connection().await;

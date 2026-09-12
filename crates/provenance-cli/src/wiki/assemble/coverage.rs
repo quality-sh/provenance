@@ -43,7 +43,7 @@ impl Assembler<'_> {
             .state
             .implementation_bindings
             .iter()
-            .filter(|binding| !binding.retired && binding.rule_id.as_str() == rule_id)
+            .filter(|binding| binding.rule_id.as_str() == rule_id)
         {
             let matches_scan = scanned_binding.map_or_else(
                 || {
@@ -133,7 +133,7 @@ impl Assembler<'_> {
             .state
             .verification_bindings
             .iter()
-            .filter(|binding| !binding.retired && binding.rule_id.as_str() == rule_id)
+            .filter(|binding| binding.rule_id.as_str() == rule_id)
         {
             let typed = VerificationSite {
                 method: binding.method.to_string(),

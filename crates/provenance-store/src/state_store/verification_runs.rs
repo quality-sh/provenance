@@ -184,13 +184,7 @@ fn verification_rule(
                         anyhow::anyhow!("rule `{}` does not exist", rule_id.as_str()),
                     )
                 })?;
-            crate::write_error::ensure!(
-                RetiredRule,
-                !rule.retired,
-                "rule `{}` is retired",
-                rule_id.as_str()
-            );
-            rule_id
+            rule.id.clone()
         }
         (None, Some(declaration)) => {
             let rule = rules
@@ -209,13 +203,6 @@ fn verification_rule(
                         ),
                     )
                 })?;
-            crate::write_error::ensure!(
-                RetiredRule,
-                !rule.retired,
-                "declaration owned by `{}` at `{}` is retired",
-                declaration.declared_by,
-                declaration.address.segments().join("/")
-            );
             rule.id.clone()
         }
         (Some(_), Some(_)) => {
