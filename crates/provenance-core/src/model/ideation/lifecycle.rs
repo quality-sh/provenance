@@ -1,4 +1,4 @@
-use super::{DispositionDecision, PromotionState};
+use super::{DispositionDecision, PromotionState, ProposalType};
 use crate::model::{
     validate_optional_confidence_score, Contribution, DispositionRecord, ProposalCard,
     SchemaVersion, ScopeId, StableId, SynthesisPacket,
@@ -92,6 +92,12 @@ pub enum LegacyProposalPolicy {
 /// review, so an author may not write either onto the row being authored; only
 /// a disposition record carries that authority.
 ///
+/// A `record_revision` row is a review submission, so it must name the exact
+/// revision it binds to, and only such a row carries a binding. Its
+/// `revises` and `revises_rejection` links stand or fall together, name a
+/// predecessor other than the row itself, and appear on no other kind: a
+/// resubmission answers one rejection of one predecessor.
+///
 /// The remaining checks are housekeeping on the row itself: `builds_on` may not
 /// name the same assertion twice, and any confidence score must be in range.
 #[rule("rule_proposal_authored_as_proposed")]
@@ -103,6 +109,30 @@ pub fn validate_proposal_intrinsic(proposal: &ProposalCard) -> anyhow::Result<()
     anyhow::ensure!(
         proposal.duplicate_of.is_none() && proposal.superseded_by.is_none(),
         "proposal disposition links require an authoritative disposition record"
+    );
+    let is_submission = proposal.proposal_type == ProposalType::RecordRevision;
+    anyhow::ensure!(
+        is_submission == proposal.record_revision.is_some(),
+        "a record revision binding belongs on a record_revision submission and no other proposal"
+    );
+    if let Some(binding) = &proposal.record_revision {
+        anyhow::ensure!(
+            !binding.content_digest.trim().is_empty(),
+            "record revision binding must carry a content digest"
+        );
+    }
+    let linked = proposal.revises.is_some() && proposal.revises_rejection.is_some();
+    let unlinked = proposal.revises.is_some() || proposal.revises_rejection.is_some();
+    anyhow::ensure!(
+        linked || !unlinked,
+        "a resubmission carries its predecessor and its rejection together"
+    );
+    if proposal.revises.as_ref() == Some(&proposal.id) {
+        anyhow::bail!("a proposal cannot revise itself");
+    }
+    anyhow::ensure!(
+        !unlinked || is_submission,
+        "resubmission links belong on a record_revision submission and no other proposal"
     );
     let mut lineage = BTreeSet::new();
     for assertion_id in &proposal.builds_on {

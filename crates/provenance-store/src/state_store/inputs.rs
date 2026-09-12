@@ -361,6 +361,16 @@ pub struct CreateProposalCardInput {
     pub promotion_state: PromotionState,
     pub duplicate_of: Option<StableId>,
     pub superseded_by: Option<StableId>,
+    /// The exact reviewed state a `record_revision` submission binds to. Only
+    /// the review seam may state one; ordinary writers refuse the type.
+    #[serde(default)]
+    pub record_revision: Option<provenance_core::RecordRevisionBinding>,
+    /// The rejected predecessor this resubmission revises.
+    #[serde(default)]
+    pub revises: Option<StableId>,
+    /// The rejection disposition of the proposal named by `revises`.
+    #[serde(default)]
+    pub revises_rejection: Option<StableId>,
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]

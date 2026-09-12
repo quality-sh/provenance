@@ -38,5 +38,8 @@ fn proposal_input(
         promotion_state,
         duplicate_of: None,
         superseded_by: None,
+        record_revision: None,
+        revises: None,
+        revises_rejection: None,
     }
 }

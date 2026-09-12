@@ -33,7 +33,9 @@ pub use ideation::lifecycle::{
     validate_proposal_intrinsic, Assertion, AssertionId, AssertionRecord, IdeationAggregate,
     LegacyProposalPolicy, SUPPORTED_SCHEMA_VERSION,
 };
-pub use ideation::proposals::{Proposal, ProposalCard, ProposalTraceability};
+pub use ideation::proposals::{
+    Proposal, ProposalCard, ProposalTraceability, RecordRevisionBinding,
+};
 pub use ideation::synthesis::{
     ConsensusFinding, ContestedClaim, EvidenceGap, MinorityObjection, RequiredHumanDecision,
     SuggestedArtifact, SynthesisPacket, UnsupportedSpeculation,
