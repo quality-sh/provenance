@@ -8,11 +8,6 @@ permissions:
 
 jobs:
   compose:
-    # Disabled pending the provenance-web renderer rebuild against the
-    # protocol-9 SDK schema and the tools/review-assets.json repin
-    # (provenance-ayh1). The compose check is what fails; everything the CLI
-    # embeds is composed without a renderer until then.
-    if: false
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v7
@@ -33,7 +28,29 @@ jobs:
       - run: npm ci --prefix tools/review-host
       - run: npm ci --prefix packages/provenance
       - run: npm run build --prefix packages/provenance
+      - name: Prepare host-only review assets
+        run: |
+          mkdir -p crates/provenance-cli/review-assets-generated
+          python3 <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          output = Path('crates/provenance-cli/review-assets-generated')
+          sdk = Path('packages/provenance')
+          page = Path('crates/provenance-cli/review-assets/index.html').read_bytes()
+          (output / 'index.html').write_bytes(page)
+          info = {
+              'formatVersion': 1,
+              'sdkVersion': json.loads((sdk / 'package.json').read_text())['version'],
+              'sdkSchemaSha256': hashlib.sha256((sdk / 'dist/generated/schema.d.ts').read_bytes()).hexdigest(),
+              'files': {'index.html': hashlib.sha256(page).hexdigest()},
+          }
+          (output / 'host-build-info.json').write_text(json.dumps(info, indent=2) + '\n')
+          PY
       - name: Compose the pinned renderer and host
+        # Pinned renderer rebuild pending (provenance-ayh1); host-only composition in the interim.
+        if: false
         env:
           GH_TOKEN: ${{ github.token }}
         run: node tools/review-host/prepare.ts packages/provenance crates/provenance-cli/review-assets-generated
