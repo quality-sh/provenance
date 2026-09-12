@@ -54,10 +54,12 @@ impl BaselineView {
             .collect()
     }
 
-    /// The baseline view for a set of head rules.
-    pub(super) fn for_rules(compatibility: BaselineCompatibility, rules: &[Rule]) -> Self {
+    /// The baseline view for the rules that existed at the base commit.
+    /// With a compatible baseline, a head rule absent from this set is new
+    /// in the range; any other baseline leaves every label uncertain.
+    pub(super) fn for_rules(compatibility: BaselineCompatibility, base_rules: &[Rule]) -> Self {
         match compatibility {
-            BaselineCompatibility::Compatible => Self::compatible(Self::rule_id_set(rules)),
+            BaselineCompatibility::Compatible => Self::compatible(Self::rule_id_set(base_rules)),
             BaselineCompatibility::Missing | BaselineCompatibility::Incompatible => {
                 Self::uncertain()
             }

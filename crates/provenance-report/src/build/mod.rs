@@ -95,7 +95,10 @@ pub fn build_envelope(input: BuildInput<'_>) -> anyhow::Result<ReportEnvelope> {
     let (verifications, implementations) =
         graph_snapshots::read_bindings(input.repo, &head, &scope)?;
     let rules = &head_snapshot.rules;
-    let baseline_view = BaselineView::for_rules(baseline, rules);
+    // Comparison labels come from the rules that existed at the base
+    // commit, never from the head snapshot: a rule that exists only at
+    // head is new in this range.
+    let baseline_view = BaselineView::for_rules(baseline, &base_snapshot.rules);
     let configured = settings::Settings::load(&layout)
         .context("read repository settings for the policy outcome")?
         .coverage

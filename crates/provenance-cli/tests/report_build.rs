@@ -182,11 +182,13 @@ fn graph_only_change_between_two_real_commits_lists_added_records() {
     assert_eq!(serves["target_kind"], "requirement");
     assert_eq!(serves["target_id"], "req_anchor");
 
-    let anchor = changes
-        .iter()
-        .find(|change| change["id"] == "rule_anchor")
-        .expect("the unchanged anchor rule must not be reported as changed");
-    assert_ne!(anchor["change"], "changed");
+    // An unchanged record produces no diff row at all: the anchor rule must
+    // not appear as added or changed between the two commits.
+    assert!(
+        !changes.iter().any(|change| change["id"] == "rule_anchor"
+            && matches!(change["change"].as_str(), Some("added") | Some("changed"))),
+        "the unchanged anchor rule must not be reported as changed"
+    );
 }
 
 #[test]
