@@ -380,6 +380,18 @@ pub enum DogfoodCommand {
         #[command(subcommand)]
         command: TriageCommand,
     },
+    /// Dev-build-only: try the whole first-run experience in a throwaway
+    /// sandbox. Serves the STE dictionary from loopback, records no note,
+    /// and touches nothing outside the sandbox.
+    Simulate {
+        /// Keep the sandbox directory after the run for inspection.
+        #[arg(long)]
+        keep: bool,
+        /// Create the sandbox inside this existing directory instead of the
+        /// system temp location.
+        #[arg(long)]
+        dir: Option<Utf8PathBuf>,
+    },
 }
 
 /// Dev-build-only triage state for captured notes. Every state change is an
