@@ -152,6 +152,7 @@ async fn answers() -> Vec<Value> {
     for request in request_set(&base) {
         let mut answer = served_value(&store, &request, policy).await;
         strip_additive(&mut answer);
+        normalize_record_stamps(&mut answer);
         normalize_cursor(&mut answer);
         answers.push(json!({
             "operation": request.operation(),
@@ -160,6 +161,31 @@ async fn answers() -> Vec<Value> {
         }));
     }
     answers
+}
+
+// The pinned file holds record content. Stamp behavior and SQL retention have
+// dedicated tests; archive permalinks remain part of the content pinned here.
+fn normalize_record_stamps(value: &mut Value) {
+    match value {
+        Value::Object(record) => {
+            if matches!(
+                record.get("node_type").and_then(Value::as_str),
+                Some("source" | "requirement" | "rule" | "resolution")
+            ) {
+                record.remove("created");
+                record.remove("updated");
+            }
+            for value in record.values_mut() {
+                normalize_record_stamps(value);
+            }
+        }
+        Value::Array(values) => {
+            for value in values {
+                normalize_record_stamps(value);
+            }
+        }
+        _ => {}
+    }
 }
 
 // Cursor authentication and target binding have dedicated behavioral tests.
@@ -210,11 +236,15 @@ async fn the_pinned_answers_match_the_committed_file_for_this_derivation() {
     if std::env::var("PROVENANCE_PINNED_WRITE").is_ok_and(|value| value == "1") {
         std::fs::write(pinned_path(), render(&answers, &fresh)).unwrap();
         eprintln!(
-            "PROVENANCE_PINNED_WRITE=1: wrote {} answers to {} and asserted nothing",
+            "PROVENANCE_PINNED_WRITE=1: wrote {} answers to {}",
             answers.len(),
             pinned_path().display()
         );
-        return;
+        assert_eq!(
+            answers,
+            self::answers().await,
+            "fresh fixture repositories must produce identical pinned content"
+        );
     }
     let (header, recorded) = parse(
         &std::fs::read_to_string(pinned_path())
