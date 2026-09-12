@@ -87,7 +87,7 @@ pub(super) async fn handle(command: QuestionsCommand, quiet: bool) -> anyhow::Re
                     scope,
                     id,
                     fields_json,
-                    ..
+                    format: output::JsonFormat::Json,
                 },
             )
             .await?;
