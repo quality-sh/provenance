@@ -148,13 +148,13 @@ impl CycleFacts {
 
     /// The feedback Message a decision published, if it did.
     pub(super) fn feedback_for(&self, disposition: &StableId) -> Option<StableId> {
-        self.entries
-            .iter()
-            .filter(|e| {
-                e.fact == CycleFact::Decided && e.disposition_id.as_ref() == Some(disposition)
-            })
-            .filter_map(|e| e.feedback_message_id.clone())
-            .next()
+        self.entries.iter().find_map(|e| {
+            if e.fact == CycleFact::Decided && e.disposition_id.as_ref() == Some(disposition) {
+                e.feedback_message_id.clone()
+            } else {
+                None
+            }
+        })
     }
 
     /// The submission sequence of one proposal, ordering its decision in the
@@ -211,8 +211,8 @@ impl CycleFacts {
             .filter(|e| {
                 !decided.contains(e.proposal_id.as_str()) && !self.is_withdrawn(&e.proposal_id)
             })
-            .map(|e| e.clone())
-            .last())
+            .cloned()
+            .next_back())
     }
 }
 
