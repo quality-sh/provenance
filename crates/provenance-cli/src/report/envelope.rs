@@ -12,6 +12,8 @@ pub const SUPPORTED_SCHEMA_VERSION: u32 = 1;
 
 /// Whether one path is a normalized repository-relative path. Only such a
 /// path, joined with an immutable commit, may become a repository link.
+/// Components are restricted to `[A-Za-z0-9._~-]` so a link label cannot
+/// swallow trusted text and a link destination stays CommonMark-safe.
 pub fn is_repo_relative_path(path: &str) -> bool {
     if path.is_empty() || path.starts_with('/') || path.contains('\\') {
         return false;
@@ -19,8 +21,14 @@ pub fn is_repo_relative_path(path: &str) -> bool {
     if path.chars().any(char::is_control) {
         return false;
     }
-    path.split('/')
-        .all(|component| !component.is_empty() && component != "." && component != "..")
+    path.split('/').all(|component| {
+        !component.is_empty()
+            && component != "."
+            && component != ".."
+            && component
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '~' | '-'))
+    })
 }
 
 /// Whether one string can be a repository identity in `owner/name` form.
@@ -37,9 +45,14 @@ fn is_repository_identity(repository: &str) -> bool {
     ok(owner) && ok(name)
 }
 
-/// Whether one string is a hexadecimal commit name (short or full SHA).
+/// Whether one string is a full immutable commit hash: 40 (SHA-1) or 64
+/// (SHA-256) lowercase hexadecimal characters. Abbreviations are refused so
+/// every rendered link pins one unambiguous commit.
 fn is_commitish(commit: &str) -> bool {
-    (4..=40).contains(&commit.len()) && commit.chars().all(|c| c.is_ascii_hexdigit())
+    (commit.len() == 40 || commit.len() == 64)
+        && commit
+            .chars()
+            .all(|c| c.is_ascii_digit() || ('a'..='f').contains(&c))
 }
 
 impl ReportEnvelope {
@@ -62,8 +75,47 @@ impl ReportEnvelope {
         for commit in [&self.base_commit, &self.head_commit] {
             if !is_commitish(commit) {
                 return Err(format!(
-                    "commit {commit:?} is not a hexadecimal commit name; the \
-                     comparison endpoints are immutable commits"
+                    "commit {commit:?} is not a full immutable hash; use 40 or \
+                     64 lowercase hexadecimal characters"
+                ));
+            }
+        }
+        if self.scan.completeness == Completeness::Incomplete
+            && self
+                .scan
+                .incompleteness_reason
+                .as_deref()
+                .is_none_or(|reason| reason.trim().is_empty())
+        {
+            return Err(
+                "scan completeness is incomplete without an incompleteness_reason; \
+                 state which analysis stage limited the scan"
+                    .to_string(),
+            );
+        }
+        if self.scan.baseline == BaselineCompatibility::Incompatible
+            && self
+                .scan
+                .baseline_reason
+                .as_deref()
+                .is_none_or(|reason| reason.trim().is_empty())
+        {
+            return Err(
+                "baseline is incompatible without a baseline_reason; state why \
+                 the two scans cannot be compared"
+                    .to_string(),
+            );
+        }
+        for run in &self.verification_runs {
+            let Some(commit) = run.commit.as_deref() else {
+                continue;
+            };
+            if !is_commitish(commit) {
+                return Err(format!(
+                    "verification run for {} carries commit {commit:?}, which is \
+                     not a full immutable hash; use 40 or 64 lowercase \
+                     hexadecimal characters",
+                    run.rule_id
                 ));
             }
         }

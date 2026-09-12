@@ -27,14 +27,14 @@ fn render_markdown(envelope: &Value) -> String {
     String::from_utf8(output.stdout).unwrap()
 }
 
-/// 96373e74 → 52ccec3f, with the three new active Rules unverified.
+/// 96373e74a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6 → 52ccec3fb1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6, with the three new active Rules unverified.
 fn scenario_a_envelope() -> Value {
     json!({
         "schema_version": 1,
         "repository": "quality-sh/provenance",
         "scope": "default",
-        "base_commit": "96373e74",
-        "head_commit": "52ccec3f",
+        "base_commit": "96373e74a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",
+        "head_commit": "52ccec3fb1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6",
         "scan": {
             "completeness": "complete",
             "baseline": "compatible",
@@ -145,7 +145,9 @@ fn scenario_a_graph_only_policy_change_names_added_obligations_in_stable_order()
 
     // The comparison scope names both immutable commits.
     assert!(
-        report.contains("96373e74 → 52ccec3f"),
+        report.contains(
+            "96373e74a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6 → 52ccec3fb1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6"
+        ),
         "report must state the comparison range"
     );
     // A useful group quotes the obligation as data.

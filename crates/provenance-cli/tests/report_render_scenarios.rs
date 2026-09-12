@@ -25,14 +25,15 @@ fn render_markdown(envelope: &Value) -> String {
     String::from_utf8(output.stdout).unwrap()
 }
 
+/// Scenario B: an active Rule without current verification under an error
 /// policy. No graph change; the finding comes from the coverage scan.
 fn scenario_b_envelope() -> Value {
     json!({
         "schema_version": 1,
         "repository": "quality-sh/provenance",
         "scope": "default",
-        "base_commit": "e898da54",
-        "head_commit": "4e84a14c",
+        "base_commit": "e898da54c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6",
+        "head_commit": "4e84a14cd1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6",
         "scan": { "completeness": "complete", "baseline": "compatible", "files_scanned": 214 },
         "policy": { "mode": "error", "result": "failure" },
         "findings": [
@@ -76,14 +77,15 @@ fn scenario_b_active_rule_without_verification_states_unknowns_and_failure() {
     assert!(!report.contains("## Graph changes"));
 }
 
+/// Scenario C (hypothetical H1): the real `rule_confidence_range` moves from
 /// active to deprecated while its real source sites stay unchanged.
 fn scenario_c_envelope() -> Value {
     json!({
         "schema_version": 1,
         "repository": "quality-sh/provenance",
         "scope": "default",
-        "base_commit": "e898da54",
-        "head_commit": "1a2b3c4d",
+        "base_commit": "e898da54c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6",
+        "head_commit": "1a2b3c4de1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6",
         "scan": { "completeness": "complete", "baseline": "compatible", "files_scanned": 214 },
         "policy": { "mode": "warning", "result": "success" },
         "graph_changes": [
@@ -139,7 +141,7 @@ fn scenario_c_deprecated_rule_with_current_bindings_reports_lifecycle_change() {
     );
     assert!(
         report.contains(
-            "[`crates/provenance-core/src/model/validation.rs:19`](https://github.com/quality-sh/provenance/blob/1a2b3c4d/crates/provenance-core/src/model/validation.rs#L19)"
+            "[`crates/provenance-core/src/model/validation.rs:19`](https://github.com/quality-sh/provenance/blob/1a2b3c4de1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6/crates/provenance-core/src/model/validation.rs#L19)"
         ),
         "the current implementation site links to the immutable head commit"
     );
@@ -157,14 +159,15 @@ fn scenario_c_deprecated_rule_with_current_bindings_reports_lifecycle_change() {
     );
 }
 
+/// Scenario D (hypothetical H2): the real conformance site for
 /// `rule_confidence_range` is gone while core property evidence remains.
 fn scenario_d_envelope() -> Value {
     json!({
         "schema_version": 1,
         "repository": "quality-sh/provenance",
         "scope": "default",
-        "base_commit": "e898da54",
-        "head_commit": "2b3c4d5e",
+        "base_commit": "e898da54c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6",
+        "head_commit": "2b3c4d5ef1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6",
         "scan": { "completeness": "complete", "baseline": "compatible", "files_scanned": 214 },
         "policy": { "mode": "warning", "result": "success" },
         "findings": [
@@ -206,7 +209,7 @@ fn scenario_d_removed_site_shows_lost_evidence_and_surviving_evidence() {
         report.contains("### warning: one verification site is gone"),
         "the removal headline comes from the catalog"
     );
-    let expected_removed = "[`crates/provenance-core/src/model/validation/tests.rs:66`](https://github.com/quality-sh/provenance/blob/e898da54/crates/provenance-core/src/model/validation/tests.rs#L66)";
+    let expected_removed = "[`crates/provenance-core/src/model/validation/tests.rs:66`](https://github.com/quality-sh/provenance/blob/e898da54c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6/crates/provenance-core/src/model/validation/tests.rs#L66)";
     assert!(
         report.contains(&format!(
             "- Removed evidence: {expected_removed} (method `conformance`)."
@@ -227,6 +230,7 @@ fn scenario_d_removed_site_shows_lost_evidence_and_surviving_evidence() {
     );
 }
 
+/// Scenario E (hypothetical H3): the exact conformance site is restored, so
 /// the earlier finding is resolved in a compatible complete scan.
 #[test]
 fn scenario_e_resolved_finding_reports_recovery_not_approval() {
@@ -234,8 +238,8 @@ fn scenario_e_resolved_finding_reports_recovery_not_approval() {
         "schema_version": 1,
         "repository": "quality-sh/provenance",
         "scope": "default",
-        "base_commit": "2b3c4d5e",
-        "head_commit": "3c4d5e6f",
+        "base_commit": "2b3c4d5ef1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6",
+        "head_commit": "3c4d5e6fa1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",
         "scan": { "completeness": "complete", "baseline": "compatible", "files_scanned": 214 },
         "policy": { "mode": "warning", "result": "success" },
         "findings": [
@@ -261,7 +265,7 @@ fn scenario_e_resolved_finding_reports_recovery_not_approval() {
     });
     let report = render_markdown(&envelope);
     assert!(
-        report.contains("1 finding: 1 resolved"),
+        report.contains("1 finding: 1 resolved finding; shown."),
         "the summary counts the recovery"
     );
     assert!(
@@ -274,6 +278,7 @@ fn scenario_e_resolved_finding_reports_recovery_not_approval() {
     );
 }
 
+/// Scenario F: the real confidence Requirement is restated while its Rule
 /// and bindings stay untouched. A new warning is present to pin ordering.
 #[test]
 fn scenario_f_restatement_names_the_rule_and_orders_intent_first() {
@@ -281,8 +286,8 @@ fn scenario_f_restatement_names_the_rule_and_orders_intent_first() {
         "schema_version": 1,
         "repository": "quality-sh/provenance",
         "scope": "default",
-        "base_commit": "e898da54",
-        "head_commit": "4d5e6f70",
+        "base_commit": "e898da54c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6",
+        "head_commit": "4d5e6f70b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6",
         "scan": { "completeness": "complete", "baseline": "compatible", "files_scanned": 214 },
         "policy": { "mode": "warning", "result": "success" },
         "graph_changes": [

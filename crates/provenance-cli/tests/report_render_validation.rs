@@ -9,6 +9,24 @@ use serde_json::{json, Value};
 use tempfile::TempDir;
 
 /// Render and expect a non-zero exit with a diagnostic naming the problem.
+fn render_markdown(envelope: &Value) -> String {
+    let dir = TempDir::new().unwrap();
+    let input = dir.path().join("envelope.json");
+    std::fs::write(&input, serde_json::to_vec_pretty(envelope).unwrap()).unwrap();
+    let output = Command::cargo_bin("provenance")
+        .unwrap()
+        .args(["report", "render", "--input"])
+        .arg(&input)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "render failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8(output.stdout).unwrap()
+}
+
 fn render_rejected(envelope: &Value) -> String {
     let dir = TempDir::new().unwrap();
     let input = dir.path().join("envelope.json");
@@ -27,14 +45,14 @@ fn render_rejected(envelope: &Value) -> String {
     String::from_utf8(output.stderr).unwrap()
 }
 
-/// 96373e74 → 52ccec3f, with the three new active Rules unverified.
+/// 96373e74a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6 → 52ccec3fb1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6, with the three new active Rules unverified.
 fn scenario_a_envelope() -> Value {
     json!({
         "schema_version": 1,
         "repository": "quality-sh/provenance",
         "scope": "default",
-        "base_commit": "96373e74",
-        "head_commit": "52ccec3f",
+        "base_commit": "96373e74a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",
+        "head_commit": "52ccec3fb1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6",
         "scan": {
             "completeness": "complete",
             "baseline": "compatible",
@@ -191,5 +209,123 @@ fn repository_identity_must_be_owner_slash_name() {
     assert!(
         message.contains("repository"),
         "a full URL is not a repository identity: {message}"
+    );
+}
+
+#[test]
+fn duplicate_finding_identities_with_different_payload_are_refused() {
+    let mut envelope = scenario_a_envelope();
+    let findings = envelope["findings"].as_array().unwrap().len();
+    let twin = envelope["findings"][0].clone();
+    envelope["findings"].as_array_mut().unwrap().push(twin);
+    // Byte-equal duplicates are allowed: they render identically in any order.
+    render_markdown(&envelope);
+    let twin = &mut envelope["findings"].as_array_mut().unwrap()[findings];
+    twin["statement"] = json!("A different payload under the same identity.");
+    twin["affected_requirement_id"] = json!("req_other");
+    let message = render_rejected(&envelope);
+    assert!(
+        message.contains("duplicate"),
+        "same identity with a different payload must be refused: {message}"
+    );
+}
+
+#[test]
+fn duplicate_site_identities_with_different_payload_are_refused() {
+    let mut envelope = scenario_a_envelope();
+    let finding = envelope["findings"][0].as_object_mut().unwrap();
+    finding.insert("binding_presence".into(), json!("present"));
+    finding.insert(
+        "sites".into(),
+        json!([
+            { "commit": "head", "path": "src/a.rs", "line": 1 },
+            { "commit": "head", "path": "src/a.rs", "line": 1, "role": "verification" }
+        ]),
+    );
+    let message = render_rejected(&envelope);
+    assert!(
+        message.contains("duplicate"),
+        "same site identity with a different payload must be refused: {message}"
+    );
+}
+
+#[test]
+fn duplicate_graph_change_identities_with_different_payload_are_refused() {
+    let mut envelope = scenario_a_envelope();
+    let changes = envelope["graph_changes"].as_array_mut().unwrap();
+    let mut twin = changes[0].clone();
+    twin["statement"] = json!("A different statement under the same record identity.");
+    changes.push(twin);
+    let message = render_rejected(&envelope);
+    assert!(
+        message.contains("duplicate"),
+        "same record identity with a different payload must be refused: {message}"
+    );
+}
+
+#[test]
+fn run_commits_must_be_full_immutable_lowercase_hashes() {
+    let mut envelope = scenario_a_envelope();
+    envelope["verification_runs"] = json!([
+        {
+            "rule_id": "rule_active_rule_requires_verification",
+            "method": "examples",
+            "status": "passed",
+            "commit": "52ccec3f"
+        }
+    ]);
+    let message = render_rejected(&envelope);
+    assert!(
+        message.contains("commit"),
+        "an abbreviated run commit must be refused: {message}"
+    );
+    envelope["verification_runs"][0]["commit"] = json!("52CCEC3FB1C2D3E4F5A6B7C8D9E0F1A2B3C4D5E6");
+    let message = render_rejected(&envelope);
+    assert!(
+        message.contains("commit"),
+        "an uppercase commit must be refused: {message}"
+    );
+}
+
+#[test]
+fn comparison_commits_must_be_full_immutable_lowercase_hashes() {
+    let mut envelope = scenario_a_envelope();
+    envelope["base_commit"] = json!("96373e74");
+    let message = render_rejected(&envelope);
+    assert!(
+        message.contains("commit"),
+        "an abbreviated comparison commit must be refused: {message}"
+    );
+}
+
+#[test]
+fn incomplete_scan_requires_a_stated_reason() {
+    let mut envelope = scenario_a_envelope();
+    envelope["scan"]["completeness"] = json!("incomplete");
+    envelope["scan"]
+        .as_object_mut()
+        .unwrap()
+        .remove("incompleteness_reason");
+    let message = render_rejected(&envelope);
+    assert!(
+        message.contains("incompleteness"),
+        "a missing incompleteness reason must be refused: {message}"
+    );
+}
+
+#[test]
+fn incompatible_baseline_requires_a_stated_reason() {
+    let mut envelope = scenario_a_envelope();
+    envelope["scan"]["baseline"] = json!("incompatible");
+    envelope["scan"]
+        .as_object_mut()
+        .unwrap()
+        .remove("baseline_reason");
+    // Keep comparison labels out of the way: only the missing reason may fire.
+    envelope["findings"] = json!([]);
+    let message = render_rejected(&envelope);
+    assert!(
+        message.contains("baseline"),
+        "a missing baseline reason must be refused: {message}"
     );
 }

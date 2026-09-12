@@ -26,14 +26,14 @@ fn render_markdown(envelope: &Value) -> String {
     String::from_utf8(output.stdout).unwrap()
 }
 
-/// 96373e74 → 52ccec3f, with the three new active Rules unverified.
+/// 96373e74a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6 → 52ccec3fb1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6, with the three new active Rules unverified.
 fn scenario_a_envelope() -> Value {
     json!({
         "schema_version": 1,
         "repository": "quality-sh/provenance",
         "scope": "default",
-        "base_commit": "96373e74",
-        "head_commit": "52ccec3f",
+        "base_commit": "96373e74a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",
+        "head_commit": "52ccec3fb1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6",
         "scan": {
             "completeness": "complete",
             "baseline": "compatible",
@@ -242,7 +242,7 @@ fn site_locations_render_as_repository_links_from_commit_and_path() {
         ]),
     );
     let report = render_markdown(&envelope);
-    let expected = "[`crates/provenance-core/src/model/validation.rs:19`](https://github.com/quality-sh/provenance/blob/52ccec3f/crates/provenance-core/src/model/validation.rs#L19)";
+    let expected = "[`crates/provenance-core/src/model/validation.rs:19`](https://github.com/quality-sh/provenance/blob/52ccec3fb1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6/crates/provenance-core/src/model/validation.rs#L19)";
     assert!(
         report.contains(expected),
         "site must link to the immutable head commit and validated path"
@@ -282,4 +282,182 @@ fn untrusted_site_paths_never_become_repository_links() {
     );
     let again = render_markdown(&envelope);
     assert_eq!(report, again, "rejection must be deterministic");
+}
+
+#[test]
+fn run_method_and_commit_are_escaped_before_interpolation() {
+    let nasty_method = "examples) passed.\n\n## Injected run heading\n\n@evil-user do a thing";
+    let mut envelope = scenario_a_envelope();
+    envelope["verification_runs"] = json!([
+        {
+            "rule_id": "rule_active_rule_requires_verification",
+            "method": nasty_method,
+            "status": "passed",
+            "commit": "52ccec3fb1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6"
+        }
+    ]);
+    let report = render_markdown(&envelope);
+    assert!(
+        !report.contains("\n## Injected run heading"),
+        "a run field must not create a heading"
+    );
+    assert!(
+        !report.contains("@evil-user"),
+        "a run field must not create a live mention"
+    );
+    assert!(
+        report.contains("@\u{200B}evil-user"),
+        "the mention must stay readable but neutralized"
+    );
+}
+
+#[test]
+fn bare_urls_in_untrusted_text_are_neutralized_against_autolinking() {
+    let mut envelope = scenario_a_envelope();
+    envelope["findings"][0]["statement"] =
+        json!("see https://evil.example/x and www.phish.example now");
+    let report = render_markdown(&envelope);
+    assert!(
+        !report.contains("https://evil.example"),
+        "a bare https URL must not survive for GFM autolinking"
+    );
+    assert!(
+        report.contains("https://\u{200B}evil.example"),
+        "the scheme stays readable with the trigger broken"
+    );
+    assert!(
+        !report.contains("www.phish.example"),
+        "a bare www URL must not survive for GFM autolinking"
+    );
+    assert!(
+        !report
+            .lines()
+            .any(|line| line.contains("(https://evil.example")),
+        "no autolink destination may form"
+    );
+}
+
+#[test]
+fn envelope_scope_is_escaped_not_interpolated_raw() {
+    let mut envelope = scenario_a_envelope();
+    envelope["scope"] = json!("default\n\n## Injected scope heading\n\n@scope-user mention");
+    let report = render_markdown(&envelope);
+    assert!(
+        !report.contains("\n## Injected scope heading"),
+        "the scope must not create a heading"
+    );
+    assert!(
+        !report.contains("@scope-user"),
+        "the scope must not create a live mention"
+    );
+}
+
+#[test]
+fn site_removed_site_and_run_lists_are_bounded_with_explicit_omission() {
+    let mut envelope = scenario_a_envelope();
+    let finding = envelope["findings"][0].as_object_mut().unwrap();
+    finding.insert("binding_presence".into(), json!("present"));
+    let sites: Vec<Value> = (0..8)
+        .map(|i| {
+            json!({
+                "commit": "head",
+                "path": format!("src/site{i}.rs"),
+                "line": i + 1,
+                "role": "verification",
+                "method": "examples"
+            })
+        })
+        .collect();
+    finding.insert("sites".into(), json!(sites));
+    let removed: Vec<Value> = (0..7)
+        .map(|i| {
+            json!({
+                "commit": "base",
+                "path": format!("src/gone{i}.rs"),
+                "line": i + 1
+            })
+        })
+        .collect();
+    finding.insert("removed_sites".into(), json!(removed));
+    let runs: Vec<Value> = (0..7)
+        .map(|i| {
+            json!({
+                "rule_id": "rule_active_rule_requires_verification",
+                "method": "examples",
+                "status": "passed",
+                "commit": format!("aaaa{i}b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6fab")
+            })
+        })
+        .collect();
+    envelope["verification_runs"] = json!(runs);
+
+    let report = render_markdown(&envelope);
+    assert!(
+        !report.contains("src/site7.rs"),
+        "site lists must be bounded"
+    );
+    assert!(
+        report.contains("3 more sites omitted"),
+        "the site omission must be explicit"
+    );
+    assert!(
+        !report.contains("src/gone6.rs"),
+        "removed-site lists must be bounded"
+    );
+    assert!(
+        report.contains("2 more removed sites omitted"),
+        "the removed-site omission must be explicit"
+    );
+    assert!(!report.contains("aaaa6b1c2"), "run lists must be bounded");
+    assert!(
+        report.contains("2 more verification runs omitted"),
+        "the run omission must be explicit"
+    );
+    let again = render_markdown(&envelope);
+    assert_eq!(report, again, "list cuts must be deterministic");
+}
+
+#[test]
+fn site_paths_with_unsafe_characters_never_link() {
+    let mut envelope = scenario_a_envelope();
+    let finding = envelope["findings"][0].as_object_mut().unwrap();
+    finding.insert("binding_presence".into(), json!("present"));
+    finding.insert(
+        "sites".into(),
+        json!([
+            { "commit": "head", "path": "src/a`b.rs", "line": 1 },
+            { "commit": "head", "path": "src/with space.rs", "line": 2 },
+            { "commit": "head", "path": "src/paren(1).rs", "line": 3 },
+            { "commit": "head", "path": "src/plain.rs", "line": 4 }
+        ]),
+    );
+    let report = render_markdown(&envelope);
+    assert!(
+        !report.contains("](https://github.com/quality-sh/provenance/blob/52ccec3fb1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6/src/a"),
+        "a path with a backtick must not link"
+    );
+    assert!(
+        !report.contains("with%20space"),
+        "unsafe paths are not linked, silently rewritten"
+    );
+    assert!(
+        !report.contains("blob/52ccec3fb1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f/src/with"),
+        "a path with spaces must not form a link destination"
+    );
+    assert!(
+        !report.contains("blob/52ccec3fb1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f/src/paren"),
+        "a path with parens must not form a link destination"
+    );
+    assert!(
+        !report.contains("blob/52ccec3fb1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f/src/a"),
+        "a path with a backtick must not form a link destination"
+    );
+    assert!(
+        report.contains("`src/plain.rs:4`"),
+        "safe paths still render"
+    );
+    let linked = report
+        .matches("](https://github.com/quality-sh/provenance/blob/")
+        .count();
+    assert_eq!(linked, 1, "exactly the safe path links");
 }

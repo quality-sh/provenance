@@ -56,6 +56,11 @@ pub fn escape_inline(text: &str) -> String {
             c => out.push(c),
         }
     }
+    // GitHub autolinks bare URLs even without Markdown syntax. Break the
+    // trigger while keeping the address readable.
+    let mut out = out
+        .replace("://", "://\u{200B}")
+        .replace("www.", "www.\u{200B}");
     if let Some(omitted) = truncated.omitted {
         out.push_str(" [truncated; ");
         out.push_str(&omitted.to_string());

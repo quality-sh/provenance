@@ -17,6 +17,8 @@ pub(super) fn handle(command: ReportCommand) -> anyhow::Result<()> {
     envelope
         .validate()
         .map_err(|message| anyhow::anyhow!("invalid report envelope: {message}"))?;
+    render::validate_duplicates(&envelope)
+        .map_err(|message| anyhow::anyhow!("invalid report envelope: {message}"))?;
     let normalized = render::normalize(&envelope);
     match format {
         OutputFormat::Markdown => emit(&render::render_markdown(&normalized), output.as_ref()),

@@ -32,33 +32,43 @@ pub(super) fn findings_section(envelope: &ReportEnvelope, out: &mut String) {
     }
 }
 
+const CLASS_SINGULAR: [&str; 6] = [
+    "new error",
+    "new warning",
+    "changed-intent review",
+    "resolved finding",
+    "pre-existing finding",
+    "uncertain finding",
+];
+const CLASS_PLURAL: [&str; 6] = [
+    "new errors",
+    "new warnings",
+    "changed-intent reviews",
+    "resolved findings",
+    "pre-existing findings",
+    "uncertain findings",
+];
+
 fn findings_summary(envelope: &ReportEnvelope) -> String {
     let mut counts = [0usize; 6];
     for finding in &envelope.findings {
         counts[finding_class(finding) as usize] += 1;
     }
-    let labels = [
-        "new errors",
-        "new warnings",
-        "changed-intent reviews",
-        "resolved",
-        "pre-existing",
-        "uncertain",
-    ];
-    let parts: Vec<String> = labels
+    let parts: Vec<String> = counts
         .iter()
-        .zip(counts)
-        .filter(|(_, count)| *count > 0)
-        .map(|(label, count)| format!("{count} {label}"))
+        .enumerate()
+        .filter(|(_, count)| **count > 0)
+        .map(|(class, count)| match count {
+            1 => format!("1 {}", CLASS_SINGULAR[class]),
+            n => format!("{n} {}", CLASS_PLURAL[class]),
+        })
         .collect();
     let total: usize = counts.iter().sum();
     let noun = if total == 1 { "finding" } else { "findings" };
     if parts.is_empty() {
         return format!("{total} {noun}.");
     }
-    let class_list = parts.join(", ");
-    let class_noun = if total == 1 { "is" } else { "are" };
-    format!("{total} {noun}: {class_list}; {class_noun} shown.")
+    format!("{total} {noun}: {}; shown.", parts.join(", "))
 }
 
 fn finding_section(envelope: &ReportEnvelope, finding: &Finding, out: &mut String) {
@@ -126,14 +136,27 @@ fn presence_line(envelope: &ReportEnvelope, finding: &Finding) -> String {
             "- Current bindings: present; no site locations supplied.\n".to_string()
         }
         BindingPresence::Present => {
-            let implementation = site_list(envelope, &finding.sites, SiteRole::Implementation);
-            let verification = site_list(envelope, &finding.sites, SiteRole::Verification);
+            let implementation: Vec<String> = finding
+                .sites
+                .iter()
+                .filter(|site| site.role == Some(SiteRole::Implementation))
+                .map(|site| site_text(envelope, site))
+                .collect();
+            let verification: Vec<String> = finding
+                .sites
+                .iter()
+                .filter(|site| site.role == Some(SiteRole::Verification))
+                .map(|site| site_text(envelope, site))
+                .collect();
             let unroled: Vec<String> = finding
                 .sites
                 .iter()
                 .filter(|site| site.role.is_none())
                 .map(|site| site_text(envelope, site))
                 .collect();
+            let implementation = bounded_list(implementation, "sites");
+            let verification = bounded_list(verification, "sites");
+            let unroled = bounded_list(unroled, "sites");
             let mut line = String::new();
             if !implementation.is_empty() {
                 writeln!(line, "- Current implementation: {implementation}.")
@@ -144,7 +167,7 @@ fn presence_line(envelope: &ReportEnvelope, finding: &Finding) -> String {
                     .expect("writing to a String should not fail");
             }
             if !unroled.is_empty() {
-                writeln!(line, "- Current bindings: {}.", unroled.join(", "))
+                writeln!(line, "- Current bindings: {unroled}.")
                     .expect("writing to a String should not fail");
             }
             line
@@ -161,17 +184,21 @@ fn removed_sites_line(envelope: &ReportEnvelope, finding: &Finding) -> String {
         .iter()
         .map(|site| site_text(envelope, site))
         .collect();
-    let joined = items.join(", ");
+    let joined = bounded_list(items, "removed sites");
     format!("- Removed evidence: {joined}.\n")
 }
 
-fn site_list(envelope: &ReportEnvelope, sites: &[Site], role: SiteRole) -> String {
-    let items: Vec<String> = sites
-        .iter()
-        .filter(|site| site.role == Some(role))
-        .map(|site| site_text(envelope, site))
-        .collect();
-    items.join(", ")
+/// Join one bounded list. The per-finding budget keeps a large envelope from
+/// producing unbounded output, and the cut is stated in the rendered line.
+fn bounded_list(items: Vec<String>, what: &str) -> String {
+    let limit = super::MAX_LIST_ITEMS;
+    let omitted = items.len().saturating_sub(limit);
+    let mut joined = items.into_iter().take(limit).collect::<Vec<_>>().join(", ");
+    if omitted > 0 {
+        write!(joined, " ({omitted} more {what} omitted)")
+            .expect("writing to a String should not fail");
+    }
+    joined
 }
 
 /// One site as a link built from an immutable commit plus a validated
@@ -217,10 +244,13 @@ fn runs_lines(envelope: &ReportEnvelope, finding: &Finding) -> String {
     if matching.is_empty() {
         return "- Verification run: not supplied.\n".to_string();
     }
+    let limit = super::MAX_LIST_ITEMS;
+    let omitted = matching.len().saturating_sub(limit);
     let mut lines = String::new();
-    for run in matching {
-        let method = run.method.as_deref().unwrap_or("verification");
-        let at = run.commit.as_deref().unwrap_or("an unknown commit");
+    for run in matching.into_iter().take(limit) {
+        // Run fields are untrusted envelope text: escape before interpolation.
+        let method = escape_inline(run.method.as_deref().unwrap_or("verification"));
+        let at = escape_inline(run.commit.as_deref().unwrap_or("an unknown commit"));
         let line = match (run.status, run.commit.as_deref()) {
             (RunStatus::Passed, Some(commit)) if commit == envelope.head_commit => {
                 format!("- Verification run ({method}): passed at {at}.\n")
@@ -237,6 +267,10 @@ fn runs_lines(envelope: &ReportEnvelope, finding: &Finding) -> String {
             }
         };
         lines.push_str(&line);
+    }
+    if omitted > 0 {
+        writeln!(lines, "- {omitted} more verification runs omitted.")
+            .expect("writing to a String should not fail");
     }
     lines
 }
