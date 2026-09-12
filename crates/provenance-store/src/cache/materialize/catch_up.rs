@@ -7,7 +7,7 @@
 use super::units::{self, Unit};
 use super::{family_rows, relation_rows, stamp, validation};
 use crate::cache::{open_cache, revision_digest_from_stored_rows, ProjectionFamily};
-use crate::{canonical_digest, layout::ProvenanceLayout, migrations, publication};
+use crate::{layout::ProvenanceLayout, migrations, publication};
 use provenance_core::ScopeId;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -205,7 +205,7 @@ async fn rederive_scope(
     for records in &records.families {
         let family = records.family;
         let fresh = (
-            canonical_digest::digest(&records.bytes),
+            family.content_digest(&records.bytes)?,
             i64::try_from(records.count)?,
         );
         let key = (scope.as_str().to_string(), family.family_name().to_string());

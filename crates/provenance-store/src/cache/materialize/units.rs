@@ -2,8 +2,10 @@
 //!
 //! A scope unit is the scope's directory. The global unit is every regular
 //! file under `state/` outside `scopes/`. A unit digest frames each file's
-//! relative path and complete bytes in sorted path order, so two shards
+//! relative path and content bytes in sorted path order, so two shards
 //! that share a basename cannot swap contents unnoticed.
+
+mod content;
 
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
@@ -95,6 +97,8 @@ pub(super) fn digest_with(
     for (relative, path) in &files {
         let bytes = std::fs::read(path).map_err(|error| UnitHashError::at(path, error))?;
         retain(path, &bytes);
+        let bytes =
+            content::hash_bytes(path, &bytes).map_err(|error| UnitHashError::at(path, error))?;
         framed.extend_from_slice(relative.as_bytes());
         framed.push(0);
         framed.extend_from_slice(&(bytes.len() as u64).to_le_bytes());

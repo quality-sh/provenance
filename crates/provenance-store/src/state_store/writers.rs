@@ -29,14 +29,16 @@ impl StateStore {
         }
         let supersedes = sorted_ids(supersedes);
         let path = shards::sources_path(&self.layout, &scope_id);
-        self.mutate_jsonl_records(&path, |records: &mut Vec<Source>| {
+        self.mutate_graph_record(&path, |records: &mut Vec<Source>| {
             let source = Source {
+                created: None,
+                updated: None,
                 schema_version: SUPPORTED_SCHEMA_VERSION,
                 scope_id: scope_id.clone(),
                 id,
                 declared_by: None,
                 declaration_address: None,
-                retired: false,
+
                 name,
                 source_type,
                 url,
@@ -112,14 +114,16 @@ impl StateStore {
         }
         let (depends_on, supersedes) = (sorted_ids(depends_on), sorted_ids(supersedes));
         let path = shards::requirements_path(&self.layout, &scope_id);
-        self.mutate_jsonl_records(&path, |records: &mut Vec<Requirement>| {
+        self.mutate_graph_record(&path, |records: &mut Vec<Requirement>| {
             let requirement = Requirement {
+                created: None,
+                updated: None,
                 schema_version: SUPPORTED_SCHEMA_VERSION,
                 scope_id: scope_id.clone(),
                 id,
                 declared_by: None,
                 declaration_address: None,
-                retired: false,
+
                 statement,
                 description,
                 fog: None,
@@ -156,7 +160,7 @@ impl StateStore {
             anyhow::ensure!(!fog.trim().is_empty(), "fog text must not be empty");
         }
         let path = shards::requirements_path(&self.layout, scope_id);
-        self.mutate_jsonl_records(&path, |records: &mut Vec<Requirement>| {
+        self.mutate_graph_record(&path, |records: &mut Vec<Requirement>| {
             let requirement = records
                 .iter_mut()
                 .find(|requirement| &requirement.id == id)
@@ -193,9 +197,8 @@ impl StateStore {
         );
         let source_ref = SourceReference { source_id, clause };
         let requirements_path = shards::requirements_path(&self.layout, &scope_id);
-        let requirement = self.mutate_jsonl_records(
-            &requirements_path,
-            |requirements: &mut Vec<Requirement>| {
+        let requirement =
+            self.mutate_graph_record(&requirements_path, |requirements: &mut Vec<Requirement>| {
                 let requirement = requirements
                     .iter_mut()
                     .find(|requirement| requirement.id == requirement_id)
@@ -222,8 +225,7 @@ impl StateStore {
                     });
                 }
                 Ok(requirement.clone())
-            },
-        )?;
+            })?;
         Ok(requirement)
     }
 }

@@ -16,6 +16,7 @@ workspace = true
 schema = ["dep:schemars", "provenance-core/schema", "provenance-ste100/schema"]
 
 [dependencies]
+time.workspace = true
 serde_path_to_error = "=0.1.20"
 schemars = { workspace = true, optional = true }
 anyhow.workspace = true

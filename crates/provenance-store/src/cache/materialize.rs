@@ -103,7 +103,7 @@ async fn rebuild_rows(
                 &mut tx,
                 scope.as_str(),
                 records.family.family_name(),
-                &crate::canonical_digest::digest(&records.bytes),
+                &records.family.content_digest(&records.bytes)?,
                 i64::try_from(records.count)?,
             )
             .await?;

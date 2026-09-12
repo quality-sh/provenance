@@ -4,13 +4,13 @@
 //! kind it checks, the requiredness a clear refuses against, and the cycle
 //! guard on a requirement's own-kind fields all come from the table.
 
+use super::record_stamps::GraphRecord;
 use super::StateStore;
 use camino::Utf8Path;
 use provenance_core::model::relations::{
     declaration_of, kind_word, required_refusal, RelationDecl, RelationOwner,
 };
 use provenance_core::{NodeType, ScopeId, StableId};
-use serde::{de::DeserializeOwned, Serialize};
 
 pub(super) fn declared<T: RelationOwner>(name: &str) -> &'static RelationDecl {
     declaration_of(T::relations(), name).expect("every writer names a declared relation")
@@ -107,14 +107,14 @@ impl StateStore {
         field: impl FnOnce(&mut T) -> &mut Option<StableId>,
     ) -> anyhow::Result<T>
     where
-        T: RelationOwner + DeserializeOwned + Serialize + Clone,
+        T: GraphRecord,
     {
         let decl = declared::<T>(name);
         self.with_repository_publication(|| {
             if let Some(target) = &target {
                 self.ensure_node_exists(scope_id, decl.target, target, "--target-id")?;
             }
-            self.mutate_jsonl_records(path, |records: &mut Vec<T>| {
+            self.mutate_graph_record(path, |records: &mut Vec<T>| {
                 if let Some(target) = &target {
                     if decl.target == T::OWNER {
                         crate::write_error::ensure!(
@@ -157,12 +157,12 @@ impl StateStore {
         field: impl FnOnce(&mut T) -> &mut Vec<StableId>,
     ) -> anyhow::Result<T>
     where
-        T: RelationOwner + DeserializeOwned + Serialize + Clone,
+        T: GraphRecord,
     {
         let decl = declared::<T>(name);
         self.with_repository_publication(|| {
             self.ensure_node_exists(scope_id, decl.target, &target, "--target-id")?;
-            self.mutate_jsonl_records(path, |records: &mut Vec<T>| {
+            self.mutate_graph_record(path, |records: &mut Vec<T>| {
                 if decl.target == T::OWNER {
                     crate::write_error::ensure!(
                         InvalidUpdate,
@@ -206,11 +206,11 @@ impl StateStore {
         field: impl FnOnce(&mut T) -> &mut Vec<StableId>,
     ) -> anyhow::Result<T>
     where
-        T: RelationOwner + DeserializeOwned + Serialize + Clone,
+        T: GraphRecord,
     {
         let decl = declared::<T>(name);
         self.with_repository_publication(|| {
-            self.mutate_jsonl_records(path, |records: &mut Vec<T>| {
+            self.mutate_graph_record(path, |records: &mut Vec<T>| {
                 let record = records
                     .iter_mut()
                     .find(|record| record.id() == owner)

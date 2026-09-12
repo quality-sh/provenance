@@ -149,7 +149,7 @@ impl StateStore {
     ) -> anyhow::Result<Requirement> {
         let path = shards::requirements_path(&self.layout, scope_id);
         self.with_repository_publication(|| {
-            self.mutate_jsonl_records(&path, |records: &mut Vec<Requirement>| {
+            self.mutate_graph_record(&path, |records: &mut Vec<Requirement>| {
                 let record = records
                     .iter_mut()
                     .find(|record| &record.id == requirement)

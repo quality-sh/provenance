@@ -30,7 +30,9 @@ pub const VALIDATION_VERSION_MIGRATION_ID: &str = "023";
 /// `annotate_only` refuses a database that lacks it.
 pub const REVIEW_JOURNAL_MIGRATION_ID: &str = "024";
 pub const DISCUSSION_JOURNAL_MIGRATION_ID: &str = "025";
-pub const LATEST_MIGRATION_ID: &str = DISCUSSION_JOURNAL_MIGRATION_ID;
+pub const RECORD_DELETION_MIGRATION_ID: &str = "026";
+pub const RECORD_STAMPS_MIGRATION_ID: &str = "027";
+pub const LATEST_MIGRATION_ID: &str = RECORD_STAMPS_MIGRATION_ID;
 const INITIAL_SQL: &str = include_str!("../migrations/001_initial_cache.sql");
 const SOURCE_REQUIREMENT_SQL: &str =
     include_str!("../migrations/002_sources_requirements_edges.sql");
@@ -124,6 +126,14 @@ pub async fn run_migrations(
         (
             DISCUSSION_JOURNAL_MIGRATION_ID,
             include_str!("../migrations/025_discussion_journal.sql"),
+        ),
+        (
+            RECORD_DELETION_MIGRATION_ID,
+            include_str!("../migrations/026_record_deletion.sql"),
+        ),
+        (
+            RECORD_STAMPS_MIGRATION_ID,
+            include_str!("../migrations/007_record_stamps.sql"),
         ),
     ] {
         let already_applied: Option<String> =
@@ -231,7 +241,7 @@ mod tests {
             vec![
                 "001", "002", "003", "004", "005", "006", "007", "008", "009", "010", "011", "012",
                 "013", "014", "015", "016", "017", "018", "019", "020", "021", "022", "023", "024",
-                "025"
+                "025", "026", "027"
             ]
         );
         assert!(run_migrations(&pool, &layout).await.unwrap().is_empty());
@@ -244,7 +254,7 @@ mod tests {
             vec![
                 "001", "002", "003", "004", "005", "006", "007", "008", "009", "010", "011", "012",
                 "013", "014", "015", "016", "017", "018", "019", "020", "021", "022", "023", "024",
-                "025"
+                "025", "026", "027"
             ]
         );
     }

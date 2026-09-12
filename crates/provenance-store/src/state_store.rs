@@ -11,6 +11,7 @@ mod inputs;
 mod proposal_surfaces;
 mod proposal_writers;
 pub(crate) mod readers;
+mod record_stamps;
 mod reference_methods;
 mod reference_writers;
 mod requirement_reviews;
@@ -204,7 +205,6 @@ impl StateStore {
         Ok(self
             .list_verification_bindings(scope)?
             .into_iter()
-            .filter(|binding| !binding.retired)
             .collect())
     }
     pub fn list_implementation_bindings(
@@ -223,7 +223,6 @@ impl StateStore {
         Ok(self
             .list_implementation_bindings(scope)?
             .into_iter()
-            .filter(|binding| !binding.retired)
             .collect())
     }
     pub(crate) fn closed_sources(&self, scope: &ScopeId) -> anyhow::Result<Vec<Source>> {
