@@ -206,6 +206,7 @@ fn beginning_a_run_materializes_and_cites_the_canonical_binding() {
                 symbol: Some("share links expire".into()),
                 commit: Some("0123456789abcdef0123456789abcdef01234567".into()),
             },
+            VerificationMethod::Examples,
         )
         .unwrap();
     let bindings = store.list_verification_bindings(&scope).unwrap();

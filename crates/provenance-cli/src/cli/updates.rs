@@ -1,4 +1,4 @@
-use crate::output::OutputFormat;
+use crate::output::JsonFormat;
 use camino::Utf8PathBuf;
 use clap::Args;
 
@@ -13,6 +13,6 @@ pub struct UpdateArgs {
     /// Changed fields as JSON or @file. Use `clear_fields` to clear nullable fields.
     #[arg(long)]
     pub fields_json: String,
-    #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-    pub format: OutputFormat,
+    #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+    pub format: JsonFormat,
 }

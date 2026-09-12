@@ -1,5 +1,5 @@
 use crate::cli::references::{ResolutionListCommand, RuleListCommand};
-use crate::output::OutputFormat;
+use crate::output::JsonFormat;
 use camino::Utf8PathBuf;
 use clap::Subcommand;
 
@@ -52,8 +52,8 @@ pub enum ResolutionsCommand {
         origin_thread: Option<String>,
         #[arg(long)]
         origin_message: Option<String>,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     /// Add or remove a requirement this resolution resolves.
     Requirement {
@@ -127,8 +127,8 @@ pub enum RulesCommand {
         #[arg(long)]
         origin_message: Option<String>,
         /// How to print the created rule.
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     /// List the rules in a scope, one summary line of record each.
     List {
@@ -139,8 +139,8 @@ pub enum RulesCommand {
         #[arg(long, default_value = "default")]
         scope: String,
         /// How to print the list.
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     /// Add or remove a requirement this rule serves.
     Requirement {
@@ -164,7 +164,7 @@ pub enum RulesCommand {
         #[arg(long)]
         id: String,
         /// How to print the rule.
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
 }

@@ -32,6 +32,17 @@ impl DiagnosticCode {
         }
     }
 
+    /// The stable code string. Round-trips with [`Self::parse`].
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::ActiveRuleMissingVerification => "active_rule_missing_verification",
+            Self::InactiveRuleCurrentBinding => "inactive_rule_current_binding",
+            Self::VerificationSiteRemoved => "verification_site_removed",
+            Self::VerificationSiteMoved => "verification_site_moved",
+            Self::RequirementStatementChanged => "requirement_statement_changed",
+        }
+    }
+
     /// The stable finding headline, readable in one line.
     pub const fn headline(self) -> &'static str {
         match self {

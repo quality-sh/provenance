@@ -19,7 +19,7 @@ pub(super) async fn handle(command: DomainsCommand) -> anyhow::Result<()> {
             name,
             description,
             color,
-            format,
+            ..
         } => {
             let domain =
                 StateStore::new(ProvenanceLayout::new(repo)).create_domain(CreateDomainInput {
@@ -29,16 +29,12 @@ pub(super) async fn handle(command: DomainsCommand) -> anyhow::Result<()> {
                     description,
                     color,
                 })?;
-            output::print(format, &domain)?;
+            output::print_json(&domain)?;
         }
-        DomainsCommand::List {
-            repo,
-            scope,
-            format,
-        } => {
+        DomainsCommand::List { repo, scope, .. } => {
             let domains =
                 StateStore::new(ProvenanceLayout::new(repo)).list_domains(&ScopeId::new(scope)?)?;
-            output::print(format, &domains)?;
+            output::print_json(&domains)?;
         }
     }
     Ok(())

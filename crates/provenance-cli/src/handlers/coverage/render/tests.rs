@@ -3,7 +3,7 @@
 //! is written.
 
 use super::{render_coverage, OUTSIDE_IMPLEMENTATION_MODULE};
-use crate::output::OutputFormat;
+use crate::output::ReportFormat;
 use camino::Utf8PathBuf;
 use provenance_core::coverage::{
     AnchorState, AnnotationResult, BindingResult, CoverageReport, CoverageScan, ScannedFile,
@@ -55,7 +55,7 @@ fn json_output_keeps_scanned_source_content() {
         content: "fn rule() {}\n".to_string(),
     }];
 
-    let json = render_coverage(OutputFormat::Json, &report).unwrap();
+    let json = render_coverage(ReportFormat::Json, &report).unwrap();
 
     assert!(json.contains("scanned_files"));
     assert!(json.contains("fn rule() {}"));
@@ -71,7 +71,7 @@ fn markdown_reports_moved_and_gone_anchor_states() {
     gone.anchor_state = AnchorState::Gone;
     let report = report(vec![moved, gone], Vec::new());
 
-    let markdown = render_coverage(OutputFormat::Markdown, &report).unwrap();
+    let markdown = render_coverage(ReportFormat::Markdown, &report).unwrap();
 
     assert!(markdown.contains("at `src/rules.rs`:18 (moved from line 7)"));
     assert!(markdown.contains("at `src/rules.rs`:12 (gone)"));
@@ -86,7 +86,7 @@ fn markdown_reports_cross_file_moves_with_their_old_file() {
     moved.original_file_path = Some(Utf8PathBuf::from("src/rules.rs"));
     let report = report(vec![moved], Vec::new());
 
-    let markdown = render_coverage(OutputFormat::Markdown, &report).unwrap();
+    let markdown = render_coverage(ReportFormat::Markdown, &report).unwrap();
 
     assert!(markdown.contains("at `src/relocated.rs`:3 (moved from src/rules.rs:7)"));
 }
@@ -97,7 +97,7 @@ fn markdown_reports_first_seen_sites_as_new() {
     new.anchor_state = AnchorState::New;
     let report = report(vec![new], Vec::new());
 
-    let markdown = render_coverage(OutputFormat::Markdown, &report).unwrap();
+    let markdown = render_coverage(ReportFormat::Markdown, &report).unwrap();
 
     assert!(markdown.contains("at `src/rules.rs`:12 (new)"));
 }
@@ -112,7 +112,7 @@ fn verification_site_in_another_file_is_marked_outside_the_implementation_module
         Vec::new(),
     );
 
-    let markdown = render_coverage(OutputFormat::Markdown, &report).unwrap();
+    let markdown = render_coverage(ReportFormat::Markdown, &report).unwrap();
 
     assert!(markdown.contains(
         "`rule_overtime` verified by examples at `tests/billing.rs`:12 (outside implementation module)"
@@ -127,7 +127,7 @@ fn comment_sites_render_with_their_roles_and_implementation_module() {
         comment("rule_overtime", "tests/billing.rs", Some("examples")),
     ];
 
-    let markdown = render_coverage(OutputFormat::Markdown, &report).unwrap();
+    let markdown = render_coverage(ReportFormat::Markdown, &report).unwrap();
 
     assert!(markdown.contains("`rule_overtime` is implemented at `src/payroll.rs`:4"));
     assert!(markdown.contains("`rule_overtime` verified by examples at `tests/billing.rs`:4"));
@@ -144,7 +144,7 @@ fn verification_site_beside_the_rule_is_not_marked() {
         Vec::new(),
     );
 
-    let markdown = render_coverage(OutputFormat::Markdown, &report).unwrap();
+    let markdown = render_coverage(ReportFormat::Markdown, &report).unwrap();
 
     assert!(!markdown.contains(OUTSIDE_IMPLEMENTATION_MODULE));
 }
@@ -157,7 +157,7 @@ fn the_implementation_site_is_never_marked() {
         Vec::new(),
     );
 
-    let markdown = render_coverage(OutputFormat::Markdown, &report).unwrap();
+    let markdown = render_coverage(ReportFormat::Markdown, &report).unwrap();
 
     assert!(markdown.contains("`rule_overtime` is implemented at `src/payroll.rs`:12"));
     assert!(!markdown.contains(OUTSIDE_IMPLEMENTATION_MODULE));
@@ -176,7 +176,7 @@ fn a_rule_with_no_scanned_implementation_leaves_its_sites_unmarked() {
         Vec::new(),
     );
 
-    let markdown = render_coverage(OutputFormat::Markdown, &report).unwrap();
+    let markdown = render_coverage(ReportFormat::Markdown, &report).unwrap();
 
     assert!(!markdown.contains(OUTSIDE_IMPLEMENTATION_MODULE));
 }
@@ -194,7 +194,7 @@ fn a_warning_without_a_location_is_rendered_without_one() {
         }],
     );
 
-    let markdown = render_coverage(OutputFormat::Markdown, &report).unwrap();
+    let markdown = render_coverage(ReportFormat::Markdown, &report).unwrap();
 
     assert!(markdown
         .contains("- Warning `rule_overtime`: active rule `rule_overtime` has no verification"));
@@ -216,7 +216,7 @@ fn a_warning_about_no_rule_is_rendered_without_an_empty_id() {
         }],
     );
 
-    let markdown = render_coverage(OutputFormat::Markdown, &report).unwrap();
+    let markdown = render_coverage(ReportFormat::Markdown, &report).unwrap();
 
     assert!(markdown
         .contains("- Warning in `src/payroll.rs`:4: legacy marker `@statesman` is deprecated"));
@@ -236,7 +236,7 @@ fn a_warning_with_a_location_still_shows_it() {
         }],
     );
 
-    let markdown = render_coverage(OutputFormat::Markdown, &report).unwrap();
+    let markdown = render_coverage(ReportFormat::Markdown, &report).unwrap();
 
     assert!(markdown.contains("- Warning `UNKNOWN` in `src/payroll.rs`:4: unknown rule"));
 }

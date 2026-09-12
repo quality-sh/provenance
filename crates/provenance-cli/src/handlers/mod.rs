@@ -21,11 +21,12 @@ mod impact;
 mod import;
 mod materialize;
 mod merge_jsonl;
+mod native;
 mod orphans;
 mod prime;
 mod proposals;
 mod questions;
-mod references;
+mod refs;
 mod repo;
 mod report;
 mod requirements;
@@ -91,12 +92,9 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
             .await??;
         }
         Command::Check {
-            repo,
-            strict,
-            base,
-            format,
+            repo, strict, base, ..
         } => {
-            check::check(&repo, strict, base.as_deref(), format)?;
+            check::check(&repo, strict, base.as_deref())?;
         }
         Command::Docs { command } => {
             docs::handle(command).await?;
@@ -108,8 +106,8 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
             wiki::handle(command).await?;
         }
         Command::Review(options) => crate::review::run(options).await?,
-        Command::Materialize { repo, format } => {
-            materialize::handle(repo, format).await?;
+        Command::Materialize { repo, .. } => {
+            materialize::handle(repo).await?;
         }
         Command::Sources { command } => {
             sources::handle(command).await?;
@@ -136,9 +134,9 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
             requirement_id,
             repo,
             scope,
-            format,
+            ..
         } => {
-            graph::handle(requirement_id, repo, scope, format)?;
+            graph::handle(requirement_id, repo, scope)?;
         }
         Command::Resolutions { command } => {
             resolutions::handle(command).await?;
@@ -150,16 +148,12 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
             rule_id,
             repo,
             scope,
-            format,
+            ..
         } => {
-            traceability::handle(rule_id, repo, scope, format)?;
+            traceability::handle(rule_id, repo, scope)?;
         }
-        Command::Gaps {
-            repo,
-            scope,
-            format,
-        } => {
-            gaps::handle(repo, scope, format)?;
+        Command::Gaps { repo, scope, .. } => {
+            gaps::handle(repo, scope)?;
         }
         Command::Thread { command } => {
             thread::handle(command)?;
@@ -191,17 +185,9 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
             node_type,
             max_hops,
             follow_indirect,
-            format,
+            ..
         } => {
-            impact::handle(
-                id,
-                repo,
-                scope,
-                &node_type,
-                max_hops,
-                follow_indirect,
-                format,
-            )?;
+            impact::handle(id, repo, scope, &node_type, max_hops, follow_indirect)?;
         }
         Command::Stale {
             base,
@@ -214,19 +200,11 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
         } => {
             stale::handle(&repo, scope, base, head, since, strict, format)?;
         }
-        Command::Health {
-            repo,
-            scope,
-            format,
-        } => {
-            health::handle(repo, scope, format)?;
+        Command::Health { repo, scope, .. } => {
+            health::handle(repo, scope)?;
         }
-        Command::Orphans {
-            repo,
-            scope,
-            format,
-        } => {
-            orphans::handle(repo, scope, format)?;
+        Command::Orphans { repo, scope, .. } => {
+            orphans::handle(repo, scope)?;
         }
         Command::Coverage { command } => {
             coverage::handle(command)?;
@@ -247,11 +225,9 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
             schema::handle(command)?;
         }
         Command::Validate {
-            artifact,
-            input,
-            format,
+            artifact, input, ..
         } => {
-            validate::handle(artifact, &input, format)?;
+            validate::handle(artifact, &input)?;
         }
         Command::Export {
             repo,
@@ -266,9 +242,9 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
             scope,
             input,
             dry_run,
-            format,
+            ..
         } => {
-            import::handle(repo, scope, input, dry_run, format)?;
+            import::handle(repo, scope, input, dry_run)?;
         }
         Command::MergeJsonl {
             base,
@@ -276,9 +252,9 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
             theirs,
             output,
             path,
-            format,
+            ..
         } => {
-            merge_jsonl::handle(&base, &ours, &theirs, output, path.as_deref(), format)?;
+            merge_jsonl::handle(&base, &ours, &theirs, output, path.as_deref())?;
         }
         #[cfg(feature = "dogfood")]
         Command::Dogfood { command } => {

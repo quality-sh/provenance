@@ -32,7 +32,7 @@ pub(super) fn handle(command: ProposalsCommand, quiet: bool) -> anyhow::Result<(
             assertion_id,
             synthesis_packet_id,
             builds_on,
-            format,
+            ..
         } => {
             warn_if_skills_missing(&repo, quiet)?;
             let store = StateStore::new(ProvenanceLayout::new(repo));
@@ -78,7 +78,7 @@ pub(super) fn handle(command: ProposalsCommand, quiet: bool) -> anyhow::Result<(
                 (None, None) => store.create_proposal_card(input)?,
                 _ => unreachable!("clap requires both atomic assertion arguments"),
             };
-            output::print(format, &proposal)?;
+            output::print_json(&proposal)?;
         }
         ProposalsCommand::Assert {
             repo,
@@ -89,7 +89,7 @@ pub(super) fn handle(command: ProposalsCommand, quiet: bool) -> anyhow::Result<(
             supporting_claim_id,
             resolve_human_gate,
             decision_key,
-            format,
+            ..
         } => {
             warn_if_skills_missing(&repo, quiet)?;
             let store = StateStore::new(ProvenanceLayout::new(repo));
@@ -106,17 +106,13 @@ pub(super) fn handle(command: ProposalsCommand, quiet: bool) -> anyhow::Result<(
             } else {
                 store.assert_proposal(input)?
             };
-            output::print(format, &assertion)?;
+            output::print_json(&assertion)?;
         }
-        ProposalsCommand::List {
-            repo,
-            scope,
-            format,
-        } => {
+        ProposalsCommand::List { repo, scope, .. } => {
             warn_if_skills_missing(&repo, quiet)?;
             let proposals = StateStore::new(ProvenanceLayout::new(repo))
                 .list_proposal_cards(&ScopeId::new(scope)?)?;
-            output::print(format, &proposals)?;
+            output::print_json(&proposals)?;
         }
         ProposalsCommand::Surface {
             repo,
@@ -124,7 +120,7 @@ pub(super) fn handle(command: ProposalsCommand, quiet: bool) -> anyhow::Result<(
             changed_path,
             target_type,
             target_id,
-            format,
+            ..
         } => {
             warn_if_skills_missing(&repo, quiet)?;
             anyhow::ensure!(
@@ -146,7 +142,7 @@ pub(super) fn handle(command: ProposalsCommand, quiet: bool) -> anyhow::Result<(
                 &ScopeId::new(scope)?,
                 &ProposalDemand::new(changed_path, targets),
             )?;
-            output::print(format, &surfaced)?;
+            output::print_json(&surfaced)?;
         }
     }
     Ok(())

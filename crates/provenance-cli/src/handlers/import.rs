@@ -1,5 +1,5 @@
 use super::export::ScopeExport;
-use crate::output::{self, OutputFormat};
+use crate::output;
 use camino::Utf8PathBuf;
 use provenance_core::ScopeId;
 use provenance_macros::rule;
@@ -253,10 +253,9 @@ pub(super) fn handle(
     scope: String,
     input: Utf8PathBuf,
     dry_run: bool,
-    format: OutputFormat,
 ) -> anyhow::Result<()> {
     let report = import_scope(repo, scope, input, dry_run)?;
-    output::print(format, &report)?;
+    output::print_json(&report)?;
     Ok(())
 }
 

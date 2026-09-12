@@ -1,5 +1,5 @@
 use super::common::{resolution_inputs, stable_ids};
-use super::references::{self, ResolutionList};
+use super::refs::{self, ResolutionList};
 use crate::cli::policy::ResolutionsCommand;
 use crate::output;
 use provenance_core::{ResolutionStatus, ScopeId, StableId};
@@ -35,7 +35,7 @@ pub(super) async fn handle(command: ResolutionsCommand) -> anyhow::Result<()> {
             approved_at,
             origin_thread,
             origin_message,
-            format,
+            ..
         } => {
             let resolution = StateStore::new(ProvenanceLayout::new(repo)).create_resolution(
                 CreateResolutionInput {
@@ -58,13 +58,13 @@ pub(super) async fn handle(command: ResolutionsCommand) -> anyhow::Result<()> {
                     origin_message: origin_message.map(StableId::new).transpose()?,
                 },
             )?;
-            output::print(format, &resolution)?;
+            output::print_json(&resolution)?;
         }
         ResolutionsCommand::Requirement { command } => {
-            references::resolution_list(ResolutionList::Requirement, command)?;
+            refs::resolution_list(ResolutionList::Requirement, command).await?;
         }
         ResolutionsCommand::Supersedes { command } => {
-            references::resolution_list(ResolutionList::Supersedes, command)?;
+            refs::resolution_list(ResolutionList::Supersedes, command).await?;
         }
     }
     Ok(())

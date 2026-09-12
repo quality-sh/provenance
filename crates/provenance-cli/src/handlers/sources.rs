@@ -1,5 +1,5 @@
 use super::common::stable_ids;
-use super::references;
+use super::refs;
 use crate::cli::knowledge::SourcesCommand;
 use crate::output;
 use provenance_core::{ScopeId, SourceType, StableId};
@@ -28,7 +28,7 @@ pub(super) async fn handle(command: SourcesCommand) -> anyhow::Result<()> {
             supersedes,
             origin_thread,
             origin_message,
-            format,
+            ..
         } => {
             let source =
                 StateStore::new(ProvenanceLayout::new(repo)).create_source(CreateSourceInput {
@@ -45,9 +45,9 @@ pub(super) async fn handle(command: SourcesCommand) -> anyhow::Result<()> {
                     origin_thread: origin_thread.map(StableId::new).transpose()?,
                     origin_message: origin_message.map(StableId::new).transpose()?,
                 })?;
-            output::print(format, &source)?;
+            output::print_json(&source)?;
         }
-        SourcesCommand::Supersedes { command } => references::source_supersedes(command)?,
+        SourcesCommand::Supersedes { command } => refs::source_supersedes(command).await?,
     }
     Ok(())
 }

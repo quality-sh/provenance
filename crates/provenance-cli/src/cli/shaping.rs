@@ -1,5 +1,5 @@
 use crate::cli::references::QuestionSingleCommand;
-use crate::output::OutputFormat;
+use crate::output::JsonFormat;
 use camino::Utf8PathBuf;
 use clap::Subcommand;
 
@@ -17,16 +17,16 @@ pub enum ThreadCommand {
         #[arg(long)]
         role: String,
         body: String,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     List {
         #[arg(long, default_value = ".")]
         repo: Utf8PathBuf,
         #[arg(long)]
         scope: String,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
 }
 
@@ -49,16 +49,16 @@ pub enum TopicsCommand {
         status: String,
         #[arg(long, default_value = "[]")]
         links_json: String,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     List {
         #[arg(long, default_value = ".")]
         repo: Utf8PathBuf,
         #[arg(long)]
         scope: String,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     /// Claim a topic so concurrent sessions skip it. Claiming an
     /// already-claimed topic is an error showing who holds it.
@@ -72,8 +72,8 @@ pub enum TopicsCommand {
         /// Actor name recorded on the claim.
         #[arg(long)]
         actor: String,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     /// Release a claimed topic without closing it.
     Release {
@@ -83,8 +83,8 @@ pub enum TopicsCommand {
         scope: String,
         #[arg(long)]
         id: String,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     /// Close a topic. Closing clears any claim on it.
     Close {
@@ -94,8 +94,8 @@ pub enum TopicsCommand {
         scope: String,
         #[arg(long)]
         id: String,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
 }
 
@@ -128,16 +128,16 @@ pub enum QuestionsCommand {
         /// The requirement that the topic's requirement contradicts.
         #[arg(long)]
         contradicts: Option<String>,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     List {
         #[arg(long, default_value = ".")]
         repo: Utf8PathBuf,
         #[arg(long)]
         scope: String,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     /// Set or clear the requirement this question's requirement contradicts.
     Contradicts {
@@ -167,8 +167,8 @@ pub enum QuestionsCommand {
         links_json: Option<String>,
         #[arg(long)]
         resolution_id: Option<String>,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     /// Claim a question so concurrent sessions skip it. Claiming an
     /// already-claimed question is an error showing who holds it.
@@ -182,8 +182,8 @@ pub enum QuestionsCommand {
         /// Actor name recorded on the claim.
         #[arg(long)]
         actor: String,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     /// Release a claimed question without answering it.
     Release {
@@ -193,8 +193,8 @@ pub enum QuestionsCommand {
         scope: String,
         #[arg(long)]
         id: String,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     /// Record the answer to a question. Answering clears any claim on it.
     Answer {
@@ -208,7 +208,7 @@ pub enum QuestionsCommand {
         answer: String,
         #[arg(long)]
         resolution_id: Option<String>,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
 }

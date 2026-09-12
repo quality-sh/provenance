@@ -9,8 +9,8 @@ mod findings;
 mod order;
 mod sections;
 
-use crate::report::envelope::ReportEnvelope;
-use crate::report::escape::escape_inline;
+use crate::envelope::ReportEnvelope;
+use crate::escape::escape_inline;
 use provenance_macros::rule;
 use serde::Serialize;
 use std::cmp::Ordering;
@@ -23,10 +23,11 @@ pub const MAX_GRAPH_CHANGE_ROWS: usize = 40;
 /// Maximum items in one site, removed-site or run list inside a finding.
 pub const MAX_LIST_ITEMS: usize = 5;
 
-/// Refuse duplicate identities whose payloads differ. Byte-equal duplicates
-/// may repeat: they render identically under any order. Different payloads
-/// under one sort identity would render in input order and break the
-/// byte-identity guarantee, so the envelope is refused instead.
+/// Refuse duplicate identities whose payloads differ.
+///
+/// Byte-equal duplicates may repeat: they render identically under any order.
+/// Different payloads under one sort identity would render in input order and
+/// break the byte-identity guarantee, so the envelope is refused instead.
 pub fn validate_duplicates(envelope: &ReportEnvelope) -> Result<(), String> {
     let mut changes = envelope.graph_changes.clone();
     changes.sort_by(order::compare_graph_changes);

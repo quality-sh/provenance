@@ -25,7 +25,13 @@ provenance export --scope default --format json --output provenance-export.json
 provenance check --format json
 ```
 
-Agent-facing commands support JSON output for deterministic parsing.
+Every command accepts `--format json`. The JSON bytes stay stable, so agents
+and scripts can parse them. Five commands also carry a real Markdown renderer:
+`stale`, `coverage scan`, `prime`, `sdk plan`, and `report render`. `stale`,
+`coverage scan`, and `prime` default to their Markdown report; `sdk plan` and
+`report render` default to JSON. `export` and `wiki build` also accept `table`,
+`toon`, and `jsonl`. A command refuses a format it does not render; it never
+prints JSON under another format name.
 
 `provenance check --format json` reports `diagnostics` for new Requirement and
 Rule records and for records whose statement differs from Git HEAD. These
@@ -259,6 +265,10 @@ provenance coverage scan --path . --scope default --validate-rules --strict --fo
 provenance coverage scan --path . --format json --output coverage.json
 provenance coverage scan --path . --baseline coverage.json --validate-rules --format json
 ```
+
+Without `--format` the scan prints its Markdown report. `--format json` prints
+the machine-readable report, and `--format json --output <path>` writes it to a
+file. `--format markdown --output <path>` writes the Markdown report to a file.
 
 Without `--validate-rules` the scan only reports what it found in the tree. With it, the
 scan loads the scope's Rules and warns about a binding that cites an unknown Rule, a

@@ -1,7 +1,5 @@
 use std::{fmt, str::FromStr};
 
-use provenance_macros::rule;
-
 use crate::string_context::marker_is_inside_quoted_region;
 
 pub(crate) const PRIMARY_ANNOTATION_MARKER: &str = "@provenance";
@@ -44,48 +42,11 @@ impl FromStr for CoverageLevel {
     }
 }
 
-/// The scanner's copy of the method words the `verifies` macro accepts; the
-/// two lists are held identical by `tests/method_word_conformance.rs`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "snake_case")]
-#[rule("rule_verification_method_words")]
-pub enum Verification {
-    Exhaustion,
-    Property,
-    Examples,
-    Conformance,
-    Construction,
-    Proof,
-}
-
-impl fmt::Display for Verification {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Exhaustion => write!(f, "exhaustion"),
-            Self::Property => write!(f, "property"),
-            Self::Examples => write!(f, "examples"),
-            Self::Conformance => write!(f, "conformance"),
-            Self::Construction => write!(f, "construction"),
-            Self::Proof => write!(f, "proof"),
-        }
-    }
-}
-
-impl FromStr for Verification {
-    type Err = String;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value.to_ascii_lowercase().as_str() {
-            "exhaustion" => Ok(Self::Exhaustion),
-            "property" => Ok(Self::Property),
-            "examples" => Ok(Self::Examples),
-            "conformance" => Ok(Self::Conformance),
-            "construction" => Ok(Self::Construction),
-            "proof" => Ok(Self::Proof),
-            other => Err(format!("invalid verification method: {other}")),
-        }
-    }
-}
+/// The method words the `verifies` macro accepts. The scanner keeps core's
+/// name so its parsed bindings read as before; the word list has one
+/// definition, and `tests/method_word_conformance.rs` pins the macro list to
+/// it.
+pub use provenance_core::VerificationMethod as Verification;
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub struct Annotation {

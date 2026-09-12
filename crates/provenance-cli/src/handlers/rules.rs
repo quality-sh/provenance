@@ -1,5 +1,5 @@
 use super::common::stable_ids;
-use super::references::{self, RuleList};
+use super::refs::{self, RuleList};
 use crate::cli::policy::RulesCommand;
 use crate::output;
 use provenance_core::{Rule, RuleSeverity, RuleStatus, ScopeId, StableId};
@@ -93,7 +93,7 @@ pub(super) async fn handle(command: RulesCommand) -> anyhow::Result<()> {
             source_section,
             origin_thread,
             origin_message,
-            format,
+            ..
         } => {
             let rule =
                 StateStore::new(ProvenanceLayout::new(repo)).create_rule(CreateRuleInput {
@@ -117,31 +117,24 @@ pub(super) async fn handle(command: RulesCommand) -> anyhow::Result<()> {
                     origin_thread: origin_thread.map(StableId::new).transpose()?,
                     origin_message: origin_message.map(StableId::new).transpose()?,
                 })?;
-            output::print(format, &rule)?;
+            output::print_json(&rule)?;
         }
         RulesCommand::Requirement { command } => {
-            references::rule_list(RuleList::Requirement, command)?;
+            refs::rule_list(RuleList::Requirement, command).await?;
         }
         RulesCommand::Resolution { command } => {
-            references::rule_list(RuleList::Resolution, command)?;
+            refs::rule_list(RuleList::Resolution, command).await?;
         }
-        RulesCommand::List {
-            repo,
-            scope,
-            format,
-        } => {
+        RulesCommand::List { repo, scope, .. } => {
             let rules = StateStore::new(ProvenanceLayout::new(repo))
                 .list_rules(&ScopeId::new(scope)?)?
                 .iter()
                 .map(RuleSummary::of)
                 .collect::<Vec<_>>();
-            output::print(format, &rules)?;
+            output::print_json(&rules)?;
         }
         RulesCommand::Show {
-            repo,
-            scope,
-            id,
-            format,
+            repo, scope, id, ..
         } => {
             let id = StableId::new(id)?;
             let rule = StateStore::new(ProvenanceLayout::new(repo))
@@ -149,7 +142,7 @@ pub(super) async fn handle(command: RulesCommand) -> anyhow::Result<()> {
                 .into_iter()
                 .find(|rule| rule.id == id)
                 .ok_or_else(|| anyhow::anyhow!("rule `{}` not found in scope", id.as_str()))?;
-            output::print(format, &rule)?;
+            output::print_json(&rule)?;
         }
     }
     Ok(())

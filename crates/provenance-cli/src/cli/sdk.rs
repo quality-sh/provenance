@@ -1,4 +1,4 @@
-use crate::output::OutputFormat;
+use crate::output::{JsonFormat, ReportFormat};
 use camino::Utf8PathBuf;
 use clap::{Args, Subcommand};
 
@@ -12,23 +12,23 @@ pub struct QueryArgs {
     /// Freshness policy: `catch_up`, `annotate_only`, or `refuse_stale`.
     #[arg(long, value_parser = parse_freshness)]
     pub freshness: Option<provenance_store::operations::read_policy::FreshnessPolicy>,
-    #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
-    pub format: OutputFormat,
+    #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+    pub format: JsonFormat,
 }
 
 #[derive(Subcommand)]
 pub enum SdkCommand {
     /// Check one unfinished Requirement or Rule statement from stdin.
     CheckStatement {
-        #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     /// Report engine compatibility and the resolved project root.
     Info {
         #[arg(long)]
         repo: Option<Utf8PathBuf>,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     /// Preview one desired-state reconciliation without writing it.
     Plan {
@@ -36,8 +36,8 @@ pub enum SdkCommand {
         repo: Option<Utf8PathBuf>,
         #[arg(long, default_value = "default")]
         scope: String,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = ReportFormat::Json)]
+        format: ReportFormat,
     },
     /// Reconcile one desired-state document read from stdin.
     Apply {
@@ -45,8 +45,8 @@ pub enum SdkCommand {
         repo: Option<Utf8PathBuf>,
         #[arg(long, default_value = "default")]
         scope: String,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     /// Start one callback-backed verification run described on stdin.
     BeginVerification {
@@ -54,8 +54,8 @@ pub enum SdkCommand {
         repo: Option<Utf8PathBuf>,
         #[arg(long, default_value = "default")]
         scope: String,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     /// Finish one callback-backed verification run described on stdin.
     CompleteVerification {
@@ -63,8 +63,8 @@ pub enum SdkCommand {
         repo: Option<Utf8PathBuf>,
         #[arg(long, default_value = "default")]
         scope: String,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     /// List cached callback-backed verification evidence.
     VerificationRuns {
@@ -74,8 +74,8 @@ pub enum SdkCommand {
         scope: String,
         #[arg(long)]
         rule: Option<String>,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     /// Read one canonical record named by a JSON request on stdin.
     Get {
@@ -125,8 +125,8 @@ pub enum SdkCommand {
         scope: String,
         #[arg(long)]
         rule: Option<String>,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
 }
 

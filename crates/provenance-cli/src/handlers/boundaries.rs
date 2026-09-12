@@ -21,7 +21,7 @@ pub(super) async fn handle(command: BoundariesCommand) -> anyhow::Result<()> {
             statement,
             source_id,
             source_clause,
-            format,
+            ..
         } => {
             let boundary = StateStore::new(ProvenanceLayout::new(repo)).create_boundary(
                 CreateBoundaryInput {
@@ -32,16 +32,12 @@ pub(super) async fn handle(command: BoundariesCommand) -> anyhow::Result<()> {
                     source_ref: boundary_source_ref(source_id, source_clause)?,
                 },
             )?;
-            output::print(format, &boundary)?;
+            output::print_json(&boundary)?;
         }
-        BoundariesCommand::List {
-            repo,
-            scope,
-            format,
-        } => {
+        BoundariesCommand::List { repo, scope, .. } => {
             let boundaries = StateStore::new(ProvenanceLayout::new(repo))
                 .list_boundaries(&ScopeId::new(scope)?)?;
-            output::print(format, &boundaries)?;
+            output::print_json(&boundaries)?;
         }
     }
     Ok(())

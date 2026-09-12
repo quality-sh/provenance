@@ -21,7 +21,7 @@ pub(super) async fn handle(command: TopicsCommand) -> anyhow::Result<()> {
             title,
             status,
             links_json,
-            format,
+            ..
         } => {
             let topic =
                 StateStore::new(ProvenanceLayout::new(repo)).create_topic(CreateTopicInput {
@@ -32,49 +32,39 @@ pub(super) async fn handle(command: TopicsCommand) -> anyhow::Result<()> {
                     status: TopicStatus::parse(&status)?,
                     links: parse_json_arg::<Vec<ArtifactLink>>("links-json", &links_json)?,
                 })?;
-            output::print(format, &topic)?;
+            output::print_json(&topic)?;
         }
-        TopicsCommand::List {
-            repo,
-            scope,
-            format,
-        } => {
+        TopicsCommand::List { repo, scope, .. } => {
             let topics =
                 StateStore::new(ProvenanceLayout::new(repo)).list_topics(&ScopeId::new(scope)?)?;
-            output::print(format, &topics)?;
+            output::print_json(&topics)?;
         }
         TopicsCommand::Claim {
             repo,
             scope,
             id,
             actor,
-            format,
+            ..
         } => {
             let store = StateStore::new(ProvenanceLayout::new(repo));
             let scope = ScopeId::new(scope)?;
             let topic_id = StableId::new(id)?;
             let claim = store.claim_topic(&scope, &topic_id, &actor)?;
-            output::print(format, &claim)?;
+            output::print_json(&claim)?;
         }
         TopicsCommand::Release {
-            repo,
-            scope,
-            id,
-            format,
+            repo, scope, id, ..
         } => {
             let topic = StateStore::new(ProvenanceLayout::new(repo))
                 .release_topic(&ScopeId::new(scope)?, &StableId::new(id)?)?;
-            output::print(format, &topic)?;
+            output::print_json(&topic)?;
         }
         TopicsCommand::Close {
-            repo,
-            scope,
-            id,
-            format,
+            repo, scope, id, ..
         } => {
             let topic = StateStore::new(ProvenanceLayout::new(repo))
                 .close_topic(&ScopeId::new(scope)?, &StableId::new(id)?)?;
-            output::print(format, &topic)?;
+            output::print_json(&topic)?;
         }
     }
     Ok(())

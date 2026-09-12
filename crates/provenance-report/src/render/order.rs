@@ -4,8 +4,8 @@
 //! resolved, pre-existing, then uncertain. Within one class, identity decides:
 //! diagnostic code, then subject id, then the first site.
 
-use crate::report::catalog::DiagnosticCode;
-use crate::report::envelope::{
+use crate::catalog::DiagnosticCode;
+use crate::envelope::{
     Comparison, Finding, GraphChange, RelationChange, Severity, Site, VerificationRun,
 };
 
