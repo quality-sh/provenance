@@ -8,9 +8,7 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 use super::StateStore;
 
-pub(crate) trait GraphRecord:
-    RelationOwner + Clone + PartialEq + DeserializeOwned + Serialize
-{
+pub trait GraphRecord: RelationOwner + Clone + PartialEq + DeserializeOwned + Serialize {
     fn validate_write(&self, _previous: Option<&Self>) -> anyhow::Result<()> {
         Ok(())
     }

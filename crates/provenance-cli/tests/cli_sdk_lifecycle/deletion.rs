@@ -13,60 +13,7 @@ fn deleting_a_requirement_removes_its_ids_from_surviving_records() {
     let removed = resource_id(&initial, "requirement", "sharing");
     let retained = resource_id(&initial, "requirement", "other");
     let base = directory.path().join(".provenance/state/scopes/default");
-    std::fs::create_dir_all(base.join("resolutions")).unwrap();
-    std::fs::write(
-        base.join("resolutions/res.jsonl"),
-        format!(
-            "{}\n{}\n",
-            json!({"schema_version": 2,"scope_id":"default","id":"res_shared",
-            "title":"Shared decision","position":"Expire sessions","rationale":"Limit access",
-            "status":"draft","requirement_ids":[removed,retained],"review_on":null}),
-            json!({"schema_version": 2,"scope_id":"default","id":"res_removed",
-            "title":"Removed decision","position":"Expire links","rationale":"Limit access",
-            "status":"draft","requirement_ids":[removed],"review_on":null})
-        ),
-    )
-    .unwrap();
-    std::fs::create_dir_all(base.join("topics")).unwrap();
-    std::fs::write(
-        base.join("topics/topic.jsonl"),
-        format!(
-            "{}\n{}\n",
-            json!({"schema_version": 2,"scope_id":"default","id":"topic_removed",
-            "requirement_id":removed,"title":"Removed topic","status":"open",
-            "links":[]}),
-            json!({"schema_version": 2,"scope_id":"default","id":"topic_retained",
-            "requirement_id":retained,"title":"Retained topic","status":"open",
-            "links":[
-                {"target_type":"requirement","target_id":removed},
-                {"target_type":"resolution","target_id":"res_removed"},
-                {"target_type":"requirement","target_id":retained}
-            ]})
-        ),
-    )
-    .unwrap();
-    std::fs::create_dir_all(base.join("questions")).unwrap();
-    std::fs::write(
-        base.join("questions/question.jsonl"),
-        format!(
-            "{}\n{}\n{}\n",
-            json!({"schema_version": 2,"scope_id":"default","id":"question_removed",
-            "topic_id":"topic_retained","requirement_id":removed,
-            "question":"Removed?","resolution_method":"research","status":"open"}),
-            json!({"schema_version": 2,"scope_id":"default","id":"question_topic_removed",
-            "topic_id":"topic_removed","requirement_id":retained,
-            "question":"Also removed?","resolution_method":"research","status":"open"}),
-            json!({"schema_version": 2,"scope_id":"default","id":"question_retained",
-            "topic_id":"topic_retained","requirement_id":retained,
-            "question":"Retained?","resolution_method":"research","status":"open",
-            "contradicts":removed,"resolution_id":"res_removed","links":[
-                {"target_type":"requirement","target_id":removed},
-                {"target_type":"resolution","target_id":"res_removed"},
-                {"target_type":"requirement","target_id":retained}
-            ]})
-        ),
-    )
-    .unwrap();
+    write_dependent_records(&base, &removed, &retained);
     let mut rules = read_records(directory.path(), "rules/rule.jsonl");
     rules[0]["declared_by"] = Value::Null;
     rules[0]
@@ -126,6 +73,63 @@ fn deleting_a_requirement_removes_its_ids_from_surviving_records() {
         questions[0]["links"],
         json!([{"target_type":"requirement","target_id":retained}])
     );
+}
+
+fn write_dependent_records(base: &std::path::Path, removed: &str, retained: &str) {
+    std::fs::create_dir_all(base.join("resolutions")).unwrap();
+    std::fs::write(
+        base.join("resolutions/res.jsonl"),
+        format!(
+            "{}\n{}\n",
+            json!({"schema_version": 2,"scope_id":"default","id":"res_shared",
+            "title":"Shared decision","position":"Expire sessions","rationale":"Limit access",
+            "status":"draft","requirement_ids":[removed,retained],"review_on":null}),
+            json!({"schema_version": 2,"scope_id":"default","id":"res_removed",
+            "title":"Removed decision","position":"Expire links","rationale":"Limit access",
+            "status":"draft","requirement_ids":[removed],"review_on":null})
+        ),
+    )
+    .unwrap();
+    std::fs::create_dir_all(base.join("topics")).unwrap();
+    std::fs::write(
+        base.join("topics/topic.jsonl"),
+        format!(
+            "{}\n{}\n",
+            json!({"schema_version": 2,"scope_id":"default","id":"topic_removed",
+            "requirement_id":removed,"title":"Removed topic","status":"open",
+            "links":[]}),
+            json!({"schema_version": 2,"scope_id":"default","id":"topic_retained",
+            "requirement_id":retained,"title":"Retained topic","status":"open",
+            "links":[
+                {"target_type":"requirement","target_id":removed},
+                {"target_type":"resolution","target_id":"res_removed"},
+                {"target_type":"requirement","target_id":retained}
+            ]})
+        ),
+    )
+    .unwrap();
+    std::fs::create_dir_all(base.join("questions")).unwrap();
+    std::fs::write(
+        base.join("questions/question.jsonl"),
+        format!(
+            "{}\n{}\n{}\n",
+            json!({"schema_version": 2,"scope_id":"default","id":"question_removed",
+            "topic_id":"topic_retained","requirement_id":removed,
+            "question":"Removed?","resolution_method":"research","status":"open"}),
+            json!({"schema_version": 2,"scope_id":"default","id":"question_topic_removed",
+            "topic_id":"topic_removed","requirement_id":retained,
+            "question":"Also removed?","resolution_method":"research","status":"open"}),
+            json!({"schema_version": 2,"scope_id":"default","id":"question_retained",
+            "topic_id":"topic_retained","requirement_id":retained,
+            "question":"Retained?","resolution_method":"research","status":"open",
+            "contradicts":removed,"resolution_id":"res_removed","links":[
+                {"target_type":"requirement","target_id":removed},
+                {"target_type":"resolution","target_id":"res_removed"},
+                {"target_type":"requirement","target_id":retained}
+            ]})
+        ),
+    )
+    .unwrap();
 }
 
 #[test]

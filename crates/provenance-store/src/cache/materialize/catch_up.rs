@@ -228,7 +228,7 @@ async fn rederive_scope(
         );
         let key = (scope.as_str().to_string(), family.family_name().to_string());
         let content_changed = content.get(&key) != Some(&fresh);
-        if !content_changed && !(metadata_changed && family.has_record_stamps()) {
+        if !(content_changed || metadata_changed && family.has_record_stamps()) {
             continue;
         }
         family_rows::delete_rows(tx, family, scope).await?;

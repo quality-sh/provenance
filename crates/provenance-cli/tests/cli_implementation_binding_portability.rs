@@ -109,7 +109,7 @@ fn scope_export_import_round_trip_preserves_implementation_bindings() {
     init(&source);
     create_rule(&source, "rule_start");
     let saved = binding("implementation_binding_start", "rule_start");
-    write_implementation_bindings(&source, &[saved.clone()]);
+    write_implementation_bindings(&source, std::slice::from_ref(&saved));
 
     let exported = export(&source, &exported_path);
     assert_eq!(exported["implementation_bindings"], json!([saved]));

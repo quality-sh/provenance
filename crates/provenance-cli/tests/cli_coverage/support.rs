@@ -1,7 +1,7 @@
 use assert_cmd::Command;
 use std::path::Path;
 
-pub(super) fn init_repo(repo: &Path) {
+pub fn init_repo(repo: &Path) {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
@@ -33,7 +33,7 @@ pub(super) fn init_repo(repo: &Path) {
         .success();
 }
 
-pub(super) fn create_rule(repo: &Path, id: &str, status: &str) {
+pub fn create_rule(repo: &Path, id: &str, status: &str) {
     let mut command = Command::cargo_bin("provenance").unwrap();
     command.args([
         "rules",

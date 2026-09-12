@@ -21,6 +21,13 @@ pub(super) struct Cascade {
     changes: Vec<CascadedResource>,
 }
 
+struct ShapingRecords {
+    topics: Vec<Topic>,
+    questions: Vec<Question>,
+    boundaries: Vec<Boundary>,
+    changes: Vec<CascadedResource>,
+}
+
 impl Cascade {
     pub(super) fn prepare(
         store: &StateStore,
@@ -80,54 +87,14 @@ impl Cascade {
             !remove
         });
 
-        let mut topics = store.list_topics(scope)?;
-        let before_topics = topics.clone();
-        let mut topic_ids = BTreeSet::new();
-        topics.retain_mut(|record| {
-            let remove = requirement_ids.contains(record.requirement_id.as_str());
-            if remove {
-                topic_ids.insert(record.id.as_str().to_owned());
-            } else {
-                retain_links(
-                    &mut record.links,
-                    &source_ids,
-                    &requirement_ids,
-                    &resolution_ids,
-                    &rule_ids,
-                );
-            }
-            !remove
-        });
-        let mut questions = store.list_questions(scope)?;
-        let before_questions = questions.clone();
-        questions.retain_mut(|record| {
-            let remove = requirement_ids.contains(record.requirement_id.as_str())
-                || topic_ids.contains(record.topic_id.as_str());
-            if !remove {
-                clear_id(&mut record.contradicts, &requirement_ids);
-                clear_id(&mut record.resolution_id, &resolution_ids);
-                retain_links(
-                    &mut record.links,
-                    &source_ids,
-                    &requirement_ids,
-                    &resolution_ids,
-                    &rule_ids,
-                );
-            }
-            !remove
-        });
-        let mut boundaries = store.list_boundaries(scope)?;
-        let before_boundaries = boundaries.clone();
-        boundaries.retain(|r| !requirement_ids.contains(r.requirement_id.as_str()));
-        for boundary in &mut boundaries {
-            if boundary
-                .source_ref
-                .as_ref()
-                .is_some_and(|r| source_ids.contains(r.source_id.as_str()))
-            {
-                boundary.source_ref = None;
-            }
-        }
+        let shaping = prepare_shaping(
+            store,
+            scope,
+            &source_ids,
+            &requirement_ids,
+            &resolution_ids,
+            &rule_ids,
+        )?;
 
         let mut changes =
             describe_replacement(NodeType::Source, &before_sources, sources, |r| &r.id);
@@ -149,30 +116,13 @@ impl Cascade {
             rules,
             |r| &r.id,
         ));
-        changes.extend(describe_replacement(
-            NodeType::Topic,
-            &before_topics,
-            &topics,
-            |r| &r.id,
-        ));
-        changes.extend(describe_replacement(
-            NodeType::Question,
-            &before_questions,
-            &questions,
-            |r| &r.id,
-        ));
-        changes.extend(describe_replacement(
-            NodeType::Boundary,
-            &before_boundaries,
-            &boundaries,
-            |r| &r.id,
-        ));
+        changes.extend(shaping.changes);
         Ok(Self {
             rules: rule_ids,
             resolutions,
-            topics,
-            questions,
-            boundaries,
+            topics: shaping.topics,
+            questions: shaping.questions,
+            boundaries: shaping.boundaries,
             changes,
         })
     }
@@ -264,6 +214,83 @@ impl Cascade {
     }
 }
 
+fn prepare_shaping(
+    store: &StateStore,
+    scope: &ScopeId,
+    source_ids: &BTreeSet<String>,
+    requirement_ids: &BTreeSet<String>,
+    resolution_ids: &BTreeSet<String>,
+    rule_ids: &BTreeSet<String>,
+) -> anyhow::Result<ShapingRecords> {
+    let mut topics = store.list_topics(scope)?;
+    let before_topics = topics.clone();
+    let mut topic_ids = BTreeSet::new();
+    topics.retain_mut(|record| {
+        let remove = requirement_ids.contains(record.requirement_id.as_str());
+        if remove {
+            topic_ids.insert(record.id.as_str().to_owned());
+        } else {
+            retain_links(
+                &mut record.links,
+                source_ids,
+                requirement_ids,
+                resolution_ids,
+                rule_ids,
+            );
+        }
+        !remove
+    });
+    let mut questions = store.list_questions(scope)?;
+    let before_questions = questions.clone();
+    questions.retain_mut(|record| {
+        let remove = requirement_ids.contains(record.requirement_id.as_str())
+            || topic_ids.contains(record.topic_id.as_str());
+        if !remove {
+            clear_id(&mut record.contradicts, requirement_ids);
+            clear_id(&mut record.resolution_id, resolution_ids);
+            retain_links(
+                &mut record.links,
+                source_ids,
+                requirement_ids,
+                resolution_ids,
+                rule_ids,
+            );
+        }
+        !remove
+    });
+    let mut boundaries = store.list_boundaries(scope)?;
+    let before_boundaries = boundaries.clone();
+    boundaries.retain(|r| !requirement_ids.contains(r.requirement_id.as_str()));
+    for boundary in &mut boundaries {
+        if boundary
+            .source_ref
+            .as_ref()
+            .is_some_and(|r| source_ids.contains(r.source_id.as_str()))
+        {
+            boundary.source_ref = None;
+        }
+    }
+    let mut changes = describe_replacement(NodeType::Topic, &before_topics, &topics, |r| &r.id);
+    changes.extend(describe_replacement(
+        NodeType::Question,
+        &before_questions,
+        &questions,
+        |r| &r.id,
+    ));
+    changes.extend(describe_replacement(
+        NodeType::Boundary,
+        &before_boundaries,
+        &boundaries,
+        |r| &r.id,
+    ));
+    Ok(ShapingRecords {
+        topics,
+        questions,
+        boundaries,
+        changes,
+    })
+}
+
 fn describe_replacement<'a, T: serde::Serialize>(
     kind: NodeType,
     before: &'a [T],
@@ -335,7 +362,7 @@ fn merge_changes(current: &mut Vec<TypedFieldChange>, cascade: &[TypedFieldChang
     }
 }
 
-fn typed_kind(kind: NodeType) -> Option<TypedResourceKind> {
+const fn typed_kind(kind: NodeType) -> Option<TypedResourceKind> {
     match kind {
         NodeType::Source => Some(TypedResourceKind::Source),
         NodeType::Requirement => Some(TypedResourceKind::Requirement),
