@@ -1,0 +1,7 @@
+# The test suite runs `provenance init` in many throwaway repositories. Keep
+# onboarding off the network: the refused loopback URL fails fast, init prints
+# its fallback warning, and no test imports a dictionary unless the test sets
+# its own PROVENANCE_TEST_STE100_ASSET_URL or imports a local PDF. Both cargo
+# test and nextest apply this section to the processes they spawn.
+[env]
+PROVENANCE_TEST_STE100_ASSET_URL = "http://127.0.0.1:9/ASD-STE100_ISSUE9.pdf"

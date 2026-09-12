@@ -33,13 +33,6 @@ pub enum PackageManager {
     Nub,
 }
 
-#[derive(Clone, Copy, Debug, Default, ValueEnum)]
-pub enum SteOnboardingMode {
-    Agent,
-    #[default]
-    Interactive,
-}
-
 #[derive(Parser)]
 #[command(name = "provenance", version)]
 pub struct Cli {
@@ -57,8 +50,8 @@ pub enum Command {
     CargoInit {
         #[arg(long)]
         package: Option<String>,
-        #[arg(long, value_enum, default_value_t)]
-        ste_onboarding: SteOnboardingMode,
+        /// Import this local Issue 9 dictionary PDF instead of downloading the
+        /// official asset.
         #[arg(long)]
         ste_pdf: Option<Utf8PathBuf>,
     },
@@ -76,8 +69,8 @@ pub enum Command {
         /// Empty the repository-local disposition actor allowlist.
         #[arg(long, conflicts_with = "disposition_actor_id")]
         clear_disposition_actors: bool,
-        #[arg(long, value_enum, default_value_t)]
-        ste_onboarding: SteOnboardingMode,
+        /// Import this local Issue 9 dictionary PDF instead of downloading the
+        /// official asset.
         #[arg(long)]
         ste_pdf: Option<Utf8PathBuf>,
         #[arg(long, value_enum, default_value_t, hide = true)]

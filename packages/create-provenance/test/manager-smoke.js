@@ -49,7 +49,7 @@ import { join } from "node:path";
 const [operation, ...args] = process.argv.slice(2);
 const value = (name) => args[args.indexOf(name) + 1];
 if (operation === "init" && args.includes("--help")) {
-  process.stdout.write("--ste-onboarding");
+  process.stdout.write("--ste-pdf");
 } else if (operation === "init") {
   const root = value("--path");
   mkdirSync(join(root, ".provenance", "state"), { recursive: true });

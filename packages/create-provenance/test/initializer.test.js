@@ -47,10 +47,10 @@ test("the README states the scope of package-manager policy overrides", () => {
   assert.match(readme, /replaces the configured release-age exclusion list/s);
 });
 
-test("the command help names interactive onboarding as the default", () => {
+test("the command help omits the removed STE onboarding option", () => {
   const command = readFileSync(new URL("../bin/create-provenance.mjs", import.meta.url), "utf8");
 
-  assert.match(command, /interactive \(default\) or agent/);
+  assert.doesNotMatch(command, /--ste-onboarding/);
 });
 
 const managers = [
@@ -121,7 +121,6 @@ function verifyExactDevelopmentDependency(manager, command, args, environment) {
       command: "/provenance-engine",
       args: [
         "init", "--path", project, "--scope", "default", "--path-prefix", ".",
-        "--ste-onboarding", "interactive",
         "--invocation-channel", "typescript", "--package-manager", manager,
       ],
       capture: false,
@@ -146,7 +145,7 @@ test("the initializer reports failure when the installed engine rejects init", (
   assert.equal(invocation, 3);
 });
 
-test("an engine without onboarding capability receives only legacy init flags", () => {
+test("an engine without the current init surface receives only bare init flags", () => {
   const project = projectDirectory({ packageManager: "npm@1.0.0" });
   const invocations = [];
 
@@ -156,9 +155,6 @@ test("an engine without onboarding capability receives only legacy init flags", 
     enginePath: "/provenance-engine",
     execute(invocation) {
       invocations.push(invocation);
-      if (invocation.args.includes("--ste-onboarding")) {
-        return { status: 2, stdout: "" };
-      }
       if (invocation.args.at(-2) === "init" && invocation.args.at(-1) === "--help") {
         return { status: 0, stdout: "Usage: provenance init [OPTIONS]\n" };
       }
@@ -285,7 +281,6 @@ test("the command defaults to the current project", () => {
   assert.deepEqual(parseArguments([], "/workspace/application"), {
     projectDirectory: "/workspace/application",
     packageManager: undefined,
-    steOnboarding: "interactive",
   });
 });
 
@@ -293,20 +288,18 @@ test("the command accepts a target path and package-manager override", () => {
   assert.deepEqual(
     parseArguments([
       "--path", "packages/web", "--package-manager", "bun",
-      "--ste-onboarding", "interactive",
     ], "/workspace"),
     {
       projectDirectory: "/workspace/packages/web",
       packageManager: "bun",
-      steOnboarding: "interactive",
     },
   );
 });
 
-test("the command rejects an unknown STE onboarding mode", () => {
+test("the command rejects the removed STE onboarding option", () => {
   assert.throws(
-    () => parseArguments(["--ste-onboarding", "automatic"], "/workspace"),
-    /Choose one of: agent, interactive/,
+    () => parseArguments(["--ste-onboarding", "agent"], "/workspace"),
+    /Unknown argument '--ste-onboarding'/,
   );
 });
 
@@ -439,7 +432,7 @@ function recordingExecutor(invocations) {
     if (invocation.capture && invocation.args.at(-1) === "--help") {
       return {
         status: 0,
-        stdout: "--ste-onboarding",
+        stdout: "--ste-pdf",
       };
     }
     return { status: 0, stdout: "" };

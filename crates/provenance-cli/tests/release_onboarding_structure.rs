@@ -44,6 +44,19 @@ fn cargo_install_emits_the_exact_init_next_step_from_the_cli_build_script() {
 }
 
 #[test]
+fn license_carries_the_asd_ste100_notice_and_the_readme_references_it() {
+    let workspace = workspace_root();
+    let license = fs::read_to_string(workspace.join("LICENSE")).expect("read LICENSE");
+    assert!(license.contains("ASD owns ASD-STE100. STEMG maintains it."));
+    assert!(license.contains("no endorsement, certification, or compliance claim"));
+
+    let readme = fs::read_to_string(workspace.join("README.md")).expect("read README.md");
+    assert!(readme.contains("notice section in"));
+    assert!(readme.contains("[LICENSE](LICENSE)"));
+    assert!(!workspace.join("NOTICE").exists());
+}
+
+#[test]
 fn windows_cli_reserves_enough_main_thread_stack_for_argument_parsing() {
     let build_script = fs::read_to_string(workspace_root().join("crates/provenance-cli/build.rs"))
         .expect("read provenance-cli build script");

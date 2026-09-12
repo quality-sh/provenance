@@ -7,10 +7,10 @@ export async function checkCreation({ HttpClient, OperationError }, fixture) {
   const created = await client.createSource({ context, request: source });
   assert.equal(created.origin_thread, 'thread_origin');
   assert.equal(created.origin_message, 'message_origin');
-  const requirement = await client.createRequirement({ context, request: { scope_id: 'default', id: 'req_ts', statement: 'The system is ready.', status: 'discovery', depends_on: [], supersedes: [] } });
+  const requirement = await client.createRequirement({ context, request: { scope_id: 'default', id: 'req_ts', statement: 'The system is prepared.', status: 'discovery', depends_on: [], supersedes: [] } });
   assert.equal(requirement.status, 'discovery');
   const resolution = await client.createResolution({ context, request: { scope_id: 'default', id: 'res_ts', title: 'Decision', requirement_ids: [requirement.id], supersedes: [], position: 'Use the existing record.', rationale: 'The shape is fixed.', status: 'draft', inputs: [] } });
-  const rule = await client.createRule({ context, request: { scope_id: 'default', id: 'rule_ts', statement: 'The system is ready.', requirement_ids: [requirement.id], resolution_ids: [resolution.id], status: 'draft', severity: 'high' } });
+  const rule = await client.createRule({ context, request: { scope_id: 'default', id: 'rule_ts', statement: 'The system is prepared.', requirement_ids: [requirement.id], resolution_ids: [resolution.id], status: 'draft', severity: 'high' } });
   assert.deepEqual(rule.requirement_ids, [requirement.id]);
   const linked = await client.addSourceReference({ context, request: { scope_id: 'default', source_id: created.id, requirement_id: requirement.id, clause: '1' } });
   assert.deepEqual(linked.source_refs, [{ source_id: created.id, clause: '1' }]);

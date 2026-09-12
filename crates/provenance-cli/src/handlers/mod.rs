@@ -52,15 +52,9 @@ pub(super) use export::{export_scope, ScopeExport};
 #[allow(clippy::redundant_pub_crate)]
 pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()> {
     match command {
-        Command::CargoInit {
-            package,
-            ste_onboarding,
-            ste_pdf,
-        } => {
-            tokio::task::spawn_blocking(move || {
-                cargo_init::handle(package.as_deref(), ste_onboarding, ste_pdf)
-            })
-            .await??;
+        Command::CargoInit { package, ste_pdf } => {
+            tokio::task::spawn_blocking(move || cargo_init::handle(package.as_deref(), ste_pdf))
+                .await??;
         }
         Command::Init {
             path,
@@ -68,7 +62,6 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
             path_prefix,
             disposition_actor_id,
             clear_disposition_actors,
-            ste_onboarding,
             ste_pdf,
             invocation_channel,
             package_manager,
@@ -81,7 +74,6 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
                         path_prefix,
                         disposition_actor_ids: disposition_actor_id,
                         clear_disposition_actors,
-                        ste_onboarding,
                         ste_pdf,
                         invocation_channel,
                         package_manager,

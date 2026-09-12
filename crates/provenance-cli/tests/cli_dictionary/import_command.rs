@@ -73,6 +73,37 @@ fn the_import_command_stores_an_index_that_later_checks_use() {
 }
 
 #[test]
+fn the_import_command_accepts_a_relative_pdf_path() {
+    let scratch = tempfile::tempdir().unwrap();
+    let repo = scratch.path().join("repo");
+    let index_directory = scratch.path().join("index");
+    std::fs::create_dir_all(&repo).unwrap();
+    std::fs::write(scratch.path().join("dictionary.pdf"), dictionary_pdf()).unwrap();
+    init(&repo);
+
+    let output = provenance()
+        .env("PROVENANCE_STE100_INDEX_DIR", &index_directory)
+        .current_dir(scratch.path())
+        .args([
+            "dictionary",
+            "import",
+            "--pdf",
+            "dictionary.pdf",
+            "--repo",
+            repo.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "a relative --pdf path must resolve against the working directory: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(reference_path(&repo).exists());
+}
+
+#[test]
 fn the_import_command_rejects_input_that_is_not_a_pdf() {
     let scratch = tempfile::tempdir().unwrap();
     let repo = scratch.path().join("repo");
