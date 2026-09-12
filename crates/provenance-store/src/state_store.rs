@@ -15,6 +15,7 @@ mod reference_methods;
 mod reference_writers;
 mod requirement_reviews;
 mod rule_writers;
+mod scope_ingestion;
 mod shaping_writers;
 mod statement_policy;
 mod thread_origins;
@@ -48,6 +49,7 @@ pub use proposal_surfaces::{ProposalDemand, ProposalSurfaceReason, SurfacedPropo
 pub use requirement_reviews::{
     requirement_statement_changes, RequirementReviewInput, RequirementStatementChange,
 };
+pub use scope_ingestion::ScopeShards;
 pub(crate) use statement_policy::StatementWriteError;
 pub use typed_statement_policy::TypedSpecWriteError;
 
