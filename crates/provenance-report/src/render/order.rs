@@ -9,11 +9,11 @@ use crate::envelope::{
     Comparison, Finding, GraphChange, RelationChange, Severity, Site, VerificationRun,
 };
 
-pub(super) fn compare_graph_changes(a: &GraphChange, b: &GraphChange) -> std::cmp::Ordering {
+pub(crate) fn compare_graph_changes(a: &GraphChange, b: &GraphChange) -> std::cmp::Ordering {
     (a.kind, a.change, a.id.as_str()).cmp(&(b.kind, b.change, b.id.as_str()))
 }
 
-pub(super) fn compare_relations(a: &RelationChange, b: &RelationChange) -> std::cmp::Ordering {
+pub(crate) fn compare_relations(a: &RelationChange, b: &RelationChange) -> std::cmp::Ordering {
     (a.relation.as_str(), a.target_kind, a.target_id.as_str()).cmp(&(
         b.relation.as_str(),
         b.target_kind,
@@ -21,7 +21,7 @@ pub(super) fn compare_relations(a: &RelationChange, b: &RelationChange) -> std::
     ))
 }
 
-pub(super) fn compare_findings(a: &Finding, b: &Finding) -> std::cmp::Ordering {
+pub(crate) fn compare_findings(a: &Finding, b: &Finding) -> std::cmp::Ordering {
     (
         finding_class(a),
         a.code.as_str(),
@@ -36,11 +36,11 @@ pub(super) fn compare_findings(a: &Finding, b: &Finding) -> std::cmp::Ordering {
         ))
 }
 
-pub(super) fn compare_sites(a: &Site, b: &Site) -> std::cmp::Ordering {
+pub(crate) fn compare_sites(a: &Site, b: &Site) -> std::cmp::Ordering {
     (a.commit, a.path.as_str(), a.line).cmp(&(b.commit, b.path.as_str(), b.line))
 }
 
-pub(super) fn compare_verification_runs(
+pub(crate) fn compare_verification_runs(
     a: &VerificationRun,
     b: &VerificationRun,
 ) -> std::cmp::Ordering {

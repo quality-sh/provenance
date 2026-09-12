@@ -2259,7 +2259,13 @@ dependencies = [
 name = "provenance-report"
 version = "0.2.3"
 dependencies = [
+ "anyhow",
+ "camino",
+ "provenance-core",
  "provenance-macros",
+ "provenance-scanner",
+ "provenance-store",
+ "same-file",
  "serde",
  "serde_json",
 ]

@@ -6,7 +6,7 @@
 //! data: graph statements are quoted, never executed as formatting.
 
 mod findings;
-mod order;
+pub(crate) mod order;
 mod sections;
 
 use crate::envelope::ReportEnvelope;
