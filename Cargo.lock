@@ -2174,6 +2174,7 @@ dependencies = [
  "predicates",
  "provenance-core",
  "provenance-macros",
+ "provenance-report",
  "provenance-scanner",
  "provenance-ste100",
  "provenance-store",
@@ -2252,6 +2253,15 @@ dependencies = [
  "quote",
  "syn 2.0.117",
  "trybuild",
+]
+
+[[package]]
+name = "provenance-report"
+version = "0.2.3"
+dependencies = [
+ "provenance-macros",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

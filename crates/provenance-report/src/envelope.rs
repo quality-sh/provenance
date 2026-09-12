@@ -10,10 +10,11 @@ use serde::{Deserialize, Serialize};
 /// The only envelope schema version this renderer accepts.
 pub const SUPPORTED_SCHEMA_VERSION: u32 = 1;
 
-/// Whether one path is a normalized repository-relative path. Only such a
-/// path, joined with an immutable commit, may become a repository link.
-/// Components are restricted to `[A-Za-z0-9._~-]` so a link label cannot
-/// swallow trusted text and a link destination stays CommonMark-safe.
+/// Whether one path is a normalized repository-relative path.
+///
+/// Only such a path, joined with an immutable commit, may become a repository
+/// link. Components are restricted to `[A-Za-z0-9._~-]` so a link label
+/// cannot swallow trusted text and a link destination stays CommonMark-safe.
 pub fn is_repo_relative_path(path: &str) -> bool {
     if path.is_empty() || path.starts_with('/') || path.contains('\\') {
         return false;
@@ -145,7 +146,7 @@ impl ReportEnvelope {
                     finding.subject.id
                 ));
             }
-            if crate::report::catalog::DiagnosticCode::parse(&finding.code).is_none() {
+            if crate::catalog::DiagnosticCode::parse(&finding.code).is_none() {
                 return Err(format!(
                     "finding subject {} carries unknown diagnostic code {}; \
                      codes come from the reviewed catalog in code",

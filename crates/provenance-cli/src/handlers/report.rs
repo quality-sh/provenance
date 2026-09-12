@@ -1,9 +1,9 @@
 use crate::cli::report::ReportCommand;
 use crate::output::OutputFormat;
-use crate::report::envelope::ReportEnvelope;
-use crate::report::render;
 use anyhow::Context;
 use camino::Utf8PathBuf;
+use provenance_report::envelope::ReportEnvelope;
+use provenance_report::render;
 
 pub(super) fn handle(command: ReportCommand) -> anyhow::Result<()> {
     let ReportCommand::Render {
