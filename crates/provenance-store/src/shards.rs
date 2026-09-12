@@ -1,7 +1,21 @@
 use camino::Utf8PathBuf;
-use provenance_core::ScopeId;
+use provenance_core::{NodeType, ScopeId};
 
 use crate::layout::ProvenanceLayout;
+
+/// The canonical record file of one node kind.
+pub fn path_for(layout: &ProvenanceLayout, scope: &ScopeId, kind: NodeType) -> Utf8PathBuf {
+    match kind {
+        NodeType::Source => sources_path(layout, scope),
+        NodeType::Requirement => requirements_path(layout, scope),
+        NodeType::Resolution => resolutions_path(layout, scope),
+        NodeType::Rule => rules_path(layout, scope),
+        NodeType::Topic => topics_path(layout, scope),
+        NodeType::Question => questions_path(layout, scope),
+        NodeType::Domain => domains_path(layout, scope),
+        NodeType::Boundary => boundaries_path(layout, scope),
+    }
+}
 
 pub fn sources_path(layout: &ProvenanceLayout, scope: &ScopeId) -> Utf8PathBuf {
     layout

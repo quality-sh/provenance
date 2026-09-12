@@ -41,6 +41,20 @@ impl RelationDecl {
     }
 }
 
+/// The mutable reference slot behind one declared relation, as a record
+/// lends it out by name.
+///
+/// `Single` lends an `Option<StableId>` field: one reference a writer sets
+/// or clears. `List` lends a `Vec<StableId>` field: the entries a writer
+/// adds to or removes from. A required bare `StableId` field lends no slot:
+/// its type already holds the reference, and no writer clears it.
+pub enum RelationSlot<'a> {
+    /// One settable or clearable reference.
+    Single(&'a mut Option<StableId>),
+    /// One addable or removable reference list.
+    List(&'a mut Vec<StableId>),
+}
+
 /// A record kind that declares its reference fields.
 pub trait RelationOwner {
     const OWNER: NodeType;
@@ -52,6 +66,11 @@ pub trait RelationOwner {
     /// Every reference the record holds, as (relation name, target id), in
     /// declaration order and then field order.
     fn references(&self) -> Vec<(&'static str, &StableId)>;
+
+    /// The mutable slot of the named relation, or `None` when the kind has
+    /// no settable slot under that name. An unknown name, a required bare
+    /// single, and a citation held through a `via` struct all yield `None`.
+    fn relation_slot_mut<'a>(&'a mut self, name: &str) -> Option<RelationSlot<'a>>;
 }
 
 /// The declaration a named relation of one owner kind, if it exists.
