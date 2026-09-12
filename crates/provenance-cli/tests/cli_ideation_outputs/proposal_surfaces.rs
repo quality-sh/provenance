@@ -193,6 +193,61 @@ fn claiming_a_topic_returns_proposals_in_that_territory() {
 }
 
 #[test]
+fn claiming_a_topic_carries_the_cli_changed_paths_into_proposal_demand() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = dir.path().join("repo").to_string_lossy().to_string();
+    init_repo(&repo);
+    create_requirement_topic_and_proposal(&repo);
+    provenance(
+        &repo,
+        &[
+            "proposals",
+            "create",
+            "--scope",
+            "default",
+            "--id",
+            "proposal_evidence_only",
+            "--proposal-key",
+            "evidence-only",
+            "--proposal-type",
+            "requirement_candidate",
+            "--title",
+            "Check payroll evidence",
+            "--summary",
+            "Evidence outside the claimed territory",
+            "--target-type",
+            "requirement",
+            "--target-id",
+            "req_elsewhere",
+            "--evidence-json",
+            r#"[{"reference_id":"evidence_elsewhere","evidence_type":"artifact","summary":"implementation","file_path":"src/payroll.rs","line":7}]"#,
+        ],
+    )
+    .success();
+
+    provenance(
+        &repo,
+        &[
+            "topics",
+            "claim",
+            "--scope",
+            "default",
+            "--id",
+            "topic_overtime",
+            "--actor",
+            "agent-one",
+            "--changed-path",
+            "src/payroll.rs",
+            "--format",
+            "json",
+        ],
+    )
+    .success()
+    .stdout(contains(r#""id": "proposal_evidence_only""#))
+    .stdout(contains(r#""trigger": "evidence_site""#));
+}
+
+#[test]
 fn a_surface_read_failure_does_not_persist_the_topic_claim() {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path().join("repo").to_string_lossy().to_string();

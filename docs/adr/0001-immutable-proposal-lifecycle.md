@@ -31,7 +31,7 @@ a durable phase marker restores backup or finishes cleanup after interruption. P
 portable directory renames rather than claiming an unavailable atomic directory exchange.
 Graph-reference projection remains limited to canonical
 graph families; lifecycle records do not affect exact export or digest identity. Proposal
-consultation remains demand-driven by exact path or typed territory and is not added to Prime.
+consultation remains demand-driven by normalized path or typed territory and is not added to Prime.
 Disposition audit may carry one closed external-action tuple (system, external scope, action
 kind, stable key), while canonical-artifact references resolve against the exact local scope,
 artifact kind, and stable ID at every persistence and validation seam. Absent additive audit
