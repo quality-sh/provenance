@@ -17,8 +17,8 @@ use provenance_macros::rule;
 
 use super::requirement_reviews;
 use super::{
-    ReconcileState, ReconciledResource, StateStore, TypedDeclarationKind, TypedFieldChange,
-    TypedRuleInput, TypedSpecInput, TypedSpecResult,
+    CascadedResource, ReconcileState, ReconciledResource, StateStore, TypedDeclarationKind,
+    TypedFieldChange, TypedRuleInput, TypedSpecInput, TypedSpecResult,
 };
 use identity::{
     declaration_ids, normalize_rule_relationships, owned_declaration_ids, requirement_identity,
@@ -158,9 +158,8 @@ impl StateStore {
             }
             return Ok(spec_result(
                 input.declared_by,
-                Vec::new(),
-                Vec::new(),
                 ownership.into_conflicts(),
+                Vec::new(),
                 Vec::new(),
             ));
         }
@@ -219,11 +218,13 @@ impl StateStore {
             &rules,
             &mut rule_resources,
         )?;
+        let mut resources =
+            all_resources(&source_resources, &requirement_resources, &rule_resources);
+        let cascade_resources = cascade.report(&mut resources);
         let mut result = spec_result(
             input.declared_by,
-            source_resources,
-            requirement_resources.clone(),
-            rule_resources.clone(),
+            resources,
+            cascade_resources,
             implementation_reconciliation.active,
         );
         self.analyze_typed_result(&mut result, &requirements, &rules);
@@ -404,23 +405,20 @@ fn adopted_rule_ids(input: &TypedSpecInput) -> BTreeSet<String> {
 #[rule("rule_rust_wire_order_is_preserved")]
 fn spec_result(
     declared_by: String,
-    source_resources: Vec<ReconciledResource>,
-    requirement_resources: Vec<ReconciledResource>,
-    rule_resources: Vec<ReconciledResource>,
+    resources: Vec<ReconciledResource>,
+    cascade: Vec<CascadedResource>,
     implementation_bindings: Vec<provenance_core::ImplementationBinding>,
 ) -> TypedSpecResult {
-    let mut resources = source_resources;
-    resources.extend(requirement_resources);
-    resources.extend(rule_resources);
     TypedSpecResult {
         declared_by,
-        created: count_state(&resources, ReconcileState::Created),
-        updated: count_state(&resources, ReconcileState::Updated),
-        moved: count_state(&resources, ReconcileState::Moved),
-        deleted: count_state(&resources, ReconcileState::Deleted),
-        conflicts: count_state(&resources, ReconcileState::Conflict),
-        unchanged: count_state(&resources, ReconcileState::Unchanged),
+        created: count_state(&resources, &cascade, ReconcileState::Created),
+        updated: count_state(&resources, &cascade, ReconcileState::Updated),
+        moved: count_state(&resources, &cascade, ReconcileState::Moved),
+        deleted: count_state(&resources, &cascade, ReconcileState::Deleted),
+        conflicts: count_state(&resources, &cascade, ReconcileState::Conflict),
+        unchanged: count_state(&resources, &cascade, ReconcileState::Unchanged),
         resources,
+        cascade,
         diagnostics: Vec::new(),
         implementation_bindings,
     }
@@ -437,10 +435,16 @@ fn replace_records<T: serde::de::DeserializeOwned + serde::Serialize>(
     })
 }
 
-fn count_state(resources: &[ReconciledResource], state: ReconcileState) -> usize {
+fn count_state(
+    resources: &[ReconciledResource],
+    cascade: &[CascadedResource],
+    state: ReconcileState,
+) -> usize {
     resources
         .iter()
-        .filter(|resource| resource.state == state)
+        .map(|resource| resource.state)
+        .chain(cascade.iter().map(|resource| resource.state))
+        .filter(|candidate| *candidate == state)
         .count()
 }
 

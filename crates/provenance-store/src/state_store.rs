@@ -35,7 +35,7 @@ pub use ideation_batches::{
     SYNTHESIS_KIND,
 };
 pub use inputs::{
-    AddSourceReferenceInput, BeginVerificationInput, CompleteVerificationInput,
+    AddSourceReferenceInput, BeginVerificationInput, CascadedResource, CompleteVerificationInput,
     CreateAssertionInput, CreateBoundaryInput, CreateContributionInput, CreateDispositionInput,
     CreateDomainInput, CreateProposalCardInput, CreateQuestionInput, CreateRequirementInput,
     CreateResolutionInput, CreateRuleInput, CreateSourceInput, CreateSynthesisPacketInput,

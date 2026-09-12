@@ -27,6 +27,13 @@ impl Replacement {
         for rule in &self.rules {
             rule.validate_archive()?;
         }
+        self.cascade.ensure_dispositions_survive(
+            store,
+            scope,
+            &self.sources,
+            &self.requirements,
+            &self.rules,
+        )?;
         (|| -> anyhow::Result<()> {
             store
                 .replace_graph_records(&shards::sources_path(&store.layout, scope), self.sources)?;

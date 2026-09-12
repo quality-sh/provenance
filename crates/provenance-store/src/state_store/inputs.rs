@@ -2,9 +2,9 @@ use provenance_core::{
     ArtifactLink, CanonicalArtifact, ClaimChallenge, ConsensusFinding, ContestedClaim,
     ContributionStance, DeclarationAddress, DispositionActor, DispositionDecision, EvidenceGap,
     IdeationEvidenceReference, IdeationTarget, MaterialClaim, MessageRole, MinorityObjection,
-    PromotionState, ProposalTraceability, ProposalType, QuestionStatus, RequiredHumanDecision,
-    RequirementStatus, ResolutionInput, ResolutionMethod, ResolutionStatus, RuleSeverity,
-    RuleStatus, ScopeId, SourceReference, SourceType, StableId, SuggestedArtifact,
+    NodeType, PromotionState, ProposalTraceability, ProposalType, QuestionStatus,
+    RequiredHumanDecision, RequirementStatus, ResolutionInput, ResolutionMethod, ResolutionStatus,
+    RuleSeverity, RuleStatus, ScopeId, SourceReference, SourceType, StableId, SuggestedArtifact,
     SuggestedArtifactChange, ThreadParent, TopicStatus, UncertaintyRating,
     UnsupportedRecommendation, UnsupportedSpeculation, VerificationMethod,
 };
@@ -209,6 +209,17 @@ pub struct TypedFieldChange {
     pub after: serde_json::Value,
 }
 
+/// One graph record changed as a consequence of a typed declaration deletion.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub struct CascadedResource {
+    pub kind: NodeType,
+    pub id: StableId,
+    pub state: ReconcileState,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub changes: Vec<TypedFieldChange>,
+}
+
 /// One ASD-STE100 violation attached to its typed declaration site.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -235,6 +246,8 @@ pub struct TypedSpecResult {
     pub conflicts: usize,
     pub unchanged: usize,
     pub resources: Vec<ReconciledResource>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cascade: Vec<CascadedResource>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub diagnostics: Vec<TypedSpecDiagnostic>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
