@@ -126,7 +126,7 @@ impl StateStore {
             duplicate_of: None,
             superseded_by: None,
             record_revision: Some(RecordRevisionBinding {
-                revision: head.revision.clone(),
+                revision: head.revision,
                 content_digest: classifier::content_digest(&record)?,
             }),
             revises,
@@ -247,7 +247,7 @@ impl StateStore {
                 &scope,
                 &requirement_id,
                 &actor,
-                &declared_by,
+                declared_by.as_deref(),
                 &request_id,
                 feedback,
             )?),
@@ -280,7 +280,7 @@ impl StateStore {
         scope: &provenance_core::ScopeId,
         requirement_id: &provenance_core::StableId,
         actor: &provenance_core::DispositionActor,
-        declared_by: &Option<String>,
+        declared_by: Option<&str>,
         request_id: &provenance_core::StableId,
         feedback: super::decision_input::ReviewFeedback,
     ) -> anyhow::Result<provenance_core::StableId> {
@@ -294,7 +294,7 @@ impl StateStore {
             },
             request_id: feedback_request_id(request_id)?,
             actor: actor.id.clone(),
-            declared_by: declared_by.clone(),
+            declared_by: declared_by.map(str::to_string),
             action: DiscussionAction::Start {
                 role: feedback.role,
                 body: feedback.body,
