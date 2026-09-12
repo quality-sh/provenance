@@ -8,6 +8,7 @@ import test, { type TestContext } from "node:test";
 import { startFixtureHost } from "../scripts/fixture-host.js";
 import { recordingHost } from "./http-recorder.test-helper.js";
 import { OperationError } from "./client.js";
+import { PROTOCOL_VERSION } from "./generated/client.js";
 import { STATE_SCHEMA_VERSION } from "./protocol.js";
 
 import {
@@ -218,7 +219,7 @@ test("plan sends the finalized spec to the read-only HTTP operation", async (t) 
   const recorder = await recordingHost({
     info: {
       engine_version: "0.1.0",
-      protocol_version: 8,
+      protocol_version: PROTOCOL_VERSION,
       state_schema_version: STATE_SCHEMA_VERSION,
       repository: "/project",
     },

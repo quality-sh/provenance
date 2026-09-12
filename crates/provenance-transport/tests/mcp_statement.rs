@@ -28,7 +28,7 @@ async fn actual_mcp_session_lists_contract_and_preserves_report_and_failure_chan
     for statement in ["Install the cover.", "Stop; wait.", "Café; wait."] {
         let result = client
             .call_tool(statement_call(json!({
-                "protocol_version":8,"call":{"request":{"statement":statement}}
+                "protocol_version":9,"call":{"request":{"statement":statement}}
             })))
             .await
             .unwrap();
@@ -40,7 +40,7 @@ async fn actual_mcp_session_lists_contract_and_preserves_report_and_failure_chan
     }
     let refused = client
         .call_tool(statement_call(json!({
-            "protocol_version":8,"call":{"request":{"statement":null}}
+            "protocol_version":9,"call":{"request":{"statement":null}}
         })))
         .await
         .unwrap();
@@ -52,7 +52,7 @@ async fn actual_mcp_session_lists_contract_and_preserves_report_and_failure_chan
     for arguments in [
         json!({"call":{"request":{"statement":"x"}}}),
         json!({"protocol_version":null,"call":{}}),
-        json!({"protocol_version":8,"call":{},"extra":1}),
+        json!({"protocol_version":9,"call":{},"extra":1}),
     ] {
         let malformed = client.call_tool(statement_call(arguments)).await;
         assert!(
@@ -73,7 +73,7 @@ async fn actual_mcp_session_lists_contract_and_preserves_report_and_failure_chan
     );
     let oversized = client
         .call_tool(statement_call(json!({
-            "protocol_version":8,"call":{"request":{"statement":"a".repeat(2*1024*1024)}}
+            "protocol_version":9,"call":{"request":{"statement":"a".repeat(2*1024*1024)}}
         })))
         .await
         .unwrap();

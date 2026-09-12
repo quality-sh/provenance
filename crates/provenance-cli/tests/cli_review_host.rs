@@ -100,7 +100,7 @@ fn response(result: Result<ureq::Response, ureq::Error>) -> ureq::Response {
 
 fn call(host: &Host, target: &str, scope: &str) -> ureq::Response {
     response(
-        request(host, "POST", "/v8/operations/list-threads", true)
+        request(host, "POST", "/v9/operations/list-threads", true)
             .set("Content-Type", "application/json")
             .send_string(
                 &json!({"context":{"repository":target,"scope":scope},"request":null}).to_string(),
@@ -141,7 +141,7 @@ fn serves_assets_configuration_and_only_the_selected_graph() {
     .unwrap();
     assert_eq!(config["repositoryId"], "A");
     assert_eq!(config["scope"], "default");
-    assert_eq!(config["protocolVersion"], 8);
+    assert_eq!(config["protocolVersion"], 9);
     assert!(config.get("bearer").is_none());
     assert_eq!(call(&host, "A", "default").status(), 200);
     for target in ["B", other.path().to_str().unwrap()] {
@@ -165,9 +165,9 @@ fn authorization_precedes_body_decode_and_rejects_unrelated_origins() {
     let repo = repository();
     let host = start(repo.path());
     for path in [
-        "/v8/operations/post-thread-message",
-        "/v8/operations/list-threads",
-        "/v8/operations/read-document",
+        "/v9/operations/post-thread-message",
+        "/v9/operations/list-threads",
+        "/v9/operations/read-document",
     ] {
         assert_eq!(
             response(request(&host, "POST", path, false).send_string("invalid")).status(),
@@ -234,7 +234,7 @@ fn existing_writes_keep_native_scope_checks() {
     }});
     let post = |body: &Value| {
         response(
-            request(&host, "POST", "/v8/operations/post-thread-message", true)
+            request(&host, "POST", "/v9/operations/post-thread-message", true)
                 .set("Origin", host.config["endpoint"].as_str().unwrap())
                 .set("Content-Type", "application/json")
                 .send_string(&body.to_string()),
@@ -318,7 +318,7 @@ fn termination_releases_the_listener() {
         .unwrap()
         .to_owned();
     let mut stalled = TcpStream::connect(&address).unwrap();
-    write!(stalled, "POST /v8/operations/list-threads HTTP/1.1\r\nHost: {address}\r\nAuthorization: Bearer {}\r\nContent-Length: 1000\r\n\r\n{{", host.config["bearer"].as_str().unwrap()).unwrap();
+    write!(stalled, "POST /v9/operations/list-threads HTTP/1.1\r\nHost: {address}\r\nAuthorization: Bearer {}\r\nContent-Length: 1000\r\n\r\n{{", host.config["bearer"].as_str().unwrap()).unwrap();
     let mut partial_headers = TcpStream::connect(&address).unwrap();
     partial_headers.write_all(b"GET / HTTP/1.1\r\nHo").unwrap();
     assert!(Command::new("kill")
@@ -403,7 +403,7 @@ fn document_root_refusal_follows_target_and_scope_access_checks() {
         ("A", "default", true, 409),
     ] {
         let result = response(
-            request(&host, "POST", "/v8/operations/read-document", authorized)
+            request(&host, "POST", "/v9/operations/read-document", authorized)
                 .set("Content-Type", "application/json")
                 .send_string(
                     &json!({
