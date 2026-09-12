@@ -1,17 +1,9 @@
 use std::collections::BTreeSet;
 
-use camino::Utf8PathBuf;
+pub use provenance_core::coverage::ValidationWarning;
 
 use crate::walker::FileScan;
 use crate::{source_sites, SourceSiteRole};
-
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
-pub struct ValidationWarning {
-    pub rule_id: String,
-    pub file_path: Utf8PathBuf,
-    pub line: usize,
-    pub message: String,
-}
 
 pub fn validate_annotations(
     scans: &[FileScan],
@@ -24,9 +16,10 @@ pub fn validate_annotations(
             if !known.contains(&location.annotation.rule) {
                 warnings.push(ValidationWarning {
                     rule_id: location.annotation.rule.clone(),
-                    file_path: location.file_path.clone(),
-                    line: location.line,
+                    file_path: Some(location.file_path.clone()),
+                    line: Some(location.line),
                     message: format!("unknown rule id `{}`", location.annotation.rule),
+                    binding_finding: false,
                 });
             }
         }
@@ -45,9 +38,10 @@ pub fn validate_bindings(
         if !known.contains(site.rule_id()) && matches!(site, crate::SourceSite::Attribute(_)) {
             warnings.push(ValidationWarning {
                 rule_id: site.rule_id().to_string(),
-                file_path: site.file_path().to_path_buf(),
-                line: site.line(),
+                file_path: Some(site.file_path().to_path_buf()),
+                line: Some(site.line()),
                 message: format!("unknown rule id `{}`", site.rule_id()),
+                binding_finding: false,
             });
         }
         if site.role() == SourceSiteRole::Implementation
@@ -55,12 +49,13 @@ pub fn validate_bindings(
         {
             warnings.push(ValidationWarning {
                 rule_id: site.rule_id().to_string(),
-                file_path: site.file_path().to_path_buf(),
-                line: site.line(),
+                file_path: Some(site.file_path().to_path_buf()),
+                line: Some(site.line()),
                 message: format!(
                     "more than one primary implementation binding was found for #[rule(\"{}\")]",
                     site.rule_id()
                 ),
+                binding_finding: false,
             });
         }
     }
@@ -119,7 +114,7 @@ mod tests {
         let warnings = validate_bindings(&[scan], ["rule_twice".to_string()]);
 
         assert_eq!(warnings.len(), 1, "{warnings:#?}");
-        assert_eq!(warnings[0].line, 4);
+        assert_eq!(warnings[0].line, Some(4));
         assert!(warnings[0]
             .message
             .contains("more than one primary implementation binding"));
@@ -184,7 +179,10 @@ mod tests {
         let warnings = validate_annotations(&[scan], ["rule_overtime".to_string()]);
 
         assert_eq!(warnings[0].rule_id, "rule_unknown");
-        assert_eq!(warnings[0].file_path, Utf8Path::new("unknown_rule.rs"));
-        assert_eq!(warnings[0].line, 2);
+        assert_eq!(
+            warnings[0].file_path.as_deref(),
+            Some(Utf8Path::new("unknown_rule.rs"))
+        );
+        assert_eq!(warnings[0].line, Some(2));
     }
 }

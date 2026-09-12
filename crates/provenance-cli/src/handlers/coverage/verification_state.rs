@@ -47,28 +47,20 @@ pub(super) fn load_validation_state(
     }) {
         warnings.push(provenance_scanner::ValidationWarning {
             rule_id: site.rule_id().to_string(),
-            file_path: site.file_path().to_path_buf(),
-            line: site.line(),
+            file_path: Some(site.file_path().to_path_buf()),
+            line: Some(site.line()),
             message: format!(
                 "more than one primary implementation binding was found for rule `{}`",
                 site.rule_id()
             ),
+            binding_finding: false,
         });
     }
     Ok(ValidationState {
         rules,
         bindings: store.active_verification_bindings(&scope)?,
         implementations,
-        warnings: warnings
-            .into_iter()
-            .map(|warning| provenance_core::coverage::ValidationWarning {
-                rule_id: warning.rule_id,
-                file_path: Some(warning.file_path),
-                line: Some(warning.line),
-                message: warning.message,
-                binding_finding: false,
-            })
-            .collect(),
+        warnings,
     })
 }
 

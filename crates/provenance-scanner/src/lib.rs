@@ -1,4 +1,5 @@
 mod binding_lexer;
+mod coverage;
 mod site;
 
 pub mod parser;
@@ -6,6 +7,7 @@ mod string_context;
 pub mod validate;
 pub mod walker;
 
+pub use coverage::{coverage_results, CoverageResults};
 pub use parser::{
     parse_annotations, Annotation, CoverageLevel, ParseResult, ParseWarning, Verification,
 };

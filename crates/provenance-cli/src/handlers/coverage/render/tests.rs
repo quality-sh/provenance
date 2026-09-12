@@ -7,20 +7,22 @@ use crate::output::ReportFormat;
 use camino::Utf8PathBuf;
 use provenance_core::coverage::{
     AnchorState, AnnotationResult, BindingResult, CoverageReport, CoverageScan, ScannedFile,
-    ValidationWarning,
+    SiteCore, ValidationWarning,
 };
 
 fn binding(rule_id: &str, file_path: &str, verification: Option<&str>) -> BindingResult {
     BindingResult {
-        rule_id: rule_id.to_string(),
-        file_path: Utf8PathBuf::from(file_path),
-        line: 12,
+        site: SiteCore {
+            rule_id: rule_id.to_string(),
+            file_path: Utf8PathBuf::from(file_path),
+            line: 12,
+            verification: verification.map(ToOwned::to_owned),
+            anchor: None,
+            anchor_state: AnchorState::Unchanged,
+            original_line: None,
+            original_file_path: None,
+        },
         item_name: None,
-        verification: verification.map(ToOwned::to_owned),
-        anchor: None,
-        anchor_state: AnchorState::Unchanged,
-        original_line: None,
-        original_file_path: None,
     }
 }
 
@@ -33,17 +35,19 @@ fn report(bindings: Vec<BindingResult>, warnings: Vec<ValidationWarning>) -> Cov
 
 fn comment(rule_id: &str, file_path: &str, verification: Option<&str>) -> AnnotationResult {
     AnnotationResult {
-        rule_id: rule_id.to_string(),
-        file_path: file_path.into(),
-        line: 4,
+        site: SiteCore {
+            rule_id: rule_id.to_string(),
+            file_path: file_path.into(),
+            line: 4,
+            verification: verification.map(ToOwned::to_owned),
+            anchor: None,
+            anchor_state: AnchorState::Unchanged,
+            original_line: None,
+            original_file_path: None,
+        },
         function_name: Some("portable_site".to_string()),
         coverage: "full".to_string(),
         confidence: 1.0,
-        verification: verification.map(ToOwned::to_owned),
-        anchor: None,
-        anchor_state: AnchorState::Unchanged,
-        original_line: None,
-        original_file_path: None,
     }
 }
 
