@@ -74,7 +74,7 @@ export function verifyPackedSteOnboarding({
   );
 
   try {
-    execFileSync(process.execPath, [initializer, "--ste-onboarding", "agent"], {
+    execFileSync(process.execPath, [initializer], {
       cwd: project,
       env: environment,
       stdio: "pipe",
@@ -85,7 +85,7 @@ export function verifyPackedSteOnboarding({
       project, "node_modules", "@quality-sh", "provenance", "bin", "provenance.mjs",
     );
     execFileSync(process.execPath, [
-      packageLocalEntry, "init", "--path", ".", "--ste-onboarding", "agent",
+      packageLocalEntry, "init", "--path", ".",
     ], { cwd: project, env: environment, stdio: "pipe" });
     assertSingleDictionaryRequest(server.requests());
 
