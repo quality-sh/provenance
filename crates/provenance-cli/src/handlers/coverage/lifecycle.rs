@@ -6,31 +6,19 @@
 //! stays readable in the graph without counting as current, and a Rule with
 //! no current binding produces no finding at all.
 
-use std::collections::BTreeMap;
-
 use provenance_macros::rule;
 
-/// The withdrawal word for a Rule the graph retired.
-const RETIRED: &str = "retired";
-
-/// Which Rules the lifecycle findings name, and why: every Rule that current
-/// coverage withdrew, with the withdrawal word as the value. Retirement is
-/// checked first because it is the strongest withdrawal, so a retired Rule
-/// is named `retired` whatever its status also says.
-fn inactive_rules(rules: &[provenance_core::Rule]) -> BTreeMap<&str, &'static str> {
-    rules
-        .iter()
-        .filter_map(|rule| {
-            if rule.retired {
-                return Some((rule.id.as_str(), RETIRED));
-            }
-            match rule.status {
-                provenance_core::RuleStatus::Deprecated => Some((rule.id.as_str(), "deprecated")),
-                provenance_core::RuleStatus::Archived => Some((rule.id.as_str(), "archived")),
-                _ => None,
-            }
-        })
-        .collect()
+/// The withdrawal word for a Rule current coverage withdrew, or None when
+/// the Rule still stands.
+const fn withdrawal_word(rule: &provenance_core::Rule) -> Option<&'static str> {
+    if rule.retired {
+        return Some("retired");
+    }
+    match rule.status {
+        provenance_core::RuleStatus::Deprecated => Some("deprecated"),
+        provenance_core::RuleStatus::Archived => Some("archived"),
+        _ => None,
+    }
 }
 
 /// Current implementation or verification bindings to deprecated or archived
@@ -43,10 +31,9 @@ pub(super) fn inactive_rule_binding_warnings(
     typed_implementations: &[provenance_core::ImplementationBinding],
     typed_verifications: &[provenance_core::VerificationBinding],
 ) -> Vec<provenance_core::coverage::ValidationWarning> {
-    let inactive = inactive_rules(rules);
-    let mut findings = marker_findings(&inactive, scans);
+    let mut findings = marker_findings(rules, scans);
     findings.extend(typed_findings(
-        &inactive,
+        rules,
         typed_implementations,
         typed_verifications,
     ));
@@ -54,52 +41,51 @@ pub(super) fn inactive_rule_binding_warnings(
 }
 
 fn marker_findings(
-    inactive: &BTreeMap<&str, &'static str>,
+    rules: &[provenance_core::Rule],
     scans: &[provenance_scanner::FileScan],
 ) -> Vec<provenance_core::coverage::ValidationWarning> {
     // A marker citing a retired Rule keeps its separate retired-record
     // check, so the lifecycle marker findings take only the deprecated and
-    // archived statuses: entries labeled `retired` are skipped here, and a
-    // retired Rule's current typed bindings join the findings instead.
+    // archived statuses: retired Rules are skipped here, and their current
+    // typed bindings join the findings instead.
+    let marker_withdrawal = |rule_id: &str| -> Option<&'static str> {
+        let rule = rules.iter().find(|rule| rule.id.as_str() == rule_id)?;
+        if rule.retired {
+            return None;
+        }
+        withdrawal_word(rule)
+    };
     scans
         .iter()
         .flat_map(|scan| {
             scan.annotations
                 .iter()
                 .filter_map(|location| {
-                    inactive
-                        .get(location.annotation.rule.as_str())
-                        .filter(|status| **status != RETIRED)
-                        .map(|status| {
-                            binding_finding(
-                                &location.annotation.rule,
-                                status,
-                                "marker",
-                                Some(location.file_path.clone()),
-                                Some(location.line),
-                            )
-                        })
+                    let word = marker_withdrawal(&location.annotation.rule)?;
+                    Some(binding_finding(
+                        &location.annotation.rule,
+                        word,
+                        "marker",
+                        Some(location.file_path.clone()),
+                        Some(location.line),
+                    ))
                 })
                 .chain(scan.bindings.iter().filter_map(|binding| {
-                    inactive
-                        .get(binding.rule_id.as_str())
-                        .filter(|status| **status != RETIRED)
-                        .map(|status| {
-                            binding_finding(
-                                &binding.rule_id,
-                                status,
-                                "marker",
-                                Some(binding.file_path.clone()),
-                                Some(binding.line),
-                            )
-                        })
+                    let word = marker_withdrawal(&binding.rule_id)?;
+                    Some(binding_finding(
+                        &binding.rule_id,
+                        word,
+                        "marker",
+                        Some(binding.file_path.clone()),
+                        Some(binding.line),
+                    ))
                 }))
         })
         .collect()
 }
 
 fn typed_findings(
-    inactive: &BTreeMap<&str, &'static str>,
+    rules: &[provenance_core::Rule],
     typed_implementations: &[provenance_core::ImplementationBinding],
     typed_verifications: &[provenance_core::VerificationBinding],
 ) -> Vec<provenance_core::coverage::ValidationWarning> {
@@ -109,10 +95,13 @@ fn typed_findings(
         .iter()
         .filter(|binding| !binding.retired)
         .filter_map(|binding| {
-            let status = inactive.get(binding.rule_id.as_str())?;
+            let rule = rules
+                .iter()
+                .find(|rule| rule.id.as_str() == binding.rule_id.as_str())?;
+            let word = withdrawal_word(rule)?;
             Some(binding_finding(
                 binding.rule_id.as_str(),
-                status,
+                word,
                 "typed implementation binding",
                 Some(binding.file.clone()),
                 None,
@@ -122,10 +111,13 @@ fn typed_findings(
         .iter()
         .filter(|binding| !binding.retired)
         .filter_map(|binding| {
-            let status = inactive.get(binding.rule_id.as_str())?;
+            let rule = rules
+                .iter()
+                .find(|rule| rule.id.as_str() == binding.rule_id.as_str())?;
+            let word = withdrawal_word(rule)?;
             Some(binding_finding(
                 binding.rule_id.as_str(),
-                status,
+                word,
                 "typed verification binding",
                 Some(binding.file.clone()),
                 None,
@@ -136,7 +128,7 @@ fn typed_findings(
 
 fn binding_finding(
     rule_id: &str,
-    status: &str,
+    word: &'static str,
     kind: &str,
     file_path: Option<camino::Utf8PathBuf>,
     line: Option<usize>,
@@ -145,7 +137,7 @@ fn binding_finding(
         rule_id: rule_id.to_string(),
         file_path,
         line,
-        message: format!("{kind} cites rule `{rule_id}` with status `{status}`"),
+        message: format!("{kind} cites rule `{rule_id}` with status `{word}`"),
         binding_finding: true,
     }
 }
