@@ -1,0 +1,24 @@
+[package]
+name = "provenance-report"
+version.workspace = true
+edition.workspace = true
+description = "Versioned report envelope contract and deterministic pull request report renderer"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+camino.workspace = true
+provenance-core.workspace = true
+provenance-macros.workspace = true
+provenance-scanner.workspace = true
+provenance-store.workspace = true
+same-file.workspace = true
+serde.workspace = true
+serde_json.workspace = true

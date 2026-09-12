@@ -1,10 +1,10 @@
 //! Scan, policy and graph-change sections of the report.
 
-use crate::report::envelope::{
+use crate::envelope::{
     BaselineCompatibility, Completeness, GraphChange, PolicyMode, PolicyResult, RelationChange,
     ReportEnvelope, ScanStage,
 };
-use crate::report::escape::{escape_cell, escape_inline};
+use crate::escape::{escape_cell, escape_inline};
 use std::fmt::Write as _;
 
 pub(super) fn scan_section(envelope: &ReportEnvelope, out: &mut String) {
@@ -90,7 +90,7 @@ pub(super) fn graph_changes_section(envelope: &ReportEnvelope, out: &mut String)
     out.push_str("## Graph changes\n\n");
     out.push_str("| Change | Record | Statement | Details |\n");
     out.push_str("| --- | --- | --- | --- |\n");
-    let limit = crate::report::render::MAX_GRAPH_CHANGE_ROWS;
+    let limit = crate::render::MAX_GRAPH_CHANGE_ROWS;
     let omitted = envelope.graph_changes.len().saturating_sub(limit);
     for change in envelope.graph_changes.iter().take(limit) {
         writeln!(

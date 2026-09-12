@@ -1,12 +1,12 @@
 //! Findings sections: one fixed-template block per finding.
 
 use super::order::finding_class;
-use crate::report::catalog::DiagnosticCode;
-use crate::report::envelope::{
+use crate::catalog::DiagnosticCode;
+use crate::envelope::{
     BindingPresence, CommitRole, Comparison, Finding, Relevance, ReportEnvelope, RunStatus,
     Severity, Site, SiteRole, SubjectKind, VerificationRun,
 };
-use crate::report::escape::escape_inline;
+use crate::escape::escape_inline;
 use std::fmt::Write as _;
 
 pub(super) fn findings_section(envelope: &ReportEnvelope, out: &mut String) {
@@ -226,7 +226,7 @@ fn repository_link(
     path: &str,
     line: u32,
 ) -> Option<String> {
-    if !crate::report::envelope::is_repo_relative_path(path) {
+    if !crate::envelope::is_repo_relative_path(path) {
         return None;
     }
     Some(format!(
