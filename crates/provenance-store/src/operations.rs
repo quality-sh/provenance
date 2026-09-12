@@ -105,7 +105,10 @@ pub fn begin_verification(
 ) -> anyhow::Result<provenance_core::VerificationRun> {
     let repo = discover_repository(repo)?;
     let method = provenance_scanner::Verification::from_str(&input.method).map_err(|error| {
-        write_error::SourceFailure::wrap(write_error::WriteFailure::InvalidVerificationTarget, error)
+        write_error::SourceFailure::wrap(
+            write_error::WriteFailure::InvalidVerificationTarget,
+            error,
+        )
     })?;
     normalize_verification_context(&repo, &mut input)?;
     StateStore::new(ProvenanceLayout::new(repo)).begin_verification(scope, input, method)

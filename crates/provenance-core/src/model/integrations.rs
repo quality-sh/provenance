@@ -10,10 +10,7 @@ const fn is_false(value: &bool) -> bool {
     !*value
 }
 
-/// How a verification binding supports its Rule. This type carries the one
-/// method word list: the `verifies` macro, the TypeScript signature, and the
-/// scanner all accept exactly these six words. The list is add-only; a word
-/// is never renamed or removed, so stored rows keep their meaning.
+/// How a verification binding supports its Rule.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
