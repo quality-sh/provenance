@@ -8,6 +8,7 @@ use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_core::{
     Rule, RuleSeverity, RuleStatus, ScopeId, StableId, VerificationBinding, VerificationMethod,
 };
+use provenance_macros::verifies;
 use provenance_scanner::{
     Annotation, AnnotationLocation, AttributeBinding, CoverageLevel, FileScan, Language,
     Verification,
@@ -97,6 +98,7 @@ fn typed_binding(rule_id: &str) -> VerificationBinding {
 }
 
 #[test]
+#[verifies("rule_active_rule_requires_verification", examples)]
 fn active_rule_with_no_verification_warns() {
     let active = rule("rule_foo", RuleStatus::Active);
 
@@ -105,6 +107,10 @@ fn active_rule_with_no_verification_warns() {
     assert_eq!(warnings.len(), 1);
     assert_eq!(warnings[0].rule_id, "rule_foo");
     assert!(warnings[0].message.contains("has no verification"));
+    assert!(
+        warnings[0].binding_finding,
+        "absence of verification is a Rule binding finding"
+    );
 }
 
 #[test]

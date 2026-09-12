@@ -32,6 +32,7 @@ jobs:
       sdk: ${{ steps.filter.outputs.sdk }}
       contract: ${{ steps.filter.outputs.contract }}
       release: ${{ steps.filter.outputs.release }}
+      policy: ${{ steps.filter.outputs.policy }}
       test-matrix: ${{ steps.matrices.outputs.test }}
       file-access-matrix: ${{ steps.matrices.outputs.file_access }}
     steps:
@@ -42,6 +43,12 @@ jobs:
           filters: |
             ci: &ci
               - ".github/workflows/ci.yml"
+            # Graph state and repository settings are inputs to the coverage
+            # check: activating an unverified Rule or flipping the binding
+            # policy must run the scan even when no code moved.
+            policy: &policy
+              - *ci
+              - ".provenance/**"
             release: &release
               - *ci
               - ".gitattributes"
@@ -101,7 +108,11 @@ jobs:
   generate-operations:
     name: Generate operation clients
     needs: changes
-    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true' || needs.changes.outputs.contract == 'true'
+    # Policy-only pull requests skip the rust, sdk, and contract jobs, but
+    # review-assets composes from this job's operation-generated artifact,
+    # so the same policy trigger keeps the chain that feeds rule-coverage
+    # intact.
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true' || needs.changes.outputs.contract == 'true' || needs.changes.outputs.policy == 'true'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v7
@@ -133,7 +144,10 @@ jobs:
 
   review-assets:
     needs: [changes, generate-operations]
-    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true'
+    # Policy-only pull requests skip the rust jobs, but build-cli-linux
+    # restores the composed review assets from this job, so the same policy
+    # trigger keeps the artifact present.
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true' || needs.changes.outputs.policy == 'true'
     uses: ./.github/workflows/review-assets.yml
 
   # One build per OS. Every job that only needs to drive the CLI downloads
@@ -144,7 +158,9 @@ jobs:
   build-cli-linux:
     name: Build provenance-cli (linux)
     needs: [changes, review-assets]
-    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true'
+    # rule-coverage can run for a policy-only change and downloads this
+    # job's CLI artifact, so the build runs whenever the coverage check can.
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true' || needs.changes.outputs.policy == 'true'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v7
@@ -380,7 +396,7 @@ jobs:
   rule-coverage:
     name: Rule Coverage
     needs: [changes, build-cli-linux]
-    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true'
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true' || needs.changes.outputs.policy == 'true'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v7
@@ -392,6 +408,56 @@ jobs:
       - run: target/debug/provenance coverage scan --repo . --path crates --scope default --validate-rules --strict
       - name: Validate initializer Rule bindings
         run: target/debug/provenance coverage scan --repo . --path packages/create-provenance --scope default --validate-rules --strict
+      # The whole-repository scan is the only one that can claim absence, so
+      # it follows the configured binding policy in .provenance/settings.json
+      # instead of a blanket --strict: warning reports without failing, error
+      # fails the job after the report is written.
+      - name: Scan the whole repository for Rule binding findings
+        run: |
+          target/debug/provenance coverage scan --repo . --path . --scope default --validate-rules --format json --output provenance-coverage-report.json
+      - name: Report Rule binding findings
+        if: always()
+        run: |
+          if [ ! -f provenance-coverage-report.json ]; then
+            echo "No coverage report was written; the scan failed before producing one." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          count=$(jq '.warnings | length' provenance-coverage-report.json)
+          governed=$(jq '[.warnings[] | select(.binding_finding)] | length' provenance-coverage-report.json)
+          # GitHub renders at most ten warning annotations per step, so the
+          # stream stops there; the tail names where every finding lives.
+          jq -r '.warnings
+            | map(select(.binding_finding))
+            | .[:10][]
+            | (if .file_path then
+                (if .line then "file=\(.file_path),line=\(.line),"
+                 else "file=\(.file_path)," end)
+               else "" end) as $location
+            | "::warning \($location)title=Rule binding finding::\(.rule_id): \(.message)"' \
+            provenance-coverage-report.json
+          if [ "$governed" -gt 10 ]; then
+            echo "::warning title=Rule binding finding::$((governed - 10)) more Rule binding finding(s) after the first 10; the job summary and the coverage report artifact list them all"
+          fi
+          {
+            echo "## Rule binding findings"
+            echo ""
+            echo "$governed of $count warning(s) fall under the configured binding policy."
+            echo ""
+            jq -r '.warnings[]
+              | select(.binding_finding)
+              | "- `\(.rule_id)`: \(.message)"
+                 + (if .file_path then
+                     " (`" + .file_path + "`" + (if .line then ":\(.line)" else "" end) + ")"
+                   else "" end)' provenance-coverage-report.json
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload the machine-readable coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: provenance-coverage-report
+          path: provenance-coverage-report.json
+          retention-days: 1
+          if-no-files-found: warn
 
   rust-sdk:
     name: Rust SDK example

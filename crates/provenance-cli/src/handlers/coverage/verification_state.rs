@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 
 use provenance_core::ScopeId;
+use provenance_macros::rule;
 use provenance_store::{layout::ProvenanceLayout, state_store::StateStore};
 
 pub(super) struct ValidationState {
@@ -65,6 +66,7 @@ pub(super) fn load_validation_state(
                 file_path: Some(warning.file_path),
                 line: Some(warning.line),
                 message: warning.message,
+                binding_finding: false,
             })
             .collect(),
     })
@@ -83,7 +85,9 @@ fn same_implementation(
 }
 
 /// Derives Unverified from both scanner sites and canonical typed bindings.
-/// The finding carries no location because absence has no site to cite.
+/// The finding carries no location because absence has no site to cite, and
+/// it is a Rule binding finding: the lifecycle policy governs its severity.
+#[rule("rule_active_rule_requires_verification")]
 pub(super) fn unverified_rule_warnings(
     rules: &[provenance_core::Rule],
     scans: &[provenance_scanner::FileScan],
@@ -118,6 +122,7 @@ pub(super) fn unverified_rule_warnings(
             file_path: None,
             line: None,
             message: format!("active rule `{}` has no verification", rule.id.as_str()),
+            binding_finding: true,
         })
         .collect()
 }

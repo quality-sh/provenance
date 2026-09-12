@@ -6,15 +6,43 @@ use camino::{Utf8Path, Utf8PathBuf};
 use provenance_macros::rule;
 use serde_json::{Map, Value};
 
+/// How the coverage scan treats a Rule binding finding.
+///
+/// Warning reports the finding and lets the command succeed. Error reports
+/// the finding and fails the command. The default is warning, so a
+/// repository that records planned work keeps it visible without blocking.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum BindingFindingsSeverity {
+    #[default]
+    Warning,
+    Error,
+}
+
+impl BindingFindingsSeverity {
+    fn parse(word: &str) -> Option<Self> {
+        match word {
+            "warning" => Some(Self::Warning),
+            "error" => Some(Self::Error),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct Settings {
     pub read: ReadSettings,
+    pub coverage: CoverageSettings,
 }
 
 #[derive(Debug, Default)]
 pub struct ReadSettings {
     pub freshness_policy: Option<FreshnessPolicy>,
     pub scan_limit: Option<usize>,
+}
+
+#[derive(Debug, Default)]
+pub struct CoverageSettings {
+    pub binding_findings: BindingFindingsSeverity,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -48,9 +76,36 @@ impl Settings {
         let value: Value = serde_json::from_slice(&bytes)
             .map_err(|error| invalid(&path, "$", format!("must be valid JSON: {error}")))?;
         let root = object(&path, "$", &value)?;
-        check_keys(&path, "", root, &["read"])?;
+        check_keys(&path, "", root, &["read", "coverage"])?;
+        let coverage = match root.get("coverage") {
+            None => CoverageSettings::default(),
+            Some(coverage) => {
+                let coverage = object(&path, "coverage", coverage)?;
+                check_keys(&path, "coverage.", coverage, &["binding_findings"])?;
+                let binding_findings = coverage
+                    .get("binding_findings")
+                    .map(|value| {
+                        value
+                            .as_str()
+                            .and_then(BindingFindingsSeverity::parse)
+                            .ok_or_else(|| {
+                                invalid(
+                                    &path,
+                                    "coverage.binding_findings",
+                                    format!("must be warning or error (found {value})"),
+                                )
+                            })
+                    })
+                    .transpose()?
+                    .unwrap_or_default();
+                CoverageSettings { binding_findings }
+            }
+        };
         let Some(read) = root.get("read") else {
-            return Ok(Self::default());
+            return Ok(Self {
+                read: ReadSettings::default(),
+                coverage,
+            });
         };
         let read = object(&path, "read", read)?;
         check_keys(&path, "read.", read, &["freshness_policy", "scan_limit"])?;
@@ -88,6 +143,7 @@ impl Settings {
                 freshness_policy,
                 scan_limit,
             },
+            coverage,
         })
     }
 }

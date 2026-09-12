@@ -2,11 +2,15 @@ use crate::cli::workspace::CoverageCommand;
 use crate::output::{self, OutputFormat};
 use anyhow::Context;
 use camino::Utf8PathBuf;
-use std::collections::{BTreeMap, BTreeSet};
-use std::fmt::Write;
+use provenance_macros::rule;
+use std::collections::BTreeSet;
 
+mod lifecycle;
+mod render;
 mod retired;
 mod verification_state;
+use lifecycle::inactive_rule_binding_warnings;
+use render::render_coverage;
 use verification_state::{load_validation_state, unverified_rule_warnings};
 
 pub(super) use provenance_store::evidence_anchors as anchors;
@@ -41,8 +45,16 @@ fn coverage_scan_against(
     if validate_rules {
         // A marker citing a retired Rule is a fact about a line the scan
         // read, so it stands even when the scan covers part of the tree.
-        // Derived absence needs the whole repository to be honest.
+        // Derived absence needs the whole repository to be honest. The same
+        // holds for a current binding to a deprecated or archived Rule: the
+        // graph and the scanned lines say it exists.
         warnings.extend(retired::stale_rule_warnings(&validation.rules, &scans));
+        warnings.extend(inactive_rule_binding_warnings(
+            &validation.rules,
+            &scans,
+            &validation.implementations,
+            &validation.bindings,
+        ));
         if scan_covers_repository(repo, path) {
             warnings.extend(unimplemented_rule_warnings(
                 &validation.rules,
@@ -149,6 +161,7 @@ fn parse_warnings(
                     file_path: Some(scan.file_path.clone()),
                     line: Some(warning.line),
                     message: warning.message.clone(),
+                    binding_finding: false,
                 })
         })
         .collect()
@@ -180,6 +193,7 @@ fn unimplemented_rule_warnings(
             file_path: None,
             line: None,
             message: format!("active rule `{}` has no implementation", rule.id.as_str()),
+            binding_finding: false,
         })
         .collect()
 }
@@ -225,182 +239,26 @@ fn scan_commit(repo: &camino::Utf8Path, scans: &[provenance_scanner::FileScan]) 
         .flatten()
 }
 
-/// Said of a verification site that lives in a different file from the
-/// primary implementation binding it checks.
-const OUTSIDE_IMPLEMENTATION_MODULE: &str = " (outside implementation module)";
-
-/// Where each rule is implemented: the file holding its native or portable
-/// binding with no verification method.
-///
-/// A rule with no `#[rule]` site in the scanned tree is absent from the map,
-/// and its verification sites are then left unannotated. Nothing is known
-/// about where it belongs, so nothing is claimed.
-fn implementation_modules(
-    report: &provenance_core::coverage::CoverageReport,
-) -> BTreeMap<&str, &camino::Utf8Path> {
-    report
-        .bindings
+/// Whether the configured policy turns the Rule binding findings into a
+/// refusal. Warning reports the findings and succeeds; error reports them
+/// and fails the command. Findings the policy does not govern never refuse
+/// here, and Rule severity metadata plays no part in the decision.
+#[rule("rule_binding_finding_uses_configured_severity")]
+fn binding_finding_refusal(
+    policy: provenance_store::settings::BindingFindingsSeverity,
+    warnings: &[provenance_core::coverage::ValidationWarning],
+) -> Option<String> {
+    let governed = warnings
         .iter()
-        .filter(|binding| {
-            binding.verification.is_none()
-                && binding.anchor_state != provenance_core::coverage::AnchorState::Gone
-        })
-        .map(|binding| (binding.rule_id.as_str(), binding.file_path.as_path()))
-        .chain(
-            report
-                .annotations
-                .iter()
-                .filter(|site| {
-                    site.verification.is_none()
-                        && site.anchor_state != provenance_core::coverage::AnchorState::Gone
-                })
-                .map(|site| (site.rule_id.as_str(), site.file_path.as_path())),
-        )
-        .collect()
-}
-
-/// Whether this site checks a rule implemented somewhere else.
-///
-/// This is what a change author wants out of the report: the sites that lean
-/// on the implementation from another module, which is where a change to the
-/// implementation breaks somebody else's tests.
-fn is_outside_implementation_module(
-    rule_id: &str,
-    file_path: &camino::Utf8Path,
-    is_verification: bool,
-    implementation_modules: &BTreeMap<&str, &camino::Utf8Path>,
-) -> bool {
-    is_verification
-        && implementation_modules
-            .get(rule_id)
-            .is_some_and(|implementation| *implementation != file_path)
-}
-
-/// The rule a warning is about, ready to sit after the word `Warning`.
-///
-/// Empty for a warning about no rule in particular, and then the line reads
-/// `- Warning in `path`:line: message`. An empty pair of backticks would only
-/// look like a rule whose name went missing.
-fn warning_subject(rule_id: &str) -> String {
-    if rule_id.is_empty() {
-        String::new()
-    } else {
-        format!(" `{rule_id}`")
-    }
-}
-
-fn anchor_state(
-    state: provenance_core::coverage::AnchorState,
-    original_line: Option<usize>,
-    original_file_path: Option<&camino::Utf8Path>,
-) -> String {
-    match (state, original_line) {
-        (provenance_core::coverage::AnchorState::Moved, Some(line)) => original_file_path
-            .map_or_else(
-                || format!(" (moved from line {line})"),
-                |file| format!(" (moved from {file}:{line})"),
-            ),
-        (provenance_core::coverage::AnchorState::Moved, None) => " (moved)".to_string(),
-        (provenance_core::coverage::AnchorState::Gone, _) => " (gone)".to_string(),
-        (provenance_core::coverage::AnchorState::New, _) => " (new)".to_string(),
-        (provenance_core::coverage::AnchorState::Unchanged, _) => String::new(),
-    }
-}
-
-pub(super) fn render_coverage(
-    format: OutputFormat,
-    report: &provenance_core::coverage::CoverageScan,
-) -> anyhow::Result<String> {
-    if matches!(format, OutputFormat::Markdown) {
-        let mut out = String::from("# Coverage Scan\n\n");
-        writeln!(out, "- Files scanned: {}", report.files_scanned)?;
-        writeln!(out, "- Total annotations: {}", report.total_annotations)?;
-        writeln!(out, "- Warnings: {}\n", report.warnings.len())?;
-        let implementation_modules = implementation_modules(report);
-        for annotation in &report.annotations {
-            let relation = annotation.verification.as_ref().map_or_else(
-                || "is implemented".to_string(),
-                |method| format!("verified by {method}"),
-            );
-            writeln!(
-                out,
-                "- `{}` {} at `{}`:{}{} ({}){}{}",
-                annotation.rule_id,
-                relation,
-                annotation.file_path,
-                annotation.line,
-                annotation
-                    .function_name
-                    .as_deref()
-                    .map(|name| format!(" ({name})"))
-                    .unwrap_or_default(),
-                annotation.coverage,
-                anchor_state(
-                    annotation.anchor_state,
-                    annotation.original_line,
-                    annotation.original_file_path.as_deref()
-                ),
-                if is_outside_implementation_module(
-                    &annotation.rule_id,
-                    &annotation.file_path,
-                    annotation.verification.is_some(),
-                    &implementation_modules,
-                ) {
-                    OUTSIDE_IMPLEMENTATION_MODULE
-                } else {
-                    ""
-                }
-            )?;
-        }
-        for binding in &report.bindings {
-            let relation = binding.verification.as_ref().map_or_else(
-                || "is implemented".to_string(),
-                |method| format!("verified by {method}"),
-            );
-            writeln!(
-                out,
-                "- `{}` {} at `{}`:{}{}{}{}",
-                binding.rule_id,
-                relation,
-                binding.file_path,
-                binding.line,
-                binding
-                    .item_name
-                    .as_deref()
-                    .map(|name| format!(" ({name})"))
-                    .unwrap_or_default(),
-                anchor_state(
-                    binding.anchor_state,
-                    binding.original_line,
-                    binding.original_file_path.as_deref()
-                ),
-                if is_outside_implementation_module(
-                    &binding.rule_id,
-                    &binding.file_path,
-                    binding.verification.is_some(),
-                    &implementation_modules,
-                ) {
-                    OUTSIDE_IMPLEMENTATION_MODULE
-                } else {
-                    ""
-                }
-            )?;
-        }
-        for warning in &report.warnings {
-            let subject = warning_subject(&warning.rule_id);
-            match (&warning.file_path, warning.line) {
-                (Some(file_path), Some(line)) => writeln!(
-                    out,
-                    "- Warning{subject} in `{file_path}`:{line}: {}",
-                    warning.message
-                )?,
-                _ => writeln!(out, "- Warning{subject}: {}", warning.message)?,
-            }
-        }
-        Ok(out)
-    } else {
-        Ok(serde_json::to_string_pretty(report)?)
-    }
+        .filter(|warning| warning.binding_finding)
+        .count();
+    let refusing = matches!(
+        policy,
+        provenance_store::settings::BindingFindingsSeverity::Error
+    ) && governed > 0;
+    refusing.then(|| {
+        format!("coverage scan found {governed} Rule binding finding(s); the repository configuration selects error")
+    })
 }
 
 pub(super) fn handle(command: CoverageCommand) -> anyhow::Result<()> {
@@ -415,6 +273,11 @@ pub(super) fn handle(command: CoverageCommand) -> anyhow::Result<()> {
             format,
             output,
         } => {
+            let policy = provenance_store::settings::Settings::load(
+                &provenance_store::layout::ProvenanceLayout::new(&repo),
+            )?
+            .coverage
+            .binding_findings;
             let report = if let Some(baseline) = baseline.as_deref() {
                 coverage_scan_against(&repo, &path, &scope, validate_rules, Some(baseline))?
             } else {
@@ -427,6 +290,9 @@ pub(super) fn handle(command: CoverageCommand) -> anyhow::Result<()> {
                 print!("{}", render_coverage(format, &report)?);
             } else {
                 output::print(format, &report)?;
+            }
+            if let Some(message) = binding_finding_refusal(policy, &report.warnings) {
+                anyhow::bail!("{message}");
             }
             if strict && !report.warnings.is_empty() {
                 anyhow::bail!(
@@ -446,10 +312,13 @@ mod git_tests;
 mod implementation_tests;
 
 #[cfg(test)]
+mod lifecycle_tests;
+
+#[cfg(test)]
 mod parse_warning_tests;
 
 #[cfg(test)]
-mod render_tests;
+mod severity_tests;
 
 #[cfg(test)]
 mod unverified_tests;
