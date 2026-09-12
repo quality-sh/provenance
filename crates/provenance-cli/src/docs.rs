@@ -1,4 +1,4 @@
-use crate::output::{self, OutputFormat};
+use crate::output;
 use anyhow::{bail, Context};
 use camino::Utf8PathBuf;
 use provenance_macros::rule;
@@ -69,10 +69,10 @@ struct BrokenLink {
     resolved_path: String,
 }
 
-pub fn check(repo: &Utf8PathBuf, format: OutputFormat) -> anyhow::Result<()> {
+pub fn check(repo: &Utf8PathBuf) -> anyhow::Result<()> {
     let site = DocsSite::load(repo.as_std_path())?;
     site.ensure_links_valid()?;
-    output::print(format, &site.check_report())?;
+    output::print_json(&site.check_report())?;
     Ok(())
 }
 

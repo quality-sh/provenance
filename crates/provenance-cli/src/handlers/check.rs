@@ -1,4 +1,4 @@
-use crate::output::{self, OutputFormat};
+use crate::output;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{ensure_supported_schema_version, Manifest};
 use provenance_macros::rule;
@@ -13,19 +13,14 @@ mod statement_report;
 use index::CheckIndex;
 
 #[rule("rule_ste_strict_committed_statement_gate")]
-pub(super) fn check(
-    repo: &Utf8Path,
-    strict: bool,
-    base: Option<&str>,
-    format: OutputFormat,
-) -> anyhow::Result<()> {
+pub(super) fn check(repo: &Utf8Path, strict: bool, base: Option<&str>) -> anyhow::Result<()> {
     let store = StateStore::new(ProvenanceLayout::new(repo.to_path_buf()));
     let report = store.with_repository_publication(|| {
         let manifest = store.manifest()?;
         collect_report_locked(&store, repo, &manifest, strict, base)
     })?;
     let has_findings = !report.diagnostics.is_empty();
-    output::print(format, &report)?;
+    output::print_json(&report)?;
     anyhow::ensure!(
         !strict || !has_findings,
         "strict statement check found ASD-STE100 findings"

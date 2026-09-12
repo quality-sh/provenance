@@ -52,7 +52,7 @@ pub(super) fn requirement_single(
                     store.set_requirement_spawned_by(&scope, &requirement, target)?
                 }
             };
-            output::print(args.format, &record)
+            output::print_json(&record)
         }
         RequirementSingleCommand::Clear(args) => {
             let store = StateStore::new(ProvenanceLayout::new(args.repo));
@@ -66,7 +66,7 @@ pub(super) fn requirement_single(
                     store.clear_requirement_spawned_by(&scope, &requirement)?
                 }
             };
-            output::print(args.format, &record)
+            output::print_json(&record)
         }
     }
 }
@@ -97,7 +97,7 @@ pub(super) fn requirement_list(
             store.clear_requirement_supersedes(&scope, &requirement, &target)?
         }
     };
-    output::print(args.format, &record)
+    output::print_json(&record)
 }
 
 pub(super) fn rule_list(field: RuleList, command: RuleListCommand) -> anyhow::Result<()> {
@@ -115,7 +115,7 @@ pub(super) fn rule_list(field: RuleList, command: RuleListCommand) -> anyhow::Re
         (RuleList::Resolution, true) => store.add_rule_resolution(&scope, &rule, target)?,
         (RuleList::Resolution, false) => store.clear_rule_resolution(&scope, &rule, &target)?,
     };
-    output::print(args.format, &record)
+    output::print_json(&record)
 }
 
 pub(super) fn resolution_list(
@@ -144,7 +144,7 @@ pub(super) fn resolution_list(
             store.clear_resolution_supersedes(&scope, &resolution, &target)?
         }
     };
-    output::print(args.format, &record)
+    output::print_json(&record)
 }
 
 pub(super) fn source_supersedes(command: SourceListCommand) -> anyhow::Result<()> {
@@ -161,7 +161,7 @@ pub(super) fn source_supersedes(command: SourceListCommand) -> anyhow::Result<()
     } else {
         store.clear_source_supersedes(&scope, &source, &target)?
     };
-    output::print(args.format, &record)
+    output::print_json(&record)
 }
 
 pub(super) fn question_contradicts(command: QuestionSingleCommand) -> anyhow::Result<()> {
@@ -173,13 +173,13 @@ pub(super) fn question_contradicts(command: QuestionSingleCommand) -> anyhow::Re
                 &StableId::new(args.id)?,
                 StableId::new(args.target_id)?,
             )?;
-            output::print(args.format, &record)
+            output::print_json(&record)
         }
         QuestionSingleCommand::Clear(args) => {
             let store = StateStore::new(ProvenanceLayout::new(args.repo));
             let record = store
                 .clear_question_contradicts(&ScopeId::new(args.scope)?, &StableId::new(args.id)?)?;
-            output::print(args.format, &record)
+            output::print_json(&record)
         }
     }
 }

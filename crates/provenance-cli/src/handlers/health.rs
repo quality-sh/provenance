@@ -1,10 +1,10 @@
-use crate::output::{self, OutputFormat};
+use crate::output;
 use camino::Utf8PathBuf;
 use provenance_core::ScopeId;
 use provenance_store::{cache, layout::ProvenanceLayout};
 
-pub(super) fn handle(repo: Utf8PathBuf, scope: String, format: OutputFormat) -> anyhow::Result<()> {
+pub(super) fn handle(repo: Utf8PathBuf, scope: String) -> anyhow::Result<()> {
     let health = cache::coverage_health(&ProvenanceLayout::new(repo), &ScopeId::new(scope)?)?;
-    output::print(format, &health)?;
+    output::print_json(&health)?;
     Ok(())
 }

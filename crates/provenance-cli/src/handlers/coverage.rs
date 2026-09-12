@@ -1,5 +1,5 @@
 use crate::cli::workspace::CoverageCommand;
-use crate::output::{self, OutputFormat};
+use crate::output::{self, ReportFormat};
 use anyhow::Context;
 use camino::Utf8PathBuf;
 use provenance_macros::rule;
@@ -286,10 +286,10 @@ pub(super) fn handle(command: CoverageCommand) -> anyhow::Result<()> {
             if let Some(output_path) = output {
                 let rendered = render_coverage(format, &report)?;
                 std::fs::write(output_path, rendered)?;
-            } else if matches!(format, OutputFormat::Markdown | OutputFormat::Toon) {
+            } else if matches!(format, ReportFormat::Markdown) {
                 print!("{}", render_coverage(format, &report)?);
             } else {
-                output::print(format, &report)?;
+                output::print_json(&report)?;
             }
             if let Some(message) = binding_finding_refusal(policy, &report.warnings) {
                 anyhow::bail!("{message}");

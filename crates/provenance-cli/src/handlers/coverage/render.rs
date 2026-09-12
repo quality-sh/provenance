@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 use std::fmt::Write;
 
-use crate::output::OutputFormat;
+use crate::output::ReportFormat;
 
 /// Said of a verification site that lives in a different file from the
 /// primary implementation binding it checks.
@@ -89,10 +89,10 @@ fn anchor_state(
 }
 
 pub(super) fn render_coverage(
-    format: OutputFormat,
+    format: ReportFormat,
     report: &provenance_core::coverage::CoverageScan,
 ) -> anyhow::Result<String> {
-    if matches!(format, OutputFormat::Markdown) {
+    if matches!(format, ReportFormat::Markdown) {
         let mut out = String::from("# Coverage Scan\n\n");
         writeln!(out, "- Files scanned: {}", report.files_scanned)?;
         writeln!(out, "- Total annotations: {}", report.total_annotations)?;

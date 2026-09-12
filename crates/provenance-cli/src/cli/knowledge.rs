@@ -1,5 +1,5 @@
 use crate::cli::references::{RequirementListCommand, RequirementSingleCommand, SourceListCommand};
-use crate::output::OutputFormat;
+use crate::output::JsonFormat;
 use camino::Utf8PathBuf;
 use clap::Subcommand;
 
@@ -37,8 +37,8 @@ pub enum SourcesCommand {
         origin_thread: Option<String>,
         #[arg(long)]
         origin_message: Option<String>,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     /// Add or remove an older source this source replaces.
     Supersedes {
@@ -82,8 +82,8 @@ pub enum RequirementsCommand {
         origin_thread: Option<String>,
         #[arg(long)]
         origin_message: Option<String>,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     SourceRef {
         #[command(subcommand)]
@@ -129,8 +129,8 @@ pub enum FogCommand {
         requirement_id: String,
         #[arg(long)]
         text: String,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     /// Show the fog text on a requirement.
     Show {
@@ -140,8 +140,8 @@ pub enum FogCommand {
         scope: String,
         #[arg(long)]
         requirement_id: String,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     /// Clear the fog text on a requirement.
     Clear {
@@ -151,8 +151,8 @@ pub enum FogCommand {
         scope: String,
         #[arg(long)]
         requirement_id: String,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
 }
 
@@ -173,16 +173,16 @@ pub enum DomainsCommand {
         description: Option<String>,
         #[arg(long)]
         color: Option<String>,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     List {
         #[arg(long, default_value = ".")]
         repo: Utf8PathBuf,
         #[arg(long)]
         scope: String,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
 }
 
@@ -205,16 +205,16 @@ pub enum BoundariesCommand {
         source_id: Option<String>,
         #[arg(long)]
         source_clause: Option<String>,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     List {
         #[arg(long, default_value = ".")]
         repo: Utf8PathBuf,
         #[arg(long)]
         scope: String,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
 }
 
@@ -231,8 +231,8 @@ pub enum SourceRefCommand {
         source_id: String,
         #[arg(long)]
         clause: Option<String>,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     /// Remove every citation of one source from a requirement.
     Clear {
@@ -244,7 +244,7 @@ pub enum SourceRefCommand {
         requirement_id: String,
         #[arg(long)]
         source_id: String,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
 }

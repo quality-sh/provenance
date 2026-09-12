@@ -25,5 +25,5 @@ pub(super) async fn handle<O: Operation<Failure = WriteError>>(
         requested_target: "native".into(),
     });
     let result = invoke_typed::<O>(context, request).await?;
-    output::print(args.format, &result)
+    output::print_json(&result)
 }

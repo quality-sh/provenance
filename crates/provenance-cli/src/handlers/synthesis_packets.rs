@@ -28,7 +28,7 @@ pub(super) fn handle(command: SynthesisPacketsCommand, quiet: bool) -> anyhow::R
             suggested_artifacts_json,
             required_human_decisions_json,
             replace,
-            format,
+            ..
         } => {
             warn_if_skills_missing(&repo, quiet)?;
             let store = StateStore::new(ProvenanceLayout::new(repo));
@@ -75,17 +75,13 @@ pub(super) fn handle(command: SynthesisPacketsCommand, quiet: bool) -> anyhow::R
             } else {
                 store.create_synthesis_packet(input)?
             };
-            output::print(format, &synthesis_packet)?;
+            output::print_json(&synthesis_packet)?;
         }
-        SynthesisPacketsCommand::List {
-            repo,
-            scope,
-            format,
-        } => {
+        SynthesisPacketsCommand::List { repo, scope, .. } => {
             warn_if_skills_missing(&repo, quiet)?;
             let synthesis_packets = StateStore::new(ProvenanceLayout::new(repo))
                 .list_synthesis_packets(&ScopeId::new(scope)?)?;
-            output::print(format, &synthesis_packets)?;
+            output::print_json(&synthesis_packets)?;
         }
     }
     Ok(())
