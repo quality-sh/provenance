@@ -6,6 +6,7 @@
 //! owner-only command names the owner alone. Scope context, id parsing, and
 //! output are shared, so a new command is one table entry.
 
+use super::native::invoke_native;
 use crate::cli::references::{
     QuestionOnly, QuestionSingleCommand, QuestionTarget, RequirementListCommand, RequirementOnly,
     RequirementSingleCommand, RequirementTarget, ResolutionListCommand, ResolutionTarget,
@@ -15,8 +16,6 @@ use crate::output::{self, OutputFormat};
 use camino::Utf8PathBuf;
 use provenance_core::{ScopeId, StableId};
 use provenance_store::operations::catalog;
-
-use super::native::invoke_native;
 
 /// Which field a requirement single-target command addresses.
 #[derive(Clone, Copy)]
