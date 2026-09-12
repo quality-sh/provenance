@@ -2234,6 +2234,7 @@ dependencies = [
 name = "provenance-http-client"
 version = "0.2.3"
 dependencies = [
+ "chrono",
  "jsonschema",
  "regress",
  "reqwest",
