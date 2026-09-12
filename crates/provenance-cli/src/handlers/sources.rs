@@ -1,5 +1,5 @@
 use super::common::stable_ids;
-use super::references;
+use super::refs;
 use crate::cli::knowledge::SourcesCommand;
 use crate::output;
 use provenance_core::{ScopeId, SourceType, StableId};
@@ -47,7 +47,7 @@ pub(super) async fn handle(command: SourcesCommand) -> anyhow::Result<()> {
                 })?;
             output::print_json(&source)?;
         }
-        SourcesCommand::Supersedes { command } => references::source_supersedes(command)?,
+        SourcesCommand::Supersedes { command } => refs::source_supersedes(command).await?,
     }
     Ok(())
 }

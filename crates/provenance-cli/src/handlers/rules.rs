@@ -1,5 +1,5 @@
 use super::common::stable_ids;
-use super::references::{self, RuleList};
+use super::refs::{self, RuleList};
 use crate::cli::policy::RulesCommand;
 use crate::output;
 use provenance_core::{Rule, RuleSeverity, RuleStatus, ScopeId, StableId};
@@ -112,10 +112,10 @@ pub(super) async fn handle(command: RulesCommand) -> anyhow::Result<()> {
             output::print_json(&rule)?;
         }
         RulesCommand::Requirement { command } => {
-            references::rule_list(RuleList::Requirement, command)?;
+            refs::rule_list(RuleList::Requirement, command).await?;
         }
         RulesCommand::Resolution { command } => {
-            references::rule_list(RuleList::Resolution, command)?;
+            refs::rule_list(RuleList::Resolution, command).await?;
         }
         RulesCommand::List { repo, scope, .. } => {
             let rules = StateStore::new(ProvenanceLayout::new(repo))

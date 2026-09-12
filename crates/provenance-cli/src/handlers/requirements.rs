@@ -1,10 +1,11 @@
 use super::common::stable_ids;
-use super::references::{self, RequirementList, RequirementSingle};
+use super::refs::{self, RequirementList, RequirementSingle};
 use crate::cli::knowledge::{FogCommand, RequirementsCommand, SourceRefCommand};
 use crate::output;
 use provenance_core::{RequirementStatus, ScopeId, StableId};
 use provenance_store::{
     layout::ProvenanceLayout,
+    operations::catalog,
     state_store::{AddSourceReferenceInput, CreateRequirementInput, StateStore},
 };
 
@@ -36,7 +37,7 @@ pub(super) async fn handle(command: RequirementsCommand) -> anyhow::Result<()> {
             supersedes,
             origin_thread,
             origin_message,
-            ..
+            format,
         } => {
             let requirement = StateStore::new(ProvenanceLayout::new(repo)).create_requirement(
                 CreateRequirementInput {
@@ -54,27 +55,27 @@ pub(super) async fn handle(command: RequirementsCommand) -> anyhow::Result<()> {
                     origin_message: origin_message.map(StableId::new).transpose()?,
                 },
             )?;
-            output::print_json(&requirement)?;
+            output::print(format, &requirement)?;
         }
-        RequirementsCommand::SourceRef { command } => source_ref(command)?,
+        RequirementsCommand::SourceRef { command } => source_ref(command).await?,
         RequirementsCommand::Refines { command } => {
-            references::requirement_single(RequirementSingle::Refines, command)?;
+            refs::requirement_single(RequirementSingle::Refines, command).await?;
         }
         RequirementsCommand::DependsOn { command } => {
-            references::requirement_list(RequirementList::DependsOn, command)?;
+            refs::requirement_list(RequirementList::DependsOn, command).await?;
         }
         RequirementsCommand::Supersedes { command } => {
-            references::requirement_list(RequirementList::Supersedes, command)?;
+            refs::requirement_list(RequirementList::Supersedes, command).await?;
         }
         RequirementsCommand::SpawnedBy { command } => {
-            references::requirement_single(RequirementSingle::SpawnedBy, command)?;
+            refs::requirement_single(RequirementSingle::SpawnedBy, command).await?;
         }
         RequirementsCommand::Fog { command } => fog(command)?,
     }
     Ok(())
 }
 
-fn source_ref(command: SourceRefCommand) -> anyhow::Result<()> {
+async fn source_ref(command: SourceRefCommand) -> anyhow::Result<()> {
     match command {
         SourceRefCommand::Add {
             repo,
@@ -82,7 +83,7 @@ fn source_ref(command: SourceRefCommand) -> anyhow::Result<()> {
             requirement_id,
             source_id,
             clause,
-            ..
+            format,
         } => {
             let requirement = StateStore::new(ProvenanceLayout::new(repo)).add_source_reference(
                 AddSourceReferenceInput {
@@ -92,21 +93,27 @@ fn source_ref(command: SourceRefCommand) -> anyhow::Result<()> {
                     clause,
                 },
             )?;
-            output::print_json(&requirement)?;
+            output::print(format, &requirement)?;
         }
         SourceRefCommand::Clear {
             repo,
             scope,
             requirement_id,
             source_id,
-            ..
+            format,
         } => {
-            let requirement = StateStore::new(ProvenanceLayout::new(repo)).clear_source_reference(
-                &ScopeId::new(scope)?,
-                &StableId::new(requirement_id)?,
-                &StableId::new(source_id)?,
-            )?;
-            output::print_json(&requirement)?;
+            let scope_id = ScopeId::new(&scope)?;
+            let requirement = super::native::invoke_native::<catalog::ClearSourceReference>(
+                repo,
+                scope_id.clone(),
+                catalog::ReferenceActionInput {
+                    scope_id,
+                    id: StableId::new(&requirement_id)?,
+                    target_id: StableId::new(&source_id)?,
+                },
+            )
+            .await?;
+            output::print(format, &requirement)?;
         }
     }
     Ok(())
@@ -119,20 +126,20 @@ fn fog(command: FogCommand) -> anyhow::Result<()> {
             scope,
             requirement_id,
             text,
-            ..
+            format,
         } => {
             let requirement = StateStore::new(ProvenanceLayout::new(repo)).set_requirement_fog(
                 &ScopeId::new(scope)?,
                 &StableId::new(requirement_id)?,
                 Some(text),
             )?;
-            output::print_json(&requirement)?;
+            output::print(format, &requirement)?;
         }
         FogCommand::Show {
             repo,
             scope,
             requirement_id,
-            ..
+            format,
         } => {
             let requirement_id = StableId::new(requirement_id)?;
             let requirement = StateStore::new(ProvenanceLayout::new(repo))
@@ -140,23 +147,26 @@ fn fog(command: FogCommand) -> anyhow::Result<()> {
                 .into_iter()
                 .find(|requirement| requirement.id == requirement_id)
                 .ok_or_else(|| anyhow::anyhow!("requirement does not exist"))?;
-            output::print_json(&FogView {
-                requirement_id: requirement.id.as_str().to_string(),
-                fog: requirement.fog,
-            })?;
+            output::print(
+                format,
+                &FogView {
+                    requirement_id: requirement.id.as_str().to_string(),
+                    fog: requirement.fog,
+                },
+            )?;
         }
         FogCommand::Clear {
             repo,
             scope,
             requirement_id,
-            ..
+            format,
         } => {
             let requirement = StateStore::new(ProvenanceLayout::new(repo)).set_requirement_fog(
                 &ScopeId::new(scope)?,
                 &StableId::new(requirement_id)?,
                 None,
             )?;
-            output::print_json(&requirement)?;
+            output::print(format, &requirement)?;
         }
     }
     Ok(())

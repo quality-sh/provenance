@@ -1,5 +1,5 @@
 use super::common::{parse_json_arg, warn_if_skills_missing};
-use super::references;
+use super::refs;
 use crate::cli::shaping::QuestionsCommand;
 use crate::output;
 use provenance_core::{ArtifactLink, QuestionStatus, ResolutionMethod, ScopeId, StableId};
@@ -23,7 +23,7 @@ pub(super) async fn handle(command: QuestionsCommand, quiet: bool) -> anyhow::Re
             links_json,
             resolution_id,
             contradicts,
-            ..
+            format,
         } => {
             warn_if_skills_missing(&repo, quiet)?;
             let question = StateStore::new(ProvenanceLayout::new(repo)).create_question(
@@ -40,14 +40,18 @@ pub(super) async fn handle(command: QuestionsCommand, quiet: bool) -> anyhow::Re
                     contradicts: contradicts.map(StableId::new).transpose()?,
                 },
             )?;
-            output::print_json(&question)?;
+            output::print(format, &question)?;
         }
-        QuestionsCommand::Contradicts { command } => references::question_contradicts(command)?,
-        QuestionsCommand::List { repo, scope, .. } => {
+        QuestionsCommand::Contradicts { command } => refs::question_contradicts(command).await?,
+        QuestionsCommand::List {
+            repo,
+            scope,
+            format,
+        } => {
             warn_if_skills_missing(&repo, quiet)?;
             let questions = StateStore::new(ProvenanceLayout::new(repo))
                 .list_questions(&ScopeId::new(scope)?)?;
-            output::print_json(&questions)?;
+            output::print(format, &questions)?;
         }
         QuestionsCommand::Update {
             repo,
@@ -59,7 +63,7 @@ pub(super) async fn handle(command: QuestionsCommand, quiet: bool) -> anyhow::Re
             links_json,
             resolution_id,
             fields_json,
-            ..
+            format,
         } => {
             warn_if_skills_missing(&repo, quiet)?;
             let fields_json = if let Some(fields) = fields_json {
@@ -87,7 +91,7 @@ pub(super) async fn handle(command: QuestionsCommand, quiet: bool) -> anyhow::Re
                     scope,
                     id,
                     fields_json,
-                    format: output::JsonFormat::Json,
+                    format,
                 },
             )
             .await?;
@@ -97,7 +101,7 @@ pub(super) async fn handle(command: QuestionsCommand, quiet: bool) -> anyhow::Re
             scope,
             id,
             actor,
-            ..
+            format,
         } => {
             warn_if_skills_missing(&repo, quiet)?;
             let question = StateStore::new(ProvenanceLayout::new(repo)).claim_question(
@@ -105,15 +109,18 @@ pub(super) async fn handle(command: QuestionsCommand, quiet: bool) -> anyhow::Re
                 &StableId::new(id)?,
                 &actor,
             )?;
-            output::print_json(&question)?;
+            output::print(format, &question)?;
         }
         QuestionsCommand::Release {
-            repo, scope, id, ..
+            repo,
+            scope,
+            id,
+            format,
         } => {
             warn_if_skills_missing(&repo, quiet)?;
             let question = StateStore::new(ProvenanceLayout::new(repo))
                 .release_question(&ScopeId::new(scope)?, &StableId::new(id)?)?;
-            output::print_json(&question)?;
+            output::print(format, &question)?;
         }
         QuestionsCommand::Answer {
             repo,
@@ -121,7 +128,7 @@ pub(super) async fn handle(command: QuestionsCommand, quiet: bool) -> anyhow::Re
             id,
             answer,
             resolution_id,
-            ..
+            format,
         } => {
             warn_if_skills_missing(&repo, quiet)?;
             let question = StateStore::new(ProvenanceLayout::new(repo)).answer_question(
@@ -130,7 +137,7 @@ pub(super) async fn handle(command: QuestionsCommand, quiet: bool) -> anyhow::Re
                 answer,
                 resolution_id.map(StableId::new).transpose()?,
             )?;
-            output::print_json(&question)?;
+            output::print(format, &question)?;
         }
     }
     Ok(())
