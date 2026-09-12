@@ -2,14 +2,26 @@ use std::io::Read as _;
 
 use crate::cli::sdk::SdkCommand;
 use crate::output;
+use camino::Utf8PathBuf;
 use provenance_core::ScopeId;
-use provenance_store::operations;
-use provenance_store::state_store::{BeginVerificationInput, CompleteVerificationInput};
+use provenance_store::operations::{self, catalog};
 
 mod check_statement;
 mod query;
 mod render;
 mod verification_lists;
+
+/// Reads one request document from stdin and runs it as a native catalog
+/// operation on the selected repository and scope.
+async fn submit<O>(repo: Option<Utf8PathBuf>, scope: String) -> anyhow::Result<O::Success>
+where
+    O: catalog::Operation,
+    O::Failure: Sync,
+{
+    let repo = operations::discover_repository(repo)?;
+    let input = read_stdin_json::<O::Request>()?;
+    super::native::invoke_native::<O>(repo, ScopeId::new(scope)?, input).await
+}
 
 pub(super) async fn handle(command: SdkCommand) -> anyhow::Result<()> {
     match command {
@@ -22,14 +34,7 @@ pub(super) async fn handle(command: SdkCommand) -> anyhow::Result<()> {
             scope,
             format,
         } => {
-            let repo = operations::discover_repository(repo)?;
-            let input = read_stdin_json()?;
-            let plan = super::native::invoke_native::<operations::catalog::Plan>(
-                repo,
-                ScopeId::new(scope)?,
-                input,
-            )
-            .await?;
+            let plan = submit::<operations::catalog::Plan>(repo, scope).await?;
             match format {
                 output::OutputFormat::Json | output::OutputFormat::Jsonl => {
                     output::print(format, &plan)?;
@@ -46,14 +51,7 @@ pub(super) async fn handle(command: SdkCommand) -> anyhow::Result<()> {
             scope,
             format,
         } => {
-            let repo = operations::discover_repository(repo)?;
-            let input = read_stdin_json()?;
-            let result = super::native::invoke_native::<operations::catalog::Apply>(
-                repo,
-                ScopeId::new(scope)?,
-                input,
-            )
-            .await?;
+            let result = submit::<operations::catalog::Apply>(repo, scope).await?;
             output::print(format, &result)?;
         }
         SdkCommand::BeginVerification {
@@ -61,14 +59,7 @@ pub(super) async fn handle(command: SdkCommand) -> anyhow::Result<()> {
             scope,
             format,
         } => {
-            let repo = operations::discover_repository(repo)?;
-            let input = read_stdin_json::<BeginVerificationInput>()?;
-            let run = super::native::invoke_native::<operations::catalog::BeginVerification>(
-                repo,
-                ScopeId::new(scope)?,
-                input,
-            )
-            .await?;
+            let run = submit::<operations::catalog::BeginVerification>(repo, scope).await?;
             output::print(format, &run)?;
         }
         SdkCommand::CompleteVerification {
@@ -76,14 +67,7 @@ pub(super) async fn handle(command: SdkCommand) -> anyhow::Result<()> {
             scope,
             format,
         } => {
-            let repo = operations::discover_repository(repo)?;
-            let input = read_stdin_json::<CompleteVerificationInput>()?;
-            let run = super::native::invoke_native::<operations::catalog::CompleteVerification>(
-                repo,
-                ScopeId::new(scope)?,
-                input,
-            )
-            .await?;
+            let run = submit::<operations::catalog::CompleteVerification>(repo, scope).await?;
             output::print(format, &run)?;
         }
         SdkCommand::VerificationRuns {

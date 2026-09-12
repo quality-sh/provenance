@@ -192,7 +192,7 @@ impl RefCommand for QuestionOnly {
 
 /// Runs an operation whose request names the owner and the target, and
 /// prints the record it returns.
-async fn targeted<O>(args: &impl WithTarget) -> anyhow::Result<()>
+async fn targeted<O>(args: &(impl WithTarget + Sync)) -> anyhow::Result<()>
 where
     O: catalog::Operation<Request = catalog::ReferenceActionInput, Failure = WriteError>,
 {
@@ -208,7 +208,7 @@ where
 
 /// Runs an operation whose request names only the owner, and prints the
 /// record it returns.
-async fn owner_only<O>(args: &impl RefCommand) -> anyhow::Result<()>
+async fn owner_only<O>(args: &(impl RefCommand + Sync)) -> anyhow::Result<()>
 where
     O: catalog::Operation<Request = catalog::RecordActionInput, Failure = WriteError>,
 {
