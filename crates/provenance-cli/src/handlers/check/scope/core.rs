@@ -23,7 +23,7 @@ pub(super) struct Records<'a> {
 }
 
 impl<'a> Records<'a> {
-    pub(super) const fn load(records: GraphRecords<'a>) -> Self {
+    pub(super) fn load(records: GraphRecords<'a>) -> Self {
         Self {
             sources: records.sources,
             domains: records.domains,

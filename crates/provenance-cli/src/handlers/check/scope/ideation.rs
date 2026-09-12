@@ -11,7 +11,7 @@ pub(super) struct Records<'a> {
 }
 
 impl<'a> Records<'a> {
-    pub(super) const fn load(snapshot: &'a ScopeSnapshot) -> Self {
+    pub(super) fn load(snapshot: &'a ScopeSnapshot) -> Self {
         Self {
             contributions: &snapshot.contributions,
             synthesis_packets: &snapshot.synthesis_packets,

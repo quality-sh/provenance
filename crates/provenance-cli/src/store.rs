@@ -123,7 +123,7 @@ pub(crate) struct ScopeSnapshot {
 }
 
 impl ScopeSnapshot {
-    pub(crate) const fn graph_records(&self) -> GraphRecords<'_> {
+    pub(crate) fn graph_records(&self) -> GraphRecords<'_> {
         GraphRecords {
             sources: &self.sources,
             domains: &self.domains,
