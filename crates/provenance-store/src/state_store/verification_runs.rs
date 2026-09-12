@@ -3,7 +3,6 @@ use provenance_core::{
     validate_optional_commit_pin, ScopeId, StableId, VerificationMethod, VerificationRun,
     VerificationRunStatus, SUPPORTED_SCHEMA_VERSION,
 };
-use std::str::FromStr as _;
 
 use super::requirement_reviews::now_millis;
 use super::{
@@ -12,23 +11,20 @@ use super::{
 };
 
 impl StateStore {
+    /// The caller parses the method word; this function receives it typed and
+    /// writes it only through `VerificationMethod::to_string()` at the
+    /// run-row edge.
     pub fn begin_verification(
         &self,
         scope_id: ScopeId,
         input: BeginVerificationInput,
+        method: VerificationMethod,
     ) -> anyhow::Result<VerificationRun> {
         crate::write_error::ensure!(
             InvalidVerificationTarget,
             !input.declared_by.trim().is_empty(),
             "declared_by must not be empty"
         );
-        crate::write_error::ensure!(
-            InvalidVerificationTarget,
-            !input.method.trim().is_empty(),
-            "method must not be empty"
-        );
-        let method = VerificationMethod::from_str(&input.method)
-            .map_err(|error| SourceFailure::wrap(WriteFailure::InvalidVerificationTarget, error))?;
         let file = input.file.ok_or_else(|| {
             SourceFailure::wrap(
                 WriteFailure::InvalidVerificationTarget,

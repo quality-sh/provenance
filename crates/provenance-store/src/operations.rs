@@ -94,22 +94,21 @@ pub fn apply(
 }
 
 /// Opens one verification run against a durable binding.
+///
+/// Parses the method word once, here, and carries the typed value through to
+/// the store; the word reaches a stored row only through its `Display` form
+/// at the run-row edge.
 pub fn begin_verification(
     repo: Option<Utf8PathBuf>,
     scope: ScopeId,
     mut input: BeginVerificationInput,
 ) -> anyhow::Result<provenance_core::VerificationRun> {
     let repo = discover_repository(repo)?;
-    input.method = provenance_scanner::Verification::from_str(&input.method)
-        .map_err(|error| {
-            write_error::SourceFailure::wrap(
-                write_error::WriteFailure::InvalidVerificationTarget,
-                anyhow::Error::msg(error),
-            )
-        })?
-        .to_string();
+    let method = provenance_scanner::Verification::from_str(&input.method).map_err(|error| {
+        write_error::SourceFailure::wrap(write_error::WriteFailure::InvalidVerificationTarget, error)
+    })?;
     normalize_verification_context(&repo, &mut input)?;
-    StateStore::new(ProvenanceLayout::new(repo)).begin_verification(scope, input)
+    StateStore::new(ProvenanceLayout::new(repo)).begin_verification(scope, input, method)
 }
 
 /// Completes one verification run as passed or failed.

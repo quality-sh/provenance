@@ -1,5 +1,5 @@
 use camino::Utf8PathBuf;
-use provenance_macros::ProjectionRow;
+use provenance_macros::{rule, ProjectionRow};
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
 use std::{fmt, str::FromStr};
 
@@ -10,10 +10,14 @@ const fn is_false(value: &bool) -> bool {
     !*value
 }
 
-/// How a verification binding supports its Rule.
+/// How a verification binding supports its Rule. This type carries the one
+/// method word list: the `verifies` macro, the TypeScript signature, and the
+/// scanner all accept exactly these six words. The list is add-only; a word
+/// is never renamed or removed, so stored rows keep their meaning.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[rule("rule_verification_method_words")]
 pub enum VerificationMethod {
     Exhaustion,
     Property,
