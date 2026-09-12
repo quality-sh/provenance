@@ -86,6 +86,8 @@ pub(super) async fn handle(command: RulesCommand) -> anyhow::Result<()> {
             resolution_id,
             statement,
             status,
+            archived_in_commit,
+            archived_at,
             severity,
             source_document,
             source_section,
@@ -103,6 +105,12 @@ pub(super) async fn handle(command: RulesCommand) -> anyhow::Result<()> {
                     resolution_ids: stable_ids(resolution_id)?,
                     statement,
                     status: RuleStatus::parse(&status)?,
+                    archived_in_commit: archived_in_commit.map(|commit| {
+                        provenance_core::ArchivedStamp {
+                            commit,
+                            at: archived_at,
+                        }
+                    }),
                     severity: RuleSeverity::parse(&severity)?,
                     source_document,
                     source_section,
@@ -155,12 +163,15 @@ mod tests {
 
     fn rule(statement: &str) -> Rule {
         Rule {
+            created: None,
+            updated: None,
+            archived_in_commit: None,
             schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: ScopeId::new("default").unwrap(),
             id: StableId::new("rule_overtime").unwrap(),
             declared_by: None,
             declaration_address: None,
-            retired: false,
+
             name: None,
             description: None,
             statement: statement.to_string(),

@@ -8,7 +8,7 @@ use provenance_core::{validate_optional_commit_pin, Rule, Source};
 impl StateStore {
     pub fn update_source(&self, input: UpdateSourceInput) -> anyhow::Result<Source> {
         let path = shards::sources_path(&self.layout, &input.scope_id);
-        self.mutate_jsonl_records(&path, |records: &mut Vec<Source>| {
+        self.mutate_graph_record(&path, |records: &mut Vec<Source>| {
             let record = records
                 .iter_mut()
                 .find(|r| r.id == input.id)
@@ -19,7 +19,6 @@ impl StateStore {
             }
             set(&mut record.name, input.name);
             set(&mut record.source_type, input.source_type);
-            set(&mut record.retired, input.retired);
             optional(
                 &mut record.url,
                 input.url,
@@ -61,7 +60,7 @@ impl StateStore {
     pub fn update_rule(&self, input: UpdateRuleInput) -> anyhow::Result<Rule> {
         self.with_repository_publication(|| {
             let path = shards::rules_path(&self.layout, &input.scope_id);
-            self.mutate_jsonl_records(&path, |records: &mut Vec<Rule>| {
+            self.mutate_graph_record(&path, |records: &mut Vec<Rule>| {
                 let record = records
                     .iter_mut()
                     .find(|r| r.id == input.id)
@@ -76,8 +75,10 @@ impl StateStore {
                 }
                 set(&mut record.statement, input.statement);
                 set(&mut record.status, input.status);
+                if let Some(stamp) = input.archived_in_commit {
+                    record.archived_in_commit = Some(stamp);
+                }
                 set(&mut record.severity, input.severity);
-                set(&mut record.retired, input.retired);
                 optional(
                     &mut record.name,
                     input.name,

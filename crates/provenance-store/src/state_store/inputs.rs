@@ -150,6 +150,8 @@ pub struct CreateRuleInput {
     pub resolution_ids: Vec<StableId>,
     pub statement: String,
     pub status: RuleStatus,
+    #[serde(default)]
+    pub archived_in_commit: Option<provenance_core::ArchivedStamp>,
     pub severity: RuleSeverity,
     pub source_document: Option<String>,
     pub source_section: Option<String>,
@@ -180,7 +182,7 @@ pub enum ReconcileState {
     Created,
     Updated,
     Moved,
-    Retired,
+    Deleted,
     Conflict,
     Unchanged,
 }
@@ -229,7 +231,7 @@ pub struct TypedSpecResult {
     pub created: usize,
     pub updated: usize,
     pub moved: usize,
-    pub retired: usize,
+    pub deleted: usize,
     pub conflicts: usize,
     pub unchanged: usize,
     pub resources: Vec<ReconciledResource>,
