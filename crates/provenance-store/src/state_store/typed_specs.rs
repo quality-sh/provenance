@@ -54,6 +54,15 @@ pub(super) struct DesiredTypedGraph<'a> {
     pub(super) rule_ids: &'a BTreeMap<DeclarationAddress, StableId>,
 }
 
+struct DesiredImplementations<'a> {
+    spec: &'a str,
+    owner: &'a str,
+    rules: &'a [TypedRuleInput],
+    rule_ids: &'a BTreeMap<DeclarationAddress, StableId>,
+    adopted_rule_ids: &'a BTreeSet<String>,
+    deleted_rule_ids: &'a BTreeSet<String>,
+}
+
 #[derive(Clone, Copy)]
 enum ReconcileMode {
     Plan,
@@ -156,7 +165,6 @@ impl StateStore {
             ));
         }
         let adopted_rule_ids = adopted_rule_ids(&input);
-
         let rule_relationships = input.rules.clone();
         let spec = input.spec;
         let (mut sources, source_resources) = reconcile_sources(
@@ -185,12 +193,8 @@ impl StateStore {
             &ids.rules,
             &ids.requirements,
         )?;
-        let deleted_resources = [
-            source_resources.as_slice(),
-            requirement_resources.as_slice(),
-            rule_resources.as_slice(),
-        ]
-        .concat();
+        let deleted_resources =
+            all_resources(&source_resources, &requirement_resources, &rule_resources);
         let cascade = cascade::Cascade::prepare(
             self,
             scope_id,
@@ -201,25 +205,22 @@ impl StateStore {
         )?;
         ensure_resolutions_exist(self, scope_id, &requirements, &rules)?;
         ensure_acyclic(&requirements)?;
-        let graph = DesiredTypedGraph {
-            spec: &spec,
-            owner: &input.declared_by,
-            rules: &rule_relationships,
-            rule_ids: &ids.rules,
-        };
-        let mut implementation_reconciliation = super::implementation_bindings::reconcile(
+        let implementation_reconciliation = reconcile_implementations(
             self,
             scope_id,
-            graph,
+            &DesiredImplementations {
+                spec: &spec,
+                owner: &input.declared_by,
+                rules: &rule_relationships,
+                rule_ids: &ids.rules,
+                adopted_rule_ids: &adopted_rule_ids,
+                deleted_rule_ids: &cascade.rules,
+            },
             &rules,
-            &adopted_rule_ids,
+            &mut rule_resources,
         )?;
-        implementation_reconciliation
-            .records
-            .retain(|r| !cascade.rules.contains(r.rule_id.as_str()));
-        attach_implementation_changes(&mut rule_resources, &implementation_reconciliation.changes);
         let mut result = spec_result(
-            input.declared_by.clone(),
+            input.declared_by,
             source_resources,
             requirement_resources.clone(),
             rule_resources.clone(),
@@ -443,6 +444,14 @@ fn count_state(resources: &[ReconciledResource], state: ReconcileState) -> usize
         .count()
 }
 
+fn all_resources(
+    sources: &[ReconciledResource],
+    requirements: &[ReconciledResource],
+    rules: &[ReconciledResource],
+) -> Vec<ReconciledResource> {
+    [sources, requirements, rules].concat()
+}
+
 fn attach_implementation_changes(
     resources: &mut [ReconciledResource],
     changes: &[(StableId, TypedFieldChange)],
@@ -456,4 +465,31 @@ fn attach_implementation_changes(
         }
         resource.changes.push(change.clone());
     }
+}
+
+fn reconcile_implementations(
+    store: &StateStore,
+    scope_id: &ScopeId,
+    desired: &DesiredImplementations<'_>,
+    canonical_rules: &[Rule],
+    rule_resources: &mut [ReconciledResource],
+) -> anyhow::Result<super::implementation_bindings::Reconciliation> {
+    let graph = DesiredTypedGraph {
+        spec: desired.spec,
+        owner: desired.owner,
+        rules: desired.rules,
+        rule_ids: desired.rule_ids,
+    };
+    let mut reconciliation = super::implementation_bindings::reconcile(
+        store,
+        scope_id,
+        graph,
+        canonical_rules,
+        desired.adopted_rule_ids,
+    )?;
+    reconciliation
+        .records
+        .retain(|record| !desired.deleted_rule_ids.contains(record.rule_id.as_str()));
+    attach_implementation_changes(rule_resources, &reconciliation.changes);
+    Ok(reconciliation)
 }

@@ -55,7 +55,7 @@ fn stamps_do_not_change_unit_digests_but_every_other_field_does() {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         let mut record = serde_json::json!({"id":"one","statement":"Original content"});
         let write = |record: &serde_json::Value| {
-            std::fs::write(&path, serde_json::to_vec(record).unwrap()).unwrap()
+            std::fs::write(&path, serde_json::to_vec(record).unwrap()).unwrap();
         };
         write(&record);
         let before = unit_digest(state, &unit).unwrap();
