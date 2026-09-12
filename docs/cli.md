@@ -137,7 +137,8 @@ projection up to date under the publication lock before the read;
 when the step refused and the answer is at the stored revision with the error
 text in `freshness_error`.
 
-The eight query commands read `.provenance/settings.json` on every call.
+The eight query commands and `provenance coverage scan` read
+`.provenance/settings.json` on every call.
 This tracked JSON file accepts `read.freshness_policy`, `read.scan_limit`, and
 `coverage.binding_findings`:
 
@@ -153,7 +154,7 @@ This tracked JSON file accepts `read.freshness_policy`, `read.scan_limit`, and
 }
 ```
 
-Both keys are optional. A missing file uses the defaults. `--freshness` accepts
+Every key is optional. A missing file uses the defaults. `--freshness` accepts
 `catch_up`, `annotate_only`, or `refuse_stale`. The flag takes precedence over
 the file, and the file takes precedence over the default `catch_up`. No
 environment variable selects a policy. `refuse_stale` hashes canonical units
@@ -165,7 +166,7 @@ Read under `catch_up` or run `provenance materialize` to update the projection.
 
 `read.scan_limit` is a whole number of at least 1. Its default is 5000 source
 files; it has no flag or request field. An invalid value, an unknown key at
-either level, or an unreadable file causes a settings refusal before a query
+any level, or an unreadable file causes a settings refusal before a query
 opens the projection. The error names the path and, for an invalid setting,
 the key and permitted values. No answer or `freshness_error` accompanies it.
 
