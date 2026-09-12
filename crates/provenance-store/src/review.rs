@@ -51,3 +51,6 @@ pub use decision_input::{
 mod decision;
 mod decision_reads;
 mod decision_state;
+
+#[cfg(test)]
+mod decision_tests;
