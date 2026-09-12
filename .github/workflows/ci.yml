@@ -140,7 +140,10 @@ jobs:
 
   review-assets:
     needs: [changes, generate-operations]
-    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true'
+    # Policy-only pull requests skip the rust jobs, but build-cli-linux
+    # restores the composed review assets from this job, so the same policy
+    # trigger keeps the artifact present.
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true' || needs.changes.outputs.policy == 'true'
     uses: ./.github/workflows/review-assets.yml
 
   # One build per OS. Every job that only needs to drive the CLI downloads
@@ -151,7 +154,9 @@ jobs:
   build-cli-linux:
     name: Build provenance-cli (linux)
     needs: [changes, review-assets]
-    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true'
+    # rule-coverage can run for a policy-only change and downloads this
+    # job's CLI artifact, so the build runs whenever the coverage check can.
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true' || needs.changes.outputs.policy == 'true'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v7

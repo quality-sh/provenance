@@ -19,14 +19,30 @@ fn workspace_root() -> std::path::PathBuf {
 }
 
 fn rule_coverage_job(workflow: &str) -> String {
+    job_block(workflow, "  rule-coverage:", "\n  rust-sdk:")
+}
+
+fn job_block(workflow: &str, start_marker: &str, end_marker: &str) -> String {
     let start = workflow
-        .split_once("  rule-coverage:")
-        .expect("the rule-coverage job exists")
+        .split_once(start_marker)
+        .unwrap_or_else(|| panic!("the {start_marker} job exists"))
         .1;
-    let end = start
-        .split_once("\n  rust-sdk:")
-        .expect("rule-coverage is followed by the rust-sdk job");
-    end.0.to_string()
+    start
+        .split_once(end_marker)
+        .unwrap_or_else(|| panic!("{start_marker} is followed by {end_marker}"))
+        .0
+        .to_string()
+}
+
+fn condition_between(block: &str, end_marker: &str) -> String {
+    block
+        .split_once("if:")
+        .unwrap_or_else(|| panic!("the job declares a condition"))
+        .1
+        .split_once(end_marker)
+        .unwrap_or_else(|| panic!("the condition ends at {end_marker}"))
+        .0
+        .to_string()
 }
 
 #[test]
@@ -56,16 +72,35 @@ fn graph_only_changes_trigger_the_rule_coverage_job() {
 #[test]
 fn the_rule_coverage_job_runs_for_policy_changes() {
     let job = rule_coverage_job(&workflow());
-    let condition = job
-        .split_once("if:")
-        .expect("rule-coverage declares a condition")
-        .1
-        .split_once("runs-on:")
-        .expect("the condition ends at runs-on")
-        .0;
+    let condition = condition_between(&job, "runs-on:");
     assert!(
         condition.contains("needs.changes.outputs.policy == 'true'"),
         "graph-only pull requests must run the coverage check: {condition}"
+    );
+}
+
+/// A policy-only pull request skips the rust and sdk jobs, so every job
+/// whose artifact `rule-coverage` downloads must run for the same change
+/// set: the linux CLI build, and the review assets its build restores.
+#[test]
+fn a_policy_only_change_builds_the_artifacts_rule_coverage_downloads() {
+    let workflow = workflow();
+    let build = job_block(&workflow, "  build-cli-linux:", "\n  build-cli-platforms:");
+    let build_condition = condition_between(&build, "runs-on:");
+    assert!(
+        build_condition.contains("needs.changes.outputs.policy == 'true'"),
+        "the linux CLI build must produce the artifact whenever rule-coverage can run: {build_condition}"
+    );
+    let review = job_block(&workflow, "\n  review-assets:", "\n  # One build per OS.");
+    let review_condition = condition_between(&review, "uses:");
+    assert!(
+        review_condition.contains("needs.changes.outputs.policy == 'true'"),
+        "the CLI build restores the composed review assets, so their job must run too: {review_condition}"
+    );
+    let coverage = rule_coverage_job(&workflow);
+    assert!(
+        coverage.contains("needs: [changes, build-cli-linux]"),
+        "rule-coverage must wait for the builder it downloads from: {coverage}"
     );
 }
 
