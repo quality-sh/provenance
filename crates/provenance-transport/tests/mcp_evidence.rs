@@ -33,7 +33,7 @@ async fn real_mcp_keeps_all_evidence_fields_stamps_and_complete_list_wrapper() {
         let answer = client
             .call_tool(
                 CallToolRequestParams::new(operation).with_arguments(
-                    json!({"protocol_version":8,"call":body})
+                    json!({"protocol_version":9,"call":body})
                         .as_object()
                         .unwrap()
                         .clone(),

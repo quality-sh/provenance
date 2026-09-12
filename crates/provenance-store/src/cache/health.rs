@@ -54,37 +54,29 @@ pub struct OrphanRuleItem {
 /// evidence for anything in the graph. Path syntax is interpreted by the
 /// command layer.
 ///
-/// Active views leave retired records and retired bindings out. A caller
-/// that asks for retired ones gets the history alongside what stands today.
+/// Deleted records and bindings do not appear in canonical state.
 pub fn graph_evidence(
     layout: &ProvenanceLayout,
     scope: &provenance_core::ScopeId,
-    include_retired: bool,
 ) -> anyhow::Result<GraphEvidence> {
     let store = StateStore::new(layout.clone());
-    store.with_repository_publication(|| graph_evidence_locked(scope, &store, include_retired))
+    store.with_repository_publication(|| graph_evidence_locked(scope, &store))
 }
 
 fn graph_evidence_locked(
     scope: &provenance_core::ScopeId,
     store: &StateStore,
-    include_retired: bool,
 ) -> anyhow::Result<GraphEvidence> {
     let requirements = store
         .list_requirements(scope)?
         .into_iter()
-        .filter(|requirement| include_retired || !requirement.retired)
         .collect::<Vec<_>>();
     let cited_sources = requirements
         .iter()
         .flat_map(|requirement| &requirement.source_refs)
         .map(|reference| reference.source_id.as_str().to_string())
         .collect::<BTreeSet<_>>();
-    let rules = store
-        .list_rules(scope)?
-        .into_iter()
-        .filter(|rule| include_retired || !rule.retired)
-        .collect::<Vec<_>>();
+    let rules = store.list_rules(scope)?.into_iter().collect::<Vec<_>>();
     let rule_ids = rules
         .iter()
         .map(|rule| rule.id.as_str().to_string())
@@ -100,9 +92,6 @@ fn graph_evidence_locked(
         })
         .collect::<Vec<_>>();
     references.extend(store.list_sources(scope)?.into_iter().filter_map(|source| {
-        if source.retired && !include_retired {
-            return None;
-        }
         (cited_sources.contains(source.id.as_str()))
             .then_some(source.reference)
             .flatten()
@@ -124,13 +113,11 @@ fn graph_evidence_locked(
         verification_bindings: store
             .list_verification_bindings(scope)?
             .into_iter()
-            .filter(|binding| include_retired || !binding.retired)
             .filter(|binding| rule_ids.contains(binding.rule_id.as_str()))
             .collect(),
         implementation_bindings: store
             .list_implementation_bindings(scope)?
             .into_iter()
-            .filter(|binding| include_retired || !binding.retired)
             .filter(|binding| rule_ids.contains(binding.rule_id.as_str()))
             .collect(),
         rule_ids,
@@ -154,13 +141,8 @@ fn coverage_health_locked(
     let requirements = store
         .list_requirements(scope)?
         .into_iter()
-        .filter(|requirement| !requirement.retired)
         .collect::<Vec<_>>();
-    let rules = store
-        .list_rules(scope)?
-        .into_iter()
-        .filter(|rule| !rule.retired)
-        .collect::<Vec<_>>();
+    let rules = store.list_rules(scope)?.into_iter().collect::<Vec<_>>();
     let resolutions = store.list_resolutions(scope)?;
     let source_linked_requirements = requirements
         .iter()

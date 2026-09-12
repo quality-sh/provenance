@@ -18,6 +18,7 @@ fn seeded_rule_with_implementation() -> (tempfile::TempDir, StateStore, ScopeId)
         .unwrap();
     store
         .create_rule(CreateRuleInput {
+            archived_in_commit: None,
             scope_id: scope.clone(),
             id: StableId::new("rule_existing").unwrap(),
             name: None,
@@ -108,7 +109,7 @@ fn rule_adoption_preserves_an_exact_or_omitted_existing_implementation() {
     let bindings = store.list_implementation_bindings(&scope).unwrap();
     assert_eq!(bindings.len(), 1);
     assert_eq!(bindings[0].id.as_str(), "implementation_binding_imported");
-    assert!(!bindings[0].retired);
+
     assert_eq!(bindings[0].file.as_str(), "src/enforcement.rs");
     assert_eq!(bindings[0].symbol, "enforce");
 }

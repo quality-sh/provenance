@@ -232,37 +232,6 @@ fn the_error_policy_passes_for_a_deprecated_rule_without_current_bindings() {
 }
 
 #[test]
-#[verifies("rule_inactive_rules_have_no_current_bindings", examples)]
-fn a_retired_typed_verification_does_not_fail_the_error_policy() {
-    let repo = init_repo();
-    create_rule(repo.path(), "rule_old_gate", "deprecated");
-    create_rule(repo.path(), "rule_new_gate", "active");
-    begin_verification(
-        repo.path(),
-        "rule_old_gate",
-        "gate-check",
-        "tests/gate.test.ts",
-    );
-    // The same owner, file, and key now vouch for the new rule, so the
-    // binding to the deprecated rule retires in place.
-    begin_verification(
-        repo.path(),
-        "rule_new_gate",
-        "gate-check",
-        "tests/gate.test.ts",
-    );
-    set_binding_policy(repo.path(), "error");
-
-    let output = full_scan(repo.path()).output().unwrap();
-
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stdout)
-    );
-}
-
-#[test]
 #[verifies("rule_binding_finding_uses_configured_severity", examples)]
 fn strict_still_fails_on_every_warning_under_the_warning_policy() {
     let repo = init_repo();

@@ -1,5 +1,6 @@
 mod artifacts;
 mod collaboration;
+mod content_equality;
 mod graph;
 mod ideation;
 mod ids;
@@ -7,10 +8,12 @@ mod integrations;
 mod manifest;
 mod parsing;
 pub mod projection_row;
+pub mod record_stamps;
 pub mod relations;
 mod services;
 mod shaping;
 mod validation;
+pub use record_stamps::{ArchivedStamp, Stamp};
 
 pub use artifacts::{
     Requirement, RequirementStatus, Resolution, ResolutionInput, ResolutionInputType,

@@ -23,6 +23,6 @@ mod test_probes;
 /// 1. Graph and ideation validation when catch-up reads changed units in place.
 ///
 /// Increase this version when a validator change requires existing scopes to be checked again.
-pub const VALIDATION_VERSION: u32 = 1;
+pub const VALIDATION_VERSION: u32 = 2;
 
 pub mod write_error;

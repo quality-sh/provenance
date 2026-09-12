@@ -180,6 +180,25 @@ impl ProjectionFamily {
         }
     }
 
+    pub(crate) fn content_digest(self, bytes: &[u8]) -> anyhow::Result<String> {
+        if !matches!(
+            self,
+            Self::Sources | Self::Requirements | Self::Rules | Self::Resolutions
+        ) {
+            return Ok(crate::canonical_digest::digest(bytes));
+        }
+        let mut records: Vec<serde_json::Value> = serde_json::from_slice(bytes)?;
+        for record in &mut records {
+            if let Some(record) = record.as_object_mut() {
+                record.remove("created");
+                record.remove("updated");
+            }
+        }
+        Ok(crate::canonical_digest::digest(
+            &crate::canonical_digest::canonical_bytes(&records)?,
+        ))
+    }
+
     canonical_records!(canonical_records, StateStore);
     canonical_records!(guarded_records, GuardedStore<'_>);
 }

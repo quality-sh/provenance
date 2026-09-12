@@ -61,6 +61,7 @@ impl Repository {
             .unwrap();
         store
             .create_rule(CreateRuleInput {
+                archived_in_commit: None,
                 scope_id: scope,
                 id: sid("rule_shared"),
                 name: None,

@@ -7,7 +7,7 @@ use provenance_core::{
 use super::super::super::{
     ReconcileState, ReconciledResource, TypedFieldChange, TypedResourceKind, TypedRuleInput,
 };
-use super::super::lifecycle::retire_omitted_rules;
+use super::super::deletion::delete_omitted_rules;
 use super::super::rule_addresses::{local_parent, rule_address};
 use super::changes::{changed, resource, state_after_change};
 use super::references;
@@ -45,7 +45,7 @@ pub(in crate::state_store::typed_specs) fn reconcile_rules(
             changes,
         ));
     }
-    retire_omitted_rules(&mut records, &mut resources, spec, owner, ids);
+    delete_omitted_rules(&mut records, &mut resources, spec, owner, ids);
     records.sort_by(|left, right| left.id.as_str().cmp(right.id.as_str()));
     Ok((records, resources))
 }
@@ -59,12 +59,15 @@ pub(in crate::state_store::typed_specs) fn desired_rule(
     requirement_ids: &BTreeMap<String, StableId>,
 ) -> anyhow::Result<Rule> {
     let mut rule = Rule {
+        created: None,
+        updated: None,
+        archived_in_commit: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id.clone(),
         id: id.clone(),
         declared_by: Some(owner.to_string()),
         declaration_address: Some(address.clone()),
-        retired: false,
+
         name: declaration.name.clone(),
         description: declaration.description.clone(),
         statement: declaration.statement.clone(),
@@ -112,7 +115,6 @@ pub(in crate::state_store::typed_specs) fn reconciled_rule(
     let mut reconciled = current.clone();
     reconciled.declared_by = desired.declared_by;
     reconciled.declaration_address = desired.declaration_address;
-    reconciled.retired = false;
     reconciled.statement = desired.statement;
     if desired.name.is_some() {
         reconciled.name = desired.name;
@@ -141,7 +143,6 @@ pub(in crate::state_store::typed_specs) fn rule_changes(
         &before.declaration_address,
         &after.declaration_address,
     );
-    changed(&mut changes, "retired", &before.retired, &after.retired);
     changed(
         &mut changes,
         "statement",

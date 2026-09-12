@@ -361,7 +361,6 @@ fn graph_reference_export_schema_validates_record_structure() {
         "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default",
         "id": "implementation_binding_runtime", "rule_id": "rule_runtime",
         "declared_by": "spec://typescript/workflows",
-        "retired": true,
         "file": "src/runtime.ts", "symbol": "startWorkflow"
     }]);
     with_implementation["graph_digest"] = json!(derived_digest(&with_implementation["graph"]));

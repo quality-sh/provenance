@@ -1,5 +1,5 @@
 //! Research scenarios B-F (mockups in the pinned Gist revision): an
-//! active Rule without verification, a retired Rule with current
+//! active Rule without verification, an inactive Rule with current
 //! bindings, a removed verification site, recovery after a prior
 //! finding, and a Requirement restatement with untouched bindings.
 
@@ -136,7 +136,7 @@ fn scenario_c_deprecated_rule_with_current_bindings_reports_lifecycle_change() {
         "the lifecycle transition must be shown in the graph changes"
     );
     assert!(
-        report.contains("### warning: a retired Rule still has current bindings"),
+        report.contains("### warning: an inactive Rule still has current bindings"),
         "the finding headline comes from the catalog"
     );
     assert!(

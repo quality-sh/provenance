@@ -125,88 +125,11 @@ fn binding<'a>(stored: &'a [Value], id: &str) -> &'a Value {
 }
 
 #[test]
-fn repointing_an_owner_key_in_one_file_retires_the_binding_it_replaced() {
-    let directory = init_repo();
-    let start = rule_id(directory.path(), "start");
-    let resume = rule_id(directory.path(), "resume");
-    let replaced = verify(
-        directory.path(),
-        Verification {
-            rule: &start,
-            key: "expiry",
-            owner: "ci://typescript",
-            file: "tests/expiry.test.ts",
-        },
-    );
-
-    let replacement = verify(
-        directory.path(),
-        Verification {
-            rule: &resume,
-            key: "expiry",
-            owner: "ci://typescript",
-            file: "tests/expiry.test.ts",
-        },
-    );
-
-    let stored = stored_bindings(directory.path());
-    assert_ne!(replaced, replacement);
-    assert_eq!(stored.len(), 2);
-    assert_eq!(binding(&stored, &replaced)["retired"], true);
-    assert_eq!(binding(&stored, &replaced)["rule_id"], start);
-    assert!(binding(&stored, &replacement).get("retired").is_none());
-}
-
-#[test]
-fn reporting_a_retired_verification_again_reactivates_the_same_binding() {
-    let directory = init_repo();
-    let start = rule_id(directory.path(), "start");
-    let resume = rule_id(directory.path(), "resume");
-    let original = verify(
-        directory.path(),
-        Verification {
-            rule: &start,
-            key: "expiry",
-            owner: "ci://typescript",
-            file: "tests/expiry.test.ts",
-        },
-    );
-    verify(
-        directory.path(),
-        Verification {
-            rule: &resume,
-            key: "expiry",
-            owner: "ci://typescript",
-            file: "tests/expiry.test.ts",
-        },
-    );
-    assert_eq!(
-        binding(&stored_bindings(directory.path()), &original)["retired"],
-        true
-    );
-
-    let restored = verify(
-        directory.path(),
-        Verification {
-            rule: &start,
-            key: "expiry",
-            owner: "ci://typescript",
-            file: "tests/expiry.test.ts",
-        },
-    );
-
-    let stored = stored_bindings(directory.path());
-    assert_eq!(restored, original);
-    assert_eq!(stored.len(), 2);
-    assert!(binding(&stored, &original).get("retired").is_none());
-}
-
-#[test]
 fn the_same_key_reported_from_another_file_leaves_the_first_file_alone() {
     let directory = init_repo();
     let start = rule_id(directory.path(), "start");
     let resume = rule_id(directory.path(), "resume");
-    let untouched = verify(
+    verify(
         directory.path(),
         Verification {
             rule: &start,
@@ -228,37 +151,6 @@ fn the_same_key_reported_from_another_file_leaves_the_first_file_alone() {
 
     let stored = stored_bindings(directory.path());
     assert_eq!(stored.len(), 2);
-    assert!(binding(&stored, &untouched).get("retired").is_none());
-}
-
-#[test]
-fn one_owner_cannot_retire_a_verification_binding_declared_by_another() {
-    let directory = init_repo();
-    let start = rule_id(directory.path(), "start");
-    let resume = rule_id(directory.path(), "resume");
-    let untouched = verify(
-        directory.path(),
-        Verification {
-            rule: &start,
-            key: "expiry",
-            owner: "ci://typescript",
-            file: "tests/expiry.test.ts",
-        },
-    );
-
-    verify(
-        directory.path(),
-        Verification {
-            rule: &resume,
-            key: "expiry",
-            owner: "ci://rust",
-            file: "tests/expiry.test.ts",
-        },
-    );
-
-    let stored = stored_bindings(directory.path());
-    assert_eq!(stored.len(), 2);
-    assert!(binding(&stored, &untouched).get("retired").is_none());
 }
 
 fn unverified_rules(repo: &std::path::Path) -> String {
@@ -303,36 +195,60 @@ fn exported_bindings(repo: &std::path::Path) -> Vec<Value> {
 }
 
 #[test]
-fn a_retired_binding_leaves_its_rule_unverified_but_stays_canonical_history() {
+fn replacing_a_key_deletes_only_its_previous_binding() {
     let directory = init_repo();
-    let start = rule_id(directory.path(), "start");
-    let resume = rule_id(directory.path(), "resume");
-    let retired = verify(
-        directory.path(),
+    let repo = directory.path();
+    let start = rule_id(repo, "start");
+    let resume = rule_id(repo, "resume");
+    let original = Verification {
+        rule: &start,
+        key: "expiry",
+        owner: "ci://typescript",
+        file: "tests/expiry.test.ts",
+    };
+    let replaced = verify(repo, original);
+    let preserved = verify(
+        repo,
         Verification {
-            rule: &start,
-            key: "expiry",
-            owner: "ci://typescript",
-            file: "tests/expiry.test.ts",
+            owner: "ci://other",
+            ..original
         },
     );
-    let unverified = format!("active rule `{start}` has no verification");
-    assert!(!unverified_rules(directory.path()).contains(&unverified));
-
-    verify(
-        directory.path(),
+    let replacement = verify(
+        repo,
         Verification {
             rule: &resume,
-            key: "expiry",
-            owner: "ci://typescript",
-            file: "tests/expiry.test.ts",
+            ..original
         },
     );
+    let stored = stored_bindings(repo);
+    assert_eq!(stored.len(), 2);
+    assert!(!stored.iter().any(|r| r["id"] == replaced));
+    assert_eq!(binding(&stored, &preserved)["rule_id"], start);
+    assert_eq!(binding(&stored, &replacement)["rule_id"], resume);
+    assert_eq!(exported_bindings(repo), stored);
+    let empty_run = document();
+    sdk(repo, "apply", &empty_run).unwrap();
+    assert_eq!(stored_bindings(repo), stored);
+}
 
-    let report = unverified_rules(directory.path());
-    assert!(report.contains(&unverified), "{report}");
-    assert_eq!(
-        binding(&exported_bindings(directory.path()), &retired)["retired"],
-        true
-    );
+#[test]
+fn deleting_a_rule_makes_its_remaining_marker_an_unknown_id_warning() {
+    let directory = init_repo();
+    let repo = directory.path();
+    let id = rule_id(repo, "start");
+    fs::write(
+        repo.join("marker.rs"),
+        format!("#[rule(\"{id}\")]\nfn run() {{}}\n"),
+    )
+    .unwrap();
+    let mut input = document();
+    input["rules"].as_array_mut().unwrap().remove(0);
+    sdk(repo, "apply", &input).unwrap();
+    let scan: Value = serde_json::from_str(&unverified_rules(repo)).unwrap();
+    assert!(scan["warnings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|w| w["rule_id"] == id && w["message"].as_str().unwrap().contains("unknown")));
 }

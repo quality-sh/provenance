@@ -47,7 +47,7 @@ impl DiagnosticCode {
     pub const fn headline(self) -> &'static str {
         match self {
             Self::ActiveRuleMissingVerification => "no current verification binding found",
-            Self::InactiveRuleCurrentBinding => "a retired Rule still has current bindings",
+            Self::InactiveRuleCurrentBinding => "an inactive Rule still has current bindings",
             Self::VerificationSiteRemoved => "one verification site is gone",
             Self::VerificationSiteMoved => "verification evidence moved",
             Self::RequirementStatementChanged => "the intent changed; evidence needs review",

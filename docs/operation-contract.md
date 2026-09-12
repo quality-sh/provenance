@@ -19,7 +19,7 @@ The operation does not open a repository, load settings, or use a dictionary.
 
 ## Statement calls
 
-HTTP uses `POST /v8/operations/check-statement` with a JSON body:
+HTTP uses `POST /v9/operations/check-statement` with a JSON body:
 
 ```json
 {"request":{"statement":"Stop; wait."}}
@@ -28,7 +28,7 @@ HTTP uses `POST /v8/operations/check-statement` with a JSON body:
 MCP uses the `check-statement` tool with these arguments:
 
 ```json
-{"protocol_version":8,"call":{"request":{"statement":"Stop; wait."}}}
+{"protocol_version":9,"call":{"request":{"statement":"Stop; wait."}}}
 ```
 
 Both calls return the full report, including integer `issue: 9` and UTF-8 byte
@@ -349,9 +349,9 @@ started work. Shutdown stops admission and joins started work.
 
 ## Compatibility
 
-The operation protocol advances from 7 to 8. This is a breaking change to
-`read-document`, search continuation, and typed read refusals. Version 7
-requests receive a protocol mismatch. No version 8 package is published by
+The operation protocol advances from 8 to 9. This is a breaking change to
+record lifecycle fields and stamp validation. Version 8 requests receive a
+protocol mismatch. No version 9 package is published by
 this implementation. The TypeScript SDK uses the
 generated HTTP client for the original sixteen operations. The generated client
 also exposes creation, attachment, discussion, proposal-lifecycle, and

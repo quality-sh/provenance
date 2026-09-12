@@ -28,7 +28,6 @@ pub enum WriteFailure {
         diagnostics: Vec<TypedSpecDiagnostic>,
     },
     InvalidVerificationTarget,
-    RetiredRule,
     InvalidCompletion,
     AlreadyComplete,
     FileAccessDenied,
@@ -128,8 +127,7 @@ impl WriteError {
             WriteFailure::RecordOwnershipConflict
             | WriteFailure::AlreadyExists
             | WriteFailure::OwnershipConflict { .. }
-            | WriteFailure::AlreadyComplete
-            | WriteFailure::RetiredRule => 409,
+            | WriteFailure::AlreadyComplete => 409,
             _ => 400,
         }
     }

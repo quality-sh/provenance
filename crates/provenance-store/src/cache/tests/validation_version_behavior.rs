@@ -1,7 +1,9 @@
 use super::catch_up_behavior::dump_family_tables;
 use super::catch_up_serial_behavior::latest_revision;
 use super::fixtures::{rewrite_records, seeded_layout};
-use crate::cache::{catch_up_state, materialize_state, open_cache, unit_digest, Unit};
+use crate::cache::{
+    catch_up_state, materialize_state, open_cache, unit_digest, unit_stored_digest, Unit,
+};
 use crate::layout::ProvenanceLayout;
 use crate::test_probes;
 use provenance_core::{Manifest, RepoPathPrefix, Scope, ScopeId};
@@ -28,8 +30,10 @@ async fn accept_invalid_bytes(layout: &ProvenanceLayout, scope: &ScopeId) {
         r["requirement_ids"] = serde_json::json!([]);
     });
     let pool = open_cache(layout).await.unwrap();
-    sqlx::query("UPDATE projection_unit_digests SET digest = ? WHERE unit = ?")
-        .bind(unit_digest(&layout.state_dir(), &Unit::Scope(scope.clone())).unwrap())
+    let unit = Unit::Scope(scope.clone());
+    sqlx::query("UPDATE projection_unit_digests SET digest = ?, stored_digest = ? WHERE unit = ?")
+        .bind(unit_digest(&layout.state_dir(), &unit).unwrap())
+        .bind(unit_stored_digest(&layout.state_dir(), &unit).unwrap())
         .bind(format!("scope:{}", scope.as_str()))
         .execute(pool.pool())
         .await

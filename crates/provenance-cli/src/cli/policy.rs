@@ -102,9 +102,15 @@ pub enum RulesCommand {
         /// What must be true, in one sentence a reader can check code against.
         #[arg(long)]
         statement: String,
-        /// One of `active`, `draft`, or `deprecated`.
+        /// One of `draft`, `review`, `active`, `deprecated`, or `archived`.
         #[arg(long, default_value = "active")]
         status: String,
+        /// Full commit hash that archived this rule.
+        #[arg(long)]
+        archived_in_commit: Option<String>,
+        /// RFC3339 time of archiving.
+        #[arg(long, requires = "archived_in_commit")]
+        archived_at: Option<String>,
         /// How much a breach costs: `low`, `medium`, `high`, or `critical`.
         #[arg(long, default_value = "medium")]
         severity: String,

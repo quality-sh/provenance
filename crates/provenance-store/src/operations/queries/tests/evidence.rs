@@ -8,10 +8,8 @@ use crate::operations::queries;
 use crate::operations::read_policy::ReadPolicy;
 use provenance_macros::verifies;
 
-/// `rule_overtime_001` has two active implementation bindings and a
-/// retired third, three verification bindings, two open reviews, and no
-/// run. A limit of two cuts the verification list alone; asked for
-/// retired bindings, the implementation list is cut too.
+/// Two implementations, three verifications, and two open reviews share
+/// a limit of two. Only the verification list is cut.
 #[tokio::test]
 #[verifies("rule_evidence_flags_each_cut_list", examples)]
 async fn evidence_reports_which_list_was_cut() {
@@ -36,19 +34,6 @@ async fn evidence_reports_which_list_was_cut() {
     assert_eq!(answer.reviews.len(), 2);
     assert!(!answer.reviews_has_more);
     assert!(answer.has_more, "the top-level flag is the OR of the four");
-
-    request.include_retired = true;
-    let with_retired = queries::evidence(
-        Some(store.root.clone()),
-        &store.scope,
-        ReadPolicy::default(),
-        request,
-    )
-    .await
-    .unwrap()
-    .result;
-    assert!(with_retired.implementation_bindings_has_more);
-    assert_eq!(with_retired.implementation_bindings.len(), 2);
 }
 
 /// `review_b` was cleared by a run; it is neither answered nor counted

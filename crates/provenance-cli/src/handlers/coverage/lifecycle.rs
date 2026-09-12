@@ -2,22 +2,17 @@
 //! deprecated or archived Rules.
 //!
 //! A marker the scan read and a typed binding the graph stores are both
-//! current evidence, so both produce a finding. A retired historical binding
-//! stays readable in the graph without counting as current, and a deprecated
-//! or archived Rule with no current binding produces no finding at all.
+//! current evidence. A deprecated or archived Rule with no current binding
+//! produces no finding.
 
 use std::collections::BTreeMap;
 
 use provenance_macros::rule;
 
-/// Which rules the lifecycle findings name, and why: every rule whose status
-/// or retirement withdrew it from current coverage. A retired rule keeps the
-/// separate retired-record check, so the lifecycle findings take only the
-/// deprecated and archived statuses.
+/// The deprecated and archived Rules that current bindings must not cite.
 fn inactive_rules(rules: &[provenance_core::Rule]) -> BTreeMap<&str, &'static str> {
     rules
         .iter()
-        .filter(|rule| !rule.retired)
         .filter_map(|rule| match rule.status {
             provenance_core::RuleStatus::Deprecated => Some((rule.id.as_str(), "deprecated")),
             provenance_core::RuleStatus::Archived => Some((rule.id.as_str(), "archived")),
@@ -87,34 +82,26 @@ fn typed_findings(
     typed_implementations: &[provenance_core::ImplementationBinding],
     typed_verifications: &[provenance_core::VerificationBinding],
 ) -> Vec<provenance_core::coverage::ValidationWarning> {
-    // A retired historical binding stays readable without counting as
-    // current, so it never becomes a finding here.
-    let implementations = typed_implementations
-        .iter()
-        .filter(|binding| !binding.retired)
-        .filter_map(|binding| {
-            let status = inactive.get(binding.rule_id.as_str())?;
-            Some(binding_finding(
-                binding.rule_id.as_str(),
-                status,
-                "typed implementation binding",
-                Some(binding.file.clone()),
-                None,
-            ))
-        });
-    let verifications = typed_verifications
-        .iter()
-        .filter(|binding| !binding.retired)
-        .filter_map(|binding| {
-            let status = inactive.get(binding.rule_id.as_str())?;
-            Some(binding_finding(
-                binding.rule_id.as_str(),
-                status,
-                "typed verification binding",
-                Some(binding.file.clone()),
-                None,
-            ))
-        });
+    let implementations = typed_implementations.iter().filter_map(|binding| {
+        let status = inactive.get(binding.rule_id.as_str())?;
+        Some(binding_finding(
+            binding.rule_id.as_str(),
+            status,
+            "typed implementation binding",
+            Some(binding.file.clone()),
+            None,
+        ))
+    });
+    let verifications = typed_verifications.iter().filter_map(|binding| {
+        let status = inactive.get(binding.rule_id.as_str())?;
+        Some(binding_finding(
+            binding.rule_id.as_str(),
+            status,
+            "typed verification binding",
+            Some(binding.file.clone()),
+            None,
+        ))
+    });
     implementations.chain(verifications).collect()
 }
 

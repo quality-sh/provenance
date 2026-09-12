@@ -87,6 +87,7 @@ pub(super) fn load_projection(
             .map_err(incomplete)?,
     };
     graph.validate_schema_versions()?;
+    graph.validate_rule_archives()?;
     validate_scope_ownership(&graph, &scope_id)?;
     strip_collaboration_fields(&mut graph);
     sort_records(&mut graph);
@@ -115,6 +116,18 @@ impl GraphExport {
         require_supported!(&self.rules, "rule");
         require_supported!(&self.verification_bindings, "verification binding");
         require_supported!(&self.implementation_bindings, "implementation binding");
+        Ok(())
+    }
+
+    pub(super) fn validate_rule_archives(&self) -> Result<(), GraphReferenceError> {
+        for rule in &self.rules {
+            rule.validate_archive().map_err(|error| {
+                incomplete(format!(
+                    "rule '{}' is archive-inconsistent: {error}",
+                    rule.id.as_str()
+                ))
+            })?;
+        }
         Ok(())
     }
 

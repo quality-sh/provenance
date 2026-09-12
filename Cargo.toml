@@ -64,6 +64,7 @@ syn = { version = "2.0", features = ["derive", "parsing", "printing", "proc-macr
 sqlx = { version = "0.8", default-features = false, features = ["sqlite", "runtime-tokio"] }
 tar = "0.4"
 tempfile = "3.10"
+time = { version = "0.3", features = ["formatting", "parsing"] }
 thiserror = "1.0"
 tokio = { version = "1.0", features = ["macros", "net", "rt-multi-thread"] }
 ureq = { version = "2.12", default-features = false, features = ["tls"] }

@@ -31,38 +31,37 @@ impl StateStore {
             self.list_requirement_reviews(&input.scope_id)?;
             let changed_at = super::super::requirement_reviews::now_millis()?;
             let path = shards::requirements_path(&self.layout, &input.scope_id);
-            let (record, before) =
-                self.mutate_jsonl_records(&path, |records: &mut Vec<Requirement>| {
-                    let record = records
-                        .iter_mut()
-                        .find(|r| r.id == input.id)
-                        .ok_or_else(missing)?;
-                    owner_matches(record.declared_by.as_deref(), input.declared_by.as_deref())?;
-                    let before = record.statement.clone();
-                    set(&mut record.statement, input.statement);
-                    set(&mut record.status, input.status);
-                    set(&mut record.retired, input.retired);
-                    optional(
-                        &mut record.description,
-                        input.description,
-                        input
-                            .clear_fields
-                            .contains(&RequirementClearField::Description),
-                    )?;
-                    optional(
-                        &mut record.fog,
-                        input.fog,
-                        input.clear_fields.contains(&RequirementClearField::Fog),
-                    )?;
-                    optional(
-                        &mut record.domain_id,
-                        input.domain_id,
-                        input
-                            .clear_fields
-                            .contains(&RequirementClearField::DomainId),
-                    )?;
-                    Ok((record.clone(), before))
-                })?;
+            let mut before = String::new();
+            let record = self.mutate_graph_record(&path, |records: &mut Vec<Requirement>| {
+                let record = records
+                    .iter_mut()
+                    .find(|r| r.id == input.id)
+                    .ok_or_else(missing)?;
+                owner_matches(record.declared_by.as_deref(), input.declared_by.as_deref())?;
+                before.clone_from(&record.statement);
+                set(&mut record.statement, input.statement);
+                set(&mut record.status, input.status);
+                optional(
+                    &mut record.description,
+                    input.description,
+                    input
+                        .clear_fields
+                        .contains(&RequirementClearField::Description),
+                )?;
+                optional(
+                    &mut record.fog,
+                    input.fog,
+                    input.clear_fields.contains(&RequirementClearField::Fog),
+                )?;
+                optional(
+                    &mut record.domain_id,
+                    input.domain_id,
+                    input
+                        .clear_fields
+                        .contains(&RequirementClearField::DomainId),
+                )?;
+                Ok(record.clone())
+            })?;
             if before != record.statement {
                 let reviews = rule_ids
                     .into_iter()

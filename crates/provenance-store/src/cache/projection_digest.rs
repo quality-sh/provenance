@@ -43,7 +43,7 @@ pub fn family_content_digests(
                 kind: family,
                 family: family.family_name(),
                 scope_id: scope.as_str().to_string(),
-                digest: canonical_digest::digest(&bytes),
+                digest: family.content_digest(&bytes)?,
                 record_count,
             });
         }

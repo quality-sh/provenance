@@ -384,6 +384,7 @@ fn an_exact_unowned_rule_can_be_adopted_without_changing_its_relationship() {
     store.apply_typed_spec(&scope, base).unwrap();
     store
         .create_rule(CreateRuleInput {
+            archived_in_commit: None,
             scope_id: scope.clone(),
             id: StableId::new("rule_existing").unwrap(),
             name: None,

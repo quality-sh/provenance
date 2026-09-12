@@ -36,7 +36,7 @@ fn impact_reports_hop_distance_and_direction() {
 #[test]
 fn graph_evidence_lists_the_fixture_rule() {
     let (_dir, layout, scope) = seeded_layout();
-    let evidence = graph_evidence(&layout, &scope, false).unwrap();
+    let evidence = graph_evidence(&layout, &scope).unwrap();
     assert!(evidence.rule_ids.contains("rule_schads_pay_001"));
 }
 
@@ -47,95 +47,6 @@ fn health_counts_rules_with_complete_traceability() {
     assert_eq!(health.rules.total, 1);
     assert_eq!(health.rules.with_complete_traceability, 1);
     assert_eq!(health.gaps.total, 0);
-}
-
-#[test]
-fn retired_declarations_are_absent_from_active_health_and_gap_views() {
-    let (_dir, layout, scope) = seeded_layout();
-    retire_records(&layout, &scope);
-
-    let health = coverage_health(&layout, &scope).unwrap();
-    assert_eq!(health.requirements.total, 0);
-    assert_eq!(health.rules.total, 0);
-    assert_eq!(health.gaps.total, 0);
-    assert!(graph_evidence(&layout, &scope, false)
-        .unwrap()
-        .rule_ids
-        .is_empty());
-    assert!(prime_context(&layout, &scope, false)
-        .unwrap()
-        .rules
-        .is_empty());
-}
-
-/// Retiring a requirement that other records name must not manufacture
-/// reference gaps. The loader drops a reference to a retired record the
-/// way it drops the record itself, so `gaps` and `prime` agree with
-/// `check`, whose unfiltered lists still resolve the reference.
-#[test]
-fn retiring_a_named_requirement_does_not_change_the_gap_report() {
-    let (_dir, layout, scope) = seeded_layout();
-    let store = StateStore::new(layout.clone());
-    // A second live requirement keeps the source referenced after the
-    // first one retires, so any delta in the report is the retirement.
-    store
-        .create_requirement(CreateRequirementInput {
-            scope_id: scope.clone(),
-            id: sid("req_stays"),
-            statement: "Still active".into(),
-            description: None,
-            status: RequirementStatus::Active,
-            domain_id: Some(sid("domain_payroll")),
-            refines: None,
-            depends_on: Vec::new(),
-            supersedes: Vec::new(),
-            spawned_by: None,
-            origin_thread: None,
-            origin_message: None,
-        })
-        .unwrap();
-    attach_source(&store, &scope, "req_stays", "source_schads");
-
-    let before = find_gaps(&layout, &scope).unwrap();
-
-    // A hand edit stands in for sdk apply retiring an omitted requirement.
-    let path = crate::shards::requirements_path(&layout, &scope);
-    let contents = std::fs::read_to_string(&path).unwrap();
-    let retired = contents
-        .lines()
-        .map(|line| {
-            let mut record = serde_json::from_str::<serde_json::Value>(line).unwrap();
-            if record["id"] == "req_schads_overtime" {
-                record["retired"] = serde_json::Value::Bool(true);
-            }
-            serde_json::to_string(&record).unwrap()
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-    std::fs::write(&path, format!("{retired}\n")).unwrap();
-
-    let after = find_gaps(&layout, &scope).unwrap();
-    assert_eq!(after, before, "retirement manufactured gaps: {after:?}");
-}
-
-fn retire_records(layout: &ProvenanceLayout, scope: &ScopeId) {
-    for path in [
-        crate::shards::sources_path(layout, scope),
-        crate::shards::requirements_path(layout, scope),
-        crate::shards::rules_path(layout, scope),
-    ] {
-        let contents = std::fs::read_to_string(&path).unwrap();
-        let retired = contents
-            .lines()
-            .map(|line| {
-                let mut record = serde_json::from_str::<serde_json::Value>(line).unwrap();
-                record["retired"] = serde_json::Value::Bool(true);
-                serde_json::to_string(&record).unwrap()
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-        std::fs::write(path, format!("{retired}\n")).unwrap();
-    }
 }
 
 /// Seeds a requirement, the decision that settles it, and a rule both are
@@ -166,6 +77,7 @@ fn seed_unsourced_chain(layout: &ProvenanceLayout, scope: &ScopeId) {
         .unwrap();
     store
         .create_rule(CreateRuleInput {
+            archived_in_commit: None,
             scope_id: scope.clone(),
             id: sid("rule_unsourced"),
             name: None,
@@ -223,6 +135,7 @@ fn requirement_produced_rule_does_not_need_a_resolution() {
     attach_source(&store, &scope, "req_half", "source_anchor");
     store
         .create_rule(CreateRuleInput {
+            archived_in_commit: None,
             scope_id: scope.clone(),
             id: sid("rule_half"),
             name: None,
@@ -336,6 +249,7 @@ fn seed_rule_with_producers(
         }
         store
             .create_rule(CreateRuleInput {
+                archived_in_commit: None,
                 scope_id: scope.clone(),
                 id: sid("rule_under_test"),
                 name: None,

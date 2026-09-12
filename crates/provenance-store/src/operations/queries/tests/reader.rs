@@ -42,7 +42,6 @@ pub(super) fn get_query(id: &str) -> GetQuery {
         protocol_version: Some(SDK_PROTOCOL_VERSION),
         node_type: NodeType::Requirement,
         id: id.into(),
-        include_retired: false,
     }
 }
 
@@ -99,7 +98,7 @@ async fn graph_stamps(store: &TestStore) -> Vec<(&'static str, Stamp)> {
                 repo(),
                 scope,
                 ReadPolicy::default(),
-                requests::neighbors("req_overtime", false, 10),
+                requests::neighbors("req_overtime", 10),
             )
             .await
             .unwrap()
@@ -111,7 +110,7 @@ async fn graph_stamps(store: &TestStore) -> Vec<(&'static str, Stamp)> {
                 repo(),
                 scope,
                 ReadPolicy::default(),
-                requests::trace("req_overtime", false, 10),
+                requests::trace("req_overtime", 10),
             )
             .await
             .unwrap()
@@ -137,7 +136,7 @@ async fn evidence_stamps(store: &TestStore, base: &str) -> Vec<(&'static str, St
                     protocol_version: version,
                     id: "req_overtime".into(),
                     node_type: None,
-                    include_retired: false,
+
                     limit: 10,
                 },
             )
@@ -168,7 +167,7 @@ async fn evidence_stamps(store: &TestStore, base: &str) -> Vec<(&'static str, St
                     base: base.to_string(),
                     head: None,
                     rules: Vec::new(),
-                    include_retired: false,
+
                     limit: 10,
                 },
             )
@@ -187,7 +186,7 @@ async fn evidence_stamps(store: &TestStore, base: &str) -> Vec<(&'static str, St
                     file: "src/pay.rs".into(),
                     symbol: None,
                     line: None,
-                    include_retired: false,
+
                     limit: 10,
                 },
             )
@@ -360,7 +359,7 @@ async fn a_bad_base_is_refused_before_the_store_is_read() {
             base: "no_such_commit".into(),
             head: None,
             rules: Vec::new(),
-            include_retired: false,
+
             limit: 10,
         },
     )

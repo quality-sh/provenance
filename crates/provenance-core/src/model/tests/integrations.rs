@@ -32,7 +32,7 @@ fn verification_binding_serializes_its_explicit_key_and_code_facts() {
         key: "share-link-expiry".into(),
         method: VerificationMethod::Examples,
         declared_by: "test://typescript".into(),
-        retired: false,
+
         file: "tests/share-links.test.ts".into(),
         symbol: Some("share links expire".into()),
     };

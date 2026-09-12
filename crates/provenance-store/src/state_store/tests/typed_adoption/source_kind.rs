@@ -80,7 +80,7 @@ fn fluent_adoption_of_an_external_integration_source_keeps_its_kind() {
         (
             plan.created,
             plan.updated,
-            plan.retired,
+            plan.deleted,
             plan.conflicts,
             plan.moved
         ),
@@ -97,7 +97,7 @@ fn fluent_adoption_of_an_external_integration_source_keeps_its_kind() {
     assert_eq!(brief.name, BRIEF_NAME);
     assert_eq!(brief.reference.as_deref(), Some(BRIEF_REFERENCE));
     assert_eq!(brief.url, None);
-    assert!(!brief.retired);
+
     assert_eq!(brief.declared_by.as_deref(), Some(OWNER));
     assert_eq!(
         brief.declaration_address.as_ref().unwrap().segments(),
@@ -121,7 +121,7 @@ fn fluent_adoption_of_an_external_integration_source_keeps_its_kind() {
             replay.created,
             replay.updated,
             replay.moved,
-            replay.retired,
+            replay.deleted,
             replay.conflicts
         ),
         (0, 0, 0, 0, 0)

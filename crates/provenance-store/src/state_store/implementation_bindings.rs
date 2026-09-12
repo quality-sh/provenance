@@ -22,9 +22,10 @@ pub(super) fn reconcile(
 ) -> anyhow::Result<Reconciliation> {
     let mut records = store.list_implementation_bindings(scope_id)?;
     let mut desired = desired_bindings(scope_id, graph, &records)?;
-    for binding in records.iter().filter(|binding| {
-        !binding.retired && preserve_omitted_for.contains(binding.rule_id.as_str())
-    }) {
+    for binding in records
+        .iter()
+        .filter(|binding| preserve_omitted_for.contains(binding.rule_id.as_str()))
+    {
         if let Some(generated) = desired
             .iter_mut()
             .find(|desired| desired.rule_id == binding.rule_id)
@@ -60,21 +61,20 @@ pub(super) fn reconcile(
         .iter()
         .map(|binding| &binding.rule_id)
         .collect::<Vec<_>>();
-    for record in records.iter_mut().filter(|binding| {
-        !binding.retired
-            && binding.declared_by == graph.owner
-            && !desired_rule_ids.contains(&&binding.rule_id)
-            && rule_belongs_to_spec(canonical_rules, &binding.rule_id, graph.owner, graph.spec)
-    }) {
-        let before = target(record);
-        record.retired = true;
-        record_change(
-            &mut changes,
-            record.rule_id.clone(),
-            before,
-            serde_json::Value::Null,
-        );
-    }
+    records.retain(|record| {
+        let omitted = record.declared_by == graph.owner
+            && !desired_rule_ids.contains(&&record.rule_id)
+            && rule_belongs_to_spec(canonical_rules, &record.rule_id, graph.owner, graph.spec);
+        if omitted {
+            record_change(
+                &mut changes,
+                record.rule_id.clone(),
+                target(record),
+                serde_json::Value::Null,
+            );
+        }
+        !omitted
+    });
 
     records.sort_by(|left, right| left.id.as_str().cmp(right.id.as_str()));
     Ok(Reconciliation {
@@ -136,7 +136,7 @@ fn desired_bindings(
                 id: binding_id(&rule_id)?,
                 rule_id,
                 declared_by: graph.owner.to_string(),
-                retired: false,
+
                 file: implementation.file.clone(),
                 symbol: implementation.symbol.clone(),
             })
@@ -174,7 +174,7 @@ impl StateStore {
                 id,
                 rule_id: input.rule_id,
                 declared_by: input.declared_by,
-                retired: false,
+
                 file: input.file,
                 symbol: input.symbol,
             };
@@ -215,14 +215,7 @@ fn rule_belongs_to_spec(rules: &[Rule], rule_id: &StableId, owner: &str, spec: &
 }
 
 fn target(binding: &ImplementationBinding) -> serde_json::Value {
-    if binding.retired {
-        serde_json::Value::Null
-    } else {
-        serde_json::json!({
-            "file": binding.file,
-            "symbol": binding.symbol,
-        })
-    }
+    serde_json::json!({ "file": binding.file, "symbol": binding.symbol })
 }
 
 fn record_change(

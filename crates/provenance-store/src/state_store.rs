@@ -11,6 +11,7 @@ mod inputs;
 mod proposal_surfaces;
 mod proposal_writers;
 pub(crate) mod readers;
+mod record_stamps;
 mod reference_methods;
 mod reference_writers;
 mod requirement_reviews;
@@ -34,7 +35,7 @@ pub use ideation_batches::{
     SYNTHESIS_KIND,
 };
 pub use inputs::{
-    AddSourceReferenceInput, BeginVerificationInput, CompleteVerificationInput,
+    AddSourceReferenceInput, BeginVerificationInput, CascadedResource, CompleteVerificationInput,
     CreateAssertionInput, CreateBoundaryInput, CreateContributionInput, CreateDispositionInput,
     CreateDomainInput, CreateProposalCardInput, CreateQuestionInput, CreateRequirementInput,
     CreateResolutionInput, CreateRuleInput, CreateSourceInput, CreateSynthesisPacketInput,
@@ -186,7 +187,7 @@ impl StateStore {
         read_jsonl(self, &shards::resolutions_path(&self.layout, scope))
     }
     pub fn list_rules(&self, scope: &ScopeId) -> anyhow::Result<Vec<Rule>> {
-        read_jsonl(self, &shards::rules_path(&self.layout, scope))
+        validate_rule_archives(read_jsonl(self, &shards::rules_path(&self.layout, scope))?)
     }
     pub fn list_verification_bindings(
         &self,
@@ -204,7 +205,6 @@ impl StateStore {
         Ok(self
             .list_verification_bindings(scope)?
             .into_iter()
-            .filter(|binding| !binding.retired)
             .collect())
     }
     pub fn list_implementation_bindings(
@@ -223,7 +223,6 @@ impl StateStore {
         Ok(self
             .list_implementation_bindings(scope)?
             .into_iter()
-            .filter(|binding| !binding.retired)
             .collect())
     }
     pub(crate) fn closed_sources(&self, scope: &ScopeId) -> anyhow::Result<Vec<Source>> {
@@ -248,7 +247,10 @@ impl StateStore {
         read_jsonl_closed(self, &shards::resolutions_path(&self.layout, scope))
     }
     pub(crate) fn closed_rules(&self, scope: &ScopeId) -> anyhow::Result<Vec<Rule>> {
-        read_jsonl_closed(self, &shards::rules_path(&self.layout, scope))
+        validate_rule_archives(read_jsonl_closed(
+            self,
+            &shards::rules_path(&self.layout, scope),
+        )?)
     }
     pub(crate) fn closed_verification_bindings(
         &self,
@@ -379,6 +381,15 @@ impl StateStore {
             Ok(records)
         })
     }
+}
+
+fn validate_rule_archives(rules: Vec<Rule>) -> anyhow::Result<Vec<Rule>> {
+    for rule in &rules {
+        rule.validate_archive().map_err(|error| {
+            anyhow::anyhow!("rule {} is archive-inconsistent: {error}", rule.id.as_str())
+        })?;
+    }
+    Ok(rules)
 }
 
 pub fn serde_name<T: serde::Serialize>(value: &T) -> anyhow::Result<String> {

@@ -1,10 +1,9 @@
 use super::{root_of, seeded_store};
-use crate::cache::tests::fixtures::{append_record, attach_source, create_rule_of, create_source};
+use crate::cache::tests::fixtures::append_record;
 use crate::operations::{queries, read_policy::ReadPolicy};
 use provenance_core::{protocol::ReadDocumentQuery, ScopeId};
 use provenance_macros::verifies;
 use serde_json::{json, Value};
-use std::fmt::Write as _;
 
 async fn page(root: &camino::Utf8Path, id: &str, cursor: Value) -> anyhow::Result<Value> {
     let result = queries::read_document(
@@ -36,93 +35,6 @@ async fn entries(root: &camino::Utf8Path, id: &str) -> Vec<Value> {
             return entries;
         }
     }
-}
-
-#[tokio::test]
-#[verifies("rule_review_ancestors_are_not_descendants", examples)]
-#[verifies("rule_review_retired_records_do_not_expand_active_document", examples)]
-async fn root_membership_does_not_follow_ancestors_cross_links_or_retired_citations() {
-    let (dir, store, scope) = seeded_store();
-    let root = root_of(&dir);
-    let path = crate::shards::requirements_path(&store.layout, &scope);
-    let original = json!(store.list_requirements(&scope).unwrap()[0]);
-    for (id, parent, retired) in [
-        ("req_parent", None, false),
-        ("req_sibling", Some("req_parent"), false),
-        ("req_child", Some("req_overtime"), false),
-        ("req_outside", None, false),
-        ("req_retired", Some("req_overtime"), true),
-        ("req_below_retired", Some("req_retired"), false),
-    ] {
-        let mut row = original.clone();
-        row["id"] = json!(id);
-        row["refines"] = json!(parent);
-        row["retired"] = json!(retired);
-        append_record(&path, &row);
-    }
-    let mut rows: Vec<Value> = std::fs::read_to_string(&path)
-        .unwrap()
-        .lines()
-        .map(|line| serde_json::from_str(line).unwrap())
-        .collect();
-    rows[0]["refines"] = json!("req_parent");
-    let mut saved = String::new();
-    for row in rows {
-        writeln!(saved, "{row}").unwrap();
-    }
-    std::fs::write(&path, saved).unwrap();
-    create_source(&store, &scope, "source_retired_only");
-    attach_source(&store, &scope, "req_retired", "source_retired_only");
-    create_rule_of(&store, &scope, "rule_shared", "req_overtime");
-    let rule_path = crate::shards::rules_path(&store.layout, &scope);
-    let mut rule = json!(store.list_rules(&scope).unwrap()[0]);
-    rule["requirement_ids"] = json!(["req_overtime", "req_outside"]);
-    std::fs::write(rule_path, format!("{rule}\n")).unwrap();
-    let mut unrelated = original.clone();
-    unrelated["id"] = json!("req_huge_unrelated");
-    unrelated["description"] = json!("x".repeat(100_000));
-    append_record(&path, &unrelated);
-    let found = entries(&root, "req_overtime").await;
-    let ids = |role: &str| {
-        found
-            .iter()
-            .filter(|e| e["kind"] == role)
-            .map(|e| e["node"]["id"].as_str().unwrap())
-            .collect::<Vec<_>>()
-    };
-    let members = ids("member");
-    assert!(members.contains(&"req_overtime") && members.contains(&"req_child"));
-    assert!(members.contains(&"rule_shared"));
-    for id in [
-        "req_parent",
-        "req_sibling",
-        "req_outside",
-        "req_retired",
-        "req_below_retired",
-    ] {
-        assert!(!members.contains(&id), "{id}");
-    }
-    let refs = ids("reference");
-    for id in ["req_parent", "req_outside", "req_retired"] {
-        assert!(refs.contains(&id), "{id}");
-    }
-    assert!(!refs.contains(&"source_retired_only"));
-    assert!(!refs.contains(&"req_sibling"));
-    assert!(page(&root, "req_absent", Value::Null)
-        .await
-        .unwrap_err()
-        .to_string()
-        .contains("missing"));
-    assert!(page(&root, "req_retired", Value::Null)
-        .await
-        .unwrap_err()
-        .to_string()
-        .contains("retired"));
-    assert!(page(&root, "rule_shared", Value::Null)
-        .await
-        .unwrap_err()
-        .to_string()
-        .contains("missing"));
 }
 
 #[tokio::test]

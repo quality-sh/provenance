@@ -207,8 +207,10 @@ async fn annotate_only_refuses_a_half_migrated_database() {
     let store = test_stores::seeded_queries();
     catch_up_state(&store.layout()).await.unwrap();
     let pool = open_cache(&store.layout()).await.unwrap();
-    sqlx::query("DELETE FROM _schema_migrations WHERE id = ?")
+    sqlx::query("DELETE FROM _schema_migrations WHERE id IN (?, ?, ?)")
         .bind(crate::migrations::RECORD_COLUMNS_MIGRATION_ID)
+        .bind(crate::migrations::RECORD_DELETION_MIGRATION_ID)
+        .bind(crate::migrations::RECORD_STAMPS_MIGRATION_ID)
         .execute(pool.pool())
         .await
         .unwrap();

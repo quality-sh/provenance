@@ -96,9 +96,9 @@ the document. It refuses implicit takeover and foreign-owned collisions before
 writing. Protocol 5 also accepts an exact, per-target `adopt_unowned` allowlist.
 An adoption target must name one declaration with the same explicit Stable ID,
 and its definition and relationships must already match canonical state.
-Omitted owned declarations retire in place. Identity-preserving moves replace
+Omitted owned declarations are deleted. Git preserves their history. Identity-preserving moves replace
 their active owned relationships. `plan` previews creates, updates, moves,
-adoptions, retirements, and ownership conflicts without writing. Verification runs
+adoptions, deletions, and ownership conflicts without writing. Verification runs
 live in the derived cache and always cite an existing Rule. Begin accepts either
 a canonical Rule ID or a declaration owner plus hierarchical address;
 the language callback itself runs in Node and never crosses into Rust. See
@@ -126,9 +126,7 @@ printf '%s' '{"file":"src/share-links.ts","symbol":"createShareLink"}' | provena
 Every answer opens with `protocol_version` and `operation`, so a recorded
 response says which contract produced it. `sdk info` still reports the version
 the engine speaks; a request may name `protocol_version` itself, and the engine
-refuses a request written for another one. Every request accepts
-`include_retired`, false by default: active views leave retired records and
-retired bindings out, and this flag is the only way to see them. Every request
+refuses a request written for another one. Every request
 that can match more than one record accepts `limit`, 50 by default and 200 at
 most, and its answer carries `limit` and `has_more`. An answer stops at the
 limit; there is no cursor and no next page.
@@ -181,8 +179,7 @@ Rule binding finding: `warning`, the default, reports the finding and lets the
 command succeed, and `error` reports the finding and fails the command. The
 findings it governs are an active Rule with no current verification binding,
 and a current implementation or verification binding to a deprecated or
-archived Rule. A retired historical binding is not current evidence and
-produces no such finding. The key does not govern other scan warnings, such as
+archived Rule. Deleted bindings do not provide current evidence. The key does not govern other scan warnings, such as
 an active Rule with no implementation, an unknown Rule id, or a second primary
 implementation. Rule severity metadata is a separate field and never selects
 the command result. An invalid value causes the same settings refusal as the
@@ -289,9 +286,8 @@ Some findings are Rule binding findings in the sense of
 `coverage.binding_findings`: an active Rule with no current verification, and a
 current implementation or verification binding to a deprecated or archived Rule.
 The scan reports each of them with `binding_finding` set in the JSON report, from
-scanned markers and typed graph bindings alike. A retired historical binding is
-readable but not current, so it neither satisfies verification nor produces the
-finding. `coverage.binding_findings` selects `warning` (report and succeed) or
+scanned markers and typed graph bindings alike. Deleted bindings do not satisfy
+verification or produce the finding. `coverage.binding_findings` selects `warning` (report and succeed) or
 `error` (report and fail); the default is `warning`, so a repository that plans
 active Rules ahead of their code keeps them visible without blocking. Rule
 severity metadata stays a record field and never selects the command result.
@@ -620,3 +616,22 @@ returns only the relations it crossed, not the whole scope.
 Shaping turn-state commands: `questions create` requires `--method` (grill, prototype, research, verify, or task); `topics claim/release/close` and `questions claim/release/answer` manage claim state (claiming an already-claimed item fails and reports the holder; closing a topic or answering a question clears its claim); `requirements fog set/show/clear` manages the deliberately unstructured fog text on an anchor requirement.
 
 Creation commands accept enriched v1 metadata for cloud-imported projects. Examples: `sources create --source-type legislation --reference "Department guidance" --commit-pin 5e1f2a9c4b6d8e0f1234567890abcdef12345678 --effective-date 1714521600000 --review-date 1717200000000 --supersedes source_2024`, `requirements create --status discovery --description "Research note" --domain-id domain_policy`, `resolutions create --status draft --confidence 0.9 --context "Code scan" --input-type regulatory --input-reference "Program manual" --input-summary "Reviewed rules" --made-by "Analyst" --approved-by "Approver" --approved-at 1714780800000 --supersedes res_2024`, `rules create --status draft --source-document docs/policy.md --source-section "Expiry limits"` (these fields are citations, not implementation bindings), and `proposals create --confidence 0.83`. Confidence values must be between `0.0` and `1.0`; source commit pins must be 7-64 hexadecimal characters.
+
+Rule archives and record stamps
+
+An archived Rule requires `archived_in_commit` with a full 40- or 64-digit
+hexadecimal commit hash and an optional RFC3339 `at` timestamp. Other Rule
+statuses refuse this field. An archived Rule cannot change to another status.
+The commit identifies the archived version in Git. `rules create` accepts
+`--archived-in-commit <hash>` and optional `--archived-at <RFC3339>`.
+`rules update` accepts the `archived_in_commit` object in its JSON input.
+
+Source, Requirement, Rule, and Resolution records can carry `created` and
+`updated` stamps. Each stamp contains `commit` and an RFC3339 `at` timestamp.
+A write uses repository HEAD at apply time. Creation stamps never change.
+Update stamps change only when record content changes. Stamps do not affect
+record equality, typed-spec conflicts, or canonical unit content digests.
+Legacy records can omit these stamps. A repository without a resolvable HEAD
+can write records with absent stamps. Later edits preserve the original
+creation stamp, including an absent one. Git preserves deleted records and
+previous versions of the source-controlled graph.

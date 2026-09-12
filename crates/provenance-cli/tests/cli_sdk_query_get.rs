@@ -61,42 +61,6 @@ fn get_carries_a_stamp_beside_the_answer() {
 }
 
 #[test]
-fn get_hides_a_retired_record_until_the_caller_asks_for_it() {
-    let directory = init_repo();
-    let repo = directory.path().to_str().unwrap();
-    let ids = apply_shared_rule(&directory);
-    let mut narrowed = fixtures::shared_rule_spec();
-    narrowed["requirements"] = json!([{
-        "key": "sharing",
-        "statement": "Shares are time bounded",
-        "sources": ["retention"]
-    }]);
-    narrowed["rules"][0]["requirements"] = json!(["sharing"]);
-    sdk(repo, "apply", &narrowed);
-
-    let active = sdk(
-        repo,
-        "get",
-        &json!({"node_type": "requirement", "id": ids.sessions.as_str()}),
-    );
-    assert_eq!(active["found"], false);
-    assert!(active.get("node").is_none());
-
-    let including = sdk(
-        repo,
-        "get",
-        &json!({
-            "node_type": "requirement",
-            "id": ids.sessions.as_str(),
-            "include_retired": true
-        }),
-    );
-    assert_eq!(including["found"], true);
-    assert_eq!(including["node"]["retired"], true);
-    assert_eq!(including["node"]["id"], ids.sessions);
-}
-
-#[test]
 fn get_refuses_a_request_written_for_another_protocol_version() {
     let directory = init_repo();
     let repo = directory.path().to_str().unwrap();

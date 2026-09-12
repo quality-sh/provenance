@@ -12,6 +12,7 @@ fn noscope_sized_source_and_requirement_adoption_preserves_all_ids_and_citations
     );
     store
         .create_rule(CreateRuleInput {
+            archived_in_commit: None,
             scope_id: scope.clone(),
             id: StableId::new("rule_unrelated").unwrap(),
             name: None,

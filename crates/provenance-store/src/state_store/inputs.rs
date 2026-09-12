@@ -2,9 +2,9 @@ use provenance_core::{
     ArtifactLink, CanonicalArtifact, ClaimChallenge, ConsensusFinding, ContestedClaim,
     ContributionStance, DeclarationAddress, DispositionActor, DispositionDecision, EvidenceGap,
     IdeationEvidenceReference, IdeationTarget, MaterialClaim, MessageRole, MinorityObjection,
-    PromotionState, ProposalTraceability, ProposalType, QuestionStatus, RequiredHumanDecision,
-    RequirementStatus, ResolutionInput, ResolutionMethod, ResolutionStatus, RuleSeverity,
-    RuleStatus, ScopeId, SourceReference, SourceType, StableId, SuggestedArtifact,
+    NodeType, PromotionState, ProposalTraceability, ProposalType, QuestionStatus,
+    RequiredHumanDecision, RequirementStatus, ResolutionInput, ResolutionMethod, ResolutionStatus,
+    RuleSeverity, RuleStatus, ScopeId, SourceReference, SourceType, StableId, SuggestedArtifact,
     SuggestedArtifactChange, ThreadParent, TopicStatus, UncertaintyRating,
     UnsupportedRecommendation, UnsupportedSpeculation, VerificationMethod,
 };
@@ -141,6 +141,10 @@ pub struct CreateResolutionInput {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(extend("x-provenance-validation-only-any-of" = true, "anyOf" = serde_json::json!([
+    {"properties":{"status":{"enum":["draft","review","active","deprecated"]},"archived_in_commit":{"type":"null"}},"required":["status"]},
+    {"properties":{"status":{"const":"archived"},"archived_in_commit":{"type":"object"}},"required":["status","archived_in_commit"]}
+]))))]
 pub struct CreateRuleInput {
     pub scope_id: ScopeId,
     pub id: StableId,
@@ -150,6 +154,8 @@ pub struct CreateRuleInput {
     pub resolution_ids: Vec<StableId>,
     pub statement: String,
     pub status: RuleStatus,
+    #[serde(default)]
+    pub archived_in_commit: Option<provenance_core::ArchivedStamp>,
     pub severity: RuleSeverity,
     pub source_document: Option<String>,
     pub source_section: Option<String>,
@@ -180,7 +186,7 @@ pub enum ReconcileState {
     Created,
     Updated,
     Moved,
-    Retired,
+    Deleted,
     Conflict,
     Unchanged,
 }
@@ -207,6 +213,17 @@ pub struct TypedFieldChange {
     pub after: serde_json::Value,
 }
 
+/// One graph record changed as a consequence of a typed declaration deletion.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub struct CascadedResource {
+    pub kind: NodeType,
+    pub id: StableId,
+    pub state: ReconcileState,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub changes: Vec<TypedFieldChange>,
+}
+
 /// One ASD-STE100 violation attached to its typed declaration site.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -229,10 +246,12 @@ pub struct TypedSpecResult {
     pub created: usize,
     pub updated: usize,
     pub moved: usize,
-    pub retired: usize,
+    pub deleted: usize,
     pub conflicts: usize,
     pub unchanged: usize,
     pub resources: Vec<ReconciledResource>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cascade: Vec<CascadedResource>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub diagnostics: Vec<TypedSpecDiagnostic>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

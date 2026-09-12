@@ -16,12 +16,15 @@ use provenance_scanner::{
 
 fn rule(id: &str, status: RuleStatus) -> Rule {
     Rule {
+        created: None,
+        updated: None,
+        archived_in_commit: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: ScopeId::new("default").unwrap(),
         id: StableId::new(id).unwrap(),
         declared_by: None,
         declaration_address: None,
-        retired: false,
+
         name: None,
         description: None,
         statement: "Claims must be grouped by participant".to_string(),
@@ -91,7 +94,7 @@ fn typed_binding(rule_id: &str) -> VerificationBinding {
         key: "typed-check".to_string(),
         method: VerificationMethod::Examples,
         declared_by: "ci://typescript".to_string(),
-        retired: false,
+
         file: "tests/rule.test.ts".into(),
         symbol: Some("rule holds".to_string()),
     }
@@ -111,16 +114,6 @@ fn active_rule_with_no_verification_warns() {
         warnings[0].binding_finding,
         "absence of verification is a Rule binding finding"
     );
-}
-
-#[test]
-fn retired_active_rule_does_not_warn_about_missing_verification() {
-    let retired = Rule {
-        retired: true,
-        ..rule("rule_retired", RuleStatus::Active)
-    };
-
-    assert!(unverified_rule_warnings(&[retired], &[], &[]).is_empty());
 }
 
 /// The rule names a source document, and the warning still points at no

@@ -19,3 +19,5 @@ include!("tests/relations.rs");
 include!("tests/proposal_lifecycle_dispositions.rs");
 include!("tests/services.rs");
 include!("tests/shaping.rs");
+
+mod record_stamps;

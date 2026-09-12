@@ -2227,6 +2227,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "thiserror 1.0.69",
+ "time",
  "trybuild",
 ]
 
@@ -2234,6 +2235,7 @@ dependencies = [
 name = "provenance-http-client"
 version = "0.2.3"
 dependencies = [
+ "chrono",
  "jsonschema",
  "regress",
  "reqwest",
@@ -2337,6 +2339,7 @@ dependencies = [
  "sqlx",
  "tempfile",
  "thiserror 1.0.69",
+ "time",
  "tokio",
  "trybuild",
  "uuid",

@@ -1,11 +1,12 @@
 import * as Effect from 'effect/Effect';
 import * as OpenApiGenerator from '@effect/openapi-generator/OpenApiGenerator';
 import { validators, responseSchemas } from './validators.mjs';
+import { clientTypeSchema } from './typescript-schema.mjs';
 
 export async function effectFiles(document) {
   const warnings = [];
   const generated = await Effect.runPromise(Effect.flatMap(OpenApiGenerator.make, generator =>
-    generator.generate(document, { name: 'ProvenanceApi', format: 'httpapi', onWarning: warning => warnings.push(warning) })));
+    generator.generate(clientTypeSchema(document), { name: 'ProvenanceApi', format: 'httpapi', onWarning: warning => warnings.push(warning) })));
   if (warnings.length) throw new Error(`Effect generator warnings: ${JSON.stringify(warnings)}`);
   const shared = new Set(responseSchemas(document).filter(name => Object.hasOwn(document.components.schemas, name)));
   const names = [];

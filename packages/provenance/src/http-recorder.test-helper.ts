@@ -44,7 +44,7 @@ export async function recordingHost(responses: Readonly<Record<string, unknown>>
       } else if (command === "plan" || command === "apply") {
         result = {
           declared_by: body.request.declared_by, created: 0, updated: 0,
-          moved: 0, retired: 0, conflicts: 0, unchanged: 0, resources: [],
+          moved: 0, deleted: 0, conflicts: 0, unchanged: 0, resources: [],
           ...(command === "plan" ? { affected_rules: [] } : {}),
         };
       } else if (command === "begin-verification") {

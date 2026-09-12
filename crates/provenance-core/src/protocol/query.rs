@@ -47,8 +47,6 @@ pub struct GetQuery {
     pub protocol_version: Option<u32>,
     pub node_type: NodeType,
     pub id: String,
-    #[serde(default)]
-    pub include_retired: bool,
 }
 
 /// Find records whose text contains a phrase.
@@ -63,8 +61,6 @@ pub struct SearchQuery {
     pub text: String,
     #[serde(default)]
     pub node_types: Vec<NodeType>,
-    #[serde(default)]
-    pub include_retired: bool,
     #[serde(default = "default_limit")]
     #[cfg_attr(feature = "schema", schemars(range(min = 1, max = super::QUERY_MAX_LIMIT)))]
     pub limit: usize,
@@ -84,8 +80,6 @@ pub struct NeighborsQuery {
     pub direction: Direction,
     #[serde(default)]
     pub relations: Vec<String>,
-    #[serde(default)]
-    pub include_retired: bool,
     #[serde(default = "default_limit")]
     #[cfg_attr(feature = "schema", schemars(range(min = 1, max = super::QUERY_MAX_LIMIT)))]
     pub limit: usize,
@@ -108,8 +102,6 @@ pub struct TraceQuery {
     #[serde(default = "default_max_depth")]
     #[cfg_attr(feature = "schema", schemars(range(min = 1, max = super::TRACE_MAX_DEPTH)))]
     pub max_depth: usize,
-    #[serde(default)]
-    pub include_retired: bool,
     #[serde(default = "default_limit")]
     #[cfg_attr(feature = "schema", schemars(range(min = 1, max = super::QUERY_MAX_LIMIT)))]
     pub limit: usize,
@@ -125,8 +117,6 @@ pub struct ImpactQuery {
     pub id: String,
     #[serde(default)]
     pub node_type: Option<NodeType>,
-    #[serde(default)]
-    pub include_retired: bool,
     #[serde(default = "default_limit")]
     #[cfg_attr(feature = "schema", schemars(range(min = 1, max = super::QUERY_MAX_LIMIT)))]
     pub limit: usize,
@@ -148,8 +138,6 @@ pub struct EvidenceQuery {
     pub base: Option<String>,
     #[serde(default)]
     pub head: Option<String>,
-    #[serde(default)]
-    pub include_retired: bool,
     #[serde(default = "default_limit")]
     #[cfg_attr(feature = "schema", schemars(range(min = 1, max = super::QUERY_MAX_LIMIT)))]
     pub limit: usize,
@@ -167,8 +155,6 @@ pub struct StaleQuery {
     pub head: Option<String>,
     #[serde(default)]
     pub rules: Vec<String>,
-    #[serde(default)]
-    pub include_retired: bool,
     #[serde(default = "default_limit")]
     #[cfg_attr(feature = "schema", schemars(range(min = 1, max = super::QUERY_MAX_LIMIT)))]
     pub limit: usize,
@@ -187,8 +173,6 @@ pub struct ResolveSymbolQuery {
     pub symbol: Option<String>,
     #[serde(default)]
     pub line: Option<usize>,
-    #[serde(default)]
-    pub include_retired: bool,
     #[serde(default = "default_limit")]
     #[cfg_attr(feature = "schema", schemars(range(min = 1, max = super::QUERY_MAX_LIMIT)))]
     pub limit: usize,

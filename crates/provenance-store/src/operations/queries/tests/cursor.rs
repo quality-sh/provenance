@@ -47,7 +47,6 @@ async fn cursor_pages_preserve_order_and_refuse_invalid_continuations() {
     for (field, value) in [
         ("text", json!("overtime")),
         ("limit", json!(50)),
-        ("include_retired", json!(true)),
         ("node_types", json!(["rule"])),
     ] {
         let mut changed = next.clone();

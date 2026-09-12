@@ -78,8 +78,7 @@ fn read_shard<T: serde::de::DeserializeOwned>(
 }
 
 /// Read the typed evidence bindings at a commit. A missing shard file is
-/// the normal state for a store that never recorded bindings; retired
-/// bindings are history and stay out.
+/// the normal state for a store that never recorded bindings.
 pub(super) fn read_bindings(
     repo: &Utf8Path,
     commit: &str,
@@ -94,20 +93,14 @@ pub(super) fn read_bindings(
         scope,
         "verifications/binding.jsonl",
     )?
-    .unwrap_or_default()
-    .into_iter()
-    .filter(|binding| !binding.retired)
-    .collect();
+    .unwrap_or_default();
     let implementations = read_shard::<provenance_core::ImplementationBinding>(
         repo,
         commit,
         scope,
         "implementations/binding.jsonl",
     )?
-    .unwrap_or_default()
-    .into_iter()
-    .filter(|binding| !binding.retired)
-    .collect();
+    .unwrap_or_default();
     Ok((verifications, implementations))
 }
 
@@ -327,7 +320,7 @@ fn requirement_lifecycle(record: &Requirement) -> String {
         provenance_core::RequirementStatus::Refinement => "refinement",
         provenance_core::RequirementStatus::Resolved => "resolved",
     };
-    retired_word(record.retired, status)
+    status.to_string()
 }
 
 fn rule_lifecycle(record: &Rule) -> String {
@@ -338,7 +331,7 @@ fn rule_lifecycle(record: &Rule) -> String {
         provenance_core::RuleStatus::Deprecated => "deprecated",
         provenance_core::RuleStatus::Archived => "archived",
     };
-    retired_word(record.retired, status)
+    status.to_string()
 }
 
 fn resolution_lifecycle(record: &Resolution) -> String {
@@ -352,15 +345,7 @@ fn resolution_lifecycle(record: &Resolution) -> String {
         provenance_core::ResolutionStatus::Superseded => "superseded",
         provenance_core::ResolutionStatus::Abandoned => "abandoned",
     };
-    retired_word(false, status)
-}
-
-fn retired_word(retired: bool, status: &str) -> String {
-    if retired {
-        format!("retired {status}")
-    } else {
-        status.to_string()
-    }
+    status.to_string()
 }
 
 fn requirement_relations(record: &Requirement) -> BTreeSet<RelationKey> {

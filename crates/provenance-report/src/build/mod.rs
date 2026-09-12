@@ -275,7 +275,7 @@ fn evidence_site_findings(
     scope: &ScopeId,
     layout: &ProvenanceLayout,
 ) -> anyhow::Result<Vec<crate::envelope::Finding>> {
-    let graph = cache::graph_evidence(layout, scope, false)?;
+    let graph = cache::graph_evidence(layout, scope)?;
     let base_files = git::revision_files(repo, base)?;
     let head_files = git::revision_files(repo, head)?;
     let changes = git::changed_files(repo, base, head)?;
