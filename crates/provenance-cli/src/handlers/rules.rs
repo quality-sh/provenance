@@ -93,28 +93,27 @@ pub(super) async fn handle(command: RulesCommand) -> anyhow::Result<()> {
             origin_message,
             ..
         } => {
-            let rule =
-                Store::open(repo).create_rule(CreateRuleInput {
-                    scope_id: ScopeId::new(scope)?,
-                    id: StableId::new(id)?,
-                    name,
-                    description,
-                    requirement_ids: stable_ids(requirement_id)?,
-                    resolution_ids: stable_ids(resolution_id)?,
-                    statement,
-                    status: RuleStatus::parse(&status)?,
-                    archived_in_commit: archived_in_commit.map(|commit| {
-                        provenance_core::ArchivedStamp {
-                            commit,
-                            at: archived_at,
-                        }
-                    }),
-                    severity: RuleSeverity::parse(&severity)?,
-                    source_document,
-                    source_section,
-                    origin_thread: origin_thread.map(StableId::new).transpose()?,
-                    origin_message: origin_message.map(StableId::new).transpose()?,
-                })?;
+            let rule = Store::open(repo).create_rule(CreateRuleInput {
+                scope_id: ScopeId::new(scope)?,
+                id: StableId::new(id)?,
+                name,
+                description,
+                requirement_ids: stable_ids(requirement_id)?,
+                resolution_ids: stable_ids(resolution_id)?,
+                statement,
+                status: RuleStatus::parse(&status)?,
+                archived_in_commit: archived_in_commit.map(|commit| {
+                    provenance_core::ArchivedStamp {
+                        commit,
+                        at: archived_at,
+                    }
+                }),
+                severity: RuleSeverity::parse(&severity)?,
+                source_document,
+                source_section,
+                origin_thread: origin_thread.map(StableId::new).transpose()?,
+                origin_message: origin_message.map(StableId::new).transpose()?,
+            })?;
             output::print_json(&rule)?;
         }
         RulesCommand::Requirement { command } => {
