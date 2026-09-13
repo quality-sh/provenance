@@ -16,7 +16,7 @@ use crate::envelope::{
 };
 use crate::render;
 use anyhow::Context;
-use camino::Utf8Path;
+use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::ScopeId;
 use provenance_macros::rule;
 use provenance_store::stale::git;
@@ -66,7 +66,8 @@ pub fn build_envelope(input: &BuildInput<'_>) -> anyhow::Result<ReportEnvelope> 
 
     let scans = provenance_scanner::scan_path_with_content(input.scan_path)?;
     let files_scanned = scans.len() as u64;
-    let scans: Vec<_> = scans.into_iter().map(|file| file.scan).collect();
+    let head_files = git::revision_files(input.repo, &head)?;
+    let scans = scans_pinned_to_head(input.repo, scans, head_files);
     let scan_covers = scan_covers_repository(input.repo, input.scan_path);
     let (completeness, incompleteness_reason) =
         scan_completeness(input.repo, input.scan_path, scan_covers, &head)?;
@@ -297,8 +298,36 @@ fn scan_covers_repository(repo: &Utf8Path, path: &Utf8Path) -> bool {
     same_file::is_same_file(repo, path).unwrap_or(false)
 }
 
-/// Whether the working tree matches the head commit. Scanned source facts
-/// come from the working tree; only a clean tree pins them to head.
+/// Keep only source scans whose path and complete bytes occur at the
+/// requested head. Other working-copy bytes cannot supply head evidence.
+fn scans_pinned_to_head(
+    repo: &Utf8Path,
+    scans: Vec<provenance_scanner::FileScanWithContent>,
+    head_files: Vec<git::RevisionFile>,
+) -> Vec<provenance_scanner::FileScan> {
+    let head_contents: std::collections::BTreeMap<Utf8PathBuf, String> = head_files
+        .into_iter()
+        .map(|file| (file.path, file.content))
+        .collect();
+    scans
+        .into_iter()
+        .filter_map(|file| {
+            let path = repository_relative_path(repo, &file.scan.file_path)?;
+            head_contents
+                .get(path)
+                .is_some_and(|content| content == &file.content)
+                .then_some(file.scan)
+        })
+        .collect()
+}
+
+fn repository_relative_path<'a>(repo: &'a Utf8Path, path: &'a Utf8Path) -> Option<&'a Utf8Path> {
+    path.strip_prefix(repo)
+        .ok()
+        .or_else(|| path.is_relative().then_some(path))
+}
+
+/// Whether the working tree has no tracked or untracked changes.
 fn working_tree_is_clean(repo: &Utf8Path) -> anyhow::Result<bool> {
     let output = std::process::Command::new("git")
         .current_dir(repo)
@@ -318,20 +347,38 @@ fn scan_completeness(
     scan_covers: bool,
     head: &str,
 ) -> anyhow::Result<(Completeness, Option<String>)> {
-    let clean = scan_covers && working_tree_is_clean(repo)?;
-    if clean {
-        return Ok((Completeness::Complete, None));
-    }
-    let reason = if scan_covers {
-        format!(
-            "the working tree has uncommitted changes; scanned source facts do not \
-             pin to head commit {head}"
-        )
-    } else {
-        format!(
-            "the scan path {scan_path} covers part of the repository tree; absence \
+    if !scan_covers {
+        return Ok((
+            Completeness::Incomplete,
+            Some(format!(
+                "the scan path {scan_path} covers part of the repository tree; absence \
              facts are not established for the whole tree"
-        )
-    };
-    Ok((Completeness::Incomplete, Some(reason)))
+            )),
+        ));
+    }
+    if !working_tree_is_clean(repo)? {
+        return Ok((
+            Completeness::Incomplete,
+            Some(format!(
+                "the working tree has uncommitted changes; scanned source facts do not \
+                 pin to head commit {head}"
+            )),
+        ));
+    }
+    let (checked_out_head, _) = git::resolve_range(
+        repo,
+        Some("HEAD".to_string()),
+        Some("HEAD".to_string()),
+        None,
+    )?;
+    if checked_out_head != head {
+        return Ok((
+            Completeness::Incomplete,
+            Some(format!(
+                "the checked-out commit is {checked_out_head}; scanned source facts do not \
+                 cover requested head commit {head}"
+            )),
+        ));
+    }
+    Ok((Completeness::Complete, None))
 }
