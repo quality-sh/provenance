@@ -61,7 +61,7 @@
   "queries": ["search", "stale", "impact", "trace", "neighbors", "resolve-symbol"],
   "base_statuses": [400, 401, 403, 404, 500, 503],
   "routes": [
-    {"id": "get-metadata", "method": "GET", "path": "/metadata", "mutates": false, "statuses": [400, 401, 403, 404, 500, 503], "response": "result"},
+    {"id": "get-metadata", "method": "GET", "path": "/metadata", "mutates": false, "statuses": [400, 401, 403, 500, 503], "response": "result"},
     {"id": "post-collection", "method": "POST", "path": "/{collection}", "mutates": true, "statuses": [400, 401, 403, 404, 409, 500, 503], "response": "resource"},
     {"id": "get-resource", "method": "GET", "path": "/{collection}/{id}", "mutates": false, "statuses": [400, 401, 403, 404, 500, 503], "response": "resource"},
     {"id": "patch-resource", "method": "PATCH", "path": "/{collection}/{id}", "mutates": true, "statuses": [400, 401, 403, 404, 409, 500, 503], "response": "resource"},
@@ -85,9 +85,11 @@
     {"id": "get-collection-discussions", "method": "GET", "path": "/{collection}/{id}/discussions", "mutates": false, "statuses": [400, 401, 403, 404, 500, 503], "response": "items"},
     {"id": "post-collection-discussions", "method": "POST", "path": "/{collection}/{id}/discussions", "mutates": true, "statuses": [400, 401, 403, 404, 409, 500, 503], "response": "resource"},
     {"id": "patch-collection-discussion", "method": "PATCH", "path": "/{collection}/{id}/discussions/{discussion_id}", "mutates": true, "statuses": [400, 401, 403, 404, 409, 500, 503], "response": "resource"},
-    {"id": "get-collection-discussion-messages", "method": "GET", "path": "/{collection}/{id}/discussions/{discussion_id}/messages[/{message_id}]", "mutates": false, "statuses": [400, 401, 403, 404, 500, 503], "response": "items"},
+    {"id": "get-collection-discussion-messages", "method": "GET", "path": "/{collection}/{id}/discussions/{discussion_id}/messages", "mutates": false, "statuses": [400, 401, 403, 404, 500, 503], "response": "items"},
+    {"id": "get-collection-discussion-message", "method": "GET", "path": "/{collection}/{id}/discussions/{discussion_id}/messages/{message_id}", "mutates": false, "statuses": [400, 401, 403, 404, 500, 503], "response": "resource"},
     {"id": "post-collection-discussion-messages", "method": "POST", "path": "/{collection}/{id}/discussions/{discussion_id}/messages", "mutates": true, "statuses": [400, 401, 403, 404, 409, 500, 503], "response": "resource"},
-    {"id": "get-legacy-messages", "method": "GET", "path": "/{collection}/{id}/discussion-containers/{container_id}/legacy-messages[/{message_id}]", "mutates": false, "statuses": [400, 401, 403, 404, 500, 503], "response": "items", "capability": "Preserves unassigned history; no legacy operation maps to it."},
+    {"id": "get-legacy-messages", "method": "GET", "path": "/{collection}/{id}/discussion-containers/{container_id}/legacy-messages", "mutates": false, "statuses": [400, 401, 403, 404, 500, 503], "response": "items", "capability": "Preserves unassigned history; no legacy operation maps to it."},
+    {"id": "get-legacy-message", "method": "GET", "path": "/{collection}/{id}/discussion-containers/{container_id}/legacy-messages/{message_id}", "mutates": false, "statuses": [400, 401, 403, 404, 500, 503], "response": "resource", "capability": "One unassigned historical message; no legacy operation maps to it."},
 
     {"id": "topic-claim", "method": "POST", "path": "/topics/{id}/claim", "action": "claim", "mutates": true, "statuses": [400, 401, 403, 404, 409, 500, 503], "response": "resource"},
     {"id": "topic-release", "method": "POST", "path": "/topics/{id}/release", "action": "release", "mutates": true, "statuses": [400, 401, 403, 404, 409, 500, 503], "response": "resource"},
@@ -179,7 +181,7 @@
     {"legacy": "review-history", "bucket": "read", "source": "pr273", "routes": ["get-requirement-history"]},
     {"legacy": "review-evidence", "bucket": "read", "source": "pr273", "routes": ["get-history-evidence"]},
     {"legacy": "review-discussions", "bucket": "read", "source": "pr273", "routes": ["get-collection-discussions"]},
-    {"legacy": "review-discussion-messages", "bucket": "read", "source": "pr273", "routes": ["get-collection-discussion-messages"]},
+    {"legacy": "review-discussion-messages", "bucket": "read", "source": "pr273", "routes": ["get-collection-discussion-messages", "get-collection-discussion-message"]},
 
     {"legacy": "search", "bucket": "query", "source": "catalog", "routes": ["query-search"]},
     {"legacy": "stale", "bucket": "query", "source": "catalog", "routes": ["query-stale"]},

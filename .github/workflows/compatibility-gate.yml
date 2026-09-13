@@ -25,9 +25,13 @@ jobs:
           fetch-depth: 0
       - name: Resolve the base revision (pull request)
         if: github.event_name == 'pull_request'
-        run: echo "COMPAT_BASE=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_ENV"
+        run: |
+          echo "COMPAT_BASE=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_ENV"
+          echo "COMPAT_PULL_REQUEST=${{ github.event.pull_request.number }}" >> "$GITHUB_ENV"
       - name: Resolve the base revision (push)
         if: github.event_name == 'push'
         run: echo "COMPAT_BASE=${{ github.event.before }}" >> "$GITHUB_ENV"
       - name: Run the compatibility gate
         run: node tools/compat-gate/check.mjs
+      - name: Run the gate tests
+        run: node --test tools/compat-gate/check.test.mjs

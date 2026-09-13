@@ -103,6 +103,22 @@ test('missing status declarations are rejected', () => {
   assert.ok(errorsFor([{ id: 'unsorted', method: 'GET', path: '/requirements/{id}', mutates: false, statuses: [500, 400, 401, 403, 404, 503] }]).some(e => /sorted and unique/.test(e)));
 });
 
+test('a connection-scoped metadata read is exempt from the 404 base requirement', () => {
+  const fixture = routeOverrides([]);
+  fixture.routes[0] = { id: 'get-metadata', method: 'GET', path: '/metadata', mutates: false, statuses: [400, 401, 403, 500, 503], response: 'result' };
+  assert.deepEqual(lintRoutes(fixture), []);
+  assert.ok(errorsFor([{ id: 'no404', method: 'GET', path: '/requirements/{id}', mutates: false, statuses: [400, 401, 403, 500, 503], response: 'resource' }]).some(e => /base status 404 is not declared/.test(e)));
+});
+
+test('a single-message read never ships the items envelope', () => {
+  const fixture = routeOverrides([
+    { id: 'single', method: 'GET', path: '/requirements/{id}/discussions/{discussion_id}/messages/{message_id}', mutates: false, statuses: [400, 401, 403, 404, 500, 503], response: 'items' },
+  ]);
+  fixture.variables.push('discussion_id', 'message_id');
+  const errors = lintRoutes(fixture);
+  assert.ok(errors.some(e => /single-message read must not ship the items envelope/.test(e)), errors.join('; '));
+});
+
 test('name collisions and duplicate bindings are rejected', () => {
   const collided = routeOverrides([
     { id: 'first', method: 'GET', path: '/requirements/{id}', mutates: false, statuses: [500] },

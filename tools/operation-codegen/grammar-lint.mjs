@@ -116,6 +116,9 @@ function routeErrors(route, fixture, legacyNames, seenIds, seenIdentities, seenN
     errors.push(`${where}: response kind '${route.response}' is rejected; use resource, items, or result under the one envelope`);
   }
   if (route.response === 'array' || route.response === 'raw') errors.push(`${where}: raw array responses are rejected; lists use data.items`);
+  if (route.response === 'items' && route.path.includes('{message_id}')) {
+    errors.push(`${where}: a single-message read must not ship the items envelope; a path carrying {message_id} reads one message`);
+  }
   if ('envelope' in route && route.envelope !== 'standard') errors.push(`${where}: flattened or non-standard envelopes are rejected`);
   if (route.mcp_only || ('mcp_envelope' in route && route.mcp_envelope !== 'standard')) errors.push(`${where}: MCP-only wrappers are rejected; MCP uses the same envelope`);
 
@@ -146,6 +149,9 @@ function routeErrors(route, fixture, legacyNames, seenIds, seenIdentities, seenN
     if (!statuses.every(status => Number.isInteger(status) && status >= 100 && status <= 599)) errors.push(`${where}: statuses must be HTTP status integers`);
     if (JSON.stringify(statuses) !== JSON.stringify([...statuses].sort((a, b) => a - b))) errors.push(`${where}: statuses must be sorted and unique`);
     for (const base of fixture.base_statuses) {
+      // A connection-scoped metadata read has no resource identity to miss,
+      // so the 404 base requirement does not apply to it.
+      if (base === 404 && route.path === '/metadata') continue;
       if (!statuses.includes(base)) errors.push(`${where}: base status ${base} is not declared`);
     }
     if (route.mutates === true && !statuses.includes(409)) errors.push(`${where}: a mutating route must declare 409`);

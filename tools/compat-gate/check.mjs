@@ -93,11 +93,32 @@ export function parseMarker(content) {
       errors.push('date is not a real calendar date');
     }
   }
+  if (!/^[1-9][0-9]*$/.test(fields['pull-request'] ?? '')) errors.push('pull-request is missing or is not a pull-request number; bind the marker to the change it authorizes');
+  if (!/^[0-9a-f]{7,40}$/.test(fields.commit ?? '')) errors.push('commit is missing or is not a commit SHA; bind the marker to a commit of the change it authorizes');
   if (!fields.reason || fields.reason.length < 4) errors.push('reason is missing; state why the change is authorized');
   return errors.length ? { ok: false, errors, fields } : { ok: true, errors: [], fields };
 }
 
-export function evaluate({ base, head, baseMarker, headMarker }) {
+// A parsed marker only counts when it is bound to the change under evaluation.
+// The binding is the detectable proxy for human authorship: a marker copied
+// from an earlier change names a pull request that is not under review, a
+// commit outside this change, and a date before the base commit existed.
+export function bindingViolations(fields, context) {
+  const violations = [];
+  if (context.pullRequest !== null && context.pullRequest !== undefined && fields['pull-request'] !== String(context.pullRequest)) {
+    violations.push(`authorization refused: marker pull-request ${fields['pull-request']} does not match pull request ${context.pullRequest} under review`);
+  }
+  const commit = fields.commit ?? '';
+  if (Array.isArray(context.commits) && !context.commits.some(sha => sha.startsWith(commit))) {
+    violations.push(`authorization refused: marker commit ${commit} is not a commit of this change (base..head); a marker from an earlier change authorizes nothing`);
+  }
+  if (context.baseDate && fields.date < context.baseDate) {
+    violations.push(`authorization refused: marker date ${fields.date} predates the base commit date ${context.baseDate}`);
+  }
+  return violations;
+}
+
+export function evaluate({ base, head, baseMarker, headMarker, context = null }) {
   const changes = [];
   for (const entry of WATCHED) {
     const from = base[entry.key];
@@ -111,6 +132,7 @@ export function evaluate({ base, head, baseMarker, headMarker }) {
   if (!marker.ok) violations.push(...marker.errors.map(error => `authorization refused: ${error}`));
   const fresh = baseMarker !== null && baseMarker === headMarker;
   if (fresh) violations.push('authorization refused: AUTHORIZED-BUMP is unchanged from the base; a human must write a new authorization for this change');
+  if (marker.ok && context) violations.push(...bindingViolations(marker.fields, context));
   return { authorized: violations.length === 0, changes, violations, base, head };
 }
 
@@ -135,6 +157,16 @@ function readFiles(root, rev) {
   return watchedValues(files);
 }
 
+function changeCommits(root, base, head) {
+  const result = git(root, ['rev-list', `${base}..${head}`]);
+  return result.ok ? result.stdout.split('\n').filter(Boolean) : [];
+}
+
+function baseCommitDate(root, base) {
+  const result = git(root, ['show', '-s', '--format=%cI', base]);
+  return result.ok ? result.stdout.trim().slice(0, 10) : null;
+}
+
 const ZERO_SHA = /^0+$/;
 
 function defaultBase(root) {
@@ -151,6 +183,7 @@ async function main() {
   };
   let base = flag('--base');
   const head = flag('--head') ?? 'HEAD';
+  const pullRequest = flag('--pull-request') ?? process.env.COMPAT_PULL_REQUEST ?? null;
   if (base === undefined && process.env.COMPAT_BASE) base = process.env.COMPAT_BASE;
   if (base === undefined) base = defaultBase(root);
   if (base === undefined || base === null || ZERO_SHA.test(base)) {
@@ -168,11 +201,18 @@ async function main() {
     return;
   }
 
+  // The full binding (pull request, change commit, marker date) needs the
+  // pull-request context. Pushes to main carry none, so they get the format
+  // and freshness rules only; the pull-request run is the authoritative one.
+  const context = pullRequest !== null
+    ? { pullRequest, commits: changeCommits(root, base, head), baseDate: baseCommitDate(root, base) }
+    : null;
   const result = evaluate({
     base: readFiles(root, base),
     head: readFiles(root, head),
     baseMarker: readBlob(root, base, MARKER_PATH),
     headMarker: readBlob(root, head, MARKER_PATH),
+    context,
   });
 
   for (const entry of WATCHED) {
@@ -189,7 +229,7 @@ async function main() {
   }
   console.error('Compatibility gate failed. Compatibility values changed without a valid human authorization.');
   for (const violation of result.violations) console.error(`  - ${violation}`);
-  console.error(`Write ${MARKER_PATH} (authorized-by, date, reason) by hand in the same change, or revert the change.`);
+  console.error(`Write ${MARKER_PATH} (authorized-by, date, pull-request, commit, reason) by hand in the same change, or revert the change.`);
   process.exitCode = 1;
 }
 

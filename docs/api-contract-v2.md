@@ -90,13 +90,18 @@ operations have no public replacement.
 Requirement writes use one guarded path. The review layer is the editing
 interface. `POST /requirements` creates a Requirement. `PATCH /requirements/{id}`
 edits one under its ETag and enrollment preconditions. No parallel write surface
-exists.
+exists. The read side merges the same way: `GET /requirements/{id}` returns one
+resource read carrying the edit state, the relationships, the ETag, and the
+decision state together, so the separate edit-state and decision-state reads of
+the #273 review surface have no successor.
 
 ## 3. Envelope
 
 Every response uses `{data, meta}` or `{error, meta}`. A list uses `data.items`.
 MCP uses the same envelope as HTTP. No surface returns a raw array, a flattened
-result, or an MCP-only wrapper.
+result, or an MCP-only wrapper. `meta` carries the response machinery kept
+unchanged from the current surface — stamps, freshness policy, the HMAC-bound
+cursor, and limits — per the plan's kept-unchanged list.
 
 A body-bearing request uses `{data}`. HTTP binds catalog-defined controls to
 headers. MCP and native calls use the same typed controls. `Idempotency-Key`,
@@ -128,8 +133,11 @@ status. The declared set omits no status that the variants produce.
 Under-declaration is impossible.
 
 The base status set is 400, 401, 403, 404, 500, 503. A mutating operation also
-declares 409. A read POST declares `MUTATES=false`. The generator linter checks
-failure variants against runtime statuses and rejects a violation.
+declares 409. A read POST declares `MUTATES=false`. Today the generator linter
+validates the fixture's own status declarations: the base set, 409 on a
+mutating route, and sorted unique lists. Checking the declared statuses
+against the live catalog's runtime failure variants is a Phase 2b requirement;
+until that drift check exists, the linter sees the fixture's declarations only.
 
 ## 6. Compatibility tuple and gate
 
@@ -168,6 +176,16 @@ POSTs without an explicit `MUTATES=false`, and missing status declarations.
 Generated clients and MCP expose the collapsed contract. They do not reproduce
 the 90 legacy commands under new names. MCP tool descriptions stay
 resource-focused and useful.
+
+Two grammar rules from the plan are explicit Phase 2b deferrals, recorded so
+the freeze does not silently lose them. `payload-identity-repetition` rejects a
+payload that repeats a connection or path identity fact — repository, scope,
+collection, or resource id — inside its fields; the linter cannot check it
+today because the fixture declares no payload schemas.
+`tool-description-usefulness` is the enforceable form of the requirement above,
+that MCP tool descriptions stay resource-focused and useful; it needs the
+Phase 2b tool declarations to bind against. Both checks land when Phase 2b
+adds the payload and tool declarations they need.
 
 ## 8. Decision record — 2026-09-13 (binding)
 

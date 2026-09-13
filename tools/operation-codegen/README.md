@@ -76,7 +76,8 @@ contract grammar: repository or scope path prefixes, relationship routes,
 legacy verb routes, `/query` subroutes, GET bodies, required-null requests,
 raw arrays, flattened envelopes, MCP-only wrappers, undeclared actions or
 queries, mutating GETs, read POSTs without `MUTATES=false`, missing failure
-statuses, duplicate bindings, unresolved path parameters, and generated-name
+statuses, single-message reads that ship an items envelope, duplicate
+bindings, unresolved path parameters, and generated-name
 collisions. `node --test grammar-lint.test.mjs coverage.test.mjs` runs the
 linter tests without generation.
 

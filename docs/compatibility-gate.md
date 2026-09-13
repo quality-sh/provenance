@@ -36,11 +36,26 @@ format:
 # Human authorization for one compatibility change. Agents never write here.
 authorized-by: Ben
 date: 2026-09-13
+pull-request: 280
+commit: 61948751dbbf818ed49b2e16b6ea048de7c8b17b
 reason: the restructured API replaces the versioned operation URL
 ```
 
-The gate requires these three fields. The date is a real calendar date in
-YYYY-MM-DD form. The reason names why the break is authorized.
+The gate requires these five fields. The date is a real calendar date in
+YYYY-MM-DD form. The `pull-request` field names the pull request that carries
+the change. The `commit` field names a commit of that change; the SHA of the
+bump commit is the usual choice. The reason names why the break is authorized.
+
+The marker's own text proves nothing, so the gate cross-checks the binding
+against the event context: the pull request must match the pull request under
+review, the named commit must be one of the change's own commits, and the
+marker date must be on or after the base commit's date. A marker copied from
+an earlier change fails all three — its pull request differs, its commit is
+outside this change, and its date predates the base. This is a detectable
+proxy, not a proof of authorship: a human still writes the file, and the
+binding makes every earlier marker unusable as-is. Pushes to main carry no
+pull-request context, so the full binding is checked on pull requests; the
+format and freshness rules apply everywhere.
 
 ## Freshness rule
 
@@ -48,14 +63,17 @@ A marker authorizes the change that carries it. The gate compares the marker at
 the base revision with the marker at the head. When a watched value changed and
 the marker text is unchanged from the base, the gate fails. A marker left in
 the tree authorizes nothing later. Every bump needs a new marker, written in
-the same change as the bump.
+the same change as the bump. The binding above closes the remaining gap: when
+the marker file is absent at the base, re-adding a historical marker still
+fails, because that marker names a commit outside this change, a pull request
+that is not under review, and a date before the base commit existed.
 
 ## Where the gate runs
 
 The `Compatibility gate` workflow (.github/workflows/compatibility-gate.yml)
 runs on every pull request and on every push to main. It compares the head with
 the pull-request base, or with the previous head on a push. The job needs no
-Rust toolchain and finishes in seconds.
+Rust toolchain and finishes in seconds; it also runs the gate's tests.
 
 Run the gate locally before you open a change:
 
