@@ -7,7 +7,7 @@ use provenance_macros::verifies;
 fn manifest_rejects_unsupported_schema_version() {
     let (_dir, store, _scope) = initialized_store();
     let mut manifest = store.manifest().unwrap();
-    manifest.schema_version = SchemaVersion(SUPPORTED_SCHEMA_VERSION.0 + 1);
+    manifest.schema_version = SchemaVersion(provenance_core::review::REVIEW_SCHEMA_VERSION.0 + 1);
     std::fs::write(
         store.layout.manifest_path(),
         serde_json::to_string(&manifest).unwrap(),

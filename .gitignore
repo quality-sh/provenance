@@ -21,3 +21,12 @@ packages/*/LICENSE
 # Local Claude Code state (skills are tracked)
 .claude/worktrees/
 .claude/settings.local.json
+
+# Generated operation contracts and client source: build/package artifacts only
+/contracts/operations/
+/packages/provenance/src/generated/
+/crates/provenance-http-client/src/generated/
+/packages/provenance/src/engine-packages.ts
+
+# Composed renderer assets enter packages, not source control.
+/crates/provenance-cli/review-assets-generated/

@@ -7,6 +7,7 @@ use super::{
 use crate::model::ids::{SchemaVersion, ScopeId, StableId};
 use crate::model::validation::deserialize_optional_confidence;
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct MaterialClaim {
@@ -25,6 +26,7 @@ pub struct MaterialClaim {
     pub confidence: Option<f64>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ClaimChallenge {
@@ -33,6 +35,7 @@ pub struct ClaimChallenge {
     pub objection: String,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SuggestedArtifactChange {
@@ -47,6 +50,7 @@ pub struct SuggestedArtifactChange {
     pub summary: String,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct UnsupportedRecommendation {
@@ -54,6 +58,7 @@ pub struct UnsupportedRecommendation {
     pub marker: SpeculationMarker,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct UncertaintyRating {
@@ -61,6 +66,7 @@ pub struct UncertaintyRating {
     pub rationale: String,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Contribution {

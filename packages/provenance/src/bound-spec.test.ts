@@ -1,10 +1,13 @@
+import { OperationError } from "./client.js";
+import { recordingHost } from "./http-recorder.test-helper.js";
+import { fixtureSettings } from "./http-fixture.test-helper.js";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import test from "node:test";
+import test, { after } from "node:test";
 import { STATE_SCHEMA_VERSION } from "./protocol.js";
 
 import { apply, configure, defineSpec, plan } from "./index.js";
@@ -84,53 +87,6 @@ function seedResolution(repo: string): void {
   ]);
 }
 
-function recordingEngine(): {
-  engine: string;
-  requests: () => Array<{ command: string; input: unknown }>;
-} {
-  const directory = mkdtempSync(join(tmpdir(), "provenance-bound-recorder-"));
-  const executable = join(directory, "engine.mjs");
-  const log = join(directory, "requests.jsonl");
-  writeFileSync(
-    executable,
-    `#!/usr/bin/env node
-import { appendFileSync, readFileSync } from "node:fs";
-const command = process.argv[3];
-const source = readFileSync(0, "utf8");
-const input = source === "" ? undefined : JSON.parse(source);
-appendFileSync(${JSON.stringify(log)}, JSON.stringify({ command, input }) + "\\n");
-if (command === "info") process.stdout.write(JSON.stringify({
-  engine_version: "0.1.0", protocol_version: 6, state_schema_version: ${STATE_SCHEMA_VERSION}, repository: "/project"
-}));
-else if (command === "begin-verification") process.stdout.write(JSON.stringify({
-  id: "run_1", binding_id: "binding_1", rule_id: "rule_1", status: "running"
-}));
-else if (command === "complete-verification") process.stdout.write(JSON.stringify({
-  id: "run_1", binding_id: "binding_1", rule_id: "rule_1", status: "passed"
-}));
-else process.stdout.write(JSON.stringify({
-  declared_by: "spec://typescript", created: 0, updated: 0, moved: 0,
-  retired: 0, conflicts: 0, unchanged: 0,
-  resources: [], affected_rules: []
-}));
-`,
-  );
-  chmodSync(executable, 0o755);
-  return {
-    engine: executable,
-    requests: () => {
-      try {
-        return readFileSync(log, "utf8")
-          .trim()
-          .split("\n")
-          .filter(Boolean)
-          .map((line) => JSON.parse(line) as { command: string; input: unknown });
-      } catch {
-        return [];
-      }
-    },
-  };
-}
 
 function engineJson(repo: string, args: string[]): unknown {
   return JSON.parse(
@@ -141,8 +97,9 @@ function engineJson(repo: string, args: string[]): unknown {
 }
 
 test("a spec-bound Rule is its own immutable verification handle", async () => {
-  const recorder = recordingEngine();
-  configure({ engine: recorder.engine, owner: "spec://typescript/bound" });
+  const recorder = await recordingHost();
+  after(() => recorder.close());
+  configure({ ...recorder.settings, localRoot: fileURLToPath(new URL("../../..", import.meta.url)), owner: "spec://typescript/bound" });
   const provenance = defineSpec("share-links");
   const policy = provenance
     .source("policy")
@@ -174,13 +131,14 @@ test("a spec-bound Rule is its own immutable verification handle", async () => {
     key: "share-link-expiry",
     method: "examples",
     declared_by: "ci://typescript",
-    file: fileURLToPath(import.meta.url),
+    file: relative(fileURLToPath(new URL("../../..", import.meta.url)), fileURLToPath(import.meta.url)).split("\\").join("/"),
   });
 });
 
 test("a spec-bound Requirement serializes an immutable explicit ID", async () => {
-  const recorder = recordingEngine();
-  configure({ engine: recorder.engine, owner: "spec://typescript/bound-requirement-id" });
+  const recorder = await recordingHost();
+  after(() => recorder.close());
+  configure({ ...recorder.settings, localRoot: fileURLToPath(new URL("../../..", import.meta.url)), owner: "spec://typescript/bound-requirement-id" });
   const provenance = defineSpec("bound-requirement-id");
   const draft = provenance.requirement("canonical");
   const identified = draft.id("req_existing");
@@ -202,8 +160,9 @@ test("a spec-bound Requirement serializes an immutable explicit ID", async () =>
 });
 
 test("spec-bound declarations serialize exact unowned adoption targets", async () => {
-  const recorder = recordingEngine();
-  configure({ engine: recorder.engine, owner: "spec://typescript/bound-adoption" });
+  const recorder = await recordingHost();
+  after(() => recorder.close());
+  configure({ ...recorder.settings, localRoot: fileURLToPath(new URL("../../..", import.meta.url)), owner: "spec://typescript/bound-adoption" });
   const provenance = defineSpec("bound-adoption");
   const policy = provenance
     .source("policy")
@@ -246,7 +205,7 @@ test("spec-bound declarations serialize exact unowned adoption targets", async (
 
 test("spec-bound declarations adopt exact unowned engine records", async () => {
   const repo = repository();
-  configure({ engine, repository: repo, owner: "spec://typescript/bound-adoption-runtime" });
+  configure({ ...await fixtureSettings(repo), owner: "spec://typescript/bound-adoption-runtime" });
   execFileSync(engine, [
     "sources",
     "create",
@@ -332,8 +291,9 @@ test("spec-bound declarations adopt exact unowned engine records", async () => {
 });
 
 test("a spec-bound Source declares a supported non-document kind", async () => {
-  const recorder = recordingEngine();
-  configure({ engine: recorder.engine, owner: "spec://typescript/bound-source-kind" });
+  const recorder = await recordingHost();
+  after(() => recorder.close());
+  configure({ ...recorder.settings, localRoot: fileURLToPath(new URL("../../..", import.meta.url)), owner: "spec://typescript/bound-source-kind" });
   const provenance = defineSpec("bound-source-kind");
   const brief = provenance
     .source("brief")
@@ -361,7 +321,7 @@ test("a spec-bound Source declares a supported non-document kind", async () => {
 
 test("spec-bound declarations adopt an unowned external_integration Source", async () => {
   const repo = repository();
-  configure({ engine, repository: repo, owner: "spec://typescript/bound-source-kind-runtime" });
+  configure({ ...await fixtureSettings(repo), owner: "spec://typescript/bound-source-kind-runtime" });
   execFileSync(engine, [
     "sources",
     "create",
@@ -428,7 +388,7 @@ test("spec-bound declarations adopt an unowned external_integration Source", asy
 
 test("a spec-scoped Rule materializes once for several Requirements", async () => {
   const repo = repository();
-  configure({ engine, repository: repo, owner: "spec://typescript/bound-shared" });
+  configure({ ...await fixtureSettings(repo), owner: "spec://typescript/bound-shared" });
   const provenance = defineSpec("lifecycles");
   const policy = provenance.source("access-policy").document("docs/access-policy.md");
   const expiry = provenance.rule("expiry").statement("Authenticated access expires");
@@ -455,7 +415,7 @@ test("a spec-scoped Rule materializes once for several Requirements", async () =
 
 test("source names and Requirement descriptions are immutable canonical metadata", async () => {
   const repo = repository();
-  configure({ engine, repository: repo, owner: "spec://typescript/bound-metadata" });
+  configure({ ...await fixtureSettings(repo), owner: "spec://typescript/bound-metadata" });
   const provenance = defineSpec("metadata");
   const sourceDraft = provenance.source("policy").document("docs/policy.md");
   const namedSource = sourceDraft.name("Security policy");
@@ -493,11 +453,13 @@ test("source names and Requirement descriptions are immutable canonical metadata
 });
 
 test("one Requirement keeps a spec-scoped implemented Rule at its exact root address", async () => {
-  configure({
-    engine,
-    repository: fileURLToPath(new URL("../../..", import.meta.url)),
-    owner: "spec://typescript/bound-one-parent",
-  });
+  const repo = repository();
+  const localRoot = fileURLToPath(new URL("../../..", import.meta.url));
+  const implementation = fileURLToPath(new URL("./implementation-target.test-helper.js", import.meta.url));
+  const destination = join(repo, relative(localRoot, implementation));
+  mkdirSync(dirname(destination), { recursive: true });
+  writeFileSync(destination, readFileSync(implementation));
+  configure({ ...await fixtureSettings(repo), localRoot, owner: "spec://typescript/bound-one-parent" });
   const provenance = defineSpec("bound-one-parent");
   const expiry = provenance
     .rule("expiry")
@@ -522,7 +484,7 @@ test("one Requirement keeps a spec-scoped implemented Rule at its exact root add
 
 test("equal requirement-local Rule keys keep distinct addresses", async () => {
   const repo = repository();
-  configure({ engine, repository: repo, owner: "spec://typescript/bound-local" });
+  configure({ ...await fixtureSettings(repo), owner: "spec://typescript/bound-local" });
   const provenance = defineSpec("lifecycles");
   const sharing = provenance.requirement("sharing").statement("Shares expire");
   const sessions = provenance.requirement("sessions").statement("Sessions expire");
@@ -634,7 +596,9 @@ test("a build rejects declarations from another same-key context", () => {
 
 test("spec-bound verify rejects an unapplied Rule before running its callback", async () => {
   const repo = repository();
-  configure({ engine, repository: repo, owner: "spec://typescript/bound-unapplied" });
+  configure({ ...await fixtureSettings(repo), owner: "spec://typescript/bound-unapplied" });
+  mkdirSync(join(repo, "tests"));
+  writeFileSync(join(repo, "tests/share-links.test.ts"), "// verification fixture\n");
   const provenance = defineSpec("unapplied");
   const sharing = provenance.requirement("sharing").statement("Shares expire");
   const expiry = sharing.rule("expiry").statement("Share links expire");
@@ -649,14 +613,16 @@ test("spec-bound verify rejects an unapplied Rule before running its callback", 
       },
       { file: "tests/share-links.test.ts" },
     ),
-    /has not been applied/i,
+    (error: unknown) => error instanceof OperationError && error.failure.error.kind === "invalid_verification_target",
   );
   assert.equal(called, false);
 });
 
 test("spec-bound verify records failure and rethrows the callback error", async () => {
   const repo = repository();
-  configure({ engine, repository: repo, owner: "spec://typescript/bound-failed" });
+  configure({ ...await fixtureSettings(repo), owner: "spec://typescript/bound-failed" });
+  mkdirSync(join(repo, "tests"));
+  writeFileSync(join(repo, "tests/share-links.test.ts"), "// verification fixture\n");
   const provenance = defineSpec("failed-verification");
   const sharing = provenance.requirement("sharing").statement("Shares expire");
   const expiry = sharing.rule("expiry").statement("Share links expire");
@@ -686,7 +652,7 @@ test("spec-bound verify records failure and rethrows the callback error", async 
 
 test("relation fields on spec-bound declarations reach the written records", async () => {
   const repo = repository();
-  configure({ engine, repository: repo, owner: "spec://typescript/bound-relations" });
+  configure({ ...await fixtureSettings(repo), owner: "spec://typescript/bound-relations" });
   seedResolution(repo);
   const provenance = defineSpec("relations");
   const older = provenance.source("policy-2024").document("docs/policy-2024.md");

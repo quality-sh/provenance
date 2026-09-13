@@ -1,80 +1,62 @@
 use std::io::Read as _;
 
 use crate::cli::sdk::SdkCommand;
-use crate::output;
-use provenance_core::{ScopeId, StableId};
-use provenance_store::operations;
-use provenance_store::state_store::{BeginVerificationInput, CompleteVerificationInput};
+use crate::output::{self, ReportFormat};
+use camino::Utf8PathBuf;
+use provenance_core::ScopeId;
+use provenance_store::operations::{self, catalog};
 
 mod check_statement;
 mod query;
 mod render;
+mod verification_lists;
+
+/// Reads one request document from stdin and runs it as a native catalog
+/// operation on the selected repository and scope.
+async fn submit<O>(repo: Option<Utf8PathBuf>, scope: String) -> anyhow::Result<O::Success>
+where
+    O: catalog::Operation,
+    O::Failure: Sync,
+{
+    let repo = operations::discover_repository(repo)?;
+    let input = read_stdin_json::<O::Request>()?;
+    super::native::invoke_native::<O>(repo, ScopeId::new(scope)?, input).await
+}
 
 pub(super) async fn handle(command: SdkCommand) -> anyhow::Result<()> {
     match command {
-        SdkCommand::CheckStatement { format } => check_statement::handle(format)?,
-        SdkCommand::Info { repo, format } => {
-            output::print(format, &operations::engine_info(repo)?)?;
+        SdkCommand::CheckStatement { .. } => check_statement::handle().await?,
+        SdkCommand::Info { repo, .. } => {
+            output::print_json(&operations::engine_info(repo)?)?;
         }
         SdkCommand::Plan {
             repo,
             scope,
             format,
         } => {
-            let repo = Some(operations::discover_repository(repo)?);
-            let input = read_stdin_json()?;
-            let plan = operations::plan(repo, &ScopeId::new(scope)?, input)?;
+            let plan = submit::<operations::catalog::Plan>(repo, scope).await?;
             match format {
-                output::OutputFormat::Json | output::OutputFormat::Jsonl => {
-                    output::print(format, &plan)?;
-                }
-                output::OutputFormat::Markdown
-                | output::OutputFormat::Table
-                | output::OutputFormat::Toon => {
-                    print!("{}", render::render(&plan));
-                }
+                ReportFormat::Json => output::print_json(&plan)?,
+                ReportFormat::Markdown => print!("{}", render::render(&plan)),
             }
         }
-        SdkCommand::Apply {
-            repo,
-            scope,
-            format,
-        } => {
-            let repo = Some(operations::discover_repository(repo)?);
-            let input = read_stdin_json()?;
-            let result = operations::apply(repo, &ScopeId::new(scope)?, input)?;
-            output::print(format, &result)?;
+        SdkCommand::Apply { repo, scope, .. } => {
+            let result = submit::<operations::catalog::Apply>(repo, scope).await?;
+            output::print_json(&result)?;
         }
-        SdkCommand::BeginVerification {
-            repo,
-            scope,
-            format,
-        } => {
-            let repo = Some(operations::discover_repository(repo)?);
-            let input = read_stdin_json::<BeginVerificationInput>()?;
-            let run = operations::begin_verification(repo, ScopeId::new(scope)?, input)?;
-            output::print(format, &run)?;
+        SdkCommand::BeginVerification { repo, scope, .. } => {
+            let run = submit::<operations::catalog::BeginVerification>(repo, scope).await?;
+            output::print_json(&run)?;
         }
-        SdkCommand::CompleteVerification {
-            repo,
-            scope,
-            format,
-        } => {
-            let repo = Some(operations::discover_repository(repo)?);
-            let input = read_stdin_json::<CompleteVerificationInput>()?;
-            let run = operations::complete_verification(repo, &ScopeId::new(scope)?, input)?;
-            output::print(format, &run)?;
+        SdkCommand::CompleteVerification { repo, scope, .. } => {
+            let run = submit::<operations::catalog::CompleteVerification>(repo, scope).await?;
+            output::print_json(&run)?;
         }
         SdkCommand::VerificationRuns {
-            repo,
-            scope,
-            rule,
-            format,
+            repo, scope, rule, ..
         } => {
-            let repo = Some(operations::discover_repository(repo)?);
-            let rule = rule.map(StableId::new).transpose()?;
-            let runs = operations::verification_runs(repo, &ScopeId::new(scope)?, rule.as_ref())?;
-            output::print(format, &runs)?;
+            verification_lists::print::<operations::catalog::VerificationRuns>(repo, scope, rule)
+                .await?;
         }
         SdkCommand::Get { query } => query::handle(query::Operation::Get, query).await?,
         SdkCommand::Search { query } => query::handle(query::Operation::Search, query).await?,
@@ -89,16 +71,12 @@ pub(super) async fn handle(command: SdkCommand) -> anyhow::Result<()> {
             query::handle(query::Operation::ResolveSymbol, query).await?;
         }
         SdkCommand::VerificationBindings {
-            repo,
-            scope,
-            rule,
-            format,
+            repo, scope, rule, ..
         } => {
-            let repo = Some(operations::discover_repository(repo)?);
-            let rule = rule.map(StableId::new).transpose()?;
-            let bindings =
-                operations::verification_bindings(repo, &ScopeId::new(scope)?, rule.as_ref())?;
-            output::print(format, &bindings)?;
+            verification_lists::print::<operations::catalog::VerificationBindings>(
+                repo, scope, rule,
+            )
+            .await?;
         }
     }
     Ok(())

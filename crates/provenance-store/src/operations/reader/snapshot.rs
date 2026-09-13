@@ -80,7 +80,7 @@ impl ReadSnapshot {
         Relations { snapshot: self }
     }
 
-    fn attest(&self, word: &'static str) {
+    pub(crate) fn attest(&self, word: &'static str) {
         self.attested
             .lock()
             .unwrap_or_else(PoisonError::into_inner)

@@ -19,7 +19,7 @@ fn resolve(file: &str, line: Option<usize>) -> ResolveSymbolQuery {
         file: file.into(),
         symbol: None,
         line,
-        include_retired: false,
+
         limit: 50,
     }
 }
@@ -45,7 +45,6 @@ fn bind(store: &TestStore, id: &str, file: &str) {
             "id": id,
             "rule_id": "rule_overtime",
             "declared_by": "spec://test",
-            "retired": false,
             "file": file,
             "symbol": "pay",
         }),
@@ -77,7 +76,7 @@ async fn resolve_symbol_reads_the_named_file_only() {
                     protocol_version: Some(SDK_PROTOCOL_VERSION),
                     id: "req_overtime".into(),
                     node_type: None,
-                    include_retired: false,
+
                     limit: 50,
                 },
             )
@@ -143,10 +142,7 @@ async fn resolve_symbol_on_a_missing_file_answers_bindings_only() {
     assert!(!answer.result.has_more);
 }
 
-/// Only a repository-relative path in canonical spelling names a file to
-/// scan, as the bindings half reads it. A `./` prefix, an absolute path,
-/// and a path that climbs out of the repository scan nothing; the
-/// bindings still answer, and nothing outside the repository is read.
+/// Invalid source paths refuse before bindings can form a successful answer.
 #[tokio::test]
 #[verifies("rule_resolve_symbol_reads_the_named_file_only", examples)]
 async fn resolve_symbol_scans_only_a_repository_relative_path() {
@@ -164,33 +160,27 @@ async fn resolve_symbol_scans_only_a_repository_relative_path() {
         beside.path().file_name().unwrap().to_str().unwrap()
     );
     let absolute = store.root.join("src/pay.rs");
-    for (file, expected) in [
-        ("./src/pay.rs", vec!["rule_overtime"]),
-        (absolute.as_str(), Vec::new()),
-        (climbing.as_str(), Vec::new()),
-        ("src/../src/pay.rs", Vec::new()),
+    for file in [
+        "./src/pay.rs",
+        absolute.as_str(),
+        climbing.as_str(),
+        "src/../src/pay.rs",
     ] {
-        let answer = queries::resolve_symbol(
-            Some(store.root.clone()),
-            &store.scope,
-            ReadPolicy::default(),
-            resolve(file, None),
-        )
-        .await
-        .unwrap();
-        assert_eq!(
-            rule_ids(&answer.result.rules),
-            expected,
-            "{file}: bindings answer by their spelling; no file is scanned"
-        );
-        let with_line = queries::resolve_symbol(
-            Some(store.root.clone()),
-            &store.scope,
-            ReadPolicy::default(),
-            resolve(file, Some(1)),
-        )
-        .await
-        .unwrap();
-        assert!(with_line.result.rules.is_empty(), "{file}: no scanned site");
+        for line in [None, Some(1)] {
+            let Err(error) = queries::resolve_symbol(
+                Some(store.root.clone()),
+                &store.scope,
+                ReadPolicy::default(),
+                resolve(file, line),
+            )
+            .await
+            else {
+                panic!("unsafe source paths refuse");
+            };
+            assert!(matches!(
+                error.downcast_ref::<crate::operations::files::FileAccessRefusal>(),
+                Some(crate::operations::files::FileAccessRefusal::Denied)
+            ));
+        }
     }
 }

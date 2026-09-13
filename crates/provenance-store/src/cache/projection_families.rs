@@ -7,15 +7,13 @@
 //! stamped.
 
 use crate::state_store::{GuardedStore, StateStore};
-#[cfg(test)]
 use crate::{layout::ProvenanceLayout, shards};
-#[cfg(test)]
 use camino::Utf8PathBuf;
 use provenance_core::ScopeId;
 
 /// One family of records the projection stores.
 ///
-/// The variant list is the rule: eighteen stored families, no more, each
+/// The variant list is the rule: nineteen stored families, no more, each
 /// sharded per scope. Fifteen come from the original cache tables;
 /// implementation bindings, verification bindings, and requirement reviews
 /// joined when the canonical halves of impact, evidence, and resolve-symbol
@@ -41,6 +39,7 @@ pub enum ProjectionFamily {
     ImplementationBindings,
     VerificationBindings,
     RequirementReviews,
+    ReviewJournal,
 }
 
 macro_rules! canonical_records {
@@ -91,6 +90,9 @@ macro_rules! canonical_records {
                 Self::VerificationBindings => {
                     sorted_bytes(store.list_verification_bindings(scope)?, |r| r.id.as_str())
                 }
+                Self::ReviewJournal => {
+                    sorted_bytes(store.validated_journal_entries(scope)?, |r| r.id().as_str())
+                }
                 Self::RequirementReviews => {
                     sorted_bytes(store.list_requirement_reviews(scope)?, |r| r.id.as_str())
                 }
@@ -100,7 +102,7 @@ macro_rules! canonical_records {
 }
 
 impl ProjectionFamily {
-    pub const ALL: [Self; 18] = [
+    pub const ALL: [Self; 19] = [
         Self::Sources,
         Self::Domains,
         Self::Requirements,
@@ -119,6 +121,7 @@ impl ProjectionFamily {
         Self::ImplementationBindings,
         Self::VerificationBindings,
         Self::RequirementReviews,
+        Self::ReviewJournal,
     ];
 
     /// The family's cache table name and its digest-row key.
@@ -142,11 +145,11 @@ impl ProjectionFamily {
             Self::ImplementationBindings => "implementation_bindings",
             Self::VerificationBindings => "verification_bindings",
             Self::RequirementReviews => "requirement_reviews",
+            Self::ReviewJournal => "review_journal",
         }
     }
 
     /// The canonical shard file the family's records live in.
-    #[cfg(test)]
     pub(crate) fn shard_path(self, layout: &ProvenanceLayout, scope: &ScopeId) -> Utf8PathBuf {
         match self {
             Self::Sources => shards::sources_path(layout, scope),
@@ -167,7 +170,30 @@ impl ProjectionFamily {
             Self::ImplementationBindings => shards::implementation_bindings_path(layout, scope),
             Self::VerificationBindings => shards::verification_bindings_path(layout, scope),
             Self::RequirementReviews => shards::requirement_reviews_path(layout, scope),
+            Self::ReviewJournal => layout
+                .scopes_dir()
+                .join(scope.as_str())
+                .join("review/journal"),
         }
+    }
+
+    pub(crate) fn content_digest(self, bytes: &[u8]) -> anyhow::Result<String> {
+        if !matches!(
+            self,
+            Self::Sources | Self::Requirements | Self::Rules | Self::Resolutions
+        ) {
+            return Ok(crate::canonical_digest::digest(bytes));
+        }
+        let mut records: Vec<serde_json::Value> = serde_json::from_slice(bytes)?;
+        for record in &mut records {
+            if let Some(record) = record.as_object_mut() {
+                record.remove("created");
+                record.remove("updated");
+            }
+        }
+        Ok(crate::canonical_digest::digest(
+            &crate::canonical_digest::canonical_bytes(&records)?,
+        ))
     }
 
     canonical_records!(canonical_records, StateStore);

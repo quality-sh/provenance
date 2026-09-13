@@ -1,6 +1,5 @@
 //! The resolved settings for one query read.
 
-use provenance_core::protocol::StampPolicy;
 use provenance_macros::rule;
 
 /// The scan stops at 5000 source files, about 50 MB at 10 KB per file.
@@ -17,30 +16,7 @@ use provenance_macros::rule;
 /// median get time from the median impact time after one warm-up run.
 pub const DEFAULT_SCAN_LIMIT: usize = 5000;
 
-/// Which freshness step a read runs before it answers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum FreshnessPolicy {
-    /// Run catch-up under the publication guard, then answer.
-    #[default]
-    CatchUp,
-    /// Answer at the stored serial without a freshness step.
-    AnnotateOnly,
-    /// Reserved and not implemented yet: refuse when the projection is
-    /// behind.
-    RefuseStale,
-}
-
-impl FreshnessPolicy {
-    /// The stamp word for a step that ran as asked.
-    pub const fn word(self) -> StampPolicy {
-        match self {
-            Self::CatchUp => StampPolicy::CatchUp,
-            Self::AnnotateOnly => StampPolicy::AnnotateOnly,
-            Self::RefuseStale => StampPolicy::RefuseStale,
-        }
-    }
-}
+pub use provenance_core::protocol::repository::FreshnessPolicy;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ReadPolicy {

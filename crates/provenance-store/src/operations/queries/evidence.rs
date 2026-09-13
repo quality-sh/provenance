@@ -1,7 +1,5 @@
 use crate::operations::reader::{Live, ReadContext};
-use provenance_core::protocol::{
-    ensure_limit, ensure_protocol_version, take_page, EvidenceQuery, EvidenceResult, StaleEvidence,
-};
+use provenance_core::protocol::{take_page, EvidenceQuery, EvidenceResult, StaleEvidence};
 use provenance_core::{ImplementationBinding, RequirementReview, StableId, VerificationBinding};
 use provenance_macros::rule;
 
@@ -18,23 +16,23 @@ pub(super) async fn evidence(
     ctx: &ReadContext,
     request: EvidenceQuery,
 ) -> anyhow::Result<EvidenceResult> {
-    ensure_protocol_version(request.protocol_version)?;
-    ensure_limit(request.limit)?;
+    request
+        .validate()
+        .map_err(provenance_core::protocol::QueryValidation::into_native)?;
     let rule = StableId::new(request.rule.clone())?;
     let scope = ctx.snapshot().scope().clone();
-    let include_retired = request.include_retired;
     let snapshot = ctx.snapshot();
     let by_rule = [rule.as_str()];
     let implementations = snapshot
         .table::<ImplementationBinding>()
-        .by_field("rule_id", &by_rule, include_retired)
+        .by_field("rule_id", &by_rule)
         .await?
         .into_iter()
         .take(request.limit + 1)
         .collect::<Vec<_>>();
     let verifications = snapshot
         .table::<VerificationBinding>()
-        .by_field("rule_id", &by_rule, include_retired)
+        .by_field("rule_id", &by_rule)
         .await?
         .into_iter()
         .take(request.limit + 1)
@@ -57,7 +55,7 @@ pub(super) async fn evidence(
     // run are open.
     let mut reviews = snapshot
         .table::<RequirementReview>()
-        .by_field("rule_id", &by_rule, include_retired)
+        .by_field("rule_id", &by_rule)
         .await?
         .into_iter()
         .filter(|review| review.cleared_at.is_none())
@@ -76,9 +74,7 @@ pub(super) async fn evidence(
         .map(|base| {
             let diff = ctx.live(Live::Diff);
             let (base, head) = diff.resolve_range(base, request.head)?;
-            let graph = ctx
-                .live(Live::Canonical)
-                .graph_evidence(&scope, include_retired)?;
+            let graph = ctx.live(Live::Canonical).graph_evidence(&scope)?;
             diff.disturbed(base, head, std::slice::from_ref(&request.rule), &graph)
                 .map(|found| StaleEvidence {
                     base: found.base,

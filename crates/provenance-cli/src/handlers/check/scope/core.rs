@@ -2,40 +2,40 @@ use crate::handlers::check::index::CheckIndex;
 use crate::handlers::check::references::{
     check_artifact_links, check_origin_references, check_scoped_reference,
 };
+use crate::store::GraphRecords;
 use provenance_core::model::relations::{declaration_of, kind_word, RelationOwner};
 use provenance_core::{
     Boundary, Domain, ImplementationBinding, Question, Requirement, Resolution, Rule, ScopeId,
     Source, Topic, VerificationBinding,
 };
-use provenance_store::state_store::StateStore;
 
-pub(super) struct Records {
-    sources: Vec<Source>,
-    domains: Vec<Domain>,
-    requirements: Vec<Requirement>,
-    boundaries: Vec<Boundary>,
-    topics: Vec<Topic>,
-    questions: Vec<Question>,
-    resolutions: Vec<Resolution>,
-    rules: Vec<Rule>,
-    verification_bindings: Vec<VerificationBinding>,
-    implementation_bindings: Vec<ImplementationBinding>,
+pub(super) struct Records<'a> {
+    sources: &'a [Source],
+    domains: &'a [Domain],
+    requirements: &'a [Requirement],
+    boundaries: &'a [Boundary],
+    topics: &'a [Topic],
+    questions: &'a [Question],
+    resolutions: &'a [Resolution],
+    rules: &'a [Rule],
+    verification_bindings: &'a [VerificationBinding],
+    implementation_bindings: &'a [ImplementationBinding],
 }
 
-impl Records {
-    pub(super) fn load(store: &StateStore, scope_id: &ScopeId) -> anyhow::Result<Self> {
-        Ok(Self {
-            sources: store.list_sources(scope_id)?,
-            domains: store.list_domains(scope_id)?,
-            requirements: store.list_requirements(scope_id)?,
-            boundaries: store.list_boundaries(scope_id)?,
-            topics: store.list_topics(scope_id)?,
-            questions: store.list_questions(scope_id)?,
-            resolutions: store.list_resolutions(scope_id)?,
-            rules: store.list_rules(scope_id)?,
-            verification_bindings: store.list_verification_bindings(scope_id)?,
-            implementation_bindings: store.list_implementation_bindings(scope_id)?,
-        })
+impl<'a> Records<'a> {
+    pub(super) const fn load(records: GraphRecords<'a>) -> Self {
+        Self {
+            sources: records.sources,
+            domains: records.domains,
+            requirements: records.requirements,
+            boundaries: records.boundaries,
+            topics: records.topics,
+            questions: records.questions,
+            resolutions: records.resolutions,
+            rules: records.rules,
+            verification_bindings: records.verification_bindings,
+            implementation_bindings: records.implementation_bindings,
+        }
     }
 
     pub(super) fn validate_scope_ownership(
@@ -57,41 +57,41 @@ impl Records {
             };
         }
 
-        check_records!(&self.sources, "source");
-        check_records!(&self.domains, "domain");
-        check_records!(&self.requirements, "requirement");
-        check_records!(&self.boundaries, "boundary");
-        check_records!(&self.topics, "topic");
-        check_records!(&self.questions, "question");
-        check_records!(&self.resolutions, "resolution");
-        check_records!(&self.rules, "rule");
-        check_records!(&self.verification_bindings, "verification binding");
-        check_records!(&self.implementation_bindings, "implementation binding");
+        check_records!(self.sources, "source");
+        check_records!(self.domains, "domain");
+        check_records!(self.requirements, "requirement");
+        check_records!(self.boundaries, "boundary");
+        check_records!(self.topics, "topic");
+        check_records!(self.questions, "question");
+        check_records!(self.resolutions, "resolution");
+        check_records!(self.rules, "rule");
+        check_records!(self.verification_bindings, "verification binding");
+        check_records!(self.implementation_bindings, "implementation binding");
     }
 
     pub(super) fn add_to(&self, index: &mut CheckIndex) {
-        for source in &self.sources {
+        for source in self.sources {
             index.add_node(&source.scope_id, "source", &source.id);
         }
-        for domain in &self.domains {
+        for domain in self.domains {
             index.add_node(&domain.scope_id, "domain", &domain.id);
         }
-        for requirement in &self.requirements {
+        for requirement in self.requirements {
             index.add_node(&requirement.scope_id, "requirement", &requirement.id);
         }
-        for boundary in &self.boundaries {
+        for boundary in self.boundaries {
             index.add_node(&boundary.scope_id, "boundary", &boundary.id);
         }
-        for topic in &self.topics {
+        for topic in self.topics {
             index.add_node(&topic.scope_id, "topic", &topic.id);
         }
-        for question in &self.questions {
+        for question in self.questions {
             index.add_node(&question.scope_id, "question", &question.id);
         }
-        for resolution in &self.resolutions {
+        for resolution in self.resolutions {
             index.add_node(&resolution.scope_id, "resolution", &resolution.id);
         }
-        for rule in &self.rules {
+        for rule in self.rules {
             index.add_node(&rule.scope_id, "rule", &rule.id);
         }
     }
@@ -117,7 +117,7 @@ fn validate_implementation_bindings(
 ) {
     let mut ids = std::collections::BTreeSet::new();
     let mut rules = std::collections::BTreeSet::new();
-    for binding in &records.implementation_bindings {
+    for binding in records.implementation_bindings {
         let owner = format!("implementation binding {}", binding.id.as_str());
         if !ids.insert(binding.id.as_str()) {
             dangling.push(format!(
@@ -161,7 +161,7 @@ fn validate_verification_bindings(
     dangling: &mut Vec<String>,
 ) {
     let mut ids = std::collections::BTreeSet::new();
-    for binding in &records.verification_bindings {
+    for binding in records.verification_bindings {
         let owner = format!("verification binding {}", binding.id.as_str());
         if !ids.insert(binding.id.as_str()) {
             dangling.push(format!(
@@ -207,13 +207,13 @@ fn validate_declared_relations(
     scope_id: &ScopeId,
     dangling: &mut Vec<String>,
 ) {
-    check_declared(index, dangling, scope_id, &records.sources);
-    check_declared(index, dangling, scope_id, &records.requirements);
-    check_declared(index, dangling, scope_id, &records.resolutions);
-    check_declared(index, dangling, scope_id, &records.rules);
-    check_declared(index, dangling, scope_id, &records.topics);
-    check_declared(index, dangling, scope_id, &records.questions);
-    check_declared(index, dangling, scope_id, &records.boundaries);
+    check_declared(index, dangling, scope_id, records.sources);
+    check_declared(index, dangling, scope_id, records.requirements);
+    check_declared(index, dangling, scope_id, records.resolutions);
+    check_declared(index, dangling, scope_id, records.rules);
+    check_declared(index, dangling, scope_id, records.topics);
+    check_declared(index, dangling, scope_id, records.questions);
+    check_declared(index, dangling, scope_id, records.boundaries);
 }
 
 fn check_declared<T: RelationOwner>(
@@ -248,7 +248,7 @@ fn validate_links_and_origins(
     scope_id: &ScopeId,
     dangling: &mut Vec<String>,
 ) {
-    for source in &records.sources {
+    for source in records.sources {
         check_origin_references(
             index,
             dangling,
@@ -258,7 +258,7 @@ fn validate_links_and_origins(
             source.origin_message.as_ref(),
         );
     }
-    for requirement in &records.requirements {
+    for requirement in records.requirements {
         check_origin_references(
             index,
             dangling,
@@ -268,15 +268,15 @@ fn validate_links_and_origins(
             requirement.origin_message.as_ref(),
         );
     }
-    for topic in &records.topics {
+    for topic in records.topics {
         let owner = format!("topic {}", topic.id.as_str());
         check_artifact_links(index, dangling, scope_id, &owner, &topic.links);
     }
-    for question in &records.questions {
+    for question in records.questions {
         let owner = format!("question {}", question.id.as_str());
         check_artifact_links(index, dangling, scope_id, &owner, &question.links);
     }
-    for resolution in &records.resolutions {
+    for resolution in records.resolutions {
         check_origin_references(
             index,
             dangling,
@@ -286,7 +286,7 @@ fn validate_links_and_origins(
             resolution.origin_message.as_ref(),
         );
     }
-    for rule in &records.rules {
+    for rule in records.rules {
         check_origin_references(
             index,
             dangling,

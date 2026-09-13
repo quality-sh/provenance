@@ -59,13 +59,33 @@ fn ste_download_client_carries_no_quic_transport() {
     let root_manifest = fs::read_to_string(workspace.join("Cargo.toml")).unwrap();
     let cli_manifest =
         fs::read_to_string(workspace.join("crates/provenance-cli/Cargo.toml")).unwrap();
-    let lock = fs::read_to_string(workspace.join("Cargo.lock")).unwrap();
 
     assert!(root_manifest.contains("ureq ="));
     assert!(cli_manifest.contains("ureq.workspace = true"));
     assert!(!root_manifest.contains("reqwest ="));
     assert!(!cli_manifest.contains("reqwest.workspace = true"));
-    assert!(!lock.contains("name = \"quinn-proto\""));
+    let dependencies = Command::new(env!("CARGO"))
+        .args([
+            "tree",
+            "--locked",
+            "--offline",
+            "-p",
+            "provenance-cli",
+            "--edges",
+            "normal",
+            "--prefix",
+            "none",
+        ])
+        .current_dir(&workspace)
+        .output()
+        .expect("read the CLI runtime dependency graph");
+    assert!(
+        dependencies.status.success(),
+        "{}",
+        String::from_utf8_lossy(&dependencies.stderr)
+    );
+    let graph = String::from_utf8(dependencies.stdout).unwrap();
+    assert!(!graph.lines().any(|line| line.starts_with("quinn-proto ")));
 }
 
 #[test]
@@ -212,13 +232,13 @@ fn native_archives_include_cargo_provenance_but_npm_engines_do_not() {
 }
 
 #[test]
-fn workspace_release_versions_are_unified_at_0_2_2() {
+fn workspace_release_versions_are_unified_at_0_2_3() {
     let metadata = cargo_metadata();
     assert!(metadata["packages"]
         .as_array()
         .unwrap()
         .iter()
-        .all(|package| package["version"] == "0.2.2"));
+        .all(|package| package["version"] == "0.2.3"));
 
     let workspace = workspace_root();
     let sdk: Value = serde_json::from_slice(
@@ -229,8 +249,8 @@ fn workspace_release_versions_are_unified_at_0_2_2() {
         &fs::read(workspace.join("packages/create-provenance/package.json")).unwrap(),
     )
     .unwrap();
-    assert_eq!(sdk["version"], "0.2.2");
-    assert_eq!(initializer["version"], "0.2.2");
+    assert_eq!(sdk["version"], "0.2.3");
+    assert_eq!(initializer["version"], "0.2.3");
     let targets: Value =
         serde_json::from_slice(&fs::read(workspace.join(".github/release-targets.json")).unwrap())
             .unwrap();
@@ -253,7 +273,7 @@ fn workspace_release_versions_are_unified_at_0_2_2() {
         .as_object()
         .unwrap()
         .values()
-        .all(|version| version == "0.2.2"));
+        .all(|version| version == "0.2.3"));
 }
 
 #[test]
@@ -283,7 +303,7 @@ fn release_version_preflight_gates_every_artifact_build() {
         .split_once("  publish:")
         .unwrap()
         .0;
-    assert!(build_job.contains("needs: preflight"));
+    assert!(build_job.contains("needs: [preflight, review-assets]"));
     assert_eq!(workflow.matches("verify-release-versions.sh").count(), 1);
     let verifier = fs::read_to_string(&script).unwrap();
     assert!(verifier.contains(".github/release-targets.json"));
@@ -293,7 +313,7 @@ fn release_version_preflight_gates_every_artifact_build() {
     {
         let output = Command::new("bash")
             .arg(script)
-            .arg("v0.2.2")
+            .arg("v0.2.3")
             .current_dir(workspace)
             .output()
             .expect("run release version preflight");
@@ -365,8 +385,12 @@ fn post_release_smoke_controls_deno_against_the_current_engine() {
     assert!(workflow.contains("  deno-registry:"));
     assert!(workflow.contains("deno-registry.sh \"$VERSION\""));
     assert!(script.contains("@quality-sh/create-provenance@$version"));
-    assert!(script.contains("npm:@quality-sh/provenance@${version}"));
+    assert!(script.contains(r#"node - "$fixture" "$version" <<'JS'"#));
+    assert!(script.contains("assert_initialized_repository"));
     assert!(script.contains("assert_provenance_check"));
+    assert!(script.contains("assert_binary_version"));
+    assert!(script
+        .contains(r#""$channel" "$version" provenance "$fixture/node_modules/.bin/provenance""#));
 }
 
 fn cargo_metadata() -> Value {

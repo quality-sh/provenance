@@ -1,8 +1,5 @@
 use crate::operations::reader::{Live, ReadContext};
-use provenance_core::protocol::{
-    ensure_limit, ensure_protocol_version, take_page, GraphNode, ResolveSymbolQuery,
-    ResolveSymbolResult,
-};
+use provenance_core::protocol::{take_page, GraphNode, ResolveSymbolQuery, ResolveSymbolResult};
 use provenance_core::{ImplementationBinding, Rule, StableId, VerificationBinding};
 use provenance_macros::rule;
 use provenance_scanner::source_sites;
@@ -22,14 +19,14 @@ pub(super) async fn resolve(
     ctx: &ReadContext,
     request: ResolveSymbolQuery,
 ) -> anyhow::Result<ResolveSymbolResult> {
-    ensure_protocol_version(request.protocol_version)?;
-    ensure_limit(request.limit)?;
+    request
+        .validate()
+        .map_err(provenance_core::protocol::QueryValidation::into_native)?;
     let file = &request.file;
     let symbol = request.symbol.as_deref();
-    let include_retired = request.include_retired;
     let snapshot = ctx.snapshot();
     let mut ids = BTreeSet::new();
-    let scanned = ctx.live(Live::ScannedSites).scan_file(file);
+    let scanned = ctx.live(Live::ScannedSites).scan_file(file)?;
     for site in source_sites(scanned.as_slice()) {
         if symbol.is_none_or(|wanted| site.item_name() == Some(wanted))
             && request.line.is_none_or(|line| site.line() == line)
@@ -41,7 +38,7 @@ pub(super) async fn resolve(
         let by_file = [file.as_str()];
         for binding in snapshot
             .table::<ImplementationBinding>()
-            .by_field("file", &by_file, include_retired)
+            .by_field("file", &by_file)
             .await?
         {
             if symbol.is_none_or(|wanted| binding.symbol == wanted) {
@@ -50,7 +47,7 @@ pub(super) async fn resolve(
         }
         for binding in snapshot
             .table::<VerificationBinding>()
-            .by_field("file", &by_file, include_retired)
+            .by_field("file", &by_file)
             .await?
         {
             if symbol.is_none_or(|wanted| binding.symbol.as_deref() == Some(wanted)) {
@@ -64,7 +61,7 @@ pub(super) async fn resolve(
         .collect::<Vec<_>>();
     let matched = snapshot
         .table::<Rule>()
-        .by_ids(&wanted, include_retired)
+        .by_ids(&wanted)
         .await?
         .into_iter()
         .map(|rule| GraphNode::Rule(Box::new(rule)))

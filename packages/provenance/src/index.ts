@@ -1,4 +1,9 @@
-import { invokeEngine, type EngineSettings } from "./engine.js";
+import { connection, context, defaults, type ConfigureOptions } from "./settings.js";
+import { documentPaths } from "./document-paths.js";
+import { portableFile } from "./portable-file.js";
+import { runVerification, type VerifyOptions } from "./verification.js";
+export type { ConfigureOptions } from "./settings.js";
+export type { VerifyOptions } from "./verification.js";
 import { fileURLToPath } from "node:url";
 import {
   authorSpec,
@@ -30,7 +35,6 @@ import type {
   StaleResponse,
   TraceRequest,
   TraceResponse,
-  VerificationRun,
 } from "./protocol.js";
 import { DeclarationRegistry } from "./registry.js";
 import {
@@ -52,17 +56,8 @@ import {
 } from "./spec.js";
 import type { DeclarationAddress } from "./protocol.js";
 import { verificationFile } from "./verification-file.js";
-import type { VerificationMethod } from "./rules.js";
 
 export type { VerificationMethod } from "./rules.js";
-
-export interface ConfigureOptions {
-  engine?: string;
-  repository?: string;
-  scope?: string;
-  owner?: string;
-  verificationOwner?: string;
-}
 
 export interface SourceOptions {
   id?: string;
@@ -84,15 +79,6 @@ export interface RuleOptions {
   statement: string;
   name?: string;
   description?: string;
-}
-
-// `file` and `url` both say which file the verification runs in. Pass
-// `import.meta` for the whole option, or state one of them yourself.
-export interface VerifyOptions {
-  method?: VerificationMethod;
-  file?: string;
-  url?: string;
-  symbol?: string;
 }
 
 export interface SourceHandle {
@@ -185,15 +171,10 @@ const sdkFiles = [
 ].map((module) => fileURLToPath(new URL(module, import.meta.url)));
 let settings = defaults();
 
-interface SdkSettings {
-  engine?: string;
-  repository?: string;
-  scope: string;
-  owner: string;
-  verificationOwner: string;
-}
-
 export function configure(options: ConfigureOptions): void {
+  if ("engine" in options || "repository" in options) {
+    throw new Error("Use endpoint, bearer, repositoryId, and localRoot; subprocess SDK configuration is no longer supported");
+  }
   settings = { ...defaults(), ...options };
   registry.reset();
 }
@@ -260,13 +241,11 @@ export function defineSpec<const Declarations extends DeclarationRecord>(
 export async function apply(
   spec?: SpecHandle<Readonly<Record<string, unknown>>>,
 ): Promise<ApplyResult> {
-  const result = await invokeEngine<ApplyResult>(
-    engineSettings(),
-    "apply",
-    spec === undefined
-      ? registry.document(settings.owner)
-      : specDocument(spec, settings.owner),
-  );
+  const selected = settings;
+  const document = spec === undefined ? registry.document(selected.owner) : specDocument(spec, selected.owner);
+  const result = await (await connection(selected)).apply({
+    context: context(selected), request: documentPaths(document, selected.localRoot),
+  });
   if (spec === undefined) {
     registry.assign(result);
   }
@@ -276,11 +255,10 @@ export async function apply(
 export async function plan(
   spec: SpecHandle<Readonly<Record<string, unknown>>>,
 ): Promise<PlanResult> {
-  return invokeEngine<PlanResult>(
-    engineSettings(),
-    "plan",
-    specDocument(spec, settings.owner),
-  );
+  const selected = settings;
+  return (await connection(selected)).plan({
+    context: context(selected), request: documentPaths(specDocument(spec, selected.owner), selected.localRoot),
+  });
 }
 
 export interface QueryOptions {
@@ -288,38 +266,46 @@ export interface QueryOptions {
 }
 
 export async function get(request: GetRequest, options?: QueryOptions): Promise<GetResponse> {
-  return invokeEngine<GetResponse>(engineSettings(), "get", request, options?.freshness);
+  const selected = settings;
+  return (await connection(selected)).get({ context: { ...context(selected), freshness: options?.freshness }, request });
 }
 
 export async function search(request: SearchRequest, options?: QueryOptions): Promise<SearchResponse> {
-  return invokeEngine<SearchResponse>(engineSettings(), "search", request, options?.freshness);
+  const selected = settings;
+  return (await connection(selected)).search({ context: { ...context(selected), freshness: options?.freshness }, request });
 }
 
 export async function neighbors(request: NeighborsRequest, options?: QueryOptions): Promise<NeighborsResponse> {
-  return invokeEngine<NeighborsResponse>(engineSettings(), "neighbors", request, options?.freshness);
+  const selected = settings;
+  return (await connection(selected)).neighbors({ context: { ...context(selected), freshness: options?.freshness }, request });
 }
 
 export async function trace(request: TraceRequest, options?: QueryOptions): Promise<TraceResponse> {
-  return invokeEngine<TraceResponse>(engineSettings(), "trace", request, options?.freshness);
+  const selected = settings;
+  return (await connection(selected)).trace({ context: { ...context(selected), freshness: options?.freshness }, request });
 }
 
 export async function impact(request: ImpactRequest, options?: QueryOptions): Promise<ImpactResponse> {
-  return invokeEngine<ImpactResponse>(engineSettings(), "impact", request, options?.freshness);
+  const selected = settings;
+  return (await connection(selected)).impact({ context: { ...context(selected), freshness: options?.freshness }, request });
 }
 
 export async function evidence(request: EvidenceRequest, options?: QueryOptions): Promise<EvidenceResponse> {
-  return invokeEngine<EvidenceResponse>(engineSettings(), "evidence", request, options?.freshness);
+  const selected = settings;
+  return (await connection(selected)).evidence({ context: { ...context(selected), freshness: options?.freshness }, request });
 }
 
 export async function stale(request: StaleRequest, options?: QueryOptions): Promise<StaleResponse> {
-  return invokeEngine<StaleResponse>(engineSettings(), "stale", request, options?.freshness);
+  const selected = settings;
+  return (await connection(selected)).stale({ context: { ...context(selected), freshness: options?.freshness }, request });
 }
 
 export async function resolveSymbol(
   request: ResolveSymbolRequest,
   options?: QueryOptions,
 ): Promise<ResolveSymbolResponse> {
-  return invokeEngine<ResolveSymbolResponse>(engineSettings(), "resolve-symbol", request, options?.freshness);
+  const selected = settings;
+  return (await connection(selected)).resolveSymbol({ context: { ...context(selected), freshness: options?.freshness }, request: { ...request, file: portableFile(request.file, selected.localRoot) } });
 }
 
 class DeclaredHandle implements SourceHandle {
@@ -369,20 +355,8 @@ class Rule extends DeclaredHandle implements RuleHandle {
     if (registry.dirty) {
       await apply();
     }
-    await runVerification({ rule: this.id }, key, callback, options, file);
+    await runVerification(settings, { rule: this.id }, key, callback, options, file);
   }
-}
-
-async function complete(
-  run: string,
-  status: "passed" | "failed",
-  error?: string,
-): Promise<void> {
-  await invokeEngine<VerificationRun>(engineSettings(), "complete-verification", {
-    run,
-    status,
-    error,
-  });
 }
 
 async function verifyDeclaration(
@@ -393,78 +367,11 @@ async function verifyDeclaration(
 ): Promise<void> {
   const file = verificationFile(key, options, sdkFiles);
   await runVerification(
+    settings,
     { declaration: { declared_by: settings.owner, address } },
     key,
     callback,
     options,
     file,
   );
-}
-
-type VerificationTarget =
-  | { rule: string }
-  | { declaration: { declared_by: string; address: DeclarationAddress } };
-
-async function runVerification(
-  target: VerificationTarget,
-  key: string,
-  callback: () => unknown | Promise<unknown>,
-  options: VerifyOptions,
-  file: string,
-): Promise<void> {
-  const run = await invokeEngine<VerificationRun>(
-    engineSettings(),
-    "begin-verification",
-    {
-      ...target,
-      key,
-      method: options.method ?? "examples",
-      declared_by: settings.verificationOwner,
-      file,
-      symbol: options.symbol,
-    },
-  );
-  try {
-    await callback();
-  } catch (error) {
-    try {
-      await complete(run.id, "failed", serializeError(error));
-    } catch {
-      // Preserve the callback as the primary test failure.
-    }
-    throw error;
-  }
-  await complete(run.id, "passed");
-}
-
-function serializeError(error: unknown): string {
-  if (error instanceof Error) {
-    return error.stack ?? `${error.name}: ${error.message}`;
-  }
-  if (typeof error === "string") {
-    return error;
-  }
-  try {
-    return JSON.stringify(error);
-  } catch {
-    return String(error);
-  }
-}
-
-function defaults(): SdkSettings {
-  return {
-    engine: process.env.PROVENANCE_BIN,
-    repository: process.env.PROVENANCE_REPO,
-    scope: process.env.PROVENANCE_SCOPE ?? "default",
-    owner: process.env.PROVENANCE_SPEC_OWNER ?? "spec://typescript",
-    verificationOwner: process.env.PROVENANCE_VERIFICATION_OWNER ?? "ci://typescript",
-  };
-}
-
-function engineSettings(): EngineSettings {
-  return {
-    engine: settings.engine,
-    repository: settings.repository,
-    scope: settings.scope,
-  };
 }

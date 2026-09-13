@@ -1,45 +1,6 @@
 use super::artifacts::{Requirement, Resolution, Rule, Source};
 
-#[test]
-fn declaration_retirement_is_explicit_and_backward_compatible() {
-    let source: Source = serde_json::from_value(serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
-        "scope_id": "default",
-        "id": "source_policy",
-        "name": "Policy",
-        "source_type": "policy",
-        "url": null,
-        "retired": true
-    }))
-    .unwrap();
-    let requirement: Requirement = serde_json::from_value(serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
-        "scope_id": "default",
-        "id": "requirement_sharing",
-        "statement": "Sharing is controlled",
-        "status": "active"
-    }))
-    .unwrap();
-    let rule: Rule = serde_json::from_value(serde_json::json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
-        "scope_id": "default",
-        "id": "rule_expiry",
-        "statement": "Shares expire",
-        "status": "active",
-        "severity": "medium",
-        "retired": true
-    }))
-    .unwrap();
 
-    assert!(source.retired);
-    assert!(!requirement.retired);
-    assert!(rule.retired);
-    assert_eq!(serde_json::to_value(source).unwrap()["retired"], true);
-    assert!(serde_json::to_value(requirement)
-        .unwrap()
-        .get("retired")
-        .is_none());
-}
 
 #[test]
 fn enriched_source_and_requirement_records_roundtrip_without_schema_bump() {

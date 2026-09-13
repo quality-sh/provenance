@@ -195,7 +195,7 @@ async fn every_operation_answers_over_the_repository_state() {
 /// The one comparison against canonical bytes over a store of real size:
 /// for every kind and integration table, the projection holds exactly the
 /// rows the canonical reader lists over a copy of this repository's own
-/// state, retired records included.
+/// state.
 #[tokio::test]
 async fn projection_counts_match_canonical_over_the_repository_state() {
     let store = test_stores::repository_state();
@@ -203,7 +203,7 @@ async fn projection_counts_match_canonical_over_the_repository_state() {
     let scope = &store.scope;
     catch_up_state(&store.layout()).await.unwrap();
     let pool = open_cache(&store.layout()).await.unwrap();
-    let snapshot = reader::ReadSnapshot::open(&pool, scope)
+    let snapshot = reader::ReadSnapshot::open(pool.pool(), scope)
         .await
         .unwrap()
         .expect("a revision");
@@ -231,7 +231,7 @@ async fn projection_counts_match_canonical_over_the_repository_state() {
     )
     .await;
     drop(snapshot);
-    pool.close().await;
+    pool.close().await.unwrap();
 }
 
 async fn assert_count<K: ProjectionRow>(snapshot: &ReadSnapshot, canonical: usize) {
@@ -240,7 +240,7 @@ async fn assert_count<K: ProjectionRow>(snapshot: &ReadSnapshot, canonical: usiz
     assert_eq!(
         counted,
         canonical,
-        "{}: the projection must hold every canonical row, retired included",
+        "{}: the projection must hold every canonical row",
         K::TABLE
     );
 }

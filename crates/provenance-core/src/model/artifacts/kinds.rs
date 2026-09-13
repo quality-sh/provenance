@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use super::super::parsing::normalize_enum_value;
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SourceType {
     #[serde(rename = "policy")]
@@ -64,6 +65,7 @@ impl SourceType {
     }
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RequirementStatus {
     #[serde(rename = "active")]
@@ -90,6 +92,7 @@ impl RequirementStatus {
     }
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ResolutionStatus {
     #[serde(rename = "draft")]
@@ -126,6 +129,7 @@ impl ResolutionStatus {
     }
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ResolutionInputType {
     #[serde(rename = "regulatory")]
@@ -159,6 +163,7 @@ impl ResolutionInputType {
     }
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RuleStatus {
     #[serde(rename = "draft")]
@@ -188,6 +193,7 @@ impl RuleStatus {
     }
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RuleSeverity {
     #[serde(rename = "low")]

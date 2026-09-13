@@ -1,14 +1,12 @@
 use super::common::{ideation_target, parse_json_arg, warn_if_skills_missing};
 use crate::cli::ideation::SynthesisPacketsCommand;
 use crate::output;
+use crate::store::Store;
 use provenance_core::{
     ConsensusFinding, ContestedClaim, EvidenceGap, MinorityObjection, RequiredHumanDecision,
     ScopeId, StableId, SuggestedArtifact, UnsupportedSpeculation,
 };
-use provenance_store::{
-    layout::ProvenanceLayout,
-    state_store::{CreateSynthesisPacketInput, StateStore},
-};
+use provenance_store::state_store::CreateSynthesisPacketInput;
 
 pub(super) fn handle(command: SynthesisPacketsCommand, quiet: bool) -> anyhow::Result<()> {
     match command {
@@ -28,10 +26,10 @@ pub(super) fn handle(command: SynthesisPacketsCommand, quiet: bool) -> anyhow::R
             suggested_artifacts_json,
             required_human_decisions_json,
             replace,
-            format,
+            ..
         } => {
             warn_if_skills_missing(&repo, quiet)?;
-            let store = StateStore::new(ProvenanceLayout::new(repo));
+            let store = Store::open(repo);
             let input = CreateSynthesisPacketInput {
                 scope_id: ScopeId::new(scope)?,
                 id: StableId::new(id)?,
@@ -75,17 +73,13 @@ pub(super) fn handle(command: SynthesisPacketsCommand, quiet: bool) -> anyhow::R
             } else {
                 store.create_synthesis_packet(input)?
             };
-            output::print(format, &synthesis_packet)?;
+            output::print_json(&synthesis_packet)?;
         }
-        SynthesisPacketsCommand::List {
-            repo,
-            scope,
-            format,
-        } => {
+        SynthesisPacketsCommand::List { repo, scope, .. } => {
             warn_if_skills_missing(&repo, quiet)?;
-            let synthesis_packets = StateStore::new(ProvenanceLayout::new(repo))
-                .list_synthesis_packets(&ScopeId::new(scope)?)?;
-            output::print(format, &synthesis_packets)?;
+            let synthesis_packets =
+                Store::open(repo).list_synthesis_packets(&ScopeId::new(scope)?)?;
+            output::print_json(&synthesis_packets)?;
         }
     }
     Ok(())

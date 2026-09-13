@@ -1,15 +1,17 @@
 use super::common::stable_ids;
-use super::references;
+use super::refs;
 use crate::cli::knowledge::SourcesCommand;
 use crate::output;
+use crate::store::Store;
 use provenance_core::{ScopeId, SourceType, StableId};
-use provenance_store::{
-    layout::ProvenanceLayout,
-    state_store::{CreateSourceInput, StateStore},
-};
+use provenance_store::state_store::CreateSourceInput;
 
-pub(super) fn handle(command: SourcesCommand) -> anyhow::Result<()> {
+pub(super) async fn handle(command: SourcesCommand) -> anyhow::Result<()> {
     match command {
+        SourcesCommand::Update(args) => {
+            super::updates::handle::<provenance_store::operations::catalog::UpdateSource>(args)
+                .await?;
+        }
         SourcesCommand::Create {
             repo,
             scope,
@@ -24,26 +26,25 @@ pub(super) fn handle(command: SourcesCommand) -> anyhow::Result<()> {
             supersedes,
             origin_thread,
             origin_message,
-            format,
+            ..
         } => {
-            let source =
-                StateStore::new(ProvenanceLayout::new(repo)).create_source(CreateSourceInput {
-                    scope_id: ScopeId::new(scope)?,
-                    id: StableId::new(id)?,
-                    name,
-                    source_type: SourceType::parse(&source_type)?,
-                    url,
-                    reference,
-                    commit_pin,
-                    effective_date,
-                    review_date,
-                    supersedes: stable_ids(supersedes)?,
-                    origin_thread: origin_thread.map(StableId::new).transpose()?,
-                    origin_message: origin_message.map(StableId::new).transpose()?,
-                })?;
-            output::print(format, &source)?;
+            let source = Store::open(repo).create_source(CreateSourceInput {
+                scope_id: ScopeId::new(scope)?,
+                id: StableId::new(id)?,
+                name,
+                source_type: SourceType::parse(&source_type)?,
+                url,
+                reference,
+                commit_pin,
+                effective_date,
+                review_date,
+                supersedes: stable_ids(supersedes)?,
+                origin_thread: origin_thread.map(StableId::new).transpose()?,
+                origin_message: origin_message.map(StableId::new).transpose()?,
+            })?;
+            output::print_json(&source)?;
         }
-        SourcesCommand::Supersedes { command } => references::source_supersedes(command)?,
+        SourcesCommand::Supersedes { command } => refs::source_supersedes(command).await?,
     }
     Ok(())
 }

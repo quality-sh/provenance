@@ -1,4 +1,4 @@
-use crate::output::OutputFormat;
+use crate::output::{JsonFormat, OutputFormat, ReportFormat};
 use camino::Utf8PathBuf;
 use clap::Subcommand;
 
@@ -7,8 +7,8 @@ pub enum DocsCommand {
     Check {
         #[arg(long, default_value = ".")]
         repo: Utf8PathBuf,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     Serve {
         #[arg(long, default_value = ".")]
@@ -56,8 +56,8 @@ pub enum WikiCommand {
 #[derive(Subcommand)]
 pub enum SkillsCommand {
     List {
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     Show {
         name: String,
@@ -69,8 +69,8 @@ pub enum SkillsCommand {
         copy: bool,
         #[arg(long)]
         force: bool,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
 }
 
@@ -93,8 +93,8 @@ pub enum CoverageCommand {
         /// still printed first.
         #[arg(long)]
         strict: bool,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = ReportFormat::Markdown)]
+        format: ReportFormat,
         #[arg(long)]
         output: Option<Utf8PathBuf>,
     },

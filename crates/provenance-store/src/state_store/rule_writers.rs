@@ -30,7 +30,8 @@ impl StateStore {
             origin_thread,
             origin_message,
         } = input;
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            MissingReference,
             !requirement_ids.is_empty(),
             "{}",
             required_refusal(declared::<Resolution>("requirement_ids"))
@@ -49,8 +50,10 @@ impl StateStore {
         let requirement_ids = sorted_ids(requirement_ids);
         let supersedes = sorted_ids(supersedes);
         let path = shards::resolutions_path(&self.layout, &scope_id);
-        let resolution = self.mutate_jsonl_records(&path, |records: &mut Vec<Resolution>| {
+        let resolution = self.mutate_graph_record(&path, |records: &mut Vec<Resolution>| {
             let resolution = Resolution {
+                created: None,
+                updated: None,
                 schema_version: SUPPORTED_SCHEMA_VERSION,
                 scope_id: scope_id.clone(),
                 id: id.clone(),
@@ -71,7 +74,8 @@ impl StateStore {
                 origin_thread,
                 origin_message,
             };
-            anyhow::ensure!(
+            crate::write_error::ensure!(
+                AlreadyExists,
                 !records.iter().any(|record| record.id == resolution.id),
                 "resolution already exists"
             );
@@ -96,6 +100,7 @@ impl StateStore {
             resolution_ids,
             statement,
             status,
+            archived_in_commit,
             severity,
             source_document,
             source_section,
@@ -103,7 +108,8 @@ impl StateStore {
             origin_message,
         } = input;
         super::statement_policy::ensure_statement_is_writable(&self.layout, &statement)?;
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            MissingReference,
             !requirement_ids.is_empty(),
             "{}",
             required_refusal(declared::<Rule>("requirement_ids"))
@@ -127,14 +133,17 @@ impl StateStore {
         let requirement_ids = sorted_ids(requirement_ids);
         let resolution_ids = sorted_ids(resolution_ids);
         let path = shards::rules_path(&self.layout, &scope_id);
-        let rule = self.mutate_jsonl_records(&path, |records: &mut Vec<Rule>| {
+        let rule = self.mutate_graph_record(&path, |records: &mut Vec<Rule>| {
             let rule = Rule {
+                created: None,
+                updated: None,
+                archived_in_commit,
                 schema_version: SUPPORTED_SCHEMA_VERSION,
                 scope_id: scope_id.clone(),
                 id: id.clone(),
                 declared_by: None,
                 declaration_address: None,
-                retired: false,
+
                 name,
                 description,
                 statement,
@@ -147,7 +156,9 @@ impl StateStore {
                 origin_thread,
                 origin_message,
             };
-            anyhow::ensure!(
+            rule.validate_archive()?;
+            crate::write_error::ensure!(
+                AlreadyExists,
                 !records.iter().any(|record| record.id == rule.id),
                 "rule already exists"
             );

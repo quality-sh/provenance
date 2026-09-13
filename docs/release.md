@@ -29,6 +29,8 @@ The workflow publishes these Rust crates to crates.io:
 - `provenance-ste100`
 - `provenance-store`
 - `provenance-sdk`
+- `provenance-http-client`
+- `provenance-transport`
 - `provenance-cli`
 
 The `crates-io` GitHub environment protects publication. Each crate must trust
@@ -48,8 +50,14 @@ Update the crate and npm package versions. Verify the crate archives before you
 tag the release:
 
 ```sh
-cargo package --workspace --locked
+git diff --exit-code HEAD --
+test -z "$(git ls-files --others --exclude-standard)"
+cargo package --workspace --locked --allow-dirty
 ```
+
+Generated client source stays outside Git and enters the crate archives. Cargo
+requires `--allow-dirty` for those files. The preceding checks reject changes to
+tracked source and untracked files that Git does not ignore.
 
 - [ ] On the release commit, run the timing report command below once. Compare
   the `repository_state` rows with the previous release's notes, meet the
@@ -111,8 +119,8 @@ rows and any cause explanation to the GitHub Release body under
 Tag and push the release commit:
 
 ```sh
-git tag v0.2.2
-git push origin v0.2.2
+git tag v0.2.3
+git push origin v0.2.3
 ```
 
 The `Release` workflow creates the GitHub Release, attaches archives, and generates release notes.
@@ -145,7 +153,7 @@ The release rejects a tag unless all versions equal the tag without its `v`
 prefix.
 
 A tag with a SemVer prerelease component is published as a prerelease, so
-`v0.2.2-rc.1` is the way to rehearse a release without announcing one. npm
+`v0.2.3-rc.1` is the way to rehearse a release without announcing one. npm
 publishes that version under the `next` tag; stable versions use `latest`.
 
 ## Never `--all-features`
@@ -156,3 +164,15 @@ agent feedback capture) and must never ship in a released binary;
 `--all-features` would compile it in. CI enforces this by building the
 release binary with the release feature set and asserting it contains no
 `dogfood` marker string.
+
+## Build without publication
+
+Run `gh workflow run release.yml --ref main` to build and package all release
+targets at the version in the source manifests. Manual runs upload archives,
+npm engine packages, and Cargo timing reports as workflow artifacts. They skip
+publication and the checks of published installations. Tag pushes retain the
+CI gate and the publication sequence.
+
+A manual run on `main` can populate release build caches for later tag runs.
+Caches from a tag are scoped to that tag; later tags can restore caches from
+`main`, but cannot restore another tag's cache.

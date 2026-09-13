@@ -14,7 +14,7 @@ mod decl;
 mod front;
 mod integrity;
 
-pub use decl::{declaration_of, RelationDecl, RelationFlow, RelationOwner};
+pub use decl::{declaration_of, RelationDecl, RelationFlow, RelationOwner, RelationSlot};
 pub use front::{
     declaration_for, flow_neighbors, incoming_of, link_rows_of, link_target, outgoing_of,
     related_nodes, rows_of, RecordFront, RelatedNode, RelationDirection, RelationEndpoint,

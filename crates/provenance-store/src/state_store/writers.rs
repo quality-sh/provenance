@@ -1,5 +1,6 @@
 use super::{AddSourceReferenceInput, CreateRequirementInput, CreateSourceInput, StateStore};
 use crate::shards;
+use crate::write_error::{SourceFailure, WriteFailure};
 use provenance_core::{
     validate_optional_commit_pin, NodeType, Requirement, ScopeId, Source, SourceReference,
     StableId, SUPPORTED_SCHEMA_VERSION,
@@ -21,20 +22,23 @@ impl StateStore {
             origin_thread,
             origin_message,
         } = input;
-        let commit_pin = validate_optional_commit_pin(commit_pin)?;
+        let commit_pin = validate_optional_commit_pin(commit_pin)
+            .map_err(|error| SourceFailure::wrap(WriteFailure::InvalidCommitPin, error))?;
         for older in &supersedes {
             self.ensure_node_exists(&scope_id, NodeType::Source, older, "--supersedes")?;
         }
         let supersedes = sorted_ids(supersedes);
         let path = shards::sources_path(&self.layout, &scope_id);
-        self.mutate_jsonl_records(&path, |records: &mut Vec<Source>| {
+        self.mutate_graph_record(&path, |records: &mut Vec<Source>| {
             let source = Source {
+                created: None,
+                updated: None,
                 schema_version: SUPPORTED_SCHEMA_VERSION,
                 scope_id: scope_id.clone(),
                 id,
                 declared_by: None,
                 declaration_address: None,
-                retired: false,
+
                 name,
                 source_type,
                 url,
@@ -46,7 +50,8 @@ impl StateStore {
                 origin_thread,
                 origin_message,
             };
-            anyhow::ensure!(
+            crate::write_error::ensure!(
+                AlreadyExists,
                 !records.iter().any(|record| record.id == source.id),
                 "source already exists"
             );
@@ -57,7 +62,23 @@ impl StateStore {
     }
 
     pub fn create_requirement(&self, input: CreateRequirementInput) -> anyhow::Result<Requirement> {
-        self.with_repository_publication(|| self.write_requirement(input))
+        self.with_repository_publication(|| {
+            self.validate_requirement_origin(
+                &input.scope_id,
+                input.origin_thread.as_ref(),
+                input.origin_message.as_ref(),
+            )?;
+            if self.origin_requires_review(&input.scope_id, input.origin_message.as_ref())? {
+                anyhow::ensure!(
+                    crate::review::guard::writer_allows(
+                        &shards::requirements_path(&self.layout, &input.scope_id),
+                        input.id.as_str()
+                    ),
+                    "addressed Requirement creation requires an immutable review outcome"
+                );
+            }
+            self.write_requirement(input)
+        })
     }
 
     fn write_requirement(&self, input: CreateRequirementInput) -> anyhow::Result<Requirement> {
@@ -93,14 +114,16 @@ impl StateStore {
         }
         let (depends_on, supersedes) = (sorted_ids(depends_on), sorted_ids(supersedes));
         let path = shards::requirements_path(&self.layout, &scope_id);
-        self.mutate_jsonl_records(&path, |records: &mut Vec<Requirement>| {
+        self.mutate_graph_record(&path, |records: &mut Vec<Requirement>| {
             let requirement = Requirement {
+                created: None,
+                updated: None,
                 schema_version: SUPPORTED_SCHEMA_VERSION,
                 scope_id: scope_id.clone(),
                 id,
                 declared_by: None,
                 declaration_address: None,
-                retired: false,
+
                 statement,
                 description,
                 fog: None,
@@ -114,7 +137,8 @@ impl StateStore {
                 origin_thread,
                 origin_message,
             };
-            anyhow::ensure!(
+            crate::write_error::ensure!(
+                AlreadyExists,
                 !records.iter().any(|record| record.id == requirement.id),
                 "requirement already exists"
             );
@@ -136,7 +160,7 @@ impl StateStore {
             anyhow::ensure!(!fog.trim().is_empty(), "fog text must not be empty");
         }
         let path = shards::requirements_path(&self.layout, scope_id);
-        self.mutate_jsonl_records(&path, |records: &mut Vec<Requirement>| {
+        self.mutate_graph_record(&path, |records: &mut Vec<Requirement>| {
             let requirement = records
                 .iter_mut()
                 .find(|requirement| &requirement.id == id)
@@ -163,7 +187,8 @@ impl StateStore {
             requirement_id,
             clause,
         } = input;
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            MissingReference,
             self.list_sources(&scope_id)?
                 .iter()
                 .any(|source| source.id == source_id),
@@ -172,16 +197,18 @@ impl StateStore {
         );
         let source_ref = SourceReference { source_id, clause };
         let requirements_path = shards::requirements_path(&self.layout, &scope_id);
-        let requirement = self.mutate_jsonl_records(
-            &requirements_path,
-            |requirements: &mut Vec<Requirement>| {
+        let requirement =
+            self.mutate_graph_record(&requirements_path, |requirements: &mut Vec<Requirement>| {
                 let requirement = requirements
                     .iter_mut()
                     .find(|requirement| requirement.id == requirement_id)
                     .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "requirement {} does not exist (--requirement-id)",
-                            requirement_id.as_str()
+                        SourceFailure::wrap(
+                            WriteFailure::MissingReference,
+                            anyhow::anyhow!(
+                                "requirement {} does not exist (--requirement-id)",
+                                requirement_id.as_str()
+                            ),
                         )
                     })?;
                 if !requirement
@@ -198,8 +225,7 @@ impl StateStore {
                     });
                 }
                 Ok(requirement.clone())
-            },
-        )?;
+            })?;
         Ok(requirement)
     }
 }

@@ -100,7 +100,7 @@ async fn a_read_that_started_before_a_publication_answers_at_its_serial() {
     let pool = open_cache(&layout).await.unwrap();
     let second_pool = open_cache(&layout).await.unwrap();
 
-    let first = ReadSnapshot::open(&pool, &store.scope)
+    let first = ReadSnapshot::open(pool.pool(), &store.scope)
         .await
         .unwrap()
         .expect("a revision");
@@ -114,7 +114,7 @@ async fn a_read_that_started_before_a_publication_answers_at_its_serial() {
         RequirementStatus::Active,
     );
     let guard = publication_guard(&layout).await.unwrap();
-    let report = catch_up_with_guard(&guard, &second_pool, &layout)
+    let report = catch_up_with_guard(&guard, second_pool.pool(), &layout)
         .await
         .unwrap();
     drop(guard);
@@ -125,7 +125,7 @@ async fn a_read_that_started_before_a_publication_answers_at_its_serial() {
         before,
         "the open snapshot still reads its own serial"
     );
-    let second = ReadSnapshot::open(&second_pool, &store.scope)
+    let second = ReadSnapshot::open(second_pool.pool(), &store.scope)
         .await
         .unwrap()
         .expect("a revision");
@@ -136,6 +136,6 @@ async fn a_read_that_started_before_a_publication_answers_at_its_serial() {
     );
     drop(first);
     drop(second);
-    pool.close().await;
-    second_pool.close().await;
+    pool.close().await.unwrap();
+    second_pool.close().await.unwrap();
 }

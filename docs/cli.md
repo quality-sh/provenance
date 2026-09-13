@@ -25,7 +25,13 @@ provenance export --scope default --format json --output provenance-export.json
 provenance check --format json
 ```
 
-Agent-facing commands support JSON output for deterministic parsing.
+Every command accepts `--format json`. The JSON bytes stay stable, so agents
+and scripts can parse them. Five commands also carry a real Markdown renderer:
+`stale`, `coverage scan`, `prime`, `sdk plan`, and `report render`. `stale`,
+`coverage scan`, and `prime` default to their Markdown report; `sdk plan` and
+`report render` default to JSON. `export` and `wiki build` also accept `table`,
+`toon`, and `jsonl`. A command refuses a format it does not render; it never
+prints JSON under another format name.
 
 `provenance check --format json` reports `diagnostics` for new Requirement and
 Rule records and for records whose statement differs from Git HEAD. These
@@ -90,9 +96,9 @@ the document. It refuses implicit takeover and foreign-owned collisions before
 writing. Protocol 5 also accepts an exact, per-target `adopt_unowned` allowlist.
 An adoption target must name one declaration with the same explicit Stable ID,
 and its definition and relationships must already match canonical state.
-Omitted owned declarations retire in place. Identity-preserving moves replace
+Omitted owned declarations are deleted. Git preserves their history. Identity-preserving moves replace
 their active owned relationships. `plan` previews creates, updates, moves,
-adoptions, retirements, and ownership conflicts without writing. Verification runs
+adoptions, deletions, and ownership conflicts without writing. Verification runs
 live in the derived cache and always cite an existing Rule. Begin accepts either
 a canonical Rule ID or a declaration owner plus hierarchical address;
 the language callback itself runs in Node and never crosses into Rust. See
@@ -120,9 +126,7 @@ printf '%s' '{"file":"src/share-links.ts","symbol":"createShareLink"}' | provena
 Every answer opens with `protocol_version` and `operation`, so a recorded
 response says which contract produced it. `sdk info` still reports the version
 the engine speaks; a request may name `protocol_version` itself, and the engine
-refuses a request written for another one. Every request accepts
-`include_retired`, false by default: active views leave retired records and
-retired bindings out, and this flag is the only way to see them. Every request
+refuses a request written for another one. Every request
 that can match more than one record accepts `limit`, 50 by default and 200 at
 most, and its answer carries `limit` and `has_more`. An answer stops at the
 limit; there is no cursor and no next page.
@@ -137,19 +141,24 @@ projection up to date under the publication lock before the read;
 when the step refused and the answer is at the stored revision with the error
 text in `freshness_error`.
 
-The eight query commands read `.provenance/settings.json` on every call.
-This tracked JSON file accepts `read.freshness_policy` and `read.scan_limit`:
+The eight query commands and `provenance coverage scan` read
+`.provenance/settings.json` on every call.
+This tracked JSON file accepts `read.freshness_policy`, `read.scan_limit`, and
+`coverage.binding_findings`:
 
 ```json
 {
   "read": {
     "freshness_policy": "catch_up",
     "scan_limit": 5000
+  },
+  "coverage": {
+    "binding_findings": "warning"
   }
 }
 ```
 
-Both keys are optional. A missing file uses the defaults. `--freshness` accepts
+Every key is optional. A missing file uses the defaults. `--freshness` accepts
 `catch_up`, `annotate_only`, or `refuse_stale`. The flag takes precedence over
 the file, and the file takes precedence over the default `catch_up`. No
 environment variable selects a policy. `refuse_stale` hashes canonical units
@@ -161,9 +170,20 @@ Read under `catch_up` or run `provenance materialize` to update the projection.
 
 `read.scan_limit` is a whole number of at least 1. Its default is 5000 source
 files; it has no flag or request field. An invalid value, an unknown key at
-either level, or an unreadable file causes a settings refusal before a query
+any level, or an unreadable file causes a settings refusal before a query
 opens the projection. The error names the path and, for an invalid setting,
 the key and permitted values. No answer or `freshness_error` accompanies it.
+
+`coverage.binding_findings` selects how `provenance coverage scan` treats a
+Rule binding finding: `warning`, the default, reports the finding and lets the
+command succeed, and `error` reports the finding and fails the command. The
+findings it governs are an active Rule with no current verification binding,
+and a current implementation or verification binding to a deprecated or
+archived Rule. Deleted bindings do not provide current evidence. The key does not govern other scan warnings, such as
+an active Rule with no implementation, an unknown Rule id, or a second primary
+implementation. Rule severity metadata is a separate field and never selects
+the command result. An invalid value causes the same settings refusal as the
+read keys, and the scan reports it instead of falling back to a default.
 
 `attested` names the projection tables behind the answer. `live` names what
 the stamp does not cover, from a closed list: `canonical` (canonical shards),
@@ -246,6 +266,10 @@ provenance coverage scan --path . --format json --output coverage.json
 provenance coverage scan --path . --baseline coverage.json --validate-rules --format json
 ```
 
+Without `--format` the scan prints its Markdown report. `--format json` prints
+the machine-readable report, and `--format json --output <path>` writes it to a
+file. `--format markdown --output <path>` writes the Markdown report to a file.
+
 Without `--validate-rules` the scan only reports what it found in the tree. With it, the
 scan loads the scope's Rules and warns about a binding that cites an unknown Rule, a
 second primary implementation for one Rule, and an active Rule with no implementation
@@ -258,9 +282,21 @@ A narrower scan still validates every binding it encounters, including unknown R
 and duplicate primary implementations, but it cannot claim that a binding is absent from
 the rest of the repository.
 
+Some findings are Rule binding findings in the sense of
+`coverage.binding_findings`: an active Rule with no current verification, and a
+current implementation or verification binding to a deprecated or archived Rule.
+The scan reports each of them with `binding_finding` set in the JSON report, from
+scanned markers and typed graph bindings alike. Deleted bindings do not satisfy
+verification or produce the finding. `coverage.binding_findings` selects `warning` (report and succeed) or
+`error` (report and fail); the default is `warning`, so a repository that plans
+active Rules ahead of their code keeps them visible without blocking. Rule
+severity metadata stays a record field and never selects the command result.
+
 `--strict` exits non-zero when the report holds any warning; the report still prints
 first. That is the dial each repository sets for itself: strict in CI once a repository
-wants every active rule verified, plain while it is still filling them in.
+wants every active rule verified, plain while it is still filling them in. `--strict`
+overrides the configured policy by failing on every warning, while the configured
+policy decides whether a Rule binding finding fails without `--strict`.
 
 Each annotation and binding in a scan report keeps `file_path` and `line` and adds a
 durable `anchor`: the enclosing symbol plus a SHA-256 hash of the cited line's trimmed
@@ -280,6 +316,44 @@ each is pinned to a baseline line where it can be, and a lost instance is report
 gone; when the survivors cannot be told apart, they stay at their current coordinates
 as unchanged and the scan warns that the group lost instances. Identical sites
 shuffled within one file with none lost stay silent.
+
+## Pull request report rendering
+
+`provenance report render` turns a versioned report envelope into bounded
+Markdown or normalized JSON. The command consumes structured facts only. It
+performs no network write, calls no language model, and reads no
+conversational history.
+
+```sh
+provenance report render --input report-envelope.json
+provenance report render --input report-envelope.json --format json
+provenance report render --input report-envelope.json --output report.md
+```
+
+The envelope is a JSON document with `schema_version` 1. It carries the
+repository identity, the provenance scope, the comparison base and head
+commits, scan completeness and baseline compatibility, the policy outcome,
+graph changes, grouped findings with stable diagnostic codes, and optional
+verification-run facts. It excludes scanned source contents. The renderer
+sorts every collection first, so equivalent input with reordered records,
+relationships, findings, or evidence sites renders byte-identical Markdown.
+
+Untrusted text is data. Graph statements, ids, paths, and reasons are
+escaped, so report text cannot create a mention, raw HTML, a link, an image,
+a code fence, an extra table column, or a workflow command. Repository links
+are built only from an immutable commit plus a validated
+repository-relative path; a complete author-supplied URL is never accepted.
+Output is bounded: budgets cut findings, graph rows, site lists, run lists,
+and long text, and every cut is stated in the report.
+
+`--format json` prints the normalized envelope, so a later publisher can
+consume structure instead of scraping Markdown. `--output` writes the result
+to a file for CI artifacts. The command exits non-zero with a named
+diagnostic when the envelope breaks its contract: an unknown schema version
+or diagnostic code, a duplicate identity with a differing payload, an
+absence claimed by an incomplete scan, new or resolved labels without a
+compatible baseline, commits that are not full immutable hashes, a missing
+required reason, or a repository identity that is not `owner/name`.
 
 ## Diff evidence gate
 
@@ -330,6 +404,15 @@ The universal floor in every language remains the comment channel:
 `@provenance rule: <rule-id>` immediately above the function. Add
 `@provenance verification: <method>` for a verification site. Comments scan alongside
 native bindings, but are honestly the weaker tier: they can drift away from the symbol.
+
+## Local review host
+
+Run `provenance review --repo /absolute/repository --repository-id A --scope default`
+to serve the embedded review assets and existing Rust operations on loopback.
+The CLI prints a URL and a session credential. Keep that output private.
+Ctrl-C stops the host. See [local review host](review-host.md) for access checks,
+runtime configuration, and the browser asset build contract. Native calls do
+not require this host. The Wiki commands remain available.
 
 ## Wiki publication safety
 
@@ -533,3 +616,22 @@ returns only the relations it crossed, not the whole scope.
 Shaping turn-state commands: `questions create` requires `--method` (grill, prototype, research, verify, or task); `topics claim/release/close` and `questions claim/release/answer` manage claim state (claiming an already-claimed item fails and reports the holder; closing a topic or answering a question clears its claim); `requirements fog set/show/clear` manages the deliberately unstructured fog text on an anchor requirement.
 
 Creation commands accept enriched v1 metadata for cloud-imported projects. Examples: `sources create --source-type legislation --reference "Department guidance" --commit-pin 5e1f2a9c4b6d8e0f1234567890abcdef12345678 --effective-date 1714521600000 --review-date 1717200000000 --supersedes source_2024`, `requirements create --status discovery --description "Research note" --domain-id domain_policy`, `resolutions create --status draft --confidence 0.9 --context "Code scan" --input-type regulatory --input-reference "Program manual" --input-summary "Reviewed rules" --made-by "Analyst" --approved-by "Approver" --approved-at 1714780800000 --supersedes res_2024`, `rules create --status draft --source-document docs/policy.md --source-section "Expiry limits"` (these fields are citations, not implementation bindings), and `proposals create --confidence 0.83`. Confidence values must be between `0.0` and `1.0`; source commit pins must be 7-64 hexadecimal characters.
+
+Rule archives and record stamps
+
+An archived Rule requires `archived_in_commit` with a full 40- or 64-digit
+hexadecimal commit hash and an optional RFC3339 `at` timestamp. Other Rule
+statuses refuse this field. An archived Rule cannot change to another status.
+The commit identifies the archived version in Git. `rules create` accepts
+`--archived-in-commit <hash>` and optional `--archived-at <RFC3339>`.
+`rules update` accepts the `archived_in_commit` object in its JSON input.
+
+Source, Requirement, Rule, and Resolution records can carry `created` and
+`updated` stamps. Each stamp contains `commit` and an RFC3339 `at` timestamp.
+A write uses repository HEAD at apply time. Creation stamps never change.
+Update stamps change only when record content changes. Stamps do not affect
+record equality, typed-spec conflicts, or canonical unit content digests.
+Legacy records can omit these stamps. A repository without a resolvable HEAD
+can write records with absent stamps. Later edits preserve the original
+creation stamp, including an absent one. Git preserves deleted records and
+previous versions of the source-controlled graph.

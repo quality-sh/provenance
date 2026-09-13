@@ -94,8 +94,8 @@ interleave with a projection write.
 ## Read path
 
 A query read takes the guard for its freshness step only. Under the
-default `catch_up` policy it opens the pool inside the guard, runs one
-catch-up pass, and drops the guard; under `annotate_only` it takes no
+default `catch_up` policy it opens the connection inside the guard, runs
+one catch-up pass, and drops the guard; under `annotate_only` it takes no
 guard and refuses a database that is absent, behind on migrations or
 validation version, or half-migrated (a revision beside no family digests).
 It then answers
@@ -197,11 +197,14 @@ plan, revision 3.
    worker while the closing read still holds the publication guard, so a
    close lock wait that needed a worker could never run. Each close lock
    attempt is a non-blocking `flock` on a runtime worker
-   (`cache.rs::acquire_close_lock`), retried after a 1 ms sleep. The table
+   (`cache/connection.rs::acquire_close_lock`), retried after a 1 ms sleep. The table
    below names synchronous work that remains on runtime workers. Moving
    this work to `spawn_blocking` is the first server task, outside W5.
-6. **Concurrency and cleanup.** Each `reader::answer` opens a separate pool
-   with one connection (`cache.rs::connect`) and a separate snapshot.
+6. **Concurrency and cleanup.** Each `reader::answer` opens a separate
+   `CacheConnection` with one connection (`cache/connection.rs::connect`)
+   and a separate snapshot. The freshness step owns the read's connection,
+   and `Freshness::complete` is the read's one completion point: the
+   connection closes in order before any answer or refusal leaves.
    Catch-up calls serialize on the publication file lock. The tests in
    `operations/queries/tests/concurrent.rs` keep both snapshots open at a
    barrier and check that both answers return the stored record count at
@@ -209,14 +212,14 @@ plan, revision 3.
    orders the closes. `answers_that_close_together_remove_the_wal_files`
    starts both closes together. Both tests run in the default suite and
    check that the -wal and -shm files are absent after both answers finish.
-   `close_cache` closes the pool under `provenance.db.close.lock` in the
+   `CacheConnection::close` closes the pool under `provenance.db.close.lock` in the
    cache directory and holds that lock until the pool holds no connection,
    which is after the physical SQLite teardown has finished. This orders
    closes across independent pools. Without that order, both SQLite closes
    can fail to get an exclusive database lock before either releases its
    shared lock, so both skip cleanup. The lock file stays in place for
    other callers. It is separate from the publication lock and contains no
-   records. Immutable reads do not create or acquire it. A close lock
+   records. Immutable connections do not create or acquire it. A close lock
    failure returns an error after the pool closes.
    The lock belongs to a detached close task, not to the reader: a read
    cancelled mid-close, or one that panics there, cannot release the lock
@@ -224,6 +227,9 @@ plan, revision 3.
    (`cache/tests/close_order_behavior.rs`). The close itself waits for the
    lock by retrying a non-blocking attempt every 1 ms, so the wait never
    needs a blocking worker and cannot deadlock behind publication waiters.
+   A connection that is dropped without a waited close starts the same
+   completion on a detached task, so a forgotten close cannot leak an
+   unordered pool (`cache/tests/completion_behavior.rs`).
 7. **Discovery.** `queries::served` calls `discover_repository` for each
    call. A server supplies a fixed absolute repository path through the
    `Option<Utf8PathBuf>` argument of each operation. It need not change
@@ -248,7 +254,7 @@ The hash estimates are from plan section C.1 and are not release limits.
 | `LiveHandle::graph_evidence` | `operations/reader/live.rs`, through `cache/health.rs::graph_evidence` | A runtime worker waiting in `flock` while another holder has the publication lock, then during canonical file reads and parse |
 | Reads through `LiveHandle::store()` | `operations/reader/live.rs`, through `state_store/access.rs` | A runtime worker waiting in `flock` for canonical reads through the plain store, then during synchronous file reads and parse |
 | `LiveHandle::runs` | `operations/reader/live.rs`, through `StateStore::list_verification_runs` | A runtime worker waiting on the verification run file's lock, then during the file read and parse |
-| Close lock attempt for each cache close | `cache.rs::close_cache`, through `acquire_close_lock` | A runtime worker during the open of the lock file and one non-blocking `flock` attempt; a held lock is retried after a 1 ms sleep on a runtime timer, never on a blocking worker |
+| Close lock attempt for each cache close | `cache/connection.rs::complete`, through `acquire_close_lock` | A runtime worker during the open of the lock file and one non-blocking `flock` attempt; a held lock is retried after a 1 ms sleep on a runtime timer, never on a blocking worker |
 | Live source scans | `operations/reader/live.rs::LiveHandle::scan_tree` and `scan_file` | A runtime worker during synchronous directory traversal, source file reads, and scans |
 | Live git reads | `operations/reader/live.rs::LiveHandle::resolve_range` and `disturbed`, through `stale/git.rs` | A runtime worker while git subprocesses run and their output is parsed |
 

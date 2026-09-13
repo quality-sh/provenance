@@ -6,13 +6,15 @@ use std::{
 
 use serde_json::Value;
 
-const CRATE_ORDER: [&str; 7] = [
+const CRATE_ORDER: [&str; 9] = [
     "provenance-macros",
     "provenance-core",
     "provenance-scanner",
     "provenance-ste100",
     "provenance-store",
     "provenance-sdk",
+    "provenance-http-client",
+    "provenance-transport",
     "provenance-cli",
 ];
 
@@ -98,7 +100,16 @@ fn release_workflow_publishes_rust_crates_in_dependency_order() {
     assert!(workflow.contains("name: Publish Rust crates"));
     assert!(workflow.contains("environment: crates-io"));
     assert!(workflow.contains("publish-cargo-if-missing.sh"));
-    assert!(workflow.contains("run: cargo package --workspace --locked"));
+    let package = workflow
+        .find("cargo package --workspace --locked --allow-dirty")
+        .unwrap();
+    assert!(workflow.find("git diff --exit-code HEAD --").unwrap() < package);
+    assert!(
+        workflow
+            .find("git ls-files --others --exclude-standard")
+            .unwrap()
+            < package
+    );
     assert!(workflow.contains("toolchain: 1.98.0"));
     assert!(!workflow.contains("run: cargo publish"));
 }
@@ -134,6 +145,10 @@ fn release_workflow_uses_npm_trusted_publishing_without_a_token() {
         .1;
 
     assert!(npm_job.contains("id-token: write"));
+    assert!(
+        npm_job.contains("runs-on: ubuntu-latest"),
+        "npm provenance requires a GitHub-hosted publisher"
+    );
     assert!(npm_job.contains("npm install --global npm@^11.5.1"));
     assert!(!workflow.contains("NPM_TOKEN"));
     assert!(!workflow.contains("NODE_AUTH_TOKEN"));
@@ -161,6 +176,15 @@ fn cli_package_contains_its_embedded_skills() {
         String::from_utf8_lossy(&output.stderr),
     );
     let files = String::from_utf8(output.stdout).expect("package file list is UTF-8");
+    // Cargo can list files with the platform's path separators.
+    let files: Vec<_> = files.lines().map(Path::new).collect();
+    for file in [
+        "build/review_assets.rs",
+        "review-assets/index.html",
+        "src/review.rs",
+    ] {
+        assert!(files.contains(&Path::new(file)), "CLI package omits {file}");
+    }
     for skill in [
         "provenance-fork-tournament",
         "provenance-grounded-writing",
@@ -168,9 +192,7 @@ fn cli_package_contains_its_embedded_skills() {
         "provenance-swarm-backtrace",
     ] {
         assert!(
-            files
-                .lines()
-                .any(|file| file == format!("skills/{skill}/SKILL.md")),
+            files.contains(&Path::new(&format!("skills/{skill}/SKILL.md"))),
             "CLI package omits {skill}",
         );
     }
@@ -235,13 +257,13 @@ mod publish_helper {
         assert!(calls.contains("/provenance-core/0.2.0"));
         assert!(
             calls.contains(
-                "cargo token=unset publish --registry crates-io --dry-run --locked --package provenance-core",
+                "cargo token=unset publish --registry crates-io --dry-run --locked --allow-dirty --package provenance-core",
             ),
             "{calls}",
         );
         assert!(
             calls.contains(
-                "cargo token=test-token publish --registry crates-io --no-verify --locked --package provenance-core",
+                "cargo token=test-token publish --registry crates-io --no-verify --locked --allow-dirty --package provenance-core",
             ),
             "{calls}",
         );

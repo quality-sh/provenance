@@ -117,6 +117,11 @@ pub fn apply_shared_rule(directory: &tempfile::TempDir) -> Ids {
 
 /// Records one passing verification run against a Rule.
 pub fn verify_rule(repo: &str, rule: &str) -> Value {
+    std::fs::write(
+        std::path::Path::new(repo).join("share-links.test.ts"),
+        "// verification fixture\n",
+    )
+    .unwrap();
     let run = sdk(
         repo,
         "begin-verification",

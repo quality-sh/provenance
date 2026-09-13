@@ -1,16 +1,15 @@
 //! The typed table handles read the projection back as the records the
 //! store wrote: byte for byte, past the bind limit, by kind rank, and
-//! with retired rows only when asked.
+//! from the current canonical state.
 
 use super::comparison::test_stores::{self, TestStore};
-use crate::cache::read::{column_values, kind_of, select_columns};
-use crate::cache::tests::fixtures::pinned_store::TWIN_ID;
-use crate::cache::{catch_up_state, open_cache, quoted};
+use crate::cache::read::{column_values, select_columns};
+use crate::cache::{catch_up_state, open_cache, quoted, CacheConnection};
 use crate::operations::reader::ReadSnapshot;
 use provenance_core::model::ProjectionRow;
 use provenance_core::{
-    Boundary, Domain, ImplementationBinding, NodeType, Question, Requirement, RequirementReview,
-    Resolution, Rule, Source, StableId, Topic, VerificationBinding,
+    Boundary, Domain, ImplementationBinding, Question, Requirement, RequirementReview, Resolution,
+    Rule, Source, StableId, Topic, VerificationBinding,
 };
 use provenance_macros::verifies;
 use serde::Serialize;
@@ -20,10 +19,10 @@ fn sid(value: &str) -> StableId {
     StableId::new(value).unwrap()
 }
 
-async fn snapshot_of(store: &TestStore) -> (SqlitePool, ReadSnapshot) {
+async fn snapshot_of(store: &TestStore) -> (CacheConnection, ReadSnapshot) {
     catch_up_state(&store.layout()).await.unwrap();
     let pool = open_cache(&store.layout()).await.unwrap();
-    let snapshot = ReadSnapshot::open(&pool, &store.scope)
+    let snapshot = ReadSnapshot::open(pool.pool(), &store.scope)
         .await
         .unwrap()
         .expect("a revision");
@@ -88,7 +87,7 @@ async fn a_stored_record_reads_back_as_its_canonical_bytes() {
     )
     .await;
     drop(snapshot);
-    pool.close().await;
+    pool.close().await.unwrap();
 }
 
 /// Every stored row of one kind reads back as the values the derive
@@ -150,22 +149,33 @@ async fn every_stored_row_of_the_repository_state_reads_back_as_written() {
     catch_up_state(&store.layout()).await.unwrap();
     let pool = open_cache(&store.layout()).await.unwrap();
     let word = scope.as_str();
-    assert_rows_read_as_written::<Source>(&pool, word, state.list_sources(scope).unwrap()).await;
+    assert_rows_read_as_written::<Source>(pool.pool(), word, state.list_sources(scope).unwrap())
+        .await;
     assert_rows_read_as_written::<Requirement>(
-        &pool,
+        pool.pool(),
         word,
         state.list_requirements(scope).unwrap(),
     )
     .await;
-    assert_rows_read_as_written::<Resolution>(&pool, word, resolutions).await;
-    assert_rows_read_as_written::<Rule>(&pool, word, state.list_rules(scope).unwrap()).await;
-    assert_rows_read_as_written::<Topic>(&pool, word, state.list_topics(scope).unwrap()).await;
-    assert_rows_read_as_written::<Question>(&pool, word, state.list_questions(scope).unwrap())
+    assert_rows_read_as_written::<Resolution>(pool.pool(), word, resolutions).await;
+    assert_rows_read_as_written::<Rule>(pool.pool(), word, state.list_rules(scope).unwrap()).await;
+    assert_rows_read_as_written::<Topic>(pool.pool(), word, state.list_topics(scope).unwrap())
         .await;
-    assert_rows_read_as_written::<Domain>(&pool, word, state.list_domains(scope).unwrap()).await;
-    assert_rows_read_as_written::<Boundary>(&pool, word, state.list_boundaries(scope).unwrap())
+    assert_rows_read_as_written::<Question>(
+        pool.pool(),
+        word,
+        state.list_questions(scope).unwrap(),
+    )
+    .await;
+    assert_rows_read_as_written::<Domain>(pool.pool(), word, state.list_domains(scope).unwrap())
         .await;
-    pool.close().await;
+    assert_rows_read_as_written::<Boundary>(
+        pool.pool(),
+        word,
+        state.list_boundaries(scope).unwrap(),
+    )
+    .await;
+    pool.close().await.unwrap();
 }
 
 fn ids<K: Serialize>(records: &[K]) -> Vec<String> {
@@ -180,43 +190,6 @@ fn ids<K: Serialize>(records: &[K]) -> Vec<String> {
         .collect()
 }
 
-#[tokio::test]
-async fn search_reads_a_retired_record_only_when_asked_and_orders_by_id() {
-    let store = TestStore::pinned();
-    let (pool, snapshot) = snapshot_of(&store).await;
-    let requirements = snapshot.table::<Requirement>();
-    assert_eq!(
-        ids(&requirements.search("Penalty", false).await.unwrap()),
-        ["req_penalty"],
-        "the needle is folded to lowercase"
-    );
-    assert!(requirements.search("old", false).await.unwrap().is_empty());
-    assert_eq!(
-        ids(&requirements.search("old", true).await.unwrap()),
-        ["req_old_overtime"]
-    );
-    assert_eq!(
-        ids(&requirements.search("overtime", true).await.unwrap()),
-        [
-            "req_bottom",
-            "req_left",
-            "req_old_overtime",
-            "req_overtime",
-            "req_penalty",
-            "req_right",
-            "req_top",
-            "twin_record",
-        ]
-    );
-    assert!(requirements
-        .search("no such text", true)
-        .await
-        .unwrap()
-        .is_empty());
-    drop(snapshot);
-    pool.close().await;
-}
-
 /// `SQLite` bounds the bind parameters of one statement; a lookup over
 /// more ids than that bound still answers.
 #[tokio::test]
@@ -228,14 +201,10 @@ async fn by_ids_reads_past_the_bind_limit() {
         .collect();
     wanted.push(sid("rule_overtime_001"));
     wanted.insert(7, sid("rule_penalty_001"));
-    let found = ids(&snapshot
-        .table::<Rule>()
-        .by_ids(&wanted, true)
-        .await
-        .unwrap());
+    let found = ids(&snapshot.table::<Rule>().by_ids(&wanted).await.unwrap());
     assert_eq!(found, ["rule_overtime_001", "rule_penalty_001"]);
     drop(snapshot);
-    pool.close().await;
+    pool.close().await.unwrap();
 }
 
 /// One record per id: an id that repeats across two chunks is still one
@@ -249,48 +218,8 @@ async fn by_ids_reads_a_repeated_id_once_across_chunks() {
     wanted.push(sid("rule_overtime_001"));
     wanted.push(sid("rule_overtime_001"));
     wanted.push(sid("rule_penalty_001"));
-    let found = ids(&snapshot
-        .table::<Rule>()
-        .by_ids(&wanted, true)
-        .await
-        .unwrap());
+    let found = ids(&snapshot.table::<Rule>().by_ids(&wanted).await.unwrap());
     assert_eq!(found, ["rule_overtime_001", "rule_penalty_001"]);
     drop(snapshot);
-    pool.close().await;
-}
-
-#[tokio::test]
-async fn kind_of_reads_kinds_in_rank_order_and_skips_retired() {
-    let store = TestStore::pinned();
-    let (pool, snapshot) = snapshot_of(&store).await;
-    assert_eq!(
-        kind_of(&snapshot, &sid(TWIN_ID), false).await.unwrap(),
-        Some(NodeType::Requirement),
-        "a requirement outranks a rule of the same id"
-    );
-    assert_eq!(
-        kind_of(&snapshot, &sid("req_old_overtime"), false)
-            .await
-            .unwrap(),
-        None,
-        "a retired record has no kind in an active view"
-    );
-    assert_eq!(
-        kind_of(&snapshot, &sid("req_old_overtime"), true)
-            .await
-            .unwrap(),
-        Some(NodeType::Requirement)
-    );
-    assert_eq!(
-        kind_of(&snapshot, &sid("boundary_no_backpay"), false)
-            .await
-            .unwrap(),
-        Some(NodeType::Boundary)
-    );
-    assert_eq!(
-        kind_of(&snapshot, &sid("nobody"), true).await.unwrap(),
-        None
-    );
-    drop(snapshot);
-    pool.close().await;
+    pool.close().await.unwrap();
 }

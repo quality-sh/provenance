@@ -4,6 +4,7 @@ use super::graph::NodeType;
 use super::ids::{SchemaVersion, ScopeId, StableId};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum ThreadStatus {
     #[serde(rename = "active")]
     Active,
@@ -14,6 +15,7 @@ pub enum ThreadStatus {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum MessageRole {
     #[serde(rename = "user")]
     User,
@@ -35,12 +37,14 @@ impl MessageRole {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct ThreadParent {
     pub node_type: NodeType,
     pub node_id: StableId,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct Thread {
     pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
@@ -51,6 +55,7 @@ pub struct Thread {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct Message {
     pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,

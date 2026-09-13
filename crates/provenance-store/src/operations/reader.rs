@@ -13,24 +13,30 @@
 //! The context guards its transaction with an async mutex and its word
 //! sets with plain mutexes, so the future a read runs is `Send`; the
 //! operations read one statement at a time, so no lock is contended.
+//!
+//! The freshness step owns the read's cache connection, and its
+//! `complete` method is the read's one completion point: whatever
+//! the answer is, the connection closes in order before it leaves.
 
+mod cursor;
 mod freshness;
 mod live;
 mod refuse_stale;
 mod snapshot;
 
+pub(crate) use cursor::{Cursor, Position};
 pub(crate) use freshness::is_missing_table;
 pub use live::{Disturbed, Live, LiveHandle};
 pub use refuse_stale::MovedUnit;
 pub use snapshot::{ReadSnapshot, Relations, Table};
 
+pub(crate) use crate::cache::read::page::{page_error, PAGE_BYTES, RECORD_BYTES};
 /// The projection readers that run over the handles: the fetched relation
 /// front and the kind probe. The operations reach them from here, so a
 /// query module never names the cache.
 pub use crate::cache::read::{kind_of, SqlFront};
 
 use super::read_policy::ReadPolicy;
-use super::stamp;
 use crate::layout::ProvenanceLayout;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::protocol::Stamped;
@@ -136,6 +142,9 @@ impl ReadContext {
 /// Runs one read: the freshness step under the guard, then `run` over a
 /// pinned snapshot, then the stamp. Every query answer leaves through here,
 /// so every answer carries a stamp.
+///
+/// The freshness step owns the read's connection, and its awaited close is
+/// the read's one completion point: no answer or refusal leaves before it.
 #[rule("rule_query_answer_carries_a_stamp")]
 pub async fn answer<R: Send>(
     repo: &Utf8Path,
@@ -143,38 +152,10 @@ pub async fn answer<R: Send>(
     policy: ReadPolicy,
     run: impl for<'c> FnOnce(&'c ReadContext) -> ReadFuture<'c, R> + Send,
 ) -> anyhow::Result<Stamped<R>> {
-    let layout = ProvenanceLayout::new(repo.to_path_buf());
+    let repo = super::canonical_repository(repo)?;
+    let layout = ProvenanceLayout::new(repo.clone());
     let fresh = freshness::run(&layout, scope, policy.freshness).await?;
-    let opened = match fresh.snapshot {
-        Some(snapshot) => Ok(Some(snapshot)),
-        None => ReadSnapshot::open(&fresh.pool, scope).await,
-    };
-    let snapshot = match opened {
-        Ok(Some(snapshot)) => snapshot,
-        Ok(None) => {
-            crate::cache::close_cache(&fresh.pool).await?;
-            return Err(ReadRefusal::NoProjection {
-                database: layout.cache_db_path(),
-                because: fresh
-                    .error
-                    .as_deref()
-                    .map(|error| format!(" (catch-up failed: {error})"))
-                    .unwrap_or_default(),
-            }
-            .into());
-        }
-        Err(error) => {
-            crate::cache::close_cache(&fresh.pool).await?;
-            return Err(error);
-        }
-    };
-    let context = ReadContext::new(snapshot, repo, policy.scan_limit);
-    let result = run(&context).await;
-    let stamp = stamp::seal(context, fresh.policy);
-    crate::cache::close_cache(&fresh.pool).await?;
-    Ok(Stamped {
-        result: result?,
-        stamp,
-        freshness_error: fresh.error,
-    })
+    fresh
+        .complete(&layout, &repo, scope, policy.scan_limit, run)
+        .await
 }

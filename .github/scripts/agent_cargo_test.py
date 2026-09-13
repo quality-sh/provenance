@@ -53,15 +53,16 @@ class AgentCargoTest(unittest.TestCase):
             "  print(json.dumps({'workflow_run_id': 314, 'html_url': 'https://github.com/quality-sh/provenance/actions/runs/314'}))\n"
             "elif a[:2] == ['run', 'list']:\n"
             "  branch = a[a.index('--branch') + 1]\n"
-            "  with open(os.environ['FAKE_GH_PAYLOAD'], 'w') as f: json.dump({'inputs': {'command_key': branch.split('/')[1], 'command_json': ''}}, f)\n"
+            "  with open(os.environ['FAKE_GH_PAYLOAD'], 'w') as f: json.dump({'headBranch': branch, 'headSha': branch.split('/')[2].split('-')[0], 'inputs': {'command_key': branch.split('/')[1], 'command_json': ''}}, f)\n"
             "  print(json.dumps([{'databaseId': 314, 'headSha': branch.split('/')[2].split('-')[0], 'workflowName': 'Agent Cargo verification'}]))\n"
             "elif a[:2] == ['run', 'watch'] and '--compact' in a:\n"
             "  sys.exit('unsupported watch flag')\n"
             "elif a[:2] == ['run', 'view'] and '--json' in a:\n"
             "  result = os.environ.get('FAKE_TEST_RESULT', 'success')\n"
-            "  inputs = json.load(open(os.environ['FAKE_GH_PAYLOAD']))['inputs']\n"
+            "  payload = json.load(open(os.environ['FAKE_GH_PAYLOAD']))\n"
+            "  inputs = payload['inputs']\n"
             "  names = ['Command'] if inputs.get('command_json') else [inputs['command_key'].split('-')[0].capitalize()]\n"
-            "  print(json.dumps({'jobs': [{'name': name, 'databaseId': i, 'conclusion': os.environ.get('FAKE_BUILD_RESULT', 'success') if name == 'Build' else result if name in ('Test', 'Command') else 'success'} for i, name in enumerate(names, 1)]}))\n"
+            "  print(json.dumps({'headBranch': payload.get('headBranch'), 'headSha': payload.get('headSha'), 'status': 'completed', 'jobs': [{'name': name, 'databaseId': i, 'conclusion': os.environ.get('FAKE_BUILD_RESULT', 'success') if name == 'Build' else result if name in ('Test', 'Command') else 'success'} for i, name in enumerate(names, 1)]}))\n"
             "elif a[:2] == ['run', 'view'] and '--log-failed' in a:\n"
             "  if os.environ.get('FAKE_LOG_ERROR') == '1': sys.exit(1)\n"
             "  print('remote test failure')\n"
@@ -116,9 +117,7 @@ class AgentCargoTest(unittest.TestCase):
         self.assertEqual((self.repo / "src.rs").read_text(), "after\n")
         self.assertIn("src.rs", self.git("diff", "--name-only"))
         self.assertEqual(len(self.calls_matching("list")), 2)
-        refs = run("git", "for-each-ref", "--format=%(objectname)", "refs/heads/agent-ci", cwd=self.remote)
-        self.assertEqual(refs.returncode, 0, refs.stderr)
-        snapshot = refs.stdout.strip().splitlines()[0]
+        snapshot = clippy.stdout.split("Remote Cargo: verifying snapshot ", 1)[1].splitlines()[0]
         self.assertEqual(len(snapshot), 40)
         committed = run("git", "show", f"{snapshot}:src.rs", cwd=self.remote)
         self.assertEqual(committed.stdout, "after\n")
@@ -133,6 +132,14 @@ class AgentCargoTest(unittest.TestCase):
         self.assertEqual(test.returncode, 1)
         self.assertIn("remote test failure", test.stdout)
         self.assertEqual(len(self.calls_matching("list")), 2)
+
+    def test_completed_check_removes_its_remote_branch(self):
+        result = self.cargo("check")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        refs = run("git", "for-each-ref", "--format=%(refname)", "refs/heads/agent-ci", cwd=self.remote)
+        self.assertEqual(refs.returncode, 0, refs.stderr)
+        self.assertEqual(refs.stdout.strip(), "")
 
     def test_repeated_check_for_same_snapshot_reuses_its_run(self):
         first = self.cargo("check")
@@ -211,9 +218,8 @@ class AgentCargoTest(unittest.TestCase):
         result = self.cargo("check")
 
         self.assertEqual(result.returncode, 0, result.stderr)
-        refs = run("git", "for-each-ref", "--format=%(objectname)", "refs/heads/agent-ci", cwd=self.remote)
-        self.assertEqual(refs.returncode, 0, refs.stderr)
-        committed = run("git", "show", f"{refs.stdout.strip()}:new.rs", cwd=self.remote)
+        snapshot = result.stdout.split("Remote Cargo: verifying snapshot ", 1)[1].splitlines()[0]
+        committed = run("git", "show", f"{snapshot}:new.rs", cwd=self.remote)
         self.assertEqual(committed.stdout, "new source\n")
 
     def test_unrelated_repository_uses_native_cargo(self):

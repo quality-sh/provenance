@@ -2,11 +2,24 @@
 
 This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
 
+## Bootstrap
+
+Generated files must never enter source control. Before a workspace Cargo build,
+install the generator dependencies with `npm ci --prefix tools/operation-codegen`
+and run `node tools/operation-codegen/ensure-generated.mjs`. SDK build and test
+commands prepare generated source automatically. See
+`tools/operation-codegen/README.md` for the build and package flow.
+
 ## Cargo checks on maintainer hosts
 
 On configured maintainer hosts, plain `cargo build`, `cargo check`, `cargo clippy`, and `cargo test` run in GitHub Actions. The command returns the CI result and pushes a public snapshot branch. Stage new files before a check, and keep secrets out of tracked files. Use `PROVENANCE_CI_LOCAL=1 cargo ...` for native Cargo or `PROVENANCE_CI_ARTIFACT=1 cargo build` to receive a dev CLI binary. Public clones do not enable the shim automatically.
 
 ## Code standards
+
+Browser UI tests do not belong in this repository. Keep Rust host, authorization,
+asset, and API tests, and non-UI session tests here. `provenance-web` owns
+Storybook component tests and its one small browser smoke test of built assets.
+Do not add a browser suite here or move a broad suite into `provenance-web`.
 
 **No Rust file in this repo may exceed 500 lines.** Unreadable code is not accepted.
 
@@ -32,6 +45,33 @@ pull requests, commit messages, and agent handoffs.
   statements when that checker is available in the workflow.
 - Do not claim full ASD-STE100 conformance from a clean automated report. The
   report covers only the standard rules that the checker currently implements.
+
+## Research and review reports
+
+Do not commit research reports, code-review reports, or session decision summaries
+into repository files or PR diffs unless the user explicitly requests that location.
+Publish retained reports as secret GitHub Gists by default. Link the exact Gist
+revision from a Provenance Source and from the relevant Resolution input. Keep
+accepted product and architecture obligations in the graph; a report does not
+replace those records or approve all of its alternatives.
+
+Keep task order, worker status, validation handoffs, and release prerequisites in
+Beads. Put a concise change description and validation summary in the PR body.
+When moving a report out of the repository, remove its file from the PR and update
+all graph and bead references. Do not leave a broken repository-path citation.
+
+## Pull requests
+
+Opening a pull request is not the end of the work. Do not abandon the PR at open.
+
+- Stay with the PR and watch CI until every required check finishes. Use
+  `gh pr checks <number> --watch` or read `gh pr view <number>` in a later turn.
+- If a check fails, fix the branch and push to the same PR. Do not open a
+  replacement PR or leave the failure for someone else.
+- A PR is safe to sign off only when all required checks pass on the latest
+  commit. Cite the passing run in your handoff.
+- If you cannot watch CI to the end, say so in your handoff and mark the PR as
+  not verified. Never report a PR as done while checks run or fail.
 
 ## Quick Reference
 

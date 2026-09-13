@@ -28,6 +28,7 @@ const PARAGRAPH_LENGTH_MESSAGE: &str = "This paragraph has more than six sentenc
 const UNAPPROVED_WORD_MESSAGE: &str = "Do not use unapproved dictionary words in descriptive text.";
 
 /// A report from the fixed ASD-STE100 Issue 9 analyzer.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Report {
     pub standard: Standard,
@@ -37,6 +38,7 @@ pub struct Report {
 }
 
 /// The authority used by the analyzer.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Standard {
     #[serde(rename = "ASD-STE100")]
@@ -44,8 +46,10 @@ pub enum Standard {
 }
 
 /// The fixed issue of the standard used by the analyzer.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(into = "u8", try_from = "u8")]
+#[cfg_attr(feature = "schema", schemars(extend("const" = 9)))]
 pub enum StandardIssue {
     Nine,
 }
@@ -70,6 +74,7 @@ impl TryFrom<u8> for StandardIssue {
 }
 
 /// One nonconformance found in descriptive text.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Finding {
     pub rule: RuleNumber,
@@ -79,6 +84,7 @@ pub struct Finding {
 }
 
 /// An ASD-STE100 Issue 9 rule implemented by this analyzer.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum RuleNumber {
     #[serde(rename = "1.1")]
@@ -94,6 +100,7 @@ pub enum RuleNumber {
 }
 
 /// The disposition of a finding.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FindingKind {
@@ -101,6 +108,7 @@ pub enum FindingKind {
 }
 
 /// A half-open UTF-8 byte range in the analyzed text.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Span {
     pub start: usize,
@@ -108,6 +116,7 @@ pub struct Span {
 }
 
 /// One word or phrase classified against the imported dictionary.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct WordUse {
     pub span: Span,
@@ -118,6 +127,7 @@ pub struct WordUse {
 ///
 /// Membership cannot settle a restricted meaning or part of speech, so an
 /// approved word can still break Rule 1.2 or Rule 1.3.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum VocabularyCategory {

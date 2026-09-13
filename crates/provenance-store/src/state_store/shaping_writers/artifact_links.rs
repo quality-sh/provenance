@@ -6,7 +6,7 @@ use provenance_core::{ArtifactLink, ArtifactLinkTargetType, ScopeId};
 use super::StateStore;
 
 impl StateStore {
-    pub(super) fn validate_artifact_links(
+    pub(in crate::state_store) fn validate_artifact_links(
         &self,
         scope_id: &ScopeId,
         links: &[ArtifactLink],
@@ -30,13 +30,13 @@ impl StateStore {
                     .iter()
                     .any(|rule| rule.id == link.target_id),
             };
-            anyhow::ensure!(exists, "linked artifact does not exist");
+            crate::write_error::ensure!(MissingReference, exists, "linked artifact does not exist");
         }
         Ok(())
     }
 }
 
-pub(super) fn sort_artifact_links(links: &mut Vec<ArtifactLink>) {
+pub(in crate::state_store) fn sort_artifact_links(links: &mut Vec<ArtifactLink>) {
     links.sort_by(|a, b| {
         artifact_link_target_key(a.target_type)
             .cmp(artifact_link_target_key(b.target_type))

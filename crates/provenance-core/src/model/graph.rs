@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use super::parsing::normalize_enum_value;
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NodeType {
     #[serde(rename = "source")]

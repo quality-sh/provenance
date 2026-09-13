@@ -26,12 +26,14 @@ pub(super) fn requirement(
     source_refs: Vec<SourceReference>,
 ) -> Requirement {
     Requirement {
+        created: None,
+        updated: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id(),
         id: sid(id),
         declared_by: None,
         declaration_address: None,
-        retired: false,
+
         statement: statement.to_string(),
         description: None,
         fog: None,
@@ -49,6 +51,8 @@ pub(super) fn requirement(
 
 pub(super) fn resolution(id: &str, title: &str, inputs: Vec<ResolutionInput>) -> Resolution {
     Resolution {
+        created: None,
+        updated: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id(),
         id: sid(id),
@@ -73,12 +77,15 @@ pub(super) fn resolution(id: &str, title: &str, inputs: Vec<ResolutionInput>) ->
 
 pub(super) fn rule(id: &str, name: Option<&str>) -> Rule {
     Rule {
+        created: None,
+        updated: None,
+        archived_in_commit: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id(),
         id: sid(id),
         declared_by: None,
         declaration_address: None,
-        retired: false,
+
         name: name.map(str::to_string),
         description: None,
         statement: "Claim items shall be grouped by participant".to_string(),
@@ -95,12 +102,14 @@ pub(super) fn rule(id: &str, name: Option<&str>) -> Rule {
 
 pub(super) fn source(id: &str, name: &str) -> Source {
     Source {
+        created: None,
+        updated: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id(),
         id: sid(id),
         declared_by: None,
         declaration_address: None,
-        retired: false,
+
         name: name.to_string(),
         source_type: SourceType::Document,
         url: None,

@@ -1,6 +1,8 @@
 //! Exact, per-target authorization for one-time declaration adoption.
 
 mod implementation;
+mod targets;
+use targets::validate_targets;
 mod relationships;
 
 use std::collections::BTreeSet;
@@ -35,9 +37,14 @@ impl OwnershipDecision {
     }
 
     pub(super) fn refuse(self) -> anyhow::Result<()> {
-        anyhow::bail!(self
-            .refusal
-            .unwrap_or_else(|| { "typed declaration ownership conflict".to_string() }))
+        Err(crate::write_error::SourceFailure::wrap(
+            crate::write_error::WriteFailure::OwnershipConflict {
+                conflicts: self.conflicts,
+            },
+            anyhow::anyhow!(self
+                .refusal
+                .unwrap_or_else(|| "typed declaration ownership conflict".to_string())),
+        ))
     }
 }
 
@@ -47,7 +54,12 @@ pub(super) fn decide(
     current: &CurrentTypedState,
     ids: &DesiredTypedIds,
 ) -> anyhow::Result<OwnershipDecision> {
-    let adopted = validate_targets(input, current)?;
+    let adopted = validate_targets(input, current).map_err(|error| {
+        crate::write_error::SourceFailure::wrap(
+            crate::write_error::WriteFailure::InvalidDeclaration,
+            error,
+        )
+    })?;
     let relationships = DesiredRelationships::new(input, ids)?;
     let mut decision = OwnershipDecision {
         conflicts: Vec::new(),
@@ -347,98 +359,6 @@ fn target(kind: TypedDeclarationKind, id: &StableId) -> TypedAdoptionTarget {
     TypedAdoptionTarget {
         kind,
         id: id.as_str().to_string(),
-    }
-}
-
-fn validate_targets(
-    input: &TypedSpecInput,
-    current: &CurrentTypedState,
-) -> anyhow::Result<BTreeSet<TypedAdoptionTarget>> {
-    let mut targets = BTreeSet::new();
-    for target in &input.adopt_unowned {
-        StableId::new(&target.id).map_err(|_| {
-            anyhow::anyhow!(
-                "adoption target id `{}` must use lowercase ASCII letters, digits, '_' or '-'",
-                target.id
-            )
-        })?;
-        anyhow::ensure!(
-            targets.insert(target.clone()),
-            "duplicate adoption target `{}:{}`",
-            kind_name(target.kind),
-            target.id
-        );
-    }
-    for target in &input.adopt_unowned {
-        let (declarations, exact) = match target.kind {
-            TypedDeclarationKind::Source => (
-                input.sources.len(),
-                input
-                    .sources
-                    .iter()
-                    .filter(|value| value.id.as_deref() == Some(&target.id))
-                    .count(),
-            ),
-            TypedDeclarationKind::Requirement => (
-                input.requirements.len(),
-                input
-                    .requirements
-                    .iter()
-                    .filter(|value| value.id.as_deref() == Some(&target.id))
-                    .count(),
-            ),
-            TypedDeclarationKind::Rule => (
-                input.rules.len(),
-                input
-                    .rules
-                    .iter()
-                    .filter(|value| value.id.as_deref() == Some(&target.id))
-                    .count(),
-            ),
-        };
-        anyhow::ensure!(
-            declarations > 0,
-            "adoption target `{}:{}` does not name a declaration in this document",
-            kind_name(target.kind),
-            target.id
-        );
-        anyhow::ensure!(
-            exact == 1,
-            "adoption target `{}:{}` must name exactly one declaration with the same explicit id",
-            kind_name(target.kind),
-            target.id
-        );
-    }
-    for target in &input.adopt_unowned {
-        let exists = match target.kind {
-            TypedDeclarationKind::Source => current
-                .sources
-                .iter()
-                .any(|value| value.id.as_str() == target.id),
-            TypedDeclarationKind::Requirement => current
-                .requirements
-                .iter()
-                .any(|value| value.id.as_str() == target.id),
-            TypedDeclarationKind::Rule => current
-                .rules
-                .iter()
-                .any(|value| value.id.as_str() == target.id),
-        };
-        anyhow::ensure!(
-            exists,
-            "adoption target `{}:{}` does not exist in canonical state",
-            kind_name(target.kind),
-            target.id
-        );
-    }
-    Ok(targets)
-}
-
-const fn kind_name(kind: TypedDeclarationKind) -> &'static str {
-    match kind {
-        TypedDeclarationKind::Source => "source",
-        TypedDeclarationKind::Requirement => "requirement",
-        TypedDeclarationKind::Rule => "rule",
     }
 }
 

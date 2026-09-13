@@ -1,7 +1,9 @@
 use assert_cmd::Command;
 use predicates::prelude::*;
 use serde_json::Value;
-use std::path::Path;
+#[path = "cli_coverage/support.rs"]
+mod support;
+use support::{create_rule, init_repo};
 
 fn strict_validating_scan(repo: &std::path::Path, source_dir: &std::path::Path) -> Command {
     let mut command = Command::cargo_bin("provenance").unwrap();
@@ -437,61 +439,4 @@ fn coverage_scan_strict_exits_non_zero_for_deprecated_marker() {
         .failure()
         .stdout(predicate::str::contains("rule_deprecated"))
         .stdout(predicate::str::contains("deprecated"));
-}
-
-fn init_repo(repo: &Path) {
-    Command::cargo_bin("provenance")
-        .unwrap()
-        .args([
-            "init",
-            "--path",
-            repo.to_str().unwrap(),
-            "--scope",
-            "default",
-            "--path-prefix",
-            ".",
-        ])
-        .assert()
-        .success();
-    Command::cargo_bin("provenance")
-        .unwrap()
-        .args([
-            "requirements",
-            "create",
-            "--repo",
-            repo.to_str().unwrap(),
-            "--scope",
-            "default",
-            "--id",
-            "req_anchor",
-            "--statement",
-            "The anchor requirement holds",
-        ])
-        .assert()
-        .success();
-}
-
-fn create_rule(repo: &Path, id: &str, status: &str) {
-    Command::cargo_bin("provenance")
-        .unwrap()
-        .args([
-            "rules",
-            "create",
-            "--repo",
-            repo.to_str().unwrap(),
-            "--scope",
-            "default",
-            "--id",
-            id,
-            "--requirement-id",
-            "req_anchor",
-            "--statement",
-            "Payroll follows the current policy",
-            "--status",
-            status,
-            "--severity",
-            "high",
-        ])
-        .assert()
-        .success();
 }

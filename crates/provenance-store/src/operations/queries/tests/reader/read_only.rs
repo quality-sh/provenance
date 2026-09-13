@@ -114,10 +114,10 @@ async fn a_half_migrated_projection_refuses_without_taking_the_lock() {
     get_through(&store, ReadPolicy::default()).await.unwrap();
     let pool = crate::cache::open_cache(&store.layout()).await.unwrap();
     sqlx::query("DELETE FROM projection_family_digests")
-        .execute(&pool)
+        .execute(pool.pool())
         .await
         .unwrap();
-    pool.close().await;
+    pool.close().await.unwrap();
     let _restore = lock_untakeable(&store);
     let error = get_through(
         &store,

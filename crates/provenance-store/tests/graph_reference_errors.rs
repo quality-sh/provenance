@@ -286,7 +286,7 @@ fn store_api_rejects_invalid_reference_contract() {
 /// put it. Every collaboration and ideation family is tried by name, as are
 /// the service families that were deleted from the model.
 #[test]
-#[verifies("rule_pinned_graph_families", construction)]
+#[verifies("rule_pinned_graph_families", examples)]
 fn exact_export_rejects_non_canonical_graph_families() {
     assert!(
         ExactExport::from_json(&serde_json::to_vec(&export_document(&empty_graph())).unwrap())

@@ -11,7 +11,10 @@ use provenance_core::{
 
 mod comparison;
 mod concurrent;
+mod cursor;
 mod dangling_targets;
+mod document;
+mod document_membership;
 mod evidence;
 mod front_equivalence;
 mod impact;
@@ -20,7 +23,6 @@ mod live;
 mod order;
 mod pinned;
 mod reader;
-mod retired;
 mod stamp;
 mod symbols;
 mod tables;
@@ -103,7 +105,6 @@ async fn get_answers_a_domain_and_a_boundary_by_id() {
                 protocol_version: Some(SDK_PROTOCOL_VERSION),
                 node_type: kind,
                 id: id.into(),
-                include_retired: false,
             },
         )
         .await
@@ -124,11 +125,11 @@ async fn search_reaches_domains_and_boundaries_by_kind_and_text() {
         &scope,
         ReadPolicy::default(),
         SearchQuery {
+            cursor: None,
             protocol_version: Some(SDK_PROTOCOL_VERSION),
             text: "pay".into(),
             node_types: vec![NodeType::Domain, NodeType::Boundary],
             limit: 10,
-            include_retired: false,
         },
     )
     .await
@@ -155,11 +156,11 @@ async fn default_search_keeps_the_six_settled_kinds_under_protocol_five() {
         &scope,
         ReadPolicy::default(),
         SearchQuery {
+            cursor: None,
             protocol_version: Some(SDK_PROTOCOL_VERSION),
             text: "pay".into(),
             node_types: Vec::new(),
             limit: 10,
-            include_retired: false,
         },
     )
     .await
@@ -202,6 +203,7 @@ async fn search_answers_new_kinds_after_every_settled_kind() {
         &scope,
         ReadPolicy::default(),
         SearchQuery {
+            cursor: None,
             protocol_version: Some(SDK_PROTOCOL_VERSION),
             text: "a".into(),
             node_types: vec![
@@ -215,7 +217,6 @@ async fn search_answers_new_kinds_after_every_settled_kind() {
                 NodeType::Boundary,
             ],
             limit: 10,
-            include_retired: false,
         },
     )
     .await

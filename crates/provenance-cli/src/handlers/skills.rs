@@ -4,14 +4,14 @@ use crate::skills;
 
 pub(super) fn handle(command: SkillsCommand) -> anyhow::Result<()> {
     match command {
-        SkillsCommand::List { format } => output::print(format, &skills::list()?)?,
+        SkillsCommand::List { .. } => output::print_json(&skills::list()?)?,
         SkillsCommand::Show { name } => print!("{}", skills::show(&name)?),
         SkillsCommand::Install {
             global,
             copy,
             force,
-            format,
-        } => output::print(format, &skills::install(global, force, copy)?)?,
+            ..
+        } => output::print_json(&skills::install(global, force, copy)?)?,
     }
     Ok(())
 }

@@ -1,7 +1,9 @@
 use super::catch_up_behavior::dump_family_tables;
 use super::catch_up_serial_behavior::latest_revision;
 use super::fixtures::{rewrite_records, seeded_layout};
-use crate::cache::{catch_up_state, materialize_state, open_cache, unit_digest, Unit};
+use crate::cache::{
+    catch_up_state, materialize_state, open_cache, unit_digest, unit_stored_digest, Unit,
+};
 use crate::layout::ProvenanceLayout;
 use crate::test_probes;
 use provenance_core::{Manifest, RepoPathPrefix, Scope, ScopeId};
@@ -28,13 +30,15 @@ async fn accept_invalid_bytes(layout: &ProvenanceLayout, scope: &ScopeId) {
         r["requirement_ids"] = serde_json::json!([]);
     });
     let pool = open_cache(layout).await.unwrap();
-    sqlx::query("UPDATE projection_unit_digests SET digest = ? WHERE unit = ?")
-        .bind(unit_digest(&layout.state_dir(), &Unit::Scope(scope.clone())).unwrap())
+    let unit = Unit::Scope(scope.clone());
+    sqlx::query("UPDATE projection_unit_digests SET digest = ?, stored_digest = ? WHERE unit = ?")
+        .bind(unit_digest(&layout.state_dir(), &unit).unwrap())
+        .bind(unit_stored_digest(&layout.state_dir(), &unit).unwrap())
         .bind(format!("scope:{}", scope.as_str()))
-        .execute(&pool)
+        .execute(pool.pool())
         .await
         .unwrap();
-    pool.close().await;
+    pool.close().await.unwrap();
 }
 
 #[tokio::test]
@@ -77,9 +81,9 @@ async fn a_manifest_change_validates_every_scope() {
     materialize_state(&layout).await.unwrap();
     accept_invalid_bytes(&layout, &scope).await;
     let pool = open_cache(&layout).await.unwrap();
-    let before = latest_revision(&pool).await;
-    let rows = dump_family_tables(&pool).await;
-    pool.close().await;
+    let before = latest_revision(pool.pool()).await;
+    let rows = dump_family_tables(pool.pool()).await;
+    pool.close().await.unwrap();
     let mut bytes = std::fs::read(layout.manifest_path()).unwrap();
     bytes.push(b'\n');
     std::fs::write(layout.manifest_path(), bytes).unwrap();
@@ -89,9 +93,9 @@ async fn a_manifest_change_validates_every_scope() {
         "{error}"
     );
     let pool = open_cache(&layout).await.unwrap();
-    assert_eq!(latest_revision(&pool).await, before);
-    assert_eq!(dump_family_tables(&pool).await, rows);
-    pool.close().await;
+    assert_eq!(latest_revision(pool.pool()).await, before);
+    assert_eq!(dump_family_tables(pool.pool()).await, rows);
+    pool.close().await.unwrap();
 }
 
 pub async fn rewind_validation(pool: &sqlx::SqlitePool) {
@@ -107,13 +111,13 @@ async fn a_validation_version_move_routes_catch_up_to_a_full_rebuild() {
     let (_dir, layout, _scope) = seeded_layout();
     materialize_state(&layout).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
-    let before = latest_revision(&pool).await;
-    rewind_validation(&pool).await;
+    let before = latest_revision(pool.pool()).await;
+    rewind_validation(pool.pool()).await;
     sqlx::query("DELETE FROM requirements")
-        .execute(&pool)
+        .execute(pool.pool())
         .await
         .unwrap();
-    pool.close().await;
+    pool.close().await.unwrap();
     let report = catch_up_state(&layout).await.unwrap();
     assert!(
         report.rebuilt,
@@ -122,11 +126,11 @@ async fn a_validation_version_move_routes_catch_up_to_a_full_rebuild() {
     assert_eq!(report.serial, before.0 + 1);
     let pool = open_cache(&layout).await.unwrap();
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM requirements")
-        .fetch_one(&pool)
+        .fetch_one(pool.pool())
         .await
         .unwrap();
     assert_eq!(count, 1);
-    pool.close().await;
+    pool.close().await.unwrap();
     assert!(!catch_up_state(&layout).await.unwrap().revision_committed);
 }
 
@@ -136,16 +140,16 @@ async fn a_validation_version_move_refuses_an_unchanged_invalid_scope() {
     materialize_state(&layout).await.unwrap();
     accept_invalid_bytes(&layout, &scope).await;
     let pool = open_cache(&layout).await.unwrap();
-    rewind_validation(&pool).await;
-    let before = latest_revision(&pool).await;
-    pool.close().await;
+    rewind_validation(pool.pool()).await;
+    let before = latest_revision(pool.pool()).await;
+    pool.close().await.unwrap();
     assert!(catch_up_state(&layout).await.is_err());
     let pool = open_cache(&layout).await.unwrap();
-    assert_eq!(latest_revision(&pool).await, before);
+    assert_eq!(latest_revision(pool.pool()).await, before);
     let version: i64 = sqlx::query_scalar("SELECT version FROM projection_validation")
-        .fetch_one(&pool)
+        .fetch_one(pool.pool())
         .await
         .unwrap();
     assert_eq!(version, 0);
-    pool.close().await;
+    pool.close().await.unwrap();
 }

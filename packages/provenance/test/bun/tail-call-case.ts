@@ -7,9 +7,15 @@
 // explicit path, so a plain `bun test` sweep never picks it up.
 import { test } from "bun:test";
 
-import { configure, defineSpec } from "../../dist/index.js";
+import { apply, configure, defineSpec } from "../../dist/index.js";
 
-configure({ engine: process.env.PROVENANCE_TEST_ENGINE, repository: import.meta.dir });
+configure({
+  endpoint: process.env.PROVENANCE_ENDPOINT,
+  bearer: process.env.PROVENANCE_TOKEN,
+  repositoryId: process.env.PROVENANCE_REPOSITORY_ID,
+  localRoot: process.env.PROVENANCE_LOCAL_ROOT,
+  scope: "default",
+});
 
 const spec = defineSpec("share-links", ({ requirement }) => {
   const sharing = requirement("sharing", {
@@ -23,6 +29,7 @@ const spec = defineSpec("share-links", ({ requirement }) => {
 });
 
 if (process.env.PROVENANCE_STATED_FILE === "1") {
+  await apply(spec);
   test("stated file", () =>
     spec.handles.expiry.verify("share-link-expiry", () => undefined, import.meta));
 } else {

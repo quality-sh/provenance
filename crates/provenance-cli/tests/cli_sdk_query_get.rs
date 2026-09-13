@@ -61,42 +61,6 @@ fn get_carries_a_stamp_beside_the_answer() {
 }
 
 #[test]
-fn get_hides_a_retired_record_until_the_caller_asks_for_it() {
-    let directory = init_repo();
-    let repo = directory.path().to_str().unwrap();
-    let ids = apply_shared_rule(&directory);
-    let mut narrowed = fixtures::shared_rule_spec();
-    narrowed["requirements"] = json!([{
-        "key": "sharing",
-        "statement": "Shares are time bounded",
-        "sources": ["retention"]
-    }]);
-    narrowed["rules"][0]["requirements"] = json!(["sharing"]);
-    sdk(repo, "apply", &narrowed);
-
-    let active = sdk(
-        repo,
-        "get",
-        &json!({"node_type": "requirement", "id": ids.sessions.as_str()}),
-    );
-    assert_eq!(active["found"], false);
-    assert!(active.get("node").is_none());
-
-    let including = sdk(
-        repo,
-        "get",
-        &json!({
-            "node_type": "requirement",
-            "id": ids.sessions.as_str(),
-            "include_retired": true
-        }),
-    );
-    assert_eq!(including["found"], true);
-    assert_eq!(including["node"]["retired"], true);
-    assert_eq!(including["node"]["id"], ids.sessions);
-}
-
-#[test]
 fn get_refuses_a_request_written_for_another_protocol_version() {
     let directory = init_repo();
     let repo = directory.path().to_str().unwrap();
@@ -113,4 +77,30 @@ fn get_refuses_a_request_written_for_another_protocol_version() {
         error.contains("protocol version 2") && error.contains(&spoken),
         "error should name both versions: {error}"
     );
+}
+
+#[test]
+fn native_validation_errors_keep_the_original_single_error_line() {
+    let directory = init_repo();
+    let repo = directory.path().to_str().unwrap();
+    for (operation, request, expected) in [
+        (
+            "search",
+            json!({"text":"shared","limit":0}),
+            "Error: limit must be between 1 and 200\n".to_owned(),
+        ),
+        (
+            "get",
+            json!({"node_type":"rule","id":"rule_missing","protocol_version":6}),
+            format!(
+                "Error: request names protocol version 6; this engine speaks {}\n",
+                provenance_core::SDK_PROTOCOL_VERSION
+            ),
+        ),
+    ] {
+        let (ok, stdout, stderr) = fixtures::sdk_raw(repo, operation, &request);
+        assert!(!ok);
+        assert!(stdout.is_empty());
+        assert_eq!(stderr, expected);
+    }
 }
