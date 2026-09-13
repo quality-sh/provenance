@@ -4,7 +4,7 @@ This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get sta
 
 ## Cargo checks on maintainer hosts
 
-On configured maintainer hosts, plain `cargo build`, `cargo check`, `cargo clippy`, and `cargo test` run in GitHub Actions. The command waits and returns the CI result. The shim pushes a public snapshot branch, so keep secrets out of tracked files and stage new files before a check. Use `PROVENANCE_CI_LOCAL=1 cargo ...` to run native Cargo. Use `PROVENANCE_CI_ARTIFACT=1 cargo build` to download a dev CLI binary. Public clones do not enable this behavior automatically; see [docs/agent-cargo.md](docs/agent-cargo.md).
+On configured maintainer hosts, plain `cargo build`, `cargo check`, `cargo clippy`, and `cargo test` run in GitHub Actions. The command returns the CI result and pushes a public snapshot branch. Stage new files before a check, and keep secrets out of tracked files. Use `PROVENANCE_CI_LOCAL=1 cargo ...` for native Cargo or `PROVENANCE_CI_ARTIFACT=1 cargo build` to receive a dev CLI binary. Public clones do not enable the shim automatically.
 
 ## Code standards
 
