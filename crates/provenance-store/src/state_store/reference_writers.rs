@@ -116,7 +116,7 @@ impl StateStore {
             if let Some(target) = &target {
                 self.ensure_node_exists(scope_id, decl.target, target, "--target-id")?;
             }
-            self.mutate_graph_record(path, |records: &mut Vec<T>| {
+            self.mutate_graph_record(&path, |records: &mut Vec<T>| {
                 if let Some(target) = &target {
                     if decl.target == T::OWNER {
                         crate::write_error::ensure!(
@@ -169,7 +169,7 @@ impl StateStore {
         let path = shards::path_for(&self.layout, scope_id, T::OWNER);
         self.with_repository_publication(|| {
             self.ensure_node_exists(scope_id, decl.target, &target, "--target-id")?;
-            self.mutate_graph_record(path, |records: &mut Vec<T>| {
+            self.mutate_graph_record(&path, |records: &mut Vec<T>| {
                 if decl.target == T::OWNER {
                     crate::write_error::ensure!(
                         InvalidUpdate,
@@ -222,7 +222,7 @@ impl StateStore {
         let decl = declared::<T>(name);
         let path = shards::path_for(&self.layout, scope_id, T::OWNER);
         self.with_repository_publication(|| {
-            self.mutate_graph_record(path, |records: &mut Vec<T>| {
+            self.mutate_graph_record(&path, |records: &mut Vec<T>| {
                 let record = records
                     .iter_mut()
                     .find(|record| record.id() == owner)
