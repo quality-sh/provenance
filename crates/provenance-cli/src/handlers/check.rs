@@ -3,6 +3,7 @@ use crate::store::Store;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{ensure_supported_schema_version, Manifest};
 use provenance_macros::rule;
+use provenance_store::dictionary_reference::{resolve_project_dictionary, DictionaryResolution};
 use std::collections::BTreeSet;
 
 mod index;
@@ -84,6 +85,7 @@ fn collect_report_locked(
 ) -> anyhow::Result<CheckReport> {
     validate_locked(store, manifest)?;
     if strict {
+        ensure_strict_dictionary_index(store.layout())?;
         let analysis = statement_report::changed_statements_from_commits(repo, manifest, base)?;
         let status = if analysis.diagnostics.is_empty() {
             "ok"
@@ -104,6 +106,31 @@ fn collect_report_locked(
         commits: None,
         diagnostics: statement_report::changed_statements_from_head(store, repo, manifest)?,
     })
+}
+
+/// Fails a strict check when the committed dictionary reference has no
+/// loadable index, instead of silently downgrading to rules-only checking.
+#[rule("rule_ste_strict_dictionary_index_gate")]
+fn ensure_strict_dictionary_index(
+    layout: &provenance_store::layout::ProvenanceLayout,
+) -> anyhow::Result<()> {
+    match resolve_project_dictionary(layout) {
+        DictionaryResolution::NoReference | DictionaryResolution::Loaded(_) => Ok(()),
+        DictionaryResolution::Unavailable {
+            directory, reason, ..
+        } => {
+            let directory = directory.map_or_else(
+                || "the machine data directory".to_owned(),
+                |directory| directory.display().to_string(),
+            );
+            anyhow::bail!(
+                "the committed dictionary reference has no loadable index in {directory}: \
+                 {reason}. Run `provenance dictionary import` with the local Issue 9 PDF \
+                 on this machine, or set PROVENANCE_STE100_INDEX_DIR to the directory \
+                 that holds the index"
+            );
+        }
+    }
 }
 
 fn validate_locked(store: &Store, manifest: &Manifest) -> anyhow::Result<()> {

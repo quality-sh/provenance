@@ -14,4 +14,11 @@ pub enum DictionaryCommand {
         #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
         format: JsonFormat,
     },
+    /// Report the committed dictionary reference and the analyzer it selects.
+    Status {
+        #[arg(long, default_value = ".")]
+        repo: Utf8PathBuf,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
+    },
 }
