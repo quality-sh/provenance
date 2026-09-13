@@ -1,14 +1,12 @@
 use super::common::canonical_artifact;
 use crate::cli::ideation::DispositionsCommand;
 use crate::output;
+use crate::store::Store;
 use provenance_core::{
     DispositionActor, DispositionDecision, ExternalActionCorrelation, IdentityType, ScopeId,
     StableId,
 };
-use provenance_store::{
-    layout::ProvenanceLayout,
-    state_store::{CreateDispositionInput, StateStore},
-};
+use provenance_store::state_store::CreateDispositionInput;
 
 pub(super) fn handle(command: DispositionsCommand) -> anyhow::Result<()> {
     match command {
@@ -30,47 +28,45 @@ pub(super) fn handle(command: DispositionsCommand) -> anyhow::Result<()> {
             external_key,
             ..
         } => {
-            let disposition = StateStore::new(ProvenanceLayout::new(repo)).create_disposition(
-                CreateDispositionInput {
-                    scope_id: ScopeId::new(scope)?,
-                    id: StableId::new(id)?,
-                    proposal_id: StableId::new(proposal_id)?,
-                    decision: DispositionDecision::parse(&decision)?,
-                    rationale,
-                    actor: DispositionActor {
-                        identity_type: IdentityType::parse(&actor_type)?,
-                        id: actor_id,
-                        name: actor_name,
-                    },
-                    canonical_artifact: canonical_artifact(
-                        canonical_artifact_type,
-                        canonical_artifact_id,
-                    )?,
-                    external_action: match (
-                        external_system,
-                        external_scope,
-                        external_kind,
-                        external_key,
-                    ) {
-                        (Some(system), Some(scope), Some(kind), Some(key)) => {
-                            Some(ExternalActionCorrelation {
-                                system,
-                                scope,
-                                kind,
-                                key,
-                            })
-                        }
-                        (None, None, None, None) => None,
-                        _ => anyhow::bail!(
-                            "external action requires system, scope, kind, and key together"
-                        ),
-                    },
+            let disposition = Store::open(repo).create_disposition(CreateDispositionInput {
+                scope_id: ScopeId::new(scope)?,
+                id: StableId::new(id)?,
+                proposal_id: StableId::new(proposal_id)?,
+                decision: DispositionDecision::parse(&decision)?,
+                rationale,
+                actor: DispositionActor {
+                    identity_type: IdentityType::parse(&actor_type)?,
+                    id: actor_id,
+                    name: actor_name,
                 },
-            )?;
+                canonical_artifact: canonical_artifact(
+                    canonical_artifact_type,
+                    canonical_artifact_id,
+                )?,
+                external_action: match (
+                    external_system,
+                    external_scope,
+                    external_kind,
+                    external_key,
+                ) {
+                    (Some(system), Some(scope), Some(kind), Some(key)) => {
+                        Some(ExternalActionCorrelation {
+                            system,
+                            scope,
+                            kind,
+                            key,
+                        })
+                    }
+                    (None, None, None, None) => None,
+                    _ => anyhow::bail!(
+                        "external action requires system, scope, kind, and key together"
+                    ),
+                },
+            })?;
             output::print_json(&disposition)?;
         }
         DispositionsCommand::List { repo, scope, .. } => {
-            let store = StateStore::new(ProvenanceLayout::new(repo));
+            let store = Store::open(repo);
             let scope_id = ScopeId::new(scope)?;
             let dispositions = store.with_repository_publication(|| {
                 store.validate_ideation_scope(&scope_id)?;

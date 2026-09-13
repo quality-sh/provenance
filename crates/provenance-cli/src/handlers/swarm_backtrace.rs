@@ -1,17 +1,14 @@
 use super::validate::{
     validate_contribution_record, validate_proposal_card_record, validate_synthesis_packet_record,
 };
-use crate::{cli::ideation::SwarmBacktraceCommand, output};
+use crate::{cli::ideation::SwarmBacktraceCommand, output, store::Store};
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{
     packet_qualifies_proposal, AssertionRecord, Contribution, DispositionRecord, ProposalCard,
     ScopeId, StableId, SynthesisPacket,
 };
-use provenance_store::{
-    layout::ProvenanceLayout,
-    state_store::{IdeationLandingBatch, StateStore},
-};
+use provenance_store::state_store::IdeationLandingBatch;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeSet;
@@ -121,7 +118,7 @@ fn land(repo: Utf8PathBuf, scope: String, run_dir: &Utf8Path, replace: bool) -> 
     let synthesis_count = synthesis_packets.len();
     let proposal_count = proposals.len();
     let assertion_count = assertions.len();
-    let store = StateStore::new(ProvenanceLayout::new(repo));
+    let store = Store::open(repo);
     preflight_land(
         &store,
         &scope_id,
@@ -239,7 +236,7 @@ fn deserialize_landing_value<T: DeserializeOwned>(
 }
 
 fn preflight_land(
-    store: &StateStore,
+    store: &Store,
     scope_id: &ScopeId,
     contributions: &[Contribution],
     synthesis_packets: &[SynthesisPacket],

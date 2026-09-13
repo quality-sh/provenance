@@ -1,8 +1,8 @@
 use std::collections::BTreeSet;
 
+use crate::store::Store;
 use provenance_core::ScopeId;
 use provenance_macros::rule;
-use provenance_store::{layout::ProvenanceLayout, state_store::StateStore};
 
 pub(super) struct ValidationState {
     pub rules: Vec<provenance_core::Rule>,
@@ -25,7 +25,7 @@ pub(super) fn load_validation_state(
             warnings: Vec::new(),
         });
     }
-    let store = StateStore::new(ProvenanceLayout::new(repo));
+    let store = Store::open(repo);
     let scope = ScopeId::new(scope)?;
     let rules = store.list_rules(&scope)?;
     let known = rules

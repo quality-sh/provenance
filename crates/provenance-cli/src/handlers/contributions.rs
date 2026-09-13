@@ -1,15 +1,13 @@
 use super::common::{ideation_target, parse_json_arg, warn_if_skills_missing};
 use crate::cli::ideation::ContributionsCommand;
 use crate::output;
+use crate::store::Store;
 use provenance_core::{
     ClaimChallenge, ContributionStance, IdeationEvidenceReference, MaterialClaim, ScopeId,
     StableId, SuggestedArtifactChange, UncertaintyLevel, UncertaintyRating,
     UnsupportedRecommendation,
 };
-use provenance_store::{
-    layout::ProvenanceLayout,
-    state_store::{CreateContributionInput, StateStore},
-};
+use provenance_store::state_store::CreateContributionInput;
 
 pub(super) fn handle(command: ContributionsCommand, quiet: bool) -> anyhow::Result<()> {
     match command {
@@ -36,7 +34,7 @@ pub(super) fn handle(command: ContributionsCommand, quiet: bool) -> anyhow::Resu
             ..
         } => {
             warn_if_skills_missing(&repo, quiet)?;
-            let store = StateStore::new(ProvenanceLayout::new(repo));
+            let store = Store::open(repo);
             let input = CreateContributionInput {
                 scope_id: ScopeId::new(scope)?,
                 id: StableId::new(id)?,
@@ -81,8 +79,7 @@ pub(super) fn handle(command: ContributionsCommand, quiet: bool) -> anyhow::Resu
         }
         ContributionsCommand::List { repo, scope, .. } => {
             warn_if_skills_missing(&repo, quiet)?;
-            let contributions = StateStore::new(ProvenanceLayout::new(repo))
-                .list_contributions(&ScopeId::new(scope)?)?;
+            let contributions = Store::open(repo).list_contributions(&ScopeId::new(scope)?)?;
             output::print_json(&contributions)?;
         }
     }

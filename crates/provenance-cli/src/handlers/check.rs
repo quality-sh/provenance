@@ -1,8 +1,8 @@
 use crate::output;
+use crate::store::Store;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{ensure_supported_schema_version, Manifest};
 use provenance_macros::rule;
-use provenance_store::{layout::ProvenanceLayout, state_store::StateStore};
 use std::collections::BTreeSet;
 
 mod index;
@@ -14,7 +14,7 @@ use index::CheckIndex;
 
 #[rule("rule_ste_strict_committed_statement_gate")]
 pub(super) fn check(repo: &Utf8Path, strict: bool, base: Option<&str>) -> anyhow::Result<()> {
-    let store = StateStore::new(ProvenanceLayout::new(repo.to_path_buf()));
+    let store = Store::open(repo);
     let report = store.with_repository_publication(|| {
         let manifest = store.manifest()?;
         collect_report_locked(&store, repo, &manifest, strict, base)
@@ -43,7 +43,7 @@ struct CommitRange {
 }
 
 pub(super) fn validate_repository(repo: Utf8PathBuf) -> anyhow::Result<()> {
-    let store = StateStore::new(ProvenanceLayout::new(repo));
+    let store = Store::open(repo);
     store.with_repository_publication(|| {
         let manifest = store.manifest()?;
         validate_locked(&store, &manifest)
@@ -54,12 +54,11 @@ pub(super) fn validate_repository_with_manifest(
     repo: &Utf8Path,
     manifest: &Manifest,
 ) -> anyhow::Result<()> {
-    let layout = ProvenanceLayout::new(repo.to_path_buf());
-    let store = StateStore::new(layout.clone());
-    match std::fs::symlink_metadata(layout.provenance_dir()) {
+    let store = Store::open(repo);
+    match std::fs::symlink_metadata(store.layout().provenance_dir()) {
         Ok(_) => store.with_repository_publication(|| validate_locked(&store, manifest)),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            provenance_store::publication::with_read_only_validation(&layout, || {
+            provenance_store::publication::with_read_only_validation(store.layout(), || {
                 validate_locked(&store, manifest)
             })
         }
@@ -68,16 +67,16 @@ pub(super) fn validate_repository_with_manifest(
 }
 
 pub(super) fn recover_repository_before_init(repo: &Utf8Path) -> anyhow::Result<()> {
-    let layout = ProvenanceLayout::new(repo.to_path_buf());
-    match std::fs::symlink_metadata(layout.provenance_dir()) {
-        Ok(_) => StateStore::new(layout).with_repository_publication(|| Ok(())),
+    let store = Store::open(repo);
+    match std::fs::symlink_metadata(store.layout().provenance_dir()) {
+        Ok(_) => store.with_repository_publication(|| Ok(())),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(error) => Err(error.into()),
     }
 }
 
 fn collect_report_locked(
-    store: &StateStore,
+    store: &Store,
     repo: &Utf8Path,
     manifest: &Manifest,
     strict: bool,
@@ -107,7 +106,7 @@ fn collect_report_locked(
     })
 }
 
-fn validate_locked(store: &StateStore, manifest: &Manifest) -> anyhow::Result<()> {
+fn validate_locked(store: &Store, manifest: &Manifest) -> anyhow::Result<()> {
     ensure_supported_schema_version("manifest", manifest.schema_version)?;
     anyhow::ensure!(
         !manifest.scopes.is_empty(),
@@ -154,6 +153,7 @@ fn validate_locked(store: &StateStore, manifest: &Manifest) -> anyhow::Result<()
 mod tests {
     use super::*;
     use provenance_core::{Manifest, RepoPathPrefix, ScopeId};
+    use provenance_store::layout::ProvenanceLayout;
 
     #[test]
     #[provenance_macros::verifies("rule_init_validates_planned_repository", examples)]
