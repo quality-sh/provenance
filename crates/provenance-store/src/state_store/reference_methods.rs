@@ -1,7 +1,10 @@
 //! The named add, set, and clear methods, one per replaced reference.
 //!
-//! Each names its field and hands the declaration's name to the generic
-//! writers, which check the target kind, the requiredness, and the cycle.
+//! Each method is a one-line binding. The engine reads the record kind from
+//! the store's own declaration, takes the record file from
+//! `shards::path_for`, and reaches the field through the declaration-derived
+//! `relation_slot_mut`, so a name here cannot drift away from the field it
+//! names.
 
 use super::StateStore;
 use crate::shards;
@@ -14,15 +17,7 @@ impl StateStore {
         requirement: &StableId,
         target: StableId,
     ) -> anyhow::Result<Requirement> {
-        let path = shards::requirements_path(&self.layout, scope_id);
-        self.write_single(
-            scope_id,
-            &path,
-            "refines",
-            requirement,
-            Some(target),
-            |r: &mut Requirement| &mut r.refines,
-        )
+        self.write_single(scope_id, "refines", requirement, Some(target))
     }
 
     pub fn clear_requirement_refines(
@@ -30,15 +25,7 @@ impl StateStore {
         scope_id: &ScopeId,
         requirement: &StableId,
     ) -> anyhow::Result<Requirement> {
-        let path = shards::requirements_path(&self.layout, scope_id);
-        self.write_single(
-            scope_id,
-            &path,
-            "refines",
-            requirement,
-            None,
-            |r: &mut Requirement| &mut r.refines,
-        )
+        self.write_single(scope_id, "refines", requirement, None)
     }
 
     pub fn add_requirement_depends_on(
@@ -47,15 +34,7 @@ impl StateStore {
         requirement: &StableId,
         target: StableId,
     ) -> anyhow::Result<Requirement> {
-        let path = shards::requirements_path(&self.layout, scope_id);
-        self.add_to_list(
-            scope_id,
-            &path,
-            "depends_on",
-            requirement,
-            target,
-            |r: &mut Requirement| &mut r.depends_on,
-        )
+        self.add_to_list(scope_id, "depends_on", requirement, target)
     }
 
     pub fn clear_requirement_depends_on(
@@ -64,14 +43,7 @@ impl StateStore {
         requirement: &StableId,
         target: &StableId,
     ) -> anyhow::Result<Requirement> {
-        let path = shards::requirements_path(&self.layout, scope_id);
-        self.clear_from_list(
-            &path,
-            "depends_on",
-            requirement,
-            target,
-            |r: &mut Requirement| &mut r.depends_on,
-        )
+        self.clear_from_list(scope_id, "depends_on", requirement, target)
     }
 
     pub fn add_requirement_supersedes(
@@ -80,15 +52,7 @@ impl StateStore {
         requirement: &StableId,
         target: StableId,
     ) -> anyhow::Result<Requirement> {
-        let path = shards::requirements_path(&self.layout, scope_id);
-        self.add_to_list(
-            scope_id,
-            &path,
-            "supersedes",
-            requirement,
-            target,
-            |r: &mut Requirement| &mut r.supersedes,
-        )
+        self.add_to_list(scope_id, "supersedes", requirement, target)
     }
 
     pub fn clear_requirement_supersedes(
@@ -97,14 +61,7 @@ impl StateStore {
         requirement: &StableId,
         target: &StableId,
     ) -> anyhow::Result<Requirement> {
-        let path = shards::requirements_path(&self.layout, scope_id);
-        self.clear_from_list(
-            &path,
-            "supersedes",
-            requirement,
-            target,
-            |r: &mut Requirement| &mut r.supersedes,
-        )
+        self.clear_from_list(scope_id, "supersedes", requirement, target)
     }
 
     pub fn set_requirement_spawned_by(
@@ -113,15 +70,7 @@ impl StateStore {
         requirement: &StableId,
         target: StableId,
     ) -> anyhow::Result<Requirement> {
-        let path = shards::requirements_path(&self.layout, scope_id);
-        self.write_single(
-            scope_id,
-            &path,
-            "spawned_by",
-            requirement,
-            Some(target),
-            |r: &mut Requirement| &mut r.spawned_by,
-        )
+        self.write_single(scope_id, "spawned_by", requirement, Some(target))
     }
 
     pub fn clear_requirement_spawned_by(
@@ -129,15 +78,7 @@ impl StateStore {
         scope_id: &ScopeId,
         requirement: &StableId,
     ) -> anyhow::Result<Requirement> {
-        let path = shards::requirements_path(&self.layout, scope_id);
-        self.write_single(
-            scope_id,
-            &path,
-            "spawned_by",
-            requirement,
-            None,
-            |r: &mut Requirement| &mut r.spawned_by,
-        )
+        self.write_single(scope_id, "spawned_by", requirement, None)
     }
 
     /// Removes every citation of one source from a requirement.
@@ -182,15 +123,7 @@ impl StateStore {
         rule: &StableId,
         target: StableId,
     ) -> anyhow::Result<Rule> {
-        let path = shards::rules_path(&self.layout, scope_id);
-        self.add_to_list(
-            scope_id,
-            &path,
-            "requirement_ids",
-            rule,
-            target,
-            |r: &mut Rule| &mut r.requirement_ids,
-        )
+        self.add_to_list(scope_id, "requirement_ids", rule, target)
     }
 
     pub fn clear_rule_requirement(
@@ -199,10 +132,7 @@ impl StateStore {
         rule: &StableId,
         target: &StableId,
     ) -> anyhow::Result<Rule> {
-        let path = shards::rules_path(&self.layout, scope_id);
-        self.clear_from_list(&path, "requirement_ids", rule, target, |r: &mut Rule| {
-            &mut r.requirement_ids
-        })
+        self.clear_from_list(scope_id, "requirement_ids", rule, target)
     }
 
     pub fn add_rule_resolution(
@@ -211,15 +141,7 @@ impl StateStore {
         rule: &StableId,
         target: StableId,
     ) -> anyhow::Result<Rule> {
-        let path = shards::rules_path(&self.layout, scope_id);
-        self.add_to_list(
-            scope_id,
-            &path,
-            "resolution_ids",
-            rule,
-            target,
-            |r: &mut Rule| &mut r.resolution_ids,
-        )
+        self.add_to_list(scope_id, "resolution_ids", rule, target)
     }
 
     pub fn clear_rule_resolution(
@@ -228,10 +150,7 @@ impl StateStore {
         rule: &StableId,
         target: &StableId,
     ) -> anyhow::Result<Rule> {
-        let path = shards::rules_path(&self.layout, scope_id);
-        self.clear_from_list(&path, "resolution_ids", rule, target, |r: &mut Rule| {
-            &mut r.resolution_ids
-        })
+        self.clear_from_list(scope_id, "resolution_ids", rule, target)
     }
 
     pub fn add_resolution_requirement(
@@ -240,15 +159,7 @@ impl StateStore {
         resolution: &StableId,
         target: StableId,
     ) -> anyhow::Result<Resolution> {
-        let path = shards::resolutions_path(&self.layout, scope_id);
-        self.add_to_list(
-            scope_id,
-            &path,
-            "requirement_ids",
-            resolution,
-            target,
-            |r: &mut Resolution| &mut r.requirement_ids,
-        )
+        self.add_to_list(scope_id, "requirement_ids", resolution, target)
     }
 
     pub fn clear_resolution_requirement(
@@ -257,14 +168,7 @@ impl StateStore {
         resolution: &StableId,
         target: &StableId,
     ) -> anyhow::Result<Resolution> {
-        let path = shards::resolutions_path(&self.layout, scope_id);
-        self.clear_from_list(
-            &path,
-            "requirement_ids",
-            resolution,
-            target,
-            |r: &mut Resolution| &mut r.requirement_ids,
-        )
+        self.clear_from_list(scope_id, "requirement_ids", resolution, target)
     }
 
     pub fn add_resolution_supersedes(
@@ -273,15 +177,7 @@ impl StateStore {
         resolution: &StableId,
         target: StableId,
     ) -> anyhow::Result<Resolution> {
-        let path = shards::resolutions_path(&self.layout, scope_id);
-        self.add_to_list(
-            scope_id,
-            &path,
-            "supersedes",
-            resolution,
-            target,
-            |r: &mut Resolution| &mut r.supersedes,
-        )
+        self.add_to_list(scope_id, "supersedes", resolution, target)
     }
 
     pub fn clear_resolution_supersedes(
@@ -290,14 +186,7 @@ impl StateStore {
         resolution: &StableId,
         target: &StableId,
     ) -> anyhow::Result<Resolution> {
-        let path = shards::resolutions_path(&self.layout, scope_id);
-        self.clear_from_list(
-            &path,
-            "supersedes",
-            resolution,
-            target,
-            |r: &mut Resolution| &mut r.supersedes,
-        )
+        self.clear_from_list(scope_id, "supersedes", resolution, target)
     }
 
     pub fn add_source_supersedes(
@@ -306,15 +195,7 @@ impl StateStore {
         source: &StableId,
         target: StableId,
     ) -> anyhow::Result<Source> {
-        let path = shards::sources_path(&self.layout, scope_id);
-        self.add_to_list(
-            scope_id,
-            &path,
-            "supersedes",
-            source,
-            target,
-            |r: &mut Source| &mut r.supersedes,
-        )
+        self.add_to_list(scope_id, "supersedes", source, target)
     }
 
     pub fn clear_source_supersedes(
@@ -323,10 +204,7 @@ impl StateStore {
         source: &StableId,
         target: &StableId,
     ) -> anyhow::Result<Source> {
-        let path = shards::sources_path(&self.layout, scope_id);
-        self.clear_from_list(&path, "supersedes", source, target, |r: &mut Source| {
-            &mut r.supersedes
-        })
+        self.clear_from_list(scope_id, "supersedes", source, target)
     }
 
     pub fn set_question_contradicts(
@@ -335,15 +213,7 @@ impl StateStore {
         question: &StableId,
         target: StableId,
     ) -> anyhow::Result<Question> {
-        let path = shards::questions_path(&self.layout, scope_id);
-        self.write_single(
-            scope_id,
-            &path,
-            "contradicts",
-            question,
-            Some(target),
-            |r: &mut Question| &mut r.contradicts,
-        )
+        self.write_single(scope_id, "contradicts", question, Some(target))
     }
 
     pub fn clear_question_contradicts(
@@ -351,14 +221,6 @@ impl StateStore {
         scope_id: &ScopeId,
         question: &StableId,
     ) -> anyhow::Result<Question> {
-        let path = shards::questions_path(&self.layout, scope_id);
-        self.write_single(
-            scope_id,
-            &path,
-            "contradicts",
-            question,
-            None,
-            |r: &mut Question| &mut r.contradicts,
-        )
+        self.write_single(scope_id, "contradicts", question, None)
     }
 }
