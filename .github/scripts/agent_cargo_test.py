@@ -33,6 +33,9 @@ class AgentCargoTest(unittest.TestCase):
         (self.repo / "Cargo.toml").write_text(
             '[workspace]\nmembers = []\n[workspace.package]\nrepository = "https://github.com/quality-sh/provenance"\n'
         )
+        workflow = self.repo / ".github/workflows/agent-cargo.yml"
+        workflow.parent.mkdir(parents=True)
+        workflow.write_text("name: Agent Cargo verification\n")
         (self.repo / "src.rs").write_text("before\n")
         self.git("add", ".")
         self.git("commit", "-m", "base")
@@ -144,6 +147,30 @@ class AgentCargoTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("LOCAL fmt --check", result.stdout)
         self.assertEqual(self.calls_matching("dispatches"), [])
+
+    def test_old_worktree_without_agent_workflow_uses_native_cargo(self):
+        (self.repo / ".github/workflows/agent-cargo.yml").unlink()
+
+        result = self.cargo("test")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("LOCAL test", result.stdout)
+        self.assertEqual(self.calls_matching("list"), [])
+
+    def test_native_cargo_resolution_ignores_an_installed_shim_symlink(self):
+        linkbin = self.root / "linkbin"
+        linkbin.mkdir()
+        (linkbin / "cargo").symlink_to(WRAPPER)
+        env = {**self.env, "PATH": str(linkbin) + os.pathsep + self.env["PATH"]}
+        script = (
+            "import runpy; "
+            f"print(runpy.run_path({str(WRAPPER)!r})['real_cargo']())"
+        )
+
+        result = run(sys.executable, "-c", script, cwd=self.repo, env=env)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(Path(result.stdout.strip()), self.bin / "cargo")
 
     def test_package_specific_test_runs_remotely_with_exact_arguments(self):
         result = self.cargo("test", "-p", "provenance-cli", "--", "--nocapture")

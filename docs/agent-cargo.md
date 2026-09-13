@@ -1,12 +1,15 @@
 # Agent Cargo CI checks
 
-The `scripts/agent-bin/cargo` shim sends Provenance build, check, Clippy, and test commands to a manually dispatched GitHub Actions workflow. It is opt-in. Put its directory before native Cargo on `PATH` in the process that launches agent shells:
+The `scripts/agent-bin/cargo` shim sends Provenance build, check, Clippy, and test commands to GitHub Actions. Enable it on a maintainer host by placing the shim before native Cargo on `PATH`. A user-local `cargo` symlink works for new shells and worktrees when `~/.local/bin` precedes native Cargo:
 
 ```sh
-export PATH="/path/to/provenance/scripts/agent-bin:$PATH"
+mkdir -p "$HOME/.local/bin"
+ln -s /path/to/provenance/scripts/agent-bin/cargo ~/.local/bin/cargo
 ```
 
-Configure the agent host's GitHub CLI login for `quality-sh/provenance`, then run `gh auth setup-git` so Git pushes use that login. The login needs permission to push a branch and read Actions runs. Argument-bearing Cargo commands also need permission to dispatch Actions. If agents work through a long-lived OpenCode or workflowd process, set `PATH` on that process before it starts so child shells inherit it.
+Install the symlink only on hosts that you control, and do not replace an existing `cargo` file. This repository does not install the shim for public clones. If a worktree does not contain `.github/workflows/agent-cargo.yml`, the shim uses native Cargo. Use `PROVENANCE_CI_LOCAL=1 cargo ...` to bypass the shim for one command, or export `PROVENANCE_CI_LOCAL=1` for an entire agent session. Remove the user-local symlink to disable it on the host.
+
+Configure the agent host's GitHub CLI login for `quality-sh/provenance`, then run `gh auth setup-git` so Git pushes use that login. The login needs permission to push a branch and read Actions runs. Argument-bearing Cargo commands also need permission to dispatch Actions. A user without push access to the target repository cannot use this remote path; the push fails. The default destination is the canonical `quality-sh/provenance` repository, not a public contributor's fork. For an OpenCode server, its `PATH` must contain the user-local bin directory before native Cargo; a symlink added there applies to new shell commands without a server restart.
 
 Plain `cargo build`, `cargo check`, `cargo clippy`, and `cargo test` calls push a snapshot branch. Its push event starts only the matching workspace-wide CI job. A call with more arguments, such as `cargo test -p provenance-cli`, uses manual workflow dispatch to run that Cargo argument list in one separate CI job from the repository root. The manual workflow must be on the target repository's default branch before argument-bearing commands can run. The shim waits and returns the selected job's status and failed-step log. Repeated calls for the same command and source snapshot reuse the run. A shell chain such as `cargo clippy && cargo test` runs both checks in CI, in order, without loading the agent host. Other Cargo subcommands execute locally through native Cargo. A remote build does not create local `target` outputs.
 

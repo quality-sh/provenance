@@ -33,8 +33,11 @@ def git(root, *args, env=None):
 
 
 def real_cargo():
-    wrapper_dir = Path(__file__).resolve().parent
-    paths = [part for part in os.environ.get("PATH", "").split(os.pathsep) if Path(part).resolve() != wrapper_dir]
+    wrapper = Path(__file__).resolve()
+    paths = [
+        part for part in os.environ.get("PATH", "").split(os.pathsep)
+        if Path(part).resolve() != wrapper.parent and (Path(part) / "cargo").resolve() != wrapper
+    ]
     found = shutil.which("cargo", path=os.pathsep.join(paths))
     if found is None:
         raise RuntimeError("Native cargo is not available outside the agent shim")
@@ -48,6 +51,8 @@ def provenance_root():
     except (RuntimeError, OSError):
         return None
     if 'repository = "https://github.com/quality-sh/provenance"' not in manifest:
+        return None
+    if not (root / ".github/workflows/agent-cargo.yml").is_file():
         return None
     return root
 

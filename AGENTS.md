@@ -2,6 +2,10 @@
 
 This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
 
+## Cargo checks on maintainer hosts
+
+On configured maintainer hosts, plain `cargo build`, `cargo check`, `cargo clippy`, and `cargo test` run in GitHub Actions. The command waits and returns the CI result. The shim pushes a public snapshot branch, so keep secrets out of tracked files and stage new files before a check. Use `PROVENANCE_CI_LOCAL=1 cargo ...` to run native Cargo. Use `PROVENANCE_CI_ARTIFACT=1 cargo build` to download a dev CLI binary. Public clones do not enable this behavior automatically; see [docs/agent-cargo.md](docs/agent-cargo.md).
+
 ## Code standards
 
 **No Rust file in this repo may exceed 500 lines.** Unreadable code is not accepted.
