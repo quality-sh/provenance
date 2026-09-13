@@ -63,7 +63,17 @@ async fn real_mcp_preserves_each_registered_read_and_full_http_stamp() {
             "list-messages",
             "list-proposals",
             "list-dispositions",
-            "list-assertions"
+            "list-assertions",
+            "requirement-edit-state",
+            "requirement-save-receipt",
+            "review-history",
+            "review-evidence",
+            "requirement-creation-receipt",
+            "discussion-receipt",
+            "review-discussions",
+            "review-discussion-messages",
+            "requirement-decision-state",
+            "requirement-review-receipt"
         ]
     );
     let mut requests = vec![(
