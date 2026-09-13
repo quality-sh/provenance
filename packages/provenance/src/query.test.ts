@@ -73,7 +73,7 @@ async function readsTheEnginesBoundedAnswers(): Promise<void> {
       sources: [retention],
     });
     const expiry = sharing.rule("expiry", {
-      statement: "Share links expire within 30 days",
+      statement: "Share links expire in 30 days",
     });
     await apply();
 

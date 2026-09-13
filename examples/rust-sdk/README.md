@@ -32,7 +32,7 @@ let policy = source("policy")
 let document = spec("existing-requirements")
     .requirements([requirement("sharing")
         .adopt_unowned("req_sharing")
-        .statement("Users can securely share documentation")
+        .statement("Users can share the documents")
         .from(policy)])
     .build()?;
 let input = document.materialize("spec://rust/existing-requirements");
