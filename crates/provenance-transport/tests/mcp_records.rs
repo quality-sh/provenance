@@ -16,6 +16,39 @@ fn tool(operation: &str, call: &Value) -> CallToolRequestParams {
     )
 }
 
+/// The read tools the MCP host advertises, in catalog registration order.
+const EXPECTED_READ_TOOLS: [&str; 29] = [
+    "check-statement",
+    "plan",
+    "info",
+    "get",
+    "read-document",
+    "search",
+    "neighbors",
+    "trace",
+    "impact",
+    "resolve-symbol",
+    "evidence",
+    "stale",
+    "verification-runs",
+    "verification-bindings",
+    "list-threads",
+    "list-messages",
+    "list-proposals",
+    "list-dispositions",
+    "list-assertions",
+    "requirement-edit-state",
+    "requirement-save-receipt",
+    "review-history",
+    "review-evidence",
+    "requirement-creation-receipt",
+    "discussion-receipt",
+    "review-discussions",
+    "review-discussion-messages",
+    "requirement-decision-state",
+    "requirement-review-receipt",
+];
+
 #[tokio::test]
 async fn real_mcp_preserves_each_registered_read_and_full_http_stamp() {
     let repo = Repository::new("The shared graph is readable.");
@@ -44,37 +77,7 @@ async fn real_mcp_preserves_each_registered_read_and_full_http_stamp() {
             .iter()
             .map(|tool| tool.name.as_ref())
             .collect::<Vec<_>>(),
-        [
-            "check-statement",
-            "plan",
-            "info",
-            "get",
-            "read-document",
-            "search",
-            "neighbors",
-            "trace",
-            "impact",
-            "resolve-symbol",
-            "evidence",
-            "stale",
-            "verification-runs",
-            "verification-bindings",
-            "list-threads",
-            "list-messages",
-            "list-proposals",
-            "list-dispositions",
-            "list-assertions",
-            "requirement-edit-state",
-            "requirement-save-receipt",
-            "review-history",
-            "review-evidence",
-            "requirement-creation-receipt",
-            "discussion-receipt",
-            "review-discussions",
-            "review-discussion-messages",
-            "requirement-decision-state",
-            "requirement-review-receipt"
-        ]
+        EXPECTED_READ_TOOLS
     );
     let mut requests = vec![(
         "info",
