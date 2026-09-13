@@ -6,15 +6,11 @@ use provenance_macros::rule;
 use provenance_store::layout::ProvenanceLayout;
 use provenance_store::state_store::{
     assertion_cites_contribution, assertion_cites_synthesis,
-    ensure_asserted_contribution_unchanged, ensure_asserted_synthesis_unchanged, StateStore,
-    CONTRIBUTION_KIND, SYNTHESIS_KIND,
+    ensure_asserted_contribution_unchanged, ensure_asserted_synthesis_unchanged, ScopeShards,
+    StateStore, CONTRIBUTION_KIND, SYNTHESIS_KIND,
 };
 use provenance_store::statement_analysis::{analyze_changed_statements, violation_error};
 use serde::Serialize;
-
-mod scope_writer;
-
-use scope_writer::write_scope;
 
 #[derive(Serialize)]
 pub struct ImportReport {
@@ -218,11 +214,33 @@ fn apply_import(
         if staged_scope.exists() {
             std::fs::remove_dir_all(&staged_scope)?;
         }
-        write_scope(layout, scope_id, exported)?;
+        StateStore::new(layout.clone()).import_scope(scope_id, &scope_shards(exported))?;
         let staged_repo = layout.provenance_dir().parent().unwrap().to_path_buf();
         super::check::validate_repository(staged_repo)?;
         ensure_changed_statements_are_clean(live_layout, layout, scope_id)
     })
+}
+
+fn scope_shards(exported: &ScopeExport) -> ScopeShards<'_> {
+    ScopeShards {
+        sources: &exported.sources,
+        domains: &exported.domains,
+        requirements: &exported.requirements,
+        boundaries: &exported.boundaries,
+        topics: &exported.topics,
+        questions: &exported.questions,
+        resolutions: &exported.resolutions,
+        rules: &exported.rules,
+        verification_bindings: &exported.verification_bindings,
+        implementation_bindings: &exported.implementation_bindings,
+        threads: &exported.threads,
+        messages: &exported.messages,
+        contributions: &exported.contributions,
+        synthesis_packets: &exported.synthesis_packets,
+        proposal_cards: &exported.proposal_cards,
+        assertion_records: &exported.assertion_records,
+        dispositions: &exported.dispositions,
+    }
 }
 
 #[rule("rule_ste_import_changed_statement_gate")]
