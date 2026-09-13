@@ -68,6 +68,7 @@ fn seeded_store() -> (tempfile::TempDir, Store, ScopeId) {
             statement: "The service applies the policy".into(),
             status: RuleStatus::Active,
             severity: RuleSeverity::High,
+            archived_in_commit: None,
             source_document: None,
             source_section: None,
             origin_thread: None,
