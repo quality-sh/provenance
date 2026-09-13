@@ -11,7 +11,7 @@ mod dictionary_support;
 /// network. The dictionary index lands beside it in the same temporary tree.
 fn offline_dictionary_env() -> (&'static Path, &'static Path) {
     static SEED: OnceLock<(&'static Path, &'static Path)> = OnceLock::new();
-    SEED.get_or_init(|| {
+    *SEED.get_or_init(|| {
         // Leaked on purpose: the seeded cache lives as long as the process.
         let temporary: &mut tempfile::TempDir = Box::leak(Box::new(tempfile::tempdir().unwrap()));
         let assets = temporary.path().join("assets");
