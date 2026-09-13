@@ -6,7 +6,7 @@ use super::catch_up_behavior::assert_catch_up_equals_rebuild;
 use super::catch_up_serial_behavior::latest_revision;
 use super::fixtures::seeded_layout;
 use crate::cache::{catch_up_state, materialize_state, open_cache};
-use crate::migrations::RECORD_COLUMNS_MIGRATION_ID;
+use crate::migrations::{RECORD_COLUMNS_MIGRATION_ID, RECORD_DELETION_MIGRATION_ID};
 use provenance_macros::verifies;
 
 async fn requirement_count(pool: &sqlx::SqlitePool) -> i64 {
@@ -20,8 +20,10 @@ async fn requirement_count(pool: &sqlx::SqlitePool) -> i64 {
 /// and recreates the eleven tables: the shape of a migration over a live
 /// database.
 async fn forget_migration_022(pool: &sqlx::SqlitePool) {
-    sqlx::query("DELETE FROM _schema_migrations WHERE id = ?")
+    sqlx::query("DELETE FROM _schema_migrations WHERE id IN (?, ?, ?)")
         .bind(RECORD_COLUMNS_MIGRATION_ID)
+        .bind(RECORD_DELETION_MIGRATION_ID)
+        .bind(crate::migrations::RECORD_STAMPS_MIGRATION_ID)
         .execute(pool)
         .await
         .unwrap();

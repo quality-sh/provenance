@@ -135,7 +135,7 @@ pub(super) fn absence_findings(
     let verified = verified_rule_ids(scans, verifications);
     rules
         .iter()
-        .filter(|rule| rule.status == provenance_core::RuleStatus::Active && !rule.retired)
+        .filter(|rule| rule.status == provenance_core::RuleStatus::Active)
         .filter(|rule| !verified.contains(rule.id.as_str()))
         .map(|rule| {
             finding(
@@ -163,7 +163,6 @@ pub(super) fn inactive_current_findings(
 ) -> Vec<Finding> {
     let inactive: BTreeSet<&str> = rules
         .iter()
-        .filter(|rule| !rule.retired)
         .filter_map(|rule| match rule.status {
             provenance_core::RuleStatus::Deprecated | provenance_core::RuleStatus::Archived => {
                 Some(rule.id.as_str())
@@ -212,14 +211,14 @@ pub(super) fn inactive_current_findings(
             }
         }
     }
-    for binding in implementations.iter().filter(|binding| !binding.retired) {
+    for binding in implementations {
         if inactive.contains(binding.rule_id.as_str()) {
             events
                 .entry(binding.rule_id.as_str().to_string())
                 .or_default();
         }
     }
-    for binding in verifications.iter().filter(|binding| !binding.retired) {
+    for binding in verifications {
         if inactive.contains(binding.rule_id.as_str()) {
             events
                 .entry(binding.rule_id.as_str().to_string())

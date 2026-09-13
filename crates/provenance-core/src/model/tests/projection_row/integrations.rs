@@ -20,17 +20,14 @@ fn filled_implementation_binding() -> ImplementationBinding {
         id: sid("bind_impl_a"),
         rule_id: sid("rule_overtime_001"),
         declared_by: "spec://pay".into(),
-        retired: true,
+
         file: "src/pay.rs".into(),
         symbol: "pay".into(),
     }
 }
 
 fn bare_implementation_binding() -> ImplementationBinding {
-    ImplementationBinding {
-        retired: false,
-        ..filled_implementation_binding()
-    }
+    filled_implementation_binding()
 }
 
 fn filled_verification_binding() -> VerificationBinding {
@@ -42,7 +39,7 @@ fn filled_verification_binding() -> VerificationBinding {
         key: "pay_examples".into(),
         method: VerificationMethod::Examples,
         declared_by: "spec://pay".into(),
-        retired: true,
+
         file: "tests/pay.rs".into(),
         symbol: Some("pay_examples".into()),
     }
@@ -50,7 +47,6 @@ fn filled_verification_binding() -> VerificationBinding {
 
 fn bare_verification_binding() -> VerificationBinding {
     VerificationBinding {
-        retired: false,
         symbol: None,
         ..filled_verification_binding()
     }

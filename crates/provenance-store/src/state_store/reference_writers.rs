@@ -7,13 +7,13 @@
 //! slot the declaration names, so a writer cannot set one field under
 //! another field's name.
 
+use super::record_stamps::GraphRecord;
 use super::StateStore;
 use crate::shards;
 use provenance_core::model::relations::{
     declaration_of, kind_word, required_refusal, RelationDecl, RelationOwner, RelationSlot,
 };
 use provenance_core::{NodeType, ScopeId, StableId};
-use serde::{de::DeserializeOwned, Serialize};
 
 pub(super) fn declared<T: RelationOwner>(name: &str) -> &'static RelationDecl {
     declaration_of(T::relations(), name).expect("every writer names a declared relation")
@@ -108,7 +108,7 @@ impl StateStore {
         target: Option<StableId>,
     ) -> anyhow::Result<T>
     where
-        T: RelationOwner + DeserializeOwned + Serialize + Clone,
+        T: GraphRecord,
     {
         let decl = declared::<T>(name);
         let path = shards::path_for(&self.layout, scope_id, T::OWNER);
@@ -116,7 +116,7 @@ impl StateStore {
             if let Some(target) = &target {
                 self.ensure_node_exists(scope_id, decl.target, target, "--target-id")?;
             }
-            self.mutate_jsonl_records(&path, |records: &mut Vec<T>| {
+            self.mutate_graph_record(path, |records: &mut Vec<T>| {
                 if let Some(target) = &target {
                     if decl.target == T::OWNER {
                         crate::write_error::ensure!(
@@ -163,13 +163,13 @@ impl StateStore {
         target: StableId,
     ) -> anyhow::Result<T>
     where
-        T: RelationOwner + DeserializeOwned + Serialize + Clone,
+        T: GraphRecord,
     {
         let decl = declared::<T>(name);
         let path = shards::path_for(&self.layout, scope_id, T::OWNER);
         self.with_repository_publication(|| {
             self.ensure_node_exists(scope_id, decl.target, &target, "--target-id")?;
-            self.mutate_jsonl_records(&path, |records: &mut Vec<T>| {
+            self.mutate_graph_record(path, |records: &mut Vec<T>| {
                 if decl.target == T::OWNER {
                     crate::write_error::ensure!(
                         InvalidUpdate,
@@ -217,12 +217,12 @@ impl StateStore {
         target: &StableId,
     ) -> anyhow::Result<T>
     where
-        T: RelationOwner + DeserializeOwned + Serialize + Clone,
+        T: GraphRecord,
     {
         let decl = declared::<T>(name);
         let path = shards::path_for(&self.layout, scope_id, T::OWNER);
         self.with_repository_publication(|| {
-            self.mutate_jsonl_records(&path, |records: &mut Vec<T>| {
+            self.mutate_graph_record(path, |records: &mut Vec<T>| {
                 let record = records
                     .iter_mut()
                     .find(|record| record.id() == owner)

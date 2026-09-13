@@ -44,8 +44,6 @@ pub(super) async fn read(
         .map_err(crate::operations::reader::page_error)
 }
 
-/// Retired records remain references and cannot supply member expansion.
-#[rule("rule_review_retired_records_do_not_expand_active_document")]
 async fn page(ctx: &ReadContext, request: ReadDocumentQuery) -> anyhow::Result<ReadDocumentResult> {
     use crate::operations::reader::{PAGE_BYTES, RECORD_BYTES};
     request
@@ -57,12 +55,9 @@ async fn page(ctx: &ReadContext, request: ReadDocumentQuery) -> anyhow::Result<R
         &(&request.id, request.limit),
         request.cursor.as_deref(),
     )?;
-    let root = nodes::page_node(ctx.snapshot(), NodeType::Requirement, &request.id)
+    nodes::page_node(ctx.snapshot(), NodeType::Requirement, &request.id)
         .await?
         .ok_or(ReadFailure::DocumentRootMissing)?;
-    if root.retired() {
-        return Err(ReadFailure::DocumentRootRetired.into());
-    }
     let keys = ctx
         .snapshot()
         .document_keys(&request.id, &position, request.limit + 1)

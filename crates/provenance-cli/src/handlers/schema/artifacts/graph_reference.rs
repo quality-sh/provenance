@@ -128,11 +128,11 @@ fn export_definitions() -> Value {
             "input_type": {"enum": ["regulatory", "legal_advice", "commercial", "benchmark", "technical", "incident", "source_material"]},
             "reference": string.clone(), "summary": string.clone()
         })),
-        "source": closed_record(
+        "source": stamped_record("source", closed_record(
             &["schema_version", "scope_id", "id", "name", "source_type", "url"],
             json!({
                 "schema_version": version.clone(), "scope_id": id.clone(), "id": id.clone(),
-                "declared_by": string.clone(), "declaration_address": declaration_address(), "retired": {"type": "boolean"}, "name": string.clone(),
+                "declared_by": string.clone(), "declaration_address": declaration_address(), "name": string.clone(),
                 "source_type": {"enum": ["policy", "document", "legislation", "company_agreement", "system_state", "external_integration", "domain_knowledge", "project_artifact", "incident", "api_spec"]},
                 "url": {"type": ["string", "null"]}, "reference": string.clone(),
                 "commit_pin": {
@@ -142,16 +142,16 @@ fn export_definitions() -> Value {
                 "effective_date": {"type": "integer"},
                 "review_date": {"type": "integer"}, "supersedes": id_list.clone()
             })
-        ),
+        )),
         "domain": closed_record(&["schema_version", "scope_id", "id", "name"], json!({
             "schema_version": version.clone(), "scope_id": id.clone(), "id": id.clone(),
             "name": string.clone(), "description": string.clone(), "color": string.clone()
         })),
-        "requirement": closed_record(
+        "requirement": stamped_record("requirement", closed_record(
             &["schema_version", "scope_id", "id", "statement", "status"],
             json!({
                 "schema_version": version.clone(), "scope_id": id.clone(), "id": id.clone(),
-                "declared_by": string.clone(), "declaration_address": declaration_address(), "retired": {"type": "boolean"}, "statement": string.clone(),
+                "declared_by": string.clone(), "declaration_address": declaration_address(), "statement": string.clone(),
                 "description": string.clone(), "fog": string.clone(),
                 "status": {"enum": ["active", "discovery", "refinement", "resolved"]},
                 "domain_id": id.clone(),
@@ -159,7 +159,7 @@ fn export_definitions() -> Value {
                 "refines": id.clone(), "depends_on": id_list.clone(),
                 "supersedes": id_list.clone(), "spawned_by": id.clone()
             })
-        ),
+        )),
         "boundary": closed_record(
             &["schema_version", "scope_id", "id", "requirement_id", "statement"],
             json!({
@@ -188,7 +188,7 @@ fn export_definitions() -> Value {
                 "links": {"type": "array", "items": {"$ref": "#/$defs/artifactLink"}}
             })
         ),
-        "resolution": closed_record(
+        "resolution": stamped_record("resolution", closed_record(
             &["schema_version", "scope_id", "id", "title", "position", "rationale", "status", "inputs", "review_on", "requirement_ids"],
             json!({
                 "schema_version": version.clone(), "scope_id": id.clone(), "id": id.clone(),
@@ -200,26 +200,26 @@ fn export_definitions() -> Value {
                 "requirement_ids": id_list.clone(), "supersedes": id_list.clone(),
                 "review_on": {"type": ["string", "null"]}
             })
-        ),
-        "rule": closed_record(
+        )),
+        "rule": stamped_record("rule", closed_record(
             &["schema_version", "scope_id", "id", "statement", "status", "severity", "requirement_ids"],
             json!({
                 "schema_version": version.clone(), "scope_id": id.clone(), "id": id.clone(),
-                "declared_by": string.clone(), "declaration_address": declaration_address(), "retired": {"type": "boolean"}, "name": string.clone(),
+                "declared_by": string.clone(), "declaration_address": declaration_address(), "name": string.clone(),
                 "description": string.clone(),
                 "statement": string.clone(), "status": {"enum": ["draft", "review", "active", "deprecated", "archived"]},
                 "severity": {"enum": ["low", "medium", "high", "critical"]},
                 "requirement_ids": id_list.clone(), "resolution_ids": id_list.clone(),
                 "source_document": string.clone(), "source_section": string.clone()
             })
-        ),
+        )),
         "verificationBinding": closed_record(
             &["schema_version", "scope_id", "id", "rule_id", "key", "method", "declared_by", "file"],
             json!({
                 "schema_version": version.clone(), "scope_id": id.clone(), "id": id.clone(),
                 "rule_id": id.clone(), "key": string.clone(),
                 "method": {"enum": ["exhaustion", "property", "examples", "conformance", "construction", "proof"]},
-                "declared_by": string.clone(), "retired": {"type": "boolean"},
+                "declared_by": string.clone(),
                 "file": string.clone(), "symbol": string.clone()
             })
         ),
@@ -228,10 +228,25 @@ fn export_definitions() -> Value {
             json!({
                 "schema_version": version.clone(), "scope_id": id.clone(), "id": id.clone(),
                 "rule_id": id.clone(), "declared_by": string.clone(),
-                "retired": {"type": "boolean"},
                 "file": {"type": "string", "minLength": 1},
                 "symbol": {"type": "string", "minLength": 1}
             })
         )
     })
+}
+
+fn stamped_record(kind: &str, mut schema: Value) -> Value {
+    let commit =
+        json!({"type":"string","pattern":provenance_core::model::record_stamps::COMMIT_PATTERN});
+    let at = json!({"type":"string","format":"date-time"});
+    let stamp = json!({"type":"object","additionalProperties":false,"required":["commit","at"],"properties":{"commit":commit,"at":at}});
+    schema["properties"]["created"] = stamp.clone();
+    schema["properties"]["updated"] = stamp;
+    if kind == "rule" {
+        schema["properties"]["archived_in_commit"] = json!({"type":"object","additionalProperties":false,"required":["commit"],"properties":{"commit":commit,"at":at}});
+        schema["if"] = json!({"properties":{"status":{"const":"archived"}}});
+        schema["then"] = json!({"required":["archived_in_commit"]});
+        schema["else"] = json!({"not":{"required":["archived_in_commit"]}});
+    }
+    schema
 }

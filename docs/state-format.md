@@ -36,8 +36,7 @@ A contribution or synthesis packet carries a `target` (`artifact_type`,
 included. The target is not a relation row: it is not in the table above and
 does not enter the projection's `relations` table. A new contribution or
 synthesis packet must name a record that exists in its scope, or the write is
-refused; a target at a retired record is accepted, as every other writer
-accepts a reference to one. A stored target that names no record is reported
+refused. A stored target that names no record is reported
 by `provenance gaps` as a dangling reference (`contribution <id> target points
 at missing <kind> <id>`), and `provenance check` names it as one too. Neither
 refuses anything else: reads, catch-up, and later writes go through.
@@ -60,13 +59,12 @@ Richer canonical metadata outside the typed surface remains unchanged and does
 not block adoption. Adoption changes only `declared_by` and
 `declaration_address`; it never rewrites a relation field.
 
-Typed-owned Sources, Requirements, and Rules may carry `retired: true`.
-Omitting the field means active. A complete typed declaration document retires
-owned records from the same spec when they disappear, but keeps their canonical
-IDs, addresses, and relation fields. Reintroducing the declaration clears the
-field and reuses the same record. Active graph, gap, health, implementation, and
-verification checks exclude retired declarations. Hard deletion is a separate,
-unsupported operation.
+When a complete typed declaration omits an owned Source, Requirement, or Rule,
+the apply operation deletes that record. It also deletes dependants that cannot
+exist without it and removes optional references to the deleted records. A
+retained disposition can name a canonical Source, Requirement, Resolution, or
+Rule. The apply operation refuses a deletion that would invalidate such a
+disposition.
 
 Typed verification relationships live in
 `scopes/<scope>/verifications/binding.jsonl`. Each row joins an owner-local
@@ -77,23 +75,23 @@ live binding.
 
 Typed implementation relationships live in
 `scopes/<scope>/implementations/binding.jsonl`. Removing `implementedBy` from
-an otherwise active typed Rule sets the owned binding's `retired` field instead
-of deleting the row. Reintroducing it clears retirement on the same binding ID;
-changing its exported target updates that row. Active coverage, wiki, stale,
-health, and plan views exclude retired bindings. Export, import, checking, and
-exact graph references preserve them as canonical history. Applying one spec
-does not retire bindings attached to Rules declared by another spec, even when
-both specs use the same declaration owner.
+a typed Rule deletes the owned binding. Changing its exported target updates
+the binding. Applying one spec does not delete bindings attached to Rules
+declared by another spec, even when both specs use the same declaration owner.
 
 Typed verification relationships live in
 `scopes/<scope>/verifications/binding.jsonl`. When a verification owner reports
-one of its keys from a file against a different Rule, the binding that key
-previously named gets its `retired` field set instead of being deleted.
-Reporting it again clears retirement on the same binding ID. Active coverage,
-wiki, stale, health, and plan views exclude retired bindings; export, import,
-checking, and exact graph references preserve them. A run reconciles only the
-owner, file, and key it reported, so another owner's binding and the same key
-declared from another file stay active.
+one of its keys from a file against a different Rule, the operation deletes the
+binding that the key previously named. A run reconciles only the owner, file,
+and key it reported, so another owner's binding and the same key declared from
+another file stay unchanged.
+
+Schema migration 026 removes the old retirement columns from the derived SQL
+cache. It cannot change canonical JSONL. Before this version reads an older
+store, delete each canonical row that has `"retired": true` and remove the
+`retired` field from each surviving row. Also remove references that point to
+the deleted rows. The store refuses any canonical record that still has a
+`retired` field. The error names record-deletion migration 026.
 
 Requirement review records live in
 `scopes/<scope>/requirements/review.jsonl`. When an applied reconciliation

@@ -9,7 +9,7 @@ use serde_json::{json, Value};
 
 fn tool(operation: &str, call: &Value) -> CallToolRequestParams {
     CallToolRequestParams::new(operation.to_owned()).with_arguments(
-        json!({"protocol_version":8,"call":call})
+        json!({"protocol_version":9,"call":call})
             .as_object()
             .unwrap()
             .clone(),

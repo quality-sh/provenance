@@ -15,8 +15,6 @@ pub enum ReadFailure {
     PageRecordTooLarge,
     #[error("document root is missing")]
     DocumentRootMissing,
-    #[error("document root is retired")]
-    DocumentRootRetired,
     #[error("catch-up failed; restart the document read")]
     DocumentCatchUpFailed,
     #[error("repository file access denied")]

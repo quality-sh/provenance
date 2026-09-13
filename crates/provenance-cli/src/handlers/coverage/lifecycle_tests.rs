@@ -2,7 +2,6 @@
 //! findings the lifecycle policy governs.
 
 use super::lifecycle::inactive_rule_binding_warnings;
-use crate::handlers::coverage::retired::stale_rule_warnings;
 use camino::Utf8PathBuf;
 use provenance_core::coverage::EvidenceAnchor;
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
@@ -17,12 +16,20 @@ use provenance_scanner::{
 
 fn rule(id: &str, status: RuleStatus) -> Rule {
     Rule {
+        created: None,
+        updated: None,
+        archived_in_commit: (status == RuleStatus::Archived).then(|| {
+            provenance_core::ArchivedStamp {
+                commit: "a".repeat(40),
+                at: None,
+            }
+        }),
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: ScopeId::new("default").unwrap(),
         id: StableId::new(id).unwrap(),
         declared_by: None,
         declaration_address: None,
-        retired: false,
+
         name: None,
         description: None,
         statement: "Claims must be grouped by participant".to_string(),
@@ -81,20 +88,19 @@ fn scan_with_attribute_binding(rule_id: &str, verification: Option<Verification>
     scan
 }
 
-fn typed_implementation(rule_id: &str, retired: bool) -> ImplementationBinding {
+fn typed_implementation(rule_id: &str) -> ImplementationBinding {
     ImplementationBinding {
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: ScopeId::new("default").unwrap(),
         id: StableId::new("implementation_binding_lifecycle").unwrap(),
         rule_id: StableId::new(rule_id).unwrap(),
         declared_by: "spec://test/owner".to_string(),
-        retired,
         file: "src/billing.rs".into(),
         symbol: "bills_overtime".to_string(),
     }
 }
 
-fn typed_verification(rule_id: &str, retired: bool) -> VerificationBinding {
+fn typed_verification(rule_id: &str) -> VerificationBinding {
     VerificationBinding {
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: ScopeId::new("default").unwrap(),
@@ -103,7 +109,6 @@ fn typed_verification(rule_id: &str, retired: bool) -> VerificationBinding {
         key: "lifecycle-check".to_string(),
         method: VerificationMethod::Examples,
         declared_by: "ci://test".to_string(),
-        retired,
         file: "tests/rule.test.ts".into(),
         symbol: Some("rule holds".to_string()),
     }
@@ -116,7 +121,7 @@ fn a_deprecated_rule_with_a_current_typed_implementation_binding_warns() {
     let warnings = inactive_rule_binding_warnings(
         &[deprecated],
         &[],
-        &[typed_implementation("rule_old_rate", false)],
+        &[typed_implementation("rule_old_rate")],
         &[],
     );
 
@@ -134,7 +139,7 @@ fn an_archived_rule_with_a_current_typed_verification_binding_warns() {
         &[archived],
         &[],
         &[],
-        &[typed_verification("rule_old_gate", false)],
+        &[typed_verification("rule_old_gate")],
     );
 
     assert_eq!(warnings.len(), 1, "{warnings:#?}");
@@ -149,20 +154,6 @@ fn a_deprecated_rule_without_current_bindings_does_not_warn() {
     let archived = rule("rule_old_gate", RuleStatus::Archived);
 
     let warnings = inactive_rule_binding_warnings(&[deprecated, archived], &[], &[], &[]);
-
-    assert!(warnings.is_empty(), "{warnings:#?}");
-}
-
-#[test]
-fn retired_typed_bindings_are_not_current_evidence_for_the_finding() {
-    let deprecated = rule("rule_old_rate", RuleStatus::Deprecated);
-
-    let warnings = inactive_rule_binding_warnings(
-        &[deprecated],
-        &[],
-        &[typed_implementation("rule_old_rate", true)],
-        &[typed_verification("rule_old_rate", true)],
-    );
 
     assert!(warnings.is_empty(), "{warnings:#?}");
 }
@@ -204,33 +195,6 @@ fn scanned_attribute_bindings_citing_inactive_rules_are_lifecycle_findings() {
 }
 
 #[test]
-fn retired_rules_stay_with_the_separate_retired_record_check() {
-    let retired_deprecated = Rule {
-        retired: true,
-        ..rule("rule_replaced", RuleStatus::Deprecated)
-    };
-    let marker = scan_with_annotation_marker("rule_replaced");
-
-    let lifecycle = inactive_rule_binding_warnings(
-        std::slice::from_ref(&retired_deprecated),
-        std::slice::from_ref(&marker),
-        &[typed_implementation("rule_replaced", false)],
-        &[],
-    );
-    let retired = stale_rule_warnings(
-        std::slice::from_ref(&retired_deprecated),
-        std::slice::from_ref(&marker),
-    );
-
-    assert!(lifecycle.is_empty(), "{lifecycle:#?}");
-    assert_eq!(retired.len(), 1, "{retired:#?}");
-    assert!(
-        !retired[0].binding_finding,
-        "the retired check stays separate"
-    );
-}
-
-#[test]
 fn active_and_draft_rules_never_appear_in_lifecycle_findings() {
     let active = rule("rule_now", RuleStatus::Active);
     let draft = rule("rule_next", RuleStatus::Draft);
@@ -239,8 +203,8 @@ fn active_and_draft_rules_never_appear_in_lifecycle_findings() {
         &[active, draft],
         &[],
         &[
-            typed_implementation("rule_now", false),
-            typed_implementation("rule_next", false),
+            typed_implementation("rule_now"),
+            typed_implementation("rule_next"),
         ],
         &[],
     );

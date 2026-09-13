@@ -119,15 +119,14 @@ async fn owned_requirement_and_rule_updates_preserve_declaration_identity() {
             let error = fixture.call(operation, request).await.unwrap_err();
             assert_eq!(error["kind"], "record_ownership_conflict");
         }
-        let after = fixture.call(operation, json!({"scope_id":"default","id":before["id"],"declared_by":"spec://fixture","description":"Changed","retired":true})).await.unwrap();
+        let after = fixture.call(operation, json!({"scope_id":"default","id":before["id"],"declared_by":"spec://fixture","description":"Changed"})).await.unwrap();
         let mut expected = before;
         expected["description"] = json!("Changed");
-        expected["retired"] = json!(true);
+
         assert_eq!(after, expected);
     }
     fixture.call("apply", spec).await.unwrap();
-    assert!(!fixture.store.list_requirements(&fixture.scope).unwrap()[0].retired);
-    assert!(!fixture.store.list_rules(&fixture.scope).unwrap()[0].retired);
+
     assert!(fixture
         .store
         .open_requirement_reviews(&fixture.scope)

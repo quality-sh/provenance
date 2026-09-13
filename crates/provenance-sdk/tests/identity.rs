@@ -53,31 +53,6 @@ fn rule_resource(
 }
 
 #[test]
-fn an_omitted_rule_retires_and_returns_under_its_id() {
-    let (_dir, root) = repository();
-    let sharing = || {
-        requirement("sharing")
-            .statement("Users can securely share documentation")
-            .rules([rule("expiry").statement("Share links expire within 30 days")])
-    };
-    let first = apply(&root, [sharing()]);
-    let expiry = rule_resource(&first, "expiry");
-
-    let without = apply(
-        &root,
-        [requirement("sharing").statement("Users can securely share documentation")],
-    );
-    assert_eq!(without.retired, 1);
-
-    let restored = apply(&root, [sharing()]);
-    let returned = rule_resource(&restored, "expiry");
-    assert_eq!(
-        returned.id, expiry.id,
-        "reactivation keeps the canonical id"
-    );
-}
-
-#[test]
 fn a_rule_migrates_from_local_to_shared_and_keeps_its_id() {
     let (_dir, root) = repository();
     let local = apply(

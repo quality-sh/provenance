@@ -19,7 +19,7 @@ fn resolve(file: &str, line: Option<usize>) -> ResolveSymbolQuery {
         file: file.into(),
         symbol: None,
         line,
-        include_retired: false,
+
         limit: 50,
     }
 }
@@ -45,7 +45,6 @@ fn bind(store: &TestStore, id: &str, file: &str) {
             "id": id,
             "rule_id": "rule_overtime",
             "declared_by": "spec://test",
-            "retired": false,
             "file": file,
             "symbol": "pay",
         }),
@@ -77,7 +76,7 @@ async fn resolve_symbol_reads_the_named_file_only() {
                     protocol_version: Some(SDK_PROTOCOL_VERSION),
                     id: "req_overtime".into(),
                     node_type: None,
-                    include_retired: false,
+
                     limit: 50,
                 },
             )

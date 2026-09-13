@@ -170,7 +170,7 @@ async fn mcp_creation_uses_explicit_write_grants_and_native_records() {
         let result = client
             .call_tool(
                 CallToolRequestParams::new("create-source").with_arguments(
-                    json!({"protocol_version":8,"call":scoped(&source())})
+                    json!({"protocol_version":9,"call":scoped(&source())})
                         .as_object()
                         .unwrap()
                         .clone(),
@@ -215,7 +215,7 @@ async fn mcp_creation_uses_explicit_write_grants_and_native_records() {
                 let result = client
                     .call_tool(
                         CallToolRequestParams::new(name).with_arguments(
-                            json!({"protocol_version":8,"call":scoped(&request)})
+                            json!({"protocol_version":9,"call":scoped(&request)})
                                 .as_object()
                                 .unwrap()
                                 .clone(),

@@ -14,7 +14,7 @@ fn query(id: &str) -> ImpactQuery {
         protocol_version: Some(SDK_PROTOCOL_VERSION),
         id: id.into(),
         node_type: None,
-        include_retired: false,
+
         limit: 50,
     }
 }

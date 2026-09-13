@@ -34,7 +34,7 @@ impl Evidence<'_> {
             .chain(
                 self.implementations
                     .iter()
-                    .filter(|binding| !binding.retired && binding.rule_id == *id)
+                    .filter(|binding| binding.rule_id == *id)
                     .map(|binding| ImplementationSite {
                         file: binding.file.clone(),
                         line: None,

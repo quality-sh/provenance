@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { startFixtureHost } from "../scripts/fixture-host.js";
+import { PROTOCOL_VERSION } from "./generated/client.js";
 
 import {
   apply,
@@ -78,7 +79,7 @@ async function readsTheEnginesBoundedAnswers(): Promise<void> {
     await apply();
 
     const fetched = await get({ node_type: "rule", id: expiry.id });
-    assert.equal(fetched.protocol_version, 8);
+    assert.equal(fetched.protocol_version, PROTOCOL_VERSION);
     assert.equal(fetched.operation, "get");
     assert.equal(fetched.found, true);
     assert.equal(fetched.node?.id, expiry.id);

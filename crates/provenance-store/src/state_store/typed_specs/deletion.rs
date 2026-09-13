@@ -3,91 +3,94 @@ use std::collections::BTreeMap;
 use provenance_core::{DeclarationAddress, Requirement, Rule, Source, StableId};
 
 use super::rule_addresses::local_parent;
-use crate::state_store::{ReconcileState, ReconciledResource, TypedFieldChange, TypedResourceKind};
+use crate::state_store::{ReconcileState, ReconciledResource, TypedResourceKind};
 
-pub(super) fn retire_omitted_sources(
-    records: &mut [Source],
+pub(super) fn delete_omitted_sources(
+    records: &mut Vec<Source>,
     resources: &mut Vec<ReconciledResource>,
     spec: &str,
     owner: &str,
     desired: &BTreeMap<String, StableId>,
 ) {
-    for record in records.iter_mut().filter(|record| {
-        owned_by_spec(
+    records.retain(|record| {
+        let omitted = owned_by_spec(
             record.declared_by.as_deref(),
             record.declaration_address.as_ref(),
             spec,
             owner,
-        ) && !record.retired
-            && !desired.values().any(|id| id == &record.id)
-    }) {
-        record.retired = true;
+        ) && !desired.values().any(|id| id == &record.id);
+        if !omitted {
+            return true;
+        }
         let address = typed_address(record.declaration_address.as_ref());
-        resources.push(retired_resource(
+        resources.push(deleted_resource(
             TypedResourceKind::Source,
             declaration_key(&address),
             None,
             address,
             record.id.clone(),
         ));
-    }
+        false
+    });
 }
 
-pub(super) fn retire_omitted_requirements(
-    records: &mut [Requirement],
+pub(super) fn delete_omitted_requirements(
+    records: &mut Vec<Requirement>,
     resources: &mut Vec<ReconciledResource>,
     spec: &str,
     owner: &str,
     desired: &BTreeMap<String, StableId>,
 ) {
-    for record in records.iter_mut().filter(|record| {
-        owned_by_spec(
+    records.retain(|record| {
+        let omitted = owned_by_spec(
             record.declared_by.as_deref(),
             record.declaration_address.as_ref(),
             spec,
             owner,
-        ) && !record.retired
-            && !desired.values().any(|id| id == &record.id)
-    }) {
-        record.retired = true;
+        ) && !desired.values().any(|id| id == &record.id);
+        if !omitted {
+            return true;
+        }
         let address = typed_address(record.declaration_address.as_ref());
-        resources.push(retired_resource(
+        resources.push(deleted_resource(
             TypedResourceKind::Requirement,
             declaration_key(&address),
             None,
             address,
             record.id.clone(),
         ));
-    }
+        false
+    });
 }
 
-pub(super) fn retire_omitted_rules(
-    records: &mut [Rule],
+pub(super) fn delete_omitted_rules(
+    records: &mut Vec<Rule>,
     resources: &mut Vec<ReconciledResource>,
     spec: &str,
     owner: &str,
     desired: &BTreeMap<DeclarationAddress, StableId>,
 ) {
-    for record in records.iter_mut().filter(|record| {
-        owned_by_spec(
+    records.retain(|record| {
+        let omitted = owned_by_spec(
             record.declared_by.as_deref(),
             record.declaration_address.as_ref(),
             spec,
             owner,
-        ) && !record.retired
-            && !desired.values().any(|id| id == &record.id)
-    }) {
-        record.retired = true;
+        ) && !desired.values().any(|id| id == &record.id);
+        if !omitted {
+            return true;
+        }
         let address = typed_address(record.declaration_address.as_ref());
         let key = declaration_key(&address);
-        resources.push(retired_resource(
+        resources.push(deleted_resource(
             TypedResourceKind::Rule,
             key,
             local_parent(&address),
             address,
             record.id.clone(),
         ));
-    }
+        false
+    });
 }
 
 fn owned_by_spec(
@@ -115,7 +118,7 @@ fn declaration_key(address: &DeclarationAddress) -> String {
         .clone()
 }
 
-fn retired_resource(
+const fn deleted_resource(
     kind: TypedResourceKind,
     key: String,
     parent: Option<String>,
@@ -128,11 +131,7 @@ fn retired_resource(
         parent,
         address,
         id,
-        state: ReconcileState::Retired,
-        changes: vec![TypedFieldChange {
-            field: "retired".to_string(),
-            before: serde_json::Value::Bool(false),
-            after: serde_json::Value::Bool(true),
-        }],
+        state: ReconcileState::Deleted,
+        changes: Vec::new(),
     }
 }

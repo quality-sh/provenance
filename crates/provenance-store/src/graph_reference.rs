@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 pub use export::{graph_digest, ExactExport};
 pub use projection::GraphExport;
 
-use canonical::{canonical_bytes, digest, sha256};
+use canonical::{canonical_bytes, sha256};
 use git::{GitRepository, TreeSource};
 use projection::load_projection;
 
@@ -187,7 +187,7 @@ impl GraphReferences {
         }
 
         let repository_id = self.repository.identity(&commit)?;
-        let graph_digest = digest(&canonical_bytes(&graph)?);
+        let graph_digest = graph_digest(&graph)?;
         let reference_id =
             reference_identity(&repository_id, STORE_PATH, scope, &commit, &graph_digest);
         Ok(GraphReference {
@@ -304,7 +304,7 @@ impl GraphReferences {
             return mismatch("repository_id", &reference.repository_id, &repository_id);
         }
         let graph = self.projection(TreeSource::Commit(&commit), &reference.scope_id)?;
-        let graph_digest = digest(&canonical_bytes(&graph)?);
+        let graph_digest = graph_digest(&graph)?;
         if graph_digest != reference.graph_digest {
             return mismatch("graph_digest", &reference.graph_digest, &graph_digest);
         }

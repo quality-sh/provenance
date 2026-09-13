@@ -66,11 +66,7 @@ fn prime_context_locked(
     };
     Ok(PrimeContextView {
         scope_id: scope.as_str().to_string(),
-        rules: store
-            .list_rules(scope)?
-            .into_iter()
-            .filter(|rule| !rule.retired)
-            .collect(),
+        rules: store.list_rules(scope)?.into_iter().collect(),
         gaps: find_gaps(layout, scope)?,
         threads,
     })

@@ -39,14 +39,14 @@ impl StateStore {
         relations: RequirementRelations,
     ) -> anyhow::Result<()> {
         let path = shards::requirements_path(&self.layout, scope);
-        self.mutate_jsonl_records(&path, |records: &mut Vec<Requirement>| {
+        self.mutate_graph_record(&path, |records: &mut Vec<Requirement>| {
             let record = records.iter_mut().find(|r| r.id == *id).unwrap();
             record.refines = relations.refines;
             record.depends_on = relations.depends_on;
             record.supersedes = relations.supersedes;
             record.spawned_by = relations.spawned_by;
             record.source_refs = relations.source_refs;
-            Ok(())
+            Ok(record.clone())
         })?;
         let record = self.requirement(scope, id)?;
         for (name, target) in record.references() {
