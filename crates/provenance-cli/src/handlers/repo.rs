@@ -171,8 +171,7 @@ impl PlannedFiles {
             crate::legacy_cleanup::project_agents(agents_before.bytes().unwrap_or_default());
         let agents_bytes = crate::onboarding::project(&without_legacy, invocation)?;
         let agents_had_section = String::from_utf8(without_legacy)
-            .ok()
-            .is_some_and(|text| crate::onboarding::owns_section(&text));
+            .is_ok_and(|text| crate::onboarding::owns_section(&text));
         let gitignore_before = FileSnapshot::read(path.join(".gitignore").as_std_path())?;
         let gitignore_bytes = crate::gitignore::project_ignored(
             gitignore_before.bytes().unwrap_or_default(),
