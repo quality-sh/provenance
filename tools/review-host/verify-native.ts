@@ -44,7 +44,7 @@ try {
     assert.equal(createHash('sha256').update(bytes).digest('hex'), expected, file);
   }
   assert.deepEqual(await (await get('/host-build-info.json')).json(), info);
-  assert.match(await (await get('/')).text(), /src="\.\/host.js"/);
+  assert.equal(await (await get('/')).text(), await readFile(join(resolve(assetsArg), 'index.html'), 'utf8'));
   assert.equal((await get('/review-config')).status, 401);
   assert.equal((await get('/host.js', { Origin: 'https://unrelated.test' })).status, 403);
   const client = await HttpClient.connectWithBearer(config.endpoint, config.bearer);

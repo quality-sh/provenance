@@ -78,7 +78,7 @@ jobs generate once and pass the output as a build artifact to dependent jobs.
 Published npm and Rust packages include their client outputs; package consumers
 do not need Node generation tools or a Rust generator. The release consumer map
 `packages/provenance/src/engine-packages.ts` is also generated during SDK builds.
-The pre-commit hook and CI reject generated paths in the Git index.
+CI rejects generated paths in the Git index.
 The generator and real-host tests use the executable paths reported by Cargo,
 including configured target directories and platform executable suffixes.
 
@@ -110,6 +110,13 @@ sibling constraints at their evaluation scope. This preserves tagged graph-node
 narrowing that the pinned tool otherwise drops. The authoritative OpenAPI and
 runtime validation schemas remain unchanged. The Rust union adapter deduplicates
 identical tagged alternatives only after proving object-only disjoint tags.
+
+The Rule schema marks its archive condition with
+`x-provenance-validation-only-any-of`. Client type adapters omit only that
+marked `anyOf` when they generate field types. This keeps the optional fields
+of the native Rust record and avoids an unsupported Effect union intersection.
+The exported OpenAPI and all wire validators retain the condition: an Archived
+Rule requires its commit stamp, and other statuses refuse a non-null stamp.
 
 The catalog mutation annotation drives response-loss classification in both
 clients. Malformed success or refusal after a write, interrupted connections,

@@ -7,7 +7,7 @@ use crate::operations::read_policy::ReadPolicy;
 use provenance_core::NodeType;
 use provenance_macros::verifies;
 
-/// The pinned store holds six active requirements whose statements say
+/// The pinned store holds seven requirements whose statements say
 /// "overtime" and no source that does, so a limit of two is met inside
 /// the requirements table and the rules table is never read.
 #[tokio::test]
@@ -45,7 +45,7 @@ async fn search_visits_kinds_in_rank_order_and_stops_at_the_limit() {
     assert!(answer.stamp.live.is_empty());
 }
 
-/// `req_top` has three live records one hop away, so a limit of two cuts
+/// `req_top` has four records one hop away, so a limit of two cuts
 /// the first depth; the stamp shows the walk read nothing past it.
 #[tokio::test]
 #[verifies("rule_query_answers_stop_at_the_limit", examples)]
@@ -55,7 +55,7 @@ async fn trace_stops_at_the_limit_and_says_has_more() {
         Some(store.root.clone()),
         &store.scope,
         ReadPolicy::default(),
-        requests::trace("req_top", false, 2),
+        requests::trace("req_top", 2),
     )
     .await
     .unwrap();
@@ -65,7 +65,7 @@ async fn trace_stops_at_the_limit_and_says_has_more() {
         .iter()
         .map(|node| (node.depth, node.node.id().as_str()))
         .collect();
-    assert_eq!(ids, [(1, "req_left"), (1, "twin_record")]);
+    assert_eq!(ids, [(1, "req_left"), (1, "req_right")]);
     assert!(answer.result.has_more);
     assert_eq!(
         answer.stamp.attested,

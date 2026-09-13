@@ -103,59 +103,7 @@ fn rule_change<'a>(result: &'a Value, field: &str) -> &'a Value {
 }
 
 #[test]
-fn removing_an_owned_implementation_retires_it_and_plan_shows_the_rule_unimplemented() {
-    let directory = init_repo();
-    let initial = document(directory.path(), Some(("src/runtime.ts", "startWorkflow")));
-    let first = sdk(directory.path(), "apply", &initial).unwrap();
-    let binding_id = first["implementation_bindings"][0]["id"].clone();
-
-    let without_implementation = document(directory.path(), None);
-    let planned = sdk(directory.path(), "plan", &without_implementation).unwrap();
-    let changed_rule = rule_change(&planned, "implementation");
-    assert_eq!(planned["updated"], 1);
-    assert_eq!(changed_rule["state"], "updated");
-    assert_eq!(changed_rule["changes"][0]["after"], Value::Null);
-    assert_eq!(planned["affected_rules"][0]["implementations"], json!([]));
-    assert!(stored_bindings(directory.path())[0]
-        .get("retired")
-        .is_none());
-
-    let applied = sdk(directory.path(), "apply", &without_implementation).unwrap();
-    assert_eq!(applied["updated"], 1);
-    assert!(applied.get("implementation_bindings").is_none());
-    let stored = stored_bindings(directory.path());
-    assert_eq!(stored.len(), 1);
-    assert_eq!(stored[0]["id"], binding_id);
-    assert_eq!(stored[0]["retired"], true);
-
-    let coverage = provenance()
-        .args([
-            "coverage",
-            "scan",
-            "--repo",
-            directory.path().to_str().unwrap(),
-            "--path",
-            directory.path().to_str().unwrap(),
-            "--scope",
-            "default",
-            "--validate-rules",
-            "--format",
-            "json",
-        ])
-        .output()
-        .unwrap();
-    assert!(coverage.status.success());
-    assert!(String::from_utf8(coverage.stdout)
-        .unwrap()
-        .contains("has no implementation"));
-
-    let clean = sdk(directory.path(), "plan", &without_implementation).unwrap();
-    assert_eq!(clean["updated"], 0);
-    assert!(clean["affected_rules"].as_array().unwrap().is_empty());
-}
-
-#[test]
-fn restoring_an_implementation_reactivates_the_same_binding() {
+fn restoring_an_implementation_recreates_the_same_binding() {
     let directory = init_repo();
     let implemented = document(directory.path(), Some(("src/runtime.ts", "startWorkflow")));
     let first = sdk(directory.path(), "apply", &implemented).unwrap();
@@ -170,9 +118,6 @@ fn restoring_an_implementation_reactivates_the_same_binding() {
     );
     let restored = sdk(directory.path(), "apply", &implemented).unwrap();
     assert_eq!(restored["implementation_bindings"][0]["id"], binding_id);
-    assert!(stored_bindings(directory.path())[0]
-        .get("retired")
-        .is_none());
 }
 
 #[test]
@@ -197,23 +142,25 @@ fn replacing_an_implementation_updates_the_same_binding() {
     let stored = stored_bindings(directory.path());
     assert_eq!(stored.len(), 1);
     assert_eq!(stored[0]["file"], "src/alternate.ts");
-    assert!(stored[0].get("retired").is_none());
 }
 
 #[test]
-fn reconciling_one_spec_does_not_retire_another_specs_binding() {
+fn removing_an_implementation_deletes_its_binding() {
     let directory = init_repo();
-    let first = document(directory.path(), Some(("src/runtime.ts", "startWorkflow")));
-    sdk(directory.path(), "apply", &first).unwrap();
-    let unrelated = json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
-        "spec": "another-spec",
-        "declared_by": "spec://typescript/workflow-runtime"
-    });
-
-    sdk(directory.path(), "apply", &unrelated).unwrap();
-
-    let stored = stored_bindings(directory.path());
-    assert_eq!(stored.len(), 1);
-    assert!(stored[0].get("retired").is_none());
+    sdk(
+        directory.path(),
+        "apply",
+        &document(directory.path(), Some(("src/runtime.ts", "startWorkflow"))),
+    )
+    .unwrap();
+    let omitted = document(directory.path(), None);
+    let plan = sdk(directory.path(), "plan", &omitted).unwrap();
+    assert_eq!(plan["updated"], 1);
+    assert_eq!(stored_bindings(directory.path()).len(), 1);
+    sdk(directory.path(), "apply", &omitted).unwrap();
+    assert!(stored_bindings(directory.path()).is_empty());
+    assert_eq!(
+        sdk(directory.path(), "plan", &omitted).unwrap()["updated"],
+        0
+    );
 }

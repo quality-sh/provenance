@@ -1,5 +1,5 @@
 use crate::cli::workspace::CoverageCommand;
-use crate::output::{self, OutputFormat};
+use crate::output::{self, ReportFormat};
 use anyhow::Context;
 use camino::Utf8PathBuf;
 use provenance_macros::rule;
@@ -7,7 +7,6 @@ use std::collections::BTreeSet;
 
 mod lifecycle;
 mod render;
-mod retired;
 mod verification_state;
 use lifecycle::inactive_rule_binding_warnings;
 use render::render_coverage;
@@ -43,12 +42,6 @@ fn coverage_scan_against(
     let mut warnings = parse_warnings(&scans);
     warnings.extend(validation.warnings);
     if validate_rules {
-        // A marker citing a retired Rule is a fact about a line the scan
-        // read, so it stands even when the scan covers part of the tree.
-        // Derived absence needs the whole repository to be honest. The same
-        // holds for a current binding to a deprecated or archived Rule: the
-        // graph and the scanned lines say it exists.
-        warnings.extend(retired::stale_rule_warnings(&validation.rules, &scans));
         warnings.extend(inactive_rule_binding_warnings(
             &validation.rules,
             &scans,
@@ -68,41 +61,7 @@ fn coverage_scan_against(
             ));
         }
     }
-    let annotations = scans
-        .iter()
-        .flat_map(|scan| &scan.annotations)
-        .map(|location| provenance_core::coverage::AnnotationResult {
-            rule_id: location.annotation.rule.clone(),
-            file_path: location.file_path.clone(),
-            line: location.line,
-            function_name: location.function_name.clone(),
-            coverage: location.annotation.coverage.to_string(),
-            confidence: location.annotation.confidence,
-            verification: location
-                .annotation
-                .verification
-                .map(|method| method.to_string()),
-            anchor: Some(location.anchor.clone()),
-            anchor_state: provenance_core::coverage::AnchorState::New,
-            original_line: None,
-            original_file_path: None,
-        })
-        .collect::<Vec<_>>();
-    let bindings = scans
-        .iter()
-        .flat_map(|scan| &scan.bindings)
-        .map(|binding| provenance_core::coverage::BindingResult {
-            rule_id: binding.rule_id.clone(),
-            file_path: binding.file_path.clone(),
-            line: binding.line,
-            item_name: binding.item_name.clone(),
-            verification: binding.verification.map(|method| method.to_string()),
-            anchor: Some(binding.anchor.clone()),
-            anchor_state: provenance_core::coverage::AnchorState::New,
-            original_line: None,
-            original_file_path: None,
-        })
-        .collect::<Vec<_>>();
+    let results = provenance_scanner::coverage_results(&scans);
     let scanned_files = scanned
         .iter()
         .map(|file| provenance_core::coverage::ScannedFile {
@@ -114,8 +73,8 @@ fn coverage_scan_against(
         report: provenance_core::coverage::CoverageReport::new(
             commit,
             scans.len(),
-            annotations,
-            bindings,
+            results.annotations,
+            results.bindings,
             warnings,
         ),
         scanned_files,
@@ -186,7 +145,7 @@ fn unimplemented_rule_warnings(
     );
     rules
         .iter()
-        .filter(|rule| rule.status == provenance_core::RuleStatus::Active && !rule.retired)
+        .filter(|rule| rule.status == provenance_core::RuleStatus::Active)
         .filter(|rule| !implementations.contains(rule.id.as_str()))
         .map(|rule| provenance_core::coverage::ValidationWarning {
             rule_id: rule.id.as_str().to_string(),
@@ -286,10 +245,10 @@ pub(super) fn handle(command: CoverageCommand) -> anyhow::Result<()> {
             if let Some(output_path) = output {
                 let rendered = render_coverage(format, &report)?;
                 std::fs::write(output_path, rendered)?;
-            } else if matches!(format, OutputFormat::Markdown | OutputFormat::Toon) {
+            } else if matches!(format, ReportFormat::Markdown) {
                 print!("{}", render_coverage(format, &report)?);
             } else {
-                output::print(format, &report)?;
+                output::print_json(&report)?;
             }
             if let Some(message) = binding_finding_refusal(policy, &report.warnings) {
                 anyhow::bail!("{message}");

@@ -15,4 +15,28 @@ pub enum ReportCommand {
         #[arg(long)]
         output: Option<Utf8PathBuf>,
     },
+    /// Build a report envelope from a real repository at a named base and
+    /// head.
+    Build {
+        #[arg(long, default_value = ".")]
+        repo: Utf8PathBuf,
+        /// Older endpoint of the comparison range.
+        #[arg(long)]
+        base: String,
+        /// Newer endpoint of the comparison range.
+        #[arg(long)]
+        head: String,
+        /// Repository identity in `owner/name` form for report links.
+        #[arg(long)]
+        repository: String,
+        #[arg(long, default_value = "default")]
+        scope: String,
+        /// Scan this path instead of the repository root; a partial scan is
+        /// recorded as incomplete.
+        #[arg(long)]
+        path: Option<Utf8PathBuf>,
+        /// Write the envelope JSON to this file instead of standard output.
+        #[arg(long)]
+        output: Option<Utf8PathBuf>,
+    },
 }

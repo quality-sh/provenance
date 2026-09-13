@@ -1,5 +1,5 @@
 mod relation_decl {
-use crate::model::relations::{RelationDecl, RelationFlow, RelationOwner};
+use crate::model::relations::{RelationDecl, RelationFlow, RelationOwner, RelationSlot};
 use crate::model::{NodeType, SourceReference, StableId};
 use provenance_macros::Relations;
 
@@ -103,6 +103,36 @@ fn an_empty_optional_or_list_contributes_no_reference() {
     };
     let names: Vec<&str> = question.references().into_iter().map(|(name, _)| name).collect();
     assert_eq!(names, ["topic_id", "requirement_ids"]);
+}
+
+#[test]
+fn relation_slot_mut_lends_the_slot_a_declaration_names() {
+    let mut question = fixture();
+    match question.relation_slot_mut("refines") {
+        Some(RelationSlot::Single(slot)) => *slot = Some(sid("req_new")),
+        _ => panic!("an optional single lends a Single slot"),
+    }
+    assert_eq!(
+        question.refines.as_ref().map(StableId::as_str),
+        Some("req_new")
+    );
+    match question.relation_slot_mut("depends_on") {
+        Some(RelationSlot::List(list)) => list.clear(),
+        _ => panic!("a list lends a List slot"),
+    }
+    assert!(question.depends_on.is_empty());
+    assert!(
+        question.relation_slot_mut("topic_id").is_none(),
+        "a required bare single lends no slot"
+    );
+    assert!(
+        question.relation_slot_mut("cites").is_none(),
+        "a citation through a via struct lends no slot"
+    );
+    assert!(
+        question.relation_slot_mut("unknown").is_none(),
+        "a name no declaration carries lends no slot"
+    );
 }
 
 #[test]

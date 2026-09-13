@@ -1,4 +1,4 @@
-use crate::output::{self, OutputFormat};
+use crate::output::{self, ReportFormat};
 use camino::Utf8Path;
 use provenance_core::coverage::{EvidenceDiffReport, EvidenceDiffState, EvidenceSiteKind};
 use provenance_core::ScopeId;
@@ -14,19 +14,17 @@ pub(super) fn handle(
     head: Option<String>,
     since: Option<String>,
     strict: bool,
-    format: OutputFormat,
+    format: ReportFormat,
 ) -> anyhow::Result<()> {
     let (base, head) = git::resolve_range(repo, base, head, since)?;
-    let graph = cache::graph_evidence(&ProvenanceLayout::new(repo), &ScopeId::new(scope)?, false)?;
+    let graph = cache::graph_evidence(&ProvenanceLayout::new(repo), &ScopeId::new(scope)?)?;
     let base_files = git::revision_files(repo, &base)?;
     let head_files = git::revision_files(repo, &head)?;
     let changes = git::changed_files(repo, &base, &head)?;
     let report = gate::report(repo, base, head, base_files, head_files, &changes, &graph);
     match format {
-        OutputFormat::Json | OutputFormat::Jsonl => output::print(format, &report)?,
-        OutputFormat::Markdown | OutputFormat::Table | OutputFormat::Toon => {
-            print!("{}", render_human(&report)?);
-        }
+        ReportFormat::Json => output::print_json(&report)?,
+        ReportFormat::Markdown => print!("{}", render_human(&report)?),
     }
     if strict && (report.summary.touched > 0 || report.summary.gone > 0) {
         anyhow::bail!(

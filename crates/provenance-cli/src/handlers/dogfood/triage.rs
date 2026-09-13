@@ -14,7 +14,7 @@
 
 use super::{now_ms, read_spool, spool_dir, Note};
 use crate::cli::{DogfoodCategory, DogfoodSeverity, TriageCommand, TriageFilter};
-use crate::output::{self, OutputFormat};
+use crate::output;
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -25,7 +25,7 @@ pub(super) fn handle(command: TriageCommand, quiet: bool) -> anyhow::Result<()> 
     match command {
         TriageCommand::Handle { id, reason } => set_state(&id, true, reason, quiet),
         TriageCommand::Reopen { id } => set_state(&id, false, None, quiet),
-        TriageCommand::List { status, format } => list(status, format),
+        TriageCommand::List { status, .. } => list(status),
     }
 }
 
@@ -75,7 +75,7 @@ fn set_state(
     Ok(())
 }
 
-fn list(filter: TriageFilter, format: OutputFormat) -> anyhow::Result<()> {
+fn list(filter: TriageFilter) -> anyhow::Result<()> {
     let notes = read_spool()?;
     let state = load_state()?;
     let mut views: Vec<TriageView> = notes.iter().map(|note| view(note, &state)).collect();
@@ -85,7 +85,7 @@ fn list(filter: TriageFilter, format: OutputFormat) -> anyhow::Result<()> {
         .into_iter()
         .filter(|entry| matches_filter(entry, filter))
         .collect();
-    output::print(format, &shown)?;
+    output::print_json(&shown)?;
     Ok(())
 }
 

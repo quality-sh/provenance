@@ -45,6 +45,7 @@ fn seed_two_producers(layout: &ProvenanceLayout, scope: &ScopeId) {
         .unwrap();
     store
         .create_rule(CreateRuleInput {
+            archived_in_commit: None,
             scope_id: scope.clone(),
             id: sid("rule_two_producers"),
             name: None,

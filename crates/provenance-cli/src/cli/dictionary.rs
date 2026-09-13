@@ -1,4 +1,4 @@
-use crate::output::OutputFormat;
+use crate::output::JsonFormat;
 use camino::Utf8PathBuf;
 use clap::Subcommand;
 
@@ -11,7 +11,7 @@ pub enum DictionaryCommand {
         pdf: Utf8PathBuf,
         #[arg(long, default_value = ".")]
         repo: Utf8PathBuf,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
 }

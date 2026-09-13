@@ -16,6 +16,7 @@ workspace = true
 schema = ["dep:schemars"]
 
 [dependencies]
+time.workspace = true
 schemars = { workspace = true, optional = true }
 anyhow.workspace = true
 camino.workspace = true

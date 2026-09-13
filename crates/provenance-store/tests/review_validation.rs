@@ -1,5 +1,5 @@
 mod review_support;
-use provenance_core::{review::SaveOutcome, StableId};
+use provenance_core::{review::SaveOutcome, StableId, VerificationMethod};
 use review_support::*;
 use serde_json::json;
 
@@ -116,7 +116,13 @@ fn statement_edits_keep_existing_verification_review_behavior() {
     assert_eq!(reviews.len(), 1);
     assert_eq!(reviews[0].before, "The system stores records.");
     assert_eq!(reviews[0].after, "The system reads records.");
-    let run = store.begin_verification(scope(), serde_json::from_value(json!({"rule":"rule_a","key":"check","method":"examples","declared_by":"test","file":"check.rs"})).unwrap()).unwrap();
+    let run = store
+        .begin_verification(
+            scope(),
+            serde_json::from_value(json!({"rule":"rule_a","key":"check","method":"examples","declared_by":"test","file":"check.rs"})).unwrap(),
+            VerificationMethod::Examples,
+        )
+        .unwrap();
     store
         .complete_verification(
             &scope(),

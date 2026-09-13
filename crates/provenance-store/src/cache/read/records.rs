@@ -13,28 +13,8 @@ use provenance_macros::rule;
 use sqlx::sqlite::SqliteRow;
 use sqlx::Row;
 
-/// The column that says a record retired, on the kinds that retire in
-/// place.
-const RETIRED: &str = "retired";
-
-fn has_retired<K: ProjectionRow>() -> bool {
-    K::COLUMNS.contains(&RETIRED)
-}
-
-/// The clause that leaves retired rows out, on a kind that has them. Every
-/// lookup that decides whether a record counts goes through it, so a
-/// retired record is answered only when the request asks for it.
-#[rule("rule_retired_records_answer_only_when_asked")]
-fn active_clause<K: ProjectionRow>(include_retired: bool) -> &'static str {
-    if has_retired::<K>() && !include_retired {
-        " AND retired = 0"
-    } else {
-        ""
-    }
-}
-
 impl<K: ProjectionRow> Table<'_, K> {
-    /// One record by id, retired or not.
+    /// One record by id.
     pub async fn record(&self, id: &StableId) -> anyhow::Result<Option<K>> {
         let sql = format!(
             "SELECT {} FROM {} WHERE scope_id = ? AND id = ?",
@@ -57,22 +37,15 @@ impl<K: ProjectionRow> Table<'_, K> {
     /// `by_field` on the id column, whose chunked select folds repeated
     /// values before it asks.
     #[rule("rule_by_ids_answers_a_repeated_id_once")]
-    pub async fn by_ids(&self, ids: &[StableId], include_retired: bool) -> anyhow::Result<Vec<K>> {
+    pub async fn by_ids(&self, ids: &[StableId]) -> anyhow::Result<Vec<K>> {
         let wanted: Vec<&str> = ids.iter().map(StableId::as_str).collect();
-        self.by_field("id", &wanted, include_retired).await
+        self.by_field("id", &wanted).await
     }
 
     /// The records whose named column holds one of the values, under the
     /// view, in id order.
-    pub async fn by_field(
-        &self,
-        column: &'static str,
-        values: &[&str],
-        include_retired: bool,
-    ) -> anyhow::Result<Vec<K>> {
-        let rows = self
-            .rows_in(&select_columns::<K>(), column, values, include_retired)
-            .await?;
+    pub async fn by_field(&self, column: &'static str, values: &[&str]) -> anyhow::Result<Vec<K>> {
+        let rows = self.rows_in(&select_columns::<K>(), column, values).await?;
         let mut records = rows
             .iter()
             .map(|row| Ok((row.try_get::<String, _>("id")?, decode::<K>(row)?)))
@@ -83,13 +56,9 @@ impl<K: ProjectionRow> Table<'_, K> {
 
     /// The given ids that name a row that counts under the view, in id
     /// order.
-    pub async fn ids_that_count(
-        &self,
-        ids: &[StableId],
-        include_retired: bool,
-    ) -> anyhow::Result<Vec<StableId>> {
+    pub async fn ids_that_count(&self, ids: &[StableId]) -> anyhow::Result<Vec<StableId>> {
         let wanted: Vec<&str> = ids.iter().map(StableId::as_str).collect();
-        let rows = self.rows_in("id", "id", &wanted, include_retired).await?;
+        let rows = self.rows_in("id", "id", &wanted).await?;
         let mut found = rows
             .iter()
             .map(|row| row.try_get::<String, _>(0))
@@ -108,7 +77,6 @@ impl<K: ProjectionRow> Table<'_, K> {
         select: &str,
         column: &str,
         values: &[&str],
-        include_retired: bool,
     ) -> anyhow::Result<Vec<SqliteRow>> {
         let mut values = values.to_vec();
         values.sort_unstable();
@@ -117,10 +85,9 @@ impl<K: ProjectionRow> Table<'_, K> {
         for chunk in values.chunks(BIND_CHUNK) {
             let marks = vec!["?"; chunk.len()].join(", ");
             let sql = format!(
-                "SELECT {select} FROM {} WHERE scope_id = ? AND {} IN ({marks}){}",
+                "SELECT {select} FROM {} WHERE scope_id = ? AND {} IN ({marks})",
                 quoted(K::TABLE),
-                quoted(column),
-                active_clause::<K>(include_retired)
+                quoted(column)
             );
             let mut query = sqlx::query(&sql).bind(self.snapshot().scope().as_str());
             for value in chunk {
@@ -135,13 +102,11 @@ impl<K: ProjectionRow> Table<'_, K> {
         Ok(rows)
     }
 
-    /// Whether the id names a row that counts: present, and not retired
-    /// unless retired rows are asked for.
-    pub async fn live(&self, id: &StableId, include_retired: bool) -> anyhow::Result<bool> {
+    /// Whether the id names a present row.
+    pub async fn live(&self, id: &StableId) -> anyhow::Result<bool> {
         let sql = format!(
-            "SELECT 1 FROM {} WHERE scope_id = ? AND id = ?{}",
-            quoted(K::TABLE),
-            active_clause::<K>(include_retired)
+            "SELECT 1 FROM {} WHERE scope_id = ? AND id = ?",
+            quoted(K::TABLE)
         );
         let found: Option<i64> = {
             let mut tx = self.snapshot().connection().await;
@@ -157,13 +122,12 @@ impl<K: ProjectionRow> Table<'_, K> {
     /// The records whose search text holds the needle, in id order. The
     /// needle is folded to lowercase, as the search text is. The match is
     /// over the joined pieces; the caller decides per piece.
-    pub async fn search(&self, needle: &str, include_retired: bool) -> anyhow::Result<Vec<K>> {
+    pub async fn search(&self, needle: &str) -> anyhow::Result<Vec<K>> {
         let sql = format!(
-            "SELECT {} FROM {} WHERE scope_id = ? AND instr({}, ?) > 0{} ORDER BY id",
+            "SELECT {} FROM {} WHERE scope_id = ? AND instr({}, ?) > 0 ORDER BY id",
             select_columns::<K>(),
             quoted(K::TABLE),
-            quoted(SEARCH_TEXT),
-            active_clause::<K>(include_retired)
+            quoted(SEARCH_TEXT)
         );
         let rows = {
             let mut tx = self.snapshot().connection().await;
@@ -180,14 +144,10 @@ impl<K: ProjectionRow> Table<'_, K> {
 /// The kind of a record named without one: the first kind, in rank
 /// order, whose table holds a row that counts. Each probe takes its own
 /// table handle, so the stamp names every table read.
-pub async fn kind_of(
-    snapshot: &ReadSnapshot,
-    id: &StableId,
-    include_retired: bool,
-) -> anyhow::Result<Option<NodeType>> {
+pub async fn kind_of(snapshot: &ReadSnapshot, id: &StableId) -> anyhow::Result<Option<NodeType>> {
     macro_rules! probe {
         ($kind:ty, $node_type:expr) => {
-            if snapshot.table::<$kind>().live(id, include_retired).await? {
+            if snapshot.table::<$kind>().live(id).await? {
                 return Ok(Some($node_type));
             }
         };

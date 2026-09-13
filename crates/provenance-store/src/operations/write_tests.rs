@@ -1,6 +1,6 @@
 use super::write_error::{WriteError, WriteFailure};
 use crate::{layout::ProvenanceLayout, state_store::StateStore};
-use provenance_core::{Manifest, RepoPathPrefix, ScopeId};
+use provenance_core::{Manifest, RepoPathPrefix, ScopeId, VerificationMethod};
 use serde_json::json;
 
 fn fixture() -> (tempfile::TempDir, StateStore, ScopeId) {
@@ -66,7 +66,9 @@ fn already_complete_is_typed_and_retains_native_text() {
         .find(|value| value.kind == crate::state_store::TypedResourceKind::Rule)
         .unwrap();
     let input = serde_json::from_value(json!({"rule":rule.id,"key":"test","method":"examples","declared_by":"test","file":"test.rs"})).unwrap();
-    let run = store.begin_verification(scope.clone(), input).unwrap();
+    let run = store
+        .begin_verification(scope.clone(), input, VerificationMethod::Examples)
+        .unwrap();
     let complete = || serde_json::from_value(json!({"run":run.id,"status":"passed"})).unwrap();
     store.complete_verification(&scope, complete()).unwrap();
     let error = WriteError(store.complete_verification(&scope, complete()).unwrap_err());
@@ -101,7 +103,11 @@ fn begin_keeps_the_publication_lock_and_reports_saved_binding_on_failure() {
         assert!(crate::test_probes::publication_lock_is_held(&layout));
         anyhow::bail!("injected after binding")
     });
-    let result = store.begin_verification(scope.clone(), serde_json::from_value(json!({"rule":rule.id,"key":"test","method":"examples","declared_by":"test","file":"test.rs"})).unwrap());
+    let result = store.begin_verification(
+        scope.clone(),
+        serde_json::from_value(json!({"rule":rule.id,"key":"test","method":"examples","declared_by":"test","file":"test.rs"})).unwrap(),
+        VerificationMethod::Examples,
+    );
     crate::test_probes::disarm("verification_binding_published");
     assert!(matches!(
         WriteError(result.unwrap_err()).safe(),

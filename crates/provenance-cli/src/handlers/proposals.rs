@@ -3,13 +3,13 @@ use super::common::{
 };
 use crate::cli::ideation::ProposalsCommand;
 use crate::output;
+use crate::store::Store;
 use provenance_core::{
     AssertionId, IdeationEvidenceReference, PromotionState, ProposalTraceability, ProposalType,
     ScopeId, StableId,
 };
-use provenance_store::{
-    layout::ProvenanceLayout,
-    state_store::{CreateAssertionInput, CreateProposalCardInput, ProposalDemand, StateStore},
+use provenance_store::state_store::{
+    CreateAssertionInput, CreateProposalCardInput, ProposalDemand,
 };
 
 #[allow(clippy::too_many_lines)]
@@ -32,10 +32,10 @@ pub(super) fn handle(command: ProposalsCommand, quiet: bool) -> anyhow::Result<(
             assertion_id,
             synthesis_packet_id,
             builds_on,
-            format,
+            ..
         } => {
             warn_if_skills_missing(&repo, quiet)?;
-            let store = StateStore::new(ProvenanceLayout::new(repo));
+            let store = Store::open(repo);
             let scope_id = ScopeId::new(scope)?;
             let proposal_id = StableId::new(id)?;
             let supporting_claim_ids = stable_ids(supporting_claim_id)?;
@@ -63,6 +63,9 @@ pub(super) fn handle(command: ProposalsCommand, quiet: bool) -> anyhow::Result<(
                 promotion_state: PromotionState::Proposed,
                 duplicate_of: None,
                 superseded_by: None,
+                record_revision: None,
+                revises: None,
+                revises_rejection: None,
             };
             let proposal = match (assertion_id, synthesis_packet_id) {
                 (Some(assertion_id), Some(synthesis_packet_id)) => store.create_asserted_proposal(
@@ -78,7 +81,7 @@ pub(super) fn handle(command: ProposalsCommand, quiet: bool) -> anyhow::Result<(
                 (None, None) => store.create_proposal_card(input)?,
                 _ => unreachable!("clap requires both atomic assertion arguments"),
             };
-            output::print(format, &proposal)?;
+            output::print_json(&proposal)?;
         }
         ProposalsCommand::Assert {
             repo,
@@ -89,10 +92,10 @@ pub(super) fn handle(command: ProposalsCommand, quiet: bool) -> anyhow::Result<(
             supporting_claim_id,
             resolve_human_gate,
             decision_key,
-            format,
+            ..
         } => {
             warn_if_skills_missing(&repo, quiet)?;
-            let store = StateStore::new(ProvenanceLayout::new(repo));
+            let store = Store::open(repo);
             let input = CreateAssertionInput {
                 scope_id: ScopeId::new(scope)?,
                 id: AssertionId::new(id)?,
@@ -106,17 +109,12 @@ pub(super) fn handle(command: ProposalsCommand, quiet: bool) -> anyhow::Result<(
             } else {
                 store.assert_proposal(input)?
             };
-            output::print(format, &assertion)?;
+            output::print_json(&assertion)?;
         }
-        ProposalsCommand::List {
-            repo,
-            scope,
-            format,
-        } => {
+        ProposalsCommand::List { repo, scope, .. } => {
             warn_if_skills_missing(&repo, quiet)?;
-            let proposals = StateStore::new(ProvenanceLayout::new(repo))
-                .list_proposal_cards(&ScopeId::new(scope)?)?;
-            output::print(format, &proposals)?;
+            let proposals = Store::open(repo).list_proposal_cards(&ScopeId::new(scope)?)?;
+            output::print_json(&proposals)?;
         }
         ProposalsCommand::Surface {
             repo,
@@ -124,7 +122,7 @@ pub(super) fn handle(command: ProposalsCommand, quiet: bool) -> anyhow::Result<(
             changed_path,
             target_type,
             target_id,
-            format,
+            ..
         } => {
             warn_if_skills_missing(&repo, quiet)?;
             anyhow::ensure!(
@@ -142,11 +140,11 @@ pub(super) fn handle(command: ProposalsCommand, quiet: bool) -> anyhow::Result<(
                 .map(|(target_type, target_id)| ideation_target(&target_type, target_id))
                 .transpose()?
                 .map_or_else(Vec::new, |target| vec![target]);
-            let surfaced = StateStore::new(ProvenanceLayout::new(repo)).surface_proposals(
+            let surfaced = Store::open(repo).surface_proposals(
                 &ScopeId::new(scope)?,
                 &ProposalDemand::new(changed_path, targets),
             )?;
-            output::print(format, &surfaced)?;
+            output::print_json(&surfaced)?;
         }
     }
     Ok(())

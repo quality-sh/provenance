@@ -20,9 +20,7 @@ pub(super) fn stale(
     // error that surfaces.
     let diff = ctx.live(Live::Diff);
     let (base, head) = diff.resolve_range(request.base, request.head)?;
-    let graph = ctx
-        .live(Live::Canonical)
-        .graph_evidence(scope, request.include_retired)?;
+    let graph = ctx.live(Live::Canonical).graph_evidence(scope)?;
     let found = diff.disturbed(base, head, &request.rules, &graph)?;
     let summary = summarize(&found.sites);
     let (sites, has_more) = take_page(found.sites, request.limit);

@@ -1,4 +1,4 @@
-use crate::output::OutputFormat;
+use crate::output::JsonFormat;
 use camino::Utf8PathBuf;
 use clap::{Subcommand, ValueEnum};
 
@@ -13,8 +13,8 @@ pub enum SwarmBacktraceCommand {
         run_dir: Utf8PathBuf,
         #[arg(long)]
         replace: bool,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
 }
 
@@ -47,8 +47,8 @@ impl IdeationArtifactKind {
 pub enum SchemaCommand {
     Show {
         artifact: IdeationArtifactKind,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
 }
 
@@ -94,16 +94,16 @@ pub enum ContributionsCommand {
         open_questions_json: String,
         #[arg(long)]
         replace: bool,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     List {
         #[arg(long, default_value = ".")]
         repo: Utf8PathBuf,
         #[arg(long)]
         scope: String,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
 }
 
@@ -141,16 +141,16 @@ pub enum SynthesisPacketsCommand {
         required_human_decisions_json: String,
         #[arg(long)]
         replace: bool,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     List {
         #[arg(long, default_value = ".")]
         repo: Utf8PathBuf,
         #[arg(long)]
         scope: String,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
 }
 
@@ -193,8 +193,8 @@ pub enum ProposalsCommand {
         /// Immutable assertion ID this proposal builds on. Repeatable.
         #[arg(long)]
         builds_on: Vec<String>,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     Assert {
         #[arg(long, default_value = ".")]
@@ -215,16 +215,16 @@ pub enum ProposalsCommand {
         /// Blocking human decision key that was resolved. Repeatable.
         #[arg(long, requires = "resolve_human_gate")]
         decision_key: Vec<String>,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     List {
         #[arg(long, default_value = ".")]
         repo: Utf8PathBuf,
         #[arg(long)]
         scope: String,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     /// Surface undisposed proposals when current work enters their territory.
     Surface {
@@ -241,8 +241,8 @@ pub enum ProposalsCommand {
         /// Explicit existing territory ID, paired with --target-type.
         #[arg(long)]
         target_id: Option<String>,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
 }
 
@@ -284,15 +284,15 @@ pub enum DispositionsCommand {
         /// Stable action key within the external system, scope, and kind.
         #[arg(long, requires_all = ["external_system", "external_scope", "external_kind"])]
         external_key: Option<String>,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     List {
         #[arg(long, default_value = ".")]
         repo: Utf8PathBuf,
         #[arg(long)]
         scope: String,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
 }

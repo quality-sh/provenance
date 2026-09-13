@@ -1,7 +1,7 @@
 use crate::{canonical_digest, layout::ProvenanceLayout, state_store::StateStore};
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::review::{
-    JournalEntry, RequirementSnapshot, ReviewEntry, SnapshotRef, REVIEW_SCHEMA_VERSION,
+    CycleEntry, JournalEntry, RequirementSnapshot, ReviewEntry, SnapshotRef, REVIEW_SCHEMA_VERSION,
 };
 use provenance_core::{Requirement, ScopeId, StableId};
 use serde::{de::DeserializeOwned, Serialize};
@@ -39,7 +39,7 @@ pub(super) fn read_entry(
     path: &Utf8Path,
 ) -> anyhow::Result<ReviewEntry> {
     let JournalEntry::Requirement(entry) = read_journal_entry(layout, path)? else {
-        anyhow::bail!("request ID belongs to a Discussion write");
+        anyhow::bail!("request ID belongs to a Discussion or decision-cycle write");
     };
     anyhow::ensure!(
         entry.schema_version == REVIEW_SCHEMA_VERSION,
@@ -56,6 +56,7 @@ pub(super) fn read_journal_entry(
     let version = match &entry {
         JournalEntry::Requirement(e) => e.schema_version,
         JournalEntry::Discussion(e) => e.schema_version,
+        JournalEntry::Cycle(e) => e.schema_version,
     };
     anyhow::ensure!(
         version == REVIEW_SCHEMA_VERSION,
@@ -131,19 +132,44 @@ pub(super) fn new_id() -> StableId {
 }
 
 pub(super) fn record_digest(record: &Requirement) -> anyhow::Result<String> {
-    let value = RequirementSnapshot {
-        schema_version: REVIEW_SCHEMA_VERSION,
-        record: record.clone(),
-    };
+    let value = serde_json::json!({
+        "schema_version": REVIEW_SCHEMA_VERSION,
+        "record": provenance_core::model::record_stamps::content_value(record)?,
+    });
     Ok(canonical_digest::digest(
         &canonical_digest::canonical_bytes(&value)?,
     ))
 }
 
 pub(super) fn etag(record: &Requirement, occurrence: Option<&StableId>) -> anyhow::Result<String> {
+    let content = provenance_core::model::record_stamps::content_value(record)?;
     Ok(canonical_digest::digest(
-        &canonical_digest::canonical_bytes(&(record, occurrence))?,
+        &canonical_digest::canonical_bytes(&(content, occurrence))?,
     ))
+}
+
+fn snapshot_record(
+    layout: &ProvenanceLayout,
+    scope: &ScopeId,
+    reference: &SnapshotRef,
+) -> anyhow::Result<Requirement> {
+    let path = snapshot_path(layout, scope, &reference.id);
+    let mut file = regular_file(layout, &path)?;
+    anyhow::ensure!(
+        file.metadata()?.len() == reference.bytes,
+        "review snapshot length differs from its immutable reference"
+    );
+    let mut bytes = Vec::new();
+    (&mut file)
+        .take(reference.bytes + 1)
+        .read_to_end(&mut bytes)?;
+    anyhow::ensure!(
+        bytes.len() as u64 == reference.bytes
+            && canonical_digest::digest(&bytes) == reference.digest,
+        "review snapshot digest differs from its immutable reference"
+    );
+    let snapshot: RequirementSnapshot = serde_json::from_slice(&bytes)?;
+    Ok(snapshot.record)
 }
 
 impl StateStore {
@@ -153,7 +179,18 @@ impl StateStore {
             .into_iter()
             .filter_map(|e| match e {
                 JournalEntry::Requirement(e) => Some(*e),
-                JournalEntry::Discussion(_) => None,
+                _ => None,
+            })
+            .collect())
+    }
+
+    pub(super) fn cycle_entries(&self, scope: &ScopeId) -> anyhow::Result<Vec<CycleEntry>> {
+        Ok(self
+            .journal_entries(scope)?
+            .into_iter()
+            .filter_map(|e| match e {
+                JournalEntry::Cycle(e) => Some(*e),
+                _ => None,
             })
             .collect())
     }
@@ -187,8 +224,9 @@ impl StateStore {
             .collect::<Vec<_>>();
         let head = validated_head(&entries)?;
         if let Some(head) = &head {
+            let snapshot = snapshot_record(&self.layout, &record.scope_id, &head.after)?;
             anyhow::ensure!(
-                head.after.digest == record_digest(record)?,
+                record_digest(&snapshot)? == record_digest(record)?,
                 "observed review history gap: live Requirement differs from its recorded snapshot"
             );
         } else {
@@ -283,4 +321,48 @@ pub(super) fn validated_head(entries: &[ReviewEntry]) -> anyhow::Result<Option<R
         "review conflict: revision cycle"
     );
     Ok(Some(head.clone()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{etag, record_digest};
+    use provenance_core::{Requirement, StableId};
+    use serde_json::json;
+
+    #[test]
+    fn requirement_hashes_ignore_record_stamps() {
+        let value = json!({
+            "schema_version": 2,
+            "scope_id": "default",
+            "id": "req_stamp",
+            "statement": "The system stores records.",
+            "status": "active"
+        });
+        let before: Requirement = serde_json::from_value(value.clone()).unwrap();
+        let mut after: Requirement = serde_json::from_value(value).unwrap();
+        after.created = Some(
+            serde_json::from_value(json!({
+                "commit": "a".repeat(40),
+                "at": "2026-09-12T00:00:00Z"
+            }))
+            .unwrap(),
+        );
+        after.updated = Some(
+            serde_json::from_value(json!({
+                "commit": "b".repeat(40),
+                "at": "2026-09-12T01:00:00Z"
+            }))
+            .unwrap(),
+        );
+        let occurrence = StableId::new("entry_one").unwrap();
+
+        assert_eq!(
+            record_digest(&before).unwrap(),
+            record_digest(&after).unwrap()
+        );
+        assert_eq!(
+            etag(&before, Some(&occurrence)).unwrap(),
+            etag(&after, Some(&occurrence)).unwrap()
+        );
+    }
 }

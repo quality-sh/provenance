@@ -1,7 +1,4 @@
-use crate::{
-    cli::ideation::IdeationArtifactKind,
-    output::{self, OutputFormat},
-};
+use crate::{cli::ideation::IdeationArtifactKind, output};
 use anyhow::Context;
 use camino::Utf8Path;
 // Validating one artifact file asks the same question the ideation aggregate
@@ -21,20 +18,13 @@ struct ValidationReport {
     valid: bool,
 }
 
-pub(super) fn handle(
-    artifact: IdeationArtifactKind,
-    input: &Utf8Path,
-    format: OutputFormat,
-) -> anyhow::Result<()> {
+pub(super) fn handle(artifact: IdeationArtifactKind, input: &Utf8Path) -> anyhow::Result<()> {
     validate_file(artifact, input)?;
-    output::print(
-        format,
-        &ValidationReport {
-            artifact: artifact.name(),
-            input: input.to_string(),
-            valid: true,
-        },
-    )
+    output::print_json(&ValidationReport {
+        artifact: artifact.name(),
+        input: input.to_string(),
+        valid: true,
+    })
 }
 
 pub(super) fn validate_file(

@@ -75,14 +75,14 @@ async fn matching_owner_can_edit_metadata_without_moving_or_adopting_the_record(
             vec![before.clone()]
         );
     }
-    let updated = fixture.call("update-source", json!({"scope_id":"default","id":before.id,"declared_by":"spec://fixture","commit_pin":"abcdef0123456789","effective_date":1234,"retired":true})).await.unwrap();
+    let updated = fixture.call("update-source", json!({"scope_id":"default","id":before.id,"declared_by":"spec://fixture","commit_pin":"abcdef0123456789","effective_date":1234})).await.unwrap();
     assert_eq!(updated["id"], json!(before.id));
     assert_eq!(
         updated["declaration_address"],
         json!(before.declaration_address)
     );
     assert_eq!(updated["declared_by"], "spec://fixture");
-    assert_eq!(updated["retired"], true);
+
     assert_eq!(updated["commit_pin"], "abcdef0123456789");
     assert_eq!(fixture.store.list_sources(&fixture.scope).unwrap().len(), 1);
     fixture.call("apply", json!({"schema_version":2,"spec":"fixture","declared_by":"spec://fixture","sources":[{"key":"policy","name":"Policy after apply","kind":"policy"}],"requirements":[]})).await.unwrap();
@@ -95,7 +95,6 @@ async fn matching_owner_can_edit_metadata_without_moving_or_adopting_the_record(
     assert_eq!(reapplied.declaration_address, before.declaration_address);
     assert_eq!(reapplied.name, "Policy after apply");
     assert_eq!(reapplied.commit_pin.as_deref(), Some("abcdef0123456789"));
-    assert!(!reapplied.retired);
 }
 
 #[tokio::test]

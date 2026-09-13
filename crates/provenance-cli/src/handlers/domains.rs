@@ -1,10 +1,8 @@
 use crate::cli::knowledge::DomainsCommand;
 use crate::output;
+use crate::store::Store;
 use provenance_core::{ScopeId, StableId};
-use provenance_store::{
-    layout::ProvenanceLayout,
-    state_store::{CreateDomainInput, StateStore},
-};
+use provenance_store::state_store::CreateDomainInput;
 
 pub(super) async fn handle(command: DomainsCommand) -> anyhow::Result<()> {
     match command {
@@ -19,26 +17,20 @@ pub(super) async fn handle(command: DomainsCommand) -> anyhow::Result<()> {
             name,
             description,
             color,
-            format,
+            ..
         } => {
-            let domain =
-                StateStore::new(ProvenanceLayout::new(repo)).create_domain(CreateDomainInput {
-                    scope_id: ScopeId::new(scope)?,
-                    id: StableId::new(id)?,
-                    name,
-                    description,
-                    color,
-                })?;
-            output::print(format, &domain)?;
+            let domain = Store::open(repo).create_domain(CreateDomainInput {
+                scope_id: ScopeId::new(scope)?,
+                id: StableId::new(id)?,
+                name,
+                description,
+                color,
+            })?;
+            output::print_json(&domain)?;
         }
-        DomainsCommand::List {
-            repo,
-            scope,
-            format,
-        } => {
-            let domains =
-                StateStore::new(ProvenanceLayout::new(repo)).list_domains(&ScopeId::new(scope)?)?;
-            output::print(format, &domains)?;
+        DomainsCommand::List { repo, scope, .. } => {
+            let domains = Store::open(repo).list_domains(&ScopeId::new(scope)?)?;
+            output::print_json(&domains)?;
         }
     }
     Ok(())

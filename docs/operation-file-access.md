@@ -102,9 +102,11 @@ these control paths and their owners to be trusted.
 Git executable selection, local config/includes, object storage, alternates,
 worktree gitdirs, and mount topology remain trusted. The read command seam removes
 inherited `GIT_*` overrides, disables filesystem monitoring and terminal prompts,
-and supplies `--no-lazy-fetch`. Git versions that lack that flag refuse before
-executing a read; range preparation reports Git unavailable. This prevents an
-implicit fetch for a missing promised object. Diffs also disable external diff
+and supplies `--no-lazy-fetch` when the local git supports it (git 2.47 and
+newer, detected once per process from `git --version`). Git versions that lack
+the flag run without it instead of refusing; on those hosts the seam cannot
+prevent an implicit fetch for a missing promised object, and the security test
+that pins that property runs only where the flag exists. Diffs also disable external diff
 and text conversion, and revision resolution uses `--end-of-options`. Revision
 failures are typed at the command result. No code parses stderr into a domain
 tag. Native diagnostics retain stderr; transport responses omit it.

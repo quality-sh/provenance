@@ -18,7 +18,17 @@ impl StateStore {
                 self.validate_discussion_origin_among(scope, origin, &discussion)?;
             }
         }
+        self.validated_cycle_entries(scope)?;
         self.journal_entries(scope)
+    }
+
+    /// Reads the scope's decision-cycle receipts and refuses one that does not
+    /// name records the scope holds.
+    pub(crate) fn validated_cycle_entries(
+        &self,
+        scope: &ScopeId,
+    ) -> anyhow::Result<Vec<provenance_core::review::CycleEntry>> {
+        super::decision_state::validated_cycle_entries(self, scope)
     }
 
     pub(crate) fn validated_review_entries(
@@ -101,6 +111,12 @@ pub async fn load_rows(tx: &mut Transaction<'_, Sqlite>, bytes: &[u8]) -> anyhow
                     .bind(entry.scope_id.as_str()).bind(entry.id.as_str()).bind(entry.request_id.as_str()).bind(serde_json::to_string(entry)?)
                     .bind(entry.discussion_id.as_str()).bind(entry.thread_id.as_str()).bind(entry.message_id.as_ref().map(provenance_core::StableId::as_str))
                     .bind(crate::state_store::serde_name(&entry.parent.node_type)?).bind(entry.parent.node_id.as_str()).bind(i64::try_from(entry.version)?)
+                    .execute(&mut **tx).await?;
+            }
+            JournalEntry::Cycle(entry) => {
+                sqlx::query("INSERT INTO review_journal(scope_id, requirement_id, id, sequence, request_id, payload) VALUES (?, ?, ?, ?, ?, ?)")
+                    .bind(entry.scope_id.as_str()).bind(entry.requirement_id.as_str()).bind(entry.id.as_str())
+                    .bind(i64::try_from(entry.sequence)?).bind(entry.request_id.as_str()).bind(serde_json::to_string(entry)?)
                     .execute(&mut **tx).await?;
             }
         }

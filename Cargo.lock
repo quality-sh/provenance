@@ -2174,6 +2174,7 @@ dependencies = [
  "predicates",
  "provenance-core",
  "provenance-macros",
+ "provenance-report",
  "provenance-scanner",
  "provenance-ste100",
  "provenance-store",
@@ -2226,6 +2227,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "thiserror 1.0.69",
+ "time",
  "trybuild",
 ]
 
@@ -2233,6 +2235,7 @@ dependencies = [
 name = "provenance-http-client"
 version = "0.2.3"
 dependencies = [
+ "chrono",
  "jsonschema",
  "regress",
  "reqwest",
@@ -2252,6 +2255,22 @@ dependencies = [
  "quote",
  "syn 2.0.117",
  "trybuild",
+]
+
+[[package]]
+name = "provenance-report"
+version = "0.2.3"
+dependencies = [
+ "anyhow",
+ "camino",
+ "provenance-core",
+ "provenance-macros",
+ "provenance-scanner",
+ "provenance-store",
+ "same-file",
+ "serde",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]
@@ -2321,6 +2340,7 @@ dependencies = [
  "sqlx",
  "tempfile",
  "thiserror 1.0.69",
+ "time",
  "tokio",
  "trybuild",
  "uuid",

@@ -1,5 +1,6 @@
 mod artifacts;
 mod collaboration;
+mod content_equality;
 mod graph;
 mod ideation;
 mod ids;
@@ -7,10 +8,12 @@ mod integrations;
 mod manifest;
 mod parsing;
 pub mod projection_row;
+pub mod record_stamps;
 pub mod relations;
 mod services;
 mod shaping;
 mod validation;
+pub use record_stamps::{ArchivedStamp, Stamp};
 
 pub use artifacts::{
     Requirement, RequirementStatus, Resolution, ResolutionInput, ResolutionInputType,
@@ -33,7 +36,9 @@ pub use ideation::lifecycle::{
     validate_proposal_intrinsic, Assertion, AssertionId, AssertionRecord, IdeationAggregate,
     LegacyProposalPolicy, SUPPORTED_SCHEMA_VERSION,
 };
-pub use ideation::proposals::{Proposal, ProposalCard, ProposalTraceability};
+pub use ideation::proposals::{
+    Proposal, ProposalCard, ProposalTraceability, RecordRevisionBinding,
+};
 pub use ideation::synthesis::{
     ConsensusFinding, ContestedClaim, EvidenceGap, MinorityObjection, RequiredHumanDecision,
     SuggestedArtifact, SynthesisPacket, UnsupportedSpeculation,

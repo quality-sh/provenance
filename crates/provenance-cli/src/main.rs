@@ -6,10 +6,10 @@ mod handlers;
 mod legacy_cleanup;
 mod onboarding;
 mod output;
-mod report;
 mod review;
 mod skills;
 mod ste_onboarding;
+mod store;
 mod wiki;
 
 use clap::Parser;

@@ -3,7 +3,7 @@ use std::io::Read as _;
 use provenance_core::protocol::CheckStatementRequest;
 use provenance_macros::rule;
 
-use crate::output::{self, OutputFormat};
+use crate::output;
 
 /// Parses the fixed request shape for one unfinished statement.
 #[rule("rule_ste_sdk_statement_request_schema")]
@@ -19,7 +19,7 @@ fn read_request() -> anyhow::Result<CheckStatementRequest> {
 
 /// Runs the statement preflight without repository discovery or state access.
 #[rule("rule_ste_sdk_statement_repository_independence")]
-pub(super) async fn handle(format: OutputFormat) -> anyhow::Result<()> {
+pub(super) async fn handle() -> anyhow::Result<()> {
     let request = read_request()?;
     let report = provenance_store::operations::catalog::invoke_typed::<
         provenance_store::operations::catalog::CheckStatement,
@@ -28,5 +28,5 @@ pub(super) async fn handle(format: OutputFormat) -> anyhow::Result<()> {
         request,
     )
     .await?;
-    output::print(format, &report)
+    output::print_json(&report)
 }

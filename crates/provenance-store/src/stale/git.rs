@@ -1,6 +1,7 @@
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
 use std::process::{Command, Output};
+use std::sync::OnceLock;
 
 #[derive(Debug)]
 pub struct RevisionFile {
@@ -60,16 +61,44 @@ pub(crate) fn command(repo: &Utf8Path) -> Command {
             command.env_remove(key);
         }
     }
+    command.arg("--no-pager");
+    if no_lazy_fetch_supported() {
+        command.arg("--no-lazy-fetch");
+    }
     command
-        .args([
-            "--no-pager",
-            "--no-lazy-fetch",
-            "-c",
-            "core.fsmonitor=false",
-        ])
+        .args(["-c", "core.fsmonitor=false"])
         .env("GIT_TERMINAL_PROMPT", "0")
         .current_dir(repo);
     command
+}
+
+/// `--no-lazy-fetch` (git 2.47+) blocks implicit promisor fetches while
+/// provenance reads a partial clone. The probe runs once per process, so
+/// modern git keeps that block and older git keeps working.
+fn no_lazy_fetch_supported() -> bool {
+    static SUPPORTED: OnceLock<bool> = OnceLock::new();
+    *SUPPORTED.get_or_init(|| match Command::new("git").arg("--version").output() {
+        Ok(output) if output.status.success() => {
+            version_supports_no_lazy_fetch(&String::from_utf8_lossy(&output.stdout))
+        }
+        // If the version cannot be read, keep the flag: modern git must not
+        // lose it, and old git then fails loudly instead of fetching.
+        _ => true,
+    })
+}
+
+fn version_supports_no_lazy_fetch(version: &str) -> bool {
+    let Some(rest) = version.trim().strip_prefix("git version ") else {
+        return true;
+    };
+    let mut numbers = rest
+        .split(|character: char| !character.is_ascii_digit())
+        .filter(|field| !field.is_empty())
+        .map(str::parse::<u32>);
+    match (numbers.next(), numbers.next()) {
+        (Some(Ok(major)), Some(Ok(minor))) => (major, minor) >= (2, 47),
+        _ => true,
+    }
 }
 
 pub fn resolve_range(
@@ -284,5 +313,29 @@ mod tests {
             parse_hunk_span("+7", '+').unwrap(),
             LineSpan { start: 7, count: 1 }
         );
+    }
+
+    #[test]
+    fn no_lazy_fetch_decision_tracks_the_local_git_capability() {
+        // Modern git keeps the block on implicit promisor fetches.
+        for version in ["2.47.0", "2.47.1", "2.48.0", "2.100.0", "3.0.0"] {
+            assert!(
+                version_supports_no_lazy_fetch(&format!("git version {version}")),
+                "git {version} must keep the flag"
+            );
+        }
+        assert!(version_supports_no_lazy_fetch(
+            "git version 2.47.0.windows.1"
+        ));
+        // Older git drops the flag so its commands keep running.
+        for version in ["2.9", "2.43.0", "2.46.2"] {
+            assert!(
+                !version_supports_no_lazy_fetch(&format!("git version {version}")),
+                "git {version} must drop the flag"
+            );
+        }
+        // Unparseable output keeps the flag rather than losing it.
+        assert!(version_supports_no_lazy_fetch("git"));
+        assert!(version_supports_no_lazy_fetch(""));
     }
 }

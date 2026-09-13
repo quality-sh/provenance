@@ -1,20 +1,17 @@
 use super::export::ScopeExport;
-use crate::output::{self, OutputFormat};
+use crate::output;
+use crate::store::{ScopeSnapshot, Store};
 use camino::Utf8PathBuf;
 use provenance_core::ScopeId;
 use provenance_macros::rule;
 use provenance_store::layout::ProvenanceLayout;
 use provenance_store::state_store::{
     assertion_cites_contribution, assertion_cites_synthesis,
-    ensure_asserted_contribution_unchanged, ensure_asserted_synthesis_unchanged, StateStore,
-    CONTRIBUTION_KIND, SYNTHESIS_KIND,
+    ensure_asserted_contribution_unchanged, ensure_asserted_synthesis_unchanged, ScopeShards,
+    StateStore, CONTRIBUTION_KIND, SYNTHESIS_KIND,
 };
 use provenance_store::statement_analysis::{analyze_changed_statements, violation_error};
 use serde::Serialize;
-
-mod scope_writer;
-
-use scope_writer::write_scope;
 
 #[derive(Serialize)]
 pub struct ImportReport {
@@ -52,9 +49,8 @@ pub(super) fn import_scope(
         + exported.proposal_cards.len()
         + exported.assertion_records.len()
         + exported.dispositions.len();
-    let live_layout = ProvenanceLayout::new(repo);
-    provenance_store::publication::with_repository_publication(&live_layout, || {
-        let store = StateStore::new(live_layout.clone());
+    let store = Store::open(repo);
+    store.with_repository_publication(|| {
         store.ensure_review_portable(&scope_id)?;
         anyhow::ensure!(
             exported
@@ -73,26 +69,27 @@ pub(super) fn import_scope(
             assertions: &exported.assertion_records,
             dispositions: &exported.dispositions,
         })?;
+        let stored = store.snapshot(&scope_id)?;
         ensure_immutable_records_preserved(
             "proposal",
-            &store.list_proposal_definitions(&scope_id)?,
+            &stored.proposal_cards,
             &exported.proposal_cards,
             |record| record.id.as_str(),
         )?;
         ensure_immutable_records_preserved(
             "assertion",
-            &store.list_assertion_records(&scope_id)?,
+            &stored.assertion_records,
             &exported.assertion_records,
             |record| record.id.as_str(),
         )?;
         ensure_immutable_records_preserved(
             "disposition",
-            &store.list_dispositions(&scope_id)?,
+            &stored.dispositions,
             &exported.dispositions,
             |record| record.id.as_str(),
         )?;
-        ensure_asserted_evidence_preserved(&store, &scope_id, &exported)?;
-        apply_import(&live_layout, &scope_id, &exported, dry_run)
+        ensure_asserted_evidence_preserved(&stored, &exported)?;
+        apply_import(store.layout(), &scope_id, &exported, dry_run)
     })?;
     Ok(ImportReport {
         status: "ok",
@@ -167,40 +164,46 @@ fn ensure_asserted_evidence_not_deleted(
 /// the incoming scope carries is judged by the store's freeze, and a record it
 /// omits by the deletion rule above.
 fn ensure_asserted_evidence_preserved(
-    store: &StateStore,
-    scope_id: &ScopeId,
+    stored: &ScopeSnapshot,
     incoming: &ScopeExport,
 ) -> anyhow::Result<()> {
-    let assertions = store.list_assertion_records(scope_id)?;
-    for existing in store.list_contributions(scope_id)? {
+    for existing in &stored.contributions {
         match incoming
             .contributions
             .iter()
             .find(|record| record.id == existing.id)
         {
             Some(replacement) => {
-                ensure_asserted_contribution_unchanged(&existing, replacement, &assertions)?;
+                ensure_asserted_contribution_unchanged(
+                    existing,
+                    replacement,
+                    &stored.assertion_records,
+                )?;
             }
             None => ensure_asserted_evidence_not_deleted(
                 CONTRIBUTION_KIND,
                 existing.id.as_str(),
-                assertion_cites_contribution(&existing, &assertions),
+                assertion_cites_contribution(existing, &stored.assertion_records),
             )?,
         }
     }
-    for existing in store.list_synthesis_packets(scope_id)? {
+    for existing in &stored.synthesis_packets {
         match incoming
             .synthesis_packets
             .iter()
             .find(|record| record.id == existing.id)
         {
             Some(replacement) => {
-                ensure_asserted_synthesis_unchanged(&existing, replacement, &assertions)?;
+                ensure_asserted_synthesis_unchanged(
+                    existing,
+                    replacement,
+                    &stored.assertion_records,
+                )?;
             }
             None => ensure_asserted_evidence_not_deleted(
                 SYNTHESIS_KIND,
                 existing.id.as_str(),
-                assertion_cites_synthesis(&existing, &assertions),
+                assertion_cites_synthesis(existing, &stored.assertion_records),
             )?,
         }
     }
@@ -218,11 +221,33 @@ fn apply_import(
         if staged_scope.exists() {
             std::fs::remove_dir_all(&staged_scope)?;
         }
-        write_scope(layout, scope_id, exported)?;
+        StateStore::new(layout.clone()).import_scope(scope_id, &scope_shards(exported))?;
         let staged_repo = layout.provenance_dir().parent().unwrap().to_path_buf();
         super::check::validate_repository(staged_repo)?;
         ensure_changed_statements_are_clean(live_layout, layout, scope_id)
     })
+}
+
+fn scope_shards(exported: &ScopeExport) -> ScopeShards<'_> {
+    ScopeShards {
+        sources: &exported.sources,
+        domains: &exported.domains,
+        requirements: &exported.requirements,
+        boundaries: &exported.boundaries,
+        topics: &exported.topics,
+        questions: &exported.questions,
+        resolutions: &exported.resolutions,
+        rules: &exported.rules,
+        verification_bindings: &exported.verification_bindings,
+        implementation_bindings: &exported.implementation_bindings,
+        threads: &exported.threads,
+        messages: &exported.messages,
+        contributions: &exported.contributions,
+        synthesis_packets: &exported.synthesis_packets,
+        proposal_cards: &exported.proposal_cards,
+        assertion_records: &exported.assertion_records,
+        dispositions: &exported.dispositions,
+    }
 }
 
 #[rule("rule_ste_import_changed_statement_gate")]
@@ -231,14 +256,16 @@ fn ensure_changed_statements_are_clean(
     staged_layout: &ProvenanceLayout,
     scope_id: &ScopeId,
 ) -> anyhow::Result<()> {
-    let live = StateStore::new(live_layout.clone());
-    let staged = StateStore::new(staged_layout.clone());
+    let live = Store::open(live_layout.provenance_dir().parent().unwrap());
+    let staged = Store::open(staged_layout.provenance_dir().parent().unwrap());
+    let live_snapshot = live.snapshot(scope_id)?;
+    let staged_snapshot = staged.snapshot(scope_id)?;
     let dictionary = provenance_store::dictionary_reference::load_project_dictionary(live_layout);
     let diagnostics = analyze_changed_statements(
-        &live.list_requirements(scope_id)?,
-        &live.list_rules(scope_id)?,
-        &staged.list_requirements(scope_id)?,
-        &staged.list_rules(scope_id)?,
+        &live_snapshot.requirements,
+        &live_snapshot.rules,
+        &staged_snapshot.requirements,
+        &staged_snapshot.rules,
         dictionary.as_ref(),
     );
     if diagnostics.is_empty() {
@@ -253,10 +280,9 @@ pub(super) fn handle(
     scope: String,
     input: Utf8PathBuf,
     dry_run: bool,
-    format: OutputFormat,
 ) -> anyhow::Result<()> {
     let report = import_scope(repo, scope, input, dry_run)?;
-    output::print(format, &report)?;
+    output::print_json(&report)?;
     Ok(())
 }
 

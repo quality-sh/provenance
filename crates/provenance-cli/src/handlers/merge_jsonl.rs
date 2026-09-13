@@ -23,7 +23,6 @@ pub(super) fn handle(
     theirs: &Utf8PathBuf,
     output_path: Option<Utf8PathBuf>,
     shard_path: Option<&Utf8Path>,
-    format: crate::output::OutputFormat,
 ) -> anyhow::Result<()> {
     let target_path = shard_path.or(output_path.as_deref());
     let base_records = target_path.map_or_else(
@@ -48,7 +47,7 @@ pub(super) fn handle(
         if let Err(error) = ensure_changed_statements_are_clean(shard_path, &base_records, records)
         {
             if matches!(outcome, MergeOutcome::Conflicted { .. }) {
-                output::print(format, &outcome)?;
+                output::print_json(&outcome)?;
             }
             return Err(error);
         }
@@ -56,7 +55,7 @@ pub(super) fn handle(
     if let Some(output_path) = output_path {
         provenance_store::jsonl::write_jsonl_atomic(&output_path, records)?;
     }
-    output::print(format, &outcome)?;
+    output::print_json(&outcome)?;
     if let MergeOutcome::Conflicted { conflicts, .. } = &outcome {
         anyhow::bail!(
             "merge left {} conflicting record(s): {}",

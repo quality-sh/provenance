@@ -10,7 +10,7 @@
 //!   non-git cwd degrade to nulls, never to errors.
 
 use crate::cli::{Cli, DogfoodCategory, DogfoodCommand, DogfoodSeverity};
-use crate::output::{self, OutputFormat};
+use crate::output;
 use anyhow::Context;
 use camino::Utf8PathBuf;
 use serde::{Deserialize, Serialize};
@@ -28,6 +28,7 @@ const SESSION_ENV_VARS: &[&str] = &[
     "OPENCODE_SESSION_ID",
 ];
 
+mod simulate;
 mod triage;
 
 #[derive(Serialize, Deserialize)]
@@ -91,9 +92,10 @@ pub(super) fn handle(command: DogfoodCommand, quiet: bool) -> anyhow::Result<()>
         } => note(
             &surface, category, severity, summary, detail, suggestion, quiet,
         ),
-        DogfoodCommand::List { format } => list(format),
-        DogfoodCommand::Report { enrich, format } => report(enrich.as_ref(), format),
+        DogfoodCommand::List { .. } => list(),
+        DogfoodCommand::Report { enrich, .. } => report(enrich.as_ref()),
         DogfoodCommand::Triage { command } => triage::handle(command, quiet),
+        DogfoodCommand::Simulate { keep, dir } => simulate::handle(keep, dir.as_deref()),
     }
 }
 
@@ -150,13 +152,13 @@ fn note(
     Ok(())
 }
 
-fn list(format: OutputFormat) -> anyhow::Result<()> {
+fn list() -> anyhow::Result<()> {
     let notes = read_spool()?;
-    output::print(format, &notes)?;
+    output::print_json(&notes)?;
     Ok(())
 }
 
-fn report(enrich: Option<&Utf8PathBuf>, format: OutputFormat) -> anyhow::Result<()> {
+fn report(enrich: Option<&Utf8PathBuf>) -> anyhow::Result<()> {
     let notes = read_spool()?;
     let sessions = enrich.map(load_enrichment).transpose()?;
 
@@ -189,7 +191,7 @@ fn report(enrich: Option<&Utf8PathBuf>, format: OutputFormat) -> anyhow::Result<
             })
             .collect(),
     };
-    output::print(format, &report)?;
+    output::print_json(&report)?;
     Ok(())
 }
 

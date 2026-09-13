@@ -12,7 +12,7 @@ pub mod workspace;
 
 pub use ideation::{IdeationArtifactKind, SchemaCommand};
 
-use crate::output::OutputFormat;
+use crate::output::{JsonFormat, OutputFormat, ReportFormat};
 use camino::Utf8PathBuf;
 use clap::{Parser, Subcommand, ValueEnum};
 
@@ -87,8 +87,8 @@ pub enum Command {
         /// Compare Git HEAD with this commit instead of its first parent.
         #[arg(long, requires = "strict")]
         base: Option<String>,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     Docs {
         #[command(subcommand)]
@@ -107,8 +107,8 @@ pub enum Command {
     Materialize {
         #[arg(long, default_value = ".")]
         repo: Utf8PathBuf,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     Sources {
         #[command(subcommand)]
@@ -144,8 +144,8 @@ pub enum Command {
         repo: Utf8PathBuf,
         #[arg(long, default_value = "default")]
         scope: String,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     Resolutions {
         #[command(subcommand)]
@@ -161,16 +161,16 @@ pub enum Command {
         repo: Utf8PathBuf,
         #[arg(long, default_value = "default")]
         scope: String,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     Gaps {
         #[arg(long, default_value = ".")]
         repo: Utf8PathBuf,
         #[arg(long, default_value = "default")]
         scope: String,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     Thread {
         #[command(subcommand)]
@@ -197,8 +197,8 @@ pub enum Command {
         repo: Utf8PathBuf,
         #[arg(long, default_value = "default")]
         scope: String,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Markdown)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = ReportFormat::Markdown)]
+        format: ReportFormat,
         #[arg(long)]
         include_threads: bool,
     },
@@ -214,8 +214,8 @@ pub enum Command {
         max_hops: u32,
         #[arg(long)]
         follow_indirect: bool,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     Stale {
         /// Older endpoint of the diff range; supply HEAD as the second endpoint.
@@ -232,24 +232,24 @@ pub enum Command {
         /// Exit non-zero when evidence is touched or gone.
         #[arg(long)]
         strict: bool,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = ReportFormat::Markdown)]
+        format: ReportFormat,
     },
     Health {
         #[arg(long, default_value = ".")]
         repo: Utf8PathBuf,
         #[arg(long, default_value = "default")]
         scope: String,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     Orphans {
         #[arg(long, default_value = ".")]
         repo: Utf8PathBuf,
         #[arg(long, default_value = "default")]
         scope: String,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     Coverage {
         #[command(subcommand)]
@@ -281,8 +281,8 @@ pub enum Command {
         artifact: ideation::IdeationArtifactKind,
         #[arg(long)]
         input: Utf8PathBuf,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     Export {
         #[arg(long, default_value = ".")]
@@ -303,8 +303,8 @@ pub enum Command {
         input: Utf8PathBuf,
         #[arg(long)]
         dry_run: bool,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     MergeJsonl {
         base: Utf8PathBuf,
@@ -317,8 +317,8 @@ pub enum Command {
         /// type the file holds and which write-time checks to re-apply.
         #[arg(long)]
         path: Option<Utf8PathBuf>,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     /// Dev-build-only: record pain-point notes about provenance itself.
     #[cfg(feature = "dogfood")]
@@ -353,8 +353,8 @@ pub enum DogfoodCommand {
     },
     /// Print the local note spool.
     List {
-        #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     /// Aggregate the spool; optionally join session metadata supplied by a
     /// sister system via the provenance-dogfood-enrichment/v1 contract.
@@ -363,8 +363,8 @@ pub enum DogfoodCommand {
         /// (a file path, or "-" for stdin).
         #[arg(long)]
         enrich: Option<Utf8PathBuf>,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     /// Dev-build-only triage of captured notes: mark them handled or reopen
     /// them. State lives beside the spool; the capture history is never
@@ -372,6 +372,18 @@ pub enum DogfoodCommand {
     Triage {
         #[command(subcommand)]
         command: TriageCommand,
+    },
+    /// Dev-build-only: try the whole first-run experience in a throwaway
+    /// sandbox. Serves the STE dictionary from loopback, records no note,
+    /// and touches nothing outside the sandbox.
+    Simulate {
+        /// Keep the sandbox directory after the run for inspection.
+        #[arg(long)]
+        keep: bool,
+        /// Create the sandbox inside this existing directory instead of the
+        /// system temp location.
+        #[arg(long)]
+        dir: Option<Utf8PathBuf>,
     },
 }
 
@@ -400,8 +412,8 @@ pub enum TriageCommand {
         /// Only show notes in this triage state.
         #[arg(long, value_enum, default_value_t = TriageFilter::All)]
         status: TriageFilter,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
 }
 

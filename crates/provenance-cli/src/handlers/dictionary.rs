@@ -1,7 +1,4 @@
-use crate::{
-    cli::dictionary::DictionaryCommand,
-    output::{self, OutputFormat},
-};
+use crate::{cli::dictionary::DictionaryCommand, output};
 use camino::Utf8Path;
 use provenance_ste100::{DictionaryImportIdentity, DictionaryStatus};
 use provenance_store::layout::ProvenanceLayout;
@@ -18,11 +15,11 @@ struct DictionaryImportSummary<'a> {
 
 pub(super) fn handle(command: DictionaryCommand) -> anyhow::Result<()> {
     match command {
-        DictionaryCommand::Import { pdf, repo, format } => import(&pdf, &repo, format),
+        DictionaryCommand::Import { pdf, repo, .. } => import(&pdf, &repo),
     }
 }
 
-fn import(pdf: &Utf8Path, repo: &Utf8Path, format: OutputFormat) -> anyhow::Result<()> {
+fn import(pdf: &Utf8Path, repo: &Utf8Path) -> anyhow::Result<()> {
     let bytes = std::fs::read(pdf)
         .map_err(|error| anyhow::anyhow!("read the dictionary PDF at {pdf}: {error}"))?;
     let import = provenance_ste100::import_dictionary(&bytes)
@@ -40,5 +37,5 @@ fn import(pdf: &Utf8Path, repo: &Utf8Path, format: OutputFormat) -> anyhow::Resu
         approved_rows,
         unapproved_rows: import.entries.len() - approved_rows,
     };
-    output::print(format, &summary)
+    output::print_json(&summary)
 }

@@ -43,3 +43,14 @@ pub use discussion_messages::read_discussion_messages;
 pub use discussion_reads::read_discussions;
 #[cfg(test)]
 mod discussion_recovery_tests;
+
+mod decision_input;
+pub use decision_input::{
+    DecideRequirementReview, ReviewFeedback, SubmitRequirementReview, WithdrawRequirementReview,
+};
+mod decision;
+mod decision_reads;
+mod decision_state;
+
+#[cfg(test)]
+mod decision_tests;

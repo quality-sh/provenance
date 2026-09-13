@@ -1,0 +1,283 @@
+#!/usr/bin/env python3
+"""Opt-in Cargo entry point for Provenance's remote verification checks."""
+
+import fcntl
+import hashlib
+import json
+import os
+import platform
+import re
+import secrets
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+
+CHECK_JOBS = {"build": "Build", "check": "Check", "clippy": "Clippy", "test": "Test"}
+WORKFLOW = "agent-cargo.yml"
+
+
+def command(args, cwd=None, env=None, input_text=None):
+    result = subprocess.run(
+        args, cwd=cwd, env=env, input=input_text, text=True, capture_output=True, check=False
+    )
+    if result.returncode:
+        raise RuntimeError(result.stderr.strip() or result.stdout.strip() or f"{args[0]} failed")
+    return result.stdout.strip()
+
+
+def git(root, *args, env=None):
+    return command(["git", *args], cwd=root, env=env)
+
+
+def real_cargo():
+    wrapper = Path(__file__).resolve()
+    paths = [
+        part for part in os.environ.get("PATH", "").split(os.pathsep)
+        if Path(part).resolve() != wrapper.parent and (Path(part) / "cargo").resolve() != wrapper
+    ]
+    found = shutil.which("cargo", path=os.pathsep.join(paths))
+    if found is None:
+        raise RuntimeError("Native cargo is not available outside the agent shim")
+    return found
+
+
+def provenance_root():
+    try:
+        root = Path(command(["git", "rev-parse", "--show-toplevel"]))
+        manifest = (root / "Cargo.toml").read_text()
+    except (RuntimeError, OSError):
+        return None
+    if 'repository = "https://github.com/quality-sh/provenance"' not in manifest:
+        return None
+    if not (root / ".github/workflows/agent-cargo.yml").is_file():
+        return None
+    return root
+
+
+def snapshot(root):
+    untracked = git(
+        root,
+        "ls-files", "--others", "--exclude-standard", "--", ".",
+        ":(exclude)target", ":(exclude).beads",
+    )
+    if untracked:
+        raise RuntimeError(
+            "Untracked files cannot enter a public CI snapshot automatically. "
+            f"Stage intended new files first: {untracked}"
+        )
+    head = git(root, "rev-parse", "HEAD")
+    with tempfile.TemporaryDirectory(prefix="provenance-agent-cargo-") as directory:
+        env = {**os.environ, "GIT_INDEX_FILE": str(Path(directory) / "index")}
+        git(root, "read-tree", "HEAD", env=env)
+        git(root, "add", "-A", "--", ".", ":(exclude)target", ":(exclude).beads", env=env)
+        tree = git(root, "write-tree", env=env)
+    if tree == git(root, "rev-parse", "HEAD^{tree}"):
+        return head
+    stable_env = {
+        **os.environ,
+        "GIT_AUTHOR_NAME": "Provenance CI snapshot",
+        "GIT_AUTHOR_EMAIL": "agent-ci@users.noreply.github.com",
+        "GIT_AUTHOR_DATE": "2000-01-01T00:00:00+0000",
+        "GIT_COMMITTER_NAME": "Provenance CI snapshot",
+        "GIT_COMMITTER_EMAIL": "agent-ci@users.noreply.github.com",
+        "GIT_COMMITTER_DATE": "2000-01-01T00:00:00+0000",
+    }
+    return git(root, "commit-tree", tree, "-p", head, "-m", "Provenance CI snapshot", env=stable_env)
+
+
+def state_file(root):
+    configured = os.environ.get("PROVENANCE_CI_STATE_DIR")
+    if configured:
+        base = Path(configured)
+    else:
+        common = git(root, "rev-parse", "--git-common-dir")
+        base = (root / common).resolve() / "agent-cargo"
+    base.mkdir(parents=True, exist_ok=True)
+    return base / "runs.json"
+
+
+def push_snapshot(root, sha, repository, branch):
+    push_url = os.environ.get("PROVENANCE_CI_PUSH_URL", f"https://github.com/{repository}.git")
+    git(root, "push", push_url, f"{sha}:refs/heads/{branch}")
+
+
+def pushed_run(root, sha, repository, command_key):
+    branch = f"agent-ci/{command_key}/{sha}-{secrets.token_hex(4)}"
+    push_snapshot(root, sha, repository, branch)
+    deadline = time.monotonic() + 120
+    while time.monotonic() < deadline:
+        try:
+            raw = command([
+                "gh", "run", "list", "--repo", repository, "--branch", branch,
+                "--event", "push", "--json", "databaseId,headSha,workflowName", "--limit", "20",
+            ])
+            runs = json.loads(raw)
+            match = next((run for run in runs if run["headSha"] == sha and run["workflowName"] == "Agent Cargo verification"), None)
+            if match:
+                return match["databaseId"]
+        except (RuntimeError, ValueError, KeyError):
+            pass
+        time.sleep(2)
+    raise RuntimeError(f"No Actions run appeared for {branch}; check the repository's Actions tab")
+
+
+def dispatch(root, sha, repository, command_json, command_key):
+    push_snapshot(root, sha, repository, f"agent-snapshot/{sha}")
+    payload = json.dumps(
+        {
+            "ref": "main",
+            "inputs": {
+                "snapshot_sha": sha,
+                "command_json": command_json,
+                "command_key": command_key,
+            },
+        }
+    )
+    response = command(
+        [
+            "gh", "api", "--method", "POST", "-H", "X-GitHub-Api-Version: 2026-03-10",
+            f"repos/{repository}/actions/workflows/{WORKFLOW}/dispatches", "--input", "-",
+        ],
+        input_text=payload,
+    )
+    run_id = json.loads(response).get("workflow_run_id")
+    if not isinstance(run_id, int) or run_id <= 0:
+        raise RuntimeError("GitHub did not return a workflow run ID")
+    return run_id
+
+
+def run_id_for_snapshot(root, sha, repository, args, artifact=False):
+    command_json = "" if len(args) == 1 else json.dumps(args, separators=(",", ":"))
+    command_key = (
+        "build-artifact" if artifact else args[0] if not command_json
+        else hashlib.sha256(command_json.encode()).hexdigest()[:16]
+    )
+    path = state_file(root)
+    with (path.parent / "runs.lock").open("a+") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            runs = json.loads(path.read_text()) if path.exists() else {}
+            key = f"{repository}:{sha}:{command_key}"
+            if key not in runs or os.environ.get("PROVENANCE_CI_RERUN") == "1":
+                runs[key] = (
+                    dispatch(root, sha, repository, command_json, command_key)
+                    if command_json else pushed_run(root, sha, repository, command_key)
+                )
+                temporary = path.with_suffix(".tmp")
+                temporary.write_text(json.dumps(runs))
+                temporary.replace(path)
+            return runs[key]
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+def show_result(run_id, repository, check, custom, artifact=False):
+    url = f"https://github.com/{repository}/actions/runs/{run_id}"
+    print(f"Remote Cargo: {check} in {url}", flush=True)
+    command(["gh", "run", "watch", str(run_id), "--repo", repository])
+    raw = command(["gh", "run", "view", str(run_id), "--json", "jobs", "--repo", repository])
+    jobs = json.loads(raw)["jobs"]
+    name = "Command" if custom else CHECK_JOBS[check]
+    job = next((item for item in jobs if item["name"] == name), None)
+    if job is None:
+        raise RuntimeError(f"The remote {check} job did not run: {url}")
+    if job["conclusion"] != "success":
+        try:
+            logs = command(
+                ["gh", "run", "view", str(run_id), "--job", str(job["databaseId"]), "--log-failed", "--repo", repository]
+            )
+        except RuntimeError:
+            logs = f"Failed-step logs are unavailable; inspect {url}"
+        if logs:
+            print(logs)
+        print(f"Remote Cargo: {check} failed ({job['conclusion']})")
+        return 1
+    print(f"Remote Cargo: {check} passed")
+    if check == "build" and not artifact:
+        print("Build outputs remain on the CI runner; no local target files were created.")
+    return 0
+
+
+def cleanup_completed_branch(root, sha, run_id, repository):
+    raw = command([
+        "gh", "run", "view", str(run_id), "--json", "headBranch,headSha,status", "--repo", repository,
+    ])
+    run = json.loads(raw)
+    branch = run.get("headBranch")
+    if run.get("status") != "completed" or run.get("headSha") != sha:
+        return
+    if not isinstance(branch, str) or not re.fullmatch(rf"agent-ci/(build|build-artifact|check|clippy|test)/{sha}-[0-9a-f]{{8}}", branch):
+        return
+    push_url = os.environ.get("PROVENANCE_CI_PUSH_URL", f"https://github.com/{repository}.git")
+    ref = f"refs/heads/{branch}"
+    remote = git(root, "ls-remote", "--heads", push_url, ref)
+    if not remote:
+        return
+    if remote.split()[0] != sha:
+        raise RuntimeError(f"Remote branch changed; leaving {branch} in place")
+    git(root, "push", f"--force-with-lease={ref}:{sha}", push_url, f":{ref}")
+
+
+def download_build(root, sha, run_id, repository):
+    target_dir = root / "target" / "debug"
+    if (root / "target").is_symlink():
+        git_dir = (root / git(root, "rev-parse", "--git-dir")).resolve()
+        target_dir = git_dir / "agent-cargo" / "bin" / sha
+    target_dir.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="agent-cargo-build-", dir=target_dir) as directory:
+        temporary = Path(directory)
+        download_dir = temporary / "download"
+        command([
+            "gh", "run", "download", str(run_id), "--repo", repository,
+            "--name", f"provenance-dev-{sha}", "--dir", str(download_dir),
+        ])
+        downloaded = download_dir / "provenance"
+        if not downloaded.is_file() or downloaded.is_symlink():
+            raise RuntimeError("The Actions artifact does not contain a provenance binary")
+        staged = temporary / "provenance"
+        shutil.copyfile(downloaded, staged)
+        staged.chmod(0o755)
+        command([str(staged), "--version"], cwd=root)
+        destination = target_dir / "provenance"
+        os.replace(staged, destination)
+    print(f"Remote Cargo: binary available at {destination}")
+
+
+def main():
+    args = sys.argv[1:]
+    root = provenance_root()
+    if root is None or not args or args[0] not in CHECK_JOBS or os.environ.get("PROVENANCE_CI_LOCAL") == "1":
+        native = real_cargo()
+        os.execv(native, [native, *args])
+    artifact = os.environ.get("PROVENANCE_CI_ARTIFACT") == "1"
+    if artifact and args != ["build"]:
+        raise RuntimeError("PROVENANCE_CI_ARTIFACT=1 requires plain cargo build")
+    if artifact and (platform.system() != "Linux" or platform.machine() not in ("x86_64", "AMD64")):
+        raise RuntimeError("The dev binary requires a Linux x86_64 host")
+    repository = os.environ.get("PROVENANCE_CI_REPO", "quality-sh/provenance")
+    sha = snapshot(root)
+    print(f"Remote Cargo: verifying snapshot {sha}", flush=True)
+    run_id = run_id_for_snapshot(root, sha, repository, args, artifact)
+    result = show_result(run_id, repository, args[0], len(args) != 1, artifact)
+    try:
+        if result == 0 and artifact:
+            download_build(root, sha, run_id, repository)
+    finally:
+        if len(args) == 1:
+            try:
+                cleanup_completed_branch(root, sha, run_id, repository)
+            except (RuntimeError, OSError, ValueError, KeyError) as error:
+                print(f"Remote Cargo: branch cleanup skipped: {error}", file=sys.stderr)
+    return result
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except (RuntimeError, OSError, ValueError, KeyError, json.JSONDecodeError) as error:
+        print(f"Remote Cargo: {error}", file=sys.stderr)
+        sys.exit(2)

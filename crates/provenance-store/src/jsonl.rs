@@ -46,10 +46,7 @@ pub fn to_stable_json<T: Serialize>(value: &T) -> anyhow::Result<String> {
 }
 
 pub fn write_jsonl_atomic<T: Serialize>(path: &Utf8Path, records: &[T]) -> anyhow::Result<()> {
-    with_state_publication(path, || {
-        crate::review::guard::protect_rows(path, records)?;
-        write_jsonl_atomic_unlocked(path, records)
-    })
+    with_state_publication(path, || write_jsonl_atomic_under_publication(path, records))
 }
 
 pub fn mutate_jsonl_locked<T, R>(
@@ -96,6 +93,15 @@ fn read_jsonl_unlocked<T: DeserializeOwned>(path: &Utf8Path) -> anyhow::Result<V
         records.push(serde_json::from_value(value)?);
     }
     Ok(records)
+}
+
+/// Writes one JSONL shard while the caller holds the publication lock.
+pub(crate) fn write_jsonl_atomic_under_publication<T: Serialize>(
+    path: &Utf8Path,
+    records: &[T],
+) -> anyhow::Result<()> {
+    crate::review::guard::protect_rows(path, records)?;
+    write_jsonl_atomic_unlocked(path, records)
 }
 
 fn write_jsonl_atomic_unlocked<T: Serialize>(path: &Utf8Path, records: &[T]) -> anyhow::Result<()> {

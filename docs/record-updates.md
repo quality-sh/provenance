@@ -9,10 +9,10 @@ and creation origin. It does not write a new canonical record shape.
 
 | Operation | Fields that can change | Nullable fields that can be cleared |
 | --- | --- | --- |
-| `update-source` | `name`, `source_type`, `url`, `reference`, `commit_pin`, `effective_date`, `review_date`, `retired` | `url`, `reference`, `commit_pin`, `effective_date`, `review_date` |
+| `update-source` | `name`, `source_type`, `url`, `reference`, `commit_pin`, `effective_date`, `review_date` | `url`, `reference`, `commit_pin`, `effective_date`, `review_date` |
 | `update-resolution` | `title`, `position`, `rationale`, `status`, `context`, `enforcement`, `confidence`, `inputs`, `made_by`, `approved_by`, `approved_at`, `review_on` | `context`, `enforcement`, `confidence`, `made_by`, `approved_by`, `approved_at`, `review_on` |
-| `update-requirement` | `statement`, `description`, `fog`, `status`, `domain_id`, `retired` | `description`, `fog`, `domain_id` |
-| `update-rule` | `name`, `description`, `statement`, `status`, `severity`, `source_document`, `source_section`, `retired` | `name`, `description`, `source_document`, `source_section` |
+| `update-requirement` | `statement`, `description`, `fog`, `status`, `domain_id` | `description`, `fog`, `domain_id` |
+| `update-rule` | `name`, `description`, `statement`, `status`, `severity`, `source_document`, `source_section`, `archived_in_commit` | `name`, `description`, `source_document`, `source_section` |
 | `update-domain` | `name`, `description`, `color` | `description`, `color` |
 | `update-boundary` | `statement`, `source_ref` | `source_ref` |
 | `update-topic` | `title`, `status`, `links` | None |
@@ -42,7 +42,7 @@ For a Source, Requirement, or Rule owned by a typed declaration, the request
 must supply the exact existing `declared_by` value. For a manual record,
 omit it. This field is an ownership precondition, not an assignment. Updates
 cannot adopt a record, change its owner, or move its declaration address.
-`apply` retains its existing reconciliation, adoption, move, and retirement
+`apply` retains its existing reconciliation, adoption, move, and deletion
 behavior. A later declaration application can restate the fields it owns.
 
 A Requirement statement change uses the statement write gate and raises the
@@ -51,10 +51,10 @@ write gate. Reviews retain their existing before/after values and clearing
 behavior. Requirement and review publication uses more than one shard; a
 failure after publication starts reports `uncertain_write`.
 
-`retired` uses the existing Source, Requirement, and Rule retirement field.
-Rule deprecation and archival use the existing `status` values. Neither
-operation deletes records or their relationships. Other record kinds gain
-no retirement state. Topic status changes clear claims when the topic closes.
+Rule deprecation and archival use the existing `status` values. An archived
+Rule must have `archived_in_commit`; other Rule statuses must not have it.
+Record updates do not delete records or their relationships. Topic status
+changes clear claims when the topic closes.
 Question status changes retain the native answer requirement and clear
 claims when the question leaves its claimable state.
 

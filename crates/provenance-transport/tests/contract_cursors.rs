@@ -71,7 +71,7 @@ async fn native_http_and_mcp_share_cursor_pages_and_refusals() {
         assert_eq!(status, 200, "{next}");
         assert!(next["next_cursor"].is_null());
         let params = CallToolRequestParams::new(operation).with_arguments(
-            json!({"protocol_version":8,"call":continuation})
+            json!({"protocol_version":9,"call":continuation})
                 .as_object()
                 .unwrap()
                 .clone(),

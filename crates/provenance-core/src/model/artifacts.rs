@@ -13,25 +13,24 @@ pub use kinds::{
     RequirementStatus, ResolutionInputType, ResolutionStatus, RuleSeverity, RuleStatus, SourceType,
 };
 
-#[allow(clippy::trivially_copy_pass_by_ref)]
-const fn is_false(value: &bool) -> bool {
-    !*value
-}
-
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Relations, ProjectionRow)]
+#[derive(Debug, Clone, Eq, Serialize, Deserialize, Relations, ProjectionRow)]
 #[table("sources")]
 pub struct Source {
     pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
     pub id: StableId,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[column(json)]
+    pub created: Option<super::Stamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[column(json)]
+    pub updated: Option<super::Stamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub declared_by: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[column(json)]
     pub declaration_address: Option<super::DeclarationAddress>,
-    #[serde(default, skip_serializing_if = "is_false")]
-    pub retired: bool,
     pub name: String,
     #[serde(alias = "sourceType")]
     pub source_type: SourceType,
@@ -82,19 +81,23 @@ pub struct SourceReference {
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Relations, ProjectionRow)]
+#[derive(Debug, Clone, Eq, Serialize, Deserialize, Relations, ProjectionRow)]
 #[table("requirements")]
 pub struct Requirement {
     pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
     pub id: StableId,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[column(json)]
+    pub created: Option<super::Stamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[column(json)]
+    pub updated: Option<super::Stamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub declared_by: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[column(json)]
     pub declaration_address: Option<super::DeclarationAddress>,
-    #[serde(default, skip_serializing_if = "is_false")]
-    pub retired: bool,
     pub statement: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
@@ -174,12 +177,18 @@ impl TryFrom<ResolutionInputFields> for ResolutionInput {
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Relations, ProjectionRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, Relations, ProjectionRow)]
 #[table("resolutions")]
 pub struct Resolution {
     pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
     pub id: StableId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[column(json)]
+    pub created: Option<super::Stamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[column(json)]
+    pub updated: Option<super::Stamp>,
     pub title: String,
     pub position: String,
     pub rationale: String,
@@ -231,25 +240,36 @@ pub struct Resolution {
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Relations, ProjectionRow)]
+#[derive(Debug, Clone, Eq, Serialize, Deserialize, Relations, ProjectionRow)]
+#[cfg_attr(feature = "schema", schemars(extend("x-provenance-validation-only-any-of" = true, "anyOf" = serde_json::json!([
+    {"properties":{"status":{"enum":["draft","review","active","deprecated"]},"archived_in_commit":{"type":"null"}},"required":["status"]},
+    {"properties":{"status":{"const":"archived"},"archived_in_commit":{"type":"object"}},"required":["status","archived_in_commit"]}
+]))))]
 #[table("rules")]
 pub struct Rule {
     pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
     pub id: StableId,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[column(json)]
+    pub created: Option<super::Stamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[column(json)]
+    pub updated: Option<super::Stamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub declared_by: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[column(json)]
     pub declaration_address: Option<super::DeclarationAddress>,
-    #[serde(default, skip_serializing_if = "is_false")]
-    pub retired: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     pub statement: String,
     pub status: RuleStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[column(json)]
+    pub archived_in_commit: Option<super::ArchivedStamp>,
     pub severity: RuleSeverity,
     #[relation(target = Requirement, flow = target_upstream, required)]
     #[serde(

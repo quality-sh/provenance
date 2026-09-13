@@ -58,7 +58,7 @@ pub fn build(
     Ok(())
 }
 
-/// JSON/JSONL get the full machine-readable report. The human-facing
+/// JSON and JSONL get the full machine-readable report. The human-facing
 /// formats (table, the CLI default, and friends) get a short summary
 /// instead of a dump of every page -- with an explicit list of any pages
 /// that failed to write.
@@ -68,7 +68,8 @@ fn print_build_report(
     repo: &Utf8PathBuf,
 ) -> anyhow::Result<()> {
     match format {
-        OutputFormat::Json | OutputFormat::Jsonl => output::print(format, report)?,
+        OutputFormat::Json => output::print_json(report)?,
+        OutputFormat::Jsonl => println!("{}", serde_json::to_string(report)?),
         OutputFormat::Table | OutputFormat::Markdown | OutputFormat::Toon => {
             let written = report.page_count;
             let noun = if written == 1 { "page" } else { "pages" };

@@ -1,12 +1,10 @@
 use super::common::{parse_json_arg, warn_if_skills_missing};
-use super::references;
+use super::refs;
 use crate::cli::shaping::QuestionsCommand;
 use crate::output;
+use crate::store::Store;
 use provenance_core::{ArtifactLink, QuestionStatus, ResolutionMethod, ScopeId, StableId};
-use provenance_store::{
-    layout::ProvenanceLayout,
-    state_store::{CreateQuestionInput, StateStore},
-};
+use provenance_store::state_store::CreateQuestionInput;
 
 #[allow(clippy::too_many_lines)]
 pub(super) async fn handle(command: QuestionsCommand, quiet: bool) -> anyhow::Result<()> {
@@ -23,35 +21,32 @@ pub(super) async fn handle(command: QuestionsCommand, quiet: bool) -> anyhow::Re
             links_json,
             resolution_id,
             contradicts,
-            format,
+            format: _,
         } => {
             warn_if_skills_missing(&repo, quiet)?;
-            let question = StateStore::new(ProvenanceLayout::new(repo)).create_question(
-                CreateQuestionInput {
-                    scope_id: ScopeId::new(scope)?,
-                    id: StableId::new(id)?,
-                    topic_id: StableId::new(topic_id)?,
-                    question,
-                    resolution_method: ResolutionMethod::parse(&method)?,
-                    status: QuestionStatus::parse(&status)?,
-                    answer,
-                    links: parse_json_arg::<Vec<ArtifactLink>>("links-json", &links_json)?,
-                    resolution_id: resolution_id.map(StableId::new).transpose()?,
-                    contradicts: contradicts.map(StableId::new).transpose()?,
-                },
-            )?;
-            output::print(format, &question)?;
+            let question = Store::open(repo).create_question(CreateQuestionInput {
+                scope_id: ScopeId::new(scope)?,
+                id: StableId::new(id)?,
+                topic_id: StableId::new(topic_id)?,
+                question,
+                resolution_method: ResolutionMethod::parse(&method)?,
+                status: QuestionStatus::parse(&status)?,
+                answer,
+                links: parse_json_arg::<Vec<ArtifactLink>>("links-json", &links_json)?,
+                resolution_id: resolution_id.map(StableId::new).transpose()?,
+                contradicts: contradicts.map(StableId::new).transpose()?,
+            })?;
+            output::print_json(&question)?;
         }
-        QuestionsCommand::Contradicts { command } => references::question_contradicts(command)?,
+        QuestionsCommand::Contradicts { command } => refs::question_contradicts(command).await?,
         QuestionsCommand::List {
             repo,
             scope,
-            format,
+            format: _,
         } => {
             warn_if_skills_missing(&repo, quiet)?;
-            let questions = StateStore::new(ProvenanceLayout::new(repo))
-                .list_questions(&ScopeId::new(scope)?)?;
-            output::print(format, &questions)?;
+            let questions = Store::open(repo).list_questions(&ScopeId::new(scope)?)?;
+            output::print_json(&questions)?;
         }
         QuestionsCommand::Update {
             repo,
@@ -63,7 +58,7 @@ pub(super) async fn handle(command: QuestionsCommand, quiet: bool) -> anyhow::Re
             links_json,
             resolution_id,
             fields_json,
-            format,
+            format: _,
         } => {
             warn_if_skills_missing(&repo, quiet)?;
             let fields_json = if let Some(fields) = fields_json {
@@ -91,7 +86,7 @@ pub(super) async fn handle(command: QuestionsCommand, quiet: bool) -> anyhow::Re
                     scope,
                     id,
                     fields_json,
-                    format,
+                    format: output::JsonFormat::Json,
                 },
             )
             .await?;
@@ -101,26 +96,26 @@ pub(super) async fn handle(command: QuestionsCommand, quiet: bool) -> anyhow::Re
             scope,
             id,
             actor,
-            format,
+            format: _,
         } => {
             warn_if_skills_missing(&repo, quiet)?;
-            let question = StateStore::new(ProvenanceLayout::new(repo)).claim_question(
+            let question = Store::open(repo).claim_question(
                 &ScopeId::new(scope)?,
                 &StableId::new(id)?,
                 &actor,
             )?;
-            output::print(format, &question)?;
+            output::print_json(&question)?;
         }
         QuestionsCommand::Release {
             repo,
             scope,
             id,
-            format,
+            format: _,
         } => {
             warn_if_skills_missing(&repo, quiet)?;
-            let question = StateStore::new(ProvenanceLayout::new(repo))
-                .release_question(&ScopeId::new(scope)?, &StableId::new(id)?)?;
-            output::print(format, &question)?;
+            let question =
+                Store::open(repo).release_question(&ScopeId::new(scope)?, &StableId::new(id)?)?;
+            output::print_json(&question)?;
         }
         QuestionsCommand::Answer {
             repo,
@@ -128,16 +123,16 @@ pub(super) async fn handle(command: QuestionsCommand, quiet: bool) -> anyhow::Re
             id,
             answer,
             resolution_id,
-            format,
+            format: _,
         } => {
             warn_if_skills_missing(&repo, quiet)?;
-            let question = StateStore::new(ProvenanceLayout::new(repo)).answer_question(
+            let question = Store::open(repo).answer_question(
                 &ScopeId::new(scope)?,
                 &StableId::new(id)?,
                 answer,
                 resolution_id.map(StableId::new).transpose()?,
             )?;
-            output::print(format, &question)?;
+            output::print_json(&question)?;
         }
     }
     Ok(())

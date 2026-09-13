@@ -263,3 +263,50 @@ async fn empty_state_materialization_stores_no_revision_and_no_instance() {
     assert_eq!(revisions, 0);
     assert_eq!(instances, 0);
 }
+
+#[tokio::test]
+async fn record_stamps_survive_projection_without_changing_content_digests() {
+    let (_dir, layout, scope) = seeded_layout();
+    let store = crate::state_store::StateStore::new(layout.clone());
+    let before = family_content_digests(&store, std::slice::from_ref(&scope)).unwrap();
+    for (family, table) in [
+        (ProjectionFamily::Sources, "sources"),
+        (ProjectionFamily::Requirements, "requirements"),
+        (ProjectionFamily::Rules, "rules"),
+        (ProjectionFamily::Resolutions, "resolutions"),
+    ] {
+        let path = family.shard_path(&layout, &scope);
+        let lines = std::fs::read_to_string(&path).unwrap();
+        let mut records = Vec::new();
+        for line in lines.lines() {
+            let mut record: serde_json::Value = serde_json::from_str(line).unwrap();
+            record["created"] =
+                serde_json::json!({"commit":"a".repeat(40),"at":"2026-09-12T00:00:00Z"});
+            record["updated"] =
+                serde_json::json!({"commit":"b".repeat(64),"at":"2026-09-12T01:00:00Z"});
+            records.push(serde_json::to_string(&record).unwrap());
+        }
+        std::fs::write(path, records.join("\n") + "\n").unwrap();
+        materialize_state(&layout).await.unwrap();
+        let pool = open_cache(&layout).await.unwrap();
+        let (created, updated): (String, String) =
+            sqlx::query_as(&format!("SELECT created, updated FROM {table} LIMIT 1"))
+                .fetch_one(pool.pool())
+                .await
+                .unwrap();
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&created).unwrap()["commit"],
+            "a".repeat(40)
+        );
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&updated).unwrap()["commit"],
+            "b".repeat(64)
+        );
+        pool.close().await.unwrap();
+    }
+    let after = family_content_digests(&store, &[scope]).unwrap();
+    assert_eq!(
+        serde_json::to_value(before).unwrap(),
+        serde_json::to_value(after).unwrap()
+    );
+}

@@ -3,6 +3,13 @@ use super::*;
 #[cfg(unix)]
 #[test]
 fn missing_promised_blob_never_starts_a_remote_helper() {
+    if !no_lazy_fetch_supported() {
+        eprintln!(
+            "skipping: git lacks --no-lazy-fetch (2.47+), so it cannot block \
+             implicit promisor fetches; CI enforces this property on git 2.47+"
+        );
+        return;
+    }
     let dir = tempfile::tempdir().unwrap();
     let root = Utf8Path::from_path(dir.path()).unwrap();
     let git = |args: &[&str]| {

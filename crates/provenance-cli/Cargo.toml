@@ -34,6 +34,7 @@ jsonschema.workspace = true
 pulldown-cmark.workspace = true
 provenance-core.workspace = true
 provenance-macros.workspace = true
+provenance-report.workspace = true
 provenance-scanner.workspace = true
 provenance-ste100.workspace = true
 provenance-store.workspace = true

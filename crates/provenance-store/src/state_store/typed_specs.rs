@@ -1,8 +1,9 @@
-use crate::review::guard::protect_requirements;
-use crate::write_error::{publication_started, SourceFailure, WriteFailure};
+use crate::write_error::{SourceFailure, WriteFailure};
 mod adoption;
+mod cascade;
+mod deletion;
 mod identity;
-mod lifecycle;
+mod publication;
 mod reconcile;
 mod rule_addresses;
 
@@ -16,10 +17,9 @@ use provenance_macros::rule;
 
 use super::requirement_reviews;
 use super::{
-    ReconcileState, ReconciledResource, StateStore, TypedDeclarationKind, TypedFieldChange,
-    TypedRuleInput, TypedSpecInput, TypedSpecResult,
+    CascadedResource, ReconcileState, ReconciledResource, StateStore, TypedDeclarationKind,
+    TypedFieldChange, TypedRuleInput, TypedSpecInput, TypedSpecResult,
 };
-use crate::shards;
 use identity::{
     declaration_ids, normalize_rule_relationships, owned_declaration_ids, requirement_identity,
     rule_declaration_ids, source_identity, validate_references,
@@ -52,6 +52,15 @@ pub(super) struct DesiredTypedGraph<'a> {
     pub(super) owner: &'a str,
     pub(super) rules: &'a [TypedRuleInput],
     pub(super) rule_ids: &'a BTreeMap<DeclarationAddress, StableId>,
+}
+
+struct DesiredImplementations<'a> {
+    spec: &'a str,
+    owner: &'a str,
+    rules: &'a [TypedRuleInput],
+    rule_ids: &'a BTreeMap<DeclarationAddress, StableId>,
+    adopted_rule_ids: &'a BTreeSet<String>,
+    deleted_rule_ids: &'a BTreeSet<String>,
 }
 
 #[derive(Clone, Copy)]
@@ -107,7 +116,7 @@ fn desired_typed_ids(
 impl StateStore {
     /// Reconciles one language-owned desired-state document with canonical state.
     ///
-    /// Omitted owned records retire in place, while records from another owner
+    /// Omitted owned records are deleted, while records from another owner
     /// remain untouched. Moves replace only active relationships owned by this
     /// spec, so applying one spec cannot take over another integration's or a
     /// human's records.
@@ -149,17 +158,15 @@ impl StateStore {
             }
             return Ok(spec_result(
                 input.declared_by,
-                Vec::new(),
-                Vec::new(),
                 ownership.into_conflicts(),
+                Vec::new(),
                 Vec::new(),
             ));
         }
         let adopted_rule_ids = adopted_rule_ids(&input);
-
         let rule_relationships = input.rules.clone();
         let spec = input.spec;
-        let (sources, source_resources) = reconcile_sources(
+        let (mut sources, source_resources) = reconcile_sources(
             current.sources,
             &spec,
             scope_id,
@@ -167,7 +174,7 @@ impl StateStore {
             input.sources,
             &ids.sources,
         )?;
-        let (requirements, requirement_resources) = reconcile_requirements(
+        let (mut requirements, requirement_resources) = reconcile_requirements(
             current.requirements,
             &spec,
             scope_id,
@@ -176,7 +183,7 @@ impl StateStore {
             &ids.requirements,
             &ids.sources,
         )?;
-        let (rules, mut rule_resources) = reconcile_rules(
+        let (mut rules, mut rule_resources) = reconcile_rules(
             current.rules,
             &spec,
             scope_id,
@@ -185,61 +192,76 @@ impl StateStore {
             &ids.rules,
             &ids.requirements,
         )?;
-        ensure_resolutions_exist(self, scope_id, &requirements, &rules)?;
-        ensure_acyclic(&requirements)?;
-        let graph = DesiredTypedGraph {
-            spec: &spec,
-            owner: &input.declared_by,
-            rules: &rule_relationships,
-            rule_ids: &ids.rules,
-        };
-        let implementation_reconciliation = super::implementation_bindings::reconcile(
+        let deleted_resources =
+            all_resources(&source_resources, &requirement_resources, &rule_resources);
+        let cascade = cascade::Cascade::prepare(
             self,
             scope_id,
-            graph,
-            &rules,
-            &adopted_rule_ids,
+            &deleted_resources,
+            &mut sources,
+            &mut requirements,
+            &mut rules,
         )?;
-        attach_implementation_changes(&mut rule_resources, &implementation_reconciliation.changes);
+        ensure_resolutions_exist(self, scope_id, &requirements, &rules)?;
+        ensure_acyclic(&requirements)?;
+        let implementation_reconciliation = reconcile_implementations(
+            self,
+            scope_id,
+            &DesiredImplementations {
+                spec: &spec,
+                owner: &input.declared_by,
+                rules: &rule_relationships,
+                rule_ids: &ids.rules,
+                adopted_rule_ids: &adopted_rule_ids,
+                deleted_rule_ids: &cascade.rules,
+            },
+            &rules,
+            &mut rule_resources,
+        )?;
+        let mut resources =
+            all_resources(&source_resources, &requirement_resources, &rule_resources);
+        let cascade_resources = cascade.report(&mut resources);
         let mut result = spec_result(
-            input.declared_by.clone(),
-            source_resources,
-            requirement_resources.clone(),
-            rule_resources.clone(),
+            input.declared_by,
+            resources,
+            cascade_resources,
             implementation_reconciliation.active,
         );
-        let dictionary = crate::dictionary_reference::load_project_dictionary(&self.layout);
-        result.diagnostics = super::typed_statement_policy::analyze_typed_statements(
-            &result.resources,
-            &requirements,
-            &rules,
-            dictionary.as_ref(),
-        );
+        self.analyze_typed_result(&mut result, &requirements, &rules);
 
         if matches!(mode, ReconcileMode::Apply) {
-            super::typed_statement_policy::ensure_typed_spec_is_writable(&result)?;
-            protect_requirements(&self.layout, scope_id, &requirements)?;
-            (|| -> anyhow::Result<()> {
-                replace_records(self, &shards::sources_path(&self.layout, scope_id), sources)?;
-                crate::test_probes::at("typed_spec_sources_published")?;
-                replace_records(
-                    self,
-                    &shards::requirements_path(&self.layout, scope_id),
-                    requirements,
-                )?;
-                replace_records(self, &shards::rules_path(&self.layout, scope_id), rules)?;
-                replace_records(
-                    self,
-                    &shards::implementation_bindings_path(&self.layout, scope_id),
-                    implementation_reconciliation.records,
-                )?;
-                self.raise_requirement_reviews(scope_id, &requirement_resources, &rule_resources)?;
-                Ok(())
-            })()
-            .map_err(publication_started)?;
+            publication::Replacement {
+                sources,
+                requirements,
+                rules,
+                implementations: implementation_reconciliation.records,
+                cascade,
+            }
+            .publish(
+                self,
+                scope_id,
+                &result,
+                &requirement_resources,
+                &rule_resources,
+            )?;
         }
 
         Ok(result)
+    }
+
+    fn analyze_typed_result(
+        &self,
+        result: &mut TypedSpecResult,
+        requirements: &[Requirement],
+        rules: &[Rule],
+    ) {
+        let dictionary = crate::dictionary_reference::load_project_dictionary(&self.layout);
+        result.diagnostics = super::typed_statement_policy::analyze_typed_statements(
+            &result.resources,
+            requirements,
+            rules,
+            dictionary.as_ref(),
+        );
     }
 
     /// Puts the evidence of every Rule under a restated Requirement up for review.
@@ -383,23 +405,20 @@ fn adopted_rule_ids(input: &TypedSpecInput) -> BTreeSet<String> {
 #[rule("rule_rust_wire_order_is_preserved")]
 fn spec_result(
     declared_by: String,
-    source_resources: Vec<ReconciledResource>,
-    requirement_resources: Vec<ReconciledResource>,
-    rule_resources: Vec<ReconciledResource>,
+    resources: Vec<ReconciledResource>,
+    cascade: Vec<CascadedResource>,
     implementation_bindings: Vec<provenance_core::ImplementationBinding>,
 ) -> TypedSpecResult {
-    let mut resources = source_resources;
-    resources.extend(requirement_resources);
-    resources.extend(rule_resources);
     TypedSpecResult {
         declared_by,
-        created: count_state(&resources, ReconcileState::Created),
-        updated: count_state(&resources, ReconcileState::Updated),
-        moved: count_state(&resources, ReconcileState::Moved),
-        retired: count_state(&resources, ReconcileState::Retired),
-        conflicts: count_state(&resources, ReconcileState::Conflict),
-        unchanged: count_state(&resources, ReconcileState::Unchanged),
+        created: count_state(&resources, &cascade, ReconcileState::Created),
+        updated: count_state(&resources, &cascade, ReconcileState::Updated),
+        moved: count_state(&resources, &cascade, ReconcileState::Moved),
+        deleted: count_state(&resources, &cascade, ReconcileState::Deleted),
+        conflicts: count_state(&resources, &cascade, ReconcileState::Conflict),
+        unchanged: count_state(&resources, &cascade, ReconcileState::Unchanged),
         resources,
+        cascade,
         diagnostics: Vec::new(),
         implementation_bindings,
     }
@@ -416,11 +435,25 @@ fn replace_records<T: serde::de::DeserializeOwned + serde::Serialize>(
     })
 }
 
-fn count_state(resources: &[ReconciledResource], state: ReconcileState) -> usize {
+fn count_state(
+    resources: &[ReconciledResource],
+    cascade: &[CascadedResource],
+    state: ReconcileState,
+) -> usize {
     resources
         .iter()
-        .filter(|resource| resource.state == state)
+        .map(|resource| resource.state)
+        .chain(cascade.iter().map(|resource| resource.state))
+        .filter(|candidate| *candidate == state)
         .count()
+}
+
+fn all_resources(
+    sources: &[ReconciledResource],
+    requirements: &[ReconciledResource],
+    rules: &[ReconciledResource],
+) -> Vec<ReconciledResource> {
+    [sources, requirements, rules].concat()
 }
 
 fn attach_implementation_changes(
@@ -436,4 +469,31 @@ fn attach_implementation_changes(
         }
         resource.changes.push(change.clone());
     }
+}
+
+fn reconcile_implementations(
+    store: &StateStore,
+    scope_id: &ScopeId,
+    desired: &DesiredImplementations<'_>,
+    canonical_rules: &[Rule],
+    rule_resources: &mut [ReconciledResource],
+) -> anyhow::Result<super::implementation_bindings::Reconciliation> {
+    let graph = DesiredTypedGraph {
+        spec: desired.spec,
+        owner: desired.owner,
+        rules: desired.rules,
+        rule_ids: desired.rule_ids,
+    };
+    let mut reconciliation = super::implementation_bindings::reconcile(
+        store,
+        scope_id,
+        graph,
+        canonical_rules,
+        desired.adopted_rule_ids,
+    )?;
+    reconciliation
+        .records
+        .retain(|record| !desired.deleted_rule_ids.contains(record.rule_id.as_str()));
+    attach_implementation_changes(rule_resources, &reconciliation.changes);
+    Ok(reconciliation)
 }

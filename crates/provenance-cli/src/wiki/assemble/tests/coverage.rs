@@ -5,6 +5,7 @@ use crate::wiki::render::render_rule;
 use camino::Utf8PathBuf;
 use provenance_core::coverage::{
     AnchorState, AnnotationResult, BindingResult, CoverageReport, CoverageScan, ScannedFile,
+    SiteCore,
 };
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_core::{
@@ -20,15 +21,17 @@ fn binding(
     verification: Option<&str>,
 ) -> BindingResult {
     BindingResult {
-        rule_id: "rule_001".to_string(),
-        file_path: Utf8PathBuf::from(file_path),
-        line,
+        site: SiteCore {
+            rule_id: "rule_001".to_string(),
+            file_path: Utf8PathBuf::from(file_path),
+            line,
+            verification: verification.map(str::to_string),
+            anchor: None,
+            anchor_state: AnchorState::Unchanged,
+            original_line: None,
+            original_file_path: None,
+        },
         item_name: Some(item_name.to_string()),
-        verification: verification.map(str::to_string),
-        anchor: None,
-        anchor_state: AnchorState::Unchanged,
-        original_line: None,
-        original_file_path: None,
     }
 }
 
@@ -39,17 +42,19 @@ fn annotation(
     verification: Option<&str>,
 ) -> AnnotationResult {
     AnnotationResult {
-        rule_id: "rule_001".to_string(),
-        file_path: Utf8PathBuf::from(file_path),
-        line,
+        site: SiteCore {
+            rule_id: "rule_001".to_string(),
+            file_path: Utf8PathBuf::from(file_path),
+            line,
+            verification: verification.map(str::to_string),
+            anchor: None,
+            anchor_state: AnchorState::Unchanged,
+            original_line: None,
+            original_file_path: None,
+        },
         function_name: Some(function_name.to_string()),
         coverage: "full".to_string(),
         confidence: 1.0,
-        verification: verification.map(str::to_string),
-        anchor: None,
-        anchor_state: AnchorState::Unchanged,
-        original_line: None,
-        original_file_path: None,
     }
 }
 
@@ -62,7 +67,7 @@ fn typed_binding() -> VerificationBinding {
         key: "share-link-expiry".to_string(),
         method: VerificationMethod::Examples,
         declared_by: "ci://typescript".to_string(),
-        retired: false,
+
         file: Utf8PathBuf::from("tests/share-links.test.ts"),
         symbol: Some("share links expire".to_string()),
     }
@@ -75,7 +80,7 @@ fn typed_implementation(file: &str, symbol: &str) -> CanonicalImplementationBind
         id: StableId::new("implementation_binding_rule_001").unwrap(),
         rule_id: StableId::new("rule_001").unwrap(),
         declared_by: "spec://typescript/payroll".to_string(),
-        retired: false,
+
         file: Utf8PathBuf::from(file),
         symbol: symbol.to_string(),
     }
@@ -97,22 +102,6 @@ fn typed_implementation_is_visible_without_a_code_scan() {
     assert!(html.contains(">Implementation</h2>"), "{html}");
     assert!(html.contains("calculatePayroll"), "{html}");
     assert!(html.contains("src/payroll.ts"), "{html}");
-}
-
-#[test]
-fn retired_typed_implementation_is_not_presented_as_current() {
-    let resolver = LinkResolver::new(Some("git@github.com:exampleorg/ex-api.git"));
-    let mut state = fixture_state();
-    let mut retired = typed_implementation("src/payroll.ts", "calculatePayroll");
-    retired.retired = true;
-    state.implementation_bindings.push(retired);
-
-    let corpus = build_corpus_with_coverage(&state, &resolver, None);
-    let page = rule_page(&corpus, "rule_001");
-    let html = render_rule("default", page);
-
-    assert!(page.implementations.is_empty());
-    assert!(!html.contains("calculatePayroll"), "{html}");
 }
 
 #[test]
@@ -239,20 +228,6 @@ fn typed_verification_binding_is_visible_without_a_code_scan() {
         page.verifications[0].location.label,
         "tests/share-links.test.ts"
     );
-}
-
-#[test]
-fn retired_typed_verification_is_not_presented_as_current() {
-    let resolver = LinkResolver::new(Some("git@github.com:exampleorg/ex-api.git"));
-    let mut state = fixture_state();
-    let mut retired = typed_binding();
-    retired.retired = true;
-    state.verification_bindings.push(retired);
-
-    let corpus = build_corpus_with_coverage(&state, &resolver, None);
-    let page = rule_page(&corpus, "rule_001");
-
-    assert!(page.verifications.is_empty());
 }
 
 #[test]
