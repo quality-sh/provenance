@@ -4,23 +4,15 @@ This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get sta
 
 ## Bootstrap
 
-After cloning the repository or creating a worktree, enable the committed Git
-hooks from that checkout:
-
-```bash
-git config core.hooksPath .githooks
-```
-
-Generated files must never enter source control. Before a workspace Cargo build,
-install the generator dependencies with `npm ci --prefix tools/operation-codegen`
-and run `node tools/operation-codegen/ensure-generated.mjs`. SDK build and test
-commands prepare generated source automatically. See
+Generated files must never enter source control. Before a native workspace Cargo
+build, install the generator dependencies with `npm ci --prefix tools/operation-codegen`
+and run `node tools/operation-codegen/ensure-generated.mjs`. Remote Cargo checks
+and SDK build and test commands prepare generated source automatically. See
 `tools/operation-codegen/README.md` for the build and package flow.
 
-The pre-commit hook rejects tracked generated files, prepares generated source,
-and runs formatting, Clippy, and compile checks. Fix any
-reported failure before committing. When a hook must be bypassed intentionally,
-use Git's standard `git commit --no-verify` option.
+## Cargo checks on maintainer hosts
+
+On configured maintainer hosts, plain `cargo build`, `cargo check`, `cargo clippy`, and `cargo test` run in GitHub Actions. The command returns the CI result and pushes a public snapshot branch. Stage new files before a check, and keep secrets out of tracked files. Use `PROVENANCE_CI_LOCAL=1 cargo ...` for native Cargo or `PROVENANCE_CI_ARTIFACT=1 cargo build` to receive a dev CLI binary. Public clones do not enable the shim automatically.
 
 ## Code standards
 

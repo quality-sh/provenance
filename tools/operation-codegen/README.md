@@ -78,7 +78,7 @@ jobs generate once and pass the output as a build artifact to dependent jobs.
 Published npm and Rust packages include their client outputs; package consumers
 do not need Node generation tools or a Rust generator. The release consumer map
 `packages/provenance/src/engine-packages.ts` is also generated during SDK builds.
-The pre-commit hook and CI reject generated paths in the Git index.
+CI rejects generated paths in the Git index.
 The generator and real-host tests use the executable paths reported by Cargo,
 including configured target directories and platform executable suffixes.
 
