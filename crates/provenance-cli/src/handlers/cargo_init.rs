@@ -13,7 +13,6 @@ const SDK_CRATE: &str = "provenance-sdk";
 
 pub(super) fn handle(
     requested_package: Option<&str>,
-    ste_onboarding: crate::cli::SteOnboardingMode,
     ste_pdf: Option<Utf8PathBuf>,
 ) -> anyhow::Result<()> {
     let metadata = load_metadata()?;
@@ -28,7 +27,6 @@ pub(super) fn handle(
             path_prefix: Some(path_prefix),
             disposition_actor_ids: Vec::new(),
             clear_disposition_actors: false,
-            ste_onboarding,
             ste_pdf,
             invocation_channel: crate::cli::InvocationChannel::Native,
             package_manager: None,

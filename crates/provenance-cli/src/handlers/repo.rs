@@ -11,7 +11,6 @@ pub(super) struct InitOptions {
     pub(super) path_prefix: Option<Utf8PathBuf>,
     pub(super) disposition_actor_ids: Vec<String>,
     pub(super) clear_disposition_actors: bool,
-    pub(super) ste_onboarding: crate::cli::SteOnboardingMode,
     pub(super) ste_pdf: Option<Utf8PathBuf>,
     pub(super) invocation_channel: crate::cli::InvocationChannel,
     pub(super) package_manager: Option<crate::cli::PackageManager>,
@@ -51,7 +50,6 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
         path_prefix,
         disposition_actor_ids,
         clear_disposition_actors,
-        ste_onboarding,
         ste_pdf,
         invocation_channel,
         package_manager,
@@ -105,7 +103,7 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
     let planned = PlannedFiles::plan(path, &invocation, manifest_before, manifest_bytes)?;
     super::check::validate_repository_with_manifest(path, &manifest)
         .context("the planned Provenance state is not valid")?;
-    let dictionary = crate::ste_onboarding::prepare(path, ste_onboarding, ste_pdf.as_deref())?;
+    let dictionary = crate::ste_onboarding::prepare(path, ste_pdf.as_deref())?;
     let scope_ids: Vec<String> = manifest
         .scopes
         .iter()
@@ -407,7 +405,6 @@ mod tests {
                 path_prefix: Some(Utf8PathBuf::from(".")),
                 disposition_actor_ids: Vec::new(),
                 clear_disposition_actors: false,
-                ste_onboarding: crate::cli::SteOnboardingMode::Interactive,
                 ste_pdf: None,
                 invocation_channel: crate::cli::InvocationChannel::Native,
                 package_manager: None,

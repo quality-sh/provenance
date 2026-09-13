@@ -4,6 +4,11 @@ Never lose the *why* behind your decisions.
 
 Provenance is a tool for building requirements traceability, from source to requirement to rule. A Rule is an atomic behavioural obligation that can exist before its implementation; `#[rule("rule_id")]` binds production code to it, and `#[verifies("rule_id", method)]` binds evidence.
 
+ASD-STE100 is owned by ASD and maintained by STEMG. Provenance implements its
+own checks against the standard and makes no affiliation, endorsement,
+certification, or compliance claim. See the notice section in
+[LICENSE](LICENSE).
+
 ### Installation
 
 Install and initialize Provenance in a TypeScript project:

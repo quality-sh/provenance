@@ -1,10 +1,30 @@
 use assert_cmd::Command;
 use provenance_macros::verifies;
-use std::path::Path;
+use std::{path::Path, sync::OnceLock};
 
 #[path = "cli_dictionary/support.rs"]
 #[allow(dead_code)]
 mod dictionary_support;
+
+/// The shared asset cache holds the official asset, so every `init` in this
+/// file meets the auto-download on its cache hit and never touches the
+/// network. The dictionary index lands beside it in the same temporary tree.
+fn offline_dictionary_env() -> (&'static Path, &'static Path) {
+    static SEED: OnceLock<(&'static Path, &'static Path)> = OnceLock::new();
+    SEED.get_or_init(|| {
+        // Leaked on purpose: the seeded cache lives as long as the process.
+        let temporary: &mut tempfile::TempDir = Box::leak(Box::new(tempfile::tempdir().unwrap()));
+        let assets = temporary.path().join("assets");
+        std::fs::create_dir(&assets).unwrap();
+        std::fs::write(
+            assets.join("ASD-STE100_ISSUE9.pdf"),
+            dictionary_support::dictionary_pdf(),
+        )
+        .unwrap();
+        let indexes = temporary.path().join("indexes");
+        (Box::leak(Box::new(assets)), Box::leak(Box::new(indexes)))
+    })
+}
 
 fn init(repo: &Path) -> assert_cmd::assert::Assert {
     init_with(repo, &[])
@@ -12,6 +32,10 @@ fn init(repo: &Path) -> assert_cmd::assert::Assert {
 
 fn init_with(repo: &Path, extra: &[&str]) -> assert_cmd::assert::Assert {
     let mut command = Command::cargo_bin("provenance").unwrap();
+    let (assets, indexes) = offline_dictionary_env();
+    command
+        .env("PROVENANCE_STE100_ASSET_DIR", assets)
+        .env("PROVENANCE_STE100_INDEX_DIR", indexes);
     command.args([
         "init",
         "--path",
@@ -58,7 +82,7 @@ fn init_prints_a_summary_that_separates_new_from_changed_files() {
         .contains("  3. provenance coverage scan --path . --scope default --validate-rules\n"));
     assert!(stdout.contains("Docs: https://github.com/quality-sh/provenance/tree/main/docs\n"));
     assert!(stdout.contains(
-        "Dictionary: Get ASD-STE100 Issue 9 from the official request page, then rerun init with --ste-pdf <path>:\n"
+        "Dictionary: Imported the Issue 9 dictionary from the official asset.\n"
     ));
 }
 

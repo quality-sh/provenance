@@ -6,8 +6,8 @@ export async function checkWrites({ HttpClient, OperationError }, fixture) {
   const client = await HttpClient.connectWithBearer(fixture.url, 'fixture-secret');
   const context = { repository: 'fixture', scope: 'default' };
   const request = { schema_version: 2, spec: 'typescript', declared_by: 'fixture-ts',
-    requirements: [{ key: 'ready', statement: 'The system is ready.' }],
-    rules: [{ key: 'ready', requirement: 'ready', statement: 'The system is ready.' }] };
+    requirements: [{ key: 'ready', statement: 'The system is prepared.' }],
+    rules: [{ key: 'ready', requirement: 'ready', statement: 'The system is prepared.' }] };
   const call = { context, request };
   const planned = await client.plan(call);
   assert.equal(planned.created, 2);

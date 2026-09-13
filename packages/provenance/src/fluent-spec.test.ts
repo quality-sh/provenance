@@ -106,10 +106,10 @@ test("fluent declarations and their finalized handles are immutable", async () =
   const policy = sourceDraft.document("docs/policy.md");
   const ruleDraft = rule("expiry");
   const identified = ruleDraft.id("rule_expiry");
-  const statedRule = identified.statement("Share links expire within 30 days");
+  const statedRule = identified.statement("Share links expire in 30 days");
   const expiry = statedRule.implementedBy(startWorkflow);
   const requirementDraft = requirement("sharing");
-  const stated = requirementDraft.statement("Users can securely share documentation");
+  const stated = requirementDraft.statement("Users can share the documents");
   const sourced = stated.from(policy);
   const sharing = sourced.rules(expiry);
   const specDraft = defineSpec("share-links");
@@ -164,7 +164,7 @@ test("top-level fluent declarations author source names and Requirement descript
   const requirementDraft = requirement("sharing")
     .description("Covers externally shared documentation");
   const statedRequirement = requirementDraft
-    .statement("Users can securely share documentation");
+    .statement("Users can share the documents");
   const expiry = rule("expiry").statement("Shared links expire");
   const sharing = statedRequirement.from(namedPolicy).rules(expiry);
   const spec = defineSpec("fluent-metadata")
@@ -194,7 +194,7 @@ test("top-level fluent declarations author source names and Requirement descript
     requirements: [
       {
         key: "sharing",
-        statement: "Users can securely share documentation",
+        statement: "Users can share the documents",
         description: "Covers externally shared documentation",
         sources: ["policy"],
       },
@@ -281,7 +281,7 @@ test("build collects Sources referenced by Requirements", async () => {
   const spec = defineSpec("collected-source")
     .requirements(
       requirement("sharing")
-        .statement("Users can securely share documentation")
+        .statement("Users can share the documents")
         .from(source("policy").name("Sharing policy").document("docs/policy.md"))
         .rules(rule("expiry").statement("Share links expire")),
     )
@@ -308,7 +308,7 @@ test("a fluent Source declares a supported non-document kind", async () => {
   const spec = defineSpec("source-kind")
     .requirements(
       requirement("intake")
-        .statement("The catalogue records the source type of every citation")
+        .statement("The catalogue records the source type of all citations")
         .from(source("brief").name("Workflowd integration brief").kind("external_integration")),
     )
     .build();
@@ -333,7 +333,7 @@ test("document stays the short form of the document kind", async () => {
   const spec = defineSpec("source-kind-document")
     .requirements(
       requirement("intake")
-        .statement("The catalogue records the source type of every citation")
+        .statement("The catalogue records the source type of all citations")
         .from(source("brief").document("docs/brief.md")),
     )
     .build();
@@ -416,7 +416,7 @@ test("a preferred fluent spec collects linked Sources and exposes its typed Rule
   const shareLinks = defineSpec("share-links")
     .requirements(
       requirement("sharing")
-        .statement("Users can securely share documentation")
+        .statement("Users can share the documents")
         .description("Controls for links shared outside the organization")
         .from(
           source("sharing-policy")
@@ -424,7 +424,7 @@ test("a preferred fluent spec collects linked Sources and exposes its typed Rule
             .document("docs/sharing-policy.md"),
         )
         .rules(
-          rule("expiry").statement("Share links must expire within 30 days"),
+          rule("expiry").statement("Share links must expire in 30 days"),
         ),
     )
     .build();
@@ -480,8 +480,8 @@ test("one shared Rule materializes once and refines both Requirements", async ()
 test("distinct local Rules may reuse a key under unrelated Requirements", async () => {
   const repo = repository();
   configure({ ...await fixtureSettings(repo), owner: "spec://typescript/local" });
-  const shareExpiry = rule("expiry").statement("Share links expire within 30 days");
-  const sessionExpiry = rule("expiry").statement("Sessions expire within 24 hours");
+  const shareExpiry = rule("expiry").statement("Share links expire in 30 days");
+  const sessionExpiry = rule("expiry").statement("Sessions expire in 24 hours");
   const sharing = requirement("sharing").statement("Shares are time bounded").rules(shareExpiry);
   const sessions = requirement("sessions").statement("Sessions are time bounded").rules(sessionExpiry);
   const spec = defineSpec("lifecycles").requirements(sharing, sessions).build();
@@ -531,8 +531,8 @@ test("an explicit Rule id resolves an ambiguous local-to-shared merge", async ()
 });
 
 test("distinct Rule declarations collide explicitly inside one Requirement", () => {
-  const first = rule("expiry").statement("Share links expire within 30 days");
-  const second = rule("expiry").statement("Share links expire within 14 days");
+  const first = rule("expiry").statement("Share links expire in 30 days");
+  const second = rule("expiry").statement("Share links expire in 14 days");
   const sharing = requirement("sharing")
     .statement("Share links are time bounded")
     .rules(first, second);

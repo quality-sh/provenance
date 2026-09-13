@@ -31,58 +31,16 @@ fn serial() -> std::sync::MutexGuard<'static, ()> {
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
-const REQUEST_FORM: &str = "https://www.asd-ste100.org/STE_downloads.html#article02-2l";
-const CHANGE_FORM: &str = "https://www.asd-ste100.org/STE_downloads.html#features038-31";
-
-#[test]
-#[verifies("rule_ste_dictionary_interactive_acquisition", examples)]
-#[verifies("rule_ste_dictionary_attribution", examples)]
-#[verifies("rule_ste_dictionary_claim_scope", examples)]
-fn interactive_onboarding_imports_the_selected_pdf() {
-    let _serial = serial();
-    let fixture = Fixture::new();
-    let pdf = fixture.temporary.path().join("issue-9.pdf");
-    std::fs::write(&pdf, dictionary_support::dictionary_pdf()).unwrap();
-
-    fixture
-        .init("interactive")
-        .args(["--ste-pdf", pdf.to_str().unwrap()])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains(REQUEST_FORM))
-        .stdout(predicate::str::contains(CHANGE_FORM))
-        .stdout(predicate::str::contains("ASD owns ASD-STE100"))
-        .stdout(predicate::str::contains("does not claim compliance"));
-
-    assert!(dictionary_support::reference_path(&fixture.repo).is_file());
-}
-
-#[test]
-#[verifies("rule_ste_dictionary_interactive_acquisition", examples)]
-fn interactive_onboarding_directs_the_user_to_the_official_form() {
-    let _serial = serial();
-    let fixture = Fixture::new();
-
-    fixture
-        .init("interactive")
-        .assert()
-        .success()
-        .stdout(predicate::str::contains(REQUEST_FORM))
-        .stdout(predicate::str::contains("--ste-pdf"));
-
-    assert!(!dictionary_support::reference_path(&fixture.repo).exists());
-}
-
 #[test]
 #[verifies("rule_ste_dictionary_agent_acquisition", examples)]
 #[verifies("rule_ste_dictionary_download_identity", examples)]
-fn agent_onboarding_downloads_and_imports_the_official_asset() {
+fn onboarding_downloads_and_imports_the_official_asset() {
     let _serial = serial();
     let server = TestServer::new(200, dictionary_support::dictionary_pdf());
     let fixture = Fixture::new();
 
     let output = fixture
-        .init("agent")
+        .init()
         .env("PROVENANCE_TEST_STE100_ASSET_URL", server.url())
         .output()
         .unwrap();
@@ -90,6 +48,8 @@ fn agent_onboarding_downloads_and_imports_the_official_asset() {
     assert!(output.status.success(), "init failed: {stderr}");
 
     assert!(dictionary_support::reference_path(&fixture.repo).is_file());
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    assert!(stdout.contains("Imported the Issue 9 dictionary from the official asset."));
     let requests = server.requests();
     assert_eq!(
         requests.len(),
@@ -103,26 +63,78 @@ fn agent_onboarding_downloads_and_imports_the_official_asset() {
 }
 
 #[test]
+#[verifies("rule_ste_dictionary_import_identity", examples)]
+fn onboarding_imports_a_selected_pdf_without_network_access() {
+    let _serial = serial();
+    let server = TestServer::new(200, dictionary_support::dictionary_pdf());
+    let fixture = Fixture::new();
+    let pdf = fixture.temporary.path().join("issue-9.pdf");
+    std::fs::write(&pdf, dictionary_support::dictionary_pdf()).unwrap();
+
+    fixture
+        .init()
+        .env("PROVENANCE_TEST_STE100_ASSET_URL", server.url())
+        .args(["--ste-pdf", pdf.to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "Imported the Issue 9 dictionary from",
+        ));
+
+    assert!(dictionary_support::reference_path(&fixture.repo).is_file());
+    assert_eq!(
+        server.requests().len(),
+        0,
+        "a selected PDF must not touch the network"
+    );
+}
+
+#[test]
+fn onboarding_accepts_a_relative_pdf_path() {
+    let _serial = serial();
+    let server = TestServer::new(200, dictionary_support::dictionary_pdf());
+    let fixture = Fixture::new();
+    std::fs::write(
+        fixture.temporary.path().join("issue-9.pdf"),
+        dictionary_support::dictionary_pdf(),
+    )
+    .unwrap();
+
+    fixture
+        .command()
+        .current_dir(fixture.temporary.path())
+        .args(init_args(&fixture.repo))
+        .args(["--ste-pdf", "issue-9.pdf"])
+        .env("PROVENANCE_TEST_STE100_ASSET_URL", server.url())
+        .assert()
+        .success();
+
+    assert!(dictionary_support::reference_path(&fixture.repo).is_file());
+    assert_eq!(server.requests().len(), 0);
+}
+
+#[test]
 #[verifies("rule_ste_dictionary_import_reuse", examples)]
 #[verifies("rule_ste_dictionary_no_operational_download", examples)]
 fn repeated_setup_and_normal_checks_use_local_data_without_network_access() {
     let _serial = serial();
     let server = TestServer::new(200, dictionary_support::dictionary_pdf());
     let fixture = Fixture::new();
+    let url = server.url();
     fixture
-        .init("agent")
-        .env("PROVENANCE_TEST_STE100_ASSET_URL", server.url())
+        .init()
+        .env("PROVENANCE_TEST_STE100_ASSET_URL", &url)
         .assert()
         .success();
 
     fixture
-        .init("agent")
-        .env("PROVENANCE_TEST_STE100_ASSET_URL", server.url())
+        .init()
+        .env("PROVENANCE_TEST_STE100_ASSET_URL", &url)
         .assert()
         .success();
     fixture
         .command()
-        .env("PROVENANCE_TEST_STE100_ASSET_URL", server.url())
+        .env("PROVENANCE_TEST_STE100_ASSET_URL", &url)
         .args(["check", "--repo", fixture.repo.to_str().unwrap()])
         .assert()
         .success();
@@ -132,7 +144,7 @@ fn repeated_setup_and_normal_checks_use_local_data_without_network_access() {
 
 #[test]
 #[verifies("rule_ste_dictionary_download_concurrency", examples)]
-fn concurrent_agent_onboarding_shares_one_download() {
+fn concurrent_onboarding_shares_one_download() {
     let _serial = serial();
     let server = TestServer::new(200, dictionary_support::dictionary_pdf());
     let temporary = tempfile::tempdir().unwrap();
@@ -148,7 +160,7 @@ fn concurrent_agent_onboarding_shares_one_download() {
                 .env("PROVENANCE_STE100_ASSET_DIR", &asset_dir)
                 .env("PROVENANCE_STE100_INDEX_DIR", &index_dir)
                 .env("PROVENANCE_TEST_STE100_ASSET_URL", server.url())
-                .args(init_args(&repo, "agent"))
+                .args(init_args(&repo))
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
                 .spawn()
@@ -175,17 +187,26 @@ fn concurrent_agent_onboarding_shares_one_download() {
 #[test]
 #[verifies("rule_ste_dictionary_download_retry_bound", examples)]
 #[verifies("rule_ste_dictionary_asset_fallback", examples)]
-fn exhausted_download_retries_fall_back_to_the_official_request_form() {
+fn exhausted_download_retries_fall_back_to_a_loud_warning() {
     let _serial = serial();
     let server = TestServer::new(503, b"unavailable");
     let fixture = Fixture::new();
 
-    fixture
-        .init("agent")
+    let output = fixture
+        .init()
         .env("PROVENANCE_TEST_STE100_ASSET_URL", server.url())
-        .assert()
-        .success()
-        .stdout(predicate::str::contains(REQUEST_FORM));
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    assert!(output.status.success(), "init failed: {stdout}");
+    assert!(stdout.contains("Warning:"), "stdout: {stdout}");
+    assert!(stdout.contains("rerun init"), "stdout: {stdout}");
+    assert!(stdout.contains("dictionary import"), "stdout: {stdout}");
+    assert!(
+        !stdout.to_ascii_lowercase().contains("asd-ste100.org"),
+        "the warning carries no ASD link: {stdout}"
+    );
+    assert!(!stdout.contains("ASD owns"), "stdout: {stdout}");
 
     assert_eq!(
         server.requests().len(),
@@ -194,6 +215,17 @@ fn exhausted_download_retries_fall_back_to_the_official_request_form() {
         server.requests()
     );
     assert!(!dictionary_support::reference_path(&fixture.repo).exists());
+}
+
+#[test]
+fn init_help_omits_the_removed_ste_onboarding_flag() {
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .args(["init", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--ste-pdf"))
+        .stdout(predicate::str::contains("--ste-onboarding").not());
 }
 
 struct Fixture {
@@ -222,14 +254,14 @@ impl Fixture {
         command
     }
 
-    fn init(&self, mode: &str) -> Command {
+    fn init(&self) -> Command {
         let mut command = self.command();
-        command.args(init_args(&self.repo, mode));
+        command.args(init_args(&self.repo));
         command
     }
 }
 
-fn init_args(repo: &Path, mode: &str) -> Vec<String> {
+fn init_args(repo: &Path) -> Vec<String> {
     [
         "init",
         "--path",
@@ -238,8 +270,6 @@ fn init_args(repo: &Path, mode: &str) -> Vec<String> {
         "default",
         "--path-prefix",
         ".",
-        "--ste-onboarding",
-        mode,
     ]
     .into_iter()
     .map(str::to_owned)

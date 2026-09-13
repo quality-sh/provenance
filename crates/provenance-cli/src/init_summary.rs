@@ -1,7 +1,7 @@
 //! The one coherent ending `provenance init` prints after a completed run:
 //! a status line, a what-Provenance-is tagline, a new-versus-changed file
-//! inventory, numbered next steps, a docs link, and the dictionary report
-//! with its required attribution.
+//! inventory, numbered next steps, a docs link, and the dictionary report.
+//! The dictionary attribution stays in the LICENSE notice.
 
 const DOCS_LINK: &str = "https://github.com/quality-sh/provenance/tree/main/docs";
 const TAGLINE: &str = "Never lose the why behind your decisions.";
@@ -9,8 +9,8 @@ const TAGLINE: &str = "Never lose the why behind your decisions.";
 /// What `provenance init` prints after the writes are committed.
 #[derive(Debug)]
 pub enum InitEnding {
-    /// Nothing would change; one short line says so. A pending dictionary
-    /// decision still gets its guidance text.
+    /// Nothing would change; one short line says so. A failed dictionary
+    /// download still gets its warning.
     Already {
         line: String,
         dictionary: Option<String>,

@@ -2,7 +2,13 @@ use assert_cmd::Command;
 use predicates::prelude::PredicateBooleanExt;
 use predicates::str::contains;
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
+use provenance_macros::verifies;
 use std::path::Path;
+
+// The synthetic Issue 9 fixture, shared with the dictionary test target.
+#[path = "cli_dictionary/support.rs"]
+#[allow(dead_code)]
+mod dictionary_support;
 
 #[test]
 fn check_rejects_dangling_artifact_links() {
@@ -264,6 +270,105 @@ fn check_rejects_symlinked_cache_without_writing_to_target() {
     provenance(dir.path()).failure();
 
     assert!(std::fs::read_dir(outside).unwrap().next().is_none());
+}
+
+#[test]
+#[verifies("rule_ste_strict_dictionary_index_gate", examples)]
+fn strict_check_fails_when_a_committed_reference_has_no_loadable_index() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = dir.path().join("repo");
+    let index_directory = dir.path().join("empty-index");
+    std::fs::create_dir_all(&repo).unwrap();
+    std::fs::create_dir_all(&index_directory).unwrap();
+    init(&repo);
+    dictionary_support::write_reference(&repo, dictionary_support::imported_dictionary());
+
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .env("PROVENANCE_STE100_INDEX_DIR", &index_directory)
+        .args([
+            "check",
+            "--repo",
+            repo.to_str().unwrap(),
+            "--strict",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .failure()
+        .stderr(contains("no loadable index"))
+        .stderr(contains("provenance dictionary import"));
+}
+
+#[test]
+fn check_without_strict_keeps_the_soft_fallback_for_a_reference_without_an_index() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = dir.path().join("repo");
+    let index_directory = dir.path().join("empty-index");
+    std::fs::create_dir_all(&repo).unwrap();
+    std::fs::create_dir_all(&index_directory).unwrap();
+    init(&repo);
+    dictionary_support::write_reference(&repo, dictionary_support::imported_dictionary());
+
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .env("PROVENANCE_STE100_INDEX_DIR", &index_directory)
+        .args([
+            "check",
+            "--repo",
+            repo.to_str().unwrap(),
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .stdout(contains(r#""status": "ok""#));
+}
+
+#[test]
+#[verifies("rule_ste_strict_dictionary_index_gate", examples)]
+fn strict_check_passes_when_the_referenced_index_is_present() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = dir.path().join("repo");
+    let index_directory = dir.path().join("index");
+    std::fs::create_dir_all(&repo).unwrap();
+    git(&repo, &["init", "--initial-branch", "main"]);
+    git(&repo, &["config", "user.email", "test@example.test"]);
+    git(&repo, &["config", "user.name", "Test"]);
+    init(&repo);
+    let dictionary = dictionary_support::imported_dictionary();
+    provenance_ste100::store_dictionary_index(dictionary, &index_directory).unwrap();
+    dictionary_support::write_reference(&repo, dictionary);
+    git(&repo, &["add", "."]);
+    git(&repo, &["commit", "-m", "initial candidate"]);
+
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .env("PROVENANCE_STE100_INDEX_DIR", &index_directory)
+        .args([
+            "check",
+            "--repo",
+            repo.to_str().unwrap(),
+            "--strict",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .stdout(contains(r#""status": "ok""#));
+}
+
+fn git(repo: &Path, arguments: &[&str]) {
+    let output = std::process::Command::new("git")
+        .current_dir(repo)
+        .args(arguments)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "git {arguments:?} failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }
 
 fn init(repo: &Path) {

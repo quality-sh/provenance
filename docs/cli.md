@@ -69,6 +69,39 @@ in committed Requirement and Rule statements. The `--strict` option for
 `provenance coverage scan` applies to Rule binding and coverage warnings. These
 options enforce different reports.
 
+## STE dictionary in CI
+
+Statement checks use the project dictionary when the machine holds the imported
+index. A project commits only `.provenance/state/dictionary.json`. That file
+holds the dictionary identity: the issue number, the source and data digests,
+and the extractor version. The index with the dictionary content stays out of
+Git. It lives in the machine data directory,
+`~/.local/share/provenance/ste100-dictionary` on Linux. Set
+`PROVENANCE_STE100_INDEX_DIR` to select a custom or project-local index
+directory.
+
+Cache the index directory in CI and key the cache on the committed reference.
+One cache miss per dictionary version runs the import once. A cache hit runs no
+import and no download:
+
+```yaml
+- uses: actions/cache@v4
+  id: ste100-index
+  with:
+    path: ~/.local/share/provenance/ste100-dictionary
+    key: ste100-${{ hashFiles('.provenance/state/dictionary.json') }}
+- run: provenance dictionary import --pdf /path/to/ASD-STE100-Issue-9.pdf
+  if: steps.ste100-index.outputs.cache-hit != 'true'
+```
+
+`provenance check --strict` fails when the repository commits a dictionary
+reference and the referenced index does not load on the runner. The error names
+the problem and points at `provenance dictionary import` with a local PDF.
+Non-strict reads keep the soft fallback to the built-in rules-only checks, and
+the write gate stays soft. `provenance dictionary status` prints the referenced
+identity, says whether the index is present, and names the active analyzer, so
+CI logs show the mode.
+
 ## Typed SDK protocol (POC)
 
 Rust consumers do not need these one-shot commands. The `provenance-sdk` crate

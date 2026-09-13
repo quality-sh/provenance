@@ -13,7 +13,19 @@ const sdk = new URL("../../dist/index.js", import.meta.url).href;
 async function runCase(statedFile: boolean) {
   const root = mkdtempSync(join(tmpdir(), "provenance-bun-tail-call-"));
   try {
-    execFileSync(cli, ["--quiet", "init", "--path", root, "--scope", "default", "--path-prefix", "."], { stdio: "pipe" });
+    // Bun caps each test at five seconds, and onboarding needs none of the
+    // dictionary: point the download at a refused loopback port and the
+    // caches inside the throwaway root, so init takes its offline fallback
+    // path instead of fetching or importing the real asset.
+    execFileSync(cli, ["--quiet", "init", "--path", root, "--scope", "default", "--path-prefix", "."], {
+      stdio: "pipe",
+      env: {
+        ...process.env,
+        PROVENANCE_TEST_STE100_ASSET_URL: "http://127.0.0.1:9/ASD-STE100_ISSUE9.pdf",
+        PROVENANCE_STE100_ASSET_DIR: join(root, "assets"),
+        PROVENANCE_STE100_INDEX_DIR: join(root, "indexes"),
+      },
+    });
     const source = readFileSync(new URL("./tail-call-case.ts", import.meta.url), "utf8");
     writeFileSync(join(root, "tail-call-case.ts"), source.replace("../../dist/index.js", sdk));
     const fixture = await startFixtureHost({ root, repositoryId: "bun-tail-call" });

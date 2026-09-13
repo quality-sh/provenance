@@ -20,23 +20,17 @@ const lockfiles = new Map([
 export function parseArguments(args, currentDirectory) {
   let projectDirectory = currentDirectory;
   let packageManager;
-  let steOnboarding = "interactive";
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (argument === "--path") {
       projectDirectory = resolve(currentDirectory, requiredValue(args, ++index, argument));
     } else if (argument === "--package-manager") {
       packageManager = requiredValue(args, ++index, argument);
-    } else if (argument === "--ste-onboarding") {
-      steOnboarding = requiredValue(args, ++index, argument);
-      if (!new Set(["agent", "interactive"]).has(steOnboarding)) {
-        throw new Error("Unsupported STE onboarding mode. Choose one of: agent, interactive.");
-      }
     } else {
       throw new Error(`Unknown argument '${argument}'.`);
     }
   }
-  return { projectDirectory, packageManager, steOnboarding };
+  return { projectDirectory, packageManager };
 }
 
 function requiredValue(args, index, option) {
@@ -57,7 +51,6 @@ export function initializeProject({
   engineArguments = [],
   resolveEngine = installedEngineCommand,
   packageManager,
-  steOnboarding = "interactive",
   userAgent = process.env.npm_config_user_agent,
   execute,
 }) {
@@ -91,10 +84,8 @@ export function initializeProject({
     args: [...engine.args, "init", "--help"],
     capture: true,
   });
-  if (supportsSteOnboarding(help)) {
+  if (supportsInvocationMetadata(help)) {
     initArgs.push(
-      "--ste-onboarding",
-      steOnboarding,
       "--invocation-channel",
       "typescript",
       "--package-manager",
@@ -109,10 +100,11 @@ export function initializeProject({
   return { packageManager: selectedManager };
 }
 
-function supportsSteOnboarding(help) {
-  // The visible onboarding flag and its hidden invocation metadata flags were
-  // introduced as one init capability. Older engines advertise none of them.
-  return help.status === 0 && help.stdout.includes("--ste-onboarding");
+function supportsInvocationMetadata(help) {
+  // The channel and package-manager flags ship with the current init surface
+  // and are hidden from help, so the visible --ste-pdf marker stands in for
+  // them. Older engines advertise none of it and receive bare init flags.
+  return help.status === 0 && help.stdout.includes("--ste-pdf");
 }
 
 function installedEngineCommand(directory) {

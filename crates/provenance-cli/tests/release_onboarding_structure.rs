@@ -44,6 +44,19 @@ fn cargo_install_emits_the_exact_init_next_step_from_the_cli_build_script() {
 }
 
 #[test]
+fn license_carries_the_asd_ste100_notice_and_the_readme_references_it() {
+    let workspace = workspace_root();
+    let license = fs::read_to_string(workspace.join("LICENSE")).expect("read LICENSE");
+    assert!(license.contains("ASD owns ASD-STE100. STEMG maintains it."));
+    assert!(license.contains("no endorsement, certification, or compliance claim"));
+
+    let readme = fs::read_to_string(workspace.join("README.md")).expect("read README.md");
+    assert!(readme.contains("notice section in"));
+    assert!(readme.contains("[LICENSE](LICENSE)"));
+    assert!(!workspace.join("NOTICE").exists());
+}
+
+#[test]
 fn windows_cli_reserves_enough_main_thread_stack_for_argument_parsing() {
     let build_script = fs::read_to_string(workspace_root().join("crates/provenance-cli/build.rs"))
         .expect("read provenance-cli build script");
@@ -103,16 +116,13 @@ fn init_download_work_runs_on_tokios_blocking_pool() {
 
 /// The summary `init` prints is one ending defined in one module: status line,
 /// tagline, new-versus-changed inventory, numbered next steps, and exactly one
-/// docs link. The dictionary attribution stays in the STE onboarding module so
-/// every print path shares it.
+/// docs link. The dictionary attribution stays out of the summary; the LICENSE
+/// notice test pins it.
 #[test]
-fn init_summary_structure_stays_pinned_in_one_module_with_the_ste_attribution() {
+fn init_summary_structure_stays_pinned_in_one_module() {
     let workspace = workspace_root();
     let summary = fs::read_to_string(workspace.join("crates/provenance-cli/src/init_summary.rs"))
         .expect("read init summary");
-    let onboarding =
-        fs::read_to_string(workspace.join("crates/provenance-cli/src/ste_onboarding.rs"))
-            .expect("read STE onboarding");
     let repo = fs::read_to_string(workspace.join("crates/provenance-cli/src/handlers/repo.rs"))
         .expect("read init handler");
 
@@ -127,11 +137,6 @@ fn init_summary_structure_stays_pinned_in_one_module_with_the_ste_attribution() 
     assert!(summary.contains("Next steps"));
     assert!(summary.contains("New"));
     assert!(summary.contains("Changed"));
-
-    assert!(onboarding.contains("ASD owns ASD-STE100, and STEMG maintains it."));
-    assert!(onboarding.contains("https://www.asd-ste100.org/STE_downloads.html#article02-2l"));
-    assert!(onboarding
-        .contains("It does not claim compliance, certification, endorsement, or approval."));
 
     assert!(repo.contains("added the Provenance section"));
     assert!(repo.contains("updated the Provenance section"));

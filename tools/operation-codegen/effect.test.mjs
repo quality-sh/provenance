@@ -35,5 +35,19 @@ test('Effect schemas retain production wire values and reject contract violation
     for (const limit of [0, 201, null, '50']) assert.throws(() => decode('SearchInput', { text: 'x', limit }));
     assert.deepEqual(decode('SearchInput', { text: 'x' }), { text: 'x' });
     assert.ok(schemas.ProvenanceApi);
+    const matchers = Object.entries(schemas).filter(([name]) => name.startsWith('match'));
+    assert.ok(matchers.length > 0);
+    // An exhaustive matcher dispatches on the wire discriminant, accepts the
+    // `_` fallback for subsets, and throws on an unknown discriminant when no
+    // fallback is given. The fixture document names its node union per the
+    // GetOutput operation, when present.
+    const match = schemas.matchGetOutputGraphNode;
+    if (match !== undefined) {
+      const node = document['x-wire-fixtures'].GraphNodeOutput;
+      const marker = Symbol('marker');
+      assert.equal(match(node, { [node.node_type]: () => marker }), marker);
+      assert.equal(match(node, { _: () => marker }), marker);
+      assert.throws(() => match({ ...node, node_type: 'invented' }, { [node.node_type]: () => marker }));
+    }
   } finally { await rm(directory, { recursive: true, force: true }); }
 });

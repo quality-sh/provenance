@@ -5,11 +5,11 @@ import { createShareLink } from "./share-links.js";
 export const shareLinks = defineSpec("share-links")
   .requirements(
     requirement("sharing")
-      .statement("Users can securely share documentation")
+      .statement("Users can share the documents")
       .from(source("sharing-policy").document("docs/sharing-policy.md"))
       .rules(
         rule("expiry")
-          .statement("Share links must expire within 30 days")
+          .statement("Share links must expire in 30 days")
           .implementedBy(createShareLink),
       ),
   )

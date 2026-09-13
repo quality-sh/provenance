@@ -187,7 +187,7 @@ export function invocation<
   requirement: RequirementDeclaration<Spec, RequirementKey>,
 ): RuleDeclaration<Spec, "invocation", RequirementKey> {
   return requirement.rule("invocation")
-    .statement("A direct Rule handle remains typed across module boundaries");
+    .statement("A typed Rule record stays typed across module boundaries");
 }
 export function bindClass<
   const Spec extends string,
@@ -241,7 +241,7 @@ const spec = defineSpec("packed-install", ({ requirement }) => {
     statement: "The installed SDK connects to an explicit fixture host"
   });
   const invocation = installed.rule("invocation", {
-    statement: "Typed SDK operations reach the shared Rust handlers"
+    statement: "Typed SDK operations use the shared Rust handlers"
   });
   return { installed, invocation };
 });
@@ -257,7 +257,7 @@ await spec.handles.invocation.verify("packed-install", () => undefined, {
 const typedSpec = defineSpec("packed-implemented-by")
   .requirements(
     requirement("typed-implementation")
-      .statement("Installed typed specs retain implementation links")
+      .statement("Installed typed specs keep their code links")
       .from(source("packed-guide").name("Packed guide").document("README.md"))
       .rules(
         rule("typed-start")

@@ -23,7 +23,7 @@ try {
   cli('init', '--path', repository, '--scope', 'default', '--path-prefix', '.');
   for (const [id, parent] of [['req_root', undefined], ['req_child', 'req_root']]) {
     cli('requirements', 'create', '--repo', repository, '--scope', 'default', '--id', id!,
-      '--statement', 'The graph is readable.', ...(parent ? ['--refines', parent] : []));
+      '--statement', 'The record is readable.', ...(parent ? ['--refines', parent] : []));
   }
   host = spawn(binary, ['review', '--repo', repository, '--repository-id', 'fixture', '--scope', 'default'], {
     cwd: work, env: { ...process.env, PATH: work }, stdio: ['ignore', 'pipe', 'inherit'],

@@ -1,9 +1,6 @@
-use crate::{
-    atomic_file::{FileRollbackJournal, FileSnapshot},
-    cli::SteOnboardingMode,
-};
+use crate::atomic_file::{FileRollbackJournal, FileSnapshot};
 use anyhow::Context;
-use camino::Utf8Path;
+use camino::{Utf8Path, Utf8PathBuf};
 use fs2::FileExt;
 use provenance_macros::rule;
 use provenance_ste100::DictionaryImport;
@@ -16,16 +13,14 @@ use std::{
 };
 
 const OFFICIAL_ASSET: &str = "https://www.asd-ste100.org/assets/files/ASD-STE100_ISSUE9.pdf";
-const REQUEST_FORM: &str = "https://www.asd-ste100.org/STE_downloads.html#article02-2l";
-const CHANGE_FORM: &str = "https://www.asd-ste100.org/STE_downloads.html#features038-31";
 const DOWNLOAD_ATTEMPTS: usize = 3;
 const MAX_ASSET_BYTES: u64 = 64 * 1024 * 1024;
 
 /// Where an imported dictionary came from, as the init summary reports it.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum DictionarySource {
     /// The `--ste-pdf` file the user selected.
-    SelectedFile,
+    SelectedFile(Utf8PathBuf),
     /// The official ASD-STE100 asset, downloaded once and cached.
     OfficialAsset,
 }
@@ -35,7 +30,7 @@ pub enum DictionarySource {
 pub enum DictionaryOutcome {
     Imported(DictionarySource),
     AlreadyImported,
-    /// No import happened; the text tells the reader how to get one.
+    /// No import happened; the text is the loud warning with the retry path.
     Guidance(String),
 }
 
@@ -46,15 +41,11 @@ pub struct Plan {
     outcome: DictionaryOutcome,
 }
 
-/// Selects the interactive form path or the bounded agent download path.
-#[rule("rule_ste_dictionary_interactive_acquisition")]
+/// Onboarding acquires the Issue 9 dictionary without a manual mode: reuse an
+/// existing import, import a selected PDF, or download the official asset.
 #[rule("rule_ste_dictionary_agent_acquisition")]
 #[rule("rule_ste_dictionary_no_operational_download")]
-pub fn prepare(
-    repo: &Utf8Path,
-    mode: SteOnboardingMode,
-    selected_pdf: Option<&Utf8Path>,
-) -> anyhow::Result<Plan> {
+pub fn prepare(repo: &Utf8Path, selected_pdf: Option<&Utf8Path>) -> anyhow::Result<Plan> {
     let layout = ProvenanceLayout::new(repo.to_owned());
     let reference_path = dictionary_reference::dictionary_reference_path(&layout);
     let reference_before = FileSnapshot::read(reference_path.as_std_path())?;
@@ -63,21 +54,19 @@ pub fn prepare(
         return Ok(Plan::unchanged(reference_before));
     }
 
-    let (import, outcome) = match (mode, selected_pdf) {
-        (_, Some(pdf)) => (
+    let (import, outcome) = if let Some(pdf) = selected_pdf {
+        (
             Some(import_pdf(pdf)?),
-            DictionaryOutcome::Imported(DictionarySource::SelectedFile),
-        ),
-        (SteOnboardingMode::Interactive, None) => {
-            (None, DictionaryOutcome::Guidance(interactive_guidance()))
-        }
-        (SteOnboardingMode::Agent, None) => match acquire_agent_dictionary_blocking() {
+            DictionaryOutcome::Imported(DictionarySource::SelectedFile(pdf.to_owned())),
+        )
+    } else {
+        match acquire_official_dictionary_blocking() {
             Ok(import) => (
                 Some(import),
                 DictionaryOutcome::Imported(DictionarySource::OfficialAsset),
             ),
             Err(error) => (None, DictionaryOutcome::Guidance(fallback_guidance(&error))),
-        },
+        }
     };
 
     let Some(import) = import else {
@@ -140,19 +129,20 @@ impl Plan {
     }
 
     /// The dictionary part of the init summary: what happened to the
-    /// dictionary, with the required attribution.
+    /// dictionary. The required attribution stays in the LICENSE notice.
     pub(super) fn dictionary_section(&self) -> String {
         match &self.outcome {
-            DictionaryOutcome::Imported(source) => import_section(*source),
+            DictionaryOutcome::Imported(source) => import_section(source),
             DictionaryOutcome::AlreadyImported => {
                 "Dictionary: ASD-STE100 Issue 9 is already imported.".to_owned()
             }
-            DictionaryOutcome::Guidance(text) => format!("Dictionary: {text}"),
+            // The warning stands alone; its first word is the loud part.
+            DictionaryOutcome::Guidance(text) => text.clone(),
         }
     }
 
-    /// True when no import happened and the text tells the reader how to get
-    /// one. An already-initialized repository prints only this part.
+    /// True when no import happened and the one-line already-set-up ending
+    /// must still carry the warning.
     pub(super) const fn has_guidance(&self) -> bool {
         matches!(self.outcome, DictionaryOutcome::Guidance(_))
     }
@@ -174,7 +164,7 @@ fn import_bytes(bytes: &[u8]) -> anyhow::Result<DictionaryImport> {
 #[rule("rule_ste_dictionary_download_retry_bound")]
 #[rule("rule_ste_dictionary_download_identity")]
 #[rule("rule_ste_dictionary_asset_fallback")]
-fn acquire_agent_dictionary_blocking() -> anyhow::Result<DictionaryImport> {
+fn acquire_official_dictionary_blocking() -> anyhow::Result<DictionaryImport> {
     let directory = asset_directory().context("no machine cache directory is available")?;
     std::fs::create_dir_all(&directory).context("create the shared STE asset cache")?;
     let lock = open_lock(&directory.join("issue-9.pdf.lock"))?;
@@ -302,34 +292,21 @@ fn cache_directory() -> Option<PathBuf> {
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cache")))
 }
 
-fn interactive_guidance() -> String {
-    format!(
-        "Get ASD-STE100 Issue 9 from the official request page, then rerun init with --ste-pdf <path>:\n{REQUEST_FORM}\n{}",
-        product_notice()
-    )
-}
-
 fn fallback_guidance(error: &anyhow::Error) -> String {
     format!(
-        "The official Issue 9 asset is unavailable after {DOWNLOAD_ATTEMPTS} attempts ({error}). Use the official request page. Provenance does not search for another asset:\n{REQUEST_FORM}\n{}",
-        product_notice()
-    )
-}
-
-fn import_section(source: DictionarySource) -> String {
-    let origin = match source {
-        DictionarySource::SelectedFile => "the selected Issue 9 dictionary file",
-        DictionarySource::OfficialAsset => "the official Issue 9 dictionary",
-    };
-    format!("Dictionary: imported {origin}.\n{}", product_notice())
-}
-
-/// Gives the required ownership, stewardship, source, and claim limits.
-#[rule("rule_ste_dictionary_attribution")]
-#[rule("rule_ste_dictionary_claim_scope")]
-#[rule("rule_ste_dictionary_change_form_link")]
-fn product_notice() -> String {
+fn fallback_guidance(error: &anyhow::Error) -> String {
     format!(
-        "ASD owns ASD-STE100, and STEMG maintains it. Official request page: {REQUEST_FORM}. Official change-form page: {CHANGE_FORM}. Provenance names only its implemented Issue 9 checks. It does not claim compliance, certification, endorsement, or approval."
+        "Warning: the official Issue 9 asset is unavailable after {DOWNLOAD_ATTEMPTS} attempts ({error}). Initialization continues without a dictionary. To add it later, rerun init, or run `provenance dictionary import --pdf <path>` with a local PDF file."
     )
+}
+
+fn import_section(source: &DictionarySource) -> String {
+    match source {
+        DictionarySource::SelectedFile(pdf) => {
+            format!("Dictionary: Imported the Issue 9 dictionary from {pdf}.")
+        }
+        DictionarySource::OfficialAsset => {
+            "Dictionary: Imported the Issue 9 dictionary from the official asset.".to_owned()
+        }
+    }
 }
