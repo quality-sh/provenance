@@ -428,6 +428,8 @@ jobs:
           tool: cargo-llvm-cov@0.9.1,cargo-crap@0.5.0
       - name: Test the gate with native cargo-crap fixtures
         run: python3 .github/scripts/crap_gate.test.py
+      - name: Prepare CRAP output directory
+        run: mkdir -p target/crap
       - name: Execute workspace tests for LCOV
         run: cargo llvm-cov --workspace --all-features --lcov --output-path target/crap/lcov.info
       # cargo-crap skips #[test] functions and exact #[cfg(test)] modules. Its

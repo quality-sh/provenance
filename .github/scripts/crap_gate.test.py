@@ -254,6 +254,7 @@ class WorkflowWiringTests(unittest.TestCase):
     def test_job_runs_executed_workspace_tests_with_pinned_tools(self):
         self.assertIn("cargo-llvm-cov@0.9.1", self.job)
         self.assertIn("cargo-crap@0.5.0", self.job)
+        self.assertIn("mkdir -p target/crap", self.job)
         self.assertIn("cargo llvm-cov --workspace --all-features --lcov", self.job)
         self.assertNotIn("continue-on-error", self.job)
         self.assertNotIn("PROVENANCE_CI_LOCAL", self.job)
