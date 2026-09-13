@@ -8,37 +8,10 @@ use provenance_core::{
 
 impl StateStore {
     pub fn create_source(&self, input: CreateSourceInput) -> anyhow::Result<Source> {
-        let CreateSourceInput {
-            scope_id,
-            id,
-            name,
-            source_type,
-            url,
-            reference,
-            commit_pin,
-            effective_date,
-            review_date,
-            supersedes,
-            origin_thread,
-            origin_message,
-        } = input;
-        let commit_pin = validate_optional_commit_pin(commit_pin)
-            .map_err(|error| SourceFailure::wrap(WriteFailure::InvalidCommitPin, error))?;
-        for older in &supersedes {
-            self.ensure_node_exists(&scope_id, NodeType::Source, older, "--supersedes")?;
-        }
-        let supersedes = sorted_ids(supersedes);
-        let path = shards::sources_path(&self.layout, &scope_id);
-        self.mutate_graph_record(&path, |records: &mut Vec<Source>| {
-            let source = Source {
-                created: None,
-                updated: None,
-                schema_version: SUPPORTED_SCHEMA_VERSION,
-                scope_id: scope_id.clone(),
+        self.with_repository_publication(|| {
+            let CreateSourceInput {
+                scope_id,
                 id,
-                declared_by: None,
-                declaration_address: None,
-
                 name,
                 source_type,
                 url,
@@ -49,15 +22,45 @@ impl StateStore {
                 supersedes,
                 origin_thread,
                 origin_message,
-            };
-            crate::write_error::ensure!(
-                AlreadyExists,
-                !records.iter().any(|record| record.id == source.id),
-                "source already exists"
-            );
-            records.push(source.clone());
-            records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
-            Ok(source)
+            } = input;
+            let commit_pin = validate_optional_commit_pin(commit_pin)
+                .map_err(|error| SourceFailure::wrap(WriteFailure::InvalidCommitPin, error))?;
+            for older in &supersedes {
+                self.ensure_node_exists(&scope_id, NodeType::Source, older, "--supersedes")?;
+            }
+            crate::test_probes::at("source_supersedes_validated")?;
+            let supersedes = sorted_ids(supersedes);
+            let path = shards::sources_path(&self.layout, &scope_id);
+            self.mutate_graph_record(&path, |records: &mut Vec<Source>| {
+                let source = Source {
+                    created: None,
+                    updated: None,
+                    schema_version: SUPPORTED_SCHEMA_VERSION,
+                    scope_id: scope_id.clone(),
+                    id,
+                    declared_by: None,
+                    declaration_address: None,
+
+                    name,
+                    source_type,
+                    url,
+                    reference,
+                    commit_pin,
+                    effective_date,
+                    review_date,
+                    supersedes,
+                    origin_thread,
+                    origin_message,
+                };
+                crate::write_error::ensure!(
+                    AlreadyExists,
+                    !records.iter().any(|record| record.id == source.id),
+                    "source already exists"
+                );
+                records.push(source.clone());
+                records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
+                Ok(source)
+            })
         })
     }
 
