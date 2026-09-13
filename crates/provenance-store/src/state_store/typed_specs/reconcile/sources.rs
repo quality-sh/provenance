@@ -7,8 +7,8 @@ use provenance_core::{
 use super::super::super::{
     ReconcileState, ReconciledResource, TypedFieldChange, TypedResourceKind, TypedSourceInput,
 };
+use super::super::deletion::delete_omitted_sources;
 use super::super::identity::source_address;
-use super::super::lifecycle::retire_omitted_sources;
 use super::changes::{changed, resource, state_after_change};
 use super::references;
 
@@ -36,7 +36,7 @@ pub(in crate::state_store::typed_specs) fn reconcile_sources(
             changes,
         ));
     }
-    retire_omitted_sources(&mut records, &mut resources, spec, owner, ids);
+    delete_omitted_sources(&mut records, &mut resources, spec, owner, ids);
     records.sort_by(|left, right| left.id.as_str().cmp(right.id.as_str()));
     Ok((records, resources))
 }
@@ -50,12 +50,14 @@ pub(in crate::state_store::typed_specs) fn desired_source(
     source_ids: &BTreeMap<String, StableId>,
 ) -> anyhow::Result<Source> {
     let mut source = Source {
+        created: None,
+        updated: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id.clone(),
         id: id.clone(),
         declared_by: Some(owner.to_string()),
         declaration_address: Some(address.clone()),
-        retired: false,
+
         name: declaration.name.clone(),
         source_type: source_type(&declaration.kind)?,
         url: declaration.url.clone(),
@@ -111,7 +113,6 @@ pub(in crate::state_store::typed_specs) fn reconciled_source(
     let mut reconciled = current.clone();
     reconciled.declared_by = desired.declared_by;
     reconciled.declaration_address = desired.declaration_address;
-    reconciled.retired = false;
     reconciled.name = desired.name;
     reconciled.source_type = desired.source_type;
     if desired.url.is_some() {
@@ -141,7 +142,6 @@ pub(in crate::state_store::typed_specs) fn source_changes(
         &before.declaration_address,
         &after.declaration_address,
     );
-    changed(&mut changes, "retired", &before.retired, &after.retired);
     changed(&mut changes, "name", &before.name, &after.name);
     changed(
         &mut changes,

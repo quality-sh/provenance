@@ -31,7 +31,7 @@ async fn http_statement_reports_match_analyzer_without_repository_access() {
     for statement in ["Install the cover.", "Stop; wait.", "Café; wait.", ""] {
         let (status, actual) = call(
             &host,
-            "/v8/operations/check-statement",
+            "/v9/operations/check-statement",
             &json!({
                 "request": {"statement": statement}
             })
@@ -59,7 +59,7 @@ async fn invalid_statement_calls_have_typed_refusals() {
         r#"{"request":{"statement":"x","extra":1}}"#,
         r#"{"request":{"statement":"x"},"context":{"repository":"outside"}}"#,
     ] {
-        let (status, actual) = call(&host, "/v8/operations/check-statement", body).await;
+        let (status, actual) = call(&host, "/v9/operations/check-statement", body).await;
         assert_eq!(status, StatusCode::BAD_REQUEST, "{body}: {actual}");
         assert_eq!(actual["error"]["kind"], "invalid_input");
     }
@@ -78,9 +78,9 @@ async fn protocol_and_unknown_operation_refusals_preserve_dispatch_identity() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(
         failure["error"],
-        json!({"kind":"protocol_mismatch", "requested":6,"supported":8})
+        json!({"kind":"protocol_mismatch", "requested":6,"supported":9})
     );
-    let (status, failure) = call(&host, "/v8/operations/not-an-operation", "{}").await;
+    let (status, failure) = call(&host, "/v9/operations/not-an-operation", "{}").await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(failure["error"]["kind"], "unknown_operation");
     assert!(failure.get("operation").is_none());
@@ -100,12 +100,12 @@ async fn metadata_and_statement_calls_leave_fixture_tree_untouched() {
     assert_eq!(response.status(), StatusCode::OK);
     let metadata: Value =
         serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap()).unwrap();
-    assert_eq!(metadata["protocol_version"], 8);
+    assert_eq!(metadata["protocol_version"], 9);
     assert_eq!(metadata["engine_version"], env!("CARGO_PKG_VERSION"));
     assert!(metadata.get("repository").is_none());
     call(
         &host,
-        "/v8/operations/check-statement",
+        "/v9/operations/check-statement",
         r#"{"request":{"statement":"Close the valve."}}"#,
     )
     .await;
@@ -118,7 +118,7 @@ async fn metadata_and_statement_calls_leave_fixture_tree_untouched() {
 async fn oversized_http_body_refuses_before_analyzer() {
     let host = StatementHost::default();
     let body = json!({"request":{"statement":"a".repeat(2 * 1024 * 1024)}}).to_string();
-    let (status, refusal) = call(&host, "/v8/operations/check-statement", &body).await;
+    let (status, refusal) = call(&host, "/v9/operations/check-statement", &body).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(refusal["error"]["reason"], "too_large");
     host.shutdown().await;
@@ -141,7 +141,7 @@ async fn request_admission_bounds_incomplete_bodies_before_decode() {
         readers.push(tokio::spawn(async move {
             router
                 .oneshot(
-                    Request::post("/v8/operations/check-statement")
+                    Request::post("/v9/operations/check-statement")
                         .body(Body::from_stream(pending))
                         .unwrap(),
                 )
@@ -150,7 +150,7 @@ async fn request_admission_bounds_incomplete_bodies_before_decode() {
         }));
         ready.await.unwrap();
     }
-    let (status, failure) = call(&host, "/v8/operations/check-statement", "{}").await;
+    let (status, failure) = call(&host, "/v9/operations/check-statement", "{}").await;
     for reader in readers {
         reader.abort();
         let _ = reader.await;
@@ -175,7 +175,7 @@ async fn shutdown_releases_incomplete_http_body_without_waiting_for_peer() {
     let reader = tokio::spawn(async move {
         router
             .oneshot(
-                Request::post("/v8/operations/check-statement")
+                Request::post("/v9/operations/check-statement")
                     .body(Body::from_stream(pending))
                     .unwrap(),
             )

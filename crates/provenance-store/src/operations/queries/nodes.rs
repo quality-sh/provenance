@@ -85,16 +85,14 @@ fn by_kind(wanted: &[(NodeType, StableId)]) -> BTreeMap<u8, (NodeType, Vec<Stabl
     kinds
 }
 
-/// One record that counts under the view: present, and not retired
-/// unless retired records are asked for.
+/// One present record of the requested kind.
 pub(super) async fn node(
     snapshot: &ReadSnapshot,
     node_type: NodeType,
     id: &StableId,
-    include_retired: bool,
 ) -> anyhow::Result<Option<GraphNode>> {
     let wanted = [(node_type, id.clone())];
-    let mut found = nodes(snapshot, &wanted, include_retired).await?;
+    let mut found = nodes(snapshot, &wanted).await?;
     Ok(found.remove(&key(node_type, id)))
 }
 
@@ -103,14 +101,13 @@ pub(super) async fn node(
 pub(super) async fn nodes(
     snapshot: &ReadSnapshot,
     wanted: &[(NodeType, StableId)],
-    include_retired: bool,
 ) -> anyhow::Result<BTreeMap<Key, GraphNode>> {
     let mut found = BTreeMap::new();
     for (node_type, ids) in by_kind(wanted).into_values() {
         let records: Vec<GraphNode> = for_kind!(node_type, K, wrap => {
             snapshot
                 .table::<K>()
-                .by_ids(&ids, include_retired)
+                .by_ids(&ids)
                 .await?
                 .into_iter()
                 .map(wrap)
@@ -128,12 +125,11 @@ pub(super) async fn nodes(
 pub(super) async fn counting(
     snapshot: &ReadSnapshot,
     wanted: &[(NodeType, StableId)],
-    include_retired: bool,
 ) -> anyhow::Result<Vec<(NodeType, StableId)>> {
     let mut found = Vec::new();
     for (node_type, ids) in by_kind(wanted).into_values() {
         let counting: Vec<StableId> = for_kind!(node_type, K => {
-            snapshot.table::<K>().ids_that_count(&ids, include_retired).await?
+            snapshot.table::<K>().ids_that_count(&ids).await?
         });
         found.extend(counting.into_iter().map(|id| (node_type, id)));
     }
@@ -144,12 +140,11 @@ pub(super) async fn counting(
 pub(super) async fn search_ids(
     snapshot: &ReadSnapshot,
     node_type: NodeType,
-    retired: bool,
     after: &str,
     limit: usize,
 ) -> anyhow::Result<Vec<String>> {
     for_kind!(node_type, K => {
-        snapshot.table::<K>().search_ids(retired, after, limit).await
+        snapshot.table::<K>().search_ids(after, limit).await
     })
 }
 

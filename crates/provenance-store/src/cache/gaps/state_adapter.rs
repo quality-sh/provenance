@@ -1,10 +1,9 @@
 use super::{compute_gaps, graph_query::GapGraph, model::GapItem};
 use crate::{layout::ProvenanceLayout, state_store::StateStore};
 use provenance_core::{
-    Boundary, Contribution, IdeationTarget, NodeType, Question, Requirement, Resolution, Rule,
-    ScopeId, Source, SynthesisPacket, Thread, Topic,
+    Contribution, Question, Requirement, Resolution, Rule, ScopeId, Source, SynthesisPacket,
+    Thread, Topic,
 };
-use std::collections::BTreeSet;
 
 pub fn find_gaps(layout: &ProvenanceLayout, scope: &ScopeId) -> anyhow::Result<Vec<GapItem>> {
     let store = StateStore::new(layout.clone());
@@ -35,94 +34,20 @@ pub(in crate::cache) struct GraphRecords {
 }
 
 impl GraphRecords {
-    /// Reads under a lock the caller already holds. Retired sources,
-    /// requirements, and rules leave; a resolution whose every requirement
-    /// retired leaves with them, and so do the topics, questions, and
-    /// boundaries of a retired requirement. A reference from a live record
-    /// to a retired record is dropped too: `check` reads the unfiltered
-    /// lists and resolves it, so the gap report must not call it dangling.
-    /// A contribution or synthesis packet whose target retired leaves on
-    /// the same terms.
+    /// Reads the canonical records under the caller's lock.
     pub(in crate::cache) fn load(scope: &ScopeId, store: &StateStore) -> anyhow::Result<Self> {
-        let mut sources = store.list_sources(scope)?;
-        let mut requirements = store.list_requirements(scope)?;
-        let mut rules = store.list_rules(scope)?;
-        let mut resolutions = store.list_resolutions(scope)?;
-        let mut topics = store.list_topics(scope)?;
-        let mut questions = store.list_questions(scope)?;
-        let mut boundaries = store.list_boundaries(scope)?;
-        let mut contributions = store.list_contributions(scope)?;
-        let mut synthesis_packets = store.list_synthesis_packets(scope)?;
-        let retired_sources = retired_ids(&sources, |record| (&record.id, record.retired));
-        let retired_requirements =
-            retired_ids(&requirements, |record| (&record.id, record.retired));
-        let retired_rules = retired_ids(&rules, |record| (&record.id, record.retired));
-        let retired_resolutions = resolutions
-            .iter()
-            .filter(|resolution| {
-                !resolution.requirement_ids.is_empty()
-                    && resolution
-                        .requirement_ids
-                        .iter()
-                        .all(|id| retired_requirements.contains(id.as_str()))
-            })
-            .map(|record| record.id.as_str().to_string())
-            .collect::<BTreeSet<_>>();
-        let retired_topics = topics
-            .iter()
-            .filter(|topic| retired_requirements.contains(topic.requirement_id.as_str()))
-            .map(|topic| topic.id.as_str().to_string())
-            .collect::<BTreeSet<_>>();
-        let retired_questions = questions
-            .iter()
-            .filter(|question| {
-                retired_requirements.contains(question.requirement_id.as_str())
-                    || retired_topics.contains(question.topic_id.as_str())
-            })
-            .map(|question| question.id.as_str().to_string())
-            .collect::<BTreeSet<_>>();
-        sources.retain(|record| !record.retired);
-        requirements.retain(|record| !record.retired);
-        rules.retain(|record| !record.retired);
-        resolutions.retain(|record| !retired_resolutions.contains(record.id.as_str()));
-        topics.retain(|record| !retired_topics.contains(record.id.as_str()));
-        questions.retain(|record| !retired_questions.contains(record.id.as_str()));
-        // A boundary's requirement is a required reference, so it cannot be
-        // emptied; the boundary leaves with its requirement, like a topic.
-        let retired_boundaries = boundaries
-            .iter()
-            .filter(|record| retired_requirements.contains(record.requirement_id.as_str()))
-            .map(|record| record.id.as_str().to_string())
-            .collect::<BTreeSet<_>>();
-        boundaries.retain(|record| !retired_boundaries.contains(record.id.as_str()));
-        let retired = RetiredNodes {
-            sources: retired_sources,
-            requirements: retired_requirements,
-            resolutions: retired_resolutions,
-            rules: retired_rules,
-            topics: retired_topics,
-            questions: retired_questions,
-            boundaries: retired_boundaries,
-        };
-        scrub_sources(&retired, &mut sources);
-        scrub_requirements(&retired, &mut requirements);
-        scrub_resolutions(&retired, &mut resolutions);
-        scrub_rules(&retired, &mut rules);
-        scrub_boundaries(&retired, &mut boundaries);
-        contributions.retain(|record| !retired.holds_target(&record.target));
-        synthesis_packets.retain(|record| !retired.holds_target(&record.target));
         Ok(Self {
-            sources,
-            requirements,
-            resolutions,
-            rules,
-            topics,
-            questions,
+            sources: store.list_sources(scope)?,
+            requirements: store.list_requirements(scope)?,
+            resolutions: store.list_resolutions(scope)?,
+            rules: store.list_rules(scope)?,
+            topics: store.list_topics(scope)?,
+            questions: store.list_questions(scope)?,
             threads: store.list_threads(scope)?,
             domains: store.list_domains(scope)?,
-            boundaries,
-            contributions,
-            synthesis_packets,
+            boundaries: store.list_boundaries(scope)?,
+            contributions: store.list_contributions(scope)?,
+            synthesis_packets: store.list_synthesis_packets(scope)?,
         })
     }
 
@@ -140,110 +65,6 @@ impl GraphRecords {
             boundaries: &self.boundaries,
             contributions: &self.contributions,
             synthesis_packets: &self.synthesis_packets,
-        }
-    }
-}
-
-fn retired_ids<'a, T>(
-    records: &'a [T],
-    fields: impl Fn(&'a T) -> (&'a provenance_core::StableId, bool),
-) -> BTreeSet<String> {
-    records
-        .iter()
-        .filter_map(|record| {
-            let (id, retired) = fields(record);
-            retired.then(|| id.as_str().to_string())
-        })
-        .collect()
-}
-
-/// The retired records a live record's reference fields can name.
-struct RetiredNodes {
-    sources: BTreeSet<String>,
-    requirements: BTreeSet<String>,
-    resolutions: BTreeSet<String>,
-    rules: BTreeSet<String>,
-    topics: BTreeSet<String>,
-    questions: BTreeSet<String>,
-    boundaries: BTreeSet<String>,
-}
-
-impl RetiredNodes {
-    /// True when an ideation target names a record that left as retired.
-    /// A domain cannot retire.
-    fn holds_target(&self, target: &IdeationTarget) -> bool {
-        let id = target.artifact_id.as_str();
-        match NodeType::from(target.artifact_type) {
-            NodeType::Source => self.sources.contains(id),
-            NodeType::Requirement => self.requirements.contains(id),
-            NodeType::Resolution => self.resolutions.contains(id),
-            NodeType::Rule => self.rules.contains(id),
-            NodeType::Topic => self.topics.contains(id),
-            NodeType::Question => self.questions.contains(id),
-            NodeType::Boundary => self.boundaries.contains(id),
-            NodeType::Domain => false,
-        }
-    }
-}
-
-fn scrub_sources(retired: &RetiredNodes, sources: &mut [Source]) {
-    for source in sources {
-        source
-            .supersedes
-            .retain(|id| !retired.sources.contains(id.as_str()));
-    }
-}
-
-fn scrub_requirements(retired: &RetiredNodes, requirements: &mut [Requirement]) {
-    for requirement in requirements {
-        requirement
-            .source_refs
-            .retain(|reference| !retired.sources.contains(reference.source_id.as_str()));
-        if let Some(id) = &requirement.refines {
-            if retired.requirements.contains(id.as_str()) {
-                requirement.refines = None;
-            }
-        }
-        requirement
-            .depends_on
-            .retain(|id| !retired.requirements.contains(id.as_str()));
-        requirement
-            .supersedes
-            .retain(|id| !retired.requirements.contains(id.as_str()));
-        if let Some(id) = &requirement.spawned_by {
-            if retired.resolutions.contains(id.as_str()) {
-                requirement.spawned_by = None;
-            }
-        }
-    }
-}
-
-fn scrub_resolutions(retired: &RetiredNodes, resolutions: &mut [Resolution]) {
-    for resolution in resolutions {
-        resolution
-            .requirement_ids
-            .retain(|id| !retired.requirements.contains(id.as_str()));
-        resolution
-            .supersedes
-            .retain(|id| !retired.resolutions.contains(id.as_str()));
-    }
-}
-
-fn scrub_rules(retired: &RetiredNodes, rules: &mut [Rule]) {
-    for rule in rules {
-        rule.requirement_ids
-            .retain(|id| !retired.requirements.contains(id.as_str()));
-        rule.resolution_ids
-            .retain(|id| !retired.resolutions.contains(id.as_str()));
-    }
-}
-
-fn scrub_boundaries(retired: &RetiredNodes, boundaries: &mut [Boundary]) {
-    for boundary in boundaries {
-        if let Some(reference) = &boundary.source_ref {
-            if retired.sources.contains(reference.source_id.as_str()) {
-                boundary.source_ref = None;
-            }
         }
     }
 }

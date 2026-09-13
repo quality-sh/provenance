@@ -9,12 +9,12 @@ use sqlx::Row;
 const SETS: &str = r"
 WITH RECURSIVE
 branch(id) AS (
- SELECT id FROM requirements WHERE scope_id = ?1 AND id = ?2 AND retired = 0
+ SELECT id FROM requirements WHERE scope_id = ?1 AND id = ?2
  UNION
  SELECT e.owner_id FROM branch b JOIN relations e
  ON e.scope_id = ?1 AND e.target_type = 'requirement' AND e.target_id = b.id
  AND e.owner_type = 'requirement' AND e.relation = 'refines'
- JOIN requirements r ON r.scope_id = ?1 AND r.id = e.owner_id AND r.retired = 0
+ JOIN requirements r ON r.scope_id = ?1 AND r.id = e.owner_id
  LIMIT 4097
 ),
 decisions(id) AS (
@@ -29,20 +29,20 @@ members(kind, id) AS (
  UNION SELECT 'rule', e.owner_id FROM branch b JOIN relations e
  ON e.scope_id = ?1 AND e.target_type = 'requirement' AND e.target_id = b.id
  AND e.owner_type = 'rule' AND e.relation = 'requirement_ids'
- JOIN rules r ON r.scope_id = ?1 AND r.id = e.owner_id AND r.retired = 0
+ JOIN rules r ON r.scope_id = ?1 AND r.id = e.owner_id
  UNION SELECT 'rule', e.owner_id FROM decisions d JOIN relations e
  ON e.scope_id = ?1 AND e.target_type = 'resolution' AND e.target_id = d.id
  AND e.owner_type = 'rule' AND e.relation = 'resolution_ids'
- JOIN rules r ON r.scope_id = ?1 AND r.id = e.owner_id AND r.retired = 0
+ JOIN rules r ON r.scope_id = ?1 AND r.id = e.owner_id
  UNION SELECT e.owner_type, e.owner_id FROM branch b JOIN relations e
  ON e.scope_id = ?1 AND e.target_type = 'requirement' AND e.target_id = b.id
  AND e.relation = 'requirement_id' AND e.owner_type IN ('topic', 'question', 'boundary')
  LIMIT 4097
 ),
 ancestors(id) AS (
- SELECT refines FROM requirements WHERE scope_id = ?1 AND id = ?2 AND retired = 0 AND refines IS NOT NULL
+ SELECT refines FROM requirements WHERE scope_id = ?1 AND id = ?2 AND refines IS NOT NULL
  UNION SELECT r.refines FROM ancestors a JOIN requirements r
- ON r.scope_id = ?1 AND r.id = a.id AND r.retired = 0 WHERE r.refines IS NOT NULL
+ ON r.scope_id = ?1 AND r.id = a.id WHERE r.refines IS NOT NULL
  LIMIT 4097
 ),
 refs(kind, id) AS (
@@ -52,8 +52,8 @@ refs(kind, id) AS (
  UNION SELECT e.owner_type, e.owner_id FROM members m JOIN relations e
  ON e.scope_id = ?1 AND e.target_type = m.kind AND e.target_id = m.id
  WHERE (e.relation = 'supersedes'
- AND ((e.owner_type = 'requirement' AND EXISTS (SELECT 1 FROM requirements r WHERE r.scope_id = ?1 AND r.id = e.owner_id AND r.retired = 0))
- OR (e.owner_type = 'source' AND EXISTS (SELECT 1 FROM sources s WHERE s.scope_id = ?1 AND s.id = e.owner_id AND s.retired = 0))
+ AND ((e.owner_type = 'requirement' AND EXISTS (SELECT 1 FROM requirements r WHERE r.scope_id = ?1 AND r.id = e.owner_id))
+ OR (e.owner_type = 'source' AND EXISTS (SELECT 1 FROM sources s WHERE s.scope_id = ?1 AND s.id = e.owner_id))
  OR e.owner_type = 'resolution'))
  OR (m.kind = 'requirement' AND e.relation IN ('refines', 'requirement_ids'))
  LIMIT 4097

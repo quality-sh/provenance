@@ -12,6 +12,7 @@ fn seeded_rule_store() -> (
     let (directory, store, scope) = seeded_requirement_store();
     store
         .create_rule(CreateRuleInput {
+            archived_in_commit: None,
             scope_id: scope.clone(),
             id: StableId::new("rule_expiry").unwrap(),
             name: None,
@@ -117,6 +118,7 @@ fn explicit_identity_is_independent_of_the_containing_scope() {
         .unwrap();
     store
         .create_rule(CreateRuleInput {
+            archived_in_commit: None,
             scope_id: other_scope.clone(),
             id: StableId::new("rule_expiry").unwrap(),
             name: None,
@@ -217,28 +219,4 @@ fn beginning_a_run_materializes_and_cites_the_canonical_binding() {
     );
     assert_eq!(run.file, Some(bindings[0].file.clone()));
     assert_eq!(run.symbol, bindings[0].symbol);
-}
-
-#[test]
-fn active_binding_view_excludes_retired_history() {
-    let (_directory, store, scope) = seeded_rule_store();
-    store
-        .materialize_verification_binding(input(&scope))
-        .unwrap();
-    let path = crate::shards::verification_bindings_path(&store.layout, &scope);
-    store
-        .mutate_jsonl_records(
-            &path,
-            |records: &mut Vec<provenance_core::VerificationBinding>| {
-                records[0].retired = true;
-                Ok(())
-            },
-        )
-        .unwrap();
-
-    assert_eq!(store.list_verification_bindings(&scope).unwrap().len(), 1);
-    assert!(store
-        .active_verification_bindings(&scope)
-        .unwrap()
-        .is_empty());
 }

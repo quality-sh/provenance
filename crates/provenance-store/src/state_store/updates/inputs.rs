@@ -30,7 +30,7 @@ update_input!(UpdateSourceInput, SourceClearField {
     Url, Reference, CommitPin, EffectiveDate, ReviewDate
 }, {
     declared_by: String, name: String, source_type: SourceType, url: String,
-    reference: String, commit_pin: String, effective_date: i64, review_date: i64, retired: bool
+    reference: String, commit_pin: String, effective_date: i64, review_date: i64
 });
 update_input!(UpdateResolutionInput, ResolutionClearField {
     Context, Enforcement, Confidence, MadeBy, ApprovedBy, ApprovedAt, ReviewOn
@@ -43,14 +43,14 @@ update_input!(UpdateRequirementInput, RequirementClearField {
     Description, Fog, DomainId
 }, {
     declared_by: String, statement: String, description: String, fog: String,
-    status: RequirementStatus, domain_id: StableId, retired: bool
+    status: RequirementStatus, domain_id: StableId
 });
 update_input!(UpdateRuleInput, RuleClearField {
     Name, Description, SourceDocument, SourceSection
 }, {
     declared_by: String, name: String, description: String, statement: String,
     status: RuleStatus, severity: RuleSeverity, source_document: String,
-    source_section: String, retired: bool
+    source_section: String, archived_in_commit: provenance_core::ArchivedStamp
 });
 update_input!(UpdateDomainInput, DomainClearField { Description, Color }, {
     name: String, description: String, color: String

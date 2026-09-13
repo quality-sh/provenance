@@ -1,4 +1,7 @@
-import type { GetResponse, Stamp } from "@quality-sh/provenance";
+import { PROTOCOL_VERSION, type components } from "@quality-sh/provenance/client";
+
+type GetResponse = components["schemas"]["GetSuccessOutput"];
+type Stamp = GetResponse["stamp"];
 
 const stamp: Stamp = {
   serial: 41,
@@ -11,7 +14,7 @@ const stamp: Stamp = {
 };
 
 const stamped: GetResponse = {
-  protocol_version: 8,
+  protocol_version: PROTOCOL_VERSION,
   operation: "get",
   found: false,
   stamp,

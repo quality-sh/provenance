@@ -24,7 +24,6 @@ pub(super) async fn resolve(
         .map_err(provenance_core::protocol::QueryValidation::into_native)?;
     let file = &request.file;
     let symbol = request.symbol.as_deref();
-    let include_retired = request.include_retired;
     let snapshot = ctx.snapshot();
     let mut ids = BTreeSet::new();
     let scanned = ctx.live(Live::ScannedSites).scan_file(file)?;
@@ -39,7 +38,7 @@ pub(super) async fn resolve(
         let by_file = [file.as_str()];
         for binding in snapshot
             .table::<ImplementationBinding>()
-            .by_field("file", &by_file, include_retired)
+            .by_field("file", &by_file)
             .await?
         {
             if symbol.is_none_or(|wanted| binding.symbol == wanted) {
@@ -48,7 +47,7 @@ pub(super) async fn resolve(
         }
         for binding in snapshot
             .table::<VerificationBinding>()
-            .by_field("file", &by_file, include_retired)
+            .by_field("file", &by_file)
             .await?
         {
             if symbol.is_none_or(|wanted| binding.symbol.as_deref() == Some(wanted)) {
@@ -62,7 +61,7 @@ pub(super) async fn resolve(
         .collect::<Vec<_>>();
     let matched = snapshot
         .table::<Rule>()
-        .by_ids(&wanted, include_retired)
+        .by_ids(&wanted)
         .await?
         .into_iter()
         .map(|rule| GraphNode::Rule(Box::new(rule)))

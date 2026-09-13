@@ -111,6 +111,13 @@ narrowing that the pinned tool otherwise drops. The authoritative OpenAPI and
 runtime validation schemas remain unchanged. The Rust union adapter deduplicates
 identical tagged alternatives only after proving object-only disjoint tags.
 
+The Rule schema marks its archive condition with
+`x-provenance-validation-only-any-of`. Client type adapters omit only that
+marked `anyOf` when they generate field types. This keeps the optional fields
+of the native Rust record and avoids an unsupported Effect union intersection.
+The exported OpenAPI and all wire validators retain the condition: an Archived
+Rule requires its commit stamp, and other statuses refuse a non-null stamp.
+
 The catalog mutation annotation drives response-loss classification in both
 clients. Malformed success or refusal after a write, interrupted connections,
 and validated uncertain/internal write outcomes remain uncertain. Response bodies

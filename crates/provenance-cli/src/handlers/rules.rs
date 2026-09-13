@@ -84,6 +84,8 @@ pub(super) async fn handle(command: RulesCommand) -> anyhow::Result<()> {
             resolution_id,
             statement,
             status,
+            archived_in_commit,
+            archived_at,
             severity,
             source_document,
             source_section,
@@ -91,21 +93,28 @@ pub(super) async fn handle(command: RulesCommand) -> anyhow::Result<()> {
             origin_message,
             ..
         } => {
-            let rule = Store::open(repo).create_rule(CreateRuleInput {
-                scope_id: ScopeId::new(scope)?,
-                id: StableId::new(id)?,
-                name,
-                description,
-                requirement_ids: stable_ids(requirement_id)?,
-                resolution_ids: stable_ids(resolution_id)?,
-                statement,
-                status: RuleStatus::parse(&status)?,
-                severity: RuleSeverity::parse(&severity)?,
-                source_document,
-                source_section,
-                origin_thread: origin_thread.map(StableId::new).transpose()?,
-                origin_message: origin_message.map(StableId::new).transpose()?,
-            })?;
+            let rule =
+                StateStore::new(ProvenanceLayout::new(repo)).create_rule(CreateRuleInput {
+                    scope_id: ScopeId::new(scope)?,
+                    id: StableId::new(id)?,
+                    name,
+                    description,
+                    requirement_ids: stable_ids(requirement_id)?,
+                    resolution_ids: stable_ids(resolution_id)?,
+                    statement,
+                    status: RuleStatus::parse(&status)?,
+                    archived_in_commit: archived_in_commit.map(|commit| {
+                        provenance_core::ArchivedStamp {
+                            commit,
+                            at: archived_at,
+                        }
+                    }),
+                    severity: RuleSeverity::parse(&severity)?,
+                    source_document,
+                    source_section,
+                    origin_thread: origin_thread.map(StableId::new).transpose()?,
+                    origin_message: origin_message.map(StableId::new).transpose()?,
+                })?;
             output::print_json(&rule)?;
         }
         RulesCommand::Requirement { command } => {
@@ -141,12 +150,15 @@ mod tests {
 
     fn rule(statement: &str) -> Rule {
         Rule {
+            created: None,
+            updated: None,
+            archived_in_commit: None,
             schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: ScopeId::new("default").unwrap(),
             id: StableId::new("rule_overtime").unwrap(),
             declared_by: None,
             declaration_address: None,
-            retired: false,
+
             name: None,
             description: None,
             statement: statement.to_string(),

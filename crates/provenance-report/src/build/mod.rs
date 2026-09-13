@@ -11,8 +11,8 @@
 //! envelope says incomplete or incompatible and states the reason.
 
 use crate::envelope::{
-    BaselineCompatibility, Completeness, PolicyMode, PolicyResult, ReportEnvelope, ScanFacts,
-    SUPPORTED_SCHEMA_VERSION,
+    BaselineCompatibility, CommitRole, Completeness, PolicyMode, PolicyResult, ReportEnvelope,
+    ScanFacts, SUPPORTED_SCHEMA_VERSION,
 };
 use crate::render;
 use anyhow::Context;
@@ -149,7 +149,7 @@ fn read_snapshots(
     head: &str,
     scope: &ScopeId,
 ) -> anyhow::Result<SnapshotPair> {
-    let head_snapshot = match graph_snapshots::read_snapshot(repo, head, scope) {
+    let head_snapshot = match graph_snapshots::read_snapshot(repo, head, scope, CommitRole::Head) {
         SnapshotRead::Present(snapshot) => snapshot,
         SnapshotRead::Absent => GraphSnapshot::default(),
         SnapshotRead::Incompatible(reason) => {
@@ -157,7 +157,7 @@ fn read_snapshots(
         }
     };
     let (baseline, baseline_reason, base_snapshot) =
-        match graph_snapshots::read_snapshot(repo, base, scope) {
+        match graph_snapshots::read_snapshot(repo, base, scope, CommitRole::Base) {
             SnapshotRead::Present(snapshot) => (BaselineCompatibility::Compatible, None, snapshot),
             SnapshotRead::Absent => (
                 BaselineCompatibility::Missing,
@@ -275,7 +275,7 @@ fn evidence_site_findings(
     scope: &ScopeId,
     layout: &ProvenanceLayout,
 ) -> anyhow::Result<Vec<crate::envelope::Finding>> {
-    let graph = cache::graph_evidence(layout, scope, false)?;
+    let graph = cache::graph_evidence(layout, scope)?;
     let base_files = git::revision_files(repo, base)?;
     let head_files = git::revision_files(repo, head)?;
     let changes = git::changed_files(repo, base, head)?;

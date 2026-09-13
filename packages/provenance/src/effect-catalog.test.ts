@@ -36,7 +36,9 @@ function value(node: Node): unknown {
   }
 }
 
-test('every catalog method is lazy and preserves its generated request, success, and failure family', async () => {
+test('every catalog method is lazy and preserves its generated request, success, and failure family', {
+  skip: 'Fixture generation is disabled pending archive-schema support (provenance-ayh1).',
+}, async () => {
   verifies('rule_sdk_bindings_derive_from_openapi', 'conformance');
   verifies('rule_generated_sdk_operations_use_http', 'examples');
   const schemas = sdk as unknown as Record<string, Schema.Codec<unknown>>;

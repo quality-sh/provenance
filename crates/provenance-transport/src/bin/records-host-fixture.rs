@@ -23,7 +23,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             protocol_version: None,
             node_type: provenance_core::NodeType::Rule,
             id: "rule_shared".into(),
-            include_retired: false,
         },
     )
     .await?;
@@ -40,7 +39,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             protocol_version: None,
             node_type: provenance_core::NodeType::Rule,
             id: "rule_shared".into(),
-            include_retired: false,
         },
     )
     .await?;

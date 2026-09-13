@@ -115,7 +115,7 @@ pub(super) fn unverified_rule_warnings(
     );
     rules
         .iter()
-        .filter(|rule| rule.status == provenance_core::RuleStatus::Active && !rule.retired)
+        .filter(|rule| rule.status == provenance_core::RuleStatus::Active)
         .filter(|rule| !verified.contains(rule.id.as_str()))
         .map(|rule| provenance_core::coverage::ValidationWarning {
             rule_id: rule.id.as_str().to_string(),

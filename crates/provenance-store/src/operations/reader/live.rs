@@ -70,13 +70,9 @@ impl<'c> LiveHandle<'c> {
 
     /// The canonical graph references that name a repository path, which
     /// the diff half is read against.
-    pub fn graph_evidence(
-        &self,
-        scope: &ScopeId,
-        include_retired: bool,
-    ) -> anyhow::Result<GraphEvidence> {
+    pub fn graph_evidence(&self, scope: &ScopeId) -> anyhow::Result<GraphEvidence> {
         self.only(Live::Canonical);
-        cache::graph_evidence(&self.layout(), scope, include_retired)
+        cache::graph_evidence(&self.layout(), scope)
     }
 
     /// A scan of the working tree, stopped at the policy's file count; the

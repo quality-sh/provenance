@@ -46,10 +46,10 @@ root when it selects or expands a nested Rule or other record.
 
 ## Wire identities and compatibility
 
-Operation protocol: **8**. Read derivation: **2**. State schema remains **2**.
-HTTP uses `POST /v8/operations/search` and `POST /v8/operations/read-document`.
+Operation protocol: **9**. Read derivation: **3**. State schema remains **2**.
+HTTP uses `POST /v9/operations/search` and `POST /v9/operations/read-document`.
 MCP uses the `search` and `read-document` tools with
-`{"protocol_version":8,"call":<the HTTP body>}`. Both return the same stamped
+`{"protocol_version":9,"call":<the HTTP body>}`. Both return the same stamped
 query object. MCP also supplies its normal text copy. The MCP tool result is
 therefore larger than the query object; its maximum is 3,342,592 bytes, excluding
 JSON-RPC framing and the caller-supplied request ID. Native Rust uses `operations::queries::{search, read_document}` with
@@ -170,7 +170,7 @@ clients must retain the actual returned values.
 
 ```json
 {
-  "protocol_version":8,
+  "protocol_version":9,
   "operation":"read-document",
   "root_id":"req_review",
   "limit":1,
@@ -179,7 +179,7 @@ clients must retain the actual returned values.
   "entries":[
     {"kind":"member","node":{"node_type":"requirement","schema_version":2,"scope_id":"default","id":"req_review","statement":"The review shows saved records.","status":"active"}}
   ],
-  "stamp":{"instance_id":"<instance>","serial":42,"digest":"sha256:<digest>","derivation":2,"policy":"catch_up","attested":["boundaries","messages","questions","relations","requirements","resolutions","rules","sources","threads","topics"],"live":[]}
+  "stamp":{"instance_id":"<instance>","serial":42,"digest":"sha256:<digest>","derivation":3,"policy":"catch_up","attested":["boundaries","messages","questions","relations","requirements","resolutions","rules","sources","threads","topics"],"live":[]}
 }
 ```
 
@@ -208,7 +208,7 @@ Its response has `nodes`, `limit`, `has_more`, `next_cursor`, `operation: "searc
 and the same stamp structure. A changed revision produces:
 
 ```json
-{"protocol_version":8,"operation":"search","error":{"kind":"cursor_revision_changed"}}
+{"protocol_version":9,"operation":"search","error":{"kind":"cursor_revision_changed"}}
 ```
 
 ## Client integration
