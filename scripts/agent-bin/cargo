@@ -167,7 +167,7 @@ def run_id_for_snapshot(root, sha, repository, args):
 
 def show_result(run_id, repository, check, custom):
     url = f"https://github.com/{repository}/actions/runs/{run_id}"
-    print(f"Remote Cargo: {check} in {url}")
+    print(f"Remote Cargo: {check} in {url}", flush=True)
     command(["gh", "run", "watch", str(run_id), "--repo", repository])
     raw = command(["gh", "run", "view", str(run_id), "--json", "jobs", "--repo", repository])
     jobs = json.loads(raw)["jobs"]
