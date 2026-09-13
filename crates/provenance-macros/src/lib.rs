@@ -186,7 +186,9 @@ fn validate_rule_id(attr: &TokenStream) {
 /// Every `StableId`-typed field carries `#[relation(target = Kind, flow =
 /// target_upstream | target_downstream | none [, required] [, name = "..."]
 /// [, via = field])]` or `#[relation(none)]`; the field named `id` is the
-/// owner key. The derive emits `Kind::RELATIONS` and `impl RelationOwner`.
+/// owner key. The derive emits `Kind::RELATIONS`, `impl RelationOwner`, and
+/// `relation_slot_mut`, which lends the mutable slot of one declared field
+/// out by name.
 #[proc_macro_derive(Relations, attributes(relation))]
 pub fn relations(input: TokenStream) -> TokenStream {
     let input = syn::parse_macro_input!(input as syn::DeriveInput);

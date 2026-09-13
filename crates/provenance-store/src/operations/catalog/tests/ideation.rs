@@ -83,6 +83,9 @@ fn proposal_input(scope: &ScopeId, id: &str) -> CreateProposalCardInput {
         promotion_state: PromotionState::Proposed,
         duplicate_of: None,
         superseded_by: None,
+        record_revision: None,
+        revises: None,
+        revises_rejection: None,
     }
 }
 

@@ -3,8 +3,8 @@ use crate::cache::GraphEvidence;
 use crate::evidence_anchors as anchors;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::coverage::{
-    AnchorState, AnnotationResult, BindingResult, CoverageReport, CoverageScan, EvidenceDiffReport,
-    EvidenceDiffSite, EvidenceDiffState, EvidenceDiffSummary, EvidenceSiteKind, ScannedFile,
+    AnchorState, CoverageReport, CoverageScan, EvidenceDiffReport, EvidenceDiffSite,
+    EvidenceDiffState, EvidenceDiffSummary, EvidenceSiteKind, ScannedFile,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -76,41 +76,7 @@ fn scan_revision(commit: &str, files: Vec<RevisionFile>) -> RevisionScan {
             provenance_scanner::scan_file(&file.path, language, &file.content)
         })
         .collect::<Vec<_>>();
-    let annotations = scans
-        .iter()
-        .flat_map(|scan| &scan.annotations)
-        .map(|site| AnnotationResult {
-            rule_id: site.annotation.rule.clone(),
-            file_path: site.file_path.clone(),
-            line: site.line,
-            function_name: site.function_name.clone(),
-            coverage: site.annotation.coverage.to_string(),
-            confidence: site.annotation.confidence,
-            verification: site
-                .annotation
-                .verification
-                .map(|method| method.to_string()),
-            anchor: Some(site.anchor.clone()),
-            anchor_state: AnchorState::New,
-            original_line: None,
-            original_file_path: None,
-        })
-        .collect();
-    let bindings = scans
-        .iter()
-        .flat_map(|scan| &scan.bindings)
-        .map(|site| BindingResult {
-            rule_id: site.rule_id.clone(),
-            file_path: site.file_path.clone(),
-            line: site.line,
-            item_name: site.item_name.clone(),
-            verification: site.verification.map(|method| method.to_string()),
-            anchor: Some(site.anchor.clone()),
-            anchor_state: AnchorState::New,
-            original_line: None,
-            original_file_path: None,
-        })
-        .collect();
+    let results = provenance_scanner::coverage_results(&scans);
     let extents = site_spans(&files, &scans);
     let scanned_files = files
         .into_iter()
@@ -124,8 +90,8 @@ fn scan_revision(commit: &str, files: Vec<RevisionFile>) -> RevisionScan {
             report: CoverageReport::new(
                 Some(commit.to_string()),
                 scans.len(),
-                annotations,
-                bindings,
+                results.annotations,
+                results.bindings,
                 Vec::new(),
             ),
             scanned_files,

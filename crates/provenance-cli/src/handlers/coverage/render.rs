@@ -5,10 +5,55 @@ use std::collections::BTreeMap;
 use std::fmt::Write;
 
 use crate::output::ReportFormat;
+use provenance_core::coverage::{AnnotationResult, BindingResult, CoverageReport, SiteCore};
 
 /// Said of a verification site that lives in a different file from the
 /// primary implementation binding it checks.
 const OUTSIDE_IMPLEMENTATION_MODULE: &str = " (outside implementation module)";
+
+#[derive(Clone, Copy)]
+enum ReportSite<'a> {
+    Annotation(&'a AnnotationResult),
+    Binding(&'a BindingResult),
+}
+
+impl<'a> ReportSite<'a> {
+    const fn core(self) -> &'a SiteCore {
+        match self {
+            Self::Annotation(site) => &site.site,
+            Self::Binding(site) => &site.site,
+        }
+    }
+
+    fn details(self) -> String {
+        let name = match self {
+            Self::Annotation(site) => site.function_name.as_deref(),
+            Self::Binding(site) => site.item_name.as_deref(),
+        }
+        .map(|name| format!(" ({name})"))
+        .unwrap_or_default();
+        match self {
+            Self::Annotation(site) => format!("{name} ({})", site.coverage),
+            Self::Binding(_) => name,
+        }
+    }
+}
+
+fn report_sites(report: &CoverageReport) -> impl Iterator<Item = ReportSite<'_>> {
+    report
+        .annotations
+        .iter()
+        .map(ReportSite::Annotation)
+        .chain(report.bindings.iter().map(ReportSite::Binding))
+}
+
+fn implementation_sites(report: &CoverageReport) -> impl Iterator<Item = ReportSite<'_>> {
+    report
+        .bindings
+        .iter()
+        .map(ReportSite::Binding)
+        .chain(report.annotations.iter().map(ReportSite::Annotation))
+}
 
 /// Where each rule is implemented: the file holding its native or portable
 /// binding with no verification method.
@@ -16,27 +61,14 @@ const OUTSIDE_IMPLEMENTATION_MODULE: &str = " (outside implementation module)";
 /// A rule with no `#[rule]` site in the scanned tree is absent from the map,
 /// and its verification sites are then left unannotated. Nothing is known
 /// about where it belongs, so nothing is claimed.
-fn implementation_modules(
-    report: &provenance_core::coverage::CoverageReport,
-) -> BTreeMap<&str, &camino::Utf8Path> {
-    report
-        .bindings
-        .iter()
-        .filter(|binding| {
-            binding.verification.is_none()
-                && binding.anchor_state != provenance_core::coverage::AnchorState::Gone
+fn implementation_modules(report: &CoverageReport) -> BTreeMap<&str, &camino::Utf8Path> {
+    implementation_sites(report)
+        .map(ReportSite::core)
+        .filter(|site| {
+            site.verification.is_none()
+                && site.anchor_state != provenance_core::coverage::AnchorState::Gone
         })
-        .map(|binding| (binding.rule_id.as_str(), binding.file_path.as_path()))
-        .chain(
-            report
-                .annotations
-                .iter()
-                .filter(|site| {
-                    site.verification.is_none()
-                        && site.anchor_state != provenance_core::coverage::AnchorState::Gone
-                })
-                .map(|site| (site.rule_id.as_str(), site.file_path.as_path())),
-        )
+        .map(|site| (site.rule_id.as_str(), site.file_path.as_path()))
         .collect()
 }
 
@@ -98,67 +130,29 @@ pub(super) fn render_coverage(
         writeln!(out, "- Total annotations: {}", report.total_annotations)?;
         writeln!(out, "- Warnings: {}\n", report.warnings.len())?;
         let implementation_modules = implementation_modules(report);
-        for annotation in &report.annotations {
-            let relation = annotation.verification.as_ref().map_or_else(
-                || "is implemented".to_string(),
-                |method| format!("verified by {method}"),
-            );
-            writeln!(
-                out,
-                "- `{}` {} at `{}`:{}{} ({}){}{}",
-                annotation.rule_id,
-                relation,
-                annotation.file_path,
-                annotation.line,
-                annotation
-                    .function_name
-                    .as_deref()
-                    .map(|name| format!(" ({name})"))
-                    .unwrap_or_default(),
-                annotation.coverage,
-                anchor_state(
-                    annotation.anchor_state,
-                    annotation.original_line,
-                    annotation.original_file_path.as_deref()
-                ),
-                if is_outside_implementation_module(
-                    &annotation.rule_id,
-                    &annotation.file_path,
-                    annotation.verification.is_some(),
-                    &implementation_modules,
-                ) {
-                    OUTSIDE_IMPLEMENTATION_MODULE
-                } else {
-                    ""
-                }
-            )?;
-        }
-        for binding in &report.bindings {
-            let relation = binding.verification.as_ref().map_or_else(
+        for report_site in report_sites(report) {
+            let site = report_site.core();
+            let relation = site.verification.as_ref().map_or_else(
                 || "is implemented".to_string(),
                 |method| format!("verified by {method}"),
             );
             writeln!(
                 out,
                 "- `{}` {} at `{}`:{}{}{}{}",
-                binding.rule_id,
+                site.rule_id,
                 relation,
-                binding.file_path,
-                binding.line,
-                binding
-                    .item_name
-                    .as_deref()
-                    .map(|name| format!(" ({name})"))
-                    .unwrap_or_default(),
+                site.file_path,
+                site.line,
+                report_site.details(),
                 anchor_state(
-                    binding.anchor_state,
-                    binding.original_line,
-                    binding.original_file_path.as_deref()
+                    site.anchor_state,
+                    site.original_line,
+                    site.original_file_path.as_deref()
                 ),
                 if is_outside_implementation_module(
-                    &binding.rule_id,
-                    &binding.file_path,
-                    binding.verification.is_some(),
+                    &site.rule_id,
+                    &site.file_path,
+                    site.verification.is_some(),
                     &implementation_modules,
                 ) {
                     OUTSIDE_IMPLEMENTATION_MODULE

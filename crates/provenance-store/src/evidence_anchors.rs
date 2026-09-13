@@ -1,6 +1,4 @@
-use provenance_core::coverage::{
-    AnchorState, AnnotationResult, BindingResult, CoverageScan, EvidenceAnchor, ValidationWarning,
-};
+use provenance_core::coverage::{AnchorState, AnchoredSite, CoverageScan, ValidationWarning};
 use std::collections::{BTreeMap, BTreeSet};
 
 pub fn reconcile(
@@ -15,10 +13,15 @@ pub fn reconcile(
         &baseline.report.annotations,
         &current.report.annotations,
         &paths,
+        "annotation",
     );
     current.report.annotations = annotations;
-    let (bindings, binding_warnings) =
-        reconcile_sites(&baseline.report.bindings, &current.report.bindings, &paths);
+    let (bindings, binding_warnings) = reconcile_sites(
+        &baseline.report.bindings,
+        &current.report.bindings,
+        &paths,
+        "binding",
+    );
     current.report.bindings = bindings;
     ambiguity_warnings.extend(binding_warnings);
     current.report.warnings.extend(ambiguity_warnings);
@@ -98,84 +101,6 @@ fn lexical_normalize(path: &camino::Utf8Path) -> camino::Utf8PathBuf {
     normalized
 }
 
-/// One reconcilable scan result: an annotation or a binding. Both carry the
-/// same anchor bookkeeping, and reconciliation reads nothing else.
-trait AnchoredSite: Clone {
-    const KIND: &'static str;
-    fn rule_id(&self) -> &str;
-    fn file_path(&self) -> &camino::Utf8Path;
-    fn line(&self) -> usize;
-    fn anchor(&self) -> Option<&EvidenceAnchor>;
-    fn mark(
-        &mut self,
-        state: AnchorState,
-        original_line: Option<usize>,
-        original_file_path: Option<camino::Utf8PathBuf>,
-    );
-}
-
-impl AnchoredSite for AnnotationResult {
-    const KIND: &'static str = "annotation";
-
-    fn rule_id(&self) -> &str {
-        &self.rule_id
-    }
-
-    fn file_path(&self) -> &camino::Utf8Path {
-        &self.file_path
-    }
-
-    fn line(&self) -> usize {
-        self.line
-    }
-
-    fn anchor(&self) -> Option<&EvidenceAnchor> {
-        self.anchor.as_ref()
-    }
-
-    fn mark(
-        &mut self,
-        state: AnchorState,
-        original_line: Option<usize>,
-        original_file_path: Option<camino::Utf8PathBuf>,
-    ) {
-        self.anchor_state = state;
-        self.original_line = original_line;
-        self.original_file_path = original_file_path;
-    }
-}
-
-impl AnchoredSite for BindingResult {
-    const KIND: &'static str = "binding";
-
-    fn rule_id(&self) -> &str {
-        &self.rule_id
-    }
-
-    fn file_path(&self) -> &camino::Utf8Path {
-        &self.file_path
-    }
-
-    fn line(&self) -> usize {
-        self.line
-    }
-
-    fn anchor(&self) -> Option<&EvidenceAnchor> {
-        self.anchor.as_ref()
-    }
-
-    fn mark(
-        &mut self,
-        state: AnchorState,
-        original_line: Option<usize>,
-        original_file_path: Option<camino::Utf8PathBuf>,
-    ) {
-        self.anchor_state = state;
-        self.original_line = original_line;
-        self.original_file_path = original_file_path;
-    }
-}
-
 /// Resolve every baseline anchor against the current scan.
 ///
 /// Four passes, strongest claim first. A baseline site is pinned to an exact
@@ -191,6 +116,7 @@ fn reconcile_sites<S: AnchoredSite>(
     baseline: &[S],
     current: &[S],
     paths: &ScanPaths<'_>,
+    kind: &'static str,
 ) -> (Vec<S>, Vec<ValidationWarning>) {
     let tracked = baseline
         .iter()
@@ -201,6 +127,7 @@ fn reconcile_sites<S: AnchoredSite>(
     let mut reconciliation = Reconciliation {
         baseline,
         current,
+        kind,
         tracked,
         used: BTreeSet::new(),
         refused: BTreeSet::new(),
@@ -216,6 +143,7 @@ fn reconcile_sites<S: AnchoredSite>(
 struct Reconciliation<'a, S: AnchoredSite> {
     baseline: &'a [S],
     current: &'a [S],
+    kind: &'static str,
     /// Baseline indices carrying an anchor inside the scanned path.
     tracked: Vec<usize>,
     /// Current indices claimed by a baseline site or an ambiguity group.
@@ -370,6 +298,7 @@ impl<S: AnchoredSite> Reconciliation<'_, S> {
                 self.current,
                 members,
                 &candidates,
+                self.kind,
             ));
         }
     }
@@ -413,6 +342,7 @@ fn ambiguity_warning<S: AnchoredSite>(
     current: &[S],
     members: &[usize],
     candidates: &[usize],
+    kind: &str,
 ) -> ValidationWarning {
     let locations = |indices: &[usize], sites: &[S]| {
         indices
@@ -432,7 +362,7 @@ fn ambiguity_warning<S: AnchoredSite>(
     let message = format!(
         "{} anchored {} site(s) ({}) match {} current site(s) ({}); the scan cannot pair them{loss}",
         members.len(),
-        S::KIND,
+        kind,
         locations(members, baseline),
         candidates.len(),
         locations(candidates, current),

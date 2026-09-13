@@ -102,6 +102,13 @@ impl StateStore {
                 if proposal.promotion_state == provenance_core::PromotionState::Proposed {
                     provenance_core::validate_proposal_intrinsic(proposal)?;
                 }
+                // A truthful binding to an exact review revision can only be
+                // written by the review seam, which checks the revision under
+                // the publication lock.
+                anyhow::ensure!(
+                    proposal.proposal_type != provenance_core::ProposalType::RecordRevision,
+                    "batch writes cannot create review submissions; they go through the review seam"
+                );
             }
             let manifest = self.manifest()?;
             provenance_core::validate_ideation_aggregate(IdeationAggregate {
@@ -113,6 +120,16 @@ impl StateStore {
                 assertions: &assertions,
                 dispositions: &dispositions,
             })?;
+            for disposition in &incoming.dispositions {
+                anyhow::ensure!(
+                    !proposals.iter().any(|proposal| {
+                        proposal.id == disposition.proposal_id
+                            && proposal.proposal_type
+                                == provenance_core::ProposalType::RecordRevision
+                    }),
+                    "decisions on review submissions go through the review seam"
+                );
+            }
             let canonical_artifacts = self.canonical_artifact_index(scope)?;
             for disposition in &dispositions {
                 canonical_artifacts.ensure_exists(disposition.canonical_artifact.as_ref())?;
