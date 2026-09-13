@@ -2,10 +2,11 @@ use super::super::*;
 use super::fixtures::*;
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
-const PROJECTION_TABLES: [&str; 7] = [
+const PROJECTION_TABLES: [&str; 8] = [
     "implementation_bindings",
     "verification_bindings",
     "requirement_reviews",
+    "review_journal",
     "projection_instance",
     "projection_revision",
     "projection_family_digests",
@@ -28,7 +29,10 @@ async fn migration_creates_the_projection_stamp_and_family_tables() {
     materialize_empty_state(&layout).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
     for table in PROJECTION_TABLES {
-        assert!(table_exists(&pool, table).await, "missing table {table}");
+        assert!(
+            table_exists(pool.pool(), table).await,
+            "missing table {table}"
+        );
     }
 }
 
@@ -38,11 +42,11 @@ fn projection_family_table_names_every_stored_family_once() {
         .iter()
         .map(|family| family.family_name())
         .collect();
-    assert_eq!(names.len(), 18);
+    assert_eq!(names.len(), 19);
     let mut unique = names.clone();
     unique.sort_unstable();
     unique.dedup();
-    assert_eq!(unique.len(), 18, "family names must be unique");
+    assert_eq!(unique.len(), 19, "family names must be unique");
     for expected in [
         "sources",
         "domains",
@@ -62,6 +66,7 @@ fn projection_family_table_names_every_stored_family_once() {
         "implementation_bindings",
         "verification_bindings",
         "requirement_reviews",
+        "review_journal",
     ] {
         assert!(names.contains(&expected), "missing family {expected}");
     }
@@ -111,7 +116,7 @@ async fn materialization_loads_binding_and_review_families_into_their_tables() {
             "SELECT id FROM {table} WHERE scope_id = ? AND rule_id = 'rule_schads_pay_001'"
         ))
         .bind(scope.as_str())
-        .fetch_optional(&pool)
+        .fetch_optional(pool.pool())
         .await
         .unwrap();
         assert_eq!(found.as_deref(), Some(id), "missing row in {table}");
@@ -139,7 +144,7 @@ async fn materialization_stores_a_revision_stamp_with_instance_identity() {
     materialize_state(&layout).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
 
-    let (serial, digest, instance) = stamp(&pool).await;
+    let (serial, digest, instance) = stamp(pool.pool()).await;
     assert_eq!(serial, 1);
     assert!(
         digest.starts_with("sha256:") && digest.len() == 71,
@@ -154,10 +159,10 @@ async fn materialization_stores_a_revision_stamp_with_instance_identity() {
     let rows: Vec<(String, String, String, i64)> = sqlx::query_as(
         "SELECT scope_id, family, content_digest, record_count FROM projection_family_digests ORDER BY family, scope_id",
     )
-    .fetch_all(&pool)
+    .fetch_all(pool.pool())
     .await
     .unwrap();
-    assert_eq!(rows.len(), 18, "one row per family for the one scope");
+    assert_eq!(rows.len(), 19, "one row per family for the one scope");
     for (scope_id, family, digest, count) in &rows {
         assert_eq!(scope_id, scope.as_str(), "scope for {family}");
         assert!(digest.starts_with("sha256:"), "digest for {family}");
@@ -182,12 +187,12 @@ async fn rematerialization_of_unchanged_state_keeps_digest_and_instance_and_adva
     seed_integration_shards(&layout, scope.as_str());
     materialize_state(&layout).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
-    let (first_serial, first_digest, first_instance) = stamp(&pool).await;
+    let (first_serial, first_digest, first_instance) = stamp(pool.pool()).await;
     drop(pool);
 
     materialize_state(&layout).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
-    let (second_serial, second_digest, second_instance) = stamp(&pool).await;
+    let (second_serial, second_digest, second_instance) = stamp(pool.pool()).await;
 
     assert!(second_serial > first_serial, "serials only move forward");
     assert_eq!(first_digest, second_digest);
@@ -205,6 +210,9 @@ fn revision_digest_reproduces_from_a_walk_of_the_family_table() {
     let mut walked = Vec::new();
     for family in ProjectionFamily::ALL {
         let (bytes, record_count) = family.canonical_records(&store, &scope).unwrap();
+        if family.family_name() == "review_journal" && record_count == 0 {
+            continue;
+        }
         walked.push(serde_json::json!({
             "family": family.family_name(),
             "scope_id": scope.as_str(),
@@ -232,8 +240,8 @@ async fn identical_repositories_agree_on_digest_but_never_on_instance() {
 
     let pool_a = open_cache(&layout_a).await.unwrap();
     let pool_b = open_cache(&layout_b).await.unwrap();
-    let (_, digest_a, instance_a) = stamp(&pool_a).await;
-    let (_, digest_b, instance_b) = stamp(&pool_b).await;
+    let (_, digest_a, instance_a) = stamp(pool_a.pool()).await;
+    let (_, digest_b, instance_b) = stamp(pool_b.pool()).await;
 
     assert_eq!(digest_a, digest_b, "same canonical state, same digest");
     assert_ne!(instance_a, instance_b, "each database is its own instance");
@@ -245,13 +253,60 @@ async fn empty_state_materialization_stores_no_revision_and_no_instance() {
     materialize_empty_state(&layout).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
     let revisions: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM projection_revision")
-        .fetch_one(&pool)
+        .fetch_one(pool.pool())
         .await
         .unwrap();
     let instances: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM projection_instance")
-        .fetch_one(&pool)
+        .fetch_one(pool.pool())
         .await
         .unwrap();
     assert_eq!(revisions, 0);
     assert_eq!(instances, 0);
+}
+
+#[tokio::test]
+async fn record_stamps_survive_projection_without_changing_content_digests() {
+    let (_dir, layout, scope) = seeded_layout();
+    let store = crate::state_store::StateStore::new(layout.clone());
+    let before = family_content_digests(&store, std::slice::from_ref(&scope)).unwrap();
+    for (family, table) in [
+        (ProjectionFamily::Sources, "sources"),
+        (ProjectionFamily::Requirements, "requirements"),
+        (ProjectionFamily::Rules, "rules"),
+        (ProjectionFamily::Resolutions, "resolutions"),
+    ] {
+        let path = family.shard_path(&layout, &scope);
+        let lines = std::fs::read_to_string(&path).unwrap();
+        let mut records = Vec::new();
+        for line in lines.lines() {
+            let mut record: serde_json::Value = serde_json::from_str(line).unwrap();
+            record["created"] =
+                serde_json::json!({"commit":"a".repeat(40),"at":"2026-09-12T00:00:00Z"});
+            record["updated"] =
+                serde_json::json!({"commit":"b".repeat(64),"at":"2026-09-12T01:00:00Z"});
+            records.push(serde_json::to_string(&record).unwrap());
+        }
+        std::fs::write(path, records.join("\n") + "\n").unwrap();
+        materialize_state(&layout).await.unwrap();
+        let pool = open_cache(&layout).await.unwrap();
+        let (created, updated): (String, String) =
+            sqlx::query_as(&format!("SELECT created, updated FROM {table} LIMIT 1"))
+                .fetch_one(pool.pool())
+                .await
+                .unwrap();
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&created).unwrap()["commit"],
+            "a".repeat(40)
+        );
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&updated).unwrap()["commit"],
+            "b".repeat(64)
+        );
+        pool.close().await.unwrap();
+    }
+    let after = family_content_digests(&store, &[scope]).unwrap();
+    assert_eq!(
+        serde_json::to_value(before).unwrap(),
+        serde_json::to_value(after).unwrap()
+    );
 }

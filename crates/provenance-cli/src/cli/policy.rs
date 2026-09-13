@@ -1,5 +1,5 @@
 use crate::cli::references::{ResolutionListCommand, RuleListCommand};
-use crate::output::OutputFormat;
+use crate::output::JsonFormat;
 use camino::Utf8PathBuf;
 use clap::Subcommand;
 
@@ -7,6 +7,8 @@ use clap::Subcommand;
 // `Create` carries every field of a resolution; the reference verbs carry four flags.
 #[allow(clippy::large_enum_variant)]
 pub enum ResolutionsCommand {
+    /// Edit existing fields. Omitted fields retain their values.
+    Update(crate::cli::updates::UpdateArgs),
     Create {
         #[arg(long, default_value = ".")]
         repo: Utf8PathBuf,
@@ -50,8 +52,8 @@ pub enum ResolutionsCommand {
         origin_thread: Option<String>,
         #[arg(long)]
         origin_message: Option<String>,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     /// Add or remove a requirement this resolution resolves.
     Requirement {
@@ -69,6 +71,8 @@ pub enum ResolutionsCommand {
 // `Create` carries every field of a rule; the read verbs carry three flags.
 #[allow(clippy::large_enum_variant)]
 pub enum RulesCommand {
+    /// Edit existing fields. Omitted fields retain their values.
+    Update(crate::cli::updates::UpdateArgs),
     /// Write a new rule into the scope.
     Create {
         /// Repository holding the `.provenance` directory.
@@ -98,9 +102,15 @@ pub enum RulesCommand {
         /// What must be true, in one sentence a reader can check code against.
         #[arg(long)]
         statement: String,
-        /// One of `active`, `draft`, or `deprecated`.
+        /// One of `draft`, `review`, `active`, `deprecated`, or `archived`.
         #[arg(long, default_value = "active")]
         status: String,
+        /// Full commit hash that archived this rule.
+        #[arg(long)]
+        archived_in_commit: Option<String>,
+        /// RFC3339 time of archiving.
+        #[arg(long, requires = "archived_in_commit")]
+        archived_at: Option<String>,
         /// How much a breach costs: `low`, `medium`, `high`, or `critical`.
         #[arg(long, default_value = "medium")]
         severity: String,
@@ -117,8 +127,8 @@ pub enum RulesCommand {
         #[arg(long)]
         origin_message: Option<String>,
         /// How to print the created rule.
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     /// List the rules in a scope, one summary line of record each.
     List {
@@ -129,8 +139,8 @@ pub enum RulesCommand {
         #[arg(long, default_value = "default")]
         scope: String,
         /// How to print the list.
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
     /// Add or remove a requirement this rule serves.
     Requirement {
@@ -154,7 +164,7 @@ pub enum RulesCommand {
         #[arg(long)]
         id: String,
         /// How to print the rule.
-        #[arg(long, value_enum, default_value_t = OutputFormat::Table)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+        format: JsonFormat,
     },
 }

@@ -137,10 +137,7 @@ impl Runner {
 
     fn record(&self, kind: &str, id: &str) -> Value {
         let id = self.fill(id);
-        let answer = self.sdk(
-            "get",
-            &json!({"node_type": kind, "id": id, "include_retired": true}),
-        );
+        let answer = self.sdk("get", &json!({"node_type": kind, "id": id}));
         assert_eq!(answer["found"], true, "{kind} {id} exists");
         answer["node"].clone()
     }

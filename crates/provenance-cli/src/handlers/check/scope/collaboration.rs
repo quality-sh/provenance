@@ -1,20 +1,20 @@
 use crate::handlers::check::index::CheckIndex;
 use crate::handlers::check::references::{check_scoped_reference, node_type_name};
+use crate::store::ScopeSnapshot;
 use provenance_core::{Message, ScopeId, Thread};
-use provenance_store::state_store::StateStore;
 use std::collections::BTreeSet;
 
-pub(super) struct Records {
-    threads: Vec<Thread>,
-    messages: Vec<Message>,
+pub(super) struct Records<'a> {
+    threads: &'a [Thread],
+    messages: &'a [Message],
 }
 
-impl Records {
-    pub(super) fn load(store: &StateStore, scope_id: &ScopeId) -> anyhow::Result<Self> {
-        Ok(Self {
-            threads: store.list_threads(scope_id)?,
-            messages: store.list_messages(scope_id)?,
-        })
+impl<'a> Records<'a> {
+    pub(super) fn load(snapshot: &'a ScopeSnapshot) -> Self {
+        Self {
+            threads: &snapshot.threads,
+            messages: &snapshot.messages,
+        }
     }
 
     pub(super) fn validate_scope_ownership(
@@ -37,7 +37,7 @@ impl Records {
             };
         }
 
-        for thread in &self.threads {
+        for thread in self.threads {
             if manifest_scopes.contains(thread.scope_id.as_str()) {
                 super::check_scope_ownership(
                     loaded_scope_id,
@@ -48,14 +48,14 @@ impl Records {
                 );
             }
         }
-        check_records!(&self.messages, "message");
+        check_records!(self.messages, "message");
     }
 
     pub(super) fn add_to(&self, index: &mut CheckIndex) {
-        for thread in &self.threads {
+        for thread in self.threads {
             index.add_node(&thread.scope_id, "thread", &thread.id);
         }
-        for message in &self.messages {
+        for message in self.messages {
             index.add_node(&message.scope_id, "message", &message.id);
         }
     }
@@ -67,7 +67,7 @@ impl Records {
         scope_id: &ScopeId,
         dangling: &mut Vec<String>,
     ) {
-        for thread in &self.threads {
+        for thread in self.threads {
             let owner = format!("thread {}", thread.id.as_str());
             if !manifest_scopes.contains(thread.scope_id.as_str()) {
                 dangling.push(format!(
@@ -85,7 +85,7 @@ impl Records {
                 &thread.parent.node_id,
             );
         }
-        for message in &self.messages {
+        for message in self.messages {
             check_scoped_reference(
                 index,
                 dangling,

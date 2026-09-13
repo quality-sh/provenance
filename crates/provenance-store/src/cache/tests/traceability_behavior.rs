@@ -7,6 +7,7 @@
 
 use super::super::*;
 use super::fixtures::*;
+use crate::layout::ProvenanceLayout;
 use crate::state_store::{CreateResolutionInput, CreateRuleInput, StateStore};
 use provenance_core::{RequirementStatus, ResolutionStatus, RuleSeverity, RuleStatus, ScopeId};
 
@@ -44,6 +45,7 @@ fn seed_two_producers(layout: &ProvenanceLayout, scope: &ScopeId) {
         .unwrap();
     store
         .create_rule(CreateRuleInput {
+            archived_in_commit: None,
             scope_id: scope.clone(),
             id: sid("rule_two_producers"),
             name: None,

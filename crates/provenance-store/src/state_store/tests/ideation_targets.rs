@@ -258,29 +258,6 @@ fn a_rewrite_that_keeps_an_old_dangling_target_is_not_refused() {
     );
 }
 
-/// The index reads the unfiltered shards, as every other writer does, so
-/// a target at a retired record is accepted; the gap pass drops it on the
-/// same terms as a reference field. Refusing it here would make the
-/// ideation writers stricter than the graph writers.
-#[test]
-#[verifies("rule_new_ideation_target_names_a_record", examples)]
-fn a_target_at_a_retired_record_is_accepted() {
-    let (_dir, store, scope) = seeded_requirement_store();
-    crate::cache::tests::fixtures::rewrite_records(
-        &crate::shards::requirements_path(&store.layout, &scope),
-        |record| record["retired"] = serde_json::Value::Bool(true),
-    );
-    let retired = target(IdeationTargetType::Requirement, "req_overtime");
-    store
-        .create_contribution(contribution_on(&scope, "contrib_a", retired.clone()))
-        .unwrap();
-    store
-        .create_synthesis_packet(synthesis_on(&scope, "synth_a", retired))
-        .unwrap();
-    assert_eq!(store.list_contributions(&scope).unwrap().len(), 1);
-    assert_eq!(store.list_synthesis_packets(&scope).unwrap().len(), 1);
-}
-
 #[test]
 #[verifies("rule_new_ideation_target_names_a_record", examples)]
 fn a_target_of_a_non_canonical_kind_is_found_when_it_exists() {

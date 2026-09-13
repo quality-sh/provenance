@@ -9,12 +9,15 @@ use provenance_scanner::{AttributeBinding, FileScan, Language, Verification};
 
 fn rule(id: &str, status: RuleStatus) -> Rule {
     Rule {
+        created: None,
+        updated: None,
+        archived_in_commit: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: ScopeId::new("default").unwrap(),
         id: StableId::new(id).unwrap(),
         declared_by: None,
         declaration_address: None,
-        retired: false,
+
         name: None,
         description: None,
         statement: "Claims must be grouped by participant".to_string(),
@@ -119,14 +122,4 @@ fn draft_and_deprecated_rules_do_not_warn() {
     let deprecated = rule("rule_deprecated", RuleStatus::Deprecated);
 
     assert!(unimplemented_rule_warnings(&[draft, deprecated], &[], &[]).is_empty());
-}
-
-#[test]
-fn retired_active_rule_does_not_warn_about_missing_implementation() {
-    let retired = Rule {
-        retired: true,
-        ..rule("rule_retired", RuleStatus::Active)
-    };
-
-    assert!(unimplemented_rule_warnings(&[retired], &[], &[]).is_empty());
 }

@@ -44,15 +44,15 @@ async fn stored_digest(pool: &sqlx::SqlitePool) -> String {
 pub(super) async fn assert_catch_up_equals_rebuild(layout: &crate::layout::ProvenanceLayout) {
     let report = catch_up_state(layout).await.unwrap();
     let pool = open_cache(layout).await.unwrap();
-    let caught_up_rows = dump_family_tables(&pool).await;
-    let caught_up_digest = stored_digest(&pool).await;
+    let caught_up_rows = dump_family_tables(pool.pool()).await;
+    let caught_up_digest = stored_digest(pool.pool()).await;
     assert_eq!(report.digest, caught_up_digest);
     drop(pool);
 
     materialize_state(layout).await.unwrap();
     let pool = open_cache(layout).await.unwrap();
-    assert_eq!(caught_up_rows, dump_family_tables(&pool).await);
-    assert_eq!(caught_up_digest, stored_digest(&pool).await);
+    assert_eq!(caught_up_rows, dump_family_tables(pool.pool()).await);
+    assert_eq!(caught_up_digest, stored_digest(pool.pool()).await);
 }
 
 #[tokio::test]
@@ -64,7 +64,7 @@ async fn a_missing_database_routes_to_a_full_rebuild() {
     assert!(report.rows_written > 0);
     let pool = open_cache(&layout).await.unwrap();
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM requirements")
-        .fetch_one(&pool)
+        .fetch_one(pool.pool())
         .await
         .unwrap();
     assert_eq!(count, 1);
@@ -93,7 +93,7 @@ async fn a_hand_edited_shard_is_found_by_the_hash_sweep_alone() {
     assert!(report.families_rederived >= 1);
     let pool = open_cache(&layout).await.unwrap();
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM rules")
-        .fetch_one(&pool)
+        .fetch_one(pool.pool())
         .await
         .unwrap();
     assert_eq!(count, 2);
@@ -107,7 +107,7 @@ async fn an_unchanged_pass_hashes_everything_and_rewrites_nothing() {
     seed_integration_shards(&layout, scope.as_str());
     materialize_state(&layout).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
-    let digest_before = stored_digest(&pool).await;
+    let digest_before = stored_digest(pool.pool()).await;
     drop(pool);
 
     let hashed = std::rc::Rc::new(std::cell::Cell::new(0u64));
@@ -160,7 +160,7 @@ async fn a_same_size_edit_with_a_restored_mtime_is_still_caught() {
     let pool = open_cache(&layout).await.unwrap();
     let statement: String =
         sqlx::query_scalar("SELECT statement FROM rules WHERE id = 'rule_schads_pay_001'")
-            .fetch_one(&pool)
+            .fetch_one(pool.pool())
             .await
             .unwrap();
     assert!(statement.contains("befor"), "{statement}");

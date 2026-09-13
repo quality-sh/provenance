@@ -20,12 +20,14 @@ fn address() -> DeclarationAddress {
 
 fn filled_source() -> Source {
     Source {
+        created: Some(stamp()),
+        updated: Some(stamp()),
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid("source_schads"),
         declared_by: Some("spec://pay".into()),
         declaration_address: Some(address()),
-        retired: true,
+
         name: "SCHADS award".into(),
         source_type: SourceType::Policy,
         url: Some("https://example.test/award".into()),
@@ -41,12 +43,14 @@ fn filled_source() -> Source {
 
 fn bare_source() -> Source {
     Source {
+        created: None,
+        updated: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid("source_bare"),
         declared_by: None,
         declaration_address: None,
-        retired: false,
+
         name: "Bare".into(),
         source_type: SourceType::Document,
         url: None,
@@ -62,12 +66,14 @@ fn bare_source() -> Source {
 
 fn filled_requirement() -> Requirement {
     Requirement {
+        created: Some(stamp()),
+        updated: Some(stamp()),
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid("req_overtime"),
         declared_by: Some("spec://pay".into()),
         declaration_address: Some(address()),
-        retired: true,
+
         statement: "Overtime is paid".into(),
         description: Some("After the threshold".into()),
         fog: Some("Which threshold".into()),
@@ -94,12 +100,14 @@ fn filled_requirement() -> Requirement {
 
 fn bare_requirement() -> Requirement {
     Requirement {
+        created: None,
+        updated: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid("req_bare"),
         declared_by: None,
         declaration_address: None,
-        retired: false,
+
         statement: "Bare".into(),
         description: None,
         fog: None,
@@ -117,6 +125,8 @@ fn bare_requirement() -> Requirement {
 
 fn resolution(confidence: Option<f64>) -> Resolution {
     Resolution {
+        created: Some(stamp()),
+        updated: Some(stamp()),
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid("res_overtime"),
@@ -145,6 +155,8 @@ fn resolution(confidence: Option<f64>) -> Resolution {
 
 fn bare_resolution() -> Resolution {
     Resolution {
+        created: None,
+        updated: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid("res_bare"),
@@ -169,16 +181,22 @@ fn bare_resolution() -> Resolution {
 
 fn filled_rule() -> Rule {
     Rule {
+        created: Some(stamp()),
+        updated: Some(stamp()),
+        archived_in_commit: Some(crate::ArchivedStamp {
+            commit: "a".repeat(40),
+            at: None,
+        }),
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid("rule_overtime_001"),
         declared_by: Some("spec://pay".into()),
         declaration_address: Some(address()),
-        retired: true,
+
         name: Some("Overtime threshold".into()),
         description: Some("Pay after the threshold".into()),
         statement: "Overtime is paid after the threshold".into(),
-        status: RuleStatus::Active,
+        status: RuleStatus::Archived,
         severity: RuleSeverity::High,
         requirement_ids: vec![sid("req_overtime")],
         resolution_ids: vec![sid("res_overtime")],
@@ -191,12 +209,15 @@ fn filled_rule() -> Rule {
 
 fn bare_rule() -> Rule {
     Rule {
+        created: None,
+        updated: None,
+        archived_in_commit: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
         id: sid("rule_bare"),
         declared_by: None,
         declaration_address: None,
-        retired: false,
+
         name: None,
         description: None,
         statement: "Bare".into(),
@@ -246,4 +267,11 @@ fn a_round_confidence_stays_a_float() {
     assert!(serde_json::to_string(&Resolution::from_row(&row).unwrap())
         .unwrap()
         .contains(r#""confidence":1.0"#));
+}
+
+fn stamp() -> crate::Stamp {
+    crate::Stamp {
+        commit: "a".repeat(40),
+        at: "2026-09-12T00:00:00Z".into(),
+    }
 }

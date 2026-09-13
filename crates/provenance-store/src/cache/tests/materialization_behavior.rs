@@ -112,7 +112,7 @@ async fn materialize_caches_generic_disposition_external_action() {
     let action: String =
         sqlx::query_scalar("SELECT external_action FROM dispositions WHERE id = ?")
             .bind("disposition_a")
-            .fetch_one(&pool)
+            .fetch_one(pool.pool())
             .await
             .unwrap();
     assert_eq!(
@@ -167,20 +167,20 @@ async fn materialize_state_caches_fog_resolution_method_and_claim_state() {
     let pool = open_cache(&layout).await.unwrap();
     let fog: Option<String> = sqlx::query_scalar("SELECT fog FROM requirements WHERE id = ?")
         .bind("req_schads_overtime")
-        .fetch_one(&pool)
+        .fetch_one(pool.pool())
         .await
         .unwrap();
     let topic: (Option<String>, Option<i64>) =
         sqlx::query_as("SELECT claimed_by, claimed_at FROM topics WHERE id = ?")
             .bind("topic_overtime")
-            .fetch_one(&pool)
+            .fetch_one(pool.pool())
             .await
             .unwrap();
     let question: (String, Option<String>, Option<i64>) = sqlx::query_as(
         "SELECT resolution_method, claimed_by, claimed_at FROM questions WHERE id = ?",
     )
     .bind("question_threshold")
-    .fetch_one(&pool)
+    .fetch_one(pool.pool())
     .await
     .unwrap();
     assert_eq!(
@@ -268,14 +268,14 @@ async fn materialize_state_caches_enriched_source_and_resolution_fields() {
     let source: (Option<String>, Option<i64>, Option<i64>) =
         sqlx::query_as("SELECT reference, effective_date, review_date FROM sources WHERE id = ?")
             .bind("source_sah")
-            .fetch_one(&pool)
+            .fetch_one(pool.pool())
             .await
             .unwrap();
     let resolution: (String, Option<String>, Option<String>, Option<i64>) = sqlx::query_as(
         "SELECT inputs, made_by, approved_by, approved_at FROM resolutions WHERE id = ?",
     )
     .bind("res_sah")
-    .fetch_one(&pool)
+    .fetch_one(pool.pool())
     .await
     .unwrap();
     assert_eq!(source.0.as_deref(), Some("Department guidance"));
@@ -304,18 +304,18 @@ async fn materialize_state_caches_commit_pin_and_confidence_scores() {
     let commit_pin: Option<String> =
         sqlx::query_scalar("SELECT commit_pin FROM sources WHERE id = ?")
             .bind("source_codebase")
-            .fetch_one(&pool)
+            .fetch_one(pool.pool())
             .await
             .unwrap();
     let confidence: Option<f64> =
         sqlx::query_scalar("SELECT confidence FROM proposal_cards WHERE id = ?")
             .bind("proposal_overtime_traceability")
-            .fetch_one(&pool)
+            .fetch_one(pool.pool())
             .await
             .unwrap();
     let payload: String = sqlx::query_scalar("SELECT payload FROM contributions WHERE id = ?")
         .bind("contrib_reviewer_001")
-        .fetch_one(&pool)
+        .fetch_one(pool.pool())
         .await
         .unwrap();
     assert_eq!(
@@ -395,7 +395,7 @@ async fn materialize_state_caches_proposal_lineage() {
     let pool = open_cache(&layout).await.unwrap();
     let builds_on: String = sqlx::query_scalar("SELECT builds_on FROM proposal_cards WHERE id = ?")
         .bind("proposal_b")
-        .fetch_one(&pool)
+        .fetch_one(pool.pool())
         .await
         .unwrap();
 

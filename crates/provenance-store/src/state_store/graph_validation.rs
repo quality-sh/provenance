@@ -25,6 +25,9 @@ impl StateStore {
         let requirements = self.list_requirements(scope)?;
         let resolutions = self.list_resolutions(scope)?;
         let rules = self.list_rules(scope)?;
+        for rule in &rules {
+            rule.validate_archive()?;
+        }
         let topics = self.list_topics(scope)?;
         let questions = self.list_questions(scope)?;
         let boundaries = self.list_boundaries(scope)?;

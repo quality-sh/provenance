@@ -46,21 +46,21 @@ async fn assert_mirrors<K: ProjectionRow>(pool: &sqlx::SqlitePool, kind: bool) {
 async fn every_kind_table_mirrors_its_record_columns() {
     let (_dir, layout, _scope) = seeded_layout();
     let pool = open_cache(&layout).await.unwrap();
-    crate::migrations::run_migrations(&pool, &layout)
+    crate::migrations::run_migrations(pool.pool(), &layout)
         .await
         .unwrap();
-    assert_mirrors::<Source>(&pool, true).await;
-    assert_mirrors::<Requirement>(&pool, true).await;
-    assert_mirrors::<Resolution>(&pool, true).await;
-    assert_mirrors::<Rule>(&pool, true).await;
-    assert_mirrors::<Topic>(&pool, true).await;
-    assert_mirrors::<Question>(&pool, true).await;
-    assert_mirrors::<Domain>(&pool, true).await;
-    assert_mirrors::<Boundary>(&pool, true).await;
-    assert_mirrors::<ImplementationBinding>(&pool, false).await;
-    assert_mirrors::<VerificationBinding>(&pool, false).await;
-    assert_mirrors::<RequirementReview>(&pool, false).await;
-    pool.close().await;
+    assert_mirrors::<Source>(pool.pool(), true).await;
+    assert_mirrors::<Requirement>(pool.pool(), true).await;
+    assert_mirrors::<Resolution>(pool.pool(), true).await;
+    assert_mirrors::<Rule>(pool.pool(), true).await;
+    assert_mirrors::<Topic>(pool.pool(), true).await;
+    assert_mirrors::<Question>(pool.pool(), true).await;
+    assert_mirrors::<Domain>(pool.pool(), true).await;
+    assert_mirrors::<Boundary>(pool.pool(), true).await;
+    assert_mirrors::<ImplementationBinding>(pool.pool(), false).await;
+    assert_mirrors::<VerificationBinding>(pool.pool(), false).await;
+    assert_mirrors::<RequirementReview>(pool.pool(), false).await;
+    pool.close().await.unwrap();
 }
 
 /// The search column holds the record's searchable pieces, lowercased,
@@ -73,14 +73,14 @@ async fn materialize_writes_search_text_from_searchable_text() {
     let pool = open_cache(&layout).await.unwrap();
     let text: String =
         sqlx::query_scalar("SELECT search_text FROM rules WHERE id = 'rule_overtime_001'")
-            .fetch_one(&pool)
+            .fetch_one(pool.pool())
             .await
             .unwrap();
     assert_eq!(
         text,
         "rule_overtime_001\u{1}overtime is paid after the threshold\u{1}overtime threshold\u{1}pay overtime after the threshold"
     );
-    pool.close().await;
+    pool.close().await.unwrap();
 }
 
 /// Catch-up over an edited shard rewrites the widened rows the way a
@@ -109,9 +109,9 @@ async fn a_link_under_two_kinds_keeps_both_relation_rows() {
          AND target_id = ? ORDER BY target_type",
     )
     .bind(TWIN_ID)
-    .fetch_all(&pool)
+    .fetch_all(pool.pool())
     .await
     .unwrap();
     assert_eq!(kinds, ["requirement", "rule"]);
-    pool.close().await;
+    pool.close().await.unwrap();
 }

@@ -1,11 +1,7 @@
-import type { GetResponse, Stamp } from "@quality-sh/provenance";
+import { PROTOCOL_VERSION, type components } from "@quality-sh/provenance/client";
 
-// An answer recorded before the stamp existed still satisfies the envelope.
-const recorded: GetResponse = {
-  protocol_version: 6,
-  operation: "get",
-  found: false,
-};
+type GetResponse = components["schemas"]["GetSuccessOutput"];
+type Stamp = GetResponse["stamp"];
 
 const stamp: Stamp = {
   serial: 41,
@@ -18,14 +14,17 @@ const stamp: Stamp = {
 };
 
 const stamped: GetResponse = {
-  ...recorded,
+  protocol_version: PROTOCOL_VERSION,
+  operation: "get",
+  found: false,
   stamp,
 };
 
 const degraded: GetResponse = {
-  ...recorded,
+  ...stamped,
   stamp: { ...stamp, policy: "catch_up_failed" },
-  freshness_error: "catch-up refused",
+  freshness_error: "catch-up failed; answer uses the stored projection",
+  freshness_cause: "catch_up_failed",
 };
 
-export { degraded, recorded, stamped };
+export { degraded, stamped };

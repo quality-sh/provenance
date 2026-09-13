@@ -3,7 +3,7 @@ use std::io::Read as _;
 use provenance_core::protocol::CheckStatementRequest;
 use provenance_macros::rule;
 
-use crate::output::{self, OutputFormat};
+use crate::output;
 
 /// Parses the fixed request shape for one unfinished statement.
 #[rule("rule_ste_sdk_statement_request_schema")]
@@ -17,15 +17,16 @@ fn read_request() -> anyhow::Result<CheckStatementRequest> {
     serde_json::from_str(&input).map_err(Into::into)
 }
 
-/// Returns the authoritative descriptive-text report without translating it.
-#[rule("rule_ste_sdk_statement_report")]
-fn report(request: &CheckStatementRequest) -> provenance_ste100::Report {
-    provenance_ste100::check_descriptive(&request.statement)
-}
-
 /// Runs the statement preflight without repository discovery or state access.
 #[rule("rule_ste_sdk_statement_repository_independence")]
-pub(super) fn handle(format: OutputFormat) -> anyhow::Result<()> {
+pub(super) async fn handle() -> anyhow::Result<()> {
     let request = read_request()?;
-    output::print(format, &report(&request))
+    let report = provenance_store::operations::catalog::invoke_typed::<
+        provenance_store::operations::catalog::CheckStatement,
+    >(
+        provenance_store::operations::catalog::PreparedContext::data_free(),
+        request,
+    )
+    .await?;
+    output::print_json(&report)
 }

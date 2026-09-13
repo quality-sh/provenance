@@ -39,10 +39,10 @@ fn tree() -> (tempfile::TempDir, Utf8PathBuf) {
     (dir, root)
 }
 
-fn relative(root: &Utf8Path, files: &[super::FileScan]) -> Vec<String> {
+fn relative(root: &Utf8Path, files: &[super::FileScan]) -> Vec<Utf8PathBuf> {
     files
         .iter()
-        .map(|scan| scan.file_path.strip_prefix(root).unwrap().to_string())
+        .map(|scan| scan.file_path.strip_prefix(root).unwrap().to_path_buf())
         .collect()
 }
 
@@ -57,7 +57,7 @@ fn a_cut_scan_reads_the_same_files_twice() {
     assert_eq!(first, second);
     assert_eq!(
         relative(&root, &first),
-        ["a/first.rs", "a/second.py", "b/deep/inner.rs", "b/mid.ts"],
+        ["a/first.rs", "a/second.py", "b/deep/inner.rs", "b/mid.ts"].map(Utf8PathBuf::from),
         "the first four language files in sorted walk order; the note and the target tree never count"
     );
 }
@@ -76,4 +76,36 @@ fn a_sub_limit_scan_matches_scan_path() {
     let (exact, cut) = scan_path_bounded(&root, 5).unwrap();
     assert!(cut, "the sixth file is met and the walk says so");
     assert_eq!(exact.len(), 5);
+}
+
+#[test]
+fn a_bounded_scan_skips_ignored_generated_output_too() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
+    for (path, content) in [
+        (".gitignore", "dist\n"),
+        ("src/kept.rs", "#[rule(\"rule_kept\")]\nfn kept() {}\n"),
+        ("dist/generated.js", "// @provenance rule: rule_generated\n"),
+        (
+            "target/skipped.rs",
+            "#[rule(\"rule_skipped\")]\nfn skipped() {}\n",
+        ),
+    ] {
+        let file = root.join(path);
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(file, content).unwrap();
+    }
+
+    let (bounded, cut) = scan_path_bounded(&root, 10).unwrap();
+    assert!(!cut);
+    assert_eq!(
+        relative(&root, &bounded),
+        [Utf8PathBuf::from("src/kept.rs")]
+    );
+    let whole = scan_path(&root).unwrap();
+    let (limited, _) = scan_path_bounded(&root, usize::MAX).unwrap();
+    assert_eq!(
+        limited, whole,
+        "the bounded walk prunes what scan_path prunes"
+    );
 }

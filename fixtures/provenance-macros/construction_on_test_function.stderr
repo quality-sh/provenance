@@ -1,0 +1,5 @@
+error: `construction` marks a type whose construction makes the violation impossible; it cannot mark the function `sample_agrees_with_the_oracle`. Put the marker on the type, or use the method that matches the evidence.
+ --> $WORKSPACE/fixtures/provenance-macros/construction_on_test_function.rs
+  |
+  | fn sample_agrees_with_the_oracle() {
+  | ^^

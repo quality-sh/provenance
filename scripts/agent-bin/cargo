@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import platform
+import re
 import secrets
 import shutil
 import subprocess
@@ -201,6 +202,26 @@ def show_result(run_id, repository, check, custom, artifact=False):
     return 0
 
 
+def cleanup_completed_branch(root, sha, run_id, repository):
+    raw = command([
+        "gh", "run", "view", str(run_id), "--json", "headBranch,headSha,status", "--repo", repository,
+    ])
+    run = json.loads(raw)
+    branch = run.get("headBranch")
+    if run.get("status") != "completed" or run.get("headSha") != sha:
+        return
+    if not isinstance(branch, str) or not re.fullmatch(rf"agent-ci/(build|build-artifact|check|clippy|test)/{sha}-[0-9a-f]{{8}}", branch):
+        return
+    push_url = os.environ.get("PROVENANCE_CI_PUSH_URL", f"https://github.com/{repository}.git")
+    ref = f"refs/heads/{branch}"
+    remote = git(root, "ls-remote", "--heads", push_url, ref)
+    if not remote:
+        return
+    if remote.split()[0] != sha:
+        raise RuntimeError(f"Remote branch changed; leaving {branch} in place")
+    git(root, "push", f"--force-with-lease={ref}:{sha}", push_url, f":{ref}")
+
+
 def download_build(root, sha, run_id, repository):
     target_dir = root / "target" / "debug"
     if (root / "target").is_symlink():
@@ -242,8 +263,15 @@ def main():
     print(f"Remote Cargo: verifying snapshot {sha}", flush=True)
     run_id = run_id_for_snapshot(root, sha, repository, args, artifact)
     result = show_result(run_id, repository, args[0], len(args) != 1, artifact)
-    if result == 0 and artifact:
-        download_build(root, sha, run_id, repository)
+    try:
+        if result == 0 and artifact:
+            download_build(root, sha, run_id, repository)
+    finally:
+        if len(args) == 1:
+            try:
+                cleanup_completed_branch(root, sha, run_id, repository)
+            except (RuntimeError, OSError, ValueError, KeyError) as error:
+                print(f"Remote Cargo: branch cleanup skipped: {error}", file=sys.stderr)
     return result
 
 

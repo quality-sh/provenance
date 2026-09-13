@@ -10,7 +10,7 @@ use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_macros::rule;
 
-use super::{is_ignored_directory, scan_file, FileScan, Language};
+use super::{repository_walk, scan_file, FileScan, Language};
 
 /// Scans at most `max_files` language files under `path`, the first that
 /// many in sorted walk order, so two runs cut the same set, and says
@@ -22,11 +22,7 @@ pub fn scan_path_bounded(
 ) -> anyhow::Result<(Vec<FileScan>, bool)> {
     let mut scans = Vec::new();
     let mut cut = false;
-    for entry in walkdir::WalkDir::new(path)
-        .sort_by_file_name()
-        .into_iter()
-        .filter_entry(|entry| entry.depth() == 0 || !is_ignored_directory(entry))
-    {
+    for entry in repository_walk(path, true) {
         let entry = entry?;
         if !entry.file_type().is_file() {
             continue;

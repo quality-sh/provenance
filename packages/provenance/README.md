@@ -12,6 +12,37 @@ an exact development dependency, installs the engine for the current platform,
 writes `.provenance/state/`, and confirms that `npx provenance check` reports
 `ok`.
 
+## SDK connection
+
+SDK operations require an explicitly configured HTTP host. The local CLI remains
+available through the package bin shim; SDK calls do not discover or start it.
+
+```ts
+import { configure } from "@quality-sh/provenance";
+
+configure({
+  endpoint: process.env.PROVENANCE_ENDPOINT,
+  bearer: process.env.PROVENANCE_TOKEN,
+  repositoryId: process.env.PROVENANCE_REPOSITORY_ID,
+  localRoot: process.env.PROVENANCE_LOCAL_ROOT,
+  scope: "default",
+});
+```
+
+The repository ID is an opaque host target. `localRoot` describes the caller's
+checkout, so inferred implementation and test paths become portable relative
+paths before transmission. It does not select the host repository. Legacy
+`engine` and `repository` settings are rejected; `PROVENANCE_REPO` is not an
+HTTP target. Host deployment and access setup must be supplied separately.
+
+Browser callers can import the named `HttpClient` and error classes from
+`@quality-sh/provenance/client`. That subpath has no Node or subprocess imports.
+Both clients validate responses against generated contracts and bound them to
+16 MiB. `OperationError` carries a validated declared failure; `ConnectionError`
+and `MalformedResponseError` identify read failures. A lost or malformed write
+response raises `UncertainWriteError`. Inspect state before deciding whether to
+retry. Clients never retry operations or replay redirects automatically.
+
 ## Consumer CI
 
 Install the locked project dependencies before each check. Use `npx --no` in
@@ -167,7 +198,7 @@ Moving a local Rule to a shared declaration, or back, preserves its canonical
 ID when Rust finds exactly one owned candidate. If several local Rules could
 become the shared Rule, apply fails instead of guessing. An immutable
 `.id(existingId)` call can choose the canonical record. Other declarations
-omitted from that complete spec are retired, not deleted.
+omitted from that complete spec are deleted. Git preserves their history.
 
 ## Adopt existing unowned declarations
 
@@ -250,9 +281,9 @@ clears its review automatically; the recorded reason stays as history. Ask for
 `--format markdown` to read the same explanation as prose.
 
 The result classifies each declaration as `created`, `updated`, `moved`,
-`retired`, `conflict`, or `unchanged`. Omission retires only records owned by
-that same spec. Their Stable IDs and history remain, active checks ignore them,
-and adding the declaration back reactivates the same record. A Rule move
+`deleted`, `conflict`, or `unchanged`. Omission deletes only records owned by
+that same spec. Git preserves their prior versions. Adding the declaration back
+creates a new record with the same deterministic ID. A Rule move
 replaces its active owned Requirement edge. Plan returns ownership conflicts as
 data; apply refuses them. Hard deletion and ownership transfer are separate and
 are not part of this API.
@@ -285,18 +316,16 @@ const around = await neighbors({ id: expiry.id, direction: "in" });
 const walked = await trace({ id: retention.id, direction: "out", max_depth: 2 });
 ```
 
-Every answer opens with `protocol_version` and `operation`. Every request takes
-`include_retired`, false by default, and every answer that can hold more than
+Every answer opens with `protocol_version` and `operation`. Every answer that can hold more than
 one record takes `limit`, 50 by default and 200 at most, and reports `limit`
 and `has_more`. These functions send their request to the engine and return its
 answer unchanged: walking, filtering, and paging all happen in Rust.
 
-Removing `.implementedBy(...)` from an active Rule also retires only that
+Removing `.implementedBy(...)` from an active Rule deletes that
 spec's canonical implementation binding. Plan reports the Rule as updated with
 the old implementation and `null` as its field-level before/after values. Adding
-the link back reactivates the same binding ID, while changing the imported
-symbol updates it in place. Retired bindings remain in canonical exports as
-history but no longer make the Rule appear implemented.
+the link back recreates the same binding ID, while changing the imported
+symbol updates it in place. Git preserves deleted bindings. A deleted binding does not make the Rule appear implemented.
 
 A test imports the actual rule handle and runs its callback:
 
@@ -322,11 +351,10 @@ frames and nothing else. Passing `import.meta` states the file on every runtime.
 name no file fails before the callback runs and says what to add.
 
 Pointing an owner-local verification key at a different Rule from the same
-test file retires the binding that key previously named. Calling it again
-reactivates the same binding ID, and moving the key to another file updates it
-in place. Retired bindings remain in canonical exports as history but no longer
-make the Rule appear verified. Because one run only sees the call sites it ran,
-nothing else is retired, and a binding whose test file disappeared is reported
+test file deletes the binding that key previously named. Calling it again
+recreates the same binding ID, and moving the key to another file updates it
+in place. Git preserves deleted bindings. A deleted binding does not make the Rule appear verified. Because one run only sees the call sites it ran,
+nothing else is deleted, and a binding whose test file disappeared is reported
 by `provenance stale` instead.
 
 The handle keeps an owner-local declaration address, not a mutable database
@@ -336,9 +364,8 @@ failed callback is recorded and the original error is rethrown.
 
 The package installs a matching Rust engine through a platform-specific
 optional dependency. It does not download a binary from an install script,
-compile Rust, or require a global CLI. Before its first operation, the SDK
-checks that the engine speaks the supported protocol. Rust then finds the
-nearest enclosing Provenance or Git project for each command.
+compile Rust, or require a global CLI. This binary is used by explicit CLI
+commands. SDK operations instead check their configured HTTP host protocol.
 
 This package owns the `provenance` command and forwards it to that engine
 unchanged, so `npx provenance` runs what the install supplied. When the platform
@@ -346,18 +373,20 @@ package is absent, after `npm install --omit=optional` or on a host with no
 published engine, the command names the missing package and the supported
 targets rather than reaching the registry for a command of the same name.
 
-Published targets are macOS arm64/x64, Windows x64, and glibc Linux x64. An
-unsupported host fails with the supported target list. These environment
-variables override the defaults:
+Published targets follow the release target inventory. An unsupported host
+fails with the supported target list. `PROVENANCE_BIN` selects a development
+binary for the CLI shim. SDK environment settings are:
 
-- `PROVENANCE_BIN`: explicit development engine; default packaged engine
-- `PROVENANCE_REPO`: explicit repository; default nearest enclosing project
+- `PROVENANCE_ENDPOINT`: explicit HTTP host URL
+- `PROVENANCE_TOKEN`: bearer credential
+- `PROVENANCE_REPOSITORY_ID`: opaque host repository ID
+- `PROVENANCE_LOCAL_ROOT`: caller checkout root for portable file paths
 - `PROVENANCE_SCOPE`: scope; default `default`
 - `PROVENANCE_SPEC_OWNER`: declaration owner; default `spec://typescript`
 - `PROVENANCE_VERIFICATION_OWNER`: evidence producer; default `ci://typescript`
 
-`configure()` provides the same settings in code. The SDK still uses one short
-process per command; it does not start a daemon.
+`configure()` provides the SDK settings in code. The SDK keeps HTTP connections
+and never starts a subprocess for an operation.
 
 Spec-scoped declaration factories, object-options declarations, and the
 callback form of `defineSpec()` remain available as compatibility surfaces. The
@@ -368,3 +397,34 @@ persistence.
 
 See `examples/typescript-sdk/` for package-name consumption through a local npm
 dependency.
+
+## Build from a source checkout
+
+Generated operation source and the platform lookup module are not tracked in Git.
+Install the generator dependencies once, then build the SDK:
+
+```sh
+npm ci --prefix tools/operation-codegen
+npm ci --prefix packages/provenance
+npm run build --prefix packages/provenance
+```
+
+Run these commands from the repository root. The first source build also needs
+the repository's Rust toolchain to export the operation contract. Later builds
+reuse generated output only when its source fingerprint and output checksums
+match. CI supplies this output as a build artifact to npm-only jobs.
+
+Published npm packages contain compiled clients and validators. Installing or
+using a published package does not run the generator or require Rust or a host
+server toolchain. The explicit CLI remains a separate packaged executable.
+
+## Effect HTTP calls
+
+The `@quality-sh/provenance/effect` entry supplies generated Effect operations,
+runtime wire schemas, and `ProvenanceApi`. Applications install the exact peer
+`effect@4.0.0-rc.113`. The existing Promise client requires no Effect setup.
+Use an explicitly connected `EffectHttpClient` through `ProvenanceClient` with
+`Atom.runtime` to preserve the shared client policy. Keep the client while
+mutation outcomes remain unresolved. See the
+[Effect SDK guide](https://github.com/quality-sh/provenance/blob/main/docs/effect-sdk.md)
+for examples and the integration handoff.

@@ -86,6 +86,32 @@ pub fn ensure_supported_record_version(
     line_number: usize,
     value: &serde_json::Value,
 ) -> anyhow::Result<()> {
+    ensure_no_legacy_retirement(path, line_number, value)?;
+    if value["schema_version"] == 3
+        && path.parent().and_then(Utf8Path::file_name) == Some("threads")
+        && if path.file_name() == Some("threads.jsonl") {
+            serde_json::from_value::<provenance_core::Thread>(value.clone()).is_ok()
+        } else {
+            serde_json::from_value::<provenance_core::Message>(value.clone()).is_ok()
+        }
+    {
+        let text = serde_json::to_string(value)?;
+        if path.file_name() == Some("threads.jsonl") {
+            deserialize_closed::<provenance_core::Thread>(&text)?;
+        } else {
+            deserialize_closed::<provenance_core::Message>(&text)?;
+        }
+        return Ok(());
+    }
+    if value["schema_version"] == 3
+        && path.file_name() == Some("req.jsonl")
+        && path.parent().and_then(Utf8Path::file_name) == Some("requirements")
+        && serde_json::from_value::<provenance_core::Requirement>(value.clone()).is_ok()
+    {
+        deserialize_closed::<provenance_core::Requirement>(&serde_json::to_string(value)?)
+            .with_context(|| format!("{path} line {line_number}: invalid enrolled Requirement"))?;
+        return Ok(());
+    }
     let Some((id, version)) = first_unsupported_record(value) else {
         return Ok(());
     };
@@ -94,6 +120,27 @@ pub fn ensure_supported_record_version(
         "{path} line {line_number}: {record} has schema_version {version}, \
          but this build reads schema_version {} only",
         SUPPORTED_SCHEMA_VERSION.0
+    )
+}
+
+fn ensure_no_legacy_retirement(
+    path: &Utf8Path,
+    line_number: usize,
+    value: &serde_json::Value,
+) -> anyhow::Result<()> {
+    let Some(record) = value.as_object() else {
+        return Ok(());
+    };
+    if !record.contains_key("retired") {
+        return Ok(());
+    }
+    let name = record
+        .get("id")
+        .and_then(serde_json::Value::as_str)
+        .map_or_else(|| "record".to_string(), |id| format!("record {id}"));
+    anyhow::bail!(
+        "{path} line {line_number}: {name} contains legacy field `retired`; \
+         canonical JSONL requires record-deletion migration 026 before this build can read it"
     )
 }
 

@@ -1,6 +1,6 @@
 use assert_cmd::Command;
 use predicates::str::contains;
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
+use provenance_core::{review::REVIEW_SCHEMA_VERSION, SUPPORTED_SCHEMA_VERSION};
 use provenance_macros::verifies;
 
 const STORED_FAMILIES: [(&str, &str); 16] = [
@@ -138,7 +138,7 @@ fn a_hand_edited_requirement_version_is_refused_by_every_reader() {
         &path,
         stored.replace(
             &format!("\"schema_version\":{}", SUPPORTED_SCHEMA_VERSION.0),
-            &format!("\"schema_version\":{}", SUPPORTED_SCHEMA_VERSION.0 + 1),
+            &format!("\"schema_version\":{}", REVIEW_SCHEMA_VERSION.0 + 1),
         ),
     )
     .unwrap();
@@ -167,7 +167,7 @@ fn a_hand_edited_requirement_version_is_refused_by_every_reader() {
             .stderr(contains("record req_overtime"))
             .stderr(contains(format!(
                 "has schema_version {}, but this build reads schema_version {} only",
-                SUPPORTED_SCHEMA_VERSION.0 + 1,
+                REVIEW_SCHEMA_VERSION.0 + 1,
                 SUPPORTED_SCHEMA_VERSION.0
             )));
     }
@@ -177,7 +177,7 @@ fn a_hand_edited_requirement_version_is_refused_by_every_reader() {
 ///
 /// A write reads the shard first and writes all of it back, so an unguarded
 /// write was worse than an unguarded read: `requirements create` for an
-/// unrelated id used to succeed, re-serialise the version-2 neighbour from
+/// unrelated id used to succeed, re-serialise the unsupported neighbour from
 /// whatever fields the current struct still recognised, and drop the rest -
 /// laundering into the supported layout exactly the record every reader
 /// refuses. The shard is compared byte for byte because "the command failed"
@@ -200,7 +200,7 @@ fn a_write_beside_a_hand_edited_record_is_refused_and_changes_nothing() {
         .unwrap()
         .replace(
             &format!("\"schema_version\":{}", SUPPORTED_SCHEMA_VERSION.0),
-            &format!("\"schema_version\":{} ", SUPPORTED_SCHEMA_VERSION.0 + 1),
+            &format!("\"schema_version\":{} ", REVIEW_SCHEMA_VERSION.0 + 1),
         )
         .replace(
             "\"statement\"",
@@ -230,7 +230,7 @@ fn a_write_beside_a_hand_edited_record_is_refused_and_changes_nothing() {
         .stderr(contains("record req_overtime"))
         .stderr(contains(format!(
             "has schema_version {}, but this build reads schema_version {} only",
-            SUPPORTED_SCHEMA_VERSION.0 + 1,
+            REVIEW_SCHEMA_VERSION.0 + 1,
             SUPPORTED_SCHEMA_VERSION.0
         )));
 

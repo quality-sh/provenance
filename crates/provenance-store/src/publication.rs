@@ -9,6 +9,8 @@ use std::collections::BTreeSet;
 use std::io::Write;
 
 mod guard;
+mod staged;
+pub use staged::with_staged_state;
 mod read_only;
 pub use guard::{publication_guard, PublicationGuard};
 

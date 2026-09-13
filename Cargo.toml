@@ -7,8 +7,17 @@ members = [
     "crates/provenance-sdk",
     "crates/provenance-ste100",
     "crates/provenance-store",
+    "crates/provenance-transport",
+    "crates/provenance-codegen",
+    "crates/provenance-http-client",
+    "crates/provenance-report",
 ]
 resolver = "2"
+
+# Keep file and line information for backtraces without full variable debug data.
+# The test profile inherits this setting. Release settings are unchanged.
+[profile.dev]
+debug = "line-tables-only"
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }
@@ -20,7 +29,7 @@ must_use_candidate = "allow"
 module_name_repetitions = "allow"
 
 [workspace.package]
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 license = "BUSL-1.1"
 repository = "https://github.com/quality-sh/provenance"
@@ -35,10 +44,11 @@ axum = "0.7"
 camino = { version = "1.1", features = ["serde1"] }
 clap = { version = "4.5", features = ["derive"] }
 filetime = "0.2"
+flate2 = "1"
 fs2 = "0.4"
 fs_at = "0.2"
 insta = "1.39"
-jsonschema = "0.18"
+jsonschema = { version = "0.18", features = ["draft202012"] }
 proc-macro2 = "1.0"
 pulldown-cmark = "0.10"
 quote = "1.0"
@@ -52,7 +62,9 @@ semver = "1.0"
 sha2 = "0.10"
 syn = { version = "2.0", features = ["derive", "parsing", "printing", "proc-macro"] }
 sqlx = { version = "0.8", default-features = false, features = ["sqlite", "runtime-tokio"] }
+tar = "0.4"
 tempfile = "3.10"
+time = { version = "0.3", features = ["formatting", "parsing"] }
 thiserror = "1.0"
 tokio = { version = "1.0", features = ["macros", "net", "rt-multi-thread"] }
 ureq = { version = "2.12", default-features = false, features = ["tls"] }
@@ -61,10 +73,13 @@ uuid = { version = "1.10", features = ["v4"] }
 toml = "0.8"
 trybuild = "1.0"
 predicates = "3.1"
-provenance-core = { path = "crates/provenance-core", version = "0.2.2" }
-provenance-macros = { path = "crates/provenance-macros", version = "0.2.2" }
-provenance-scanner = { path = "crates/provenance-scanner", version = "0.2.2" }
-provenance-ste100 = { path = "crates/provenance-ste100", version = "0.2.2" }
-provenance-store = { path = "crates/provenance-store", version = "0.2.2" }
+provenance-core = { path = "crates/provenance-core", version = "0.2.3" }
+provenance-macros = { path = "crates/provenance-macros", version = "0.2.3" }
+provenance-report = { path = "crates/provenance-report", version = "0.2.3" }
+provenance-scanner = { path = "crates/provenance-scanner", version = "0.2.3" }
+provenance-ste100 = { path = "crates/provenance-ste100", version = "0.2.3" }
+provenance-store = { path = "crates/provenance-store", version = "0.2.3" }
 walkdir = "2.5"
 windows-sys = { version = "0.52", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
+
+schemars = "=1.2.2"

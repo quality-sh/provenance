@@ -55,6 +55,11 @@ jobs:
           shared-key: build-cli
           add-job-id-key: "false"
           save-if: "false"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: npm ci --prefix tools/operation-codegen
+      - run: node tools/operation-codegen/ensure-generated.mjs
       - run: cargo build --workspace --all-features
       - name: Upload dev binary
         if: startsWith(github.ref, 'refs/heads/agent-ci/build-artifact/')
@@ -91,6 +96,11 @@ jobs:
           shared-key: rust
           add-job-id-key: "false"
           save-if: "false"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: npm ci --prefix tools/operation-codegen
+      - run: node tools/operation-codegen/ensure-generated.mjs
       - run: cargo check --workspace --all-targets
 
   clippy:
@@ -120,6 +130,11 @@ jobs:
           shared-key: clippy
           add-job-id-key: "false"
           save-if: "false"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: npm ci --prefix tools/operation-codegen
+      - run: node tools/operation-codegen/ensure-generated.mjs
       - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
   test:
@@ -148,6 +163,11 @@ jobs:
           shared-key: rust
           add-job-id-key: "false"
           save-if: "false"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: npm ci --prefix tools/operation-codegen
+      - run: node tools/operation-codegen/ensure-generated.mjs
       - run: cargo test --workspace --all-features --no-fail-fast
 
   command:
@@ -177,6 +197,11 @@ jobs:
           shared-key: rust
           add-job-id-key: "false"
           save-if: "false"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: npm ci --prefix tools/operation-codegen
+      - run: node tools/operation-codegen/ensure-generated.mjs
       - name: Run requested Cargo check
         env:
           CARGO_ARGS_JSON: ${{ inputs.command_json }}

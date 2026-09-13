@@ -9,8 +9,8 @@ mod common;
 
 pub(super) fn handle(command: SchemaCommand) -> anyhow::Result<()> {
     match command {
-        SchemaCommand::Show { artifact, format } => {
-            output::print(format, &schema_for(artifact))?;
+        SchemaCommand::Show { artifact, .. } => {
+            output::print_json(&schema_for(artifact))?;
         }
     }
     Ok(())

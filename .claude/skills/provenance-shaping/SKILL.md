@@ -2,7 +2,7 @@
 name: provenance-shaping
 description: Guide turn-based requirement shaping in Provenance. Use when a user brings a loose idea, asks to refine requirements, work through open shaping questions, graduate fog, or run the Chart/Work loop against an anchor requirement. Land every resolved decision immediately into the graph.
 ---
-<!-- Installed by provenance 0.2.2; content hash fnv1a64:06b0ba1b2b522d9b -->
+<!-- Installed by provenance 0.2.3; content hash fnv1a64:06b0ba1b2b522d9b -->
 
 # Shaping
 

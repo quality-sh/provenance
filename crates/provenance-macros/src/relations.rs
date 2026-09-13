@@ -2,7 +2,9 @@
 //!
 //! Each `StableId`-typed field carries one `#[relation(...)]` or is exempted
 //! with `#[relation(none)]`; the field named `id` is the owner key and needs
-//! neither. The derive emits `Kind::RELATIONS` and `impl RelationOwner`.
+//! neither. The derive emits `Kind::RELATIONS`, `impl RelationOwner`, and
+//! `relation_slot_mut`, which lends the mutable slot of one declared field
+//! out by name.
 
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
@@ -294,6 +296,21 @@ fn emit(owner: &Ident, rows: &[Row]) -> TokenStream {
             _ => unreachable!("row shapes are checked before emission"),
         }
     });
+    // One slot arm per field a writer can borrow by name: optional singles
+    // as `Single`, lists as `List`. Bare singles and `via` citations lend
+    // no slot and fall through to `None`.
+    let slots = rows.iter().filter_map(|row| {
+        let (name, field) = (&row.name, &row.field);
+        match row.shape {
+            Shape::OptionalSingle => Some(quote! {
+                #name => Some(#core::relations::RelationSlot::Single(&mut self.#field)),
+            }),
+            Shape::List => Some(quote! {
+                #name => Some(#core::relations::RelationSlot::List(&mut self.#field)),
+            }),
+            _ => None,
+        }
+    });
     quote! {
         impl #owner {
             pub const RELATIONS: [#core::relations::RelationDecl; #count] = [#(#table),*];
@@ -314,6 +331,16 @@ fn emit(owner: &Ident, rows: &[Row]) -> TokenStream {
                 let mut references = ::std::vec::Vec::new();
                 #(#walks)*
                 references
+            }
+
+            fn relation_slot_mut<'a>(
+                &'a mut self,
+                name: &str,
+            ) -> ::core::option::Option<#core::relations::RelationSlot<'a>> {
+                match name {
+                    #(#slots)*
+                    _ => None,
+                }
             }
         }
     }

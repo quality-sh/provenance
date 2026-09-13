@@ -1,8 +1,9 @@
-use crate::output::{self, OutputFormat};
+use crate::output;
+use crate::store::Store;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{ensure_supported_schema_version, Manifest};
 use provenance_macros::rule;
-use provenance_store::{layout::ProvenanceLayout, state_store::StateStore};
+use provenance_store::dictionary_reference::{resolve_project_dictionary, DictionaryResolution};
 use std::collections::BTreeSet;
 
 mod index;
@@ -13,19 +14,14 @@ mod statement_report;
 use index::CheckIndex;
 
 #[rule("rule_ste_strict_committed_statement_gate")]
-pub(super) fn check(
-    repo: &Utf8Path,
-    strict: bool,
-    base: Option<&str>,
-    format: OutputFormat,
-) -> anyhow::Result<()> {
-    let store = StateStore::new(ProvenanceLayout::new(repo.to_path_buf()));
+pub(super) fn check(repo: &Utf8Path, strict: bool, base: Option<&str>) -> anyhow::Result<()> {
+    let store = Store::open(repo);
     let report = store.with_repository_publication(|| {
         let manifest = store.manifest()?;
         collect_report_locked(&store, repo, &manifest, strict, base)
     })?;
     let has_findings = !report.diagnostics.is_empty();
-    output::print(format, &report)?;
+    output::print_json(&report)?;
     anyhow::ensure!(
         !strict || !has_findings,
         "strict statement check found ASD-STE100 findings"
@@ -48,7 +44,7 @@ struct CommitRange {
 }
 
 pub(super) fn validate_repository(repo: Utf8PathBuf) -> anyhow::Result<()> {
-    let store = StateStore::new(ProvenanceLayout::new(repo));
+    let store = Store::open(repo);
     store.with_repository_publication(|| {
         let manifest = store.manifest()?;
         validate_locked(&store, &manifest)
@@ -59,12 +55,11 @@ pub(super) fn validate_repository_with_manifest(
     repo: &Utf8Path,
     manifest: &Manifest,
 ) -> anyhow::Result<()> {
-    let layout = ProvenanceLayout::new(repo.to_path_buf());
-    let store = StateStore::new(layout.clone());
-    match std::fs::symlink_metadata(layout.provenance_dir()) {
+    let store = Store::open(repo);
+    match std::fs::symlink_metadata(store.layout().provenance_dir()) {
         Ok(_) => store.with_repository_publication(|| validate_locked(&store, manifest)),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            provenance_store::publication::with_read_only_validation(&layout, || {
+            provenance_store::publication::with_read_only_validation(store.layout(), || {
                 validate_locked(&store, manifest)
             })
         }
@@ -73,16 +68,16 @@ pub(super) fn validate_repository_with_manifest(
 }
 
 pub(super) fn recover_repository_before_init(repo: &Utf8Path) -> anyhow::Result<()> {
-    let layout = ProvenanceLayout::new(repo.to_path_buf());
-    match std::fs::symlink_metadata(layout.provenance_dir()) {
-        Ok(_) => StateStore::new(layout).with_repository_publication(|| Ok(())),
+    let store = Store::open(repo);
+    match std::fs::symlink_metadata(store.layout().provenance_dir()) {
+        Ok(_) => store.with_repository_publication(|| Ok(())),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(error) => Err(error.into()),
     }
 }
 
 fn collect_report_locked(
-    store: &StateStore,
+    store: &Store,
     repo: &Utf8Path,
     manifest: &Manifest,
     strict: bool,
@@ -90,6 +85,7 @@ fn collect_report_locked(
 ) -> anyhow::Result<CheckReport> {
     validate_locked(store, manifest)?;
     if strict {
+        ensure_strict_dictionary_index(store.layout())?;
         let analysis = statement_report::changed_statements_from_commits(repo, manifest, base)?;
         let status = if analysis.diagnostics.is_empty() {
             "ok"
@@ -112,7 +108,32 @@ fn collect_report_locked(
     })
 }
 
-fn validate_locked(store: &StateStore, manifest: &Manifest) -> anyhow::Result<()> {
+/// Fails a strict check when the committed dictionary reference has no
+/// loadable index, instead of silently downgrading to rules-only checking.
+#[rule("rule_ste_strict_dictionary_index_gate")]
+fn ensure_strict_dictionary_index(
+    layout: &provenance_store::layout::ProvenanceLayout,
+) -> anyhow::Result<()> {
+    match resolve_project_dictionary(layout) {
+        DictionaryResolution::NoReference | DictionaryResolution::Loaded(_) => Ok(()),
+        DictionaryResolution::Unavailable {
+            directory, reason, ..
+        } => {
+            let directory = directory.map_or_else(
+                || "the machine data directory".to_owned(),
+                |directory| directory.display().to_string(),
+            );
+            anyhow::bail!(
+                "the committed dictionary reference has no loadable index in {directory}: \
+                 {reason}. Run `provenance dictionary import` with the local Issue 9 PDF \
+                 on this machine, or set PROVENANCE_STE100_INDEX_DIR to the directory \
+                 that holds the index"
+            );
+        }
+    }
+}
+
+fn validate_locked(store: &Store, manifest: &Manifest) -> anyhow::Result<()> {
     ensure_supported_schema_version("manifest", manifest.schema_version)?;
     anyhow::ensure!(
         !manifest.scopes.is_empty(),
@@ -159,6 +180,7 @@ fn validate_locked(store: &StateStore, manifest: &Manifest) -> anyhow::Result<()
 mod tests {
     use super::*;
     use provenance_core::{Manifest, RepoPathPrefix, ScopeId};
+    use provenance_store::layout::ProvenanceLayout;
 
     #[test]
     #[provenance_macros::verifies("rule_init_validates_planned_repository", examples)]

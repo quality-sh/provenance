@@ -27,10 +27,10 @@ async fn effective_state(layout: &crate::layout::ProvenanceLayout) -> String {
     let pool = open_cache(layout).await.unwrap();
     let state: String =
         sqlx::query_scalar("SELECT promotion_state FROM proposal_cards WHERE id = 'proposal_base'")
-            .fetch_one(&pool)
+            .fetch_one(pool.pool())
             .await
             .unwrap();
-    pool.close().await;
+    pool.close().await.unwrap();
     state
 }
 
@@ -112,10 +112,10 @@ async fn a_legacy_promotion_decision_is_refused_by_catch_up_and_by_rebuild() {
     assert_eq!(effective_state(&layout).await, "asserted");
     let pool = open_cache(&layout).await.unwrap();
     let serial_before: i64 = sqlx::query_scalar("SELECT MAX(serial) FROM projection_revision")
-        .fetch_one(&pool)
+        .fetch_one(pool.pool())
         .await
         .unwrap();
-    pool.close().await;
+    pool.close().await.unwrap();
 
     let legacy = crate::shards::legacy_promotion_decisions_path(&layout, &scope);
     std::fs::write(
@@ -146,9 +146,9 @@ async fn a_legacy_promotion_decision_is_refused_by_catch_up_and_by_rebuild() {
     );
     let pool = open_cache(&layout).await.unwrap();
     let serial_after: i64 = sqlx::query_scalar("SELECT MAX(serial) FROM projection_revision")
-        .fetch_one(&pool)
+        .fetch_one(pool.pool())
         .await
         .unwrap();
-    pool.close().await;
+    pool.close().await.unwrap();
     assert_eq!(serial_after, serial_before);
 }

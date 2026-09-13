@@ -2,5 +2,8 @@
   "read": {
     "freshness_policy": "catch_up",
     "scan_limit": 5000
+  },
+  "coverage": {
+    "binding_findings": "warning"
   }
 }

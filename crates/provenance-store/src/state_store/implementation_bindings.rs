@@ -22,9 +22,10 @@ pub(super) fn reconcile(
 ) -> anyhow::Result<Reconciliation> {
     let mut records = store.list_implementation_bindings(scope_id)?;
     let mut desired = desired_bindings(scope_id, graph, &records)?;
-    for binding in records.iter().filter(|binding| {
-        !binding.retired && preserve_omitted_for.contains(binding.rule_id.as_str())
-    }) {
+    for binding in records
+        .iter()
+        .filter(|binding| preserve_omitted_for.contains(binding.rule_id.as_str()))
+    {
         if let Some(generated) = desired
             .iter_mut()
             .find(|desired| desired.rule_id == binding.rule_id)
@@ -60,21 +61,20 @@ pub(super) fn reconcile(
         .iter()
         .map(|binding| &binding.rule_id)
         .collect::<Vec<_>>();
-    for record in records.iter_mut().filter(|binding| {
-        !binding.retired
-            && binding.declared_by == graph.owner
-            && !desired_rule_ids.contains(&&binding.rule_id)
-            && rule_belongs_to_spec(canonical_rules, &binding.rule_id, graph.owner, graph.spec)
-    }) {
-        let before = target(record);
-        record.retired = true;
-        record_change(
-            &mut changes,
-            record.rule_id.clone(),
-            before,
-            serde_json::Value::Null,
-        );
-    }
+    records.retain(|record| {
+        let omitted = record.declared_by == graph.owner
+            && !desired_rule_ids.contains(&&record.rule_id)
+            && rule_belongs_to_spec(canonical_rules, &record.rule_id, graph.owner, graph.spec);
+        if omitted {
+            record_change(
+                &mut changes,
+                record.rule_id.clone(),
+                target(record),
+                serde_json::Value::Null,
+            );
+        }
+        !omitted
+    });
 
     records.sort_by(|left, right| left.id.as_str().cmp(right.id.as_str()));
     Ok(Reconciliation {
@@ -102,12 +102,33 @@ fn desired_bindings(
             let rule_id = graph.rule_ids[&address].clone();
             validate_target(&implementation.file, &implementation.symbol)?;
             if let Some(record) = existing.iter().find(|record| record.rule_id == rule_id) {
-                anyhow::ensure!(
-                    record.declared_by == graph.owner,
-                    "rule `{}` implementation is owned by `{}`",
-                    rule_id.as_str(),
-                    record.declared_by
-                );
+                if record.declared_by != graph.owner {
+                    use crate::write_error::{SourceFailure, WriteFailure};
+                    return Err(SourceFailure::wrap(
+                        WriteFailure::OwnershipConflict {
+                            conflicts: vec![super::ReconciledResource {
+                                kind: super::TypedResourceKind::Rule,
+                                key: rule.key.clone(),
+                                parent: provenance_core::authoring::addresses::local_parent(
+                                    &address,
+                                ),
+                                address,
+                                id: rule_id,
+                                state: super::ReconcileState::Conflict,
+                                changes: vec![TypedFieldChange {
+                                    field: "implementation.declared_by".into(),
+                                    before: record.declared_by.clone().into(),
+                                    after: graph.owner.into(),
+                                }],
+                            }],
+                        },
+                        anyhow::anyhow!(
+                            "rule `{}` implementation is owned by `{}`",
+                            record.rule_id.as_str(),
+                            record.declared_by
+                        ),
+                    ));
+                }
             }
             Ok(ImplementationBinding {
                 schema_version: SUPPORTED_SCHEMA_VERSION,
@@ -115,7 +136,7 @@ fn desired_bindings(
                 id: binding_id(&rule_id)?,
                 rule_id,
                 declared_by: graph.owner.to_string(),
-                retired: false,
+
                 file: implementation.file.clone(),
                 symbol: implementation.symbol.clone(),
             })
@@ -153,7 +174,7 @@ impl StateStore {
                 id,
                 rule_id: input.rule_id,
                 declared_by: input.declared_by,
-                retired: false,
+
                 file: input.file,
                 symbol: input.symbol,
             };
@@ -194,14 +215,7 @@ fn rule_belongs_to_spec(rules: &[Rule], rule_id: &StableId, owner: &str, spec: &
 }
 
 fn target(binding: &ImplementationBinding) -> serde_json::Value {
-    if binding.retired {
-        serde_json::Value::Null
-    } else {
-        serde_json::json!({
-            "file": binding.file,
-            "symbol": binding.symbol,
-        })
-    }
+    serde_json::json!({ "file": binding.file, "symbol": binding.symbol })
 }
 
 fn record_change(
@@ -223,11 +237,13 @@ fn record_change(
 }
 
 fn validate_target(file: &camino::Utf8Path, symbol: &str) -> anyhow::Result<()> {
-    anyhow::ensure!(
+    crate::write_error::ensure!(
+        InvalidDeclaration,
         !file.as_str().is_empty(),
         "implementation file must not be empty"
     );
-    anyhow::ensure!(
+    crate::write_error::ensure!(
+        InvalidDeclaration,
         !file.as_str().contains('\\')
             && !file.is_absolute()
             && !file.components().any(|part| {
@@ -240,7 +256,8 @@ fn validate_target(file: &camino::Utf8Path, symbol: &str) -> anyhow::Result<()> 
             }),
         "implementation file must be a repository-relative path"
     );
-    anyhow::ensure!(
+    crate::write_error::ensure!(
+        InvalidDeclaration,
         !symbol.trim().is_empty(),
         "implementation symbol must not be empty"
     );

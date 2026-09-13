@@ -26,6 +26,11 @@ fn init_repo() -> tempfile::TempDir {
         ])
         .assert()
         .success();
+    std::fs::write(
+        directory.path().join("share-links.test.ts"),
+        "// verification fixture\n",
+    )
+    .unwrap();
     directory
 }
 

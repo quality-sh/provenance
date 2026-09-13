@@ -5,6 +5,7 @@ use super::{
 };
 use crate::model::ids::{SchemaVersion, ScopeId, StableId};
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ConsensusFinding {
@@ -15,6 +16,7 @@ pub struct ConsensusFinding {
     pub evidence_reference_ids: Vec<StableId>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ContestedClaim {
@@ -29,6 +31,7 @@ pub struct ContestedClaim {
     pub evidence_quality: EvidenceQuality,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct MinorityObjection {
@@ -39,6 +42,7 @@ pub struct MinorityObjection {
     pub evidence_reference_ids: Vec<StableId>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EvidenceGap {
@@ -49,6 +53,7 @@ pub struct EvidenceGap {
     pub blocking_promotion: bool,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct UnsupportedSpeculation {
@@ -58,6 +63,7 @@ pub struct UnsupportedSpeculation {
     pub marker: SpeculationMarker,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SuggestedArtifact {
@@ -72,6 +78,7 @@ pub struct SuggestedArtifact {
     pub origin_participant_slots: Vec<String>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RequiredHumanDecision {
@@ -82,6 +89,7 @@ pub struct RequiredHumanDecision {
     pub blocks_promotion: bool,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SynthesisPacket {

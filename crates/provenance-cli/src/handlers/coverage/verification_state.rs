@@ -1,7 +1,8 @@
 use std::collections::BTreeSet;
 
+use crate::store::Store;
 use provenance_core::ScopeId;
-use provenance_store::{layout::ProvenanceLayout, state_store::StateStore};
+use provenance_macros::rule;
 
 pub(super) struct ValidationState {
     pub rules: Vec<provenance_core::Rule>,
@@ -24,7 +25,7 @@ pub(super) fn load_validation_state(
             warnings: Vec::new(),
         });
     }
-    let store = StateStore::new(ProvenanceLayout::new(repo));
+    let store = Store::open(repo);
     let scope = ScopeId::new(scope)?;
     let rules = store.list_rules(&scope)?;
     let known = rules
@@ -46,27 +47,20 @@ pub(super) fn load_validation_state(
     }) {
         warnings.push(provenance_scanner::ValidationWarning {
             rule_id: site.rule_id().to_string(),
-            file_path: site.file_path().to_path_buf(),
-            line: site.line(),
+            file_path: Some(site.file_path().to_path_buf()),
+            line: Some(site.line()),
             message: format!(
                 "more than one primary implementation binding was found for rule `{}`",
                 site.rule_id()
             ),
+            binding_finding: false,
         });
     }
     Ok(ValidationState {
         rules,
         bindings: store.active_verification_bindings(&scope)?,
         implementations,
-        warnings: warnings
-            .into_iter()
-            .map(|warning| provenance_core::coverage::ValidationWarning {
-                rule_id: warning.rule_id,
-                file_path: Some(warning.file_path),
-                line: Some(warning.line),
-                message: warning.message,
-            })
-            .collect(),
+        warnings,
     })
 }
 
@@ -83,7 +77,9 @@ fn same_implementation(
 }
 
 /// Derives Unverified from both scanner sites and canonical typed bindings.
-/// The finding carries no location because absence has no site to cite.
+/// The finding carries no location because absence has no site to cite, and
+/// it is a Rule binding finding: the lifecycle policy governs its severity.
+#[rule("rule_active_rule_requires_verification")]
 pub(super) fn unverified_rule_warnings(
     rules: &[provenance_core::Rule],
     scans: &[provenance_scanner::FileScan],
@@ -111,13 +107,14 @@ pub(super) fn unverified_rule_warnings(
     );
     rules
         .iter()
-        .filter(|rule| rule.status == provenance_core::RuleStatus::Active && !rule.retired)
+        .filter(|rule| rule.status == provenance_core::RuleStatus::Active)
         .filter(|rule| !verified.contains(rule.id.as_str()))
         .map(|rule| provenance_core::coverage::ValidationWarning {
             rule_id: rule.id.as_str().to_string(),
             file_path: None,
             line: None,
             message: format!("active rule `{}` has no verification", rule.id.as_str()),
+            binding_finding: true,
         })
         .collect()
 }

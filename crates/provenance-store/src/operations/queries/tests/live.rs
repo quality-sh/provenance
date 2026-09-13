@@ -29,6 +29,7 @@ fn store_with_rule() -> TestStore {
 fn create_rule_citing(store: &StateStore, scope: &ScopeId, id: &str, document: &str) {
     store
         .create_rule(CreateRuleInput {
+            archived_in_commit: None,
             scope_id: scope.clone(),
             id: sid(id),
             name: None,
@@ -59,7 +60,7 @@ async fn a_scanner_annotation_moves_impact_and_not_the_stamp() {
         protocol_version: Some(SDK_PROTOCOL_VERSION),
         id: "req_overtime".into(),
         node_type: None,
-        include_retired: false,
+
         limit: 50,
     };
     let sites = |answer: &provenance_core::protocol::ImpactResult| -> Vec<String> {
@@ -219,7 +220,7 @@ async fn a_canonical_edit_under_annotate_only_moves_stale_and_not_the_stamp() {
                         base,
                         head: None,
                         rules: Vec::new(),
-                        include_retired: false,
+
                         limit: 50,
                     },
                 )

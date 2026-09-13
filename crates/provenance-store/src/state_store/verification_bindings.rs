@@ -16,13 +16,23 @@ impl StateStore {
         &self,
         input: MaterializeVerificationBindingInput,
     ) -> anyhow::Result<VerificationBinding> {
-        anyhow::ensure!(!input.key.trim().is_empty(), "key must not be empty");
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            InvalidVerificationTarget,
+            !input.key.trim().is_empty(),
+            "key must not be empty"
+        );
+        crate::write_error::ensure!(
+            InvalidVerificationTarget,
             !input.declared_by.trim().is_empty(),
             "declared_by must not be empty"
         );
-        anyhow::ensure!(!input.file.as_str().is_empty(), "file must not be empty");
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            InvalidVerificationTarget,
+            !input.file.as_str().is_empty(),
+            "file must not be empty"
+        );
+        crate::write_error::ensure!(
+            InvalidVerificationTarget,
             !input.file.as_str().contains('\\')
                 && !input.file.is_absolute()
                 && !input.file.components().any(|part| {
@@ -36,9 +46,14 @@ impl StateStore {
             "file must be a repository-relative path"
         );
         if let Some(symbol) = &input.symbol {
-            anyhow::ensure!(!symbol.trim().is_empty(), "symbol must not be empty");
+            crate::write_error::ensure!(
+                InvalidVerificationTarget,
+                !symbol.trim().is_empty(),
+                "symbol must not be empty"
+            );
         }
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            InvalidVerificationTarget,
             self.list_rules(&input.scope_id)?
                 .iter()
                 .any(|rule| rule.id == input.rule_id),
@@ -55,13 +70,13 @@ impl StateStore {
             key: input.key,
             method: input.method,
             declared_by: input.declared_by,
-            retired: false,
+
             file: input.file,
             symbol: input.symbol,
         };
         let path = shards::verification_bindings_path(&self.layout, &input.scope_id);
         self.mutate_jsonl_records(&path, |records: &mut Vec<VerificationBinding>| {
-            retire_replaced(records, &binding);
+            delete_replaced(records, &binding);
             if let Some(existing) = records.iter_mut().find(|record| record.id == id) {
                 *existing = binding.clone();
             } else {
@@ -73,18 +88,16 @@ impl StateStore {
     }
 }
 
-/// Retires the relationship an owner-local key replaced in one test file. A
+/// Deletes the relationship an owner-local key replaced in one test file. A
 /// run vouches only for the owner, file, and key it just reported, so a key
 /// reused by another owner or from another file stays untouched.
-fn retire_replaced(records: &mut [VerificationBinding], reported: &VerificationBinding) {
-    for record in records.iter_mut().filter(|record| {
-        record.declared_by == reported.declared_by
+fn delete_replaced(records: &mut Vec<VerificationBinding>, reported: &VerificationBinding) {
+    records.retain(|record| {
+        !(record.declared_by == reported.declared_by
             && record.file == reported.file
             && record.key == reported.key
-            && record.rule_id != reported.rule_id
-    }) {
-        record.retired = true;
-    }
+            && record.rule_id != reported.rule_id)
+    });
 }
 
 fn binding_id(input: &MaterializeVerificationBindingInput) -> anyhow::Result<StableId> {

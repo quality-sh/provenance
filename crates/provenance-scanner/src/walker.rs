@@ -14,6 +14,7 @@ mod bindings;
 mod bounded;
 #[cfg(test)]
 mod bounded_tests;
+mod ignore;
 mod rust_lines;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
@@ -88,10 +89,7 @@ pub fn scan_path(path: &Utf8Path) -> anyhow::Result<Vec<FileScan>> {
 
 pub fn scan_path_with_content(path: &Utf8Path) -> anyhow::Result<Vec<FileScanWithContent>> {
     let mut scans = Vec::new();
-    for entry in walkdir::WalkDir::new(path)
-        .into_iter()
-        .filter_entry(|entry| entry.depth() == 0 || !is_ignored_directory(entry))
-    {
+    for entry in repository_walk(path, false) {
         let entry = entry?;
         if !entry.file_type().is_file() {
             continue;
@@ -113,6 +111,27 @@ pub fn scan_path_with_content(path: &Utf8Path) -> anyhow::Result<Vec<FileScanWit
     Ok(scans)
 }
 
+/// Walks a repository tree for the scan. Directories named like dependency,
+/// build, or metadata trees are always skipped, and the repository's own
+/// `.gitignore` rules prune generated output trees; the scan root itself is
+/// always admitted, so an explicitly requested path overrides the rules.
+fn repository_walk(
+    root: &Utf8Path,
+    sorted: bool,
+) -> impl Iterator<Item = walkdir::Result<walkdir::DirEntry>> {
+    let walk = if sorted {
+        walkdir::WalkDir::new(root).sort_by_file_name()
+    } else {
+        walkdir::WalkDir::new(root)
+    };
+    let mut filter = ignore::RepositoryFilter::new();
+    walk.into_iter()
+        .filter_entry(move |entry| filter.admits(entry))
+}
+
+/// Dependency, build, and metadata trees whose name alone marks output.
+/// Whether other output is generated is the repository's own call, made
+/// through its `.gitignore` files.
 fn is_ignored_directory(entry: &walkdir::DirEntry) -> bool {
     entry.file_type().is_dir()
         && matches!(
@@ -154,19 +173,36 @@ pub fn scan_file(file_path: &Utf8Path, language: Language, content: &str) -> Fil
                 block_comment_state(line, in_block_comment, language == Language::Rust);
         }
         let binding = (language != Language::Rust || rust_states[idx] == RustLexicalState::Code)
-            .then(|| parse_binding_line(language, line, started_in_block_comment))
+            .then(|| {
+                parse_binding_line(language, line, &lines[idx + 1..], started_in_block_comment)
+            })
             .flatten();
-        if let Some((rule_id, verification)) = binding {
-            let item_name = binding_item_name(language, &lines, idx, verification);
+        if let Some(binding) = binding {
+            let end_idx = idx + binding.extra_lines;
+            let item_name = binding_item_name(language, &lines, end_idx, binding.verification);
             bindings.push(AttributeBinding {
                 file_path: file_path.to_path_buf(),
                 line: idx + 1,
                 anchor: EvidenceAnchor::new(item_name.clone(), lines[idx]),
                 item_name,
-                rule_id,
-                verification,
+                rule_id: binding.rule_id,
+                verification: binding.verification,
             });
-            idx += 1;
+            for consumed in lines.iter().take(end_idx + 1).skip(idx + 1) {
+                let Some(code) = code_outside_multiline_string(
+                    consumed,
+                    multiline_style(language),
+                    &mut multiline_delimiter,
+                    in_block_comment,
+                ) else {
+                    break;
+                };
+                if language != Language::Python {
+                    in_block_comment =
+                        block_comment_state(code, in_block_comment, language == Language::Rust);
+                }
+            }
+            idx = end_idx + 1;
             continue;
         }
         let marker_position = annotation_marker_start(
@@ -346,7 +382,7 @@ fn next_item_name(language: Language, following: &[&str]) -> Option<String> {
 }
 
 fn type_name(line: &str) -> Option<String> {
-    ["struct ", "enum ", "type "]
+    ["struct ", "enum ", "trait ", "type "]
         .iter()
         .find(|marker| line.contains(*marker))
         .and_then(|marker| token_after(line, marker))

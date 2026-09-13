@@ -1,7 +1,4 @@
-use crate::{
-    atomic_file::{FileRollbackJournal, FileSnapshot},
-    cli::SteOnboardingMode,
-};
+use crate::atomic_file::{FileRollbackJournal, FileSnapshot};
 use anyhow::Context;
 use camino::Utf8Path;
 use fs2::FileExt;
@@ -16,8 +13,6 @@ use std::{
 };
 
 const OFFICIAL_ASSET: &str = "https://www.asd-ste100.org/assets/files/ASD-STE100_ISSUE9.pdf";
-const REQUEST_FORM: &str = "https://www.asd-ste100.org/STE_downloads.html#article02-2l";
-const CHANGE_FORM: &str = "https://www.asd-ste100.org/STE_downloads.html#features038-31";
 const DOWNLOAD_ATTEMPTS: usize = 3;
 const MAX_ASSET_BYTES: u64 = 64 * 1024 * 1024;
 
@@ -28,15 +23,11 @@ pub struct Plan {
     message: Option<String>,
 }
 
-/// Selects the interactive form path or the bounded agent download path.
-#[rule("rule_ste_dictionary_interactive_acquisition")]
+/// Onboarding acquires the Issue 9 dictionary without a manual mode: reuse an
+/// existing import, import a selected PDF, or download the official asset.
 #[rule("rule_ste_dictionary_agent_acquisition")]
 #[rule("rule_ste_dictionary_no_operational_download")]
-pub fn prepare(
-    repo: &Utf8Path,
-    mode: SteOnboardingMode,
-    selected_pdf: Option<&Utf8Path>,
-) -> anyhow::Result<Plan> {
+pub fn prepare(repo: &Utf8Path, selected_pdf: Option<&Utf8Path>) -> anyhow::Result<Plan> {
     let layout = ProvenanceLayout::new(repo.to_owned());
     let reference_path = dictionary_reference::dictionary_reference_path(&layout);
     let reference_before = FileSnapshot::read(reference_path.as_std_path())?;
@@ -45,25 +36,19 @@ pub fn prepare(
         return Ok(Plan::unchanged(reference_before));
     }
 
-    let (import, message) = match (mode, selected_pdf) {
-        (_, Some(pdf)) => (
+    let (import, message) = if let Some(pdf) = selected_pdf {
+        (
             Some(import_pdf(pdf)?),
-            Some(format!(
-                "Imported the selected Issue 9 dictionary.\n{}",
-                product_notice()
-            )),
-        ),
-        (SteOnboardingMode::Interactive, None) => (None, Some(interactive_guidance())),
-        (SteOnboardingMode::Agent, None) => match acquire_agent_dictionary_blocking() {
+            Some(format!("Imported the Issue 9 dictionary from {pdf}.")),
+        )
+    } else {
+        match acquire_official_dictionary_blocking() {
             Ok(import) => (
                 Some(import),
-                Some(format!(
-                    "Imported the official Issue 9 dictionary.\n{}",
-                    product_notice()
-                )),
+                Some("Imported the Issue 9 dictionary from the official asset.".to_owned()),
             ),
             Err(error) => (None, Some(fallback_guidance(&error))),
-        },
+        }
     };
 
     let Some(import) = import else {
@@ -148,7 +133,7 @@ fn import_bytes(bytes: &[u8]) -> anyhow::Result<DictionaryImport> {
 #[rule("rule_ste_dictionary_download_retry_bound")]
 #[rule("rule_ste_dictionary_download_identity")]
 #[rule("rule_ste_dictionary_asset_fallback")]
-fn acquire_agent_dictionary_blocking() -> anyhow::Result<DictionaryImport> {
+fn acquire_official_dictionary_blocking() -> anyhow::Result<DictionaryImport> {
     let directory = asset_directory().context("no machine cache directory is available")?;
     std::fs::create_dir_all(&directory).context("create the shared STE asset cache")?;
     let lock = open_lock(&directory.join("issue-9.pdf.lock"))?;
@@ -276,26 +261,8 @@ fn cache_directory() -> Option<PathBuf> {
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cache")))
 }
 
-fn interactive_guidance() -> String {
-    format!(
-        "Get ASD-STE100 Issue 9 from the official request page, then rerun init with --ste-pdf <path>:\n{REQUEST_FORM}\n{}",
-        product_notice()
-    )
-}
-
 fn fallback_guidance(error: &anyhow::Error) -> String {
     format!(
-        "The official Issue 9 asset is unavailable after {DOWNLOAD_ATTEMPTS} attempts ({error}). Use the official request page; Provenance does not search for another asset:\n{REQUEST_FORM}\n{}",
-        product_notice()
-    )
-}
-
-/// Gives the required ownership, stewardship, source, and claim limits.
-#[rule("rule_ste_dictionary_attribution")]
-#[rule("rule_ste_dictionary_claim_scope")]
-#[rule("rule_ste_dictionary_change_form_link")]
-fn product_notice() -> String {
-    format!(
-        "ASD owns ASD-STE100, and STEMG maintains it. Official request page: {REQUEST_FORM}. Official change-form page: {CHANGE_FORM}. Provenance names only its implemented Issue 9 checks. It does not claim compliance, certification, endorsement, or approval."
+        "Warning: the official Issue 9 asset is unavailable after {DOWNLOAD_ATTEMPTS} attempts ({error}). Initialization continues without a dictionary. To add it later, rerun init, or run `provenance dictionary import --pdf <path>` with a local PDF file."
     )
 }

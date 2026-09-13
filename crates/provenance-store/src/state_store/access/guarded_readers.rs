@@ -139,3 +139,12 @@ impl GuardedStore<'_> {
         self.store.validate_graph_scope(scope)
     }
 }
+
+impl GuardedStore<'_> {
+    pub(crate) fn validated_journal_entries(
+        &self,
+        scope: &ScopeId,
+    ) -> anyhow::Result<Vec<provenance_core::review::JournalEntry>> {
+        self.store.validated_journal_entries(scope)
+    }
+}

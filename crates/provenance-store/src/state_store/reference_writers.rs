@@ -2,15 +2,18 @@
 //!
 //! Every writer reaches the declaration through `RelationOwner`: the target
 //! kind it checks, the requiredness a clear refuses against, and the cycle
-//! guard on a requirement's own-kind fields all come from the table.
+//! guard on a requirement's own-kind fields all come from the table. The
+//! field it writes comes from the same table: `relation_slot_mut` lends the
+//! slot the declaration names, so a writer cannot set one field under
+//! another field's name.
 
+use super::record_stamps::GraphRecord;
 use super::StateStore;
-use camino::Utf8Path;
+use crate::shards;
 use provenance_core::model::relations::{
-    declaration_of, kind_word, required_refusal, RelationDecl, RelationOwner,
+    declaration_of, kind_word, required_refusal, RelationDecl, RelationOwner, RelationSlot,
 };
 use provenance_core::{NodeType, ScopeId, StableId};
-use serde::{de::DeserializeOwned, Serialize};
 
 pub(super) fn declared<T: RelationOwner>(name: &str) -> &'static RelationDecl {
     declaration_of(T::relations(), name).expect("every writer names a declared relation")
@@ -65,7 +68,7 @@ impl StateStore {
     /// Refuses an id no record of the kind holds. `named_by` is the
     /// user-facing slot the id came from: the flag on a command, the
     /// field on a declaration.
-    pub(super) fn ensure_node_exists(
+    pub(crate) fn ensure_node_exists(
         &self,
         scope_id: &ScopeId,
         kind: NodeType,
@@ -85,7 +88,8 @@ impl StateStore {
             NodeType::Domain => self.list_domains(scope_id)?.iter().any(|r| &r.id == id),
             NodeType::Boundary => self.list_boundaries(scope_id)?.iter().any(|r| &r.id == id),
         };
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            MissingReference,
             exists,
             "{} {} does not exist ({})",
             kind_word(kind),
@@ -99,24 +103,24 @@ impl StateStore {
     pub(super) fn write_single<T>(
         &self,
         scope_id: &ScopeId,
-        path: &Utf8Path,
         name: &str,
         owner: &StableId,
         target: Option<StableId>,
-        field: impl FnOnce(&mut T) -> &mut Option<StableId>,
     ) -> anyhow::Result<T>
     where
-        T: RelationOwner + DeserializeOwned + Serialize + Clone,
+        T: GraphRecord,
     {
         let decl = declared::<T>(name);
+        let path = shards::path_for(&self.layout, scope_id, T::OWNER);
         self.with_repository_publication(|| {
             if let Some(target) = &target {
                 self.ensure_node_exists(scope_id, decl.target, target, "--target-id")?;
             }
-            self.mutate_jsonl_records(path, |records: &mut Vec<T>| {
+            self.mutate_graph_record(&path, |records: &mut Vec<T>| {
                 if let Some(target) = &target {
                     if decl.target == T::OWNER {
-                        anyhow::ensure!(
+                        crate::write_error::ensure!(
+                            InvalidUpdate,
                             !forms_cycle(records, name, owner, target),
                             "{name} from {} to {} would form a cycle",
                             owner.as_str(),
@@ -128,14 +132,23 @@ impl StateStore {
                     .iter_mut()
                     .find(|record| record.id() == owner)
                     .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "{} {} does not exist ({})",
-                            kind_word(T::OWNER),
-                            owner.as_str(),
-                            owner_flag(T::OWNER)
+                        crate::write_error::SourceFailure::wrap(
+                            crate::write_error::WriteFailure::MissingReference,
+                            anyhow::anyhow!(
+                                "{} {} does not exist ({})",
+                                kind_word(T::OWNER),
+                                owner.as_str(),
+                                owner_flag(T::OWNER)
+                            ),
                         )
                     })?;
-                *field(record) = target;
+                let Some(RelationSlot::Single(slot)) = record.relation_slot_mut(name) else {
+                    panic!(
+                        "relation `{name}` on {} is not a single reference",
+                        kind_word(T::OWNER)
+                    );
+                };
+                *slot = target;
                 Ok(record.clone())
             })
         })
@@ -145,21 +158,21 @@ impl StateStore {
     pub(super) fn add_to_list<T>(
         &self,
         scope_id: &ScopeId,
-        path: &Utf8Path,
         name: &str,
         owner: &StableId,
         target: StableId,
-        field: impl FnOnce(&mut T) -> &mut Vec<StableId>,
     ) -> anyhow::Result<T>
     where
-        T: RelationOwner + DeserializeOwned + Serialize + Clone,
+        T: GraphRecord,
     {
         let decl = declared::<T>(name);
+        let path = shards::path_for(&self.layout, scope_id, T::OWNER);
         self.with_repository_publication(|| {
             self.ensure_node_exists(scope_id, decl.target, &target, "--target-id")?;
-            self.mutate_jsonl_records(path, |records: &mut Vec<T>| {
+            self.mutate_graph_record(&path, |records: &mut Vec<T>| {
                 if decl.target == T::OWNER {
-                    anyhow::ensure!(
+                    crate::write_error::ensure!(
+                        InvalidUpdate,
                         !forms_cycle(records, name, owner, &target),
                         "{name} from {} to {} would form a cycle",
                         owner.as_str(),
@@ -170,14 +183,22 @@ impl StateStore {
                     .iter_mut()
                     .find(|record| record.id() == owner)
                     .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "{} {} does not exist ({})",
-                            kind_word(T::OWNER),
-                            owner.as_str(),
-                            owner_flag(T::OWNER)
+                        crate::write_error::SourceFailure::wrap(
+                            crate::write_error::WriteFailure::MissingReference,
+                            anyhow::anyhow!(
+                                "{} {} does not exist ({})",
+                                kind_word(T::OWNER),
+                                owner.as_str(),
+                                owner_flag(T::OWNER)
+                            ),
                         )
                     })?;
-                let list = field(record);
+                let Some(RelationSlot::List(list)) = record.relation_slot_mut(name) else {
+                    panic!(
+                        "relation `{name}` on {} is not a reference list",
+                        kind_word(T::OWNER)
+                    );
+                };
                 if !list.contains(&target) {
                     list.push(target);
                     list.sort_by(|a, b| a.as_str().cmp(b.as_str()));
@@ -190,44 +211,56 @@ impl StateStore {
     /// Removes one entry from a list field; a required list keeps its last.
     pub(super) fn clear_from_list<T>(
         &self,
-        path: &Utf8Path,
+        scope_id: &ScopeId,
         name: &str,
         owner: &StableId,
         target: &StableId,
-        field: impl FnOnce(&mut T) -> &mut Vec<StableId>,
     ) -> anyhow::Result<T>
     where
-        T: RelationOwner + DeserializeOwned + Serialize + Clone,
+        T: GraphRecord,
     {
         let decl = declared::<T>(name);
+        let path = shards::path_for(&self.layout, scope_id, T::OWNER);
         self.with_repository_publication(|| {
-            self.mutate_jsonl_records(path, |records: &mut Vec<T>| {
+            self.mutate_graph_record(&path, |records: &mut Vec<T>| {
                 let record = records
                     .iter_mut()
                     .find(|record| record.id() == owner)
                     .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "{} {} does not exist ({})",
-                            kind_word(T::OWNER),
-                            owner.as_str(),
-                            owner_flag(T::OWNER)
+                        crate::write_error::SourceFailure::wrap(
+                            crate::write_error::WriteFailure::MissingReference,
+                            anyhow::anyhow!(
+                                "{} {} does not exist ({})",
+                                kind_word(T::OWNER),
+                                owner.as_str(),
+                                owner_flag(T::OWNER)
+                            ),
                         )
                     })?;
-                let list = field(record);
+                let Some(RelationSlot::List(list)) = record.relation_slot_mut(name) else {
+                    panic!(
+                        "relation `{name}` on {} is not a reference list",
+                        kind_word(T::OWNER)
+                    );
+                };
                 let position = list
                     .iter()
                     .position(|entry| entry == target)
                     .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "{} {} does not name {} {} under {}",
-                            kind_word(T::OWNER),
-                            owner.as_str(),
-                            kind_word(decl.target),
-                            target.as_str(),
-                            decl.name
+                        crate::write_error::SourceFailure::wrap(
+                            crate::write_error::WriteFailure::InvalidUpdate,
+                            anyhow::anyhow!(
+                                "{} {} does not name {} {} under {}",
+                                kind_word(T::OWNER),
+                                owner.as_str(),
+                                kind_word(decl.target),
+                                target.as_str(),
+                                decl.name
+                            ),
                         )
                     })?;
-                anyhow::ensure!(
+                crate::write_error::ensure!(
+                    InvalidUpdate,
                     !(decl.required && list.len() == 1),
                     "{}",
                     required_refusal(decl)

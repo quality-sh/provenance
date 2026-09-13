@@ -16,12 +16,14 @@ fn scope_id() -> ScopeId {
 
 pub fn requirement(id: &str) -> Requirement {
     Requirement {
+        created: None,
+        updated: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id(),
         id: sid(id),
         declared_by: None,
         declaration_address: None,
-        retired: false,
+
         statement: format!("{id} statement"),
         description: None,
         fog: None,
@@ -39,6 +41,8 @@ pub fn requirement(id: &str) -> Requirement {
 
 pub fn resolution(id: &str) -> Resolution {
     Resolution {
+        created: None,
+        updated: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id(),
         id: sid(id),
@@ -63,12 +67,15 @@ pub fn resolution(id: &str) -> Resolution {
 
 pub fn rule(id: &str) -> Rule {
     Rule {
+        created: None,
+        updated: None,
+        archived_in_commit: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id(),
         id: sid(id),
         declared_by: None,
         declaration_address: None,
-        retired: false,
+
         name: None,
         description: None,
         statement: "Rule statement".to_string(),
@@ -131,12 +138,14 @@ pub fn question_for(
 
 pub fn source(id: &str) -> Source {
     Source {
+        created: None,
+        updated: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id(),
         id: sid(id),
         declared_by: None,
         declaration_address: None,
-        retired: false,
+
         name: id.to_string(),
         source_type: SourceType::Policy,
         url: None,

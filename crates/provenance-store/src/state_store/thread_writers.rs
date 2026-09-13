@@ -1,5 +1,6 @@
 use super::{serde_name, PostMessageInput, PostMessageResult, StateStore};
-use crate::shards;
+use crate::write_error::{publication_started, SourceFailure, WriteFailure};
+use crate::{operations::reader::RECORD_BYTES, shards};
 use provenance_core::{
     Message, NodeType, StableId, Thread, ThreadStatus, SUPPORTED_SCHEMA_VERSION,
 };
@@ -9,17 +10,34 @@ impl StateStore {
         &self,
         input: PostMessageInput,
     ) -> anyhow::Result<PostMessageResult> {
-        self.with_repository_publication(|| self.write_thread_message(input))
+        self.with_repository_publication(|| {
+            anyhow::ensure!(
+                !self
+                    .list_threads(&input.scope_id)?
+                    .iter()
+                    .any(|t| t.parent == input.parent
+                        && t.schema_version == provenance_core::review::REVIEW_SCHEMA_VERSION),
+                "enrolled Thread requires an addressed Discussion write"
+            );
+            self.write_thread_message(input)
+        })
     }
 
-    fn write_thread_message(&self, input: PostMessageInput) -> anyhow::Result<PostMessageResult> {
+    pub(crate) fn write_thread_message(
+        &self,
+        input: PostMessageInput,
+    ) -> anyhow::Result<PostMessageResult> {
         let PostMessageInput {
             scope_id,
             parent,
             role,
             body,
         } = input;
-        anyhow::ensure!(!body.trim().is_empty(), "message body must not be empty");
+        crate::write_error::ensure!(
+            EmptyMessageBody,
+            !body.trim().is_empty(),
+            "message body must not be empty"
+        );
         match parent.node_type {
             NodeType::Source
             | NodeType::Requirement
@@ -27,11 +45,16 @@ impl StateStore {
             | NodeType::Rule
             | NodeType::Topic
             | NodeType::Question => {}
-            NodeType::Domain | NodeType::Boundary => anyhow::bail!(
-                "thread parent kind `{}` is not supported; threads attach to a source, \
+            NodeType::Domain | NodeType::Boundary => {
+                return Err(SourceFailure::wrap(
+                    WriteFailure::UnsupportedThreadParent,
+                    anyhow::anyhow!(
+                        "thread parent kind `{}` is not supported; threads attach to a source, \
                  requirement, resolution, rule, topic, or question",
-                serde_name(&parent.node_type)?
-            ),
+                        serde_name(&parent.node_type)?
+                    ),
+                ))
+            }
         }
         let threads_path = shards::threads_path(&self.layout, &scope_id);
         let thread = self.mutate_jsonl_records(&threads_path, |threads: &mut Vec<Thread>| {
@@ -71,34 +94,61 @@ impl StateStore {
             Ok(thread)
         })?;
 
-        let messages_path = shards::messages_path(&self.layout, &scope_id);
-        let message =
-            self.mutate_jsonl_records(&messages_path, |messages: &mut Vec<Message>| {
-                let created_at = messages
-                    .iter()
-                    .map(|message| message.created_at)
-                    .max()
-                    .unwrap_or(0)
-                    + 1;
-                let message = Message {
-                    schema_version: SUPPORTED_SCHEMA_VERSION,
-                    scope_id: scope_id.clone(),
-                    id: StableId::new(format!("msg_{created_at:06}"))?,
-                    thread_id: thread.id.clone(),
-                    role,
-                    body,
-                    created_at,
-                    ai_metadata: None,
-                };
-                messages.push(message.clone());
-                messages.sort_by(|a, b| {
-                    a.created_at
-                        .cmp(&b.created_at)
-                        .then(a.id.as_str().cmp(b.id.as_str()))
-                });
-                Ok(message)
-            })?;
+        let message = self
+            .append_discussion_message(&scope_id, &thread.id, role, body)
+            .map_err(publication_started)?;
+
         Ok(PostMessageResult { thread, message })
+    }
+    pub(crate) fn append_discussion_message(
+        &self,
+        scope_id: &provenance_core::ScopeId,
+        thread_id: &StableId,
+        role: provenance_core::MessageRole,
+        body: String,
+    ) -> anyhow::Result<Message> {
+        let existing = self.list_messages(scope_id)?;
+        let created_at = existing
+            .iter()
+            .map(|m| m.created_at)
+            .max()
+            .unwrap_or(0)
+            .checked_add(1)
+            .ok_or_else(|| anyhow::anyhow!("Message timestamp overflow"))?;
+        let id = StableId::new(format!("msg_{created_at:06}"))?;
+        anyhow::ensure!(
+            !existing.iter().any(|m| m.id == id),
+            "Message identity already exists in a legacy shard"
+        );
+        let message = Message {
+            schema_version: SUPPORTED_SCHEMA_VERSION,
+            scope_id: scope_id.clone(),
+            id,
+            thread_id: thread_id.clone(),
+            role,
+            body,
+            created_at,
+            ai_metadata: None,
+        };
+        // The bounded page readers refuse any Message whose encoded form
+        // exceeds the record budget, so an oversized Message would be
+        // persisted once and never readable. Enforce the same bound here,
+        // before the Message reaches the shard, so the write fails while
+        // nothing has been staged or published.
+        anyhow::ensure!(
+            serde_json::to_vec(&message)?.len() <= RECORD_BYTES,
+            "Message exceeds the record byte budget"
+        );
+        let messages_path = shards::messages_path(&self.layout, scope_id);
+        self.mutate_jsonl_records(&messages_path, |messages: &mut Vec<Message>| {
+            messages.push(message.clone());
+            messages.sort_by(|a, b| {
+                a.created_at
+                    .cmp(&b.created_at)
+                    .then(a.id.as_str().cmp(b.id.as_str()))
+            });
+            Ok(message.clone())
+        })
     }
 }
 

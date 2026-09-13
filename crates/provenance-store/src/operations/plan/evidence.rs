@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// What the current state of a Rule's evidence asks a reader to do.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Deserialize, Serialize)]
 pub struct RuleEvidence {
     review_required: bool,
@@ -14,6 +15,7 @@ pub struct RuleEvidence {
 }
 
 /// One restated Requirement that put this Rule's evidence up for review.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ReviewReason {
     pub requirement: StableId,

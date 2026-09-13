@@ -26,14 +26,14 @@ use provenance_macros::verifies;
 async fn stored(store: &TestStore) -> (i64, String) {
     let pool = open_cache(&store.layout()).await.unwrap();
     let serial: i64 = sqlx::query_scalar("SELECT MAX(serial) FROM projection_revision")
-        .fetch_one(&pool)
+        .fetch_one(pool.pool())
         .await
         .unwrap();
     let instance_id: String = sqlx::query_scalar("SELECT instance_id FROM projection_instance")
-        .fetch_one(&pool)
+        .fetch_one(pool.pool())
         .await
         .unwrap();
-    pool.close().await;
+    pool.close().await.unwrap();
     (serial, instance_id)
 }
 
@@ -42,7 +42,6 @@ pub(super) fn get_query(id: &str) -> GetQuery {
         protocol_version: Some(SDK_PROTOCOL_VERSION),
         node_type: NodeType::Requirement,
         id: id.into(),
-        include_retired: false,
     }
 }
 
@@ -99,7 +98,7 @@ async fn graph_stamps(store: &TestStore) -> Vec<(&'static str, Stamp)> {
                 repo(),
                 scope,
                 ReadPolicy::default(),
-                requests::neighbors("req_overtime", false, 10),
+                requests::neighbors("req_overtime", 10),
             )
             .await
             .unwrap()
@@ -111,7 +110,7 @@ async fn graph_stamps(store: &TestStore) -> Vec<(&'static str, Stamp)> {
                 repo(),
                 scope,
                 ReadPolicy::default(),
-                requests::trace("req_overtime", false, 10),
+                requests::trace("req_overtime", 10),
             )
             .await
             .unwrap()
@@ -137,7 +136,7 @@ async fn evidence_stamps(store: &TestStore, base: &str) -> Vec<(&'static str, St
                     protocol_version: version,
                     id: "req_overtime".into(),
                     node_type: None,
-                    include_retired: false,
+
                     limit: 10,
                 },
             )
@@ -168,7 +167,7 @@ async fn evidence_stamps(store: &TestStore, base: &str) -> Vec<(&'static str, St
                     base: base.to_string(),
                     head: None,
                     rules: Vec::new(),
-                    include_retired: false,
+
                     limit: 10,
                 },
             )
@@ -187,7 +186,7 @@ async fn evidence_stamps(store: &TestStore, base: &str) -> Vec<(&'static str, St
                     file: "src/pay.rs".into(),
                     symbol: None,
                     line: None,
-                    include_retired: false,
+
                     limit: 10,
                 },
             )
@@ -310,7 +309,7 @@ async fn a_table_handle_puts_its_word_in_attested() {
     );
 
     let pool = open_cache(&store.layout()).await.unwrap();
-    let snapshot = ReadSnapshot::open(&pool, &store.scope)
+    let snapshot = ReadSnapshot::open(pool.pool(), &store.scope)
         .await
         .unwrap()
         .expect("a revision");
@@ -321,7 +320,7 @@ async fn a_table_handle_puts_its_word_in_attested() {
         .store();
     let stamp = seal(context, StampPolicy::AnnotateOnly);
     assert_eq!(words(&stamp), (vec!["rules"], vec!["canonical"]));
-    pool.close().await;
+    pool.close().await.unwrap();
 }
 
 #[tokio::test]
@@ -360,7 +359,7 @@ async fn a_bad_base_is_refused_before_the_store_is_read() {
             base: "no_such_commit".into(),
             head: None,
             rules: Vec::new(),
-            include_retired: false,
+
             limit: 10,
         },
     )

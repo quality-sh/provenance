@@ -52,6 +52,31 @@ fn a_rule_with_no_requirement_is_refused_by_the_validator() {
 }
 
 #[test]
+fn rule_readers_refuse_an_archive_stamp_on_a_live_rule() {
+    let (_dir, store, scope) = seeded_requirement_store();
+    append(
+        &crate::shards::rules_path(&store.layout, &scope),
+        &serde_json::json!({
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+            "scope_id": scope.as_str(),
+            "id": "rule_bad_archive",
+            "statement": "The rule remains active.",
+            "status": "active",
+            "archived_in_commit": {"commit": "a".repeat(40)},
+            "severity": "high",
+            "requirement_ids": ["req_overtime"],
+        }),
+    );
+
+    for error in [
+        store.list_rules(&scope).unwrap_err(),
+        store.closed_rules(&scope).unwrap_err(),
+    ] {
+        assert!(error.to_string().contains("archived_in_commit"), "{error}");
+    }
+}
+
+#[test]
 fn a_resolution_with_no_requirement_is_refused_by_the_validator() {
     let (_dir, store, scope) = seeded_requirement_store();
     append(

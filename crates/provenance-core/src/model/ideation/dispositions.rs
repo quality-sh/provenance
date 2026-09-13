@@ -4,6 +4,7 @@ use super::{CanonicalArtifactType, DispositionDecision, IdentityType};
 use crate::model::ids::{SchemaVersion, ScopeId, StableId};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct DispositionActor {
     pub identity_type: IdentityType,
@@ -13,6 +14,7 @@ pub struct DispositionActor {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct CanonicalArtifact {
     pub artifact_type: CanonicalArtifactType,
@@ -20,6 +22,7 @@ pub struct CanonicalArtifact {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct ExternalActionCorrelation {
     pub system: String,
@@ -29,6 +32,7 @@ pub struct ExternalActionCorrelation {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct DispositionRecord {
     pub schema_version: SchemaVersion,

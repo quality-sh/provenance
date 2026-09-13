@@ -52,21 +52,21 @@ async fn an_edit_between_hash_and_parse_is_hashed_again() {
     test_probes::disarm("catch_up_before_parse");
     let pool = open_cache(&layout).await.unwrap();
     let statement: String = sqlx::query_scalar("SELECT statement FROM requirements")
-        .fetch_one(&pool)
+        .fetch_one(pool.pool())
         .await
         .unwrap();
     assert_eq!(statement, "Second edit");
     let stored: String =
         sqlx::query_scalar("SELECT digest FROM projection_unit_digests WHERE unit = ?")
             .bind(format!("scope:{}", scope.as_str()))
-            .fetch_one(&pool)
+            .fetch_one(pool.pool())
             .await
             .unwrap();
     assert_eq!(
         stored,
         unit_digest(&layout.state_dir(), &Unit::Scope(scope)).unwrap()
     );
-    pool.close().await;
+    pool.close().await.unwrap();
     assert_catch_up_equals_rebuild(&layout).await;
 }
 
@@ -83,21 +83,21 @@ async fn a_rebuild_stores_the_digest_of_the_bytes_it_loaded() {
     test_probes::disarm("catch_up_before_parse");
     let pool = open_cache(&layout).await.unwrap();
     let statement: String = sqlx::query_scalar("SELECT statement FROM requirements")
-        .fetch_one(&pool)
+        .fetch_one(pool.pool())
         .await
         .unwrap();
     assert_eq!(statement, "Edit during rebuild");
     let stored: String =
         sqlx::query_scalar("SELECT digest FROM projection_unit_digests WHERE unit = ?")
             .bind(format!("scope:{}", scope.as_str()))
-            .fetch_one(&pool)
+            .fetch_one(pool.pool())
             .await
             .unwrap();
     assert_eq!(
         stored,
         unit_digest(&layout.state_dir(), &Unit::Scope(scope)).unwrap()
     );
-    pool.close().await;
+    pool.close().await.unwrap();
     assert!(!catch_up_state(&layout).await.unwrap().revision_committed);
 }
 
@@ -126,8 +126,8 @@ async fn a_manifest_restored_before_hashing_keeps_its_scopes() {
     let (_dir, layout, _scope) = seeded_layout();
     materialize_state(&layout).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
-    let before = super::catch_up_behavior::dump_family_tables(&pool).await;
-    pool.close().await;
+    let before = super::catch_up_behavior::dump_family_tables(pool.pool()).await;
+    pool.close().await.unwrap();
     let path = layout.manifest_path();
     let original = std::fs::read(&path).unwrap();
     let mut manifest: provenance_core::Manifest = serde_json::from_slice(&original).unwrap();
@@ -146,10 +146,10 @@ async fn a_manifest_restored_before_hashing_keeps_its_scopes() {
     );
     let pool = open_cache(&layout).await.unwrap();
     assert_eq!(
-        super::catch_up_behavior::dump_family_tables(&pool).await,
+        super::catch_up_behavior::dump_family_tables(pool.pool()).await,
         before
     );
-    pool.close().await;
+    pool.close().await.unwrap();
 }
 
 #[tokio::test]

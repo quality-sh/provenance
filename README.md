@@ -4,6 +4,11 @@ Never lose the *why* behind your decisions.
 
 Provenance is a tool for building requirements traceability, from source to requirement to rule. A Rule is an atomic behavioural obligation that can exist before its implementation; `#[rule("rule_id")]` binds production code to it, and `#[verifies("rule_id", method)]` binds evidence.
 
+ASD-STE100 is owned by ASD and maintained by STEMG. Provenance implements its
+own checks against the standard and makes no affiliation, endorsement,
+certification, or compliance claim. See the notice section in
+[LICENSE](LICENSE).
+
 ### Installation
 
 Install and initialize Provenance in a TypeScript project:
@@ -44,6 +49,19 @@ cargo build --release -p provenance-cli --features scanner
 
 The binaries land at `target/release/provenance` and
 `target/release/cargo-provenance`. Put them on your PATH.
+
+Development builds and tests retain file and line information for backtraces.
+For full variable inspection in a debugger, use
+`CARGO_PROFILE_DEV_DEBUG=2 cargo build` or
+`CARGO_PROFILE_TEST_DEBUG=2 cargo test`. See the
+[operation generation guide](tools/operation-codegen/README.md) before a workspace build.
+
+For parallel test execution, install [cargo-nextest](https://nexte.st/docs/installation/)
+and run `cargo nextest run --workspace --all-features`. Run
+`cargo test --workspace --all-features --doc` for doctests. The repository
+configuration serializes PDF onboarding and limits tests that invoke Cargo.
+CI uses the `ci` profile with eight test slots. Ordinary `cargo test`
+continues to work.
 
 ### Quick start
 
