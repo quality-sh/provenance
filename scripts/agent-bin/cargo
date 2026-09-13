@@ -5,6 +5,7 @@ import fcntl
 import hashlib
 import json
 import os
+import platform
 import secrets
 import shutil
 import subprocess
@@ -143,9 +144,12 @@ def dispatch(root, sha, repository, command_json, command_key):
     return run_id
 
 
-def run_id_for_snapshot(root, sha, repository, args):
+def run_id_for_snapshot(root, sha, repository, args, artifact=False):
     command_json = "" if len(args) == 1 else json.dumps(args, separators=(",", ":"))
-    command_key = args[0] if not command_json else hashlib.sha256(command_json.encode()).hexdigest()[:16]
+    command_key = (
+        "build-artifact" if artifact else args[0] if not command_json
+        else hashlib.sha256(command_json.encode()).hexdigest()[:16]
+    )
     path = state_file(root)
     with (path.parent / "runs.lock").open("a+") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
@@ -165,7 +169,7 @@ def run_id_for_snapshot(root, sha, repository, args):
             fcntl.flock(lock, fcntl.LOCK_UN)
 
 
-def show_result(run_id, repository, check, custom):
+def show_result(run_id, repository, check, custom, artifact=False):
     url = f"https://github.com/{repository}/actions/runs/{run_id}"
     print(f"Remote Cargo: {check} in {url}", flush=True)
     command(["gh", "run", "watch", str(run_id), "--repo", repository])
@@ -187,9 +191,31 @@ def show_result(run_id, repository, check, custom):
         print(f"Remote Cargo: {check} failed ({job['conclusion']})")
         return 1
     print(f"Remote Cargo: {check} passed")
-    if check == "build":
+    if check == "build" and not artifact:
         print("Build outputs remain on the CI runner; no local target files were created.")
     return 0
+
+
+def download_build(root, sha, run_id, repository):
+    target_dir = root / "target" / "debug"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="agent-cargo-build-", dir=target_dir) as directory:
+        temporary = Path(directory)
+        download_dir = temporary / "download"
+        command([
+            "gh", "run", "download", str(run_id), "--repo", repository,
+            "--name", f"provenance-dev-{sha}", "--dir", str(download_dir),
+        ])
+        downloaded = download_dir / "provenance"
+        if not downloaded.is_file() or downloaded.is_symlink():
+            raise RuntimeError("The Actions artifact does not contain a provenance binary")
+        staged = temporary / "provenance"
+        shutil.copyfile(downloaded, staged)
+        staged.chmod(0o755)
+        command([str(staged), "--version"], cwd=root)
+        destination = target_dir / "provenance"
+        os.replace(staged, destination)
+    print(f"Remote Cargo: binary available at {destination}")
 
 
 def main():
@@ -198,11 +224,19 @@ def main():
     if root is None or not args or args[0] not in CHECK_JOBS or os.environ.get("PROVENANCE_CI_LOCAL") == "1":
         native = real_cargo()
         os.execv(native, [native, *args])
+    artifact = os.environ.get("PROVENANCE_CI_ARTIFACT") == "1"
+    if artifact and args != ["build"]:
+        raise RuntimeError("PROVENANCE_CI_ARTIFACT=1 requires plain cargo build")
+    if artifact and (platform.system() != "Linux" or platform.machine() not in ("x86_64", "AMD64")):
+        raise RuntimeError("The dev binary requires a Linux x86_64 host")
     repository = os.environ.get("PROVENANCE_CI_REPO", "quality-sh/provenance")
     sha = snapshot(root)
     print(f"Remote Cargo: verifying snapshot {sha}", flush=True)
-    run_id = run_id_for_snapshot(root, sha, repository, args)
-    return show_result(run_id, repository, args[0], len(args) != 1)
+    run_id = run_id_for_snapshot(root, sha, repository, args, artifact)
+    result = show_result(run_id, repository, args[0], len(args) != 1, artifact)
+    if result == 0 and artifact:
+        download_build(root, sha, run_id, repository)
+    return result
 
 
 if __name__ == "__main__":

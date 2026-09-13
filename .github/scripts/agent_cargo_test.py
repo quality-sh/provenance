@@ -57,11 +57,17 @@ class AgentCargoTest(unittest.TestCase):
             "elif a[:2] == ['run', 'view'] and '--json' in a:\n"
             "  result = os.environ.get('FAKE_TEST_RESULT', 'success')\n"
             "  inputs = json.load(open(os.environ['FAKE_GH_PAYLOAD']))['inputs']\n"
-            "  names = ['Command'] if inputs.get('command_json') else [inputs['command_key'].capitalize()]\n"
-            "  print(json.dumps({'jobs': [{'name': name, 'databaseId': i, 'conclusion': result if name in ('Test', 'Command') else 'success'} for i, name in enumerate(names, 1)]}))\n"
+            "  names = ['Command'] if inputs.get('command_json') else [inputs['command_key'].split('-')[0].capitalize()]\n"
+            "  print(json.dumps({'jobs': [{'name': name, 'databaseId': i, 'conclusion': os.environ.get('FAKE_BUILD_RESULT', 'success') if name == 'Build' else result if name in ('Test', 'Command') else 'success'} for i, name in enumerate(names, 1)]}))\n"
             "elif a[:2] == ['run', 'view'] and '--log-failed' in a:\n"
             "  if os.environ.get('FAKE_LOG_ERROR') == '1': sys.exit(1)\n"
             "  print('remote test failure')\n"
+            "elif a[:2] == ['run', 'download']:\n"
+            "  from pathlib import Path\n"
+            "  dest = Path(a[a.index('--dir') + 1])\n"
+            "  dest.mkdir(parents=True, exist_ok=True)\n"
+            "  broken = os.environ.get('FAKE_BINARY_BROKEN') == '1'\n"
+            "  (dest / 'provenance').write_text('#!/bin/sh\\n' + ('exit 1\\n' if broken else 'echo provenance 0.2.2\\n'))\n"
         )
         fake_gh.chmod(0o755)
         fake_cargo = self.bin / "cargo"
@@ -207,6 +213,67 @@ class AgentCargoTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("LOCAL build", result.stdout)
         self.assertEqual(self.calls_matching("dispatches"), [])
+
+    def test_opt_in_build_downloads_a_usable_binary(self):
+        env = {**self.env, "PROVENANCE_CI_ARTIFACT": "1"}
+
+        result = self.cargo("build", env=env)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("binary available", result.stdout)
+        binary = self.repo / "target/debug/provenance"
+        self.assertEqual(run(str(binary), "--version", cwd=self.repo).stdout.strip(), "provenance 0.2.2")
+        self.assertEqual(len(self.calls_matching("download")), 1)
+        branches = [call[call.index("--branch") + 1] for call in self.calls_matching("list")]
+        self.assertTrue(any(branch.startswith("agent-ci/build-artifact/") for branch in branches))
+
+    def test_normal_build_does_not_download_an_artifact(self):
+        result = self.cargo("build")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.calls_matching("download"), [])
+        self.assertFalse((self.repo / "target/debug/provenance").exists())
+
+    def test_opt_in_build_does_not_reuse_a_plain_build_without_an_artifact(self):
+        ordinary = self.cargo("build")
+        artifact = self.cargo("build", env={**self.env, "PROVENANCE_CI_ARTIFACT": "1"})
+
+        self.assertEqual(ordinary.returncode, 0, ordinary.stderr)
+        self.assertEqual(artifact.returncode, 0, artifact.stderr)
+        self.assertEqual(len(self.calls_matching("list")), 2)
+        self.assertEqual(len(self.calls_matching("download")), 1)
+
+    def test_failed_opt_in_build_does_not_download_or_replace_binary(self):
+        binary = self.repo / "target/debug/provenance"
+        binary.parent.mkdir(parents=True)
+        binary.write_text("previous binary")
+        env = {**self.env, "PROVENANCE_CI_ARTIFACT": "1", "FAKE_BUILD_RESULT": "failure"}
+
+        result = self.cargo("build", env=env)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(binary.read_text(), "previous binary")
+        self.assertEqual(self.calls_matching("download"), [])
+
+    def test_unusable_download_does_not_replace_existing_binary(self):
+        binary = self.repo / "target/debug/provenance"
+        binary.parent.mkdir(parents=True)
+        binary.write_text("previous binary")
+        env = {**self.env, "PROVENANCE_CI_ARTIFACT": "1", "FAKE_BINARY_BROKEN": "1"}
+
+        result = self.cargo("build", env=env)
+
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(binary.read_text(), "previous binary")
+
+    def test_artifact_opt_in_requires_plain_build(self):
+        env = {**self.env, "PROVENANCE_CI_ARTIFACT": "1"}
+
+        result = self.cargo("test", env=env)
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("cargo build", result.stderr)
+        self.assertEqual(self.calls_matching("list"), [])
 
 
 if __name__ == "__main__":

@@ -31,7 +31,7 @@ concurrency:
 jobs:
   build:
     name: Build
-    if: (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/agent-ci/build/')) || (github.event_name == 'workflow_dispatch' && inputs.command_json == '' && inputs.command_key == 'build')
+    if: (github.event_name == 'push' && (startsWith(github.ref, 'refs/heads/agent-ci/build/') || startsWith(github.ref, 'refs/heads/agent-ci/build-artifact/'))) || (github.event_name == 'workflow_dispatch' && inputs.command_json == '' && inputs.command_key == 'build')
     runs-on: ubuntu-24.04
     steps:
       - name: Validate commit ID
@@ -56,6 +56,14 @@ jobs:
           add-job-id-key: "false"
           save-if: "false"
       - run: cargo build --workspace --all-features
+      - name: Upload dev binary
+        if: startsWith(github.ref, 'refs/heads/agent-ci/build-artifact/')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: provenance-dev-${{ github.sha }}
+          path: target/debug/provenance
+          if-no-files-found: error
+          retention-days: 3
 
   check:
     name: Check
