@@ -198,6 +198,9 @@ def show_result(run_id, repository, check, custom, artifact=False):
 
 def download_build(root, sha, run_id, repository):
     target_dir = root / "target" / "debug"
+    if (root / "target").is_symlink():
+        git_dir = (root / git(root, "rev-parse", "--git-dir")).resolve()
+        target_dir = git_dir / "agent-cargo" / "bin" / sha
     target_dir.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="agent-cargo-build-", dir=target_dir) as directory:
         temporary = Path(directory)

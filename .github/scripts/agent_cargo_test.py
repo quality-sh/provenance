@@ -227,6 +227,23 @@ class AgentCargoTest(unittest.TestCase):
         branches = [call[call.index("--branch") + 1] for call in self.calls_matching("list")]
         self.assertTrue(any(branch.startswith("agent-ci/build-artifact/") for branch in branches))
 
+    def test_shared_target_symlink_keeps_binary_in_worktree_git_dir(self):
+        shared = self.root / "shared-target"
+        shared_binary = shared / "debug/provenance"
+        shared_binary.parent.mkdir(parents=True)
+        shared_binary.write_text("another worktree's binary")
+        (self.repo / "target").symlink_to(shared, target_is_directory=True)
+        env = {**self.env, "PROVENANCE_CI_ARTIFACT": "1"}
+
+        result = self.cargo("build", env=env)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(shared_binary.read_text(), "another worktree's binary")
+        installed = self.repo / ".git/agent-cargo/bin"
+        binaries = list(installed.glob("*/provenance"))
+        self.assertEqual(len(binaries), 1)
+        self.assertEqual(run(str(binaries[0]), "--version", cwd=self.repo).stdout.strip(), "provenance 0.2.2")
+
     def test_normal_build_does_not_download_an_artifact(self):
         result = self.cargo("build")
 
