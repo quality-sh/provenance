@@ -107,12 +107,12 @@ test("a spec-bound Rule is its own immutable verification handle", async () => {
     .document("docs/policy.md");
   const sharing = provenance
     .requirement("sharing")
-    .statement("Users can securely share documentation")
+    .statement("Users can share the documents")
     .description("Controls for shared documentation")
     .from(policy);
   const expiry = sharing
     .rule("expiry")
-    .statement("Share links expire within 30 days");
+    .statement("Share links expire in 30 days");
   const spec = provenance.build(sharing.rules(expiry));
 
   assert.equal(Object.isFrozen(expiry), true);
@@ -194,7 +194,7 @@ test("spec-bound declarations serialize exact unowned adoption targets", async (
     .requirement("ordinary")
     .adoptUnowned("req_old")
     .id("req_existing")
-    .statement("Ordinary identity selection does not request adoption")
+    .statement("Ordinary identity selection needs no adoption")
     .from(policy.id("source_existing"))
     .rules(enforcement.id("rule_existing"));
   await apply(provenance.build(ordinary));
@@ -301,7 +301,7 @@ test("a spec-bound Source declares a supported non-document kind", async () => {
     .kind("external_integration");
   const canonical = provenance
     .requirement("intake")
-    .statement("The catalogue records the source type of every citation")
+    .statement("The catalogue records the source type of all citations")
     .from(brief);
 
   await apply(provenance.build(canonical));
@@ -348,7 +348,7 @@ test("spec-bound declarations adopt an unowned external_integration Source", asy
     "--id",
     "req_env_key_at_invocation",
     "--statement",
-    "The provider reads the environment key at invocation",
+    "The provider reads the environment value at invocation",
   ]);
   execFileSync(engine, [
     "requirements",
@@ -373,7 +373,7 @@ test("spec-bound declarations adopt an unowned external_integration Source", asy
   const canonical = provenance
     .requirement("env-key-at-invocation")
     .adoptUnowned("req_env_key_at_invocation")
-    .statement("The provider reads the environment key at invocation")
+    .statement("The provider reads the environment value at invocation")
     .from(brief);
   const spec = provenance.build(canonical);
 
@@ -421,7 +421,7 @@ test("source names and Requirement descriptions are immutable canonical metadata
   const namedSource = sourceDraft.name("Security policy");
   const requirementBase = provenance
     .requirement("sharing")
-    .statement("Users can securely share documentation");
+    .statement("Users can share the documents");
   const requirementDraft = requirementBase
     .from(sourceDraft)
     .description("The first canonical description");

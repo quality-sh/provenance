@@ -145,15 +145,7 @@ fn step_arguments(sandbox: &Path) -> Vec<StepSpec> {
     vec![
         spec(
             "init",
-            &[
-                "init",
-                "--path",
-                path.as_str(),
-                "--scope",
-                "default",
-                "--ste-onboarding",
-                "agent",
-            ],
+            &["init", "--path", path.as_str(), "--scope", "default"],
         ),
         spec("prime", &["prime", "--repo", ".", "--scope", "default"]),
         spec(

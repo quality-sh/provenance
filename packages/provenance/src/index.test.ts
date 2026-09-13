@@ -83,11 +83,11 @@ function declareFixture(settings: Parameters<typeof configure>[0]) {
   });
   const sharing = requirement("sharing", {
     id: "req_existing_sharing",
-    statement: "Users can securely share documentation",
+    statement: "Users can share the documents",
     sources: [linear],
   });
   const expiry = sharing.rule("expiry", {
-    statement: "Share links expire within 30 days",
+    statement: "Share links expire in 30 days",
   });
   return { expiry, sharing };
 }
@@ -142,11 +142,11 @@ test("verify sends the same durable binding key on repeated runs", async (t) => 
   configure({ ...recorder.settings, localRoot: localFiles(t) });
   const spec = defineSpec("share-links", ({ requirement }) => {
     const sharing = requirement("sharing", {
-      statement: "Users can securely share documentation",
+      statement: "Users can share the documents",
     });
     return {
       expiry: sharing.rule("expiry", {
-        statement: "Share links expire within 30 days",
+        statement: "Share links expire in 30 days",
       }),
     };
   });
@@ -193,11 +193,11 @@ test("verify sends distinct durable binding keys from one test file", async (t) 
   configure({ ...recorder.settings, localRoot: localFiles(t) });
   const spec = defineSpec("share-links", ({ requirement }) => {
     const sharing = requirement("sharing", {
-      statement: "Users can securely share documentation",
+      statement: "Users can share the documents",
     });
     return {
       expiry: sharing.rule("expiry", {
-        statement: "Share links expire within 30 days",
+        statement: "Share links expire in 30 days",
       }),
     };
   });
@@ -239,11 +239,11 @@ test("plan sends the finalized spec to the read-only HTTP operation", async (t) 
   configure({ ...recorder.settings, localRoot: localFiles(t) });
   const spec = defineSpec("share-links", ({ requirement }) => {
     const sharing = requirement("sharing", {
-      statement: "Users can securely share documentation",
+      statement: "Users can share the documents",
     });
     return {
       expiry: sharing.rule("expiry", {
-        statement: "Share links expire within 14 days",
+        statement: "Share links expire in 14 days",
       }),
     };
   });
@@ -256,7 +256,7 @@ test("plan sends the finalized spec to the read-only HTTP operation", async (t) 
     {
       key: "expiry",
       requirement: "sharing",
-      statement: "Share links expire within 14 days",
+      statement: "Share links expire in 14 days",
     },
   ]);
 });
@@ -278,7 +278,7 @@ test("typed declarations reconcile to canonical Provenance records", async (t) =
     "--id",
     expiry.id,
   ]) as { statement: string; declared_by: string };
-  assert.equal(rule.statement, "Share links expire within 30 days");
+  assert.equal(rule.statement, "Share links expire in 30 days");
   assert.equal(rule.declared_by, "spec://typescript/share-links");
 });
 
@@ -322,11 +322,11 @@ test("omitted declarations are deleted and later recreated with the same ids", a
   });
   const full = defineSpec("deletion", ({ requirement }) => {
     const sharing = requirement("sharing", {
-      statement: "Users can securely share documentation",
+      statement: "Users can share the documents",
     });
     return {
       expiry: sharing.rule("expiry", {
-        statement: "Share links expire within 30 days",
+        statement: "Share links expire in 30 days",
       }),
     };
   });
@@ -351,16 +351,16 @@ test("equal local rule keys under different requirements reconcile separately", 
     owner: "spec://typescript/lifecycles",
   });
   const sharing = requirement("sharing", {
-    statement: "Users can securely share documentation",
+    statement: "Users can share the documents",
   });
   const shareLinkExpiry = sharing.rule("expiry", {
-    statement: "Share links expire within 30 days",
+    statement: "Share links expire in 30 days",
   });
   const sessions = requirement("sessions", {
     statement: "User sessions are time bounded",
   });
   const sessionExpiry = sessions.rule("expiry", {
-    statement: "Inactive sessions expire within 24 hours",
+    statement: "Sessions that are not active expire in 24 hours",
   });
 
   await apply();
@@ -373,17 +373,17 @@ test("defineSpec finalizes pure builders into immutable hierarchical handles", (
   let escapedRequirement: { rule(key: string, options: unknown): unknown } | undefined;
   const spec = defineSpec("lifecycles", ({ requirement }) => {
     const sharing = requirement("sharing", {
-      statement: "Users can securely share documentation",
+      statement: "Users can share the documents",
     });
     escapedRequirement = sharing;
     const shareLinkExpiry = sharing.rule("expiry", {
-      statement: "Share links expire within 30 days",
+      statement: "Share links expire in 30 days",
     });
     const sessions = requirement("sessions", {
       statement: "User sessions are time bounded",
     });
     const sessionExpiry = sessions.rule("expiry", {
-      statement: "Inactive sessions expire within 24 hours",
+      statement: "Sessions that are not active expire in 24 hours",
     });
     return { sharing, shareLinkExpiry, sessions, sessionExpiry };
   });
@@ -421,10 +421,10 @@ test("immutable rule handles verify through an applied declaration address", asy
   });
   const spec = defineSpec("share-links", ({ requirement }) => {
     const sharing = requirement("sharing", {
-      statement: "Users can securely share documentation",
+      statement: "Users can share the documents",
     });
     const expiry = sharing.rule("expiry", {
-      statement: "Share links expire within 30 days",
+      statement: "Share links expire in 30 days",
     });
     return { sharing, expiry };
   });
@@ -470,11 +470,11 @@ test("reapplying an address reuses the canonical id already assigned by Rust", a
   const declared = (id?: string) =>
     defineSpec("share-links", ({ requirement }) => {
       const sharing = requirement("sharing", {
-        statement: "Users can securely share documentation",
+        statement: "Users can share the documents",
       });
       const expiry = sharing.rule("expiry", {
         id,
-        statement: "Share links expire within 30 days",
+        statement: "Share links expire in 30 days",
       });
       return { sharing, expiry };
     });
@@ -548,11 +548,11 @@ test("verify records a failed callback and rethrows the original error", async (
 function shareLinksSpec() {
   return defineSpec("share-links", ({ requirement }) => {
     const sharing = requirement("sharing", {
-      statement: "Users can securely share documentation",
+      statement: "Users can share the documents",
     });
     return {
       expiry: sharing.rule("expiry", {
-        statement: "Share links expire within 30 days",
+        statement: "Share links expire in 30 days",
       }),
     };
   });
@@ -590,9 +590,9 @@ test("verify fails before applying when the stack holds no frames", async (t) =>
   t.after(() => recorder.close());
   configure({ ...recorder.settings, localRoot: localFiles(t) });
   const sharing = requirement("sharing", {
-    statement: "Users can securely share documentation",
+    statement: "Users can share the documents",
   });
-  const expiry = sharing.rule("expiry", { statement: "Share links expire within 30 days" });
+  const expiry = sharing.rule("expiry", { statement: "Share links expire in 30 days" });
   let called = false;
 
   const pending = whileStackIs("Error", () =>
