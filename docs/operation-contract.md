@@ -12,7 +12,14 @@ The catalog contains `check-statement`, `info`, `get`, `search`, `neighbors`,
 `create-resolution`, `create-rule`, `add-source-reference`, `list-threads`,
 `list-messages`, `post-thread-message`, `list-proposals`, `list-dispositions`,
 `list-assertions`, `create-proposal`, `create-assertion`, and
-`create-disposition`. Additional edits and native actions are listed in
+`create-disposition`. The catalog also contains `requirement-edit-state`,
+`save-requirement`, `requirement-save-receipt`, `review-history`,
+`review-evidence`, `create-review-requirement`,
+`requirement-creation-receipt`, `write-discussion`, `discussion-receipt`,
+`review-discussions`, `review-discussion-messages`,
+`submit-requirement-review`, `decide-requirement-review`,
+`withdraw-requirement-review`, `requirement-decision-state`, and
+`requirement-review-receipt`. Additional edits and native actions are listed in
 [record updates](record-updates.md). The statement
 handler returns the existing ASD-STE100 analyzer report. A finding is a successful report result.
 The operation does not open a repository, load settings, or use a dictionary.
@@ -200,33 +207,43 @@ and Phase 8 history and content behaviors stay out of scope; they are not
 awaiting model approval. Bulk landing and convenience landing stay out of
 scope.
 
+## Requirement review operations
+
+The Requirement review operations expose the native review module without a
+second review model. `save-requirement` keeps the existing
+`UpdateRequirementInput` field names and result. It can also replace the final
+relationship set in one guarded save. `create-review-requirement` and
+`write-discussion` keep the native creation and addressed Discussion results.
+
+`review-history`, `review-evidence`, `review-discussions`, and
+`review-discussion-messages` use the shared bounded read module. They retain the
+50-entry default, the 200-entry maximum, the record and response byte limits,
+and revision-bound cursors. Each response has the normal operation and
+projection stamp.
+
+The receipt operations accept the original write identity. The
+decision-cycle receipt operation accepts the complete submit, decide, or
+withdraw request. A missing result is authoritative only after the Store runs
+publication recovery and checks the request identity. Clients do not retry a
+mutation automatically.
+
+Submission binds a Proposal to the current immutable Requirement revision.
+Decision keeps the existing Disposition gate and can publish optional feedback
+in the same state publication. Withdrawal preserves the Proposal, feedback,
+and decision history. None of these operations changes Requirement lifecycle
+status. The transport contract contains no retired lifecycle state.
+
+The CLI, HTTP, MCP, Promise client, and Effect client use these same catalog
+operations. Host target, scope, credential, Host, and Origin checks run before
+operation dispatch. Read-only fixture principals do not advertise the mutation
+operations and direct calls receive `access_denied`.
+
 ## Current operation limits
 
-The catalog exposes existing native operations and typed record updates.
-See [record updates](record-updates.md) for fields, clearing, ownership,
-shaping actions, and relationship operations. It does not implement
-text-edit history linked to discussions or Source-content editing.
-
-### Graph text and discussion history
-
-`plan` and `apply` reconcile typed declarations. Their per-resource `changes`
-entries contain `field`, `before`, and `after`, but the report is transient.
-These operations do not provide a general record editor or stored edit history.
-
-`StateStore::update_question`
-(`crates/provenance-store/src/state_store/shaping_writers.rs`) retains its existing partial-state input and delegates to the shared question
-edit writer. The catalog and CLI also expose question text edits and explicit
-reference clearing.
-
-`RequirementReview` records
-(`crates/provenance-store/src/state_store/requirement_reviews.rs`) retain
-before/after statement values for Requirement reviews. A restated Requirement
-raises a review per affected Rule, and verification marks it cleared. The
-record names no Thread or Message. Creation-time `origin_thread` and
-`origin_message` fields do not identify later edits.
-
-No native operation stores the requested link between an edit and a discussion.
-Adding that relationship is outside the unchanged data model.
+The catalog exposes Requirement review and typed record updates. See
+[record updates](record-updates.md) for fields, clearing, ownership, shaping
+actions, and relationship operations. Source-content editing remains outside
+this delivery.
 
 ### Source content
 
@@ -341,6 +358,7 @@ node tools/operation-codegen/test-clients.mjs writes
 node tools/operation-codegen/test-clients.mjs creation
 node tools/operation-codegen/test-clients.mjs discussions
 node tools/operation-codegen/test-clients.mjs ideation
+node tools/operation-codegen/test-clients.mjs review
 ```
 
 The adapters bound request bodies and concurrent work. Blocking operation work
@@ -355,7 +373,8 @@ protocol mismatch. No version 9 package is published by
 this implementation. The TypeScript SDK uses the
 generated HTTP client for the original sixteen operations. The generated client
 also exposes creation, attachment, discussion, proposal-lifecycle, and
-[record update operations](record-updates.md).
+[record update operations](record-updates.md). It also exposes the Requirement
+review operations in this document.
 Configure `endpoint`,
 `bearer`, `repositoryId`, and `scope`; configure `localRoot` separately when
 converting local implementation or verification paths. The SDK rejects the old

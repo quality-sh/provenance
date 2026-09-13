@@ -9,6 +9,7 @@ use provenance_store::operations::{self, catalog};
 mod check_statement;
 mod query;
 mod render;
+mod review;
 mod verification_lists;
 
 /// Reads one request document from stdin and runs it as a native catalog
@@ -24,6 +25,9 @@ where
 }
 
 pub(super) async fn handle(command: SdkCommand) -> anyhow::Result<()> {
+    if review::handles(&command) {
+        return review::handle(command).await;
+    }
     match command {
         SdkCommand::CheckStatement { .. } => check_statement::handle().await?,
         SdkCommand::Info { repo, .. } => {
@@ -78,6 +82,7 @@ pub(super) async fn handle(command: SdkCommand) -> anyhow::Result<()> {
             )
             .await?;
         }
+        _ => unreachable!("review commands were handled before dispatch"),
     }
     Ok(())
 }

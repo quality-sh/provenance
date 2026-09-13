@@ -15,23 +15,24 @@ import { checkWrites } from './test-writes.mjs';
 import { checkDiscussions } from './test-discussions.mjs';
 import { checkCreation } from './test-creation.mjs';
 import { checkIdeation } from './test-ideation.mjs';
+import { checkReview } from './test-review.mjs';
 
 const family = process.argv[2];
-const checks = { statements: checkStatements, records: checkRecords, evidence: checkEvidence, writes: checkWrites, creation: checkCreation, discussions: checkDiscussions, ideation: checkIdeation };
-if (!checks[family]) throw new Error('Expected statements, records, evidence, writes, creation, discussions, or ideation');
+const checks = { statements: checkStatements, records: checkRecords, evidence: checkEvidence, writes: checkWrites, creation: checkCreation, discussions: checkDiscussions, ideation: checkIdeation, review: checkReview };
+if (!checks[family]) throw new Error('Expected statements, records, evidence, writes, creation, discussions, ideation, or review');
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 function run(args, env = process.env) {
   const child = spawnSync('cargo', args, { cwd: root, env, stdio: 'inherit' });
   if (child.status !== 0) throw new Error(`cargo ${args.join(' ')} failed`);
 }
 await ensureGenerated();
-const binary = ['writes', 'creation', 'discussions', 'ideation'].includes(family) ? 'existing-root-host-fixture' : family === 'statements' ? 'statement-host-fixture' : 'records-host-fixture';
+const binary = ['writes', 'creation', 'discussions', 'ideation', 'review'].includes(family) ? 'existing-root-host-fixture' : family === 'statements' ? 'statement-host-fixture' : 'records-host-fixture';
 const hostBinary = buildBinary(root, ['--locked', '-p', 'provenance-transport', '--features', 'test-fixture', '--bin', binary], binary);
 const temporary = await mkdtemp(join(tmpdir(), 'provenance-clients-'));
-if (['writes', 'creation', 'discussions', 'ideation'].includes(family)) {
+if (['writes', 'creation', 'discussions', 'ideation', 'review'].includes(family)) {
   const cliBinary = buildBinary(root, ['--locked', '-p', 'provenance-cli', '--bin', 'provenance'], 'provenance');
   const init = ['init', '--path', temporary, '--scope', 'default', '--path-prefix', '.'];
-  if (family === 'ideation') init.push('--disposition-actor-id', 'reviewer');
+  if (['ideation', 'review'].includes(family)) init.push('--disposition-actor-id', 'reviewer');
   const result = spawnSync(cliBinary, init, { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
   await writeFile(join(temporary, 'check.rs'), 'fn check() {}\n');
@@ -58,12 +59,13 @@ try {
   const module = await import(join(temporary, 'client.js'));
   const clientModule = process.argv.includes('--effect') ? (await import('./effect-host.mjs')).effectModule(module) : module;
   await checks[family](clientModule, fixture);
-  if (!process.argv.includes('--effect')) {
+  if (!process.argv.includes('--effect') && family !== 'review') {
     run(['test', '--locked', '-p', 'provenance-http-client', '--test', family, '--', '--ignored'], {
       ...process.env, PROVENANCE_TEST_HOST: fixture.url, PROVENANCE_RECORDS_FIXTURE: JSON.stringify(fixture),
     });
   }
-  console.log(`${process.argv.includes('--effect') ? 'Effect client' : 'Promise and Rust clients'} passed against the real ${family} host.`);
+  const clients = process.argv.includes('--effect') ? 'Effect client' : family === 'review' ? 'Promise client' : 'Promise and Rust clients';
+  console.log(`${clients} passed against the real ${family} host.`);
 } finally {
   const exited = host.exitCode === null ? once(host, 'exit') : Promise.resolve([host.exitCode]);
   host.stdin.end();

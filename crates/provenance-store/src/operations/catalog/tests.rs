@@ -154,6 +154,30 @@ async fn declared_handler_fields_cannot_disappear_during_erasure() {
     );
 }
 
+#[test]
+fn registry_contains_the_requirement_review_operations() {
+    for operation in [
+        "requirement-edit-state",
+        "save-requirement",
+        "requirement-save-receipt",
+        "review-history",
+        "review-evidence",
+        "create-review-requirement",
+        "requirement-creation-receipt",
+        "write-discussion",
+        "discussion-receipt",
+        "review-discussions",
+        "review-discussion-messages",
+        "submit-requirement-review",
+        "decide-requirement-review",
+        "withdraw-requirement-review",
+        "requirement-decision-state",
+        "requirement-review-receipt",
+    ] {
+        assert!(super::contains(operation), "missing {operation}");
+    }
+}
+
 #[cfg(feature = "schema")]
 #[test]
 fn baseline_operations_have_one_registered_contract_each() {
@@ -237,7 +261,23 @@ fn baseline_operations_have_one_registered_contract_each() {
             "list-assertions",
             "create-proposal",
             "create-assertion",
-            "create-disposition"
+            "create-disposition",
+            "requirement-edit-state",
+            "save-requirement",
+            "requirement-save-receipt",
+            "review-history",
+            "review-evidence",
+            "create-review-requirement",
+            "requirement-creation-receipt",
+            "write-discussion",
+            "discussion-receipt",
+            "review-discussions",
+            "review-discussion-messages",
+            "submit-requirement-review",
+            "decide-requirement-review",
+            "withdraw-requirement-review",
+            "requirement-decision-state",
+            "requirement-review-receipt"
         ]
     );
 }

@@ -158,9 +158,9 @@ Integration requires an SDK release and consumer dependency and lockfile updates
 CLI asset composition also needs a compatible renderer archive and checksum pin.
 Downstream work must supply one Effect version, connect the shared service to
 application atoms, and keep the client alive while mutations are unresolved.
-Review-save guards and durable receipts are not added by this SDK. Existing
-review controls must not gain authority merely because a CRUD call exists.
-Full UI migration, review lifecycles, the browser package split, release
+The generated Requirement review calls retain Rust save guards and durable
+receipt lookup. The SDK does not add review authority or retry a write. Full UI
+migration, the browser package split, release
 publication, and renderer composition remain separate work. Web PR 15 and W1
 are not reopened by this change.
 

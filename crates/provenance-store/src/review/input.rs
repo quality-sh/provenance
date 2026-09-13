@@ -3,6 +3,7 @@ use provenance_core::{SourceReference, StableId};
 use serde::{Deserialize, Serialize};
 
 /// Relationships are replaced and validated as one final set.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RequirementRelations {
@@ -13,6 +14,7 @@ pub struct RequirementRelations {
     pub source_refs: Vec<SourceReference>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SaveRequirement {

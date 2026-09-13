@@ -83,3 +83,24 @@ pub(super) async fn handle(operation: Operation, args: QueryArgs) -> anyhow::Res
         }
     }
 }
+
+pub(super) async fn submit<O>(args: QueryArgs) -> anyhow::Result<O::Success>
+where
+    O: catalog::Operation,
+    O::Failure: Sync,
+{
+    let root = provenance_store::operations::discover_repository(args.repo)?;
+    let settings = provenance_store::settings::Settings::load(
+        &provenance_store::layout::ProvenanceLayout::new(root.clone()),
+    )?;
+    let policy =
+        provenance_store::operations::read_policy::ReadPolicy::resolve(&settings, args.freshness);
+    let context = catalog::PreparedContext::read(catalog::PreparedRead {
+        root,
+        scope: ScopeId::new(args.scope)?,
+        policy,
+        requested_target: String::new(),
+        external: false,
+    });
+    Ok(catalog::invoke_typed::<O>(context, super::read_stdin_json()?).await?)
+}

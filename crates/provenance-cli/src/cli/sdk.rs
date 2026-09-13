@@ -16,6 +16,17 @@ pub struct QueryArgs {
     pub format: JsonFormat,
 }
 
+/// What a scope operation needs besides its stdin request.
+#[derive(Args)]
+pub struct ScopeArgs {
+    #[arg(long)]
+    pub repo: Option<Utf8PathBuf>,
+    #[arg(long, default_value = "default")]
+    pub scope: String,
+    #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
+    pub format: JsonFormat,
+}
+
 #[derive(Subcommand)]
 pub enum SdkCommand {
     /// Check one unfinished Requirement or Rule statement from stdin.
@@ -127,6 +138,86 @@ pub enum SdkCommand {
         rule: Option<String>,
         #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
         format: JsonFormat,
+    },
+    /// Read the current edit token and review revision for one Requirement.
+    RequirementEditState {
+        #[command(flatten)]
+        scope: ScopeArgs,
+    },
+    /// Save one guarded Requirement update from stdin.
+    SaveRequirement {
+        #[command(flatten)]
+        scope: ScopeArgs,
+    },
+    /// Find the durable result of one Requirement save.
+    RequirementSaveReceipt {
+        #[command(flatten)]
+        scope: ScopeArgs,
+    },
+    /// Read a bounded page of Requirement review history.
+    ReviewHistory {
+        #[command(flatten)]
+        query: QueryArgs,
+    },
+    /// Read one bounded span of immutable review evidence.
+    ReviewEvidence {
+        #[command(flatten)]
+        query: QueryArgs,
+    },
+    /// Create a Requirement with durable review evidence.
+    CreateReviewRequirement {
+        #[command(flatten)]
+        scope: ScopeArgs,
+    },
+    /// Find the durable result of one reviewed Requirement creation.
+    RequirementCreationReceipt {
+        #[command(flatten)]
+        scope: ScopeArgs,
+    },
+    /// Start, reply to, or resolve one addressed Discussion.
+    WriteDiscussion {
+        #[command(flatten)]
+        scope: ScopeArgs,
+    },
+    /// Find the durable result of one Discussion write.
+    DiscussionReceipt {
+        #[command(flatten)]
+        scope: ScopeArgs,
+    },
+    /// Read a bounded page of Discussions for one Requirement.
+    ReviewDiscussions {
+        #[command(flatten)]
+        query: QueryArgs,
+    },
+    /// Read a bounded page of Messages from one Discussion.
+    ReviewDiscussionMessages {
+        #[command(flatten)]
+        query: QueryArgs,
+    },
+    /// Submit a Requirement revision for review.
+    SubmitRequirementReview {
+        #[command(flatten)]
+        scope: ScopeArgs,
+    },
+    /// Record one guarded decision on a Requirement submission.
+    DecideRequirementReview {
+        #[command(flatten)]
+        scope: ScopeArgs,
+    },
+    /// Withdraw one pending Requirement submission.
+    WithdrawRequirementReview {
+        #[command(flatten)]
+        scope: ScopeArgs,
+    },
+    /// Read current and historical Requirement review decisions.
+    RequirementDecisionState {
+        #[command(flatten)]
+        scope: ScopeArgs,
+    },
+    /// Find the durable result of one decision-cycle write.
+    RequirementReviewReceipt {
+        #[command(flatten)]
+        scope: ScopeArgs,
     },
 }
 

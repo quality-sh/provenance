@@ -771,9 +771,10 @@ jobs:
       - name: Test generated clients against isolated hosts
         shell: bash
         run: |
-          families=(statements records evidence writes creation discussions ideation)
+          rust_families=(statements records evidence writes creation discussions ideation)
+          families=("${rust_families[@]}" review)
           test_args=()
-          for family in "${families[@]}"; do
+          for family in "${rust_families[@]}"; do
             test_args+=(--test "$family")
           done
           cargo test --locked -p provenance-http-client "${test_args[@]}" --no-run --timings
