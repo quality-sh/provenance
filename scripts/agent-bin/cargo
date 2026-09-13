@@ -1,0 +1,213 @@
+#!/usr/bin/env python3
+"""Opt-in Cargo entry point for Provenance's remote verification checks."""
+
+import fcntl
+import hashlib
+import json
+import os
+import secrets
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+
+CHECK_JOBS = {"build": "Build", "check": "Check", "clippy": "Clippy", "test": "Test"}
+WORKFLOW = "agent-cargo.yml"
+
+
+def command(args, cwd=None, env=None, input_text=None):
+    result = subprocess.run(
+        args, cwd=cwd, env=env, input=input_text, text=True, capture_output=True, check=False
+    )
+    if result.returncode:
+        raise RuntimeError(result.stderr.strip() or result.stdout.strip() or f"{args[0]} failed")
+    return result.stdout.strip()
+
+
+def git(root, *args, env=None):
+    return command(["git", *args], cwd=root, env=env)
+
+
+def real_cargo():
+    wrapper_dir = Path(__file__).resolve().parent
+    paths = [part for part in os.environ.get("PATH", "").split(os.pathsep) if Path(part).resolve() != wrapper_dir]
+    found = shutil.which("cargo", path=os.pathsep.join(paths))
+    if found is None:
+        raise RuntimeError("Native cargo is not available outside the agent shim")
+    return found
+
+
+def provenance_root():
+    try:
+        root = Path(command(["git", "rev-parse", "--show-toplevel"]))
+        manifest = (root / "Cargo.toml").read_text()
+    except (RuntimeError, OSError):
+        return None
+    if 'repository = "https://github.com/quality-sh/provenance"' not in manifest:
+        return None
+    return root
+
+
+def snapshot(root):
+    untracked = git(
+        root,
+        "ls-files", "--others", "--exclude-standard", "--", ".",
+        ":(exclude)target", ":(exclude).beads",
+    )
+    if untracked:
+        raise RuntimeError(
+            "Untracked files cannot enter a public CI snapshot automatically. "
+            f"Stage intended new files first: {untracked}"
+        )
+    head = git(root, "rev-parse", "HEAD")
+    with tempfile.TemporaryDirectory(prefix="provenance-agent-cargo-") as directory:
+        env = {**os.environ, "GIT_INDEX_FILE": str(Path(directory) / "index")}
+        git(root, "read-tree", "HEAD", env=env)
+        git(root, "add", "-A", "--", ".", ":(exclude)target", ":(exclude).beads", env=env)
+        tree = git(root, "write-tree", env=env)
+    if tree == git(root, "rev-parse", "HEAD^{tree}"):
+        return head
+    stable_env = {
+        **os.environ,
+        "GIT_AUTHOR_NAME": "Provenance CI snapshot",
+        "GIT_AUTHOR_EMAIL": "agent-ci@users.noreply.github.com",
+        "GIT_AUTHOR_DATE": "2000-01-01T00:00:00+0000",
+        "GIT_COMMITTER_NAME": "Provenance CI snapshot",
+        "GIT_COMMITTER_EMAIL": "agent-ci@users.noreply.github.com",
+        "GIT_COMMITTER_DATE": "2000-01-01T00:00:00+0000",
+    }
+    return git(root, "commit-tree", tree, "-p", head, "-m", "Provenance CI snapshot", env=stable_env)
+
+
+def state_file(root):
+    configured = os.environ.get("PROVENANCE_CI_STATE_DIR")
+    if configured:
+        base = Path(configured)
+    else:
+        common = git(root, "rev-parse", "--git-common-dir")
+        base = (root / common).resolve() / "agent-cargo"
+    base.mkdir(parents=True, exist_ok=True)
+    return base / "runs.json"
+
+
+def push_snapshot(root, sha, repository, branch):
+    push_url = os.environ.get("PROVENANCE_CI_PUSH_URL", f"https://github.com/{repository}.git")
+    git(root, "push", push_url, f"{sha}:refs/heads/{branch}")
+
+
+def pushed_run(root, sha, repository, command_key):
+    branch = f"agent-ci/{command_key}/{sha}-{secrets.token_hex(4)}"
+    push_snapshot(root, sha, repository, branch)
+    deadline = time.monotonic() + 120
+    while time.monotonic() < deadline:
+        try:
+            raw = command([
+                "gh", "run", "list", "--repo", repository, "--branch", branch,
+                "--event", "push", "--json", "databaseId,headSha,workflowName", "--limit", "20",
+            ])
+            runs = json.loads(raw)
+            match = next((run for run in runs if run["headSha"] == sha and run["workflowName"] == "Agent Cargo verification"), None)
+            if match:
+                return match["databaseId"]
+        except (RuntimeError, ValueError, KeyError):
+            pass
+        time.sleep(2)
+    raise RuntimeError(f"No Actions run appeared for {branch}; check the repository's Actions tab")
+
+
+def dispatch(root, sha, repository, command_json, command_key):
+    push_snapshot(root, sha, repository, f"agent-snapshot/{sha}")
+    payload = json.dumps(
+        {
+            "ref": "main",
+            "inputs": {
+                "snapshot_sha": sha,
+                "command_json": command_json,
+                "command_key": command_key,
+            },
+        }
+    )
+    response = command(
+        [
+            "gh", "api", "--method", "POST", "-H", "X-GitHub-Api-Version: 2026-03-10",
+            f"repos/{repository}/actions/workflows/{WORKFLOW}/dispatches", "--input", "-",
+        ],
+        input_text=payload,
+    )
+    run_id = json.loads(response).get("workflow_run_id")
+    if not isinstance(run_id, int) or run_id <= 0:
+        raise RuntimeError("GitHub did not return a workflow run ID")
+    return run_id
+
+
+def run_id_for_snapshot(root, sha, repository, args):
+    command_json = "" if len(args) == 1 else json.dumps(args, separators=(",", ":"))
+    command_key = args[0] if not command_json else hashlib.sha256(command_json.encode()).hexdigest()[:16]
+    path = state_file(root)
+    with (path.parent / "runs.lock").open("a+") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            runs = json.loads(path.read_text()) if path.exists() else {}
+            key = f"{repository}:{sha}:{command_key}"
+            if key not in runs or os.environ.get("PROVENANCE_CI_RERUN") == "1":
+                runs[key] = (
+                    dispatch(root, sha, repository, command_json, command_key)
+                    if command_json else pushed_run(root, sha, repository, command_key)
+                )
+                temporary = path.with_suffix(".tmp")
+                temporary.write_text(json.dumps(runs))
+                temporary.replace(path)
+            return runs[key]
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+def show_result(run_id, repository, check, custom):
+    url = f"https://github.com/{repository}/actions/runs/{run_id}"
+    print(f"Remote Cargo: {check} in {url}")
+    command(["gh", "run", "watch", str(run_id), "--repo", repository])
+    raw = command(["gh", "run", "view", str(run_id), "--json", "jobs", "--repo", repository])
+    jobs = json.loads(raw)["jobs"]
+    name = "Command" if custom else CHECK_JOBS[check]
+    job = next((item for item in jobs if item["name"] == name), None)
+    if job is None:
+        raise RuntimeError(f"The remote {check} job did not run: {url}")
+    if job["conclusion"] != "success":
+        try:
+            logs = command(
+                ["gh", "run", "view", str(run_id), "--job", str(job["databaseId"]), "--log-failed", "--repo", repository]
+            )
+        except RuntimeError:
+            logs = f"Failed-step logs are unavailable; inspect {url}"
+        if logs:
+            print(logs)
+        print(f"Remote Cargo: {check} failed ({job['conclusion']})")
+        return 1
+    print(f"Remote Cargo: {check} passed")
+    if check == "build":
+        print("Build outputs remain on the CI runner; no local target files were created.")
+    return 0
+
+
+def main():
+    args = sys.argv[1:]
+    root = provenance_root()
+    if root is None or not args or args[0] not in CHECK_JOBS or os.environ.get("PROVENANCE_CI_LOCAL") == "1":
+        native = real_cargo()
+        os.execv(native, [native, *args])
+    repository = os.environ.get("PROVENANCE_CI_REPO", "quality-sh/provenance")
+    sha = snapshot(root)
+    print(f"Remote Cargo: verifying snapshot {sha}", flush=True)
+    run_id = run_id_for_snapshot(root, sha, repository, args)
+    return show_result(run_id, repository, args[0], len(args) != 1)
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except (RuntimeError, OSError, ValueError, KeyError, json.JSONDecodeError) as error:
+        print(f"Remote Cargo: {error}", file=sys.stderr)
+        sys.exit(2)

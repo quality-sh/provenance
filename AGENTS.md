@@ -2,19 +2,6 @@
 
 This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
 
-## Bootstrap
-
-After cloning the repository or creating a worktree, enable the committed Git
-hooks from that checkout:
-
-```bash
-git config core.hooksPath .githooks
-```
-
-The pre-commit hook runs formatting, Clippy, and compile checks. Fix any
-reported failure before committing. When a hook must be bypassed intentionally,
-use Git's standard `git commit --no-verify` option.
-
 ## Code standards
 
 **No Rust file in this repo may exceed 500 lines.** Unreadable code is not accepted.
