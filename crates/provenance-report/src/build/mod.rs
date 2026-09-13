@@ -64,10 +64,9 @@ pub fn build_envelope(input: &BuildInput<'_>) -> anyhow::Result<ReportEnvelope> 
         .coverage
         .binding_findings;
 
-    let scans = provenance_scanner::scan_path_with_content(input.scan_path)?;
-    let files_scanned = scans.len() as u64;
-    let head_files = git::revision_files(input.repo, &head)?;
-    let scans = scans_pinned_to_head(input.repo, scans, head_files);
+    let scan_candidates = provenance_scanner::scan_path_with_content(input.scan_path)?;
+    let files_scanned = scan_candidates.len() as u64;
+    let scans = scans_at_head(input.repo, &head, scan_candidates)?;
     let scan_covers = scan_covers_repository(input.repo, input.scan_path);
     let (completeness, incompleteness_reason) =
         scan_completeness(input.repo, input.scan_path, scan_covers, &head)?;
@@ -298,27 +297,35 @@ fn scan_covers_repository(repo: &Utf8Path, path: &Utf8Path) -> bool {
     same_file::is_same_file(repo, path).unwrap_or(false)
 }
 
-/// Keep only source scans whose path and complete bytes occur at the
-/// requested head. Other working-copy bytes cannot supply head evidence.
-fn scans_pinned_to_head(
+/// Scan requested-head blobs only for paths selected by the source walker.
+/// Working-copy bytes select the scan surface but do not supply head facts.
+fn scans_at_head(
     repo: &Utf8Path,
-    scans: Vec<provenance_scanner::FileScanWithContent>,
-    head_files: Vec<git::RevisionFile>,
-) -> Vec<provenance_scanner::FileScan> {
-    let head_contents: std::collections::BTreeMap<Utf8PathBuf, String> = head_files
-        .into_iter()
-        .map(|file| (file.path, file.content))
-        .collect();
-    scans
+    head: &str,
+    candidates: Vec<provenance_scanner::FileScanWithContent>,
+) -> anyhow::Result<Vec<provenance_scanner::FileScan>> {
+    let paths: Vec<Utf8PathBuf> = candidates
         .into_iter()
         .filter_map(|file| {
-            let path = repository_relative_path(repo, &file.scan.file_path)?;
-            head_contents
-                .get(path)
-                .is_some_and(|content| content == &file.content)
-                .then_some(file.scan)
+            repository_relative_path(repo, &file.scan.file_path).map(Utf8Path::to_path_buf)
         })
-        .collect()
+        .collect();
+    let head_files = git::revision_files_at_paths(repo, head, &paths)?;
+    let scans = head_files
+        .into_iter()
+        .filter_map(|file| {
+            let language = file
+                .path
+                .extension()
+                .and_then(provenance_scanner::Language::from_extension)?;
+            Some(provenance_scanner::scan_file(
+                &repo.join(&file.path),
+                language,
+                &file.content,
+            ))
+        })
+        .collect();
+    Ok(scans)
 }
 
 fn repository_relative_path<'a>(repo: &'a Utf8Path, path: &'a Utf8Path) -> Option<&'a Utf8Path> {

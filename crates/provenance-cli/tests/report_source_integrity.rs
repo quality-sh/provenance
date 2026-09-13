@@ -1,6 +1,5 @@
-//! Source-to-commit integrity tests for report building. A working-copy
-//! source can supply head evidence only when its complete bytes belong to
-//! the requested head commit.
+//! Source-to-commit integrity tests for report building. The working copy
+//! selects the scan surface, and requested-head blobs supply source facts.
 
 use assert_cmd::Command;
 use provenance_macros::verifies;
@@ -198,7 +197,7 @@ fn ignored_source_cannot_hide_a_known_absence() {
 
 #[test]
 #[verifies("rule_report_envelope_states_only_known_facts", examples)]
-fn byte_matching_partial_scan_keeps_a_valid_head_site() {
+fn partial_scan_keeps_a_valid_requested_head_site() {
     let directory = repo_with_rule("deprecated");
     let repo = directory.path();
     write(repo, "src/lib.rs", source_binding(false));
@@ -240,5 +239,40 @@ fn committed_typed_binding_survives_an_unpinned_source_scan() {
     assert!(
         current["sites"].as_array().is_none_or(Vec::is_empty),
         "a typed binding has no fabricated source coordinate"
+    );
+}
+
+#[test]
+#[verifies("rule_report_envelope_states_only_known_facts", examples)]
+fn clean_source_conversion_keeps_committed_verification() {
+    let directory = repo_with_rule("active");
+    let repo = directory.path();
+    git(repo, &["config", "core.autocrlf", "true"]);
+    write(
+        repo,
+        "src/lib.rs",
+        "#[test]\n#[verifies(\"rule_anchor\", examples)]\nfn evidence() {}\n",
+    );
+    let head = commit(repo, "head with a verification");
+    std::fs::remove_file(repo.join("src/lib.rs")).unwrap();
+    git(repo, &["checkout", "--", "src/lib.rs"]);
+    assert!(
+        std::fs::read(repo.join("src/lib.rs"))
+            .unwrap()
+            .windows(2)
+            .any(|bytes| bytes == b"\r\n"),
+        "Git must convert the checked-out source to CRLF"
+    );
+    assert!(
+        git(repo, &["status", "--porcelain", "--untracked-files=all"]).is_empty(),
+        "Git must consider the converted source clean"
+    );
+
+    let envelope = build_envelope(repo, &head, &head, None);
+
+    assert_eq!(envelope["scan"]["completeness"], "complete");
+    assert!(
+        finding(&envelope, "active_rule_missing_verification").is_none(),
+        "a clean Git conversion must retain the committed verification"
     );
 }
