@@ -1,5 +1,4 @@
 use crate::layout::ProvenanceLayout;
-use anyhow::Context;
 use provenance_macros::rule;
 use sqlx::{Executor, SqlitePool};
 
@@ -67,7 +66,7 @@ const VALIDATION_VERSION_SQL: &str = include_str!("../migrations/023_projection_
 
 pub async fn run_migrations(
     pool: &SqlitePool,
-    layout: &ProvenanceLayout,
+    _layout: &ProvenanceLayout,
 ) -> anyhow::Result<Vec<String>> {
     pool.execute("CREATE TABLE IF NOT EXISTS _schema_migrations (id TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)").await?;
     let mut tx = pool.begin().await?;
@@ -147,9 +146,6 @@ pub async fn run_migrations(
                 .fetch_optional(&mut *tx)
                 .await?;
         if already_applied.is_none() {
-            if id == REMOVE_SERVICES_SHARDS_MIGRATION_ID {
-                remove_services_shards(layout)?;
-            }
             for statement in sql.split(';').map(str::trim).filter(|s| !s.is_empty()) {
                 tx.execute(statement).await?;
             }
@@ -177,44 +173,6 @@ pub async fn run_migrations(
 async fn forget_digests(tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>) -> anyhow::Result<()> {
     for table in ["projection_unit_digests", "projection_family_digests"] {
         tx.execute(format!("DELETE FROM {table}").as_str()).await?;
-    }
-    Ok(())
-}
-
-fn remove_services_shards(layout: &ProvenanceLayout) -> anyhow::Result<()> {
-    let scopes_dir = layout.scopes_dir();
-    if !scopes_dir.exists() {
-        return Ok(());
-    }
-    for scope in std::fs::read_dir(&scopes_dir)
-        .with_context(|| format!("failed to read scopes directory {scopes_dir}"))?
-    {
-        let scope = scope?;
-        if !scope.file_type()?.is_dir() {
-            continue;
-        }
-        let services_dir = scope.path().join("services");
-        if !services_dir.exists() {
-            continue;
-        }
-        for shard in std::fs::read_dir(&services_dir).with_context(|| {
-            format!(
-                "failed to read services directory {}",
-                services_dir.display()
-            )
-        })? {
-            let shard = shard?;
-            if shard.file_type()?.is_file()
-                && shard.path().extension().is_some_and(|ext| ext == "jsonl")
-            {
-                std::fs::remove_file(shard.path()).with_context(|| {
-                    format!(
-                        "failed to remove legacy services shard {}",
-                        shard.path().display()
-                    )
-                })?;
-            }
-        }
     }
     Ok(())
 }
@@ -283,55 +241,5 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(dispositions.as_deref(), Some("dispositions"));
-    }
-
-    #[tokio::test]
-    async fn migration_removes_services_shards_when_present() {
-        let (_directory, layout) = test_layout();
-        let shard = layout
-            .scopes_dir()
-            .join("default/services/services-00.jsonl");
-        std::fs::create_dir_all(shard.parent().unwrap()).unwrap();
-        std::fs::write(&shard, "legacy service\n").unwrap();
-        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
-
-        run_migrations(&pool, &layout).await.unwrap();
-
-        assert!(!shard.exists());
-    }
-
-    #[tokio::test]
-    async fn migration_no_ops_when_services_shards_are_absent() {
-        let (_directory, layout) = test_layout();
-        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
-
-        run_migrations(&pool, &layout).await.unwrap();
-
-        assert!(!layout.scopes_dir().join("default/services").exists());
-    }
-
-    #[tokio::test]
-    async fn store_materializes_cleanly_after_services_shard_cleanup() {
-        let (_directory, layout) = test_layout();
-        std::fs::create_dir_all(layout.manifest_path().parent().unwrap()).unwrap();
-        std::fs::write(
-            layout.manifest_path(),
-            serde_json::to_string(&provenance_core::Manifest::default_with_scope(
-                provenance_core::ScopeId::new("default").unwrap(),
-                provenance_core::RepoPathPrefix::new("."),
-            ))
-            .unwrap(),
-        )
-        .unwrap();
-        let shard = layout
-            .scopes_dir()
-            .join("default/services/services-00.jsonl");
-        std::fs::create_dir_all(shard.parent().unwrap()).unwrap();
-        std::fs::write(&shard, "not valid json\n").unwrap();
-
-        let report = crate::cache::materialize_state(&layout).await.unwrap();
-
-        assert_eq!(report.records_loaded, 0);
-        assert!(!shard.exists());
     }
 }
