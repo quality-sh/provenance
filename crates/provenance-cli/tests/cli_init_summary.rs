@@ -81,9 +81,9 @@ fn init_prints_a_summary_that_separates_new_from_changed_files() {
     assert!(stdout
         .contains("  3. provenance coverage scan --path . --scope default --validate-rules\n"));
     assert!(stdout.contains("Docs: https://github.com/quality-sh/provenance/tree/main/docs\n"));
-    assert!(stdout.contains(
-        "Dictionary: Imported the Issue 9 dictionary from the official asset.\n"
-    ));
+    assert!(
+        stdout.contains("Dictionary: Imported the Issue 9 dictionary from the official asset.\n")
+    );
 }
 
 #[test]
