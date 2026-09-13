@@ -94,7 +94,7 @@ pub(super) async fn handle(command: RulesCommand) -> anyhow::Result<()> {
             ..
         } => {
             let rule =
-                StateStore::new(ProvenanceLayout::new(repo)).create_rule(CreateRuleInput {
+                Store::open(repo).create_rule(CreateRuleInput {
                     scope_id: ScopeId::new(scope)?,
                     id: StableId::new(id)?,
                     name,
