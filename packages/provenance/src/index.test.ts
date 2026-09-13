@@ -8,6 +8,7 @@ import test, { type TestContext } from "node:test";
 import { startFixtureHost } from "../scripts/fixture-host.js";
 import { recordingHost } from "./http-recorder.test-helper.js";
 import { OperationError } from "./client.js";
+import { PROTOCOL_VERSION } from "./generated/client.js";
 import { STATE_SCHEMA_VERSION } from "./protocol.js";
 
 import {
@@ -107,7 +108,7 @@ test("the callback option-object Requirement keeps an explicit ID", async (t) =>
       created: 1,
       updated: 0,
       moved: 0,
-      retired: 0,
+      deleted: 0,
       conflicts: 0,
       unchanged: 0,
       resources: [],
@@ -218,7 +219,7 @@ test("plan sends the finalized spec to the read-only HTTP operation", async (t) 
   const recorder = await recordingHost({
     info: {
       engine_version: "0.1.0",
-      protocol_version: 8,
+      protocol_version: PROTOCOL_VERSION,
       state_schema_version: STATE_SCHEMA_VERSION,
       repository: "/project",
     },
@@ -227,7 +228,7 @@ test("plan sends the finalized spec to the read-only HTTP operation", async (t) 
       created: 0,
       updated: 1,
       moved: 0,
-      retired: 0,
+      deleted: 0,
       conflicts: 0,
       unchanged: 1,
       resources: [],
@@ -313,13 +314,13 @@ test("requirement source order stays unchanged after apply", async (t) => {
   assert.equal(result.unchanged, 4);
 });
 
-test("omitted declarations retire and later reactivate with the same ids", async (t) => {
+test("omitted declarations are deleted and later recreated with the same ids", async (t) => {
   const { repo, settings } = await repository(t);
   configure({
     ...settings,
-    owner: "spec://typescript/retirement",
+    owner: "spec://typescript/deletion",
   });
-  const full = defineSpec("retirement", ({ requirement }) => {
+  const full = defineSpec("deletion", ({ requirement }) => {
     const sharing = requirement("sharing", {
       statement: "Users can securely share documentation",
     });
@@ -329,17 +330,17 @@ test("omitted declarations retire and later reactivate with the same ids", async
       }),
     };
   });
-  const empty = defineSpec("retirement", () => ({}));
+  const empty = defineSpec("deletion", () => ({}));
 
   const first = await apply(full);
   const ids = first.resources.map(({ id }) => id).sort();
   const preview = await plan(empty);
-  assert.equal(preview.retired, 2);
-  assert.deepEqual(preview.resources.map(({ state }) => state), ["retired", "retired"]);
+  assert.equal(preview.deleted, 2);
+  assert.deepEqual(preview.resources.map(({ state }) => state), ["deleted", "deleted"]);
 
   await apply(empty);
   const reactivated = await apply(full);
-  assert.equal(reactivated.updated, 2);
+  assert.equal(reactivated.created, 2);
   assert.deepEqual(reactivated.resources.map(({ id }) => id).sort(), ids);
 });
 

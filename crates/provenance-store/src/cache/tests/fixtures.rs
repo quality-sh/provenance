@@ -87,6 +87,7 @@ pub fn seeded_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
         .unwrap();
     store
         .create_rule(CreateRuleInput {
+            archived_in_commit: None,
             scope_id: scope.clone(),
             id: sid("rule_schads_pay_001"),
             name: None,
@@ -165,6 +166,7 @@ fn seed_owner_chain(store: &StateStore, scope: &ScopeId) {
     create_resolution(store, scope, "res_schads_overtime", "req_schads_overtime");
     store
         .create_rule(CreateRuleInput {
+            archived_in_commit: None,
             scope_id: scope.clone(),
             id: sid("rule_schads_pay_001"),
             name: None,
@@ -299,6 +301,7 @@ pub fn create_requirement(
 pub fn create_rule_of(store: &StateStore, scope: &ScopeId, id: &str, requirement_id: &str) {
     store
         .create_rule(CreateRuleInput {
+            archived_in_commit: None,
             scope_id: scope.clone(),
             id: sid(id),
             name: None,

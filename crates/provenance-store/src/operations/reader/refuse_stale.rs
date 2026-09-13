@@ -2,7 +2,7 @@
 
 use super::freshness::{self, Freshness};
 use super::{ReadRefusal, ReadSnapshot};
-use crate::cache::{open_stored_cache, scope_ids, unit_digest, units_for};
+use crate::cache::{open_stored_cache, scope_ids, unit_stored_digest, units_for};
 use crate::layout::ProvenanceLayout;
 use crate::publication::publication_guard;
 use provenance_core::protocol::StampPolicy;
@@ -72,11 +72,13 @@ async fn check(
             })?;
     let stored: BTreeMap<String, String> = {
         let mut tx = snapshot.connection().await;
-        sqlx::query_as::<_, (String, String)>("SELECT unit, digest FROM projection_unit_digests")
-            .fetch_all(&mut **tx)
-            .await?
-            .into_iter()
-            .collect()
+        sqlx::query_as::<_, (String, String)>(
+            "SELECT unit, stored_digest FROM projection_unit_digests",
+        )
+        .fetch_all(&mut **tx)
+        .await?
+        .into_iter()
+        .collect()
     };
     // Without a guard, two complete passes must match this same stored revision.
     // Each pass reads the scope list again. A missing lock or a recovery marker
@@ -105,11 +107,12 @@ fn moved_units(
     let scopes = scope_ids(&state_dir)?;
     let mut moved = Vec::new();
     for unit in units_for(&scopes) {
-        let live = unit_digest(&state_dir, &unit).map_err(|error| ReadRefusal::UnitUnreadable {
-            unit: unit.name(),
-            path: error.path,
-            error: format!("{:#}", error.error),
-        })?;
+        let live =
+            unit_stored_digest(&state_dir, &unit).map_err(|error| ReadRefusal::UnitUnreadable {
+                unit: unit.name(),
+                path: error.path,
+                error: format!("{:#}", error.error),
+            })?;
         let stored = stored.remove(&unit.name()).unwrap_or_default();
         if stored != live {
             moved.push(MovedUnit {

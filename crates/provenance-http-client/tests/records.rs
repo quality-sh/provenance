@@ -1,6 +1,28 @@
 use provenance_http_client::{Error, HttpClient, PROTOCOL_VERSION};
 use serde_json::{json, Value};
 
+fn normalize_date_times(value: &mut Value) {
+    match value {
+        Value::Array(values) => values.iter_mut().for_each(normalize_date_times),
+        Value::Object(fields) => {
+            for (field, value) in fields {
+                if field == "at" {
+                    let Value::String(at) = value else { continue };
+                    let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(at) else {
+                        continue;
+                    };
+                    *at = parsed
+                        .with_timezone(&chrono::Utc)
+                        .to_rfc3339_opts(chrono::SecondsFormat::Nanos, true);
+                } else {
+                    normalize_date_times(value);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
 struct Fixture {
     client: HttpClient,
     data: Value,
@@ -43,14 +65,18 @@ impl Fixture {
 macro_rules! compare {
     ($fixture:expr, $method:ident, $call:expr) => {{
         let call = $call;
-        let (status, expected) = $fixture.raw(stringify!($method), &call).await;
+        let (status, mut expected) = $fixture.raw(stringify!($method), &call).await;
         assert_eq!(status, 200);
         let actual = $fixture
             .client
             .$method(&serde_json::from_value(call).unwrap())
             .await
             .unwrap();
-        let actual = serde_json::to_value(actual).unwrap();
+        let mut actual = serde_json::to_value(actual).unwrap();
+        // Generated date-time types preserve the instant but can normalize
+        // the RFC 3339 fractional width when they serialize it again.
+        normalize_date_times(&mut actual);
+        normalize_date_times(&mut expected);
         assert_eq!(
             actual, expected,
             "all fields and the full stamp must survive"

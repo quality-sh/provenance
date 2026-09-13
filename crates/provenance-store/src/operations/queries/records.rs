@@ -9,13 +9,7 @@ pub(super) async fn get(ctx: &ReadContext, request: GetQuery) -> anyhow::Result<
         .validate()
         .map_err(provenance_core::protocol::QueryValidation::into_native)?;
     let id = StableId::new(request.id)?;
-    let node = nodes::node(
-        ctx.snapshot(),
-        request.node_type,
-        &id,
-        request.include_retired,
-    )
-    .await?;
+    let node = nodes::node(ctx.snapshot(), request.node_type, &id).await?;
     Ok(GetResult {
         found: node.is_some(),
         node,
@@ -51,7 +45,7 @@ async fn search_page(ctx: &ReadContext, request: SearchQuery) -> anyhow::Result<
     let (cursor, mut position) = Cursor::open(
         ctx,
         "search",
-        &(&needle, &wanted, request.include_retired, request.limit),
+        &(&needle, &wanted, request.limit),
         request.cursor.as_deref(),
     )?;
     let mut matched = Vec::new();
@@ -69,9 +63,7 @@ async fn search_page(ctx: &ReadContext, request: SearchQuery) -> anyhow::Result<
         };
         loop {
             let count = (request.limit + 1 - matched.len()).min(512 - scanned);
-            let ids =
-                nodes::search_ids(ctx.snapshot(), kind, request.include_retired, &after, count)
-                    .await?;
+            let ids = nodes::search_ids(ctx.snapshot(), kind, &after, count).await?;
             let exhausted = ids.len() < count;
             for id in ids {
                 let node = nodes::page_node(ctx.snapshot(), kind, &id)

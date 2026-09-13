@@ -2,7 +2,9 @@
 use provenance_core::{VerificationBinding, VerificationRun};
 use provenance_store::{
     operations::TypedSpecPlan,
-    state_store::{BeginVerificationInput, CompleteVerificationInput, TypedSpecResult},
+    state_store::{
+        BeginVerificationInput, CompleteVerificationInput, CreateRuleInput, TypedSpecResult,
+    },
 };
 use schemars::{
     generate::{Contract, SchemaSettings},
@@ -37,7 +39,7 @@ fn round_trip<T: JsonSchema + DeserializeOwned + Serialize>(value: &Value) {
 }
 #[test]
 fn apply_and_flat_plan_use_the_real_result_types() {
-    let result = json!({"declared_by":"test","created":0,"updated":0,"moved":0,"retired":0,
+    let result = json!({"declared_by":"test","created":0,"updated":0,"moved":0,"deleted":0,
         "conflicts":0,"unchanged":0,"resources":[]});
     round_trip::<TypedSpecResult>(&result);
     let mut plan = result;
@@ -111,4 +113,44 @@ fn update_requests_keep_empty_clear_lists_omitted() {
         serde_json::to_value(decoded).unwrap()["clear_fields"],
         value["clear_fields"]
     );
+}
+
+#[test]
+fn rule_contract_requires_the_archive_permalink_and_validates_stamps() {
+    let schema = serde_json::to_value(schemars::schema_for!(provenance_core::Rule)).unwrap();
+    let compiled = jsonschema::JSONSchema::options()
+        .with_draft(jsonschema::Draft::Draft202012)
+        .compile(&schema)
+        .unwrap();
+    let mut rule = json!({"schema_version":2,"scope_id":"default","id":"rule_one","statement":"The system saves records.","status":"draft","severity":"medium","requirement_ids":["req_one"]});
+    assert!(compiled.is_valid(&rule));
+    rule["status"] = json!("archived");
+    assert!(!compiled.is_valid(&rule));
+    rule["archived_in_commit"] = json!({"commit":"a".repeat(40)});
+    assert!(compiled.is_valid(&rule));
+    rule["created"] = json!({"commit":"b".repeat(64),"at":"2026-09-12T00:00:00Z"});
+    assert!(compiled.is_valid(&rule));
+    rule["created"]["commit"] = json!("abc");
+    assert!(!compiled.is_valid(&rule));
+    rule.as_object_mut().unwrap().remove("created");
+    rule["status"] = json!("active");
+    assert!(!compiled.is_valid(&rule));
+    assert!(schema["properties"].get("retired").is_none());
+    assert!(
+        serde_json::to_value(schemars::schema_for!(provenance_core::Source)).unwrap()["properties"]
+            .get("archived_in_commit")
+            .is_none()
+    );
+
+    let input_schema = serde_json::to_value(schemars::schema_for!(CreateRuleInput)).unwrap();
+    let input_contract = jsonschema::JSONSchema::options()
+        .with_draft(jsonschema::Draft::Draft202012)
+        .compile(&input_schema)
+        .unwrap();
+    let mut input = json!({"scope_id":"default","id":"rule_one","statement":"The system saves records.","status":"draft","severity":"medium","requirement_ids":["req_one"],"resolution_ids":[]});
+    assert!(input_contract.is_valid(&input));
+    input["archived_in_commit"] = json!({"commit":"a".repeat(40)});
+    assert!(!input_contract.is_valid(&input));
+    input["status"] = json!("archived");
+    assert!(input_contract.is_valid(&input));
 }

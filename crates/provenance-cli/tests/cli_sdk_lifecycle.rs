@@ -1,3 +1,6 @@
+#[path = "cli_sdk_lifecycle/deletion.rs"]
+mod deletion;
+
 use assert_cmd::Command;
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use serde_json::{json, Value};
@@ -90,7 +93,7 @@ fn resource_id(result: &Value, kind: &str, key: &str) -> String {
 }
 
 #[test]
-fn omission_plans_and_applies_retirement_without_deleting_history() {
+fn omission_plans_and_applies_deletion_and_recreation() {
     let directory = init_repo();
     let repo = directory.path().to_str().unwrap();
     let owner = "spec://typescript/share-links";
@@ -102,25 +105,25 @@ fn omission_plans_and_applies_retirement_without_deleting_history() {
     ];
 
     let planned = sdk(repo, "plan", &empty_document(owner)).unwrap();
-    assert_eq!(planned["retired"], 3);
+    assert_eq!(planned["deleted"], 3);
     assert!(planned["resources"]
         .as_array()
         .unwrap()
         .iter()
-        .all(|resource| resource["state"] == "retired"));
+        .all(|resource| resource["state"] == "deleted"));
     assert!(read_records(directory.path(), "sources/source.jsonl")
         .iter()
-        .all(|record| record.get("retired").is_none()));
+        .all(|record| record.get("deleted").is_none()));
 
     let applied = sdk(repo, "apply", &empty_document(owner)).unwrap();
-    assert_eq!(applied["retired"], planned["retired"]);
+    assert_eq!(applied["deleted"], planned["deleted"]);
     assert_eq!(applied["resources"], planned["resources"]);
     for relative in [
         "sources/source.jsonl",
         "requirements/req.jsonl",
         "rules/rule.jsonl",
     ] {
-        assert_eq!(read_records(directory.path(), relative)[0]["retired"], true);
+        assert!(read_records(directory.path(), relative).is_empty());
     }
     let verification_error = sdk(
         repo,
@@ -130,7 +133,7 @@ fn omission_plans_and_applies_retirement_without_deleting_history() {
                 "declared_by": owner,
                 "address": ["share-links", "requirement", "sharing", "rule", "expiry"]
             },
-            "key": "expiry-after-retirement",
+            "key": "expiry-after-deletion",
             "method": "examples",
             "declared_by": "ci://typescript",
             "file": "tests/share-links.test.ts"
@@ -138,16 +141,16 @@ fn omission_plans_and_applies_retirement_without_deleting_history() {
     )
     .unwrap_err();
     assert!(
-        verification_error.contains("retired"),
+        verification_error.contains("has not been applied"),
         "{verification_error}"
     );
 
     let clean = sdk(repo, "plan", &empty_document(owner)).unwrap();
-    assert_eq!(clean["retired"], 0);
+    assert_eq!(clean["deleted"], 0);
     assert!(clean["resources"].as_array().unwrap().is_empty());
 
     let reactivated = sdk(repo, "apply", &document(owner)).unwrap();
-    assert_eq!(reactivated["updated"], 3);
+    assert_eq!(reactivated["created"], 3);
     assert_eq!(resource_id(&reactivated, "source", "policy"), ids[0]);
     assert_eq!(resource_id(&reactivated, "requirement", "sharing"), ids[1]);
     assert_eq!(resource_id(&reactivated, "rule", "expiry"), ids[2]);

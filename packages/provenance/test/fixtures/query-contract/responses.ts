@@ -1,6 +1,7 @@
 import type {
   EvidenceResponse, GetResponse, GraphNode, QueryEnvelope, SourceKind, Stamp,
 } from "../../../src/protocol.js";
+import { PROTOCOL_VERSION } from "../../../src/generated/client.js";
 
 const stamp: Stamp = {
   serial: 1, digest: "digest", instance_id: "instance", derivation: 0,
@@ -9,13 +10,13 @@ const stamp: Stamp = {
 
 // Current responses always carry a stamp and their exact operation identity.
 // @ts-expect-error A historical unstamped response is not a current response.
-const missingStamp: GetResponse = { protocol_version: 8, operation: "get", found: false };
+const missingStamp: GetResponse = { protocol_version: PROTOCOL_VERSION, operation: "get", found: false };
 // @ts-expect-error A search result cannot satisfy the get contract.
-const wrongOperation: GetResponse = { protocol_version: 8, operation: "search", found: false, stamp };
+const wrongOperation: GetResponse = { protocol_version: PROTOCOL_VERSION, operation: "search", found: false, stamp };
 
 // @ts-expect-error The current evidence result always includes all four cut flags.
 const missingCuts: EvidenceResponse = {
-  protocol_version: 8, operation: "evidence", stamp, rule_id: "rule_a",
+  protocol_version: PROTOCOL_VERSION, operation: "evidence", stamp, rule_id: "rule_a",
   limit: 200, has_more: false, implementation_bindings: [], verification_bindings: [],
   verification_runs: [], review_required: false, reviews: [], stale: null,
 };

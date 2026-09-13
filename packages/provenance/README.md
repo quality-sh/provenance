@@ -198,7 +198,7 @@ Moving a local Rule to a shared declaration, or back, preserves its canonical
 ID when Rust finds exactly one owned candidate. If several local Rules could
 become the shared Rule, apply fails instead of guessing. An immutable
 `.id(existingId)` call can choose the canonical record. Other declarations
-omitted from that complete spec are retired, not deleted.
+omitted from that complete spec are deleted. Git preserves their history.
 
 ## Adopt existing unowned declarations
 
@@ -281,9 +281,9 @@ clears its review automatically; the recorded reason stays as history. Ask for
 `--format markdown` to read the same explanation as prose.
 
 The result classifies each declaration as `created`, `updated`, `moved`,
-`retired`, `conflict`, or `unchanged`. Omission retires only records owned by
-that same spec. Their Stable IDs and history remain, active checks ignore them,
-and adding the declaration back reactivates the same record. A Rule move
+`deleted`, `conflict`, or `unchanged`. Omission deletes only records owned by
+that same spec. Git preserves their prior versions. Adding the declaration back
+creates a new record with the same deterministic ID. A Rule move
 replaces its active owned Requirement edge. Plan returns ownership conflicts as
 data; apply refuses them. Hard deletion and ownership transfer are separate and
 are not part of this API.
@@ -316,18 +316,16 @@ const around = await neighbors({ id: expiry.id, direction: "in" });
 const walked = await trace({ id: retention.id, direction: "out", max_depth: 2 });
 ```
 
-Every answer opens with `protocol_version` and `operation`. Every request takes
-`include_retired`, false by default, and every answer that can hold more than
+Every answer opens with `protocol_version` and `operation`. Every answer that can hold more than
 one record takes `limit`, 50 by default and 200 at most, and reports `limit`
 and `has_more`. These functions send their request to the engine and return its
 answer unchanged: walking, filtering, and paging all happen in Rust.
 
-Removing `.implementedBy(...)` from an active Rule also retires only that
+Removing `.implementedBy(...)` from an active Rule deletes that
 spec's canonical implementation binding. Plan reports the Rule as updated with
 the old implementation and `null` as its field-level before/after values. Adding
-the link back reactivates the same binding ID, while changing the imported
-symbol updates it in place. Retired bindings remain in canonical exports as
-history but no longer make the Rule appear implemented.
+the link back recreates the same binding ID, while changing the imported
+symbol updates it in place. Git preserves deleted bindings. A deleted binding does not make the Rule appear implemented.
 
 A test imports the actual rule handle and runs its callback:
 
@@ -353,11 +351,10 @@ frames and nothing else. Passing `import.meta` states the file on every runtime.
 name no file fails before the callback runs and says what to add.
 
 Pointing an owner-local verification key at a different Rule from the same
-test file retires the binding that key previously named. Calling it again
-reactivates the same binding ID, and moving the key to another file updates it
-in place. Retired bindings remain in canonical exports as history but no longer
-make the Rule appear verified. Because one run only sees the call sites it ran,
-nothing else is retired, and a binding whose test file disappeared is reported
+test file deletes the binding that key previously named. Calling it again
+recreates the same binding ID, and moving the key to another file updates it
+in place. Git preserves deleted bindings. A deleted binding does not make the Rule appear verified. Because one run only sees the call sites it ran,
+nothing else is deleted, and a binding whose test file disappeared is reported
 by `provenance stale` instead.
 
 The handle keeps an owner-local declaration address, not a mutable database

@@ -6,6 +6,11 @@ fn draft7(value: &mut Value) {
     match value {
         Value::Object(map) => {
             map.remove("$schema");
+            // Keep native record field types. The wire validator retains the
+            // marked condition between fields from the original OpenAPI.
+            if map.remove("x-provenance-validation-only-any-of") == Some(Value::Bool(true)) {
+                map.remove("anyOf");
+            }
             if let Some(constant) = map.remove("const") {
                 map.insert("enum".into(), json!([constant]));
             }

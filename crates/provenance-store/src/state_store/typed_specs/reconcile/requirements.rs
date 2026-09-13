@@ -8,8 +8,8 @@ use provenance_core::{
 use super::super::super::{
     ReconcileState, ReconciledResource, TypedFieldChange, TypedRequirementInput, TypedResourceKind,
 };
+use super::super::deletion::delete_omitted_requirements;
 use super::super::identity::requirement_address;
-use super::super::lifecycle::retire_omitted_requirements;
 use super::changes::{changed, resource, state_after_change};
 use super::references;
 
@@ -46,7 +46,7 @@ pub(in crate::state_store::typed_specs) fn reconcile_requirements(
             changes,
         ));
     }
-    retire_omitted_requirements(&mut records, &mut resources, spec, owner, ids);
+    delete_omitted_requirements(&mut records, &mut resources, spec, owner, ids);
     records.sort_by(|left, right| left.id.as_str().cmp(right.id.as_str()));
     Ok((records, resources))
 }
@@ -69,12 +69,14 @@ pub(in crate::state_store::typed_specs) fn desired_requirement(
         })
         .collect();
     let mut requirement = Requirement {
+        created: None,
+        updated: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope_id.clone(),
         id: id.clone(),
         declared_by: Some(owner.to_string()),
         declaration_address: Some(address.clone()),
-        retired: false,
+
         statement: declaration.statement.clone(),
         description: declaration.description.clone(),
         fog: None,
@@ -122,7 +124,6 @@ pub(in crate::state_store::typed_specs) fn reconciled_requirement(
     let mut reconciled = current.clone();
     reconciled.declared_by = desired.declared_by;
     reconciled.declaration_address = desired.declaration_address;
-    reconciled.retired = false;
     reconciled.statement = desired.statement;
     if desired.description.is_some() {
         reconciled.description = desired.description;
@@ -163,7 +164,6 @@ pub(in crate::state_store::typed_specs) fn requirement_changes(
         &before.declaration_address,
         &after.declaration_address,
     );
-    changed(&mut changes, "retired", &before.retired, &after.retired);
     changed(
         &mut changes,
         "statement",

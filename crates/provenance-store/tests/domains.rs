@@ -61,6 +61,7 @@ fn seed_domains_and_rule(store: &StateStore, scope: &ScopeId) {
         .unwrap();
     store
         .create_rule(CreateRuleInput {
+            archived_in_commit: None,
             scope_id: scope.clone(),
             id: StableId::new("rule_overtime").unwrap(),
             name: None,

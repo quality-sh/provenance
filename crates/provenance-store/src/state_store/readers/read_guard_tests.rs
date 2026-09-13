@@ -114,6 +114,32 @@ fn refusal_says_so_even_when_the_line_carries_no_id() {
 }
 
 #[test]
+fn legacy_retirement_requires_the_canonical_record_deletion_migration() {
+    let line = json!({
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+        "id": "req_retired",
+        "retired": true
+    })
+    .to_string();
+
+    for (loader_name, load_line) in LOADERS {
+        let message = load_line(&line).unwrap_err().to_string();
+        assert!(
+            message.contains("record req_retired"),
+            "{loader_name}: {message}"
+        );
+        assert!(
+            message.contains("legacy field `retired`"),
+            "{loader_name}: {message}"
+        );
+        assert!(
+            message.contains("migration 026"),
+            "{loader_name}: {message}"
+        );
+    }
+}
+
+#[test]
 #[verifies("rule_reads_supported_version_only", examples)]
 fn a_line_claiming_no_version_is_left_to_its_own_deserializer() {
     let line = json!({"id": "req_a"}).to_string();

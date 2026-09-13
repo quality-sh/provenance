@@ -5,11 +5,6 @@ use std::{fmt, str::FromStr};
 
 use super::{SchemaVersion, ScopeId, StableId};
 
-#[allow(clippy::trivially_copy_pass_by_ref)]
-const fn is_false(value: &bool) -> bool {
-    !*value
-}
-
 /// How a verification binding supports its Rule.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -147,8 +142,6 @@ pub struct VerificationBinding {
     pub key: String,
     pub method: VerificationMethod,
     pub declared_by: String,
-    #[serde(default, skip_serializing_if = "is_false")]
-    pub retired: bool,
     #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub file: Utf8PathBuf,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -190,8 +183,6 @@ pub struct ImplementationBinding {
     pub id: StableId,
     pub rule_id: StableId,
     pub declared_by: String,
-    #[serde(default, skip_serializing_if = "is_false")]
-    pub retired: bool,
     #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub file: Utf8PathBuf,
     pub symbol: String,

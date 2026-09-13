@@ -44,3 +44,37 @@ fn a_scope_created_after_file_collection_invalidates_the_digest() {
     let error = result.expect_err("new scope files were missed");
     assert_eq!(error.path, added);
 }
+
+#[test]
+fn stamps_do_not_change_unit_digests_but_every_other_field_does() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = camino::Utf8Path::from_path(dir.path()).unwrap();
+    let unit = Unit::Scope(provenance_core::ScopeId::new("default").unwrap());
+    for family in ["sources", "requirements", "rules", "resolutions"] {
+        let path = state.join(format!("scopes/default/{family}/record.jsonl"));
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let mut record = serde_json::json!({"id":"one","statement":"Original content"});
+        let write = |record: &serde_json::Value| {
+            std::fs::write(&path, serde_json::to_vec(record).unwrap()).unwrap();
+        };
+        write(&record);
+        let before = unit_digest(state, &unit).unwrap();
+        record["created"] =
+            serde_json::json!({"commit":"a".repeat(40),"at":"2026-09-12T00:00:00Z"});
+        record["updated"] =
+            serde_json::json!({"commit":"b".repeat(64),"at":"2026-09-12T01:00:00Z"});
+        write(&record);
+        assert_eq!(before, unit_digest(state, &unit).unwrap(), "{family}");
+        record["statement"] = serde_json::json!("Hand edited content");
+        write(&record);
+        assert_ne!(before, unit_digest(state, &unit).unwrap(), "{family}");
+        let before_archive = unit_digest(state, &unit).unwrap();
+        record["archived_in_commit"] = serde_json::json!({"commit":"c".repeat(40)});
+        write(&record);
+        assert_ne!(
+            before_archive,
+            unit_digest(state, &unit).unwrap(),
+            "archive permalink is content"
+        );
+    }
+}

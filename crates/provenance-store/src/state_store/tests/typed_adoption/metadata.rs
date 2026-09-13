@@ -43,6 +43,7 @@ fn seed_external_metadata(store: &StateStore, scope: &ScopeId) {
         .unwrap();
     store
         .create_rule(CreateRuleInput {
+            archived_in_commit: None,
             scope_id: scope.clone(),
             id: StableId::new("rule_metadata").unwrap(),
             name: None,

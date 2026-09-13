@@ -38,6 +38,7 @@ fn repeated_materialization_updates_one_owned_primary_binding() {
     .unwrap();
     store
         .create_rule(CreateRuleInput {
+            archived_in_commit: None,
             scope_id: scope.clone(),
             id: StableId::new("rule_start").unwrap(),
             name: None,
@@ -75,58 +76,6 @@ fn repeated_materialization_updates_one_owned_primary_binding() {
 }
 
 #[test]
-fn active_binding_view_excludes_retired_history() {
-    let (directory, store, scope) = seeded_requirement_store();
-    std::fs::write(
-        directory.path().join("runtime.ts"),
-        "export function start() {}\n",
-    )
-    .unwrap();
-    store
-        .create_rule(CreateRuleInput {
-            scope_id: scope.clone(),
-            id: StableId::new("rule_start").unwrap(),
-            name: None,
-            description: None,
-            requirement_ids: vec![StableId::new("req_overtime").unwrap()],
-            resolution_ids: Vec::new(),
-            statement: "Workflows start".into(),
-            status: RuleStatus::Active,
-            severity: RuleSeverity::Medium,
-            source_document: None,
-            source_section: None,
-            origin_thread: None,
-            origin_message: None,
-        })
-        .unwrap();
-    store
-        .materialize_implementation_binding(MaterializeImplementationBindingInput {
-            scope_id: scope.clone(),
-            rule_id: StableId::new("rule_start").unwrap(),
-            declared_by: "spec://typescript".into(),
-            file: "runtime.ts".into(),
-            symbol: "start".into(),
-        })
-        .unwrap();
-    let path = crate::shards::implementation_bindings_path(&store.layout, &scope);
-    store
-        .mutate_jsonl_records(
-            &path,
-            |records: &mut Vec<provenance_core::ImplementationBinding>| {
-                records[0].retired = true;
-                Ok(())
-            },
-        )
-        .unwrap();
-
-    assert_eq!(store.list_implementation_bindings(&scope).unwrap().len(), 1);
-    assert!(store
-        .active_implementation_bindings(&scope)
-        .unwrap()
-        .is_empty());
-}
-
-#[test]
 fn direct_materialization_requires_a_nonempty_owner() {
     let (directory, store, scope) = seeded_requirement_store();
     std::fs::write(
@@ -136,6 +85,7 @@ fn direct_materialization_requires_a_nonempty_owner() {
     .unwrap();
     store
         .create_rule(CreateRuleInput {
+            archived_in_commit: None,
             scope_id: scope.clone(),
             id: StableId::new("rule_start").unwrap(),
             name: None,
@@ -170,6 +120,7 @@ fn direct_materialization_rejects_platform_specific_path_separators() {
     let (_directory, store, scope) = seeded_requirement_store();
     store
         .create_rule(CreateRuleInput {
+            archived_in_commit: None,
             scope_id: scope.clone(),
             id: StableId::new("rule_start").unwrap(),
             name: None,
@@ -209,6 +160,7 @@ fn another_owner_cannot_replace_the_primary_binding() {
     .unwrap();
     store
         .create_rule(CreateRuleInput {
+            archived_in_commit: None,
             scope_id: scope.clone(),
             id: StableId::new("rule_start").unwrap(),
             name: None,

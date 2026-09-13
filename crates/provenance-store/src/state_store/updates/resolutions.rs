@@ -10,7 +10,7 @@ use provenance_core::{
 impl StateStore {
     pub fn update_resolution(&self, input: UpdateResolutionInput) -> anyhow::Result<Resolution> {
         let path = shards::resolutions_path(&self.layout, &input.scope_id);
-        self.mutate_jsonl_records(&path, |records: &mut Vec<Resolution>| {
+        self.mutate_graph_record(&path, |records: &mut Vec<Resolution>| {
             let record = records
                 .iter_mut()
                 .find(|r| r.id == input.id)
