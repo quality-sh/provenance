@@ -117,7 +117,7 @@ impl StateStore {
     ) -> anyhow::Result<ReviewEntry> {
         let scope = before.scope_id.clone();
         let id = before.id.clone();
-        self.update_requirement(input.update)?;
+        self.update_requirement_in_staged_state(input.update)?;
         if let Some(relationships) = input.relationships {
             self.replace_review_relationships(&scope, &id, relationships)?;
         }

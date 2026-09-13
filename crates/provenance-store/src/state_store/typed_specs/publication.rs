@@ -3,7 +3,7 @@ use provenance_core::{ImplementationBinding, Requirement, Rule, ScopeId, Source}
 use super::{cascade::Cascade, replace_records};
 use crate::review::guard::protect_requirements;
 use crate::state_store::{ReconciledResource, StateStore, TypedSpecResult};
-use crate::{shards, write_error::publication_started};
+use crate::{publication::with_staged_state, shards};
 
 pub(super) struct Replacement {
     pub sources: Vec<Source>,
@@ -34,23 +34,22 @@ impl Replacement {
             &self.requirements,
             &self.rules,
         )?;
-        (|| -> anyhow::Result<()> {
-            store
-                .replace_graph_records(&shards::sources_path(&store.layout, scope), self.sources)?;
+        with_staged_state(&store.layout, false, |layout| {
+            let staged = StateStore::new(layout.clone());
+            staged.replace_graph_records(&shards::sources_path(layout, scope), self.sources)?;
             crate::test_probes::at("typed_spec_sources_published")?;
-            store.replace_graph_records(
-                &shards::requirements_path(&store.layout, scope),
+            staged.replace_graph_records(
+                &shards::requirements_path(layout, scope),
                 self.requirements,
             )?;
-            store.replace_graph_records(&shards::rules_path(&store.layout, scope), self.rules)?;
+            staged.replace_graph_records(&shards::rules_path(layout, scope), self.rules)?;
             replace_records(
-                store,
-                &shards::implementation_bindings_path(&store.layout, scope),
+                &staged,
+                &shards::implementation_bindings_path(layout, scope),
                 self.implementations,
             )?;
-            self.cascade.publish(store, scope)?;
-            store.raise_requirement_reviews(scope, requirement_resources, rule_resources)
-        })()
-        .map_err(publication_started)
+            self.cascade.publish(&staged, scope)?;
+            staged.raise_requirement_reviews(scope, requirement_resources, rule_resources)
+        })
     }
 }
