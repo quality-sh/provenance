@@ -11,13 +11,61 @@ pub fn dictionary_reference_path(layout: &ProvenanceLayout) -> Utf8PathBuf {
     layout.state_dir().join("dictionary.json")
 }
 
+/// How the project dictionary reference resolved on this machine.
+#[derive(Debug)]
+pub enum DictionaryResolution {
+    /// The project commits no dictionary reference.
+    NoReference,
+    /// The reference loaded its index from the machine directory.
+    Loaded(DictionaryImport),
+    /// The reference exists, but this machine holds no matching index for it.
+    Unavailable {
+        identity: Option<DictionaryImportIdentity>,
+        directory: Option<PathBuf>,
+        reason: String,
+    },
+}
+
+/// Separates a missing reference from a reference that cannot load, so a strict
+/// gate can fail on the second and stay silent on the first.
+pub fn resolve_project_dictionary(layout: &ProvenanceLayout) -> DictionaryResolution {
+    let Ok(reference) = std::fs::read(dictionary_reference_path(layout).as_std_path()) else {
+        return DictionaryResolution::NoReference;
+    };
+    let identity: DictionaryImportIdentity = match serde_json::from_slice(&reference) {
+        Ok(identity) => identity,
+        Err(error) => {
+            return DictionaryResolution::Unavailable {
+                identity: None,
+                directory: index_directory(),
+                reason: format!("the reference is not a dictionary identity: {error}"),
+            };
+        }
+    };
+    let Some(directory) = index_directory() else {
+        return DictionaryResolution::Unavailable {
+            identity: Some(identity),
+            directory: None,
+            reason: "no machine data directory is available".to_owned(),
+        };
+    };
+    match provenance_ste100::load_dictionary_index(&directory, &identity) {
+        Ok(dictionary) => DictionaryResolution::Loaded(dictionary),
+        Err(error) => DictionaryResolution::Unavailable {
+            identity: Some(identity),
+            directory: Some(directory),
+            reason: error.to_string(),
+        },
+    }
+}
+
 /// Loads the referenced dictionary, or nothing when it cannot load.
 #[rule("rule_ste_dictionary_reference_resolution")]
 pub fn load_project_dictionary(layout: &ProvenanceLayout) -> Option<DictionaryImport> {
-    let reference = std::fs::read(dictionary_reference_path(layout).as_std_path()).ok()?;
-    let identity: DictionaryImportIdentity = serde_json::from_slice(&reference).ok()?;
-    let directory = index_directory()?;
-    provenance_ste100::load_dictionary_index(&directory, &identity).ok()
+    match resolve_project_dictionary(layout) {
+        DictionaryResolution::Loaded(dictionary) => Some(dictionary),
+        DictionaryResolution::NoReference | DictionaryResolution::Unavailable { .. } => None,
+    }
 }
 
 /// Stores the index in the machine data directory and writes the project reference.
