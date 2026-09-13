@@ -219,6 +219,39 @@ class NativeGateTests(unittest.TestCase):
         self.assertIn("CRAP threshold 30", result.stdout)
         self.assertIn("complex_uncovered", result.stdout)
 
+    def test_invalid_coverage_still_prints_native_threshold_candidates(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            lcov = root / "lcov.info"
+            lcov.write_text(
+                f"SF:{FIXTURES / 'failing' / 'src' / 'lib.rs'}\n"
+                "DA:99,1\nend_of_record\n"
+            )
+            result = subprocess.run(
+                [
+                    "python3",
+                    str(SCRIPT),
+                    "--cargo-crap",
+                    self.tool,
+                    "--path",
+                    str(FIXTURES / "failing" / "src"),
+                    "--lcov",
+                    str(lcov),
+                    "--report",
+                    str(root / "report.json"),
+                    "--threshold",
+                    "5",
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertIn("complex_uncovered", result.stdout)
+        self.assertIn("CC", result.stdout)
+        self.assertIn("100.0%", result.stdout)
+        self.assertIn("no executed LCOV function record", result.stderr)
+
     def test_real_workspace_attribution_is_explicit(self):
         with tempfile.TemporaryDirectory() as temp:
             output = Path(temp) / "real-workspace.json"
@@ -266,6 +299,8 @@ class WorkflowWiringTests(unittest.TestCase):
         self.assertIn("--workspace", self.job)
         self.assertIn("--exclude 'build.rs'", self.job)
         self.assertIn("--exclude 'build/**'", self.job)
+        self.assertIn("--exclude 'src/fixture.rs'", self.job)
+        self.assertIn("--exclude 'src/bin/*-fixture.rs'", self.job)
         self.assertIn("if: always()", self.job)
         self.assertIn("crap-report.json", self.job)
 

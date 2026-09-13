@@ -238,27 +238,34 @@ def main():
         return report_run.returncode or 2
     try:
         parsed = json.loads(args.report.read_text())
-        validate_report(parsed, args.lcov, args.expected_version)
-    except (OSError, json.JSONDecodeError, GateInputError) as error:
+    except (OSError, json.JSONDecodeError) as error:
         print(f"CRAP gate input error: {error}", file=sys.stderr)
         return 2
 
     print(
         "Policy: CRAP = C*C*(1-coverage)^3+C; "
-        f"fail when CRAP > {args.threshold:g}. Top 50 raw results follow.",
+        f"fail when CRAP > {args.threshold:g}.",
         flush=True,
     )
+    print("Unvalidated top 50 raw results follow.", flush=True)
     top = subprocess.run([*base, "--format", "human", "--top", "50"])
     if top.returncode != 0:
         return top.returncode
     print(
-        f"Showing every function with CRAP >= {args.threshold:g}; "
-        f"cargo-crap fails only scores above {args.threshold:g}.",
+        f"Unvalidated raw candidates with CRAP >= {args.threshold:g} follow. "
+        "The input checks run after this native cargo-crap table.",
         flush=True,
     )
     result = subprocess.run(
         [*base, "--format", "human", "--min", str(args.threshold), "--fail-above"]
     )
+    if result.returncode not in (0, 1):
+        return result.returncode
+    try:
+        validate_report(parsed, args.lcov, args.expected_version)
+    except GateInputError as error:
+        print(f"CRAP gate input error: {error}", file=sys.stderr)
+        return 2
     return result.returncode
 
 

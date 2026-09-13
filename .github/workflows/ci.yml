@@ -434,8 +434,8 @@ jobs:
         run: cargo llvm-cov --workspace --all-features --lcov --output-path target/crap/lcov.info
       # cargo-crap skips #[test] functions and exact #[cfg(test)] modules. Its
       # defaults omit tests/**, benches/**, and examples/**. These patterns
-      # also omit build-script code, generated clients, and dedicated test
-      # modules under src.
+      # also omit build-script code, generated clients, dedicated test
+      # modules under src, and explicitly named test-fixture support.
       - name: Enforce the CRAP threshold
         run: >-
           python3 .github/scripts/crap_gate.py
@@ -450,6 +450,8 @@ jobs:
           --exclude 'src/**/tests/**'
           --exclude 'src/**/tests.rs'
           --exclude 'src/**/*_tests.rs'
+          --exclude 'src/fixture.rs'
+          --exclude 'src/bin/*-fixture.rs'
       - name: Upload the exhaustive CRAP report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
