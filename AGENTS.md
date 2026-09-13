@@ -4,10 +4,10 @@ This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get sta
 
 ## Bootstrap
 
-Generated files must never enter source control. Before a workspace Cargo build,
-install the generator dependencies with `npm ci --prefix tools/operation-codegen`
-and run `node tools/operation-codegen/ensure-generated.mjs`. SDK build and test
-commands prepare generated source automatically. See
+Generated files must never enter source control. Before a native workspace Cargo
+build, install the generator dependencies with `npm ci --prefix tools/operation-codegen`
+and run `node tools/operation-codegen/ensure-generated.mjs`. Remote Cargo checks
+and SDK build and test commands prepare generated source automatically. See
 `tools/operation-codegen/README.md` for the build and package flow.
 
 ## Cargo checks on maintainer hosts
