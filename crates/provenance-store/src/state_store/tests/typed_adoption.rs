@@ -1,15 +1,15 @@
 use super::initialized_store;
 use crate::state_store::{
-    AddSourceReferenceInput, CreateRequirementInput, CreateResolutionInput, CreateRuleInput,
-    CreateSourceInput, MaterializeImplementationBindingInput, ReconcileState, StateStore,
+    CreateRequirementInput, CreateResolutionInput, CreateRuleInput, CreateSourceInput,
+    MaterializeImplementationBindingInput, ReconcileState, StateStore,
 };
 use provenance_core::protocol::{
     TypedAdoptionTarget, TypedDeclarationKind, TypedImplementationInput, TypedRequirementInput,
     TypedRuleInput, TypedSourceInput, TypedSpecInput,
 };
 use provenance_core::{
-    RequirementStatus, ResolutionStatus, RuleSeverity, RuleStatus, ScopeId, SourceType, StableId,
-    SUPPORTED_SCHEMA_VERSION,
+    Requirement, RequirementStatus, ResolutionStatus, RuleSeverity, RuleStatus, ScopeId,
+    SourceReference, SourceType, StableId, SUPPORTED_SCHEMA_VERSION,
 };
 
 mod metadata;
@@ -59,8 +59,10 @@ fn document(
 }
 
 fn create_unowned_requirement(store: &StateStore, scope: &ScopeId, id: &str, statement: &str) {
+    // Seeds a plain unmanaged record, as a scope from before the restructure
+    // holds one, so the typed-spec adoption of such a record stays pinned.
     store
-        .create_requirement(CreateRequirementInput {
+        .write_requirement(CreateRequirementInput {
             scope_id: scope.clone(),
             id: StableId::new(id).unwrap(),
             statement: statement.to_string(),
@@ -73,6 +75,31 @@ fn create_unowned_requirement(store: &StateStore, scope: &ScopeId, id: &str, sta
             spawned_by: None,
             origin_thread: None,
             origin_message: None,
+        })
+        .unwrap();
+}
+
+/// Seeds one citation on a plain record, keeping the record outside the
+/// review journal the way a scope from before the restructure holds one.
+fn seed_plain_citation(
+    store: &StateStore,
+    scope: &ScopeId,
+    requirement_id: &str,
+    source_id: &str,
+    clause: Option<&str>,
+) {
+    let path = crate::shards::requirements_path(&store.layout, scope);
+    store
+        .mutate_graph_record(&path, |records: &mut Vec<Requirement>| {
+            let record = records
+                .iter_mut()
+                .find(|record| record.id.as_str() == requirement_id)
+                .unwrap();
+            record.source_refs.push(SourceReference {
+                source_id: StableId::new(source_id).unwrap(),
+                clause: clause.map(str::to_string),
+            });
+            Ok(record.clone())
         })
         .unwrap();
 }

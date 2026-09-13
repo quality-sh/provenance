@@ -238,22 +238,7 @@ fn create_graph(repo: &str) {
         ])
         .assert()
         .success();
-    Command::cargo_bin("provenance")
-        .unwrap()
-        .args([
-            "requirements",
-            "create",
-            "--repo",
-            repo,
-            "--scope",
-            "default",
-            "--id",
-            "req_schads_overtime",
-            "--statement",
-            "Overtime must follow SCHADS thresholds",
-            "--format",
-            "json",
-        ])
-        .assert()
-        .success();
+    // The seed stays free of CLI-created Requirements: creating one enrolls it
+    // in the review journal, and a review-bearing scope refuses a lossy
+    // export. The Requirement content arrives through the import below.
 }

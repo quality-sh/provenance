@@ -43,14 +43,14 @@ fn a_refines_chain_back_to_the_owner_is_refused() {
 
     assert_eq!(
         error.to_string(),
-        "refines from req_overtime to req_rates would form a cycle"
+        "refines forms a cycle: req_leave -> req_overtime -> req_rates -> req_leave"
     );
     let error = store
         .add_requirement_depends_on(&scope, &sid("req_overtime"), sid("req_overtime"))
         .unwrap_err();
     assert_eq!(
         error.to_string(),
-        "depends_on from req_overtime to req_overtime would form a cycle"
+        "depends_on forms a cycle: req_overtime -> req_overtime"
     );
 }
 
@@ -62,14 +62,14 @@ fn a_missing_target_is_refused_by_kind() {
         .unwrap_err();
     assert_eq!(
         error.to_string(),
-        "resolution res_missing does not exist (--target-id)"
+        "resolution res_missing does not exist (spawned_by)"
     );
     let error = store
         .add_requirement_supersedes(&scope, &sid("req_overtime"), sid("req_missing"))
         .unwrap_err();
     assert_eq!(
         error.to_string(),
-        "requirement req_missing does not exist (--target-id)"
+        "requirement req_missing does not exist (supersedes)"
     );
 }
 
@@ -81,21 +81,21 @@ fn a_missing_owner_is_refused_by_its_own_id_and_flag() {
         .unwrap_err();
     assert_eq!(
         error.to_string(),
-        "requirement req_ghost does not exist (--requirement-id)"
+        "requirement req_ghost does not exist uniquely in this scope"
     );
     let error = store
         .clear_requirement_refines(&scope, &sid("req_ghost"))
         .unwrap_err();
     assert_eq!(
         error.to_string(),
-        "requirement req_ghost does not exist (--requirement-id)"
+        "requirement req_ghost does not exist uniquely in this scope"
     );
     let error = store
         .clear_requirement_depends_on(&scope, &sid("req_ghost"), &sid("req_overtime"))
         .unwrap_err();
     assert_eq!(
         error.to_string(),
-        "requirement req_ghost does not exist (--requirement-id)"
+        "requirement req_ghost does not exist uniquely in this scope"
     );
     let error = store
         .add_rule_requirement(&scope, &sid("rule_ghost"), sid("req_overtime"))
@@ -137,7 +137,7 @@ fn a_missing_owner_is_refused_by_its_own_id_and_flag() {
         .unwrap_err();
     assert_eq!(
         error.to_string(),
-        "requirement req_ghost does not exist (--requirement-id)"
+        "requirement req_ghost does not exist uniquely in this scope"
     );
     let error = store
         .add_source_reference(crate::state_store::AddSourceReferenceInput {
@@ -149,7 +149,7 @@ fn a_missing_owner_is_refused_by_its_own_id_and_flag() {
         .unwrap_err();
     assert_eq!(
         error.to_string(),
-        "requirement req_ghost does not exist (--requirement-id)"
+        "requirement req_ghost does not exist uniquely in this scope"
     );
     let error = store
         .add_source_reference(crate::state_store::AddSourceReferenceInput {
@@ -161,7 +161,7 @@ fn a_missing_owner_is_refused_by_its_own_id_and_flag() {
         .unwrap_err();
     assert_eq!(
         error.to_string(),
-        "source source_ghost does not exist (--target-id)"
+        "source source_ghost does not exist (cites)"
     );
 }
 
@@ -179,14 +179,14 @@ fn a_clear_refusal_names_the_relation_it_searched() {
         .unwrap_err();
     assert_eq!(
         error.to_string(),
-        "requirement req_overtime does not name requirement req_rates under supersedes"
+        "requirement req_overtime does not name a record under supersedes: req_rates"
     );
     let error = store
         .clear_requirement_depends_on(&scope, &sid("req_overtime"), &sid("req_leave"))
         .unwrap_err();
     assert_eq!(
         error.to_string(),
-        "requirement req_overtime does not name requirement req_leave under depends_on"
+        "requirement req_overtime does not name a record under depends_on: req_leave"
     );
 }
 

@@ -119,5 +119,19 @@ fn rule_creation_rejects_a_deterministic_violation_without_writing_the_record() 
                 .and(contains(r#""start":16,"end":17"#)),
         );
 
-    assert!(!export(&repo).contains("rule_rejected"));
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .args([
+            "rules",
+            "list",
+            "--repo",
+            repo.path().to_str().unwrap(),
+            "--scope",
+            "default",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("rule_rejected").not());
 }

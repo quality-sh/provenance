@@ -1,13 +1,15 @@
+#[allow(dead_code)]
 mod review_support;
 use provenance_core::review::{EvidenceQuery, RequirementSnapshot, ReviewHistoryQuery};
 use provenance_store::{
     operations::read_policy::ReadPolicy,
-    review::{read_evidence, read_history},
+    review::{read_evidence, read_history, SaveRequirement},
 };
 use review_support::*;
 use serde_json::json;
 
 #[tokio::test]
+#[allow(clippy::too_many_lines)]
 async fn evidence_reassembles_exact_unicode_and_history_cursor_is_bound() {
     let (temp, store) = fixture();
     let root = camino::Utf8Path::from_path(temp.path()).unwrap();
@@ -61,7 +63,10 @@ async fn evidence_reassembles_exact_unicode_and_history_cursor_is_bound() {
     )
     .await
     .unwrap();
-    assert_eq!(one.result.entries, [first]);
+    // The fixture's guarded creation opens the history; the cursor pages
+    // through one outcome at a time.
+    assert_eq!(one.result.entries.len(), 1);
+    assert_eq!(one.result.entries[0].request_id.as_str(), "fixture_create");
     let cursor = one.result.next_cursor.unwrap();
     let two = read_history(
         root,
@@ -75,7 +80,22 @@ async fn evidence_reassembles_exact_unicode_and_history_cursor_is_bound() {
     )
     .await
     .unwrap();
-    assert_eq!(two.result.entries[0].request_id.as_str(), "next");
+    assert_eq!(two.result.entries[0].request_id, first.request_id);
+    assert_eq!(two.result.entries[0].id, first.id);
+    let cursor = two.result.next_cursor.unwrap();
+    let three = read_history(
+        root,
+        &scope(),
+        ReadPolicy::default(),
+        ReviewHistoryQuery {
+            requirement_id: id(),
+            limit: 1,
+            cursor: Some(cursor.clone()),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(three.result.entries[0].request_id.as_str(), "next");
     store
         .save_requirement(save(&store, "noop", json!({})))
         .unwrap();
@@ -106,7 +126,7 @@ async fn evidence_reassembles_exact_unicode_and_history_cursor_is_bound() {
 }
 
 #[test]
-fn receipts_are_authoritative_after_reopen_and_private_to_the_actor() {
+fn saves_stay_authoritative_after_reopen_and_private_to_the_actor() {
     let (temp, store) = fixture();
     let first = store
         .save_requirement(save(&store, "enroll", json!({})))
@@ -117,31 +137,22 @@ fn receipts_are_authoritative_after_reopen_and_private_to_the_actor() {
             camino::Utf8Path::from_path(temp.path()).unwrap(),
         ),
     );
-    assert_eq!(
-        store
-            .requirement_save_receipt(&scope(), &id(), &first.request_id, "ben", None)
-            .unwrap(),
-        Some(first)
-    );
+    // Resubmitting the committed request through the write path returns the
+    // recorded outcome instead of replaying the edit.
+    let repeat: SaveRequirement =
+        serde_json::from_value(serde_json::to_value(save(&store, "enroll", json!({}))).unwrap())
+            .unwrap();
+    assert_eq!(store.save_requirement(repeat).unwrap(), first);
+    // A different actor identity on the same request identity is a refusal.
+    let mut foreign = serde_json::to_value(save(&store, "enroll", json!({}))).unwrap();
+    foreign["actor"] = json!("other");
     assert!(store
-        .requirement_save_receipt(
-            &scope(),
-            &id(),
-            &provenance_core::StableId::new("missing").unwrap(),
-            "ben",
-            None
-        )
-        .unwrap()
-        .is_none());
-    assert!(store
-        .requirement_save_receipt(
-            &scope(),
-            &id(),
-            &provenance_core::StableId::new("enroll").unwrap(),
-            "other",
-            None
-        )
+        .save_requirement(serde_json::from_value(foreign).unwrap())
         .is_err());
+    // An unknown request identity is simply a fresh save.
+    assert!(store
+        .save_requirement(save(&store, "missing", json!({"description":"new"})))
+        .is_ok());
 }
 
 #[tokio::test]

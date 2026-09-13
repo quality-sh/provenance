@@ -46,14 +46,16 @@ async fn messages(
         position.counter = i64::MIN;
     }
     let mut tx = ctx.snapshot().connection().await;
+    let kind = super::discussion_state::discussion_kind_word(query.parent.node_type);
     let (address_sql, address_id) = match &query.selector {
-        DiscussionSelector::Discussion { discussion_id } => ("SELECT EXISTS(SELECT 1 FROM review_journal WHERE scope_id=? AND parent_type='requirement' AND parent_id=? AND discussion_id=?)", discussion_id),
-        DiscussionSelector::Legacy { thread_id } => ("SELECT EXISTS(SELECT 1 FROM threads WHERE scope_id=? AND parent_type='requirement' AND parent_id=? AND id=?)", thread_id),
+        DiscussionSelector::Discussion { discussion_id } => ("SELECT EXISTS(SELECT 1 FROM review_journal WHERE scope_id=? AND parent_type=? AND parent_id=? AND discussion_id=?)", discussion_id.as_str()),
+        DiscussionSelector::Legacy { thread_id } => ("SELECT EXISTS(SELECT 1 FROM threads WHERE scope_id=? AND parent_type=? AND parent_id=? AND id=?)", thread_id.as_str()),
     };
     let exists: bool = sqlx::query_scalar(address_sql)
         .bind(ctx.snapshot().scope().as_str())
+        .bind(kind)
         .bind(query.parent.node_id.as_str())
-        .bind(address_id.as_str())
+        .bind(address_id)
         .fetch_one(&mut **tx)
         .await?;
     anyhow::ensure!(
@@ -61,8 +63,8 @@ async fn messages(
         "Discussion selector does not belong to this parent and scope"
     );
     // Fetch lengths and keys first. Large Message bodies never enter the page query.
-    let keys: Vec<(String,i64,i64)> = sqlx::query_as(&format!("SELECT m.id,m.created_at,length(CAST(m.body AS BLOB))+COALESCE(length(CAST(m.ai_metadata AS BLOB)),0)+length(m.id)+length(m.thread_id)+256 FROM messages m JOIN threads t ON t.scope_id=m.scope_id AND t.id=m.thread_id {join} WHERE m.scope_id=? AND t.parent_type='requirement' AND t.parent_id=? AND {condition} AND (m.created_at>? OR (m.created_at=? AND m.id>?)) ORDER BY m.created_at,m.id LIMIT ?"))
-        .bind(ctx.snapshot().scope().as_str()).bind(query.parent.node_id.as_str()).bind(selector)
+    let keys: Vec<(String,i64,i64)> = sqlx::query_as(&format!("SELECT m.id,m.created_at,length(CAST(m.body AS BLOB))+COALESCE(length(CAST(m.ai_metadata AS BLOB)),0)+length(m.id)+length(m.thread_id)+256 FROM messages m JOIN threads t ON t.scope_id=m.scope_id AND t.id=m.thread_id {join} WHERE m.scope_id=? AND t.parent_type=? AND t.parent_id=? AND {condition} AND (m.created_at>? OR (m.created_at=? AND m.id>?)) ORDER BY m.created_at,m.id LIMIT ?"))
+        .bind(ctx.snapshot().scope().as_str()).bind(kind).bind(query.parent.node_id.as_str()).bind(selector)
         .bind(position.counter).bind(position.counter).bind(&position.id).bind(i64::try_from(query.limit+1)?).fetch_all(&mut **tx).await.map_err(anyhow::Error::from).map_err(reader::page_error)?;
     drop(tx);
     let mut entries = Vec::new();

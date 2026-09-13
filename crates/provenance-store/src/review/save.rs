@@ -117,9 +117,10 @@ impl StateStore {
     ) -> anyhow::Result<ReviewEntry> {
         let scope = before.scope_id.clone();
         let id = before.id.clone();
-        self.update_requirement(input.update)?;
+        self.apply_requirement_update(input.update)?;
         if let Some(relationships) = input.relationships {
-            self.replace_review_relationships(&scope, &id, relationships)?;
+            let final_sets = relationships.expand(before)?;
+            self.replace_review_relationships(&scope, &id, final_sets)?;
         }
         let path = shards::requirements_path(&self.layout, &scope);
         let after = self.mutate_jsonl_records(&path, |records: &mut Vec<Requirement>| {

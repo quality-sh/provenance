@@ -74,20 +74,19 @@ fn mismatched_discussion_message_origin_refuses_without_editing() {
 }
 
 #[test]
-fn creation_receipt_reports_absence_before_the_requirement_exists() {
+fn repeated_guarded_creation_resolves_to_the_recorded_outcome() {
     let (_temp, store) = fixture();
     let value = json!({"request_id":"create","actor":"ben","origin":null,"create":{"scope_id":"default","id":"req_new","statement":"The system retains evidence.","status":"discovery","depends_on":[],"supersedes":[]}});
-    assert!(store
-        .requirement_creation_receipt(serde_json::from_value(value.clone()).unwrap())
-        .unwrap()
-        .is_none());
     let created = store
         .create_review_requirement(serde_json::from_value(value.clone()).unwrap())
         .unwrap();
+    // The same request resolved through the write path returns the recorded
+    // outcome instead of replaying the create.
     assert_eq!(
         store
-            .requirement_creation_receipt(serde_json::from_value(value).unwrap())
+            .create_review_requirement(serde_json::from_value(value).unwrap())
             .unwrap(),
-        Some(created)
+        created
     );
+    assert_eq!(store.list_requirements(&scope()).unwrap().len(), 2);
 }

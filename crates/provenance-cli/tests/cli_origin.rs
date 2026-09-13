@@ -13,15 +13,6 @@ fn provenance_json(args: &[&str]) -> Value {
     serde_json::from_slice(&output).unwrap()
 }
 
-fn record_with_id<'a>(records: &'a Value, id: &str) -> &'a Value {
-    records
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|record| record["id"] == id)
-        .unwrap()
-}
-
 #[test]
 #[allow(clippy::too_many_lines)]
 fn cli_create_commands_preserve_origin_thread_and_message() {
@@ -163,23 +154,18 @@ fn cli_create_commands_preserve_origin_thread_and_message() {
         assert_eq!(artifact["origin_message"], origin_message);
     }
 
-    let exported = provenance_json(&[
-        "export", "--repo", &repo, "--scope", "default", "--format", "json",
-    ]);
-    assert_eq!(
-        record_with_id(&exported["sources"], "source_origin")["origin_thread"],
-        origin_thread
-    );
-    assert_eq!(
-        record_with_id(&exported["requirements"], "req_origin_child")["origin_message"],
-        origin_message
-    );
-    assert_eq!(
-        record_with_id(&exported["resolutions"], "res_origin")["origin_thread"],
-        origin_thread
-    );
-    assert_eq!(
-        record_with_id(&exported["rules"], "rule_origin")["origin_message"],
-        origin_message
-    );
+    // The CLI-created Requirements enroll through the guarded journal, and a
+    // review-bearing scope refuses a lossy export until export carries
+    // journal history. Origin facts stay verifiable on the created records
+    // above and through the journal reads.
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .args([
+            "export", "--repo", &repo, "--scope", "default", "--format", "json",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains(
+            "review-bearing scopes require lossless import/export support",
+        ));
 }

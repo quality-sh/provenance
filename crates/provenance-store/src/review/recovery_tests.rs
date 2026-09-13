@@ -79,16 +79,8 @@ fn process_crashes_reopen_as_complete_old_or_new_state() {
             .unwrap();
         assert_eq!(status.code(), Some(86), "{phase}");
         let store = open(root);
-        let receipt = store
-            .requirement_save_receipt(
-                &scope(),
-                &id(),
-                &StableId::new("crash_request").unwrap(),
-                "ben",
-                None,
-            )
-            .unwrap();
-        assert_eq!(receipt.is_some(), committed, "{phase}");
+        let found = journal_entry_exists(&store, "crash_request");
+        assert_eq!(found, committed, "{phase}");
         let record = store.list_requirements(&scope()).unwrap().remove(0);
         assert_eq!(
             record.description.as_deref(),
@@ -104,6 +96,15 @@ fn process_crashes_reopen_as_complete_old_or_new_state() {
             .publication_marker_path()
             .exists());
     }
+}
+
+fn journal_entry_exists(store: &StateStore, request: &str) -> bool {
+    let request = StableId::new(request).unwrap();
+    store
+        .review_entries(&scope())
+        .unwrap()
+        .iter()
+        .any(|entry| entry.request_id == request)
 }
 
 #[test]
@@ -140,16 +141,7 @@ fn assert_failed_rollback(root: &Utf8Path) {
         .publication_marker_path()
         .exists());
     let store = open(root);
-    assert!(store
-        .requirement_save_receipt(
-            &scope(),
-            &id(),
-            &StableId::new("failed").unwrap(),
-            "ben",
-            None
-        )
-        .unwrap()
-        .is_none());
+    assert!(!journal_entry_exists(&store, "failed"));
     assert_eq!(
         store.list_requirements(&scope()).unwrap()[0]
             .description
@@ -159,11 +151,12 @@ fn assert_failed_rollback(root: &Utf8Path) {
 }
 
 #[test]
-fn a_lost_result_is_uncertain_until_the_receipt_is_read_after_recovery() {
+fn a_lost_result_resolves_through_resubmission_after_recovery() {
     let temp = fixture();
     let root = Utf8Path::from_path(temp.path()).unwrap();
     let store = open(root);
     let input = input(&store, "lost_result");
+    let request = serde_json::to_vec(&input).unwrap();
     test_probes::crash_at("state_published");
     let error = store.save_requirement(input).unwrap_err();
     test_probes::disarm("state_published");
@@ -171,16 +164,20 @@ fn a_lost_result_is_uncertain_until_the_receipt_is_read_after_recovery() {
         crate::write_error::WriteError(error).safe(),
         crate::write_error::WriteFailure::UncertainWrite
     ));
-    let receipt = open(root)
-        .requirement_save_receipt(
-            &scope(),
-            &id(),
-            &StableId::new("lost_result").unwrap(),
-            "ben",
-            None,
-        )
-        .unwrap();
-    assert!(receipt.is_some());
+    // The write reports uncertainty only to its own caller. Resolution stays
+    // internal: resubmitting the same request at the Store boundary returns
+    // the committed outcome instead of replaying the write.
+    let reopened = open(root);
+    let retried: SaveRequirement = serde_json::from_slice(&request).unwrap();
+    let entry = reopened.save_requirement(retried).unwrap();
+    assert_eq!(entry.request_id, StableId::new("lost_result").unwrap());
+    assert!(journal_entry_exists(&reopened, "lost_result"));
+    assert_eq!(
+        reopened.list_requirements(&scope()).unwrap()[0]
+            .description
+            .as_deref(),
+        Some("lost_result")
+    );
 }
 
 #[test]
@@ -247,7 +244,7 @@ fn a_relationship_only_review_save_updates_the_record_stamp() {
         "request_id":"relationships", "actor":"ben",
         "expected_etag":store.requirement_edit_state(&scope(), &id()).unwrap().etag,
         "update":{"scope_id":"default","id":"req_a"},
-        "relationships":{"refines":null,"depends_on":["req_b"],"supersedes":[],"spawned_by":null,"source_refs":[]}
+        "relationships":{"refines":null,"depends_on":["req_b"],"supersedes":[],"spawned_by":null,"cites":[]}
     })).unwrap();
     store.save_requirement(save).unwrap();
     let after = store.requirement(&scope(), &id()).unwrap();

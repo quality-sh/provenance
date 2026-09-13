@@ -1,10 +1,8 @@
-use super::journal;
 use super::snapshot::evidence;
 use crate::operations::read_policy::ReadPolicy;
 use crate::operations::reader::{
     self, Cursor, Live, Position, ReadContext, ReadSnapshot, PAGE_BYTES, RECORD_BYTES,
 };
-use crate::state_store::StateStore;
 use camino::Utf8Path;
 use provenance_core::protocol::{read_failure::ReadFailure, Stamped};
 use provenance_core::review::{
@@ -126,34 +124,4 @@ pub async fn read_evidence(
     })
     .await?;
     crate::operations::queries::page::checked("review-evidence", answer)
-}
-
-impl StateStore {
-    /// An absent receipt is authoritative only after publication recovery and owner checks.
-    pub fn requirement_save_receipt(
-        &self,
-        scope: &ScopeId,
-        requirement: &StableId,
-        request: &StableId,
-        actor: &str,
-        owner: Option<&str>,
-    ) -> anyhow::Result<Option<ReviewEntry>> {
-        self.with_repository_publication(|| {
-            let record = self.requirement(scope, requirement)?;
-            super::owner_matches(&record, owner)?;
-            let path = journal::entry_path(&self.layout, scope, request);
-            if !path.try_exists()? {
-                return Ok(None);
-            }
-            let entry = journal::read_entry(&self.layout, &path)?;
-            anyhow::ensure!(
-                entry.request_id == *request
-                    && entry.scope_id == *scope
-                    && entry.requirement_id == *requirement
-                    && entry.actor == actor,
-                "receipt identity mismatch"
-            );
-            Ok(Some(entry))
-        })
-    }
 }

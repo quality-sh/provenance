@@ -6,7 +6,7 @@ use camino::Utf8Path;
 use provenance_core::{
     protocol::{read_failure::ReadFailure, Stamped},
     threads::{DiscussionEntry, DiscussionGroup, DiscussionPage, DiscussionQuery},
-    NodeType, ScopeId, StableId, ThreadParent,
+    ScopeId, StableId, ThreadParent,
 };
 
 pub async fn read_discussions(
@@ -30,15 +30,13 @@ pub(super) fn check_limit(limit: usize) -> anyhow::Result<()> {
 }
 
 pub(super) async fn check_parent(ctx: &ReadContext, parent: &ThreadParent) -> anyhow::Result<()> {
-    anyhow::ensure!(
-        parent.node_type == NodeType::Requirement,
-        "addressed Discussions currently require a Requirement parent"
-    );
-    ctx.snapshot().attest("requirements");
+    let table = super::discussion_state::parent_table(parent.node_type)
+        .ok_or_else(|| anyhow::anyhow!("thread parent kind does not take Discussions"))?;
+    ctx.snapshot().attest(table);
     let mut tx = ctx.snapshot().connection().await;
-    let exists: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM requirements WHERE scope_id = ? AND id = ?)",
-    )
+    let exists: bool = sqlx::query_scalar(&format!(
+        "SELECT EXISTS(SELECT 1 FROM {table} WHERE scope_id = ? AND id = ?)"
+    ))
     .bind(ctx.snapshot().scope().as_str())
     .bind(parent.node_id.as_str())
     .fetch_one(&mut **tx)
@@ -65,8 +63,10 @@ async fn groups(ctx: &ReadContext, query: DiscussionQuery) -> anyhow::Result<Dis
     if position.stage == 0 {
         let mut tx = ctx.snapshot().connection().await;
         let keys: Vec<(String, String, i64, String)> = sqlx::query_as(
-            "SELECT j.discussion_id, j.id, length(CAST(j.payload AS BLOB)), t.status FROM review_journal j JOIN threads t ON t.scope_id=j.scope_id AND t.id=j.thread_id WHERE j.scope_id=? AND j.parent_type='requirement' AND j.parent_id=? AND j.discussion_id>? AND NOT EXISTS(SELECT 1 FROM review_journal n WHERE n.scope_id=j.scope_id AND n.discussion_id=j.discussion_id AND n.version>j.version) ORDER BY j.discussion_id LIMIT ?"
-        ).bind(ctx.snapshot().scope().as_str()).bind(query.parent.node_id.as_str()).bind(&position.id)
+            "SELECT j.discussion_id, j.id, length(CAST(j.payload AS BLOB)), t.status FROM review_journal j JOIN threads t ON t.scope_id=j.scope_id AND t.id=j.thread_id WHERE j.scope_id=? AND j.parent_type=? AND j.parent_id=? AND j.discussion_id>? AND NOT EXISTS(SELECT 1 FROM review_journal n WHERE n.scope_id=j.scope_id AND n.discussion_id=j.discussion_id AND n.version>j.version) ORDER BY j.discussion_id LIMIT ?"
+        ).bind(ctx.snapshot().scope().as_str())
+        .bind(super::discussion_state::discussion_kind_word(query.parent.node_type))
+        .bind(query.parent.node_id.as_str()).bind(&position.id)
             .bind(i64::try_from(query.limit + 1)?).fetch_all(&mut **tx).await.map_err(anyhow::Error::from).map_err(reader::page_error)?;
         drop(tx);
         for (discussion, id, size, status) in keys {
@@ -106,8 +106,10 @@ async fn groups(ctx: &ReadContext, query: DiscussionQuery) -> anyhow::Result<Dis
         };
     }
     let mut tx = ctx.snapshot().connection().await;
-    let keys: Vec<(String,String)> = sqlx::query_as("SELECT t.id,t.status FROM threads t WHERE t.scope_id=? AND t.parent_type='requirement' AND t.parent_id=? AND t.id>? AND EXISTS(SELECT 1 FROM messages m WHERE m.scope_id=t.scope_id AND m.thread_id=t.id AND NOT EXISTS(SELECT 1 FROM review_journal j WHERE j.scope_id=m.scope_id AND j.message_id=m.id)) ORDER BY t.id LIMIT ?")
-        .bind(ctx.snapshot().scope().as_str()).bind(query.parent.node_id.as_str()).bind(&position.id)
+    let keys: Vec<(String,String)> = sqlx::query_as("SELECT t.id,t.status FROM threads t WHERE t.scope_id=? AND t.parent_type=? AND t.parent_id=? AND t.id>? AND EXISTS(SELECT 1 FROM messages m WHERE m.scope_id=t.scope_id AND m.thread_id=t.id AND NOT EXISTS(SELECT 1 FROM review_journal j WHERE j.scope_id=m.scope_id AND j.message_id=m.id)) ORDER BY t.id LIMIT ?")
+        .bind(ctx.snapshot().scope().as_str())
+        .bind(super::discussion_state::discussion_kind_word(query.parent.node_type))
+        .bind(query.parent.node_id.as_str()).bind(&position.id)
         .bind(i64::try_from(query.limit + 1)?).fetch_all(&mut **tx).await.map_err(anyhow::Error::from).map_err(reader::page_error)?;
     drop(tx);
     for (id, status) in keys {

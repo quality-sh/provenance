@@ -1,5 +1,7 @@
+#[allow(dead_code)]
 mod review_support;
 use provenance_core::{review::SaveOutcome, StableId, VerificationMethod};
+use provenance_store::{layout::ProvenanceLayout, state_store::StateStore};
 use review_support::*;
 use serde_json::json;
 
@@ -11,22 +13,16 @@ fn failed_relationship_replacement_does_not_publish_the_text_edit() {
         .unwrap();
     let before = store.requirement_edit_state(&scope(), &id()).unwrap();
     let mut input = save(&store, "invalid", json!({"description":"must not persist"}));
-    input.relationships = Some(serde_json::from_value(json!({"refines":"req_a", "depends_on":[], "supersedes":[], "spawned_by":null, "source_refs":[]})).unwrap());
+    input.relationships = Some(serde_json::from_value(json!({"refines":"req_a", "depends_on":[], "supersedes":[], "spawned_by":null, "cites":[]})).unwrap());
     assert!(store.save_requirement(input).is_err());
     assert_eq!(
         store.requirement_edit_state(&scope(), &id()).unwrap(),
         before
     );
-    assert!(store
-        .requirement_save_receipt(
-            &scope(),
-            &id(),
-            &StableId::new("invalid").unwrap(),
-            "ben",
-            None
-        )
-        .unwrap()
-        .is_none());
+    // No outcome was recorded for the failed request: the same request
+    // identity resubmitted with a valid edit is a fresh save, not a refusal.
+    let retried = save(&store, "invalid", json!({"description":"valid now"}));
+    assert!(store.save_requirement(retried).is_ok());
 }
 
 #[test]
@@ -46,7 +42,7 @@ fn relationship_sets_are_normalized_and_classified_without_lifecycle_changes() {
         .save_requirement(save(&store, "enroll", json!({})))
         .unwrap();
     let mut input = save(&store, "relations", json!({}));
-    input.relationships = Some(serde_json::from_value(json!({"refines":null, "depends_on":["req_b","req_b"], "supersedes":[], "spawned_by":null, "source_refs":[]})).unwrap());
+    input.relationships = Some(serde_json::from_value(json!({"refines":null, "depends_on":["req_b","req_b"], "supersedes":[], "spawned_by":null, "cites":[]})).unwrap());
     let result = store.save_requirement(input).unwrap();
     assert_eq!(result.outcome, SaveOutcome::Changed);
     assert_ne!(first.revision, result.revision);
@@ -77,8 +73,22 @@ fn missing_snapshot_refuses_further_saves() {
 
 #[test]
 fn enrolled_scope_refuses_lossy_portability_and_external_content_gap() {
+    // A scope that holds no review history stays portable.
+    let empty = tempfile::tempdir().unwrap();
+    let empty_layout = ProvenanceLayout::new(camino::Utf8Path::from_path(empty.path()).unwrap());
+    std::fs::create_dir_all(empty_layout.state_dir()).unwrap();
+    std::fs::write(
+        empty_layout.manifest_path(),
+        r#"{"schema_version":2,"scopes":[{"id":"default","path_prefix":"."}]}"#,
+    )
+    .unwrap();
+    assert!(StateStore::new(empty_layout)
+        .ensure_review_portable(&scope())
+        .is_ok());
+
+    // Creation enrolls the record, so the fixture scope is not portable.
     let (temp, store) = fixture();
-    assert!(store.ensure_review_portable(&scope()).is_ok());
+    assert!(store.ensure_review_portable(&scope()).is_err());
     store
         .save_requirement(save(&store, "enroll", json!({})))
         .unwrap();
