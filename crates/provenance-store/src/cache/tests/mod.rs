@@ -1,3 +1,5 @@
+#[cfg(unix)]
+mod canonical_preservation;
 mod catch_up_behavior;
 mod catch_up_derived_state;
 mod catch_up_domain_coverage;
