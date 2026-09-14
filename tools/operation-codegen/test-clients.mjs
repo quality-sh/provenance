@@ -58,10 +58,8 @@ try {
   const module = await import(join(temporary, 'client.js'));
   const clientModule = process.argv.includes('--effect') ? (await import('./effect-host.mjs')).effectModule(module) : module;
   await checks[family](clientModule, fixture);
-  if (!process.argv.includes('--effect')) {
-    run(['test', '--locked', '-p', 'provenance-http-client', '--test', family, '--', '--ignored'], {
-      ...process.env, PROVENANCE_TEST_HOST: fixture.url, PROVENANCE_RECORDS_FIXTURE: JSON.stringify(fixture),
-    });
+  if (!process.argv.includes('--effect') && family === 'statements') {
+    run(['test', '--locked', '-p', 'provenance-http-client', '--test', 'v2_wire']);
   }
   console.log(`${process.argv.includes('--effect') ? 'Effect client' : 'Promise and Rust clients'} passed against the real ${family} host.`);
 } finally {

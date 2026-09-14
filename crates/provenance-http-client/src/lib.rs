@@ -13,5 +13,5 @@ mod client {
     include!("generated/client.rs");
 }
 mod runtime;
-pub use client::{HttpClient, OperationFailure, PROTOCOL_VERSION};
+pub use client::{HttpClient, OperationFailure, COMPATIBILITY, PROTOCOL_VERSION};
 pub use runtime::{Error, ResponseFailure, MAX_RESPONSE_BYTES};

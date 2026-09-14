@@ -39,7 +39,8 @@ async function runCase(statedFile: boolean) {
       output = result.stdout.toString() + result.stderr.toString();
       if (statedFile && result.exitCode !== 0) throw new Error(output);
     } finally { await fixture.close(); }
-    const runs = JSON.parse(execFileSync(cli, ["sdk", "verification-runs", "--repo", root, "--scope", "default", "--format", "json"], { encoding: "utf8" }));
+    const response = JSON.parse(execFileSync(cli, ["verification-runs", "list", "--repo", root, "--scope", "default", "--format", "json"], { encoding: "utf8" }));
+    const runs = response.data.items;
     return { output, runs };
   } finally { rmSync(root, { recursive: true, force: true }); }
 }

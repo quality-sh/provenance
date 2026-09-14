@@ -13,6 +13,7 @@ use provenance_core::{
 use provenance_macros::rule;
 use serde::{Deserialize, Serialize};
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CreateReviewRequirement {

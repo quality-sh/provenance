@@ -123,7 +123,7 @@ fn accepted_inventory_uses_the_composed_router_and_origin_checks() {
     assert_eq!(
         response(
             agent
-                .post(&format!("{endpoint}/v9/operations/list-threads"))
+                .get(&format!("{endpoint}/discussion-containers"))
                 .send_string("invalid")
         )
         .status(),

@@ -46,6 +46,7 @@
     "side",
     "proposal_id",
     "run_id"
+    ,"fact_id"
   ],
   "actions": [
     "claim",
@@ -76,6 +77,10 @@
 
     {"id": "post-proposal-assertions", "method": "POST", "path": "/proposals/{proposal_id}/assertions", "mutates": true, "statuses": [400, 401, 403, 404, 409, 500, 503], "response": "resource"},
     {"id": "post-proposal-dispositions", "method": "POST", "path": "/proposals/{proposal_id}/dispositions", "mutates": true, "statuses": [400, 401, 403, 404, 409, 500, 503], "response": "resource"},
+    {"id": "get-proposal-assertions", "method": "GET", "path": "/proposals/{id}/assertions", "mutates": false, "statuses": [400, 401, 403, 404, 500, 503], "response": "items", "capability": "Reads immutable Assertion facts owned by one Proposal."},
+    {"id": "get-proposal-assertion", "method": "GET", "path": "/proposals/{id}/assertions/{fact_id}", "mutates": false, "statuses": [400, 401, 403, 404, 500, 503], "response": "resource", "capability": "Reads one immutable Assertion fact owned by one Proposal."},
+    {"id": "get-proposal-dispositions", "method": "GET", "path": "/proposals/{id}/dispositions", "mutates": false, "statuses": [400, 401, 403, 404, 500, 503], "response": "items", "capability": "Reads immutable Disposition facts owned by one Proposal."},
+    {"id": "get-proposal-disposition", "method": "GET", "path": "/proposals/{id}/dispositions/{fact_id}", "mutates": false, "statuses": [400, 401, 403, 404, 500, 503], "response": "resource", "capability": "Reads one immutable Disposition fact owned by one Proposal."},
 
     {"id": "get-requirement-document", "method": "GET", "path": "/requirements/{id}/document", "mutates": false, "statuses": [400, 401, 403, 404, 500, 503], "response": "result"},
     {"id": "get-requirement-history", "method": "GET", "path": "/requirements/{id}/history[/{entry_id}]", "mutates": false, "statuses": [400, 401, 403, 404, 500, 503], "response": "items"},
@@ -84,6 +89,7 @@
 
     {"id": "get-collection-discussions", "method": "GET", "path": "/{collection}/{id}/discussions", "mutates": false, "statuses": [400, 401, 403, 404, 500, 503], "response": "items"},
     {"id": "post-collection-discussions", "method": "POST", "path": "/{collection}/{id}/discussions", "mutates": true, "statuses": [400, 401, 403, 404, 409, 500, 503], "response": "resource"},
+    {"id": "get-collection-discussion", "method": "GET", "path": "/{collection}/{id}/discussions/{discussion_id}", "mutates": false, "statuses": [400, 401, 403, 404, 500, 503], "response": "resource", "capability": "Reads one addressed Discussion under its parent."},
     {"id": "patch-collection-discussion", "method": "PATCH", "path": "/{collection}/{id}/discussions/{discussion_id}", "mutates": true, "statuses": [400, 401, 403, 404, 409, 500, 503], "response": "resource"},
     {"id": "get-collection-discussion-messages", "method": "GET", "path": "/{collection}/{id}/discussions/{discussion_id}/messages", "mutates": false, "statuses": [400, 401, 403, 404, 500, 503], "response": "items"},
     {"id": "get-collection-discussion-message", "method": "GET", "path": "/{collection}/{id}/discussions/{discussion_id}/messages/{message_id}", "mutates": false, "statuses": [400, 401, 403, 404, 500, 503], "response": "resource"},

@@ -71,7 +71,7 @@ test('receipt operations stay internal and declare no route', () => {
   assert.ok(publicPaths.every(p => !p.includes('receipt')), 'receipt handling must stay out of the public route table');
 });
 
-test('the catalog seam accepts the live catalog shape and rejects drift', () => {
+test('the retired catalog inventory remains checkable but v2 has no legacy names', () => {
   const catalogNames = fixture.operations.filter(o => o.source === 'catalog').map(o => o.legacy);
   const document = {
     paths: Object.fromEntries([
@@ -85,4 +85,6 @@ test('the catalog seam accepts the live catalog shape and rejects drift', () => 
   const errors = lintFixture(fixture, { catalogNames: catalogNamesFromDocument(drifted) });
   assert.ok(errors.some(e => e.includes('is not in the live catalog')), errors.join('; '));
   assert.ok(errors.some(e => e.includes(`'${catalogNames[0]}'`)), errors.join('; '));
+  assert.equal(catalogNamesFromDocument({ paths: { '/sources': {}, '/metadata': {} } }), null);
+  assert.deepEqual(lintFixture(fixture, { catalogNames: null }), []);
 });

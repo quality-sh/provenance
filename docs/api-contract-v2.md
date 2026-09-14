@@ -155,6 +155,7 @@ negotiation.
 
 The release removes versioned URLs, per-call version fields, response version
 echoes, old operation aliases, and compatibility translators.
+Phase 2b removed the legacy versioned operation wire.
 
 A breaking change requires human authorization. Agents never bump a version, a
 release, or the tuple. The required compatibility gate fails when a watched

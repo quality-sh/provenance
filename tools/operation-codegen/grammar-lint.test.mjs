@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { lintFixture, lintRoutes } from './grammar-lint.mjs';
+import { documentGrammarErrors, lintFixture, lintRoutes } from './grammar-lint.mjs';
 
 function baseFixture() {
   return {
@@ -82,6 +82,29 @@ test('raw array and flattened envelopes are rejected', () => {
 test('MCP-only wrappers are rejected', () => {
   assert.ok(errorsFor([{ id: 'mcp', method: 'GET', path: '/requirements', mutates: false, statuses: [500], response: 'items', mcp_envelope: 'wrapped' }]).some(e => /MCP-only wrappers/.test(e)));
   assert.ok(errorsFor([{ id: 'mcp', method: 'GET', path: '/requirements', mutates: false, statuses: [500], response: 'items', mcp_only: true }]).some(e => /MCP-only wrappers/.test(e)));
+});
+
+test('payload identity repetition and empty tool descriptions are rejected', () => {
+  const document = { paths: { '/requirements/{id}': { patch: {
+    description: 'short', parameters: [],
+    requestBody: { content: { 'application/json': { schema: { properties: { data: {
+      properties: { id: { type: 'string' }, scope_id: { type: 'string' } },
+    } } } } } },
+  } } } };
+  const errors = documentGrammarErrors(document, { tools: [{ name: 'update-requirement', description: 'Invoke the shared operation.' }] });
+  assert.ok(errors.some(error => error.includes("path field 'id'")), errors.join('; '));
+  assert.ok(errors.some(error => error.includes("connection field 'scope_id'")), errors.join('; '));
+  assert.ok(errors.some(error => error.includes('tool-description-usefulness')), errors.join('; '));
+});
+
+test('an immutable child id does not repeat its Proposal parent id', () => {
+  const document = { paths: { '/proposals/{id}/assertions': { post: {
+    description: 'Add one immutable assertion to a Proposal.', parameters: [],
+    requestBody: { content: { 'application/json': { schema: { properties: { data: {
+      properties: { id: { type: 'string' } },
+    } } } } } },
+  } } } };
+  assert.deepEqual(documentGrammarErrors(document), []);
 });
 
 test('undeclared actions and queries are rejected', () => {

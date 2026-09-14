@@ -1,6 +1,6 @@
 use predicates::str::contains;
 
-use crate::provenance::provenance;
+use crate::provenance::{provenance, provenance_stdin};
 
 pub fn init(repo: &str) {
     provenance(&[
@@ -72,26 +72,17 @@ pub fn create_source_and_requirement(repo: &str) {
 }
 
 pub fn create_topic(repo: &str) {
-    provenance(&[
+    provenance_stdin(&[
         "topics",
         "create",
         "--repo",
         repo,
         "--scope",
         "default",
-        "--id",
-        "topic_overtime",
-        "--requirement-id",
-        "req_overtime",
-        "--title",
-        "Overtime eligibility",
-        "--status",
-        "open",
-        "--links-json",
-        r#"[{"target_type":"source","target_id":"source_schads"}]"#,
+        "--stdin",
         "--format",
         "json",
-    ])
+    ], r#"{"id":"topic_overtime","requirement_id":"req_overtime","title":"Overtime eligibility","status":"open","links":[{"target_type":"source","target_id":"source_schads"}]}"#)
     .success()
     .stdout(contains("topic_overtime"))
     .stdout(contains(r#""status": "open""#));

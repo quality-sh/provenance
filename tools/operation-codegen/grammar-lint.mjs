@@ -245,11 +245,80 @@ export function lintFixture(fixture, { catalogNames = null } = {}) {
   return [...coverageErrors(fixture, catalogNames), ...lintRoutes(fixture)];
 }
 
+function operationEntries(document) {
+  return Object.entries(document?.paths ?? {}).flatMap(([path, item]) =>
+    ['get', 'post', 'patch'].flatMap(method => item?.[method] ? [{ path, method: method.toUpperCase(), operation: item[method] }] : []));
+}
+
+function matchesFixturePath(pattern, actual) {
+  const variants = pattern.includes('[')
+    ? [pattern.replace(/\[.*\]/, ''), pattern.replaceAll('[', '').replaceAll(']', '')]
+    : [pattern];
+  return variants.some(variant => {
+    const expected = variant.split('/').filter(Boolean);
+    const received = actual.split('/').filter(Boolean);
+    return expected.length === received.length && expected.every((part, index) =>
+      /^\{[a-z0-9_]+\}$/.test(part) ? received[index].length > 0 : part === received[index]);
+  });
+}
+
+export function surfaceCoverageErrors(fixture, document) {
+  const live = operationEntries(document);
+  const errors = [];
+  for (const entry of live) {
+    if (!fixture.routes.some(route => route.method === entry.method && matchesFixturePath(route.path, entry.path))) {
+      errors.push(`live route ${entry.method} ${entry.path}: no Phase 1 fixture pattern accounts for it`);
+    }
+  }
+  for (const route of fixture.routes) {
+    if (!live.some(entry => entry.method === route.method && matchesFixturePath(route.path, entry.path))) {
+      errors.push(`route ${route.id}: no live catalog route implements this fixture pattern`);
+    }
+  }
+  return errors;
+}
+
+function resolveSchema(document, schema) {
+  const name = schema?.$ref?.match(/^#\/components\/schemas\/(.+)$/)?.[1];
+  return name ? document.components?.schemas?.[name] : schema;
+}
+
+export function documentGrammarErrors(document, mcp = null) {
+  const errors = [];
+  const banned = 'Invoke the shared operation.';
+  for (const { path, method, operation } of operationEntries(document)) {
+    const where = `${method} ${path}`;
+    if (typeof operation.description !== 'string' || operation.description.trim().length < 20 || operation.description.includes(banned)) {
+      errors.push(`${where}: tool-description-usefulness requires a specific resource-focused description`);
+    }
+    const body = resolveSchema(document, operation.requestBody?.content?.['application/json']?.schema);
+    const data = resolveSchema(document, body?.properties?.data);
+    const fields = Object.keys(data?.properties ?? {});
+    for (const identity of ['repository', 'repo', 'scope', 'scope_id', 'collection']) {
+      if (fields.includes(identity)) errors.push(`${where}: payload-identity-repetition rejects connection field '${identity}'`);
+    }
+    for (const identity of pathVariables(path)) {
+      const createsImmutableChild = method === 'POST'
+        && identity === 'id'
+        && /^\/proposals\/\{id\}\/(assertions|dispositions)$/.test(path);
+      if (createsImmutableChild) continue;
+      if (fields.includes(identity)) errors.push(`${where}: payload-identity-repetition rejects path field '${identity}'`);
+    }
+  }
+  for (const tool of mcp?.tools ?? []) {
+    if (typeof tool.description !== 'string' || tool.description.trim().length < 20 || tool.description.includes(banned)) {
+      errors.push(`MCP tool ${tool.name ?? '(unnamed)'}: tool-description-usefulness requires a specific resource-focused description`);
+    }
+  }
+  return errors;
+}
+
 /// Extracts the legacy catalog operation names from the exported OpenAPI
 /// document. The legacy surface is one catch-all shape: `/v{version}/operations/{name}`,
 /// plus `/metadata`.
 export function catalogNamesFromDocument(document) {
-  return Object.keys(document?.paths ?? {})
+  const names = Object.keys(document?.paths ?? {})
     .filter(path => path.includes('/operations/'))
     .map(path => path.slice(path.indexOf('/operations/') + '/operations/'.length));
+  return names.length === 0 ? null : names;
 }

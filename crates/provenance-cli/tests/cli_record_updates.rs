@@ -40,42 +40,40 @@ fn source_update_uses_the_local_writer_and_explicit_clears() {
         .unwrap()
         .args([
             "sources",
+            "source_one",
             "update",
             "--repo",
             repo,
             "--scope",
             "default",
-            "--id",
-            "source_one",
-            "--fields-json",
-            r#"{"reference":"section 2","clear_fields":["url"]}"#,
+            "--stdin",
             "--format",
             "json",
         ])
+        .write_stdin(r#"{"reference":"section 2","clear_fields":["url"]}"#)
         .assert()
         .success()
         .get_output()
         .stdout
         .clone();
     let result: Value = serde_json::from_slice(&output).unwrap();
-    assert_eq!(result["id"], "source_one");
-    assert_eq!(result["name"], "Policy");
-    assert_eq!(result["reference"], "section 2");
-    assert!(result["url"].is_null());
+    assert_eq!(result["data"]["id"], "source_one");
+    assert_eq!(result["data"]["name"], "Policy");
+    assert_eq!(result["data"]["reference"], "section 2");
+    assert!(result["data"]["url"].is_null());
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
             "sources",
+            "source_one",
             "update",
             "--repo",
             repo,
             "--scope",
             "default",
-            "--id",
-            "source_one",
-            "--fields-json",
-            r#"{"id":"source_other","name":"Wrong"}"#,
+            "--stdin",
         ])
+        .write_stdin(r#"{"id":"source_other","name":"Wrong"}"#)
         .assert()
         .failure();
 }
@@ -139,30 +137,34 @@ fn every_descriptive_update_command_uses_the_local_catalog() {
         let patch_path = dir.path().join("patch.json");
         std::fs::write(&patch_path, serde_json::to_vec(&patch).unwrap()).unwrap();
         let fields = format!("@{}", patch_path.display());
-        let output = Command::cargo_bin("provenance")
-            .unwrap()
-            .args([
-                group,
-                "update",
-                "--repo",
-                repo,
-                "--scope",
-                "default",
-                "--id",
-                id,
-                "--fields-json",
-                &fields,
-                "--format",
-                "json",
-            ])
+        let mut command = Command::cargo_bin("provenance").unwrap();
+        command.args([
+            group, id, "update", "--repo", repo, "--scope", "default", "--stdin", "--format",
+            "json",
+        ]);
+        if group == "requirements" {
+            use provenance_core::{ScopeId, StableId};
+            use provenance_store::{layout::ProvenanceLayout, state_store::StateStore};
+            let store = StateStore::new(ProvenanceLayout::new(repo));
+            let etag = store
+                .requirement_edit_state(
+                    &ScopeId::new("default").unwrap(),
+                    &StableId::new(id).unwrap(),
+                )
+                .unwrap()
+                .etag;
+            command.args(["--if-match", &etag]);
+        }
+        let output = command
+            .write_stdin(std::fs::read_to_string(fields.trim_start_matches('@')).unwrap())
             .assert()
             .success()
             .get_output()
             .stdout
             .clone();
         let updated: Value = serde_json::from_slice(&output).unwrap();
-        assert_eq!(updated["id"], id);
-        assert_eq!(updated[field], expected);
+        assert_eq!(updated["data"]["id"], id);
+        assert_eq!(updated["data"][field], expected);
     }
 }
 

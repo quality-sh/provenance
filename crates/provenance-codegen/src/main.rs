@@ -11,6 +11,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             for (name, value) in [
                 ("openapi.json", openapi),
                 ("mcp.json", mcp),
+                (
+                    "compatibility.json",
+                    serde_json::to_value(provenance_core::protocol::host::COMPATIBILITY)?,
+                ),
                 ("fixtures.openapi.json", provenance_codegen::corpus()),
             ] {
                 fs::write(

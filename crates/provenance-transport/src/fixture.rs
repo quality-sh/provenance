@@ -91,8 +91,11 @@ impl FixtureAccess {
         self
     }
     pub(crate) fn permits_operation(&self, operation: &str) -> bool {
-        !self.denied_operations.contains(operation)
-            && (self.writes || !provenance_store::operations::catalog::mutates(operation))
+        let mutates = provenance_store::operations::catalog::definitions()
+            .into_iter()
+            .find(|definition| definition.name == operation)
+            .is_some_and(|definition| definition.mutates);
+        !self.denied_operations.contains(operation) && (self.writes || !mutates)
     }
     pub(crate) fn authenticate(
         &self,
@@ -112,11 +115,14 @@ impl FixtureAccess {
         }
         Ok(())
     }
+    pub(crate) fn bound_identity(&self) -> Option<(String, String)> {
+        self.grants.iter().next().cloned()
+    }
 }
 impl ContextResolver for FixtureAccess {
     fn prepare(
         &self,
-        operation: &'static str,
+        _operation: &'static str,
         context: RequestedContext,
         needs: ExecutionNeeds,
     ) -> Result<PreparedContext, OperationFailure> {
@@ -143,7 +149,7 @@ impl ContextResolver for FixtureAccess {
                     .contains(&(target.clone(), context.scope.clone()))
             },
         );
-        if !self.permits_operation(operation) || !granted {
+        if !granted {
             return Err(OperationFailure::AccessDenied);
         }
         let Some(context) = selected else {

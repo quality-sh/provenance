@@ -88,12 +88,12 @@ release order before the CLI. It uses the shared workspace release version.
 
 The asset entry is `/index.html`, also served at `/`. Relative local dependencies
 retain their paths. Missing assets return 404; no repository file is served.
-`/metadata` reports protocol 9. `/v9/operations/:operation` uses the current
-[operation contract](operation-contract.md).
+`/metadata` reports the complete compatibility tuple. Resource routes use the current
+[operation contract](operation-contract.md); the host has no versioned operation path.
 The host reserves `/review-config` for authenticated runtime configuration:
 
 ```json
-{"endpoint":"http://127.0.0.1:PORT","repositoryId":"A","scope":"default","protocolVersion":9,"sdkVersion":"0.2.3"}
+{"endpoint":"http://127.0.0.1:PORT","repositoryId":"A","scope":"default","compatibility":{"wire":9,"state":2,"review_journal":3,"read_derivation":3},"sdkVersion":"0.2.3"}
 ```
 
 The generic renderer does not read credentials, fetch host configuration, or
@@ -109,10 +109,11 @@ URLs, logs, assets, or browser storage. The password input is cleared after each
 connection attempt. A failed refresh removes the previous document; a superseded
 request cannot replace a later result.
 
-The browser entry is `@quality-sh/provenance/client`, protocol `9`.
-Published SDK `0.2.3` supplies `readDocument`. The pinned renderer and the local
-SDK use the same generated schema. The composer checks this schema before it
-builds the application.
+The browser entry is `@quality-sh/provenance/client`. It pins the complete
+compatibility tuple from `/metadata` before it reads a resource. The application
+uses `getRequirementDocument` and collection search from the generated v2
+client. Its adapter supplies the renderer's document and search views. The
+composer checks the generated schema before it builds the application.
 The generated client calls an existing host; it does not
 start one. Asset code must use the same origin and local dependencies. Response
 policy permits local scripts, styles, fonts, images, and connections. It blocks

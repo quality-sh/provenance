@@ -1,29 +1,48 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
 
 export async function checkDiscussions({ HttpClient, OperationError }, fixture) {
-  const client = await HttpClient.connectWithBearer(fixture.url, 'fixture-secret');
-  const context = { repository: 'fixture', scope: 'default' };
-  const request = { scope_id: 'default', parent: { node_type: 'question', node_id: 'question_ts' }, role: 'system', body: ' TypeScript text ' };
-  const first = await client.postThreadMessage({ context, request });
-  const second = await client.postThreadMessage({ context, request: { ...request, body: 'Second' } });
-  assert.equal(first.thread.id, second.thread.id);
-  assert.equal(first.message.body, ' TypeScript text ');
-  assert.equal(first.message.role, 'system');
-  const rows = async file => (await readFile(join(fixture.root, '.provenance/state/scopes/default/threads', file), 'utf8')).trim().split('\n').map(line => JSON.parse(line));
-  assert.deepEqual(await client.listThreads({ context, request: null }), await rows('threads.jsonl'));
-  assert.deepEqual(await client.listMessages({ context, request: null }), await rows('2026-07.jsonl'));
-  for (const [input, kind] of [
-    [{ ...request, body: ' ' }, 'empty_message_body'],
-    [{ ...request, scope_id: 'other' }, 'scope_mismatch'],
-    [{ ...request, parent: { ...request.parent, node_type: 'domain' } }, 'unsupported_thread_parent'],
-  ]) {
-    await assert.rejects(client.postThreadMessage({ context, request: input }), error => {
-      assert.ok(error instanceof OperationError);
-      assert.equal(error.failure.error.kind, kind);
-      return true;
-    });
-  }
-  assert.deepEqual(await client.listMessages({ context, request: null }), [first.message, second.message]);
+  const client = await HttpClient.connectWithBearer(fixture.url, 'fixture-secret', undefined, {
+    repository: 'fixture', scope: 'default',
+  });
+  const question = await client.createQuestion({ data: {
+    id: 'question_ts', topic_id: null, question: 'Which path is correct?',
+    resolution_method: 'human', status: 'open', links: [],
+  } });
+  assert.equal(question.data.id, 'question_ts');
+
+  const first = await client.questionCreateDiscussion({
+    id: question.data.id,
+    idempotency_key: 'discussion_first',
+    data: { actor: 'fixture', role: 'system', body: ' TypeScript text ' },
+  });
+  assert.equal(first.data.status, 'open');
+  assert.ok(first.data.discussion_id);
+
+  const second = await client.questionCreateDiscussionMessage({
+    id: question.data.id,
+    discussion_id: first.data.discussion_id,
+    idempotency_key: 'discussion_second',
+    if_match: String(first.data.version),
+    data: { actor: 'fixture', role: 'system', body: 'Second' },
+  });
+  assert.equal(second.data.version, first.data.version + 1);
+
+  const discussions = await client.questionListDiscussions({ id: question.data.id });
+  assert.equal(discussions.data.items.length, 1);
+  const messages = await client.questionListDiscussionMessages({
+    id: question.data.id, discussion_id: first.data.discussion_id,
+  });
+  assert.equal(messages.data.items.length, 2);
+
+  await assert.rejects(client.questionCreateDiscussionMessage({
+    id: question.data.id,
+    discussion_id: first.data.discussion_id,
+    idempotency_key: 'discussion_empty',
+    if_match: String(second.data.version),
+    data: { actor: 'fixture', role: 'system', body: ' ' },
+  }), error => {
+    assert.ok(error instanceof OperationError);
+    assert.equal(error.failure.error.kind, 'empty_message_body');
+    return true;
+  });
 }

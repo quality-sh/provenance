@@ -62,7 +62,7 @@ pub(super) struct Entry {
         std::sync::Arc<dyn super::ContextResolver>,
     ) -> OperationFuture<Value, FailureEnvelope>,
     #[cfg(feature = "schema")]
-    pub definition: fn() -> super::Definition,
+    pub definition: fn() -> super::schema::RawDefinition,
 }
 
 fn register<O: Operation>() -> Entry {
@@ -71,7 +71,7 @@ fn register<O: Operation>() -> Entry {
         mutates: O::MUTATES,
         invoke: super::invoke::invoke_resolved::<O>,
         #[cfg(feature = "schema")]
-        definition: super::schema::definition::<O>,
+        definition: super::schema::raw_definition::<O>,
     }
 }
 
@@ -152,5 +152,34 @@ pub(super) fn entries() -> Vec<Entry> {
         register::<super::CreateProposal>(),
         register::<super::CreateAssertion>(),
         register::<super::CreateDisposition>(),
+        register::<super::resource_lists::ListSourcesV2>(),
+        register::<super::resource_lists::ListRequirementsV2>(),
+        register::<super::resource_lists::ListResolutionsV2>(),
+        register::<super::resource_lists::ListRulesV2>(),
+        register::<super::resource_lists::ListDomainsV2>(),
+        register::<super::resource_lists::ListBoundariesV2>(),
+        register::<super::resource_lists::ListTopicsV2>(),
+        register::<super::resource_lists::ListQuestionsV2>(),
+        register::<super::resource_lists::ListContributionsV2>(),
+        register::<super::resource_lists::ListSynthesisPacketsV2>(),
+        register::<super::resource_lists::ListProposalsV2>(),
+        register::<super::resource_lists::ListVerificationRunsV2>(),
+        register::<super::resource_lists::ListVerificationBindingsV2>(),
+        register::<super::resource_lists::ListDiscussionContainersV2>(),
+        register::<super::resource_lists::ListMessagesV2>(),
+        register::<super::resource_lists::ListAssertionsV2>(),
+        register::<super::resource_lists::ListDispositionsV2>(),
+        register::<super::GetRequirementV2>(),
+        register::<super::CreateRequirementV2>(),
+        register::<super::UpdateRequirementV2>(),
+        register::<super::SubmitRequirementReviewV2>(),
+        register::<super::DecideRequirementReviewV2>(),
+        register::<super::WithdrawRequirementReviewV2>(),
+        register::<super::ReviewHistoryV2>(),
+        register::<super::ReviewHistoryEntryV2>(),
+        register::<super::ReviewEvidenceV2>(),
+        register::<super::ReviewDiscussionsV2>(),
+        register::<super::ReviewDiscussionMessagesV2>(),
+        register::<super::WriteDiscussionV2>(),
     ]
 }

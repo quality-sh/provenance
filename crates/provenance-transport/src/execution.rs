@@ -56,14 +56,8 @@ impl Execution {
             drop(closed);
             task
         };
-        task.await.map_err(|_| {
-            let failure = if provenance_store::operations::catalog::mutates(operation) {
-                OperationFailure::UncertainWrite
-            } else {
-                OperationFailure::Internal
-            };
-            FailureEnvelope::new(Some(operation), failure)
-        })?
+        task.await
+            .map_err(|_| FailureEnvelope::new(Some(operation), OperationFailure::Internal))?
     }
 
     pub async fn shutdown(&self) {

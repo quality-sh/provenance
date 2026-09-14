@@ -291,7 +291,7 @@ async fn concurrent_dispositions_through_the_catalog_exactly_one_wins() {
 
 #[cfg(unix)]
 #[tokio::test]
-async fn a_publication_that_cannot_write_reports_uncertainty() {
+async fn a_publication_that_cannot_write_reports_a_write_failure() {
     use std::os::unix::fs::PermissionsExt;
 
     let (dir, store, scope) = initialized();
@@ -317,6 +317,6 @@ async fn a_publication_that_cannot_write_reports_uncertainty() {
     .await;
     permissions.set_mode(0o755);
     std::fs::set_permissions(&dispositions_dir, permissions).unwrap();
-    assert_eq!(refusal_kind(result.unwrap_err()), "uncertain_write");
+    assert_eq!(refusal_kind(result.unwrap_err()), "write_failed");
     assert!(store.list_dispositions(&scope).unwrap().is_empty());
 }

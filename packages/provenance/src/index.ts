@@ -1,4 +1,4 @@
-import { connection, context, defaults, type ConfigureOptions } from "./settings.js";
+import { connection, defaults, type ConfigureOptions } from "./settings.js";
 import { documentPaths } from "./document-paths.js";
 import { portableFile } from "./portable-file.js";
 import { runVerification, type VerifyOptions } from "./verification.js";
@@ -243,9 +243,9 @@ export async function apply(
 ): Promise<ApplyResult> {
   const selected = settings;
   const document = spec === undefined ? registry.document(selected.owner) : specDocument(spec, selected.owner);
-  const result = await (await connection(selected)).apply({
-    context: context(selected), request: documentPaths(document, selected.localRoot),
-  });
+  const result = (await (await connection(selected)).applyAuthoring({
+    data: documentPaths(document, selected.localRoot),
+  })).data;
   if (spec === undefined) {
     registry.assign(result);
   }
@@ -256,9 +256,9 @@ export async function plan(
   spec: SpecHandle<Readonly<Record<string, unknown>>>,
 ): Promise<PlanResult> {
   const selected = settings;
-  return (await connection(selected)).plan({
-    context: context(selected), request: documentPaths(specDocument(spec, selected.owner), selected.localRoot),
-  });
+  return (await (await connection(selected)).planAuthoring({
+    data: documentPaths(specDocument(spec, selected.owner), selected.localRoot),
+  })).data;
 }
 
 export interface QueryOptions {
@@ -267,37 +267,40 @@ export interface QueryOptions {
 
 export async function get(request: GetRequest, options?: QueryOptions): Promise<GetResponse> {
   const selected = settings;
-  return (await connection(selected)).get({ context: { ...context(selected), freshness: options?.freshness }, request });
+  return memberCall(await connection(selected), request.node_type, request.id, {}) as Promise<GetResponse>;
 }
 
 export async function search(request: SearchRequest, options?: QueryOptions): Promise<SearchResponse> {
   const selected = settings;
-  return (await connection(selected)).search({ context: { ...context(selected), freshness: options?.freshness }, request });
+  const { collection, ...query } = request;
+  return collectionCall(await connection(selected), collection, { query: "search", ...query }) as Promise<SearchResponse>;
 }
 
 export async function neighbors(request: NeighborsRequest, options?: QueryOptions): Promise<NeighborsResponse> {
   const selected = settings;
-  return (await connection(selected)).neighbors({ context: { ...context(selected), freshness: options?.freshness }, request });
+  const { node_type, id, ...query } = request;
+  return memberCall(await connection(selected), node_type, id, { query: "neighbors", ...query }) as Promise<NeighborsResponse>;
 }
 
 export async function trace(request: TraceRequest, options?: QueryOptions): Promise<TraceResponse> {
   const selected = settings;
-  return (await connection(selected)).trace({ context: { ...context(selected), freshness: options?.freshness }, request });
+  const { node_type, id, ...query } = request;
+  return memberCall(await connection(selected), node_type, id, { query: "trace", ...query }) as Promise<TraceResponse>;
 }
 
 export async function impact(request: ImpactRequest, options?: QueryOptions): Promise<ImpactResponse> {
   const selected = settings;
-  return (await connection(selected)).impact({ context: { ...context(selected), freshness: options?.freshness }, request });
+  return memberCall(await connection(selected), request.node_type, request.id, { query: "impact" }) as Promise<ImpactResponse>;
 }
 
 export async function evidence(request: EvidenceRequest, options?: QueryOptions): Promise<EvidenceResponse> {
   const selected = settings;
-  return (await connection(selected)).evidence({ context: { ...context(selected), freshness: options?.freshness }, request });
+  return (await connection(selected)).getRuleEvidence({ id: request.rule, base: request.base, head: request.head });
 }
 
 export async function stale(request: StaleRequest, options?: QueryOptions): Promise<StaleResponse> {
   const selected = settings;
-  return (await connection(selected)).stale({ context: { ...context(selected), freshness: options?.freshness }, request });
+  return await (await connection(selected)).listRules({ query: "stale", ...request }) as unknown as StaleResponse;
 }
 
 export async function resolveSymbol(
@@ -305,7 +308,36 @@ export async function resolveSymbol(
   options?: QueryOptions,
 ): Promise<ResolveSymbolResponse> {
   const selected = settings;
-  return (await connection(selected)).resolveSymbol({ context: { ...context(selected), freshness: options?.freshness }, request: { ...request, file: portableFile(request.file, selected.localRoot) } });
+  return await (await connection(selected)).listRules({ query: "resolve-symbol", ...request, file: portableFile(request.file, selected.localRoot) }) as unknown as ResolveSymbolResponse;
+}
+
+type CatalogClient = Awaited<ReturnType<typeof connection>>;
+type MemberQuery = { query?: string; direction?: string; limit?: number; max_depth?: number };
+
+function collectionCall(client: CatalogClient, collection: SearchRequest["collection"], query: Omit<SearchRequest, "collection"> & { query: string }) {
+  switch (collection) {
+    case "sources": return client.listSources(query);
+    case "requirements": return client.listRequirements(query);
+    case "resolutions": return client.listResolutions(query);
+    case "rules": return client.listRules(query);
+    case "domains": return client.listDomains(query);
+    case "boundaries": return client.listBoundaries(query);
+    case "topics": return client.listTopics(query);
+    case "questions": return client.listQuestions(query);
+  }
+}
+
+function memberCall(client: CatalogClient, kind: GetRequest["node_type"], id: string, query: MemberQuery) {
+  switch (kind) {
+    case "source": return client.getSource({ id, ...query });
+    case "requirement": return client.getRequirement({ id, ...query });
+    case "resolution": return client.getResolution({ id, ...query });
+    case "rule": return client.getRule({ id, ...query });
+    case "domain": return client.getDomain({ id, ...query });
+    case "boundary": return client.getBoundary({ id, ...query });
+    case "topic": return client.getTopic({ id, ...query });
+    case "question": return client.getQuestion({ id, ...query });
+  }
 }
 
 class DeclaredHandle implements SourceHandle {

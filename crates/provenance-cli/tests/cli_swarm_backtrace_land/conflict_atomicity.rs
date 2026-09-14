@@ -331,25 +331,29 @@ fn swarm_backtrace_land_rejects_existing_ids_before_writing() {
             &repo,
             "--scope",
             "default",
-            "--id",
-            "contrib_backtrace_refute_auth",
-            "--target-type",
-            "source",
-            "--target-id",
-            "source_codebase",
-            "--participant-slot",
-            "preexisting_refute_auth",
-            "--stance",
-            "mixed",
-            "--strongest-finding",
-            "Pre-existing refuter finding.",
-            "--uncertainty-level",
-            "medium",
-            "--uncertainty-rationale",
-            "Seeded existing record.",
+            "--stdin",
             "--format",
             "json",
         ])
+        .write_stdin(
+            serde_json::json!({
+                "id": "contrib_backtrace_refute_auth",
+                "target": {"artifact_type": "source", "artifact_id": "source_codebase"},
+                "participant_slot": "preexisting_refute_auth",
+                "stance": "mixed",
+                "strongest_finding": "Pre-existing refuter finding.",
+                "evidence_references": [],
+                "material_claims": [],
+                "risks": [],
+                "objections": [],
+                "challenges": [],
+                "suggested_artifact_changes": [],
+                "unsupported_recommendations": [],
+                "uncertainty": {"level": "medium", "rationale": "Seeded existing record."},
+                "open_questions": []
+            })
+            .to_string(),
+        )
         .assert()
         .success();
 

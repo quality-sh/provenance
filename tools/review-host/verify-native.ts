@@ -22,8 +22,16 @@ try {
   const cli = (...args: string[]) => execFileSync(binary, args, { cwd: work, encoding: 'utf8', timeout: 30_000 });
   cli('init', '--path', repository, '--scope', 'default', '--path-prefix', '.');
   for (const [id, parent] of [['req_root', undefined], ['req_child', 'req_root']]) {
-    cli('requirements', 'create', '--repo', repository, '--scope', 'default', '--id', id!,
-      '--statement', 'The record is readable.', ...(parent ? ['--refines', parent] : []));
+    execFileSync(binary, [
+      'requirements', 'create', '--repo', repository, '--scope', 'default',
+      '--idempotency-key', `request_${id}`, '--stdin',
+    ], {
+      cwd: work, encoding: 'utf8', timeout: 30_000,
+      input: JSON.stringify({
+        actor: 'review-test', id, statement: 'The record is readable.', status: 'discovery',
+        depends_on: [], supersedes: [], ...(parent ? { refines: parent } : {}),
+      }),
+    });
   }
   host = spawn(binary, ['review', '--repo', repository, '--repository-id', 'fixture', '--scope', 'default'], {
     cwd: work, env: { ...process.env, PATH: work }, stdio: ['ignore', 'pipe', 'inherit'],
@@ -47,20 +55,27 @@ try {
   assert.equal(await (await get('/')).text(), await readFile(join(resolve(assetsArg), 'index.html'), 'utf8'));
   assert.equal((await get('/review-config')).status, 401);
   assert.equal((await get('/host.js', { Origin: 'https://unrelated.test' })).status, 403);
-  const client = await HttpClient.connectWithBearer(config.endpoint, config.bearer);
-  const context = { repository: 'fixture', scope: 'default', freshness: 'catch_up' };
-  const first = await client.readDocument({ context, request: { id: 'req_root', limit: 1 } });
-  assert.equal(first.entries.length, 1);
-  assert.ok(first.next_cursor, 'document has a continuation');
-  const next = await client.readDocument({ context: { ...context, freshness: 'annotate_only' },
-    request: { id: 'req_root', limit: 1, cursor: first.next_cursor } });
-  assert.equal(next.entries.length, 1);
-  assert.equal(next.next_cursor, null);
-  const search = await client.search({ context, request: { text: 'readable', limit: 1 } });
-  assert.equal(search.nodes.length, 1);
-  assert.ok(search.next_cursor, 'search has a continuation');
-  await assert.rejects(client.readDocument({ context: { ...context, repository: 'other' }, request: { id: 'req_root' } }));
-  await assert.rejects(client.readDocument({ context: { ...context, scope: 'other' }, request: { id: 'req_root' } }));
+  const client = await HttpClient.connectWithBearer(
+    config.endpoint, config.bearer, globalThis.fetch,
+    { repository: 'fixture', scope: 'default' },
+  );
+  const first = await client.getRequirementDocument({ id: 'req_root', limit: 1 });
+  assert.equal(first.data.entries.length, 1);
+  assert.ok(first.meta.next_cursor, 'document has a continuation');
+  const next = await client.getRequirementDocument({
+    id: 'req_root', limit: 1, cursor: first.meta.next_cursor,
+  });
+  assert.equal(next.data.entries.length, 1);
+  assert.equal(next.meta.next_cursor, null);
+  const search = await client.listRequirements({ query: 'search', text: 'readable', limit: 1 });
+  assert.equal(search.data.items.length, 1);
+  assert.ok(search.meta.next_cursor, 'search has a continuation');
+  await assert.rejects(HttpClient.connectWithBearer(
+    config.endpoint, config.bearer, globalThis.fetch, { repository: 'other', scope: 'default' },
+  ));
+  await assert.rejects(HttpClient.connectWithBearer(
+    config.endpoint, config.bearer, globalThis.fetch, { repository: 'fixture', scope: 'other' },
+  ));
   host.kill('SIGTERM');
   await exited;
   console.log(`Verified ${Object.keys(info.files).length} embedded files, SDK cursor reads, search, and access checks: ${binaryArg}`);

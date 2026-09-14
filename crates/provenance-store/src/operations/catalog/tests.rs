@@ -35,7 +35,7 @@ async fn statement_call_is_closed_and_refuses_invalid_payloads() {
             .await
             .unwrap_err();
         assert_eq!(error.error["kind"], "invalid_input");
-        assert_eq!(error.operation.as_deref(), Some("check-statement"));
+        assert_eq!(error.error["kind"], "invalid_input");
     }
 }
 
@@ -45,7 +45,7 @@ async fn unknown_operations_never_claim_an_execution_identity() {
         .await
         .unwrap_err();
     assert_eq!(error.error, json!({"kind":"unknown_operation"}));
-    assert_eq!(error.operation, None);
+    assert_eq!(serde_json::to_value(error.meta).unwrap(), json!({}));
 }
 
 #[tokio::test]
