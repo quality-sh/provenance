@@ -80,6 +80,7 @@ mod references;
 mod scope_ingestion;
 mod shaping;
 mod source_requirements;
+mod source_supersedes_concurrency;
 mod threads;
 mod typed_adoption;
 mod typed_references;
