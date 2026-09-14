@@ -1,5 +1,11 @@
 use super::{classifier, guard, journal, SaveRequirement};
-use crate::{canonical_digest, publication::with_staged_state, shards, state_store::StateStore};
+use crate::{
+    canonical_digest,
+    publication::with_staged_state,
+    shards,
+    state_store::StateStore,
+    write_error::{SourceFailure, WriteFailure},
+};
 use provenance_core::review::{
     RequirementEditState, ReviewEntry, SaveOutcome, REVIEW_SCHEMA_VERSION,
 };
@@ -92,10 +98,12 @@ impl StateStore {
                 .as_ref()
                 .map(|e| e.etag.clone())
                 .unwrap_or(journal::etag(&record, None)?);
-            anyhow::ensure!(
-                input.expected_etag == current_etag,
-                "stale Requirement edit etag"
-            );
+            if input.expected_etag != current_etag {
+                return Err(SourceFailure::wrap(
+                    WriteFailure::InvalidUpdate,
+                    anyhow::anyhow!("stale Requirement edit etag"),
+                ));
+            }
             with_staged_state(&self.layout, false, |layout| {
                 let staged = Self::new(layout.clone());
                 let path = shards::requirements_path(layout, scope);

@@ -11,6 +11,10 @@ pub(super) struct Replacement {
     pub rules: Vec<Rule>,
     pub implementations: Vec<ImplementationBinding>,
     pub cascade: Cascade,
+    /// The applying spec's owner and address root: the actor and identity
+    /// facts a journaled adoption of enrolled state records.
+    pub spec_owner: String,
+    pub spec: String,
 }
 
 impl Replacement {
@@ -23,6 +27,7 @@ impl Replacement {
         rule_resources: &[ReconciledResource],
     ) -> anyhow::Result<()> {
         super::super::typed_statement_policy::ensure_typed_spec_is_writable(result)?;
+        store.commit_enrollment_adoptions(scope, &self.requirements, &self.spec_owner, &self.spec)?;
         protect_requirements(&store.layout, scope, &self.requirements)?;
         for rule in &self.rules {
             rule.validate_archive()?;

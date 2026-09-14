@@ -46,8 +46,7 @@ impl StateStore {
             Err(error) => {
                 let duplicate = self
                     .list_requirements(&scope)
-                    .map(|records| records.iter().any(|record| record.id == id))
-                    .unwrap_or(false);
+                    .is_ok_and(|records| records.iter().any(|record| record.id == id));
                 Err(retyped(error, duplicate))
             }
         }
@@ -266,38 +265,36 @@ impl StateStore {
                 expected_etag.as_str(),
             ],
         )?;
+        // The guarded save types its own refusals: a validation refusal is
+        // InvalidUpdate from its raise site, and an infrastructure failure
+        // stays WriteFailed.
         self.save_requirement(SaveRequirement {
             request_id,
             actor: AUTHORING_ACTOR.to_owned(),
             expected_etag,
             update,
             relationships,
-        })
-        .map_err(|error| retyped(error, false))?;
+        })?;
         self.requirement(&scope, &id)
     }
 }
 
-/// Keeps every typed failure as the guarded path raised it and gives the
-/// untyped ones the legacy authoring refusal class.
+/// Keeps every failure with the class its raise site gave it. Only the
+/// create path's duplicate resolution stays here: a create refusal while the
+/// scope already holds the identity is the AlreadyExists class, and an
+/// infrastructure failure keeps the 500 WriteFailed class.
 fn retyped(error: anyhow::Error, duplicate: bool) -> anyhow::Error {
-    let wrapper = WriteError(error);
-    let untyped = matches!(wrapper.safe(), WriteFailure::WriteFailed);
-    let WriteError(error) = wrapper;
-    if !untyped {
+    if !duplicate {
         return error;
     }
-    if duplicate {
-        SourceFailure::wrap(
+    let wrapper = WriteError(error);
+    if matches!(wrapper.safe(), WriteFailure::WriteFailed) {
+        return SourceFailure::wrap(
             WriteFailure::AlreadyExists,
             anyhow::anyhow!("requirement already exists"),
-        )
-    } else {
-        SourceFailure::wrap(
-            WriteFailure::InvalidUpdate,
-            anyhow::anyhow!(error.to_string()),
-        )
+        );
     }
+    wrapper.0
 }
 
 const fn add_delta(add: Vec<StableId>) -> ListEdit {

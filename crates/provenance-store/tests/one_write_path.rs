@@ -150,12 +150,16 @@ fn failed_edits_return_typed_errors_without_uncertainty() {
         .unwrap();
 
     // req_a refining req_b closes the cycle req_a -> req_b -> req_a: a typed
-    // client failure, never an uncertain write.
+    // client failure, never an uncertain write. The refusal carries its
+    // InvalidUpdate class from the graph validator's raise site; an
+    // infrastructure failure before publication would keep its WriteFailed
+    // class instead of borrowing this one.
     let error = store
         .set_requirement_refines(&scope(), &id(), StableId::new("req_b").unwrap())
         .unwrap_err();
     let failure = WriteError(error).safe();
     assert!(!matches!(failure, WriteFailure::UncertainWrite));
+    assert!(!matches!(failure, WriteFailure::WriteFailed));
     assert!(
         matches!(failure, WriteFailure::InvalidUpdate),
         "{failure:?}"

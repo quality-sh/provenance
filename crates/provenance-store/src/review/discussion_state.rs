@@ -250,7 +250,15 @@ impl StateStore {
                 input.declared_by.is_none(),
                 "a topic or question parent takes no declared owner"
             ),
-            _ => parent_owner_matches(owner.as_deref(), input.declared_by.as_deref())?,
+            NodeType::Source | NodeType::Requirement | NodeType::Resolution | NodeType::Rule => {
+                parent_owner_matches(owner.as_deref(), input.declared_by.as_deref())?
+            }
+            // The parent resolution refused kinds that take no Discussions
+            // before this match; the closed vocabulary still names them.
+            NodeType::Domain | NodeType::Boundary => anyhow::bail!(
+                "thread parent kind `{}` does not take Discussions",
+                discussion_kind_word(input.parent.node_type).unwrap_or("unsupported")
+            ),
         }
         let mut ids = BTreeSet::new();
         for thread in self.list_threads(&input.scope_id)? {
@@ -296,7 +304,7 @@ pub(super) const fn discussion_kind_word(kind: NodeType) -> Option<&'static str>
         NodeType::Rule => Some("rule"),
         NodeType::Topic => Some("topic"),
         NodeType::Question => Some("question"),
-        _ => None,
+        NodeType::Domain | NodeType::Boundary => None,
     }
 }
 
@@ -369,9 +377,9 @@ impl StateStore {
             NodeType::Question => {
                 Self::resolve_parent_among(&self.list_questions(scope)?, scope, parent)
             }
-            kind => anyhow::bail!(
+            NodeType::Domain | NodeType::Boundary => anyhow::bail!(
                 "thread parent kind `{}` does not take Discussions",
-                discussion_kind_word(kind).unwrap_or("unsupported")
+                discussion_kind_word(parent.node_type).unwrap_or("unsupported")
             ),
         }
     }

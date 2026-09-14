@@ -38,6 +38,7 @@ mod discussion_writes;
 mod create;
 pub use create::CreateReviewRequirement;
 mod authoring;
+mod typed_adoption;
 mod discussion_messages;
 mod discussion_reads;
 pub use discussion_messages::read_discussion_messages;
