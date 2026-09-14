@@ -6,6 +6,7 @@ pub const REVIEW_SCHEMA_VERSION: SchemaVersion = SchemaVersion(3);
 use crate::{Requirement, ScopeId, StableId};
 use serde::{Deserialize, Serialize};
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SnapshotRef {
@@ -16,6 +17,7 @@ pub struct SnapshotRef {
 }
 
 /// A field range in an ordinary JSON snapshot. Offsets count UTF-8 bytes.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SnapshotField {
@@ -24,6 +26,7 @@ pub struct SnapshotField {
     pub bytes: u64,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SaveOutcome {
@@ -35,6 +38,7 @@ pub enum SaveOutcome {
 }
 
 /// One committed save is also its durable request receipt.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ReviewEntry {
@@ -58,6 +62,7 @@ pub struct ReviewEntry {
     pub origin: Option<crate::threads::DiscussionOrigin>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RequirementSnapshot {
@@ -65,6 +70,7 @@ pub struct RequirementSnapshot {
     pub record: Requirement,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RequirementEditState {
     pub etag: String,
@@ -73,6 +79,7 @@ pub struct RequirementEditState {
 }
 
 /// JSON text spans concatenate to the exact immutable snapshot document.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EvidencePage {
     pub snapshot: SnapshotRef,
@@ -82,6 +89,7 @@ pub struct EvidencePage {
     pub next_offset: Option<u64>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ReviewHistoryQuery {
@@ -94,12 +102,14 @@ const fn default_limit() -> usize {
     50
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReviewHistoryPage {
     pub entries: Vec<ReviewEntry>,
     pub next_cursor: Option<String>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EvidenceQuery {
@@ -112,6 +122,7 @@ pub struct EvidenceQuery {
 }
 
 /// R1 Requirement entries keep their original representation in the shared journal.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum JournalEntry {
@@ -144,6 +155,7 @@ impl JournalEntry {
 }
 
 /// One decision-cycle fact: a submission, a decision, or a withdrawal.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CycleFact {
@@ -158,6 +170,7 @@ pub enum CycleFact {
 /// Submission writes an immutable bound proposal, decision writes an immutable
 /// disposition, and this entry records which of the three happened, so the
 /// request can be replayed and the history read in order.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CycleEntry {
@@ -181,6 +194,7 @@ pub struct CycleEntry {
 }
 
 /// A submission still waiting for a decision.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PendingSubmission {
@@ -193,6 +207,7 @@ pub struct PendingSubmission {
 /// One terminal decision as the cycle reads it: the disposition itself, the
 /// exact revision it decided on when its proposal is bound, and the feedback
 /// Message published with it, if any.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RecordedDecision {
@@ -204,6 +219,7 @@ pub struct RecordedDecision {
 }
 
 /// The current and historical decision state of one record.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RequirementDecisionState {

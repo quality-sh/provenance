@@ -46,7 +46,8 @@ mod discussion_recovery_tests;
 
 mod decision_input;
 pub use decision_input::{
-    DecideRequirementReview, ReviewFeedback, SubmitRequirementReview, WithdrawRequirementReview,
+    DecideRequirementReview, RequirementReviewRequest, ReviewFeedback, SubmitRequirementReview,
+    WithdrawRequirementReview,
 };
 mod decision;
 mod decision_reads;

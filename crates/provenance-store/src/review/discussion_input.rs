@@ -1,6 +1,7 @@
 use provenance_core::{threads::DiscussionStatus, MessageRole, ScopeId, StableId, ThreadParent};
 use serde::{Deserialize, Serialize};
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct WriteDiscussion {
@@ -12,6 +13,7 @@ pub struct WriteDiscussion {
     pub action: DiscussionAction,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum DiscussionAction {
