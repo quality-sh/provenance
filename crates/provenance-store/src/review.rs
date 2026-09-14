@@ -38,9 +38,9 @@ mod discussion_writes;
 mod create;
 pub use create::CreateReviewRequirement;
 mod authoring;
-mod typed_adoption;
 mod discussion_messages;
 mod discussion_reads;
+mod typed_adoption;
 pub use discussion_messages::read_discussion_messages;
 pub use discussion_reads::read_discussions;
 #[cfg(test)]

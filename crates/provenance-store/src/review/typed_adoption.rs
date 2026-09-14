@@ -28,7 +28,14 @@ impl StateStore {
             let Some(before) = current.iter().find(|r| r.id == record.id) else {
                 continue;
             };
-            if before.schema_version != REVIEW_SCHEMA_VERSION || before == record {
+            // Only an adoption takes this path: an unowned enrolled record
+            // the declaration takes over exactly. A record this spec already
+            // owns stays with the guarded refusal, so the shard swap never
+            // publishes an enrolled edit.
+            if before.declared_by.is_some()
+                || before.schema_version != REVIEW_SCHEMA_VERSION
+                || before == record
+            {
                 continue;
             }
             let intent = adoption_intent(owner, before, record)?;
@@ -50,7 +57,10 @@ impl StateStore {
         request_id: StableId,
         intent_digest: &str,
     ) -> anyhow::Result<()> {
-        anyhow::ensure!(!actor.trim().is_empty(), "invalid adoption request identity");
+        anyhow::ensure!(
+            !actor.trim().is_empty(),
+            "invalid adoption request identity"
+        );
         self.with_repository_publication(|| {
             let scope = before.scope_id.clone();
             let path = journal::entry_path(&self.layout, &scope, &request_id);
@@ -186,10 +196,7 @@ fn adoption_intent(
 ) -> anyhow::Result<String> {
     let before = journal::record_digest(before)?;
     let after = journal::record_digest(after)?;
-    Ok(canonical_digest::digest(&canonical_digest::canonical_bytes(&(
-        "typed-spec-adoption",
-        owner,
-        before,
-        after,
-    ))?))
+    Ok(canonical_digest::digest(
+        &canonical_digest::canonical_bytes(&("typed-spec-adoption", owner, before, after))?,
+    ))
 }
