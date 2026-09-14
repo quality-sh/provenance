@@ -221,7 +221,6 @@ impl StateStore {
         let mut resources =
             all_resources(&source_resources, &requirement_resources, &rule_resources);
         let cascade_resources = cascade.report(&mut resources);
-        let spec_owner = input.declared_by.clone();
         let mut result = spec_result(
             input.declared_by,
             resources,
@@ -237,8 +236,6 @@ impl StateStore {
                 rules,
                 implementations: implementation_reconciliation.records,
                 cascade,
-                spec_owner,
-                spec,
             }
             .publish(
                 self,

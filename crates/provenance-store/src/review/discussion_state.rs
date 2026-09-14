@@ -251,7 +251,7 @@ impl StateStore {
                 "a topic or question parent takes no declared owner"
             ),
             NodeType::Source | NodeType::Requirement | NodeType::Resolution | NodeType::Rule => {
-                parent_owner_matches(owner.as_deref(), input.declared_by.as_deref())?
+                parent_owner_matches(owner.as_deref(), input.declared_by.as_deref())?;
             }
             // The parent resolution refused kinds that take no Discussions
             // before this match; the closed vocabulary still names them.

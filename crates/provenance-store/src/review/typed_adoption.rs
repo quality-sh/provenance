@@ -22,7 +22,6 @@ impl StateStore {
         scope: &ScopeId,
         desired: &[Requirement],
         owner: &str,
-        spec: &str,
     ) -> anyhow::Result<()> {
         let current = self.list_requirements(scope)?;
         for record in desired {
@@ -32,7 +31,7 @@ impl StateStore {
             if before.schema_version != REVIEW_SCHEMA_VERSION || before == record {
                 continue;
             }
-            let intent = adoption_intent(spec, owner, before, record)?;
+            let intent = adoption_intent(owner, before, record)?;
             let request_id = StableId::new(canonical_digest::sha256(
                 format!("typed-spec-adoption\u{1f}{intent}").as_bytes(),
             ))?;
@@ -74,7 +73,7 @@ impl StateStore {
                 let id = before.id.clone();
                 guard::with_writer(&path, id.as_str(), || {
                     staged.commit_adoption_record(
-                        before, after, actor, request_id, intent_digest, head,
+                        before, after, actor, request_id, &intent_digest, &head,
                     )
                 })
             })
@@ -89,8 +88,8 @@ impl StateStore {
         after: &Requirement,
         actor: &str,
         request_id: StableId,
-        intent_digest: String,
-        head: Option<ReviewEntry>,
+        intent_digest: &str,
+        head: &Option<ReviewEntry>,
     ) -> anyhow::Result<()> {
         let scope = before.scope_id.clone();
         let id = before.id.clone();
@@ -119,11 +118,11 @@ impl StateStore {
         } else {
             SaveOutcome::LifecycleOnly
         };
-        let revision = match &head {
+        let revision = match head {
             Some(head) if !classifier::changes_revision(&fields) => head.revision.clone(),
             _ => journal::new_id(),
         };
-        let before_snapshot = match &head {
+        let before_snapshot = match head {
             Some(entry) => entry.after.clone(),
             None => journal::snapshot(&self.layout, before)?,
         };
@@ -134,7 +133,7 @@ impl StateStore {
         };
         let entry_id = journal::new_id();
         let etag = if outcome == SaveOutcome::NoChange {
-            match &head {
+            match head {
                 Some(head) => head.etag.clone(),
                 None => journal::etag(&after, None)?,
             }
@@ -144,7 +143,7 @@ impl StateStore {
         let entry = ReviewEntry {
             schema_version: REVIEW_SCHEMA_VERSION,
             scope_id: scope.clone(),
-            requirement_id: id.clone(),
+            requirement_id: id,
             sequence: head.as_ref().map_or(1, |e| e.sequence + 1),
             id: entry_id,
             predecessor: head.as_ref().map(|e| e.id.clone()),
@@ -155,7 +154,7 @@ impl StateStore {
             changed_fields: fields,
             actor: actor.to_owned(),
             request_id,
-            intent_digest,
+            intent_digest: intent_digest.to_owned(),
             etag,
             outcome,
             origin: None,
@@ -172,11 +171,10 @@ impl StateStore {
     }
 }
 
-/// The intent of one adoption: the spec, the owner, and the exact before and
-/// after content. Record stamps stay out, so a replay of the same adoption
+/// The intent of one adoption: the owner and the exact before and after
+/// content. Record stamps stay out, so a replay of the same adoption
 /// resolves to the recorded receipt.
 fn adoption_intent(
-    spec: &str,
     owner: &str,
     before: &Requirement,
     after: &Requirement,
@@ -185,7 +183,6 @@ fn adoption_intent(
     let after = journal::record_digest(after)?;
     Ok(canonical_digest::digest(&canonical_digest::canonical_bytes(&(
         "typed-spec-adoption",
-        spec,
         owner,
         before,
         after,

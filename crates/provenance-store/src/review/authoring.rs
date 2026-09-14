@@ -281,8 +281,8 @@ impl StateStore {
 
 /// Keeps every failure with the class its raise site gave it. Only the
 /// create path's duplicate resolution stays here: a create refusal while the
-/// scope already holds the identity is the AlreadyExists class, and an
-/// infrastructure failure keeps the 500 WriteFailed class.
+/// scope already holds the identity is the `AlreadyExists` class, and an
+/// infrastructure failure keeps the 500 `WriteFailed` class.
 fn retyped(error: anyhow::Error, duplicate: bool) -> anyhow::Error {
     if !duplicate {
         return error;
