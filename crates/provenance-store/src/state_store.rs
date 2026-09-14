@@ -1,6 +1,7 @@
 mod access;
 mod canonical_artifacts;
 mod domain_writers;
+mod exact_export;
 mod graph_validation;
 mod ideation_batches;
 mod ideation_targets;
