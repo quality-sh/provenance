@@ -183,11 +183,11 @@ fn adoption_intent(
 ) -> anyhow::Result<String> {
     let before = journal::record_digest(before)?;
     let after = journal::record_digest(after)?;
-    canonical_digest::digest(&canonical_digest::canonical_bytes(&(
+    Ok(canonical_digest::digest(&canonical_digest::canonical_bytes(&(
         "typed-spec-adoption",
         spec,
         owner,
         before,
         after,
-    ))?)
+    ))?))
 }
