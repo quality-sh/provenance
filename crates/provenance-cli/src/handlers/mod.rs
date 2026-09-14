@@ -78,6 +78,7 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
                         ste_pdf,
                         invocation_channel,
                         package_manager,
+                        quiet,
                     },
                 )
             })

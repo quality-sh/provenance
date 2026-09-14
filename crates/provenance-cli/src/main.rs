@@ -3,6 +3,7 @@ mod cli;
 mod docs;
 mod gitignore;
 mod handlers;
+mod init_summary;
 mod legacy_cleanup;
 mod onboarding;
 mod output;

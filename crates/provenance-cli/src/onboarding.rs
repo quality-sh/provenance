@@ -57,6 +57,20 @@ impl Invocation {
             })),
         }
     }
+
+    /// The command prefix the summary's copy-pasteable next steps use; the
+    /// same prefix the injected AGENTS.md section writes.
+    pub(super) const fn command_prefix(&self) -> &'static str {
+        self.0
+    }
+}
+
+/// Reports whether the exact Provenance heading already owns a section, so a
+/// summary can tell an added section from an updated one.
+pub fn owns_section(existing: &str) -> bool {
+    section_headings(existing)
+        .iter()
+        .any(|offset| line_at(existing, *offset) == HEADING)
 }
 
 /// Projects only the instruction section owned by the exact Provenance heading.

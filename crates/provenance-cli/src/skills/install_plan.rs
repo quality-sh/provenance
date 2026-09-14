@@ -156,6 +156,62 @@ impl InstallPlan {
         }
         Ok(())
     }
+
+    /// What this plan would change, counted per managed directory, from the
+    /// same statuses `apply_in` would report.
+    pub(super) fn planned_changes(&self) -> PlannedChanges {
+        let mut changes = PlannedChanges {
+            canonical: DirectoryChanges::default(),
+            claude: DirectoryChanges::default(),
+            claude_links: self.link_mode == "symlink",
+        };
+        for action in &self.canonical {
+            changes.canonical.record(action.status);
+        }
+        for action in &self.claude {
+            for status in action.planned_statuses() {
+                changes.claude.record(status);
+            }
+        }
+        for action in &self.legacy {
+            let directory = if action.path.starts_with(&self.canonical_dir) {
+                &mut changes.canonical
+            } else {
+                &mut changes.claude
+            };
+            directory.record(FileStatus::Removed);
+        }
+        changes
+    }
+}
+
+/// Planned file changes counted per managed skill directory.
+pub(super) struct PlannedChanges {
+    pub(super) canonical: DirectoryChanges,
+    pub(super) claude: DirectoryChanges,
+    pub(super) claude_links: bool,
+}
+
+#[derive(Default)]
+pub struct DirectoryChanges {
+    pub installed: usize,
+    pub updated: usize,
+    pub removed: usize,
+}
+
+impl DirectoryChanges {
+    const fn record(&mut self, status: FileStatus) {
+        match status {
+            FileStatus::Unchanged => {}
+            FileStatus::Installed | FileStatus::Linked => self.installed += 1,
+            FileStatus::Updated => self.updated += 1,
+            FileStatus::Removed => self.removed += 1,
+        }
+    }
+
+    pub(crate) const fn is_unchanged(&self) -> bool {
+        self.installed == 0 && self.updated == 0 && self.removed == 0
+    }
 }
 
 pub(super) struct FileAction {
