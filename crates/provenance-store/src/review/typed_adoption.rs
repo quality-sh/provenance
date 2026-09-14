@@ -35,7 +35,7 @@ impl StateStore {
             let request_id = StableId::new(canonical_digest::sha256(
                 format!("typed-spec-adoption\u{1f}{intent}").as_bytes(),
             ))?;
-            self.commit_adoption(before, record, owner, request_id, intent)?;
+            self.commit_adoption(before, record, owner, request_id, &intent)?;
         }
         Ok(())
     }
@@ -48,7 +48,7 @@ impl StateStore {
         after: &Requirement,
         actor: &str,
         request_id: StableId,
-        intent_digest: String,
+        intent_digest: &str,
     ) -> anyhow::Result<()> {
         anyhow::ensure!(!actor.trim().is_empty(), "invalid adoption request identity");
         self.with_repository_publication(|| {
@@ -73,7 +73,12 @@ impl StateStore {
                 let id = before.id.clone();
                 guard::with_writer(&path, id.as_str(), || {
                     staged.commit_adoption_record(
-                        before, after, actor, request_id, &intent_digest, &head,
+                        before,
+                        after,
+                        actor,
+                        request_id,
+                        intent_digest,
+                        head.as_ref(),
                     )
                 })
             })
@@ -89,7 +94,7 @@ impl StateStore {
         actor: &str,
         request_id: StableId,
         intent_digest: &str,
-        head: &Option<ReviewEntry>,
+        head: Option<&ReviewEntry>,
     ) -> anyhow::Result<()> {
         let scope = before.scope_id.clone();
         let id = before.id.clone();
@@ -144,11 +149,11 @@ impl StateStore {
             schema_version: REVIEW_SCHEMA_VERSION,
             scope_id: scope.clone(),
             requirement_id: id,
-            sequence: head.as_ref().map_or(1, |e| e.sequence + 1),
+            sequence: head.map_or(1, |e| e.sequence + 1),
             id: entry_id,
-            predecessor: head.as_ref().map(|e| e.id.clone()),
+            predecessor: head.map(|e| e.id.clone()),
             revision,
-            prior_revision: head.as_ref().map(|e| e.revision.clone()),
+            prior_revision: head.map(|e| e.revision.clone()),
             before: Some(before_snapshot),
             after: after_snapshot,
             changed_fields: fields,
