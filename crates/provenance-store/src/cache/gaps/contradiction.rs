@@ -1,6 +1,7 @@
 use super::{
     graph_query::GraphQuery,
     model::{GapItem, GapKind},
+    RecordRef,
 };
 use provenance_core::{NodeType, Question, ResolutionStatus, StableId};
 use provenance_macros::rule;
@@ -40,19 +41,31 @@ pub(super) fn add_gaps(query: &GraphQuery<'_, '_>, gaps: &mut Vec<GapItem>) {
 #[rule("rule_rejected_resolution_does_not_settle_contradiction")]
 fn is_resolved(query: &GraphQuery<'_, '_>, question: &Question, other: &StableId) -> bool {
     let settled_by_resolution = question.resolution_id.as_ref().is_some_and(|id| {
-        query.graph.resolutions.iter().any(|resolution| {
-            resolution.id == *id && resolution.status != ResolutionStatus::Rejected
-        })
+        query
+            .all(NodeType::Resolution, id.as_str())
+            .iter()
+            .any(|record| {
+                matches!(
+                    record,
+                    RecordRef::Resolution(resolution)
+                        if resolution.status != ResolutionStatus::Rejected
+                )
+            })
     });
     if settled_by_resolution {
         return true;
     }
-    let supersedes =
-        |left: &StableId, right: &StableId| {
-            query.graph.requirements.iter().any(|requirement| {
-                requirement.id == *left && requirement.supersedes.contains(right)
+    let supersedes = |left: &StableId, right: &StableId| {
+        query
+            .all(NodeType::Requirement, left.as_str())
+            .iter()
+            .any(|record| {
+                matches!(
+                    record,
+                    RecordRef::Requirement(requirement) if requirement.supersedes.contains(right)
+                )
             })
-        };
+    };
     supersedes(&question.requirement_id, other) || supersedes(other, &question.requirement_id)
 }
 
