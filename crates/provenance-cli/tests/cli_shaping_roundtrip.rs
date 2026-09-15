@@ -5,23 +5,12 @@ mod provenance;
 
 use fixtures::{create_source_and_requirement, create_topic, init};
 use predicates::str::contains;
-use provenance::provenance;
+use provenance::{provenance, provenance_stdin};
 
 #[test]
-fn cli_shaping_records_roundtrip_materialize_and_accept_topic_question_threads() {
+fn cli_shaping_records_materialize_and_accept_topic_question_discussions() {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path().join("repo").to_string_lossy().to_string();
-    let import_repo = dir.path().join("imported").to_string_lossy().to_string();
-    let export_path = dir
-        .path()
-        .join("shaping-export.json")
-        .to_string_lossy()
-        .to_string();
-    let import_export_path = dir
-        .path()
-        .join("shaping-import-export.json")
-        .to_string_lossy()
-        .to_string();
 
     init(&repo);
     create_source_and_requirement(&repo);
@@ -31,31 +20,20 @@ fn cli_shaping_records_roundtrip_materialize_and_accept_topic_question_threads()
     post_topic_thread(&repo);
     post_question_thread(&repo);
     verify_materialized_lists(&repo);
-    export_scope(&repo, &export_path);
-    import_export_roundtrip(&import_repo, &export_path, &import_export_path);
 }
 
 fn create_boundary(repo: &str) {
-    provenance(&[
+    provenance_stdin(&[
         "boundaries",
         "create",
         "--repo",
         repo,
         "--scope",
         "default",
-        "--id",
-        "boundary_no_manual_rework",
-        "--requirement-id",
-        "req_overtime",
-        "--statement",
-        "No manual payroll reconciliation",
-        "--source-id",
-        "source_schads",
-        "--source-clause",
-        "28.1",
+        "--stdin",
         "--format",
         "json",
-    ])
+    ], r#"{"id":"boundary_no_manual_rework","requirement_id":"req_overtime","statement":"No manual payroll reconciliation","source_ref":{"source_id":"source_schads","clause":"28.1"}}"#)
     .success()
     .stdout(contains("boundary_no_manual_rework"))
     .stdout(contains(r#""source_id": "source_schads""#));
@@ -91,47 +69,45 @@ fn create_question(repo: &str) {
 }
 
 fn post_topic_thread(repo: &str) {
-    provenance(&[
-        "thread",
-        "post",
-        "--repo",
-        repo,
-        "--scope",
-        "default",
-        "--parent-type",
-        "topic",
-        "--parent-id",
-        "topic_overtime",
-        "--role",
-        "assistant",
-        "Work this topic before shaping the pitch",
-        "--format",
-        "json",
-    ])
+    provenance_stdin(
+        &[
+            "topics",
+            "topic_overtime",
+            "discussions",
+            "create",
+            "--repo",
+            repo,
+            "--scope",
+            "default",
+            "--stdin",
+            "--format",
+            "json",
+        ],
+        r#"{"role":"assistant","body":"Work this topic before shaping the pitch"}"#,
+    )
     .success()
-    .stdout(contains("thread_topic_topic_overtime"));
+    .stdout(contains("discussion"));
 }
 
 fn post_question_thread(repo: &str) {
-    provenance(&[
-        "thread",
-        "post",
-        "--repo",
-        repo,
-        "--scope",
-        "default",
-        "--parent-type",
-        "question",
-        "--parent-id",
-        "question_overtime_threshold",
-        "--role",
-        "assistant",
-        "Answered from SCHADS clause 28.1",
-        "--format",
-        "json",
-    ])
+    provenance_stdin(
+        &[
+            "questions",
+            "question_overtime_threshold",
+            "discussions",
+            "create",
+            "--repo",
+            repo,
+            "--scope",
+            "default",
+            "--stdin",
+            "--format",
+            "json",
+        ],
+        r#"{"role":"assistant","body":"Answered from SCHADS clause 28.1"}"#,
+    )
     .success()
-    .stdout(contains("thread_question_question_overtime_threshold"));
+    .stdout(contains("discussion"));
 }
 
 fn verify_materialized_lists(repo: &str) {
@@ -167,44 +143,4 @@ fn verify_materialized_lists(repo: &str) {
     ])
     .success()
     .stdout(contains("boundary_no_manual_rework"));
-}
-
-fn export_scope(repo: &str, export_path: &str) {
-    provenance(&[
-        "export",
-        "--repo",
-        repo,
-        "--scope",
-        "default",
-        "--format",
-        "json",
-        "--output",
-        export_path,
-    ])
-    .success();
-}
-
-fn import_export_roundtrip(import_repo: &str, export_path: &str, import_export_path: &str) {
-    init(import_repo);
-    provenance(&[
-        "import",
-        "--repo",
-        import_repo,
-        "--scope",
-        "default",
-        "--input",
-        export_path,
-        "--format",
-        "json",
-    ])
-    .success();
-    export_scope(import_repo, import_export_path);
-
-    let exported = std::fs::read_to_string(import_export_path).unwrap();
-    assert!(exported.contains(r#""boundaries""#));
-    assert!(exported.contains(r#""topics""#));
-    assert!(exported.contains(r#""questions""#));
-    assert!(exported.contains("boundary_no_manual_rework"));
-    assert!(exported.contains("topic_overtime"));
-    assert!(exported.contains("question_overtime_threshold"));
 }

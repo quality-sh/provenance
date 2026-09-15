@@ -1,3 +1,5 @@
+#![allow(clippy::result_large_err)]
+
 use super::{
     entry::{entries, DataFreeCall, RepositoryCall},
     Operation, OperationFuture, PreparedContext,
@@ -116,16 +118,8 @@ pub(super) fn invoke_resolved<O: Operation>(
         let success = invoke_typed::<O>(context, request)
             .await
             .map_err(frame_failure::<O>)?;
-        serde_json::to_value(success).map_err(|_| {
-            FailureEnvelope::new(
-                Some(O::NAME),
-                if O::MUTATES {
-                    OperationFailure::UncertainWrite
-                } else {
-                    OperationFailure::Internal
-                },
-            )
-        })
+        serde_json::to_value(success)
+            .map_err(|_| FailureEnvelope::new(Some(O::NAME), OperationFailure::Internal))
     })
 }
 

@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { startFixtureHost } from "../scripts/fixture-host.js";
-import { PROTOCOL_VERSION } from "./generated/client.js";
+import { OperationError } from "./client.js";
 
 import {
   apply,
@@ -79,38 +79,36 @@ async function readsTheEnginesBoundedAnswers(): Promise<void> {
     await apply();
 
     const fetched = await get({ node_type: "rule", id: expiry.id });
-    assert.equal(fetched.protocol_version, PROTOCOL_VERSION);
-    assert.equal(fetched.operation, "get");
-    assert.equal(fetched.found, true);
-    assert.equal(fetched.node?.id, expiry.id);
+    assert.equal(fetched.data.id, expiry.id);
+    assert.deepEqual(fetched.meta, {});
 
-    const matched = await search({ text: "time bounded" });
-    assert.equal(matched.has_more, false);
-    assert.deepEqual(matched.nodes.map((node) => node.id), [sharing.id]);
+    const matched = await search({ collection: "requirements", text: "time bounded" });
+    assert.equal(matched.meta.has_more, false);
+    assert.deepEqual(matched.data.items.map((node) => node.id), [sharing.id]);
 
-    const around = await neighbors({ id: expiry.id });
+    const around = await neighbors({ node_type: "rule", id: expiry.id });
     assert.deepEqual(
-      around.neighbors.map((neighbor) => neighbor.node.id),
+      around.data.neighbors.map((neighbor) => neighbor.node.id),
       [sharing.id],
     );
 
     // The source is named by the requirement's citation and the requirement
     // by the rule's list, so the walk to the rule reads `in` at every hop.
-    const walked = await trace({ id: retention.id, direction: "in" });
+    const walked = await trace({ node_type: "source", id: retention.id, direction: "in" });
     assert.ok(
-      walked.nodes.some((reached) => reached.node.id === expiry.id && reached.depth === 2),
+      walked.data.nodes.some((reached) => reached.node.id === expiry.id && reached.depth === 2),
     );
 
-    const reached = await impact({ id: sharing.id });
-    assert.deepEqual(reached.affected_rules.map((rule) => rule.id), [expiry.id]);
+    const reached = await impact({ node_type: "requirement", id: sharing.id });
+    assert.deepEqual(reached.data.affected_rules.map((rule) => rule.id), [expiry.id]);
 
     const behind = await evidence({ rule: expiry.id });
-    assert.equal(behind.rule_id, expiry.id);
-    assert.equal(behind.review_required, false);
-    assert.equal(behind.stale, null);
+    assert.equal(behind.data.rule_id, expiry.id);
+    assert.equal(behind.data.review_required, false);
+    assert.equal(behind.data.stale, null);
 
     const resolved = await resolveSymbol({ file: "share-links.ts" });
-    assert.deepEqual(resolved.rules, []);
+    assert.deepEqual(resolved.data.items, []);
   } finally {
     await fixture.close();
   }
@@ -121,32 +119,13 @@ test(
   readsTheEnginesBoundedAnswers,
 );
 
-test("a query freshness option overrides the repository setting", async () => {
+test("a missing member is a typed resource failure", async () => {
   const fixture = await repository();
-  const repo = fixture.repo;
   try {
     configure({ ...fixture.settings, owner: "spec://freshness" });
     const request = { node_type: "requirement" as const, id: "req_missing" };
-    await get(request);
-    writeFileSync(join(repo, ".provenance/settings.json"), JSON.stringify({ read: { freshness_policy: "catch_up" } }));
-    execFileSync("git", ["init", "--quiet", repo]);
-    execFileSync("git", ["-c", "user.name=Test", "-c", "user.email=test@example.com",
-      "-c", "core.hooksPath=/dev/null", "commit", "--allow-empty", "--quiet", "-m", "Initialize test repository"], { cwd: repo });
-    const options = { freshness: "annotate_only" as const };
-    const queries = [
-      () => get(request, options),
-      () => search({ text: "missing" }, options),
-      () => neighbors({ id: "req_missing" }, options),
-      () => trace({ id: "req_missing" }, options),
-      () => impact({ id: "req_missing" }, options),
-      () => evidence({ rule: "rule_missing" }, options),
-      () => stale({ base: "HEAD", head: "HEAD" }, options),
-      () => resolveSymbol({ file: "missing.rs" }, options),
-    ];
-    for (const query of queries) {
-      const answer = await query();
-      assert.equal(answer.stamp.policy, "annotate_only");
-    }
+    await assert.rejects(get(request), error =>
+      error instanceof OperationError && error.status === 404);
   } finally {
     await fixture.close();
   }

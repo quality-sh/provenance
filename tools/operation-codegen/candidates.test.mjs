@@ -29,8 +29,6 @@ type Issue = Assert<Equal<Schemas['ReportOutput']['issue'],9>>;
 type Stale = Assert<null extends Schemas['EvidenceOutput']['stale'] ? true : false>;
 type StaleRequired = Assert<{} extends Pick<Schemas['EvidenceOutput'],'stale'> ? false : true>;
 type NodeOptional = Assert<{} extends Pick<Schemas['GetOutput'],'node'> ? true : false>;
-type GetIdentity = Assert<Equal<Schemas['GetOutput']['operation'],'get'>>;
-type EvidenceIdentity = Assert<Equal<Schemas['EvidenceOutput']['operation'],'evidence'>>;
 type FoundFlat = Assert<Equal<Schemas['GetOutput']['found'],boolean>>;
 type CreatedFlat = Assert<Equal<Schemas['PlanOutput']['created'],number>>;
 type Cut = Assert<Equal<Schemas['EvidenceOutput']['reviews_has_more'],boolean>>;
@@ -46,32 +44,20 @@ const node: Schemas['GraphNodeOutput']['node_type'] = 'invented';
     for (const name of ['client.ts', 'schema.ts', 'runtime.ts', 'validators.mjs', 'validators.d.mts']) await writeFile(join(temporary, 'client', name), await readFile(join(root, 'packages/provenance/src/generated', name)));
     await writeFile(join(temporary, 'client', 'assertions.ts'), `import { HttpClient, type OperationFailure, type components } from './client';
 declare const client: HttpClient;
-client.info({context:{repository:'first'},request:{}});
-const context = {repository:'first',scope:'default'};
-client.impact({context,request:{id:'rule_shared'}});
-client.resolveSymbol({context,request:{file:'code.rs',symbol:null}});
-client.evidence({context,request:{rule:'rule_shared',base:null}});
-client.stale({context,request:{base:'HEAD',head:null}});
-client.verificationRuns({context,request:{rule:null}});
-client.verificationBindings({context,request:{}});
-// @ts-expect-error verification lists do not accept freshness policy
-client.verificationRuns({context:{...context,freshness:'catch_up'},request:{}});
-// @ts-expect-error verification lists remain unbounded with a closed request
-client.verificationBindings({context,request:{limit:1}});
-client.get({context:{repository:'first',scope:'default',freshness:null},request:{node_type:'rule',id:'rule_shared'}});
-// @ts-expect-error scoped get needs a scope
-client.get({context:{repository:'first'},request:{node_type:'rule',id:'rule_shared'}});
-// @ts-expect-error info context has no scope
-client.info({context:{repository:'first',scope:'default'},request:{}});
+client.listSources({query:'search',text:'fixture'});
+client.getRule({id:'rule_shared',query:'impact'});
+client.listRules({query:'resolve-symbol',file:'code.rs',symbol:'symbol'});
+client.getRuleEvidence({id:'rule_shared'});
+client.listVerificationRuns({});
+client.listVerificationBindings({});
+client.checkStatement({data:{statement:'Stop.'}});
+// @ts-expect-error connection identity never appears in a resource call
+client.listSources({repository:'first'});
 type Assert<T extends true> = T;
 type Closed = Assert<'invented' extends OperationFailure['error']['kind'] ? false : true>;
-declare const node: NonNullable<components['schemas']['GetSuccessOutput']['node']>;
-if (node.node_type === 'rule') { const statement: string = node.statement; }
-if (node.node_type === 'source') { const kind: components['schemas']['GetSuccessOutputSourceType'] = node.source_type; }
-type StatementSubset = Assert<'stale' extends components['schemas']['CheckStatementFailureOutput']['error']['kind'] ? false : true>;
-function facts(failure: OperationFailure): string | undefined {
-  if (failure.operation === 'get' && failure.error.kind === 'stale') return failure.error.moved[0]?.stored;
-}
+type SourceData = Extract<components['schemas']['GetSourceSuccess']['data'], { url: string | null }>;
+declare const source: SourceData;
+const name: string = source.name;
 `);
     run(process.execPath, [join(root, 'tools/operation-codegen/node_modules/typescript/bin/tsc'), '--strict', '--noEmit', '--skipLibCheck', '--target', 'es2022', join(temporary, 'client', 'assertions.ts')]);
     // Cargo reports the exporter path, including any configured build cache.
@@ -81,7 +67,7 @@ function facts(failure: OperationFailure): string | undefined {
     await writeFile(join(temporary, 'Cargo.toml'), `[package]\nname="operation-generator-candidate"\nversion="0.0.0"\nedition="2021"\n[workspace]\n[dependencies]\nserde={version="=1.0.228",features=["derive"]}\nserde_json="=1.0.150"\nchrono={version="=0.4.45",features=["serde"]}\nuuid={version="=1.24.0",features=["serde"]}\nregress="=0.11.1"\n`);
     await writeFile(join(temporary, 'Cargo.lock'), await readFile(join(root, 'Cargo.lock')));
     const roundtrips = Object.keys(document['x-wire-fixtures']).map(name => `let decoded: ${name} = serde_json::from_value(fixtures["${name}"].clone()).unwrap(); assert_eq!(serde_json::to_value(decoded).unwrap(), fixtures["${name}"], "${name}");`).join('\n');
-    await writeFile(join(temporary, 'src/lib.rs'), `#![allow(dead_code)]\ninclude!("generated/types.rs");\n#[test] fn actual_wire_values_round_trip() { let fixtures: serde_json::Value = serde_json::from_str(include_str!("../fixtures.json")).unwrap(); ${roundtrips} }\n#[test] fn numeric_issue_is_closed() { let mut report: serde_json::Value = serde_json::from_str(include_str!("../fixtures.json")).unwrap(); report["ReportOutput"]["issue"] = serde_json::json!(8); assert!(serde_json::from_value::<ReportOutput>(report["ReportOutput"].clone()).is_err()); }\n#[test] fn envelopes_reject_wrong_identity() { let fixtures: serde_json::Value = serde_json::from_str(include_str!("../fixtures.json")).unwrap(); let mut get = fixtures["GetOutput"].clone(); get["operation"] = serde_json::json!("evidence"); assert!(serde_json::from_value::<GetOutput>(get).is_err()); let mut evidence = fixtures["EvidenceOutput"].clone(); evidence["protocol_version"] = serde_json::json!(0); assert!(serde_json::from_value::<EvidenceOutput>(evidence).is_err()); }\n#[test] fn query_default_and_wire_types_survive_generation() { let search: SearchInput = serde_json::from_value(serde_json::json!({"text":"x"})).unwrap(); assert_eq!(serde_json::to_value(search.limit).unwrap(), serde_json::json!(50)); for limit in [serde_json::Value::Null,serde_json::json!("50")] { assert!(serde_json::from_value::<SearchInput>(serde_json::json!({"text":"x","limit":limit})).is_err(), "accepted limit {limit}"); } for limit in [1,200] { assert!(serde_json::from_value::<SearchInput>(serde_json::json!({"text":"x","limit":limit})).is_ok()); } assert!(serde_json::from_value::<SearchInput>(serde_json::json!({"text":"x","node_types":null})).is_err()); }`);
+    await writeFile(join(temporary, 'src/lib.rs'), `#![allow(dead_code)]\ninclude!("generated/types.rs");\n#[test] fn actual_wire_values_round_trip() { let fixtures: serde_json::Value = serde_json::from_str(include_str!("../fixtures.json")).unwrap(); ${roundtrips} }\n#[test] fn numeric_issue_is_closed() { let mut report: serde_json::Value = serde_json::from_str(include_str!("../fixtures.json")).unwrap(); report["ReportOutput"]["issue"] = serde_json::json!(8); assert!(serde_json::from_value::<ReportOutput>(report["ReportOutput"].clone()).is_err()); }\n#[test] fn query_default_and_wire_types_survive_generation() { let search: SearchInput = serde_json::from_value(serde_json::json!({"text":"x"})).unwrap(); assert_eq!(serde_json::to_value(search.limit).unwrap(), serde_json::json!(50)); for limit in [serde_json::Value::Null,serde_json::json!("50")] { assert!(serde_json::from_value::<SearchInput>(serde_json::json!({"text":"x","limit":limit})).is_err(), "accepted limit {limit}"); } for limit in [1,200] { assert!(serde_json::from_value::<SearchInput>(serde_json::json!({"text":"x","limit":limit})).is_ok()); } assert!(serde_json::from_value::<SearchInput>(serde_json::json!({"text":"x","node_types":null})).is_err()); }`);
     run('cargo', ['test', '--quiet', '--offline', '--manifest-path', join(temporary, 'Cargo.toml')]);
   } finally { await rm(temporary, { recursive: true, force: true }); }
 });

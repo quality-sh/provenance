@@ -16,12 +16,19 @@ mod failures;
 mod ideation;
 mod invoke;
 mod records;
+mod resource_lists;
+#[cfg(feature = "schema")]
+mod routes;
 #[cfg(feature = "schema")]
 mod schema;
 mod scoped_list;
 mod statement;
 mod updates;
+mod v2_review;
+mod v2_review_reads;
 pub use updates::*;
+pub use v2_review::*;
+pub use v2_review_reads::*;
 
 pub use authoring::{Apply, BeginVerification, CompleteVerification, Plan};
 pub use context::{
@@ -40,7 +47,7 @@ pub use ideation::{
 };
 pub use invoke::{invoke, invoke_typed, invoke_with};
 #[cfg(feature = "schema")]
-pub use schema::{bind_response_identity, definitions, Definition};
+pub use schema::{definitions, Definition, HttpMethod, Parameter, ResponseKind};
 pub use statement::CheckStatement;
 
 #[cfg(test)]

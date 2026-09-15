@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { lintFixture, lintRoutes } from './grammar-lint.mjs';
+import { documentGrammarErrors, lintFixture, lintRoutes } from './grammar-lint.mjs';
 
 function baseFixture() {
   return {
@@ -84,6 +84,29 @@ test('MCP-only wrappers are rejected', () => {
   assert.ok(errorsFor([{ id: 'mcp', method: 'GET', path: '/requirements', mutates: false, statuses: [500], response: 'items', mcp_only: true }]).some(e => /MCP-only wrappers/.test(e)));
 });
 
+test('payload identity repetition and empty tool descriptions are rejected', () => {
+  const document = { paths: { '/requirements/{id}': { patch: {
+    description: 'short', parameters: [],
+    requestBody: { content: { 'application/json': { schema: { properties: { data: {
+      properties: { id: { type: 'string' }, scope_id: { type: 'string' } },
+    } } } } } },
+  } } } };
+  const errors = documentGrammarErrors(document, { tools: [{ name: 'update-requirement', description: 'Invoke the shared operation.' }] });
+  assert.ok(errors.some(error => error.includes("path field 'id'")), errors.join('; '));
+  assert.ok(errors.some(error => error.includes("connection field 'scope_id'")), errors.join('; '));
+  assert.ok(errors.some(error => error.includes('tool-description-usefulness')), errors.join('; '));
+});
+
+test('an immutable child id does not repeat its Proposal parent id', () => {
+  const document = { paths: { '/proposals/{id}/assertions': { post: {
+    description: 'Add one immutable assertion to a Proposal.', parameters: [],
+    requestBody: { content: { 'application/json': { schema: { properties: { data: {
+      properties: { id: { type: 'string' } },
+    } } } } } },
+  } } } };
+  assert.deepEqual(documentGrammarErrors(document), []);
+});
+
 test('undeclared actions and queries are rejected', () => {
   assert.ok(errorsFor([{ id: 'act', method: 'POST', path: '/requirements/{id}/promote', action: 'promote', mutates: true, statuses: [400, 401, 403, 404, 409, 500, 503] }]).some(e => /action 'promote' is not declared/.test(e)));
   assert.ok(errorsFor([{ id: 'q', method: 'GET', path: '/requirements', query: 'rank', mutates: false, statuses: [500], response: 'items' }]).some(e => /query 'rank' is not declared/.test(e)));
@@ -101,6 +124,41 @@ test('missing status declarations are rejected', () => {
   assert.ok(errorsFor([{ id: 'nobase', method: 'GET', path: '/requirements/{id}', mutates: false, statuses: [400, 500] }]).some(e => /base status 401 is not declared/.test(e)));
   assert.ok(errorsFor([{ id: 'noconflict', method: 'POST', path: '/requirements', mutates: true, statuses: [400, 401, 403, 404, 500, 503], response: 'resource' }]).some(e => /must declare 409/.test(e)));
   assert.ok(errorsFor([{ id: 'unsorted', method: 'GET', path: '/requirements/{id}', mutates: false, statuses: [500, 400, 401, 403, 404, 503] }]).some(e => /sorted and unique/.test(e)));
+});
+
+test('declared statuses cover every live failure variant status', () => {
+  const document = {
+    paths: {
+      '/requirements/{id}': {
+        get: {
+          operationId: 'getRequirement',
+          description: 'Read one Requirement from the selected scope.',
+          parameters: [],
+          responses: {
+            200: { content: { 'application/json': { schema: {} } } },
+            400: { content: { 'application/json': { schema: { $ref: '#/components/schemas/FailureEnvelope' } } } },
+            401: {}, 403: {}, 404: {}, 409: {}, 500: {},
+          },
+        },
+      },
+    },
+    components: {
+      schemas: {
+        FailureEnvelope: {
+          properties: { error: { $ref: '#/components/schemas/ReadFailure' } },
+        },
+        ReadFailure: {
+          oneOf: [
+            { properties: { kind: { const: 'resource_not_found' } } },
+            { properties: { kind: { const: 'file_unavailable' } } },
+          ],
+        },
+      },
+    },
+  };
+
+  assert.ok(documentGrammarErrors(document).some(error =>
+    /file_unavailable.*503|503.*file_unavailable/.test(error)));
 });
 
 test('a connection-scoped metadata read is exempt from the 404 base requirement', () => {

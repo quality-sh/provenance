@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 /// One singleton reference edit: the record id sets it, JSON `null` clears it.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(untagged)]
 pub enum SingleEdit {
@@ -32,6 +33,7 @@ fn single_edit_field<'de, D: serde::Deserializer<'de>>(
 
 /// One list edit: an array is the complete final set; an object names a
 /// partial delta of entries to add and entries to remove.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(untagged)]
 pub enum ListEdit {
@@ -68,6 +70,7 @@ impl<'de> Deserialize<'de> for ListEdit {
 /// One citation edit: an array is the complete final set of citations; an
 /// object names a partial delta that adds citations and removes every clause
 /// of the sources it names.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(untagged)]
 pub enum CitesEdit {
@@ -129,6 +132,7 @@ fn parse<T: serde::de::DeserializeOwned>(value: Value) -> anyhow::Result<T> {
 /// The Store expands the edit against the record's current state under the
 /// publication lock, and every validation runs on the resulting final
 /// resource.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RequirementRelations {
@@ -152,6 +156,7 @@ pub struct RequirementRelations {
     pub cites: Option<CitesEdit>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SaveRequirement {

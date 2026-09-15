@@ -1,7 +1,7 @@
 use camino::Utf8Path;
 use provenance_core::{
     AssertionRecord, Boundary, Contribution, DispositionRecord, Domain, ImplementationBinding,
-    Message, ProposalCard, Question, Requirement, Resolution, Rule, ScopeId, Source, StableId,
+    Message, ProposalCard, Question, Requirement, Resolution, Rule, ScopeId, Source,
     SynthesisPacket, Thread, Topic, VerificationBinding,
 };
 use provenance_store::{layout::ProvenanceLayout, state_store::StateStore};
@@ -21,28 +21,6 @@ impl Store {
 
     pub const fn layout(&self) -> &ProvenanceLayout {
         &self.layout
-    }
-
-    pub fn requirement(&self, scope: &ScopeId, id: &StableId) -> anyhow::Result<Requirement> {
-        self.list_requirements(scope)?
-            .into_iter()
-            .find(|record| record.id == *id)
-            .ok_or_else(|| anyhow::Error::new(NotFound::Requirement))
-    }
-
-    pub fn rule(&self, scope: &ScopeId, id: &StableId) -> anyhow::Result<Rule> {
-        self.list_rules(scope)?
-            .into_iter()
-            .find(|record| record.id == *id)
-            .ok_or_else(|| anyhow::Error::new(NotFound::Rule(id.clone())))
-    }
-
-    #[allow(dead_code)]
-    pub fn source(&self, scope: &ScopeId, id: &StableId) -> anyhow::Result<Source> {
-        self.list_sources(scope)?
-            .into_iter()
-            .find(|record| record.id == *id)
-            .ok_or_else(|| anyhow::Error::new(NotFound::Source))
     }
 
     pub fn snapshot(&self, scope: &ScopeId) -> anyhow::Result<ScopeSnapshot> {
@@ -77,25 +55,6 @@ impl std::ops::Deref for Store {
         &self.state
     }
 }
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum NotFound {
-    Requirement,
-    Rule(StableId),
-    Source,
-}
-
-impl std::fmt::Display for NotFound {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Requirement => formatter.write_str("requirement does not exist"),
-            Self::Rule(id) => write!(formatter, "rule `{}` not found in scope", id.as_str()),
-            Self::Source => formatter.write_str("source does not exist"),
-        }
-    }
-}
-
-impl std::error::Error for NotFound {}
 
 #[derive(Debug)]
 pub struct ScopeSnapshot {

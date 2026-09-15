@@ -245,11 +245,137 @@ export function lintFixture(fixture, { catalogNames = null } = {}) {
   return [...coverageErrors(fixture, catalogNames), ...lintRoutes(fixture)];
 }
 
+function operationEntries(document) {
+  return Object.entries(document?.paths ?? {}).flatMap(([path, item]) =>
+    ['get', 'post', 'patch'].flatMap(method => item?.[method] ? [{ path, method: method.toUpperCase(), operation: item[method] }] : []));
+}
+
+function matchesFixturePath(pattern, actual) {
+  const variants = pattern.includes('[')
+    ? [pattern.replace(/\[.*\]/, ''), pattern.replaceAll('[', '').replaceAll(']', '')]
+    : [pattern];
+  return variants.some(variant => {
+    const expected = variant.split('/').filter(Boolean);
+    const received = actual.split('/').filter(Boolean);
+    return expected.length === received.length && expected.every((part, index) =>
+      /^\{[a-z0-9_]+\}$/.test(part) ? received[index].length > 0 : part === received[index]);
+  });
+}
+
+export function surfaceCoverageErrors(fixture, document) {
+  const live = operationEntries(document);
+  const errors = [];
+  for (const entry of live) {
+    if (!fixture.routes.some(route => route.method === entry.method && matchesFixturePath(route.path, entry.path))) {
+      errors.push(`live route ${entry.method} ${entry.path}: no Phase 1 fixture pattern accounts for it`);
+    }
+  }
+  for (const route of fixture.routes) {
+    if (!live.some(entry => entry.method === route.method && matchesFixturePath(route.path, entry.path))) {
+      errors.push(`route ${route.id}: no live catalog route implements this fixture pattern`);
+    }
+  }
+  return errors;
+}
+
+function resolveSchema(document, schema) {
+  const name = schema?.$ref?.match(/^#\/components\/schemas\/(.+)$/)?.[1];
+  return name ? document.components?.schemas?.[name] : schema;
+}
+
+const FAILURE_STATUS = new Map([
+  ['invalid_input', 400], ['protocol_mismatch', 400],
+  ['unknown_operation', 404], ['unknown_target', 404], ['unknown_scope', 404],
+  ['unauthenticated', 401], ['access_denied', 403], ['unavailable_needs', 503], ['internal', 500],
+  ['resource_not_found', 404], ['read_failed', 500], ['file_access_denied', 403],
+  ['file_unavailable', 503], ['git_unavailable', 503],
+  ['cursor_invalid', 409], ['cursor_revision_changed', 409], ['page_budget_exceeded', 409],
+  ['page_record_too_large', 409], ['document_root_missing', 409],
+  ['document_catch_up_failed', 409], ['git_revision_not_found', 409], ['no_projection', 409],
+  ['stale', 409], ['unit_unreadable', 409], ['schema_behind', 409], ['half_migrated', 409],
+  ['write_failed', 500], ['record_ownership_conflict', 409], ['already_exists', 409],
+  ['ownership_conflict', 409], ['already_complete', 409],
+  ['schema_version', 400], ['invalid_commit_pin', 400], ['scope_mismatch', 400],
+  ['empty_message_body', 400], ['unsupported_thread_parent', 400], ['statement_invalid', 400],
+  ['invalid_declaration', 400], ['invalid_update', 400], ['missing_reference', 400],
+  ['statement_rejected', 400], ['invalid_verification_target', 400], ['invalid_completion', 400],
+]);
+
+function failureKinds(document, schema, seen = new Set(), kinds = new Set()) {
+  if (Array.isArray(schema)) {
+    for (const child of schema) failureKinds(document, child, seen, kinds);
+    return kinds;
+  }
+  if (schema === null || typeof schema !== 'object') return kinds;
+  const reference = schema.$ref;
+  if (typeof reference === 'string' && reference.startsWith('#/')) {
+    if (seen.has(reference)) return kinds;
+    seen.add(reference);
+    let resolved = document;
+    for (const part of reference.slice(2).split('/')) resolved = resolved?.[part];
+    failureKinds(document, resolved, seen, kinds);
+    return kinds;
+  }
+  const kind = schema.properties?.kind?.const;
+  if (typeof kind === 'string') kinds.add(kind);
+  for (const child of Object.values(schema)) failureKinds(document, child, seen, kinds);
+  return kinds;
+}
+
+function statusDriftErrors(document, path, method, operation) {
+  const declared = new Set(Object.keys(operation.responses ?? {}).map(Number));
+  const failure = Object.entries(operation.responses ?? {})
+    .find(([status]) => Number(status) >= 400)?.[1]
+    ?.content?.['application/json']?.schema;
+  const errors = [];
+  for (const kind of failureKinds(document, failure)) {
+    const status = FAILURE_STATUS.get(kind);
+    if (status === undefined) {
+      errors.push(`${method} ${path}: failure variant '${kind}' has no runtime status mapping`);
+    } else if (!declared.has(status)) {
+      errors.push(`${method} ${path}: failure variant '${kind}' can produce undeclared status ${status}`);
+    }
+  }
+  return errors;
+}
+
+export function documentGrammarErrors(document, mcp = null) {
+  const errors = [];
+  const banned = 'Invoke the shared operation.';
+  for (const { path, method, operation } of operationEntries(document)) {
+    const where = `${method} ${path}`;
+    if (typeof operation.description !== 'string' || operation.description.trim().length < 20 || operation.description.includes(banned)) {
+      errors.push(`${where}: tool-description-usefulness requires a specific resource-focused description`);
+    }
+    const body = resolveSchema(document, operation.requestBody?.content?.['application/json']?.schema);
+    const data = resolveSchema(document, body?.properties?.data);
+    const fields = Object.keys(data?.properties ?? {});
+    for (const identity of ['repository', 'repo', 'scope', 'scope_id', 'collection']) {
+      if (fields.includes(identity)) errors.push(`${where}: payload-identity-repetition rejects connection field '${identity}'`);
+    }
+    for (const identity of pathVariables(path)) {
+      const createsImmutableChild = method === 'POST'
+        && identity === 'id'
+        && /^\/proposals\/\{id\}\/(assertions|dispositions)$/.test(path);
+      if (createsImmutableChild) continue;
+      if (fields.includes(identity)) errors.push(`${where}: payload-identity-repetition rejects path field '${identity}'`);
+    }
+    errors.push(...statusDriftErrors(document, path, method, operation));
+  }
+  for (const tool of mcp?.tools ?? []) {
+    if (typeof tool.description !== 'string' || tool.description.trim().length < 20 || tool.description.includes(banned)) {
+      errors.push(`MCP tool ${tool.name ?? '(unnamed)'}: tool-description-usefulness requires a specific resource-focused description`);
+    }
+  }
+  return errors;
+}
+
 /// Extracts the legacy catalog operation names from the exported OpenAPI
 /// document. The legacy surface is one catch-all shape: `/v{version}/operations/{name}`,
 /// plus `/metadata`.
 export function catalogNamesFromDocument(document) {
-  return Object.keys(document?.paths ?? {})
+  const names = Object.keys(document?.paths ?? {})
     .filter(path => path.includes('/operations/'))
     .map(path => path.slice(path.indexOf('/operations/') + '/operations/'.length));
+  return names.length === 0 ? null : names;
 }

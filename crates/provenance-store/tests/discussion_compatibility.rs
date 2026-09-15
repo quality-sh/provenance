@@ -90,7 +90,7 @@ fn a_message_read_failure_after_legacy_thread_publication_remains_uncertain() {
         .unwrap_err();
     assert!(matches!(
         provenance_store::write_error::WriteError::from(error).safe(),
-        provenance_store::write_error::WriteFailure::UncertainWrite
+        provenance_store::write_error::WriteFailure::WriteFailed
     ));
     assert_eq!(store.list_threads(&scope()).unwrap().len(), 1);
     assert_eq!(std::fs::read_to_string(path).unwrap(), "invalid JSON\n");

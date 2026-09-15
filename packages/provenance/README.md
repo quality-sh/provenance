@@ -39,9 +39,9 @@ Browser callers can import the named `HttpClient` and error classes from
 `@quality-sh/provenance/client`. That subpath has no Node or subprocess imports.
 Both clients validate responses against generated contracts and bound them to
 16 MiB. `OperationError` carries a validated declared failure; `ConnectionError`
-and `MalformedResponseError` identify read failures. A lost or malformed write
-response raises `UncertainWriteError`. Inspect state before deciding whether to
-retry. Clients never retry operations or replay redirects automatically.
+and `MalformedResponseError` identify transport or contract failures. A write
+returns success or one of these typed errors. The clients keep no uncertain
+write ledger. They never retry mutations or replay redirects automatically.
 
 ## Consumer CI
 
@@ -316,10 +316,10 @@ const around = await neighbors({ id: expiry.id, direction: "in" });
 const walked = await trace({ id: retention.id, direction: "out", max_depth: 2 });
 ```
 
-Every answer opens with `protocol_version` and `operation`. Every answer that can hold more than
-one record takes `limit`, 50 by default and 200 at most, and reports `limit`
-and `has_more`. These functions send their request to the engine and return its
-answer unchanged: walking, filtering, and paging all happen in Rust.
+Every answer uses `{data,meta}`. Lists place records in `data.items`. Bounded
+reads take `limit`, 50 by default and 200 at most, and report paging fields in
+`meta`. These functions send their request to the engine and return its answer
+unchanged: walking, filtering, and paging all happen in Rust.
 
 Removing `.implementedBy(...)` from an active Rule deletes that
 spec's canonical implementation binding. Plan reports the Rule as updated with

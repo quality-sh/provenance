@@ -11,6 +11,19 @@ use std::{
 
 pub const MAX_RESPONSE_BYTES: usize = 16 * 1024 * 1024;
 
+pub fn path(value: &str) -> String {
+    let mut encoded = String::with_capacity(value.len());
+    for byte in value.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
+            encoded.push(char::from(byte));
+        } else {
+            use std::fmt::Write as _;
+            write!(encoded, "%{byte:02X}").expect("writing to a String cannot fail");
+        }
+    }
+    encoded
+}
+
 /// Safe public context with the underlying cause retained for error chaining.
 pub struct ResponseFailure {
     cause: Box<dyn StdError + Send + Sync>,
@@ -55,57 +68,25 @@ pub enum Error {
     MalformedResponse(#[source] ResponseFailure),
     #[error("incompatible operation protocol: expected {expected}, received {received}")]
     ProtocolMismatch { expected: u32, received: u32 },
+    #[error("incompatible compatibility tuple")]
+    CompatibilityMismatch,
+    #[error("host metadata does not match the requested repository and scope")]
+    IdentityMismatch,
     #[error("operation failed with status {status}")]
     Operation {
         status: u16,
         failure: OperationFailure,
     },
-    #[error("write outcome is uncertain; inspect repository state before retrying")]
-    UncertainWrite {
-        operation: &'static str,
-        #[source]
-        cause: ResponseFailure,
-        failure: Option<Box<OperationFailure>>,
-    },
 }
 
-pub fn connection(operation: &'static str, mutates: bool, cause: reqwest::Error) -> Error {
-    outcome(operation, mutates, ResponseFailure::new(cause), false)
+pub fn connection(_: &'static str, _: bool, cause: reqwest::Error) -> Error {
+    Error::Connection(ResponseFailure::new(cause))
 }
-const fn outcome(
-    operation: &'static str,
-    mutates: bool,
-    cause: ResponseFailure,
-    malformed: bool,
-) -> Error {
-    if mutates {
-        Error::UncertainWrite {
-            operation,
-            cause,
-            failure: None,
-        }
-    } else if malformed {
-        Error::MalformedResponse(cause)
-    } else {
-        Error::Connection(cause)
-    }
+const fn outcome(cause: ResponseFailure) -> Error {
+    Error::MalformedResponse(cause)
 }
 pub fn metadata_status() -> Error {
     Error::Connection(ResponseFailure::contract())
-}
-pub fn uncertain(operation: &'static str, failure: OperationFailure) -> Error {
-    Error::UncertainWrite {
-        operation,
-        cause: ResponseFailure::contract(),
-        failure: Some(Box::new(failure)),
-    }
-}
-pub fn uncertain_kind(value: &Value, mutates: bool) -> bool {
-    match value.pointer("/error/kind").and_then(Value::as_str) {
-        Some("uncertain_write") => true,
-        Some("internal" | "write_failed") => mutates,
-        _ => false,
-    }
 }
 
 pub async fn read_json(
@@ -120,43 +101,31 @@ pub async fn read_json(
         .map_err(|cause| connection(operation, mutates, cause))?
     {
         if bytes.len().saturating_add(chunk.len()) > MAX_RESPONSE_BYTES {
-            return Err(outcome(
-                operation,
-                mutates,
-                ResponseFailure::contract(),
-                true,
-            ));
+            return Err(outcome(ResponseFailure::contract()));
         }
         bytes.extend_from_slice(&chunk);
     }
-    serde_json::from_slice(&bytes)
-        .map_err(|cause| outcome(operation, mutates, ResponseFailure::new(cause), true))
+    serde_json::from_slice(&bytes).map_err(|cause| outcome(ResponseFailure::new(cause)))
 }
 
 pub fn decode<T: DeserializeOwned>(
     value: Value,
-    operation: &'static str,
-    mutates: bool,
+    _operation: &'static str,
+    _mutates: bool,
 ) -> Result<T, Error> {
-    serde_json::from_value(value)
-        .map_err(|cause| outcome(operation, mutates, ResponseFailure::new(cause), true))
+    serde_json::from_value(value).map_err(|cause| outcome(ResponseFailure::new(cause)))
 }
 
 pub fn validate(
     value: &Value,
     schema: &str,
-    operation: &'static str,
-    mutates: bool,
+    _operation: &'static str,
+    _mutates: bool,
 ) -> Result<(), Error> {
-    if validators()[schema].is_valid(value) {
+    if validator(schema).is_valid(value) {
         Ok(())
     } else {
-        Err(outcome(
-            operation,
-            mutates,
-            ResponseFailure::contract(),
-            true,
-        ))
+        Err(outcome(ResponseFailure::contract()))
     }
 }
 
@@ -175,27 +144,51 @@ impl jsonschema::SchemaResolver for NoExternalSchemas {
         .into())
     }
 }
-fn validators() -> &'static BTreeMap<String, jsonschema::JSONSchema> {
-    static VALIDATORS: OnceLock<BTreeMap<String, jsonschema::JSONSchema>> = OnceLock::new();
+fn validators() -> &'static BTreeMap<String, OnceLock<jsonschema::JSONSchema>> {
+    static VALIDATORS: OnceLock<BTreeMap<String, OnceLock<jsonschema::JSONSchema>>> =
+        OnceLock::new();
     VALIDATORS.get_or_init(|| {
-        let mut document: Value = serde_json::from_str(include_str!("generated/responses.json")).expect("generated response schemas are JSON");
-        document["components"]["schemas"]["MetadataOutput"]["properties"]["protocol_version"].as_object_mut().expect("metadata version property").remove("const");
-        document["response_schemas"].as_array().expect("generated response inventory").iter().map(|name| {
-            let name = name.as_str().expect("schema name").to_owned();
-            let schema = json!({"$ref":format!("#/components/schemas/{name}"),"components":document["components"]});
-            let validator = jsonschema::JSONSchema::options()
-                .with_draft(jsonschema::Draft::Draft202012)
-                .with_resolver(NoExternalSchemas)
-                .compile(&schema).expect("generated response schema is valid");
-            (name, validator)
-        }).collect()
+        document()["response_schemas"]
+            .as_array()
+            .expect("generated response inventory")
+            .iter()
+            .map(|name| {
+                (
+                    name.as_str().expect("schema name").to_owned(),
+                    OnceLock::new(),
+                )
+            })
+            .collect()
+    })
+}
+
+fn document() -> &'static Value {
+    static DOCUMENT: OnceLock<Value> = OnceLock::new();
+    DOCUMENT.get_or_init(|| {
+        serde_json::from_str(include_str!("generated/responses.json"))
+            .expect("generated response schemas are JSON")
+    })
+}
+
+fn validator(name: &str) -> &'static jsonschema::JSONSchema {
+    validators()[name].get_or_init(|| {
+        let document = document();
+        let schema = json!({
+            "$ref":format!("#/components/schemas/{name}"),
+            "components":document["components"]
+        });
+        jsonschema::JSONSchema::options()
+            .with_draft(jsonschema::Draft::Draft202012)
+            .with_resolver(NoExternalSchemas)
+            .compile(&schema)
+            .expect("generated response schema is valid")
     })
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{uncertain_kind, MAX_RESPONSE_BYTES};
-    use serde_json::{json, Value};
+    use super::MAX_RESPONSE_BYTES;
+    use serde_json::Value;
 
     #[test]
     fn shared_client_policy_cases() {
@@ -204,15 +197,6 @@ mod tests {
             MAX_RESPONSE_BYTES as u64,
             policy["max_response_bytes"].as_u64().unwrap()
         );
-        for case in policy["refusals"].as_array().unwrap() {
-            assert_eq!(
-                uncertain_kind(
-                    &json!({"error":{"kind":case["kind"]}}),
-                    case["mutates"].as_bool().unwrap()
-                ),
-                case["uncertain"].as_bool().unwrap(),
-                "{case}"
-            );
-        }
+        assert!(policy.get("refusals").is_none());
     }
 }

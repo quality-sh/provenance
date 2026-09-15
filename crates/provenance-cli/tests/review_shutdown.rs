@@ -110,16 +110,15 @@ fn block_write(host: &Host, layout: &ProvenanceLayout) -> (File, TcpStream) {
         .status()
         .unwrap()
         .success());
-    let body = json!({"context":{"repository":"A","scope":"default"},"request":{
-        "scope_id":"default", "parent":{"node_type":"requirement","node_id":"req_example"},
-        "role":"user", "body":"The active write finishes before exit."
+    let body = json!({"data":{
+        "actor":"ben", "role":"user", "body":"The active write finishes before exit."
     }})
     .to_string();
     let mut stream = TcpStream::connect(&host.address).unwrap();
     stream
         .set_read_timeout(Some(Duration::from_secs(5)))
         .unwrap();
-    write!(stream, "POST /v9/operations/post-thread-message HTTP/1.1\r\nHost: {}\r\nAuthorization: Bearer {}\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{body}", host.address, host.token, body.len()).unwrap();
+    write!(stream, "POST /requirements/req_example/discussions HTTP/1.1\r\nHost: {}\r\nAuthorization: Bearer {}\r\nContent-Type: application/json\r\nIdempotency-Key: request_shutdown\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{body}", host.address, host.token, body.len()).unwrap();
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
         match rustix::fs::open(
@@ -142,6 +141,22 @@ fn block_write(host: &Host, layout: &ProvenanceLayout) -> (File, TcpStream) {
 #[test]
 fn first_signal_waits_for_an_active_write_to_finish() {
     let (repo, layout, manifest) = repository();
+    StateStore::new(layout.clone())
+        .create_requirement(provenance_store::state_store::CreateRequirementInput {
+            scope_id: ScopeId::new("default").unwrap(),
+            id: provenance_core::StableId::new("req_example").unwrap(),
+            statement: "The Requirement accepts review.".into(),
+            description: None,
+            status: provenance_core::RequirementStatus::Discovery,
+            domain_id: None,
+            refines: None,
+            depends_on: Vec::new(),
+            supersedes: Vec::new(),
+            spawned_by: None,
+            origin_thread: None,
+            origin_message: None,
+        })
+        .unwrap();
     let mut host = Host::start(repo.path());
     let (mut blocked, mut request) = block_write(&host, &layout);
     host.signal("-TERM");

@@ -13,7 +13,7 @@ From this directory, with the Rust CLI built:
 PROVENANCE_REPO="$PWD" cargo run --bin apply
 PROVENANCE_REPO="$PWD" cargo test
 ../../target/debug/provenance rules list --format json
-../../target/debug/provenance sdk verification-runs --format json
+../../target/debug/provenance verification-runs list --format json
 ```
 
 `cargo run --bin apply` reconciles the spec; `cargo test` runs the

@@ -1,6 +1,6 @@
 //! Safe failure data shared by operation adapters.
 
-use super::SDK_PROTOCOL_VERSION;
+use super::ResponseMeta;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -39,8 +39,6 @@ pub enum OperationFailure {
     UnavailableNeeds,
     #[error("internal operation failure")]
     Internal,
-    #[error("write outcome is uncertain; inspect saved state before another submission")]
-    UncertainWrite,
 }
 
 impl OperationFailure {
@@ -51,7 +49,7 @@ impl OperationFailure {
             Self::Unauthenticated => 401,
             Self::AccessDenied => 403,
             Self::UnavailableNeeds => 503,
-            Self::Internal | Self::UncertainWrite => 500,
+            Self::Internal => 500,
         }
     }
 }
@@ -60,18 +58,15 @@ impl OperationFailure {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[error("{error}")]
 pub struct FailureEnvelope<E = OperationFailure> {
-    pub protocol_version: u32,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub operation: Option<String>,
     pub error: E,
+    pub meta: ResponseMeta,
 }
 
 impl FailureEnvelope {
-    pub fn new(operation: Option<&str>, error: OperationFailure) -> Self {
+    pub fn new(_: Option<&str>, error: OperationFailure) -> Self {
         Self {
-            protocol_version: SDK_PROTOCOL_VERSION,
-            operation: operation.map(str::to_owned),
             error,
+            meta: ResponseMeta::default(),
         }
     }
 }
@@ -91,20 +86,17 @@ pub enum OperationError<F> {
 #[derive(Debug, Serialize, thiserror::Error)]
 #[error("operation failed")]
 pub struct ErasedFailure {
-    pub protocol_version: u32,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub operation: Option<String>,
     pub error: serde_json::Value,
+    pub meta: ResponseMeta,
     #[serde(skip)]
     status: u16,
 }
 impl ErasedFailure {
-    pub fn new(operation: Option<&str>, error: OperationFailure) -> Self {
+    pub fn new(_: Option<&str>, error: OperationFailure) -> Self {
         let status = error.status_code();
         Self {
-            protocol_version: SDK_PROTOCOL_VERSION,
-            operation: operation.map(str::to_owned),
             error: serde_json::to_value(error).expect("common failure is JSON"),
+            meta: ResponseMeta::default(),
             status,
         }
     }
@@ -112,9 +104,8 @@ impl ErasedFailure {
         serde_json::to_value(error).map_or_else(
             |_| Self::new(Some(operation), OperationFailure::Internal),
             |error| Self {
-                protocol_version: SDK_PROTOCOL_VERSION,
-                operation: Some(operation.to_owned()),
                 error,
+                meta: ResponseMeta::default(),
                 status,
             },
         )
@@ -125,6 +116,6 @@ impl ErasedFailure {
 }
 impl From<FailureEnvelope> for ErasedFailure {
     fn from(value: FailureEnvelope) -> Self {
-        Self::new(value.operation.as_deref(), value.error)
+        Self::new(None, value.error)
     }
 }

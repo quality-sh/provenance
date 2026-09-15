@@ -9,6 +9,7 @@ macro_rules! scoped_list {
             const NAME: &'static str = $wire;
             const CONTEXT: $crate::operations::catalog::ContextKind =
                 $crate::operations::catalog::ContextKind::Scope;
+            const FAILURE_STATUSES: &'static [u16] = &[409];
             fn needs(_: &Self::Request) -> $crate::operations::catalog::ExecutionNeeds {
                 &[$crate::operations::catalog::ExecutionNeed::GraphStorage]
             }
