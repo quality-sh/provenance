@@ -20,7 +20,7 @@ creation!(
     "upsert-contribution",
     CreateContributionInput,
     provenance_core::Contribution,
-    upsert_contribution,
+    update_contribution,
     [GraphStorage]
 );
 creation!(
@@ -36,6 +36,6 @@ creation!(
     "upsert-synthesis-packet",
     CreateSynthesisPacketInput,
     provenance_core::SynthesisPacket,
-    upsert_synthesis_packet,
+    update_synthesis_packet,
     [GraphStorage]
 );

@@ -15,6 +15,8 @@ impl Operation for CheckStatement {
     type Failure = StatementFailure;
     const NAME: &'static str = "check-statement";
 
+    /// Keeps statement checks independent of repository state.
+    #[rule("rule_ste_sdk_statement_repository_independence")]
     fn needs(_: &Self::Request) -> ExecutionNeeds {
         &[]
     }

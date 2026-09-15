@@ -58,10 +58,9 @@ async fn messages(
         .bind(address_id)
         .fetch_one(&mut **tx)
         .await?;
-    anyhow::ensure!(
-        exists,
-        "Discussion selector does not belong to this parent and scope"
-    );
+    if !exists {
+        return Err(ReadFailure::ResourceNotFound.into());
+    }
     // Fetch lengths and keys first. Large Message bodies never enter the page query.
     let keys: Vec<(String,i64,i64)> = sqlx::query_as(&format!("SELECT m.id,m.created_at,length(CAST(m.body AS BLOB))+COALESCE(length(CAST(m.ai_metadata AS BLOB)),0)+length(m.id)+length(m.thread_id)+256 FROM messages m JOIN threads t ON t.scope_id=m.scope_id AND t.id=m.thread_id {join} WHERE m.scope_id=? AND t.parent_type=? AND t.parent_id=? AND {condition} AND (m.created_at>? OR (m.created_at=? AND m.id>?)) ORDER BY m.created_at,m.id LIMIT ?"))
         .bind(ctx.snapshot().scope().as_str()).bind(kind).bind(query.parent.node_id.as_str()).bind(selector)

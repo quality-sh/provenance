@@ -47,9 +47,7 @@ pub use ideation::{
 };
 pub use invoke::{invoke, invoke_typed, invoke_with};
 #[cfg(feature = "schema")]
-pub use schema::{
-    bind_response_identity, definitions, Definition, HttpMethod, Parameter, ResponseKind,
-};
+pub use schema::{definitions, Definition, HttpMethod, Parameter, ResponseKind};
 pub use statement::CheckStatement;
 
 #[cfg(test)]

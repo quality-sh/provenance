@@ -3,7 +3,7 @@ import { ensureGenerated } from './ensure-generated.mjs';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -30,9 +30,22 @@ const hostBinary = buildBinary(root, ['--locked', '-p', 'provenance-transport', 
 const temporary = await mkdtemp(join(tmpdir(), 'provenance-clients-'));
 if (['writes', 'creation', 'discussions', 'ideation'].includes(family)) {
   const cliBinary = buildBinary(root, ['--locked', '-p', 'provenance-cli', '--bin', 'provenance'], 'provenance');
+  const steAssets = join(temporary, 'ste-assets');
+  await mkdir(steAssets);
+  await copyFile(
+    join(root, 'packages/provenance/test/fixtures/synthetic-ste-dictionary.pdf'),
+    join(steAssets, 'ASD-STE100_ISSUE9.pdf'),
+  );
   const init = ['init', '--path', temporary, '--scope', 'default', '--path-prefix', '.'];
   if (family === 'ideation') init.push('--disposition-actor-id', 'reviewer');
-  const result = spawnSync(cliBinary, init, { encoding: 'utf8' });
+  const result = spawnSync(cliBinary, init, {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      PROVENANCE_STE100_ASSET_DIR: steAssets,
+      PROVENANCE_STE100_INDEX_DIR: join(temporary, 'ste-indexes'),
+    },
+  });
   assert.equal(result.status, 0, result.stderr);
   await writeFile(join(temporary, 'check.rs'), 'fn check() {}\n');
 }

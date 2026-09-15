@@ -53,7 +53,7 @@ export async function checkIdeation({ HttpClient, OperationError }, fixture) {
 
   await seedEvidence(fixture.root);
   const assertion = await client.createProposalAssertion({
-    proposal_id: proposal.id,
+    id: proposal.id,
     data: { id: 'assertion_ts', synthesis_packet_id: 'synthesis_ts', supporting_claim_ids: ['claim_ts'] },
   });
   assert.equal(assertion.data.proposal_id, proposal.id);
@@ -61,7 +61,7 @@ export async function checkIdeation({ HttpClient, OperationError }, fixture) {
   assert.equal((await client.listAssertions({})).data.items.length, 1);
 
   const disposition = await client.createProposalDisposition({
-    proposal_id: proposal.id,
+    id: proposal.id,
     data: {
       id: 'disposition_ts', decision: 'rejected', rationale: 'Reviewed',
       actor: { identity_type: 'human', id: 'reviewer' },
@@ -72,7 +72,7 @@ export async function checkIdeation({ HttpClient, OperationError }, fixture) {
   assert.equal((await client.listProposals({})).data.items[0].promotion_state, 'rejected');
 
   await assert.rejects(client.createProposalDisposition({
-    proposal_id: proposal.id,
+    id: proposal.id,
     data: {
       id: 'disposition_second', decision: 'rejected', rationale: 'Reviewed',
       actor: { identity_type: 'human', id: 'reviewer' },

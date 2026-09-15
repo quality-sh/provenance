@@ -73,13 +73,12 @@ async fn invoke(State(host): State<StatementHost>, request: Request) -> Response
     };
     let headers = request.headers().clone();
     let expects_body = matched.definition.request_schema.is_some();
-    let bytes = match tokio::select! {
+    let Ok(bytes) = (tokio::select! {
         biased;
         () = host.stopping.cancelled() => return failure::response(ErasedFailure::new(None, OperationFailure::UnavailableNeeds)),
         bytes = to_bytes(request.into_body(), MAX_BODY_BYTES) => bytes,
-    } {
-        Ok(bytes) => bytes,
-        Err(_) => return invalid(InvalidInputReason::TooLarge),
+    }) else {
+        return invalid(InvalidInputReason::TooLarge);
     };
     let data = match routing::decode_body(&bytes, expects_body) {
         Ok(data) => data,

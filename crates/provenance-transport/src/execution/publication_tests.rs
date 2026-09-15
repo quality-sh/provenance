@@ -53,7 +53,10 @@ async fn a_panicked_task_after_publication_has_an_internal_failure() {
     execution.shutdown().await;
     assert_eq!(requirements(&repo), before + 1, "the write took effect");
     assert_eq!(error.error, serde_json::json!({"kind":"internal"}));
-    assert_eq!(error.operation.as_deref(), Some("apply"));
+    assert_eq!(
+        serde_json::to_value(error.meta).unwrap(),
+        serde_json::json!({})
+    );
 }
 
 #[tokio::test]

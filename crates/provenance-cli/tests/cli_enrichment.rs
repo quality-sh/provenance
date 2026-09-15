@@ -54,8 +54,8 @@ fn cli_creates_and_exports_enriched_sources_and_resolutions() {
                 "source_type": "legislation",
                 "reference": "Department guidance",
                 "commit_pin": "5e1f2a9c4b6d8e0f1234567890abcdef12345678",
-                "effective_date": 1714521600000_i64,
-                "review_date": 1717200000000_i64,
+                "effective_date": 1_714_521_600_000_i64,
+                "review_date": 1_717_200_000_000_i64,
                 "supersedes": ["source_sah_2025"]
             })
             .to_string(),
@@ -167,7 +167,7 @@ fn cli_creates_and_exports_enriched_sources_and_resolutions() {
                 }],
                 "made_by": "Analyst One",
                 "approved_by": "Approver Two",
-                "approved_at": 1714780800000_i64
+                "approved_at": 1_714_780_800_000_i64
             })
             .to_string(),
         )

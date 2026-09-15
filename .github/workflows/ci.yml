@@ -775,11 +775,7 @@ jobs:
         shell: bash
         run: |
           families=(statements records evidence writes creation discussions ideation)
-          test_args=()
-          for family in "${families[@]}"; do
-            test_args+=(--test "$family")
-          done
-          cargo test --locked -p provenance-http-client "${test_args[@]}" --no-run --timings
+          cargo test --locked -p provenance-http-client --test v2_wire --no-run --timings
           # Each family has a separate temporary repository and host port.
           # Cargo locks the shared build directory during fixture builds.
           printf '%s\0' "${families[@]}" | xargs -0 -n 1 -P 4 node tools/operation-codegen/test-clients.mjs

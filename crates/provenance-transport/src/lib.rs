@@ -1,3 +1,5 @@
+#![allow(clippy::result_large_err)]
+
 //! Isolated adapters for the shared operation contract.
 //!
 //! This library does not open a listener. The CLI owns the local review listener.
@@ -72,7 +74,7 @@ impl StatementHost {
     pub(crate) fn bound_call(
         &self,
         kind: provenance_store::operations::catalog::ContextKind,
-        request: Value,
+        request: &Value,
     ) -> Result<Value, FailureEnvelope> {
         routing::context(self.access.bound_identity(), kind, request)
     }

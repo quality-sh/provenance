@@ -82,12 +82,8 @@ pub enum Error {
 pub fn connection(_: &'static str, _: bool, cause: reqwest::Error) -> Error {
     Error::Connection(ResponseFailure::new(cause))
 }
-const fn outcome(_: &'static str, _: bool, cause: ResponseFailure, malformed: bool) -> Error {
-    if malformed {
-        Error::MalformedResponse(cause)
-    } else {
-        Error::Connection(cause)
-    }
+const fn outcome(cause: ResponseFailure) -> Error {
+    Error::MalformedResponse(cause)
 }
 pub fn metadata_status() -> Error {
     Error::Connection(ResponseFailure::contract())
@@ -105,43 +101,31 @@ pub async fn read_json(
         .map_err(|cause| connection(operation, mutates, cause))?
     {
         if bytes.len().saturating_add(chunk.len()) > MAX_RESPONSE_BYTES {
-            return Err(outcome(
-                operation,
-                mutates,
-                ResponseFailure::contract(),
-                true,
-            ));
+            return Err(outcome(ResponseFailure::contract()));
         }
         bytes.extend_from_slice(&chunk);
     }
-    serde_json::from_slice(&bytes)
-        .map_err(|cause| outcome(operation, mutates, ResponseFailure::new(cause), true))
+    serde_json::from_slice(&bytes).map_err(|cause| outcome(ResponseFailure::new(cause)))
 }
 
 pub fn decode<T: DeserializeOwned>(
     value: Value,
-    operation: &'static str,
-    mutates: bool,
+    _operation: &'static str,
+    _mutates: bool,
 ) -> Result<T, Error> {
-    serde_json::from_value(value)
-        .map_err(|cause| outcome(operation, mutates, ResponseFailure::new(cause), true))
+    serde_json::from_value(value).map_err(|cause| outcome(ResponseFailure::new(cause)))
 }
 
 pub fn validate(
     value: &Value,
     schema: &str,
-    operation: &'static str,
-    mutates: bool,
+    _operation: &'static str,
+    _mutates: bool,
 ) -> Result<(), Error> {
     if validator(schema).is_valid(value) {
         Ok(())
     } else {
-        Err(outcome(
-            operation,
-            mutates,
-            ResponseFailure::contract(),
-            true,
-        ))
+        Err(outcome(ResponseFailure::contract()))
     }
 }
 

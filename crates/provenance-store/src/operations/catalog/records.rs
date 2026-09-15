@@ -99,6 +99,7 @@ impl Operation for Info {
     }
     const NAME: &'static str = "info";
     const CONTEXT: super::ContextKind = super::ContextKind::Repository;
+    const FAILURE_STATUSES: &'static [u16] = &[409];
     fn needs(_: &Self::Request) -> ExecutionNeeds {
         &[ExecutionNeed::GraphStorage]
     }

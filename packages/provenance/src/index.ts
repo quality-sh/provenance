@@ -261,51 +261,46 @@ export async function plan(
   })).data;
 }
 
-export interface QueryOptions {
-  freshness?: Exclude<StampPolicy, "catch_up_failed">;
-}
-
-export async function get(request: GetRequest, options?: QueryOptions): Promise<GetResponse> {
+export async function get(request: GetRequest): Promise<GetResponse> {
   const selected = settings;
   return memberCall(await connection(selected), request.node_type, request.id, {}) as Promise<GetResponse>;
 }
 
-export async function search(request: SearchRequest, options?: QueryOptions): Promise<SearchResponse> {
+export async function search(request: SearchRequest): Promise<SearchResponse> {
   const selected = settings;
   const { collection, ...query } = request;
   return collectionCall(await connection(selected), collection, { query: "search", ...query }) as Promise<SearchResponse>;
 }
 
-export async function neighbors(request: NeighborsRequest, options?: QueryOptions): Promise<NeighborsResponse> {
+export async function neighbors(request: NeighborsRequest): Promise<NeighborsResponse> {
   const selected = settings;
   const { node_type, id, ...query } = request;
   return memberCall(await connection(selected), node_type, id, { query: "neighbors", ...query }) as Promise<NeighborsResponse>;
 }
 
-export async function trace(request: TraceRequest, options?: QueryOptions): Promise<TraceResponse> {
+export async function trace(request: TraceRequest): Promise<TraceResponse> {
   const selected = settings;
   const { node_type, id, ...query } = request;
   return memberCall(await connection(selected), node_type, id, { query: "trace", ...query }) as Promise<TraceResponse>;
 }
 
-export async function impact(request: ImpactRequest, options?: QueryOptions): Promise<ImpactResponse> {
+export async function impact(request: ImpactRequest): Promise<ImpactResponse> {
   const selected = settings;
   return memberCall(await connection(selected), request.node_type, request.id, { query: "impact" }) as Promise<ImpactResponse>;
 }
 
-export async function evidence(request: EvidenceRequest, options?: QueryOptions): Promise<EvidenceResponse> {
+export async function evidence(request: EvidenceRequest): Promise<EvidenceResponse> {
   const selected = settings;
   return (await connection(selected)).getRuleEvidence({ id: request.rule, base: request.base, head: request.head });
 }
 
-export async function stale(request: StaleRequest, options?: QueryOptions): Promise<StaleResponse> {
+export async function stale(request: StaleRequest): Promise<StaleResponse> {
   const selected = settings;
   return await (await connection(selected)).listRules({ query: "stale", ...request }) as unknown as StaleResponse;
 }
 
 export async function resolveSymbol(
   request: ResolveSymbolRequest,
-  options?: QueryOptions,
 ): Promise<ResolveSymbolResponse> {
   const selected = settings;
   return await (await connection(selected)).listRules({ query: "resolve-symbol", ...request, file: portableFile(request.file, selected.localRoot) }) as unknown as ResolveSymbolResponse;

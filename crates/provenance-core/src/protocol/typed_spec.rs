@@ -130,6 +130,7 @@ pub struct TypedImplementationInput {
 }
 
 /// The fixed request shape for one statement preflight.
+#[rule("rule_ste_sdk_statement_request_schema")]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]

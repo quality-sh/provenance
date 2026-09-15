@@ -1,3 +1,9 @@
+#![allow(
+    clippy::literal_string_with_formatting_args,
+    clippy::too_many_lines,
+    clippy::wildcard_imports
+)]
+
 use super::*;
 
 pub(super) fn register(out: &mut Vec<Definition>) {

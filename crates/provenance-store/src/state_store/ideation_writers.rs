@@ -21,6 +21,23 @@ impl StateStore {
         self.with_lifecycle_lock(&scope, || self.write_contribution(input, true))
     }
 
+    pub fn update_contribution(
+        &self,
+        input: CreateContributionInput,
+    ) -> anyhow::Result<Contribution> {
+        let scope = input.scope_id.clone();
+        self.with_lifecycle_lock(&scope, || {
+            crate::write_error::ensure!(
+                ResourceNotFound,
+                self.list_contributions(&scope)?
+                    .iter()
+                    .any(|record| record.id == input.id),
+                "contribution does not exist"
+            );
+            self.write_contribution(input, true)
+        })
+    }
+
     fn write_contribution(
         &self,
         input: CreateContributionInput,
@@ -139,6 +156,23 @@ impl StateStore {
     ) -> anyhow::Result<SynthesisPacket> {
         let scope = input.scope_id.clone();
         self.with_lifecycle_lock(&scope, || self.write_synthesis_packet(input, true))
+    }
+
+    pub fn update_synthesis_packet(
+        &self,
+        input: CreateSynthesisPacketInput,
+    ) -> anyhow::Result<SynthesisPacket> {
+        let scope = input.scope_id.clone();
+        self.with_lifecycle_lock(&scope, || {
+            crate::write_error::ensure!(
+                ResourceNotFound,
+                self.list_synthesis_packets(&scope)?
+                    .iter()
+                    .any(|record| record.id == input.id),
+                "synthesis packet does not exist"
+            );
+            self.write_synthesis_packet(input, true)
+        })
     }
 
     fn write_synthesis_packet(

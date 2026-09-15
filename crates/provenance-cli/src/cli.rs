@@ -1,12 +1,7 @@
 pub mod dictionary;
 pub mod graph;
 pub mod ideation;
-pub mod knowledge;
-pub mod policy;
-pub mod references;
 pub mod report;
-pub mod shaping;
-pub mod updates;
 pub mod workspace;
 
 pub use ideation::{IdeationArtifactKind, SchemaCommand};

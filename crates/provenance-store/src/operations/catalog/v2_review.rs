@@ -57,6 +57,7 @@ impl Operation for GetRequirementV2 {
     type Failure = ReadError;
     const NAME: &'static str = "get-requirement-v2";
     const CONTEXT: ContextKind = ContextKind::Scope;
+    const FAILURE_STATUSES: &'static [u16] = &[409];
     fn needs(_: &Self::Request) -> ExecutionNeeds {
         &[ExecutionNeed::GraphStorage]
     }

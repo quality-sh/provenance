@@ -1,3 +1,5 @@
+#![allow(clippy::result_large_err)]
+
 use super::{
     entry::{entries, DataFreeCall, RepositoryCall},
     Operation, OperationFuture, PreparedContext,

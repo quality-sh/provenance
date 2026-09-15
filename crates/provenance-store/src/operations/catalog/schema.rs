@@ -184,15 +184,7 @@ pub(super) fn response_envelope(mut payload: Value, kind: ResponseKind) -> Value
     meta.as_object_mut().map(|o| o.remove("$schema"));
     let data = match kind {
         ResponseKind::Items => {
-            let items = payload
-                .get("properties")
-                .and_then(|properties| {
-                    ["items", "entries", "nodes", "sites", "rules"]
-                        .into_iter()
-                        .find_map(|name| properties.get(name))
-                })
-                .cloned()
-                .unwrap_or(payload);
+            let items = list_items(&payload, defs.as_ref()).unwrap_or(payload);
             json!({"type":"object","additionalProperties":false,"required":["items"],"properties":{"items":items}})
         }
         ResponseKind::Resource | ResponseKind::Result => payload,
@@ -211,6 +203,21 @@ pub(super) fn response_envelope(mut payload: Value, kind: ResponseKind) -> Value
         result["$defs"] = Value::Object(merged);
     }
     result
+}
+
+fn list_items<'a>(payload: &'a Value, defs: Option<&'a Value>) -> Option<Value> {
+    let resolved = payload
+        .get("$ref")
+        .and_then(Value::as_str)
+        .and_then(|reference| reference.strip_prefix("#/$defs/"))
+        .and_then(|name| defs?.get(name))
+        .unwrap_or(payload);
+    resolved.get("properties").and_then(|properties| {
+        ["items", "entries", "nodes", "sites", "rules"]
+            .into_iter()
+            .find_map(|name| properties.get(name))
+            .cloned()
+    })
 }
 
 pub(super) fn namespace_defs(value: &mut Value, prefix: &str) {
@@ -256,26 +263,16 @@ pub(super) fn request_envelope(mut request: Value, strip: &[&str]) -> Value {
 }
 
 fn strip_fields(value: &mut Value, fields: &[&str]) {
-    match value {
-        Value::Object(object) => {
-            if let Some(Value::Object(properties)) = object.get_mut("properties") {
-                for field in fields {
-                    properties.remove(*field);
-                }
-            }
-            if let Some(Value::Array(required)) = object.get_mut("required") {
-                required.retain(|field| !fields.iter().any(|name| field == *name));
-            }
-            for child in object.values_mut() {
-                strip_fields(child, fields);
-            }
+    let Some(object) = value.as_object_mut() else {
+        return;
+    };
+    if let Some(Value::Object(properties)) = object.get_mut("properties") {
+        for field in fields {
+            properties.remove(*field);
         }
-        Value::Array(array) => {
-            for child in array {
-                strip_fields(child, fields);
-            }
-        }
-        _ => {}
+    }
+    if let Some(Value::Array(required)) = object.get_mut("required") {
+        required.retain(|field| !fields.iter().any(|name| field == *name));
     }
 }
 
@@ -284,14 +281,11 @@ pub fn definitions() -> Vec<Definition> {
     DEFINITIONS.get_or_init(super::routes::definitions).clone()
 }
 
-pub fn bind_response_identity(schema: Value, _: &str) -> Value {
-    schema
-}
-
 pub(super) fn type_schema<T: JsonSchema>(contract: Contract) -> Value {
     schema::<T>(contract)
 }
 
+#[allow(clippy::missing_const_for_fn)]
 pub(super) fn path(name: &'static str) -> Parameter {
     Parameter {
         name,
@@ -300,7 +294,7 @@ pub(super) fn path(name: &'static str) -> Parameter {
         schema: json!({"type":"string","minLength":1}),
     }
 }
-pub(super) fn query(name: &'static str, schema: Value) -> Parameter {
+pub(super) const fn query(name: &'static str, schema: Value) -> Parameter {
     Parameter {
         name,
         location: "query",
@@ -308,6 +302,7 @@ pub(super) fn query(name: &'static str, schema: Value) -> Parameter {
         schema,
     }
 }
+#[allow(clippy::missing_const_for_fn)]
 pub(super) fn header(name: &'static str) -> Parameter {
     Parameter {
         name,

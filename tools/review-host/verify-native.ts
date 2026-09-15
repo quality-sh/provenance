@@ -2,12 +2,13 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { execFileSync, spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { copyFile, mkdtemp, readFile, rm, chmod } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, rm, chmod } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const [binaryArg, assetsArg, sdkArg] = process.argv.slice(2);
 if (!binaryArg || !assetsArg || !sdkArg) throw new Error('Usage: node verify-native.ts BINARY COMPOSED_ASSETS SDK_PACKAGE');
 const info = JSON.parse(await readFile(join(resolve(assetsArg), 'host-build-info.json'), 'utf8'));
@@ -19,7 +20,20 @@ try {
   await copyFile(resolve(binaryArg), binary);
   await chmod(binary, 0o755);
   const repository = join(work, 'repository');
-  const cli = (...args: string[]) => execFileSync(binary, args, { cwd: work, encoding: 'utf8', timeout: 30_000 });
+  const steAssets = join(work, 'ste-assets');
+  await mkdir(steAssets);
+  await copyFile(
+    join(root, 'packages/provenance/test/fixtures/synthetic-ste-dictionary.pdf'),
+    join(steAssets, 'ASD-STE100_ISSUE9.pdf'),
+  );
+  const fixtureEnv = {
+    ...process.env,
+    PROVENANCE_STE100_ASSET_DIR: steAssets,
+    PROVENANCE_STE100_INDEX_DIR: join(work, 'ste-indexes'),
+  };
+  const cli = (...args: string[]) => execFileSync(binary, args, {
+    cwd: work, encoding: 'utf8', timeout: 30_000, env: fixtureEnv,
+  });
   cli('init', '--path', repository, '--scope', 'default', '--path-prefix', '.');
   for (const [id, parent] of [['req_root', undefined], ['req_child', 'req_root']]) {
     execFileSync(binary, [

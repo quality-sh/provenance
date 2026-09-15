@@ -4,7 +4,8 @@
     clippy::if_not_else,
     clippy::missing_const_for_fn,
     clippy::derivable_impls,
-    clippy::default_trait_access
+    clippy::default_trait_access,
+    clippy::large_enum_variant
 )]
 pub mod types {
     include!("generated/types.rs");

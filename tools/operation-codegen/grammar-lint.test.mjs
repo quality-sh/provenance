@@ -126,6 +126,41 @@ test('missing status declarations are rejected', () => {
   assert.ok(errorsFor([{ id: 'unsorted', method: 'GET', path: '/requirements/{id}', mutates: false, statuses: [500, 400, 401, 403, 404, 503] }]).some(e => /sorted and unique/.test(e)));
 });
 
+test('declared statuses cover every live failure variant status', () => {
+  const document = {
+    paths: {
+      '/requirements/{id}': {
+        get: {
+          operationId: 'getRequirement',
+          description: 'Read one Requirement from the selected scope.',
+          parameters: [],
+          responses: {
+            200: { content: { 'application/json': { schema: {} } } },
+            400: { content: { 'application/json': { schema: { $ref: '#/components/schemas/FailureEnvelope' } } } },
+            401: {}, 403: {}, 404: {}, 409: {}, 500: {},
+          },
+        },
+      },
+    },
+    components: {
+      schemas: {
+        FailureEnvelope: {
+          properties: { error: { $ref: '#/components/schemas/ReadFailure' } },
+        },
+        ReadFailure: {
+          oneOf: [
+            { properties: { kind: { const: 'resource_not_found' } } },
+            { properties: { kind: { const: 'file_unavailable' } } },
+          ],
+        },
+      },
+    },
+  };
+
+  assert.ok(documentGrammarErrors(document).some(error =>
+    /file_unavailable.*503|503.*file_unavailable/.test(error)));
+});
+
 test('a connection-scoped metadata read is exempt from the 404 base requirement', () => {
   const fixture = routeOverrides([]);
   fixture.routes[0] = { id: 'get-metadata', method: 'GET', path: '/metadata', mutates: false, statuses: [400, 401, 403, 500, 503], response: 'result' };

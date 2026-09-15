@@ -82,8 +82,7 @@ impl ReadSnapshot {
         ).bind(i64::try_from(RECORD_BYTES)?).bind(self.scope().as_str()).bind(requirement.as_str()).bind(id)
             .fetch_optional(&mut **tx).await?;
         drop(tx);
-        let (size, payload) =
-            row.ok_or_else(|| anyhow::anyhow!("review entry does not exist at this address"))?;
+        let (size, payload) = row.ok_or(ReadFailure::ResourceNotFound)?;
         if size > i64::try_from(RECORD_BYTES)? {
             return Err(ReadFailure::PageRecordTooLarge.into());
         }

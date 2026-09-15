@@ -283,6 +283,62 @@ function resolveSchema(document, schema) {
   return name ? document.components?.schemas?.[name] : schema;
 }
 
+const FAILURE_STATUS = new Map([
+  ['invalid_input', 400], ['protocol_mismatch', 400],
+  ['unknown_operation', 404], ['unknown_target', 404], ['unknown_scope', 404],
+  ['unauthenticated', 401], ['access_denied', 403], ['unavailable_needs', 503], ['internal', 500],
+  ['resource_not_found', 404], ['read_failed', 500], ['file_access_denied', 403],
+  ['file_unavailable', 503], ['git_unavailable', 503],
+  ['cursor_invalid', 409], ['cursor_revision_changed', 409], ['page_budget_exceeded', 409],
+  ['page_record_too_large', 409], ['document_root_missing', 409],
+  ['document_catch_up_failed', 409], ['git_revision_not_found', 409], ['no_projection', 409],
+  ['stale', 409], ['unit_unreadable', 409], ['schema_behind', 409], ['half_migrated', 409],
+  ['write_failed', 500], ['record_ownership_conflict', 409], ['already_exists', 409],
+  ['ownership_conflict', 409], ['already_complete', 409],
+  ['schema_version', 400], ['invalid_commit_pin', 400], ['scope_mismatch', 400],
+  ['empty_message_body', 400], ['unsupported_thread_parent', 400], ['statement_invalid', 400],
+  ['invalid_declaration', 400], ['invalid_update', 400], ['missing_reference', 400],
+  ['statement_rejected', 400], ['invalid_verification_target', 400], ['invalid_completion', 400],
+]);
+
+function failureKinds(document, schema, seen = new Set(), kinds = new Set()) {
+  if (Array.isArray(schema)) {
+    for (const child of schema) failureKinds(document, child, seen, kinds);
+    return kinds;
+  }
+  if (schema === null || typeof schema !== 'object') return kinds;
+  const reference = schema.$ref;
+  if (typeof reference === 'string' && reference.startsWith('#/')) {
+    if (seen.has(reference)) return kinds;
+    seen.add(reference);
+    let resolved = document;
+    for (const part of reference.slice(2).split('/')) resolved = resolved?.[part];
+    failureKinds(document, resolved, seen, kinds);
+    return kinds;
+  }
+  const kind = schema.properties?.kind?.const;
+  if (typeof kind === 'string') kinds.add(kind);
+  for (const child of Object.values(schema)) failureKinds(document, child, seen, kinds);
+  return kinds;
+}
+
+function statusDriftErrors(document, path, method, operation) {
+  const declared = new Set(Object.keys(operation.responses ?? {}).map(Number));
+  const failure = Object.entries(operation.responses ?? {})
+    .find(([status]) => Number(status) >= 400)?.[1]
+    ?.content?.['application/json']?.schema;
+  const errors = [];
+  for (const kind of failureKinds(document, failure)) {
+    const status = FAILURE_STATUS.get(kind);
+    if (status === undefined) {
+      errors.push(`${method} ${path}: failure variant '${kind}' has no runtime status mapping`);
+    } else if (!declared.has(status)) {
+      errors.push(`${method} ${path}: failure variant '${kind}' can produce undeclared status ${status}`);
+    }
+  }
+  return errors;
+}
+
 export function documentGrammarErrors(document, mcp = null) {
   const errors = [];
   const banned = 'Invoke the shared operation.';
@@ -304,6 +360,7 @@ export function documentGrammarErrors(document, mcp = null) {
       if (createsImmutableChild) continue;
       if (fields.includes(identity)) errors.push(`${where}: payload-identity-repetition rejects path field '${identity}'`);
     }
+    errors.push(...statusDriftErrors(document, path, method, operation));
   }
   for (const tool of mcp?.tools ?? []) {
     if (typeof tool.description !== 'string' || tool.description.trim().length < 20 || tool.description.includes(banned)) {

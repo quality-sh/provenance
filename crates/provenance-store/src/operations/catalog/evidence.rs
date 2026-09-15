@@ -70,6 +70,7 @@ macro_rules! list {
             type Failure = ReadError;
             const NAME: &'static str = $wire;
             const CONTEXT: super::ContextKind = super::ContextKind::Scope;
+            const FAILURE_STATUSES: &'static [u16] = &[409];
             fn needs(_: &Self::Request) -> ExecutionNeeds {
                 &[ExecutionNeed::GraphStorage, ExecutionNeed::$need]
             }

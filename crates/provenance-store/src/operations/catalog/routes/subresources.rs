@@ -1,3 +1,9 @@
+#![allow(
+    clippy::literal_string_with_formatting_args,
+    clippy::too_many_lines,
+    clippy::wildcard_imports
+)]
+
 use super::*;
 
 pub(super) fn register(out: &mut Vec<Definition>) {
@@ -325,7 +331,7 @@ fn discussions(out: &mut Vec<Definition>, parent: &'static str) {
             } else {
                 "List unassigned historical messages from their parent container."
             },
-            "list-messages-v2",
+            "review-discussion-messages-v2",
             if one {
                 ResponseKind::Resource
             } else {

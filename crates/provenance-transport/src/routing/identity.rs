@@ -1,9 +1,14 @@
 use super::invalid;
 use provenance_core::protocol::failure::ErasedFailure;
+use provenance_store::operations::catalog::Definition;
 use serde_json::Value;
 use std::collections::BTreeMap;
 
-pub(super) fn reject(data: &Value, path: &BTreeMap<String, String>) -> Result<(), ErasedFailure> {
+pub(super) fn reject(
+    data: &Value,
+    path: &BTreeMap<String, String>,
+    definition: &Definition,
+) -> Result<(), ErasedFailure> {
     let Some(object) = data.as_object() else {
         return Ok(());
     };
@@ -12,12 +17,15 @@ pub(super) fn reject(data: &Value, path: &BTreeMap<String, String>) -> Result<()
     }
     let repeated = ["repository", "scope", "scope_id"]
         .into_iter()
-        .chain(path.keys().map(String::as_str))
+        .chain(path.keys().map(String::as_str).filter(|name| {
+            !(name == &"id"
+                && matches!(
+                    definition.name,
+                    "create-proposal-assertion" | "create-proposal-disposition"
+                ))
+        }))
         .find(|name| object.contains_key(*name));
-    match repeated {
-        Some(field) => Err(invalid(Some(field))),
-        None => Ok(()),
-    }
+    repeated.map_or(Ok(()), |field| Err(invalid(Some(field))))
 }
 
 pub(super) fn node_type(path: &str) -> Result<&'static str, ErasedFailure> {

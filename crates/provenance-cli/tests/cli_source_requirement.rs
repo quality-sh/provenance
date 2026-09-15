@@ -2,6 +2,7 @@ use assert_cmd::Command;
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 #[test]
+#[allow(clippy::too_many_lines)]
 fn cli_source_requirement_slice_materializes_and_reads_graph() {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path().to_string_lossy().to_string();

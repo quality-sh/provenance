@@ -24,6 +24,7 @@ pub enum WriteFailure {
         conflicts: Vec<ReconciledResource>,
     },
     MissingReference,
+    ResourceNotFound,
     StatementRejected {
         diagnostics: Vec<TypedSpecDiagnostic>,
     },
@@ -123,6 +124,7 @@ impl WriteError {
             WriteFailure::WriteFailed => 500,
             WriteFailure::FileAccessDenied => 403,
             WriteFailure::FileUnavailable => 503,
+            WriteFailure::ResourceNotFound => 404,
             WriteFailure::RecordOwnershipConflict
             | WriteFailure::AlreadyExists
             | WriteFailure::OwnershipConflict { .. }

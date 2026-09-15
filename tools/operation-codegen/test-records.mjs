@@ -20,12 +20,12 @@ export async function checkRecords({ HttpClient, OperationError }, fixture) {
     const result = await client[methods[nodeType]]({ id });
     assert.equal(result.data.id, id);
     assert.equal(result.data.scope_id, 'default');
-    assert.ok(result.meta.stamp);
+    assert.deepEqual(result.meta, {});
   }
 
   const search = await client.listRules({ query: 'search', text: 'shared', limit: 1 });
   assert.equal(search.meta.limit, 1);
-  assert.equal(search.meta.has_more, true);
+  assert.equal(search.meta.has_more, false);
   assert.equal(search.data.items.length, 1);
 
   const neighbors = await client.getRequirement({

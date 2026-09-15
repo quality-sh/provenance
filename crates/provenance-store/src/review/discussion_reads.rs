@@ -42,7 +42,9 @@ pub(super) async fn check_parent(ctx: &ReadContext, parent: &ThreadParent) -> an
     .fetch_one(&mut **tx)
     .await?;
     drop(tx);
-    anyhow::ensure!(exists, "Discussion parent does not exist in this scope");
+    if !exists {
+        return Err(ReadFailure::ResourceNotFound.into());
+    }
     Ok(())
 }
 

@@ -148,6 +148,7 @@ export function rustClientFiles(document, compatibility) {
     const variant = op.operationId[0].toUpperCase() + op.operationId.slice(1);
     const name = op.operationId.replace(/[A-Z]/g, c => '_' + c.toLowerCase());
     return [`operations/${name}.rs`, `// Generated from OpenAPI. Do not edit.
+#[allow(clippy::too_many_arguments, clippy::literal_string_with_formatting_args)]
 impl HttpClient {
     pub async fn ${name}(&self, ${rustArgs(op)}) -> Result<${success}, Error> {
         ${rustRequest(path, method, op, name)}

@@ -112,13 +112,11 @@ fn list_envelopes_put_records_in_data_items() {
         .iter()
         .find(|schema| schema["properties"]["data"]["required"] == json!(["items"]))
         .expect("list success has a data.items variant");
-    for schema in [*list] {
-        assert_eq!(schema["properties"]["data"]["required"], json!(["items"]));
-        assert_eq!(
-            schema["properties"]["data"]["properties"]["items"]["type"],
-            "array"
-        );
-    }
+    assert_eq!(list["properties"]["data"]["required"], json!(["items"]));
+    assert_eq!(
+        list["properties"]["data"]["properties"]["items"]["type"],
+        "array"
+    );
 }
 
 #[test]

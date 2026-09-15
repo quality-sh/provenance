@@ -1,7 +1,10 @@
+#![allow(clippy::literal_string_with_formatting_args)]
+
 use super::schema::{self, Definition, HttpMethod, Parameter, ResponseKind};
 use schemars::generate::Contract;
 use serde_json::{json, Value};
 
+#[allow(clippy::too_many_arguments)]
 fn backed(
     name: &'static str,
     operation_id: &'static str,
@@ -23,7 +26,7 @@ fn backed(
             parameters.push(schema::header("Idempotency-Key"));
         }
         if name.starts_with("update-requirement")
-            || name.starts_with("update-discussion")
+            || name.ends_with("update-discussion")
             || name.ends_with("create-discussion-message")
         {
             parameters.push(schema::header("If-Match"));
@@ -37,7 +40,8 @@ fn backed(
         description,
         backing,
         context: raw.context,
-        inject_scope: strip.contains(&"scope_id"),
+        inject_scope: strip.contains(&"scope_id")
+            && raw.request_schema["properties"].get("scope_id").is_some(),
         mutates: raw.mutates,
         http_statuses: raw.http_statuses,
         parameters,
@@ -134,7 +138,7 @@ fn with_query_results(mut definition: Definition, queries: &[(&str, ResponseKind
     }
     let mut variants = vec![definition.success_schema.clone()];
     let mut defs = serde_json::Map::new();
-    for schema in variants.iter_mut() {
+    for schema in &mut variants {
         if let Some(Value::Object(found)) = schema
             .as_object_mut()
             .and_then(|object| object.remove("$defs"))

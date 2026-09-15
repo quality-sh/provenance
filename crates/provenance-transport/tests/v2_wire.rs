@@ -4,6 +4,7 @@ use rmcp::{model::CallToolRequestParams, ServiceExt as _};
 use serde_json::{json, Value};
 use tower::ServiceExt as _;
 
+#[allow(clippy::option_if_let_else)]
 async fn request(
     host: &StatementHost,
     method: &str,

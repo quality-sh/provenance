@@ -8,6 +8,7 @@ use crate::{
     write_error::WriteError,
 };
 use provenance_core::{
+    protocol::failure::{InvalidInputReason, OperationFailure},
     review::{EvidencePage, EvidenceQuery, ReviewEntry, ReviewHistoryPage, ReviewHistoryQuery},
     threads::{
         DiscussionEntry, DiscussionGroup, DiscussionMessagesPage, DiscussionMessagesQuery,
@@ -70,7 +71,7 @@ pub struct HistoryRequest {
     pub limit: usize,
     pub cursor: Option<String>,
 }
-fn limit() -> usize {
+const fn limit() -> usize {
     50
 }
 
@@ -81,6 +82,7 @@ impl Operation for ReviewHistoryV2 {
     type Failure = ReadError;
     const NAME: &'static str = "review-history-v2";
     const CONTEXT: ContextKind = ContextKind::Scoped;
+    const FAILURE_STATUSES: &'static [u16] = &[409];
     fn needs(_: &Self::Request) -> ExecutionNeeds {
         &[
             ExecutionNeed::GraphStorage,
@@ -127,6 +129,7 @@ impl Operation for ReviewHistoryEntryV2 {
     type Failure = ReadError;
     const NAME: &'static str = "review-history-entry-v2";
     const CONTEXT: ContextKind = ContextKind::Scoped;
+    const FAILURE_STATUSES: &'static [u16] = &[409];
     fn needs(_: &Self::Request) -> ExecutionNeeds {
         &[
             ExecutionNeed::GraphStorage,
@@ -166,9 +169,10 @@ impl Operation for ReviewHistoryEntryV2 {
                 match page.result.next_cursor {
                     Some(next) => cursor = Some(next),
                     None => {
-                        return Err(
-                            anyhow::anyhow!("review entry does not exist at this address").into(),
+                        return Err(anyhow::Error::new(
+                            provenance_core::protocol::read_failure::ReadFailure::ResourceNotFound,
                         )
+                        .into())
                     }
                 }
             }
@@ -195,6 +199,17 @@ impl Operation for ReviewEvidenceV2 {
     type Failure = ReadError;
     const NAME: &'static str = "review-evidence-v2";
     const CONTEXT: ContextKind = ContextKind::Scoped;
+    const FAILURE_STATUSES: &'static [u16] = &[409];
+    fn validate_external(request: &Self::Request) -> Result<(), OperationFailure> {
+        if matches!(request.side.as_str(), "before" | "after") {
+            Ok(())
+        } else {
+            Err(OperationFailure::InvalidInput {
+                field: Some("side".into()),
+                reason: InvalidInputReason::InvalidValue,
+            })
+        }
+    }
     fn needs(_: &Self::Request) -> ExecutionNeeds {
         &[
             ExecutionNeed::GraphStorage,
@@ -210,9 +225,6 @@ impl Operation for ReviewEvidenceV2 {
     ) -> OperationFuture<Self::Success, Self::Failure> {
         Box::pin(async move {
             let read = context.graph()?;
-            if !matches!(request.side.as_str(), "before" | "after") {
-                return Err(anyhow::anyhow!("evidence side must be before or after").into());
-            }
             Ok(review::read_evidence(
                 &read.root,
                 &read.scope,
@@ -248,6 +260,7 @@ impl Operation for ReviewDiscussionsV2 {
     type Failure = ReadError;
     const NAME: &'static str = "review-discussions-v2";
     const CONTEXT: ContextKind = ContextKind::Scoped;
+    const FAILURE_STATUSES: &'static [u16] = &[409];
     fn needs(_: &Self::Request) -> ExecutionNeeds {
         &[
             ExecutionNeed::GraphStorage,
@@ -284,7 +297,7 @@ impl Operation for ReviewDiscussionsV2 {
 #[serde(deny_unknown_fields)]
 pub struct DiscussionMessagesRequest {
     pub parent: ThreadParent,
-    pub discussion_id: StableId,
+    pub selector: DiscussionSelector,
     #[serde(default = "limit")]
     pub limit: usize,
     pub cursor: Option<String>,
@@ -297,6 +310,7 @@ impl Operation for ReviewDiscussionMessagesV2 {
     type Failure = ReadError;
     const NAME: &'static str = "review-discussion-messages-v2";
     const CONTEXT: ContextKind = ContextKind::Scoped;
+    const FAILURE_STATUSES: &'static [u16] = &[409];
     fn needs(_: &Self::Request) -> ExecutionNeeds {
         &[
             ExecutionNeed::GraphStorage,
@@ -318,9 +332,7 @@ impl Operation for ReviewDiscussionMessagesV2 {
                 read.policy,
                 DiscussionMessagesQuery {
                     parent: request.parent,
-                    selector: DiscussionSelector::Discussion {
-                        discussion_id: request.discussion_id,
-                    },
+                    selector: request.selector,
                     limit: request.limit,
                     cursor: request.cursor,
                 },

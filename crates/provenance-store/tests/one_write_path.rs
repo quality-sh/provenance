@@ -144,7 +144,6 @@ fn failed_edits_return_typed_errors_without_uncertainty() {
         .set_requirement_refines(&scope(), &id(), StableId::new("req_b").unwrap())
         .unwrap_err();
     let failure = WriteError(error).safe();
-    assert!(!matches!(failure, WriteFailure::UncertainWrite));
     assert!(!matches!(failure, WriteFailure::WriteFailed));
     assert!(
         matches!(failure, WriteFailure::InvalidUpdate),

@@ -75,6 +75,7 @@ fn register<O: Operation>() -> Entry {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 pub(super) fn entries() -> Vec<Entry> {
     vec![
         register::<super::CheckStatement>(),

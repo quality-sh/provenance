@@ -89,7 +89,7 @@ impl ServerHandler for StatementHost {
                 },
             )));
         }
-        let (matched, data, query, headers) = match mcp_call(definition, arguments) {
+        let (matched, data, query, headers) = match mcp_call(definition, &arguments) {
             Ok(call) => call,
             Err(failure) => return Ok(error(failure)),
         };
@@ -109,7 +109,7 @@ type McpCall = (
     axum::http::HeaderMap,
 );
 
-fn mcp_call(definition: catalog::Definition, value: Value) -> Result<McpCall, ErasedFailure> {
+fn mcp_call(definition: catalog::Definition, value: &Value) -> Result<McpCall, ErasedFailure> {
     let mut arguments = value.as_object().cloned().ok_or_else(invalid)?;
     let data = arguments
         .remove("data")

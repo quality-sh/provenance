@@ -4,6 +4,7 @@ use provenance_store::operations::catalog::{self, Definition};
 use serde_json::{json, Map, Value};
 use std::{
     collections::BTreeMap,
+    fmt::Write as _,
     io::Read as _,
     net::{Ipv4Addr, SocketAddr},
 };
@@ -51,7 +52,7 @@ pub async fn try_dispatch(arguments: &[String]) -> anyhow::Result<bool> {
                 && path_matches(definition.path, &path)
         })
         .ok_or_else(|| anyhow::anyhow!("the catalog does not declare {method} {path}"))?;
-    let (data, query, headers) = input(&definition, route_words)?;
+    let (data, query, headers) = input(&definition, &route_words)?;
     if matches!(
         collection.as_str(),
         "questions" | "contributions" | "synthesis-packets" | "proposals"
@@ -127,8 +128,8 @@ fn split_global(arguments: &[String]) -> anyhow::Result<Option<(Context, Vec<Str
                     .get(index + 1)
                     .ok_or_else(|| anyhow::anyhow!("{} requires a value", arguments[index]))?;
                 match arguments[index].as_str() {
-                    "--repo" => repo = value.clone(),
-                    "--scope" => scope = value.clone(),
+                    "--repo" => repo.clone_from(value),
+                    "--scope" => scope.clone_from(value),
                     _ => format = Some(value.clone()),
                 }
                 index += 2;
@@ -184,7 +185,7 @@ fn address(
             )
         }
         id => {
-            let action = words.get(1).map(String::as_str).unwrap_or("get");
+            let action = words.get(1).map_or("get", String::as_str);
             member_address(collection, id, action, &words)?
         }
     };
@@ -215,7 +216,7 @@ fn member_address(
         "history" => history_address(&base, words),
         "submissions" if collection == "requirements" => submission_address(&base, words),
         "assertions" | "dispositions" if collection == "proposals" => {
-            fact_address(&base, action, words)
+            Ok(fact_address(&base, action, words))
         }
         "discussions" => discussion_address(&base, words),
         "discussion-containers" => legacy_message_address(&base, words),
@@ -228,14 +229,15 @@ fn history_address(base: &str, words: &[String]) -> anyhow::Result<(Method, Stri
         return Ok((Method::GET, format!("{base}/history"), 2));
     };
     let mut path = format!("{base}/history/{entry}");
-    let mut consumed = 3;
-    if words.get(3).is_some_and(|word| word == "evidence") {
+    let consumed = if words.get(3).is_some_and(|word| word == "evidence") {
         let side = words
             .get(4)
             .ok_or_else(|| anyhow::anyhow!("history evidence requires before or after"))?;
-        path.push_str(&format!("/evidence/{side}"));
-        consumed = 5;
-    }
+        write!(path, "/evidence/{side}").expect("writing to a String cannot fail");
+        5
+    } else {
+        3
+    };
     Ok((Method::GET, path, consumed))
 }
 
@@ -257,15 +259,11 @@ fn submission_address(base: &str, words: &[String]) -> anyhow::Result<(Method, S
     ))
 }
 
-fn fact_address(
-    base: &str,
-    kind: &str,
-    words: &[String],
-) -> anyhow::Result<(Method, String, usize)> {
+fn fact_address(base: &str, kind: &str, words: &[String]) -> (Method, String, usize) {
     match words.get(2).map(String::as_str) {
-        None | Some("list") => Ok((Method::GET, format!("{base}/{kind}"), words.len().min(3))),
-        Some("create") => Ok((Method::POST, format!("{base}/{kind}"), 3)),
-        Some(id) => Ok((Method::GET, format!("{base}/{kind}/{id}"), 3)),
+        None | Some("list") => (Method::GET, format!("{base}/{kind}"), words.len().min(3)),
+        Some("create") => (Method::POST, format!("{base}/{kind}"), 3),
+        Some(id) => (Method::GET, format!("{base}/{kind}/{id}"), 3),
     }
 }
 
@@ -319,9 +317,10 @@ fn path_matches(pattern: &str, actual: &str) -> bool {
         })
 }
 
+#[allow(clippy::too_many_lines)]
 fn input(
     definition: &Definition,
-    words: Vec<String>,
+    words: &[String],
 ) -> anyhow::Result<(Value, BTreeMap<String, String>, HeaderMap)> {
     let mut data = Map::new();
     let mut query = BTreeMap::new();

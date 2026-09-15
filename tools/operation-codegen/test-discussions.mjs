@@ -4,22 +4,21 @@ export async function checkDiscussions({ HttpClient, OperationError }, fixture) 
   const client = await HttpClient.connectWithBearer(fixture.url, 'fixture-secret', undefined, {
     repository: 'fixture', scope: 'default',
   });
-  const question = await client.createQuestion({ data: {
-    id: 'question_ts', topic_id: null, question: 'Which path is correct?',
-    resolution_method: 'human', status: 'open', links: [],
+  const source = await client.createSource({ data: {
+    id: 'source_ts', name: 'Discussion source', source_type: 'policy', supersedes: [],
   } });
-  assert.equal(question.data.id, 'question_ts');
+  assert.equal(source.data.id, 'source_ts');
 
-  const first = await client.questionCreateDiscussion({
-    id: question.data.id,
+  const first = await client.sourceCreateDiscussion({
+    id: source.data.id,
     idempotency_key: 'discussion_first',
     data: { actor: 'fixture', role: 'system', body: ' TypeScript text ' },
   });
-  assert.equal(first.data.status, 'open');
+  assert.equal(first.data.status, 'active');
   assert.ok(first.data.discussion_id);
 
-  const second = await client.questionCreateDiscussionMessage({
-    id: question.data.id,
+  const second = await client.sourceCreateDiscussionMessage({
+    id: source.data.id,
     discussion_id: first.data.discussion_id,
     idempotency_key: 'discussion_second',
     if_match: String(first.data.version),
@@ -27,15 +26,15 @@ export async function checkDiscussions({ HttpClient, OperationError }, fixture) 
   });
   assert.equal(second.data.version, first.data.version + 1);
 
-  const discussions = await client.questionListDiscussions({ id: question.data.id });
+  const discussions = await client.sourceListDiscussions({ id: source.data.id });
   assert.equal(discussions.data.items.length, 1);
-  const messages = await client.questionListDiscussionMessages({
-    id: question.data.id, discussion_id: first.data.discussion_id,
+  const messages = await client.sourceListDiscussionMessages({
+    id: source.data.id, discussion_id: first.data.discussion_id,
   });
   assert.equal(messages.data.items.length, 2);
 
-  await assert.rejects(client.questionCreateDiscussionMessage({
-    id: question.data.id,
+  await assert.rejects(client.sourceCreateDiscussionMessage({
+    id: source.data.id,
     discussion_id: first.data.discussion_id,
     idempotency_key: 'discussion_empty',
     if_match: String(second.data.version),
