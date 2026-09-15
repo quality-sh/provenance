@@ -247,7 +247,8 @@ impl StateStore {
         let matches = records.iter().filter(|r| r.id == *id).collect::<Vec<_>>();
         anyhow::ensure!(
             matches.len() == 1 && matches[0].scope_id == *scope,
-            "Requirement does not exist uniquely in this scope"
+            "requirement {} does not exist uniquely in this scope",
+            id.as_str()
         );
         Ok(matches[0].clone())
     }

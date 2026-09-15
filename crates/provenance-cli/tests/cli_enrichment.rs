@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_macros::verifies;
 
 #[allow(clippy::too_many_lines)]
@@ -78,6 +79,29 @@ fn cli_creates_and_exports_enriched_sources_and_resolutions() {
         ))
         .stdout(predicates::str::contains(r#""supersedes": ["#))
         .stdout(predicates::str::contains(r#""source_sah_2025""#));
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .args([
+            "export",
+            "--repo",
+            &repo,
+            "--scope",
+            "default",
+            "--format",
+            "json",
+            "--output",
+            &export_path,
+        ])
+        .assert()
+        .success();
+
+    let exported = std::fs::read_to_string(&export_path).unwrap();
+    assert!(exported.contains(r#""commit_pin": "5e1f2a9c4b6d8e0f1234567890abcdef12345678""#));
+    assert!(exported.contains(r#""effective_date": 1714521600000"#));
+    assert!(exported.contains(r#""review_date": 1717200000000"#));
+
+    // The resolutions anchor on a Requirement, whose creation enrolls it in
+    // the review journal; from then on the scope refuses a lossy export.
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
@@ -182,17 +206,13 @@ fn cli_creates_and_exports_enriched_sources_and_resolutions() {
             "--format",
             "json",
             "--output",
-            &export_path,
+            export_path.as_str(),
         ])
         .assert()
-        .success();
-
-    let exported = std::fs::read_to_string(export_path).unwrap();
-    assert!(exported.contains(r#""commit_pin": "5e1f2a9c4b6d8e0f1234567890abcdef12345678""#));
-    assert!(exported.contains(r#""effective_date": 1714521600000"#));
-    assert!(exported.contains(r#""review_date": 1717200000000"#));
-    assert!(exported.contains(r#""input_type": "regulatory""#));
-    assert!(exported.contains(r#""approved_at": 1714780800000"#));
+        .failure()
+        .stderr(predicates::str::contains(
+            "review-bearing scopes require lossless import/export support",
+        ));
 }
 
 #[test]
@@ -309,77 +329,54 @@ fn cli_rejects_a_resolution_input_with_a_blank_reference() {
 fn cli_rejects_an_imported_resolution_input_with_a_blank_summary() {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path().to_string_lossy().to_string();
-    let export_path = dir.path().join("export.json");
+    let import_path = dir.path().join("scope.json");
     init_repo(&repo);
 
-    Command::cargo_bin("provenance")
-        .unwrap()
-        .args([
-            "requirements",
-            "create",
-            "--repo",
-            &repo,
-            "--scope",
-            "default",
-            "--id",
-            "req_sah",
-            "--statement",
-            "SAH applies",
-        ])
-        .assert()
-        .success();
-    Command::cargo_bin("provenance")
-        .unwrap()
-        .args([
-            "resolutions",
-            "create",
-            "--repo",
-            &repo,
-            "--scope",
-            "default",
-            "--id",
-            "res_sah",
-            "--requirement-id",
-            "req_sah",
-            "--title",
-            "SAH extraction",
-            "--position",
-            "Keep as draft extraction",
-            "--rationale",
-            "Needs human review",
-            "--status",
-            "draft",
-            "--input-type",
-            "regulatory",
-            "--input-reference",
-            "SAH program manual",
-            "--input-summary",
-            "Program rules reviewed",
-            "--format",
-            "json",
-        ])
-        .assert()
-        .success();
-    Command::cargo_bin("provenance")
-        .unwrap()
-        .args([
-            "export",
-            "--repo",
-            &repo,
-            "--scope",
-            "default",
-            "--format",
-            "json",
-            "--output",
-            export_path.to_str().unwrap(),
-        ])
-        .assert()
-        .success();
-
-    let mut exported: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(&export_path).unwrap()).unwrap();
-    exported["resolutions"][0]["inputs"][0]["summary"] = serde_json::json!("");
-    std::fs::write(&export_path, serde_json::to_vec(&exported).unwrap()).unwrap();
+    // The scope file carries a resolution whose input summary was blanked, as
+    // a hand-edited export would have it.
+    std::fs::write(
+        &import_path,
+        serde_json::json!({
+            "scope": "default",
+            "sources": [{
+                "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+                "scope_id": "default",
+                "id": "source_sah",
+                "name": "Support at Home",
+                "source_type": "legislation",
+                "url": "https://example.test/sah",
+                "reference": "Department guidance"
+            }],
+            "requirements": [{
+                "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+                "scope_id": "default",
+                "id": "req_sah",
+                "statement": "SAH applies",
+                "status": "discovery"
+            }],
+            "resolutions": [{
+                "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+                "scope_id": "default",
+                "id": "res_sah",
+                "title": "SAH extraction",
+                "position": "Keep as draft extraction",
+                "rationale": "Needs human review",
+                "status": "draft",
+                "requirement_ids": ["req_sah"],
+                "supersedes": [],
+                "inputs": [{
+                    "input_type": "regulatory",
+                    "reference": "SAH program manual",
+                    "summary": ""
+                }]
+            }],
+            "rules": [],
+            "threads": [],
+            "messages": []
+        })
+        .to_string(),
+    )
+    .unwrap();
 
     Command::cargo_bin("provenance")
         .unwrap()
@@ -390,7 +387,7 @@ fn cli_rejects_an_imported_resolution_input_with_a_blank_summary() {
             "--scope",
             "default",
             "--input",
-            export_path.to_str().unwrap(),
+            import_path.to_str().unwrap(),
         ])
         .assert()
         .failure()

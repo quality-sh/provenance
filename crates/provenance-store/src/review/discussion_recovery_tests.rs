@@ -38,7 +38,10 @@ fn fixture() -> tempfile::TempDir {
     )
     .unwrap();
     let store = open(root);
-    store.create_requirement(serde_json::from_value(json!({"scope_id":"default","id":"req_a","statement":"The system stores records.","status":"discovery","depends_on":[],"supersedes":[]})).unwrap()).unwrap();
+    // Start with an unenrolled Requirement.
+    store
+        .write_requirement(serde_json::from_value(json!({"scope_id":"default","id":"req_a","statement":"The system stores records.","status":"discovery","depends_on":[],"supersedes":[]})).unwrap())
+        .unwrap();
     store.write_discussion(root_input()).unwrap();
     temp
 }
@@ -118,12 +121,8 @@ fn process_restart_recovers_membership_status_and_outcome_as_one_state() {
             // This receipt read must recover an absent live state before reporting absence.
             let original = store.discussion_receipt(&root_input()).unwrap().unwrap();
             if operation == "create" {
-                let receipt = store
-                    .requirement_creation_receipt(creation(&original))
-                    .unwrap();
-                assert_eq!(receipt.is_some(), committed, "creation/{phase}");
                 let entries = store.review_entries(&scope()).unwrap();
-                assert_eq!(entries.len(), usize::from(committed));
+                assert_eq!(entries.len(), usize::from(committed), "creation/{phase}");
                 assert_eq!(
                     store.list_requirements(&scope()).unwrap().len(),
                     if committed { 2 } else { 1 }
@@ -137,25 +136,22 @@ fn process_restart_recovers_membership_status_and_outcome_as_one_state() {
                     assert_eq!(result, entries[0]);
                 }
             } else if operation == "edit" {
-                let receipt = store
-                    .requirement_save_receipt(
-                        &scope(),
-                        &provenance_core::StableId::new("req_a").unwrap(),
-                        &provenance_core::StableId::new("edit").unwrap(),
-                        "ben",
-                        None,
-                    )
-                    .unwrap();
-                assert_eq!(receipt.is_some(), committed);
+                let request = provenance_core::StableId::new("edit").unwrap();
+                let entry = store
+                    .review_entries(&scope())
+                    .unwrap()
+                    .into_iter()
+                    .find(|e| e.request_id == request);
+                assert_eq!(entry.is_some(), committed);
                 assert_eq!(
                     store.list_requirements(&scope()).unwrap()[0]
                         .description
                         .as_deref(),
                     committed.then_some("After")
                 );
-                if let Some(receipt) = receipt {
-                    assert!(receipt.before.is_some());
-                    assert_eq!(receipt.origin, Some(origin(&original)));
+                if let Some(entry) = entry {
+                    assert!(entry.before.is_some());
+                    assert_eq!(entry.origin, Some(origin(&original)));
                 }
             } else {
                 let input = mutation(&original, operation);

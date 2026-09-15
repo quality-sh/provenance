@@ -7,10 +7,12 @@ fn import_replaces_only_target_scope_and_removes_all_stale_target_shards() {
     let repo = dir.path().join("repo");
     init(&repo);
     add_other_scope(&repo);
-    create_source(&repo, "default", "source_target");
-    create_source(&repo, "other", "source_other");
+    // Requirements seed first: each seed import replaces its target scope, so
+    // sources created afterwards survive the replacement.
     create_requirement(&repo, "default", "requirement_target");
     create_requirement(&repo, "other", "requirement_other");
+    create_source(&repo, "default", "source_target");
+    create_source(&repo, "other", "source_other");
     seed_stale_target_shards(&repo);
 
     let export = dir.path().join("replacement.json");
@@ -129,21 +131,41 @@ fn create_source(repo: &std::path::Path, scope: &str, id: &str) {
 }
 
 fn create_requirement(repo: &std::path::Path, scope: &str, id: &str) {
+    // Seeds through the import path, which keeps the record plain: this test
+    // pins exact-replacement import across scopes, and a CLI-created
+    // Requirement would enroll its scope into the review journal, whose
+    // lossless export is a later phase.
+    let seed = repo.join(format!("seed-{scope}-{id}.json"));
+    std::fs::write(
+        &seed,
+        serde_json::json!({
+            "scope": scope,
+            "requirements": [{
+                "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+                "scope_id": scope,
+                "id": id,
+                "statement": id,
+                "status": "active"
+            }],
+            "sources": [],
+            "resolutions": [],
+            "rules": [],
+            "threads": [],
+            "messages": []
+        })
+        .to_string(),
+    )
+    .unwrap();
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "requirements",
-            "create",
+            "import",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
             scope,
-            "--id",
-            id,
-            "--statement",
-            id,
-            "--status",
-            "active",
+            "--input",
+            seed.to_str().unwrap(),
             "--format",
             "json",
         ])

@@ -12,7 +12,11 @@ use crate::{
 use provenance_core::{Boundary, Domain, NodeType, Requirement};
 
 impl StateStore {
-    pub fn update_requirement(&self, input: UpdateRequirementInput) -> anyhow::Result<Requirement> {
+    /// Mutates a Requirement only within the guarded save path.
+    pub(crate) fn apply_requirement_update(
+        &self,
+        input: UpdateRequirementInput,
+    ) -> anyhow::Result<Requirement> {
         self.with_repository_publication(|| {
             if let Some(id) = &input.domain_id {
                 self.ensure_node_exists(&input.scope_id, NodeType::Domain, id, "domain_id")?;

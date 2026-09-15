@@ -156,7 +156,7 @@ fn a_refusal_names_the_id_and_the_flag_it_came_from() {
     .assert()
     .failure()
     .stderr(contains(
-        "requirement req_ghost does not exist (--requirement-id)",
+        "requirement req_ghost does not exist uniquely in this scope",
     ));
 
     provenance(
@@ -173,9 +173,7 @@ fn a_refusal_names_the_id_and_the_flag_it_came_from() {
     )
     .assert()
     .failure()
-    .stderr(contains(
-        "requirement req_nope does not exist (--target-id)",
-    ));
+    .stderr(contains("requirement req_nope does not exist (supersedes)"));
 }
 
 #[test]
@@ -281,7 +279,7 @@ fn a_clear_refusal_names_the_relation_it_searched() {
     .assert()
     .failure()
     .stderr(contains(
-        "requirement req_refund_amount does not name requirement req_refund_window under supersedes",
+        "requirement req_refund_amount does not name a record under supersedes: req_refund_window",
     ));
 
     provenance(

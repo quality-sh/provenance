@@ -63,6 +63,35 @@ fn cli_creates_materializes_and_exports_ideation_outputs() {
         ])
         .assert()
         .success();
+    let import_path = dir.path().join("seed.json");
+    std::fs::write(
+        &import_path,
+        serde_json::json!({
+            "scope": "default",
+            "sources": [{
+                "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+                "scope_id": "default",
+                "id": "source_schads",
+                "name": "SCHADS Award",
+                "source_type": "policy",
+                "url": null,
+                "reference": null
+            }],
+            "requirements": [{
+                "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+                "scope_id": "default",
+                "id": "req_overtime",
+                "statement": "Overtime must be traceable",
+                "status": "discovery"
+            }],
+            "resolutions": [],
+            "rules": [],
+            "threads": [],
+            "messages": []
+        })
+        .to_string(),
+    )
+    .unwrap();
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
@@ -83,19 +112,19 @@ fn cli_creates_materializes_and_exports_ideation_outputs() {
         ])
         .assert()
         .success();
+    // The ideation target seeds through the import path, which stays a plain
+    // record: this lifecycle pins ideation outputs and their export, not
+    // Requirement enrollment.
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "requirements",
-            "create",
+            "import",
             "--repo",
             &repo,
             "--scope",
             "default",
-            "--id",
-            "req_overtime",
-            "--statement",
-            "Overtime must be traceable",
+            "--input",
+            import_path.to_str().unwrap(),
             "--format",
             "json",
         ])

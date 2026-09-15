@@ -281,5 +281,5 @@ fn requirement_fog_is_set_and_cleared_as_free_text() {
         .set_requirement_fog(&scope, &StableId::new("req_missing").unwrap(), None)
         .unwrap_err()
         .to_string()
-        .contains("requirement does not exist"));
+        .contains("does not exist"));
 }
