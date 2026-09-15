@@ -1,0 +1,12 @@
+[Unit]
+Description=Run the WiFi connectivity watchdog every 45 seconds
+
+[Timer]
+# First run 90s after boot, then every 45s (within the required 30-60s window).
+OnBootSec=90
+OnUnitActiveSec=45
+AccuracySec=10
+Unit=net-watch.service
+
+[Install]
+WantedBy=timers.target

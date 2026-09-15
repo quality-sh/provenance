@@ -1,0 +1,14 @@
+[Unit]
+Description=Probe opencode2-server /api/provider every 15 minutes
+
+[Timer]
+OnBootSec=3min
+# Every 15 minutes, on the quarter hour.
+OnCalendar=*:0/15
+AccuracySec=15s
+# If the machine was asleep/suspended at a scheduled time, run once on resume.
+Persistent=true
+Unit=opencode2-provider-watch.service
+
+[Install]
+WantedBy=timers.target

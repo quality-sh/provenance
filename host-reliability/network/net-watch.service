@@ -1,0 +1,18 @@
+[Unit]
+Description=WiFi connectivity watchdog (probe + staged repair via NetworkManager)
+Documentation=file:///usr/local/sbin/net-watch.sh
+After=NetworkManager.service wpa_supplicant.service
+Wants=NetworkManager.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/net-watch.sh
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+# State (/run/net-watch.state) and kill switch (/run/net-watch.disabled) live in
+# /run (tmpfs, cleared at boot by design). Root is required for nmcli/ip link.
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,11 @@
+[Unit]
+Description=Self-heal watchdog for opencode2-server provider view
+# Re-runs are timer-driven; After= only orders them if both start in the same transaction.
+After=opencode2-server.service
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/opencode2-provider-watch.sh
+NoNewPrivileges=true
+# Credentials are read at runtime from %h/.config/opencode/server.env and are
+# never embedded in this unit, passed on a command line, or written to the journal.
