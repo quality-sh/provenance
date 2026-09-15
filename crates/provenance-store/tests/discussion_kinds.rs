@@ -1,7 +1,3 @@
-//! Addressed Discussions on all six parent kinds: per-kind ownership, the
-//! journaled Thread and Message outcomes, and the legacy containers that stay
-//! readable beside them.
-
 #[allow(dead_code)]
 mod review_support;
 use provenance_core::threads::DiscussionStatus;
@@ -43,8 +39,6 @@ fn every_kind() -> Vec<(NodeType, &'static str)> {
     ]
 }
 
-/// Seeds one parent record per kind: source, requirement, resolution, rule,
-/// topic, and question.
 fn seed_kinds(store: &StateStore) {
     store
         .create_source(
@@ -57,7 +51,6 @@ fn seed_kinds(store: &StateStore) {
             .unwrap(),
         )
         .unwrap();
-    // req_a comes from the fixture.
     store
         .create_resolution(
             serde_json::from_value(json!({
@@ -116,7 +109,6 @@ fn every_kind_starts_replies_and_resolves_a_concern() {
     seed_kinds(&store);
     for (kind, node) in every_kind() {
         let parent = json!({"node_type": kind, "node_id": node});
-        // The resolution parent carries its maker as the owner fact.
         let declared_by = if node == "res_award" {
             json!("maker")
         } else {
@@ -162,7 +154,6 @@ fn every_kind_starts_replies_and_resolves_a_concern() {
             .unwrap_or_else(|error| panic!("{node}: {error}"));
         assert_eq!(resolved.status, DiscussionStatus::Resolved, "{node}");
     }
-    // Six kinds, one canonical container each; every Message stays readable.
     let threads = store.list_threads(&scope()).unwrap();
     assert_eq!(threads.len(), 6);
     assert!(threads
@@ -175,7 +166,6 @@ fn every_kind_starts_replies_and_resolves_a_concern() {
 fn parent_ownership_and_existence_are_per_kind() {
     let (_temp, store) = fixture();
     seed_kinds(&store);
-    // An owner fact the parent does not carry refuses on every authored kind.
     for (kind, node) in [
         (NodeType::Source, "source_award"),
         (NodeType::Requirement, "req_a"),
@@ -194,7 +184,6 @@ fn parent_ownership_and_existence_are_per_kind() {
             "{node} refuses a foreign declared owner"
         );
     }
-    // The resolution owner matches its maker.
     store
         .write_discussion(write_for(
             NodeType::Resolution,
@@ -203,8 +192,6 @@ fn parent_ownership_and_existence_are_per_kind() {
             &json!("maker"),
         ))
         .unwrap();
-    // Claims are work locks, not authorship: topics and questions take no
-    // declared owner at all.
     for (kind, node) in [
         (NodeType::Topic, "topic_award"),
         (NodeType::Question, "question_award"),
@@ -224,7 +211,6 @@ fn parent_ownership_and_existence_are_per_kind() {
             .write_discussion(write_for(kind, node, &format!("open_{node}"), &json!(null)))
             .unwrap_or_else(|error| panic!("{node}: {error}"));
     }
-    // A parent that does not exist refuses before any write.
     assert!(store
         .write_discussion(write_for(
             NodeType::Source,
@@ -233,7 +219,6 @@ fn parent_ownership_and_existence_are_per_kind() {
             &json!(null)
         ))
         .is_err());
-    // A kind that takes no Discussions refuses before any lookup.
     assert!(store
         .write_discussion(write_for(
             NodeType::Domain,
@@ -248,7 +233,6 @@ fn parent_ownership_and_existence_are_per_kind() {
 fn legacy_containers_stay_readable_beside_addressed_discussions() {
     let (_temp, store) = fixture();
     seed_kinds(&store);
-    // The legacy posting path still works, and its container keeps its identity.
     let legacy = store
         .post_thread_message(
             serde_json::from_value(json!({
@@ -260,8 +244,6 @@ fn legacy_containers_stay_readable_beside_addressed_discussions() {
         )
         .unwrap();
     assert_eq!(legacy.thread.parent.node_id.as_str(), "question_award");
-    // The addressed Discussion adopts the canonical container, so the legacy
-    // identity keeps its history instead of splitting it.
     let addressed = store
         .write_discussion(write_for(
             NodeType::Question,

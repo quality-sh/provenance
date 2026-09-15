@@ -123,7 +123,6 @@ async fn owned_requirement_and_rule_updates_preserve_declaration_identity() {
         let mut expected = before;
         expected["description"] = json!("Changed");
         if operation == "update-requirement" {
-            // The guarded edit enrolls the record it publishes.
             expected["schema_version"] = json!(3);
         }
 

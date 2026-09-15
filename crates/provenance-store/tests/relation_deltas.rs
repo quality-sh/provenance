@@ -1,7 +1,3 @@
-//! Relationship edits on the guarded save: complete final sets, partial
-//! deltas, deterministic expansion, and validation on the resulting final
-//! resource.
-
 #[allow(dead_code)]
 mod review_support;
 use provenance_core::review::SaveOutcome;
@@ -9,8 +5,6 @@ use provenance_store::review::SaveRequirement;
 use review_support::*;
 use serde_json::json;
 
-/// Seeds the records the relationship edits name. `req_cycle` already depends
-/// on `req_a`, so a req_a-to-req_cycle edit closes a cycle.
 fn seed_targets(store: &provenance_store::state_store::StateStore) {
     for (id, depends_on) in [
         ("req_b", vec![]),
@@ -117,7 +111,6 @@ fn list_deltas_add_and_remove_without_touching_other_fields() {
         json!({"depends_on": {"remove": ["req_b"]}}),
     );
     assert_eq!(depends_on(&store), ["req_c"]);
-    // A repeated add is not a change.
     let entry = save_ok(&store, "again", json!({"depends_on": {"add": ["req_c"]}}));
     assert_eq!(entry.outcome, SaveOutcome::NoChange);
     assert_eq!(depends_on(&store), ["req_c"]);
@@ -129,7 +122,6 @@ fn an_array_supplies_the_complete_final_set() {
     seed_targets(&store);
     save_ok(&store, "final_one", json!({"depends_on": ["req_c"]}));
     assert_eq!(depends_on(&store), ["req_c"]);
-    // A complete set is normalized: sorted, without duplicates.
     save_ok(
         &store,
         "final_two",
@@ -197,14 +189,12 @@ fn invalid_deltas_refuse_and_publish_nothing() {
     save_ok(&store, "add", json!({"depends_on": {"add": ["req_c"]}}));
     let etag = store.requirement_edit_state(&scope(), &id()).unwrap().etag;
 
-    // A remove of an absent entry refuses and changes nothing.
     let missing = relations(
         &store,
         "bad_remove",
         json!({"depends_on": {"remove": ["req_missing"]}}),
     );
     assert!(store.save_requirement(missing).is_err());
-    // A misspelled delta field refuses instead of silently no-oping.
     let mut typo = serde_json::to_value(save(&store, "typo", json!({}))).unwrap();
     typo["relationships"] = json!({"depends_on": {"depends": [], "remove": ["req_c"]}});
     assert!(
@@ -216,7 +206,6 @@ fn invalid_deltas_refuse_and_publish_nothing() {
         etag
     );
 
-    // The failed requests recorded no outcome, so the identity is a fresh save.
     let retried = relations(
         &store,
         "bad_remove",
@@ -233,7 +222,6 @@ fn validation_runs_on_the_final_resource_exactly_as_one_edit() {
     let (_temp, store) = fixture();
     seed_targets(&store);
 
-    // req_cycle already depends on req_a, so this delta closes a cycle.
     let cycle = relations(
         &store,
         "cycle",
@@ -241,8 +229,6 @@ fn validation_runs_on_the_final_resource_exactly_as_one_edit() {
     );
     assert!(store.save_requirement(cycle).is_err());
 
-    // An add and a remove of the same entry validate against the final set:
-    // the removal follows the add, so the delta applies as no change.
     let swap = relations(
         &store,
         "swap",
@@ -254,7 +240,6 @@ fn validation_runs_on_the_final_resource_exactly_as_one_edit() {
     );
     assert!(depends_on(&store).is_empty());
 
-    // An unknown target kind refuses: spawned_by takes a resolution.
     let wrong_kind = relations(&store, "wrong_kind", json!({"spawned_by": "req_b"}));
     assert!(store.save_requirement(wrong_kind).is_err());
 }
@@ -270,8 +255,6 @@ fn the_same_delta_on_the_same_state_resolves_to_one_outcome() {
     );
     let request = serde_json::to_value(&input).unwrap();
     let first = store.save_requirement(input).unwrap();
-    // Resubmitting the same request returns the recorded outcome instead of
-    // replaying the edit.
     let replay: SaveRequirement = serde_json::from_value(request).unwrap();
     let second = store.save_requirement(replay).unwrap();
     assert_eq!(first, second);
@@ -289,8 +272,6 @@ fn the_journal_holds_the_complete_before_and_after() {
         "delta",
         json!({"depends_on": {"add": ["req_b", "req_c"]}}),
     );
-    // The Before snapshot is exactly the recorded state before the delta, and
-    // the After snapshot carries the complete resulting set.
     assert_eq!(entry.before.as_ref().unwrap().digest, before_digest);
     assert_eq!(depends_on(&store), ["req_b", "req_c"]);
 }

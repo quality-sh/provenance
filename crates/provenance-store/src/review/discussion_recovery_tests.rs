@@ -38,8 +38,7 @@ fn fixture() -> tempfile::TempDir {
     )
     .unwrap();
     let store = open(root);
-    // The requirement seeds as a plain record, so the crash phases below start
-    // from a journal-free scope.
+    // Start with an unenrolled Requirement.
     store
         .write_requirement(serde_json::from_value(json!({"scope_id":"default","id":"req_a","statement":"The system stores records.","status":"discovery","depends_on":[],"supersedes":[]})).unwrap())
         .unwrap();

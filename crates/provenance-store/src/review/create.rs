@@ -70,9 +70,6 @@ impl StateStore {
         })
     }
 
-    /// Resolves one create request identity against the journal and the
-    /// current owner, so a repeated guarded create returns its recorded
-    /// outcome instead of replaying the write.
     fn creation_receipt(
         &self,
         input: &CreateReviewRequirement,

@@ -243,8 +243,7 @@ fn submission_gates_refuse_a_second_pending_or_unrevised_record() {
     );
     assert_eq!(store.list_proposal_definitions(&scope()).unwrap().len(), 1);
 
-    // A record from before the restructure holds no review revision, so a
-    // submission on it is refused until a save enrolls it.
+    // Seed an unenrolled Requirement.
     let fresh = tempfile::tempdir().unwrap();
     let layout = ProvenanceLayout::new(Utf8Path::from_path(fresh.path()).unwrap());
     std::fs::create_dir_all(layout.state_dir()).unwrap();

@@ -36,7 +36,6 @@ async fn receipt_only_save_changes_projection_and_rebuild_keeps_history() {
         .fetch_one(&pool)
         .await
         .unwrap();
-    // The fixture's guarded creation plus the two saves, one outcome each.
     assert_eq!(count, 3);
     pool.close().await;
 }

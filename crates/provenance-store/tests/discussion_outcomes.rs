@@ -80,8 +80,6 @@ fn repeated_guarded_creation_resolves_to_the_recorded_outcome() {
     let created = store
         .create_review_requirement(serde_json::from_value(value.clone()).unwrap())
         .unwrap();
-    // The same request resolved through the write path returns the recorded
-    // outcome instead of replaying the create.
     assert_eq!(
         store
             .create_review_requirement(serde_json::from_value(value).unwrap())

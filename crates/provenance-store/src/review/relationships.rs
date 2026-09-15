@@ -3,7 +3,6 @@ use crate::{shards, state_store::StateStore};
 use provenance_core::model::relations::RelationOwner;
 use provenance_core::{Requirement, ScopeId, SourceReference, StableId};
 
-/// The complete final relationship sets one save publishes.
 #[derive(Debug, Clone, Default)]
 pub(super) struct FinalRelations {
     pub refines: Option<StableId>,
@@ -26,18 +25,12 @@ impl SaveRequirement {
 }
 
 impl RequirementRelations {
-    /// Sorts and dedups every set, so the same edit always carries the same
-    /// canonical intent and request identity stays deterministic.
     fn normalize(&mut self) {
         sort_list(self.depends_on.as_mut());
         sort_list(self.supersedes.as_mut());
         sort_cites(self.cites.as_mut());
     }
 
-    /// Expands the edit against the record's current state into complete
-    /// final sets. Expansion is deterministic: the same edit on the same
-    /// record always yields the same final state, so request identity and
-    /// idempotency resolution stay correct.
     pub(super) fn expand(&self, before: &Requirement) -> anyhow::Result<FinalRelations> {
         let mut final_sets = FinalRelations {
             refines: before.refines.clone(),
@@ -137,9 +130,9 @@ fn expand_list(
     match edit {
         ListEdit::Set(entries) => *target = sorted_ids(entries.clone()),
         ListEdit::Delta { add, remove } => {
-            for entry in add.clone() {
-                if !target.contains(&entry) {
-                    target.push(entry);
+            for entry in add {
+                if !target.contains(entry) {
+                    target.push(entry.clone());
                 }
             }
             for entry in remove {
@@ -166,9 +159,9 @@ fn expand_cites(
     match edit {
         CitesEdit::Set(entries) => *target = sorted_citations(entries.clone()),
         CitesEdit::Delta { add, remove } => {
-            for citation in add.clone() {
-                if !target.contains(&citation) {
-                    target.push(citation);
+            for citation in add {
+                if !target.contains(citation) {
+                    target.push(citation.clone());
                 }
             }
             for source in remove {

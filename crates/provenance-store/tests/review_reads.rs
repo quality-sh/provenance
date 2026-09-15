@@ -63,8 +63,6 @@ async fn evidence_reassembles_exact_unicode_and_history_cursor_is_bound() {
     )
     .await
     .unwrap();
-    // The fixture's guarded creation opens the history; the cursor pages
-    // through one outcome at a time.
     assert_eq!(one.result.entries.len(), 1);
     assert_eq!(one.result.entries[0].request_id.as_str(), "fixture_create");
     let cursor = one.result.next_cursor.unwrap();
@@ -137,19 +135,15 @@ fn saves_stay_authoritative_after_reopen_and_private_to_the_actor() {
             camino::Utf8Path::from_path(temp.path()).unwrap(),
         ),
     );
-    // Resubmitting the committed request through the write path returns the
-    // recorded outcome instead of replaying the edit.
     let repeat: SaveRequirement =
         serde_json::from_value(serde_json::to_value(save(&store, "enroll", json!({}))).unwrap())
             .unwrap();
     assert_eq!(store.save_requirement(repeat).unwrap(), first);
-    // A different actor identity on the same request identity is a refusal.
     let mut foreign = serde_json::to_value(save(&store, "enroll", json!({}))).unwrap();
     foreign["actor"] = json!("other");
     assert!(store
         .save_requirement(serde_json::from_value(foreign).unwrap())
         .is_err());
-    // An unknown request identity is simply a fresh save.
     assert!(store
         .save_requirement(save(&store, "missing", json!({"description":"new"})))
         .is_ok());

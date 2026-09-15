@@ -59,8 +59,7 @@ fn document(
 }
 
 fn create_unowned_requirement(store: &StateStore, scope: &ScopeId, id: &str, statement: &str) {
-    // Seeds a plain unmanaged record, as a scope from before the restructure
-    // holds one, so the typed-spec adoption of such a record stays pinned.
+    // Seed an unenrolled Requirement.
     store
         .write_requirement(CreateRequirementInput {
             scope_id: scope.clone(),
@@ -79,8 +78,6 @@ fn create_unowned_requirement(store: &StateStore, scope: &ScopeId, id: &str, sta
         .unwrap();
 }
 
-/// Seeds one citation on a plain record, keeping the record outside the
-/// review journal the way a scope from before the restructure holds one.
 fn seed_plain_citation(
     store: &StateStore,
     scope: &ScopeId,

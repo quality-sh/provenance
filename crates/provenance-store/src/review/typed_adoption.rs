@@ -1,12 +1,4 @@
-//! The journaled commit for one typed-spec adoption of an enrolled
-//! Requirement.
-//!
-//! The typed-spec publication replaces a scope's record shards. A shard
-//! swap may not touch an enrolled record: enrolled Requirements take every
-//! change through the guarded journal. So when a declared Requirement
-//! adopts an enrolled identity, this module commits that change as a
-//! review entry first. The later shard swap then carries no unjournaled
-//! change to enrolled state, and the guard lets it pass.
+//! Guarded journal writes for typed-spec adoption of enrolled Requirements.
 
 use super::{classifier, guard, journal};
 use crate::{canonical_digest, publication::with_staged_state, shards, state_store::StateStore};
@@ -14,9 +6,6 @@ use provenance_core::review::{ReviewEntry, SaveOutcome, REVIEW_SCHEMA_VERSION};
 use provenance_core::{Requirement, ScopeId, StableId};
 
 impl StateStore {
-    /// Commits the guarded journal write for every declared Requirement in
-    /// the desired set that adopts an enrolled identity. Records that are
-    /// missing, unchanged, or not enrolled stay with the shard swap.
     pub(crate) fn commit_enrollment_adoptions(
         &self,
         scope: &ScopeId,
@@ -28,10 +17,7 @@ impl StateStore {
             let Some(before) = current.iter().find(|r| r.id == record.id) else {
                 continue;
             };
-            // Only an adoption takes this path: an unowned enrolled record
-            // the declaration takes over exactly. A record this spec already
-            // owns stays with the guarded refusal, so the shard swap never
-            // publishes an enrolled edit.
+            // An owned record stays with the guarded shard-swap refusal.
             if before.declared_by.is_some()
                 || before.schema_version != REVIEW_SCHEMA_VERSION
                 || before == record
@@ -47,8 +33,6 @@ impl StateStore {
         Ok(())
     }
 
-    /// Publishes one adoption as a review entry, its evidence, and its
-    /// request receipt together, under the record's guarded writer.
     fn commit_adoption(
         &self,
         before: &Requirement,
@@ -95,8 +79,6 @@ impl StateStore {
         })
     }
 
-    /// The staged half of one adoption: the record change, the scope
-    /// validation, and the journal entry that carries before and after.
     fn commit_adoption_record(
         &self,
         before: &Requirement,
@@ -186,9 +168,7 @@ impl StateStore {
     }
 }
 
-/// The intent of one adoption: the owner and the exact before and after
-/// content. Record stamps stay out, so a replay of the same adoption
-/// resolves to the recorded receipt.
+/// Excludes record stamps so retries resolve to the same receipt.
 fn adoption_intent(
     owner: &str,
     before: &Requirement,

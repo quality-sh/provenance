@@ -3,48 +3,53 @@ use crate::state_store::StateStore;
 use provenance_core::{
     review::JournalEntry,
     threads::{DiscussionEntry, DiscussionOrigin},
-    Message, NodeType, ScopeId, StableId, Thread, ThreadParent,
+    Message, NodeType, Question, Requirement, Resolution, Rule, ScopeId, Source, StableId, Thread,
+    ThreadParent, Topic,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
-use provenance_core::{Question, Requirement, Resolution, Rule, Source, Topic};
-
-/// Every record of a kind that takes Discussions, as the parent index reads it.
-trait IndexedParent {
-    fn indexed_id(&self) -> &StableId;
-    fn indexed_scope(&self) -> &ScopeId;
+trait DiscussionParent {
+    fn parent_id(&self) -> &StableId;
+    fn parent_scope(&self) -> &ScopeId;
+    fn owner_field(&self) -> Option<&str>;
 }
 
-macro_rules! indexed_parent {
-    ($($kind:ty),* $(,)?) => {
+macro_rules! discussion_parent {
+    ($($kind:ty => $owner:ident),* $(,)?) => {
         $(
-            impl IndexedParent for $kind {
-                fn indexed_id(&self) -> &StableId { &self.id }
-                fn indexed_scope(&self) -> &ScopeId { &self.scope_id }
+            impl DiscussionParent for $kind {
+                fn parent_id(&self) -> &StableId { &self.id }
+                fn parent_scope(&self) -> &ScopeId { &self.scope_id }
+                fn owner_field(&self) -> Option<&str> { self.$owner.as_deref() }
             }
         )*
     };
 }
 
-indexed_parent!(Source, Requirement, Resolution, Rule, Topic, Question);
+discussion_parent!(
+    Source => declared_by,
+    Requirement => declared_by,
+    Resolution => made_by,
+    Rule => declared_by,
+    Topic => claimed_by,
+    Question => claimed_by,
+);
 
 impl StateStore {
-    /// Indexes every parent-kind shard once, as `(kind word, id) -> scope
-    /// words`, so a parent resolves to exactly one record in this scope.
     fn index_discussion_parents(
         &self,
         scope: &ScopeId,
     ) -> anyhow::Result<BTreeMap<(&'static str, String), Vec<String>>> {
-        fn index_one<K: IndexedParent>(
+        fn index_one<K: DiscussionParent>(
             index: &mut BTreeMap<(&'static str, String), Vec<String>>,
             word: &'static str,
             records: &[K],
         ) {
             for record in records {
                 index
-                    .entry((word, record.indexed_id().as_str().to_owned()))
+                    .entry((word, record.parent_id().as_str().to_owned()))
                     .or_default()
-                    .push(record.indexed_scope().as_str().to_owned());
+                    .push(record.parent_scope().as_str().to_owned());
             }
         }
         let mut index = BTreeMap::new();
@@ -107,16 +112,12 @@ impl StateStore {
                 .get(&(entry.thread_id.as_str(), scope.as_str()))
                 .copied()
                 .ok_or_else(|| anyhow::anyhow!("Discussion Thread is missing"))?;
-            anyhow::ensure!(
-                thread.parent == entry.parent
-                    && discussion_kind_word(entry.parent.node_type).is_some(),
-                "Discussion parent mismatch"
-            );
+            let Some(parent_kind) = discussion_kind_word(entry.parent.node_type) else {
+                anyhow::bail!("Discussion parent mismatch");
+            };
+            anyhow::ensure!(thread.parent == entry.parent, "Discussion parent mismatch");
             let in_scope = parents_by_key
-                .get(&(
-                    discussion_kind_word(entry.parent.node_type).unwrap_or_default(),
-                    entry.parent.node_id.as_str().to_owned(),
-                ))
+                .get(&(parent_kind, entry.parent.node_id.as_str().to_owned()))
                 .is_some_and(|scopes| scopes.len() == 1 && scopes[0].as_str() == scope.as_str());
             anyhow::ensure!(
                 in_scope,
@@ -202,8 +203,6 @@ impl StateStore {
         self.validate_requirement_origin(scope, Some(&origin.thread_id), Some(&origin.message_id))
     }
 
-    /// Receipt resolution stays internal to the Store: the Discussion write
-    /// path resolves request identity itself.
     pub(crate) fn discussion_receipt(
         &self,
         input: &super::WriteDiscussion,
@@ -253,8 +252,6 @@ impl StateStore {
             NodeType::Source | NodeType::Requirement | NodeType::Resolution | NodeType::Rule => {
                 parent_owner_matches(owner.as_deref(), input.declared_by.as_deref())?;
             }
-            // The parent resolution refused kinds that take no Discussions
-            // before this match; the closed vocabulary still names them.
             NodeType::Domain | NodeType::Boundary => anyhow::bail!(
                 "thread parent kind `{}` does not take Discussions",
                 discussion_kind_word(input.parent.node_type).unwrap_or("unsupported")
@@ -277,8 +274,6 @@ impl StateStore {
     }
 }
 
-/// The owner fact a Discussion parent carries: the record must exist uniquely
-/// in the scope, and the kind decides which field owns it.
 pub(super) fn parent_owner_matches(
     saved: Option<&str>,
     supplied: Option<&str>,
@@ -294,8 +289,6 @@ pub(super) fn parent_owner_matches(
     Ok(())
 }
 
-/// The wire word of one supported Discussion parent kind, or `None` for a
-/// kind that takes no Discussion.
 pub(super) const fn discussion_kind_word(kind: NodeType) -> Option<&'static str> {
     match kind {
         NodeType::Source => Some("source"),
@@ -308,51 +301,19 @@ pub(super) const fn discussion_kind_word(kind: NodeType) -> Option<&'static str>
     }
 }
 
-/// The projection table of one parent kind, named like its attested family.
-pub(super) fn parent_table(kind: NodeType) -> Option<&'static str> {
-    discussion_kind_word(kind).map(|word| match word {
-        "source" => "sources",
-        "requirement" => "requirements",
-        "resolution" => "resolutions",
-        "rule" => "rules",
-        "topic" => "topics",
-        _ => "questions",
-    })
+pub(super) const fn parent_table(kind: NodeType) -> Option<&'static str> {
+    match kind {
+        NodeType::Source => Some("sources"),
+        NodeType::Requirement => Some("requirements"),
+        NodeType::Resolution => Some("resolutions"),
+        NodeType::Rule => Some("rules"),
+        NodeType::Topic => Some("topics"),
+        NodeType::Question => Some("questions"),
+        NodeType::Domain | NodeType::Boundary => None,
+    }
 }
-
-/// One record of a kind that takes Discussions, as the parent check reads it.
-trait DiscussionParent {
-    fn parent_id(&self) -> &StableId;
-    fn parent_scope(&self) -> &ScopeId;
-    /// The field that owns the record, if the kind has one.
-    fn owner_field(&self) -> Option<&str>;
-}
-
-macro_rules! discussion_parent {
-    ($($kind:ty => $owner:ident),* $(,)?) => {
-        $(
-            impl DiscussionParent for $kind {
-                fn parent_id(&self) -> &StableId { &self.id }
-                fn parent_scope(&self) -> &ScopeId { &self.scope_id }
-                fn owner_field(&self) -> Option<&str> { self.$owner.as_deref() }
-            }
-        )*
-    };
-}
-
-discussion_parent!(
-    Source => declared_by,
-    Requirement => declared_by,
-    Resolution => made_by,
-    Rule => declared_by,
-    Topic => claimed_by,
-    Question => claimed_by,
-);
 
 impl StateStore {
-    /// Resolves one Discussion parent: the record must exist uniquely in the
-    /// scope, and the kind's owner fact comes back for the ownership check.
-    /// A topic or question claim is a work lock, so it is not an owner fact.
     pub(super) fn resolve_discussion_parent(
         &self,
         scope: &ScopeId,

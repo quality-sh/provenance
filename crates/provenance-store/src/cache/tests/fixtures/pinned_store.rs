@@ -20,8 +20,6 @@ use provenance_core::{
 /// under two kinds.
 pub const TWIN_ID: &str = "twin_record";
 
-/// Seeds one citation on a plain record, keeping the pinned store outside the
-/// review journal: the pinned file pins reader answers, not journal history.
 fn seed_plain_citation(
     store: &StateStore,
     scope: &ScopeId,

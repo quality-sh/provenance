@@ -12,9 +12,7 @@ use crate::{
 use provenance_core::{Boundary, Domain, NodeType, Requirement};
 
 impl StateStore {
-    /// Applies one text-field update to the Requirement record and records the
-    /// Rule reviews a statement change raises. This is the record mutation the
-    /// guarded save publishes; it is not a write path of its own.
+    /// Mutates a Requirement only within the guarded save path.
     pub(crate) fn apply_requirement_update(
         &self,
         input: UpdateRequirementInput,

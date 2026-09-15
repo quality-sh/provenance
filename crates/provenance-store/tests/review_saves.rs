@@ -10,7 +10,6 @@ fn repeated_content_has_distinct_occurrences_and_lifecycle_keeps_revision() {
     let a = store
         .save_requirement(save(&store, "enroll", json!({})))
         .unwrap();
-    // Creation already enrolled the record, so an empty save changes nothing.
     assert_eq!(a.outcome, SaveOutcome::NoChange);
     let b = store
         .save_requirement(save(&store, "edit_b", json!({"description":"B"})))
@@ -80,8 +79,6 @@ fn stale_etag_and_wrong_owner_refuse_without_changing_state() {
         ))
         .is_err());
     assert_eq!(before, store.list_requirements(&scope()).unwrap());
-    // The legacy edit surface routes through the guarded save, so an edit of
-    // an enrolled record publishes a journaled outcome instead of bypassing it.
     let etag = store.requirement_edit_state(&scope(), &id()).unwrap().etag;
     let bypassed = store
         .update_requirement(

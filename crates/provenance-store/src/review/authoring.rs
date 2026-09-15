@@ -1,17 +1,4 @@
-//! The legacy authoring surfaces, kept until Phase 2b re-registers the
-//! catalog.
-//!
-//! The v2 contract gives Requirements one guarded write path: the journaled
-//! review operations. Every create and edit below routes through that path, so
-//! it enrolls actor identity, request identity, edit preconditions, and the
-//! before/after journal entries. No bridge here writes a record directly.
-//!
-//! The legacy surface carries no actor or idempotency facts, so each bridge
-//! derives them deterministically: the actor is the authoring identity and the
-//! request identity is the digest of the call and the edit precondition it was
-//! computed against. A repeated identical call therefore resolves to the same
-//! journal receipt, and a changed record state produces a new identity instead
-//! of a false intent clash.
+//! Legacy Requirement authoring routed through guarded review writes.
 
 use super::{
     input::{CitesEdit, ListEdit, RequirementRelations, SaveRequirement, SingleEdit},
@@ -26,14 +13,12 @@ use crate::{
 };
 use provenance_core::{Requirement, ScopeId, SourceReference, StableId};
 
-/// The actor a legacy authoring call records, which carries no actor fact.
 const AUTHORING_ACTOR: &str = "authoring";
 
 impl StateStore {
-    /// LEGACY (Phase 2b re-registers this surface): creates a Requirement
-    /// through the guarded journal creation.
     pub fn create_requirement(&self, input: CreateRequirementInput) -> anyhow::Result<Requirement> {
-        let request_id = authoring_request_id("create-requirement", &[&intent_of(&input)?])?;
+        let intent = intent_of(&input)?;
+        let request_id = authoring_request_id("create-requirement", &[&intent])?;
         let scope = input.scope_id.clone();
         let id = input.id.clone();
         match self.create_review_requirement(CreateReviewRequirement {
@@ -47,39 +32,33 @@ impl StateStore {
                 let duplicate = self
                     .list_requirements(&scope)
                     .is_ok_and(|records| records.iter().any(|record| record.id == id));
-                Err(retyped(error, duplicate))
+                Err(retype_create_error(error, duplicate))
             }
         }
     }
 
-    /// LEGACY (Phase 2b re-registers this surface): edits a Requirement
-    /// through the guarded journal save under the current edit precondition.
     pub fn update_requirement(&self, input: UpdateRequirementInput) -> anyhow::Result<Requirement> {
         self.save_record(input, None)
     }
 
-    /// LEGACY (Phase 2b re-registers this surface): sets or clears the
-    /// deliberately unstructured fog text through the guarded journal save.
+    /// Sets or clears the deliberately unstructured fog text.
     pub fn set_requirement_fog(
         &self,
         scope_id: &ScopeId,
         id: &StableId,
         fog: Option<String>,
     ) -> anyhow::Result<Requirement> {
-        if let Some(fog) = &fog {
-            anyhow::ensure!(!fog.trim().is_empty(), "fog text must not be empty");
-        }
         let mut update = empty_update(scope_id, id);
-        if fog.is_some() {
-            update.fog = fog;
-        } else {
-            update.clear_fields = vec![crate::state_store::RequirementClearField::Fog];
+        match fog {
+            Some(fog) => {
+                anyhow::ensure!(!fog.trim().is_empty(), "fog text must not be empty");
+                update.fog = Some(fog);
+            }
+            None => update.clear_fields = vec![crate::state_store::RequirementClearField::Fog],
         }
         self.save_record(update, None)
     }
 
-    /// LEGACY (Phase 2b re-registers this surface): adds one citation through
-    /// the guarded journal save.
     pub fn add_source_reference(
         &self,
         input: AddSourceReferenceInput,
@@ -102,7 +81,6 @@ impl StateStore {
         )
     }
 
-    /// LEGACY (Phase 2b re-registers this surface).
     pub fn set_requirement_refines(
         &self,
         scope_id: &ScopeId,
@@ -118,7 +96,6 @@ impl StateStore {
         )
     }
 
-    /// LEGACY (Phase 2b re-registers this surface).
     pub fn clear_requirement_refines(
         &self,
         scope_id: &ScopeId,
@@ -133,7 +110,6 @@ impl StateStore {
         )
     }
 
-    /// LEGACY (Phase 2b re-registers this surface).
     pub fn add_requirement_depends_on(
         &self,
         scope_id: &ScopeId,
@@ -149,7 +125,6 @@ impl StateStore {
         )
     }
 
-    /// LEGACY (Phase 2b re-registers this surface).
     pub fn clear_requirement_depends_on(
         &self,
         scope_id: &ScopeId,
@@ -165,7 +140,6 @@ impl StateStore {
         )
     }
 
-    /// LEGACY (Phase 2b re-registers this surface).
     pub fn add_requirement_supersedes(
         &self,
         scope_id: &ScopeId,
@@ -181,7 +155,6 @@ impl StateStore {
         )
     }
 
-    /// LEGACY (Phase 2b re-registers this surface).
     pub fn clear_requirement_supersedes(
         &self,
         scope_id: &ScopeId,
@@ -197,7 +170,6 @@ impl StateStore {
         )
     }
 
-    /// LEGACY (Phase 2b re-registers this surface).
     pub fn set_requirement_spawned_by(
         &self,
         scope_id: &ScopeId,
@@ -213,7 +185,6 @@ impl StateStore {
         )
     }
 
-    /// LEGACY (Phase 2b re-registers this surface).
     pub fn clear_requirement_spawned_by(
         &self,
         scope_id: &ScopeId,
@@ -228,8 +199,7 @@ impl StateStore {
         )
     }
 
-    /// LEGACY (Phase 2b re-registers this surface): removes every clause that
-    /// cites one source through the guarded journal save.
+    /// Removes every citation of one source from a Requirement.
     pub fn clear_source_reference(
         &self,
         scope_id: &ScopeId,
@@ -248,8 +218,6 @@ impl StateStore {
         )
     }
 
-    /// Publishes one guarded save under the authoring identity and the current
-    /// edit precondition, then returns the resulting record.
     fn save_record(
         &self,
         update: UpdateRequirementInput,
@@ -258,16 +226,9 @@ impl StateStore {
         let scope = update.scope_id.clone();
         let id = update.id.clone();
         let expected_etag = self.requirement_edit_state(&scope, &id)?.etag;
-        let request_id = authoring_request_id(
-            "update-requirement",
-            &[
-                &intent_of(&(&update, &relationships))?,
-                expected_etag.as_str(),
-            ],
-        )?;
-        // The guarded save types its own refusals: a validation refusal is
-        // InvalidUpdate from its raise site, and an infrastructure failure
-        // stays WriteFailed.
+        let intent = intent_of(&(&update, &relationships))?;
+        let request_id =
+            authoring_request_id("update-requirement", &[&intent, expected_etag.as_str()])?;
         self.save_requirement(SaveRequirement {
             request_id,
             actor: AUTHORING_ACTOR.to_owned(),
@@ -279,11 +240,7 @@ impl StateStore {
     }
 }
 
-/// Keeps every failure with the class its raise site gave it. Only the
-/// create path's duplicate resolution stays here: a create refusal while the
-/// scope already holds the identity is the `AlreadyExists` class, and an
-/// infrastructure failure keeps the 500 `WriteFailed` class.
-fn retyped(error: anyhow::Error, duplicate: bool) -> anyhow::Error {
+fn retype_create_error(error: anyhow::Error, duplicate: bool) -> anyhow::Error {
     if !duplicate {
         return error;
     }
@@ -311,7 +268,6 @@ const fn remove_delta(remove: Vec<StableId>) -> ListEdit {
     }
 }
 
-/// A text update that changes nothing.
 fn empty_update(scope_id: &ScopeId, id: &StableId) -> UpdateRequirementInput {
     UpdateRequirementInput {
         scope_id: scope_id.clone(),
@@ -332,7 +288,6 @@ fn intent_of(value: &impl serde::Serialize) -> anyhow::Result<String> {
     ))
 }
 
-/// The stable request identity of one legacy authoring call.
 fn authoring_request_id(label: &str, parts: &[&str]) -> anyhow::Result<StableId> {
     let joined = format!("{label}\u{1f}{}", parts.join("\u{1f}"));
     StableId::new(canonical_digest::sha256(joined.as_bytes()))

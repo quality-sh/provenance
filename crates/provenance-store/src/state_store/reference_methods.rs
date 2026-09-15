@@ -5,10 +5,7 @@
 //! `shards::path_for`, and reaches the field through the declaration-derived
 //! `relation_slot_mut`, so a name here cannot drift away from the field it
 //! names.
-//!
-//! Requirement references have no methods here: their one write path is the
-//! guarded journal save, and the legacy relation commands are bridges over it
-//! (`review::authoring`).
+//! Requirement references instead use the guarded review write path.
 
 use super::StateStore;
 use provenance_core::{Question, Resolution, Rule, ScopeId, Source, StableId};

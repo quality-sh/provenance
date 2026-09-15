@@ -63,9 +63,7 @@ impl StateStore {
         })
     }
 
-    /// Writes one new Requirement record. This is the record mutation the
-    /// guarded creation publishes; origin checks and enrollment live with the
-    /// guarded path, and no separate write path calls this.
+    /// Creates a Requirement only within the guarded creation path.
     pub(crate) fn write_requirement(
         &self,
         input: CreateRequirementInput,

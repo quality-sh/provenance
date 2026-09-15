@@ -15,7 +15,6 @@ pub fn fixture() -> (tempfile::TempDir, StateStore) {
     )
     .unwrap();
     let store = StateStore::new(layout);
-    // Every Requirement create enrolls through the guarded journal creation.
     store
         .create_review_requirement(serde_json::from_value(json!({
             "request_id":"fixture_create","actor":"ben","origin":null,

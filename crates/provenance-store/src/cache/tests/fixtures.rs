@@ -46,8 +46,6 @@ pub fn seeded_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
         })
         .unwrap();
     create_source(&store, &scope, "source_schads");
-    // The projection fixtures stay outside the review journal: the record
-    // counts they pin describe graph state, not journal history.
     store
         .write_requirement(CreateRequirementInput {
             scope_id: scope.clone(),
@@ -280,8 +278,6 @@ pub fn create_requirement(
     id: &str,
     status: RequirementStatus,
 ) {
-    // Seeds a plain record: these fixtures pin projection and reader behavior
-    // over graph state, not journal history.
     store
         .write_requirement(CreateRequirementInput {
             scope_id: scope.clone(),
@@ -348,8 +344,6 @@ pub fn create_resolution(store: &StateStore, scope: &ScopeId, id: &str, requirem
 }
 
 pub fn attach_source(store: &StateStore, scope: &ScopeId, requirement_id: &str, source_id: &str) {
-    // Seeds the citation on the plain record, so the projection fixtures stay
-    // outside the review journal.
     let path = crate::shards::requirements_path(&store.layout, scope);
     store
         .mutate_graph_record(&path, |records: &mut Vec<Requirement>| {

@@ -19,8 +19,6 @@ fn failed_relationship_replacement_does_not_publish_the_text_edit() {
         store.requirement_edit_state(&scope(), &id()).unwrap(),
         before
     );
-    // No outcome was recorded for the failed request: the same request
-    // identity resubmitted with a valid edit is a fresh save, not a refusal.
     let retried = save(&store, "invalid", json!({"description":"valid now"}));
     assert!(store.save_requirement(retried).is_ok());
 }
@@ -73,7 +71,6 @@ fn missing_snapshot_refuses_further_saves() {
 
 #[test]
 fn enrolled_scope_refuses_lossy_portability_and_external_content_gap() {
-    // A scope that holds no review history stays portable.
     let empty = tempfile::tempdir().unwrap();
     let empty_layout = ProvenanceLayout::new(camino::Utf8Path::from_path(empty.path()).unwrap());
     std::fs::create_dir_all(empty_layout.state_dir()).unwrap();
@@ -86,7 +83,6 @@ fn enrolled_scope_refuses_lossy_portability_and_external_content_gap() {
         .ensure_review_portable(&scope())
         .is_ok());
 
-    // Creation enrolls the record, so the fixture scope is not portable.
     let (temp, store) = fixture();
     assert!(store.ensure_review_portable(&scope()).is_err());
     store

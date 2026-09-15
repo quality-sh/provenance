@@ -1,7 +1,3 @@
-//! The one Requirement write path: the legacy authoring surfaces enroll
-//! through the guarded journal, every write returns committed-success or a
-//! typed error, and no surface advertises uncertainty.
-
 #[allow(dead_code)]
 mod review_support;
 use provenance_core::review::{ReviewHistoryQuery, SaveOutcome};
@@ -37,13 +33,10 @@ async fn the_legacy_create_enrolls_through_the_journal() {
         provenance_core::review::REVIEW_SCHEMA_VERSION
     );
 
-    // A repeated identical create resolves to the recorded outcome instead of
-    // publishing a duplicate.
     let again = store.create_requirement(new_requirement("req_b")).unwrap();
     assert_eq!(again.id, created.id);
     assert_eq!(store.list_requirements(&scope()).unwrap().len(), 2);
 
-    // A different identity on an existing record keeps the typed refusal.
     let error = store
         .create_requirement(
             serde_json::from_value({
@@ -59,7 +52,6 @@ async fn the_legacy_create_enrolls_through_the_journal() {
         WriteFailure::AlreadyExists
     ));
 
-    // The creation outcome is a journal entry with the authoring identity.
     let root = camino::Utf8Path::from_path(temp.path()).unwrap();
     let layout = ProvenanceLayout::new(root);
     cache::materialize_state(&layout).await.unwrap();
@@ -128,7 +120,6 @@ fn every_legacy_edit_publishes_a_journaled_outcome() {
     store.set_requirement_fog(&scope(), &id(), None).unwrap();
     assert_eq!(store.list_requirements(&scope()).unwrap()[0].fog, None);
 
-    // A self-refines cycle refuses, and the record keeps its earlier state.
     let before = store.list_requirements(&scope()).unwrap();
     assert!(store
         .set_requirement_refines(&scope(), &id(), StableId::new("req_a").unwrap())
@@ -149,11 +140,6 @@ fn failed_edits_return_typed_errors_without_uncertainty() {
         )
         .unwrap();
 
-    // req_a refining req_b closes the cycle req_a -> req_b -> req_a: a typed
-    // client failure, never an uncertain write. The refusal carries its
-    // InvalidUpdate class from the graph validator's raise site; an
-    // infrastructure failure before publication would keep its WriteFailed
-    // class instead of borrowing this one.
     let error = store
         .set_requirement_refines(&scope(), &id(), StableId::new("req_b").unwrap())
         .unwrap_err();
@@ -165,7 +151,6 @@ fn failed_edits_return_typed_errors_without_uncertainty() {
         "{failure:?}"
     );
 
-    // The store still answers after the refusal: the state is intact.
     let state = store.requirement_edit_state(&scope(), &id()).unwrap();
     assert!(state.snapshot.is_some());
 }

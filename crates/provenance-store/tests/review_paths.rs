@@ -42,9 +42,6 @@ async fn review_reads_and_projection_accept_a_symlinked_repository_parent() {
     let second = store
         .save_requirement(save(&store, "next", json!({"description":"later"})))
         .unwrap();
-    drop(store);
-    // A fresh Store on the same layout sees the same committed history.
-    let _reopened = StateStore::new(layout.clone());
     cache::materialize_state(&layout).await.unwrap();
     let history = read_history(
         &root,
@@ -58,8 +55,6 @@ async fn review_reads_and_projection_accept_a_symlinked_repository_parent() {
     )
     .await
     .unwrap();
-    // The fixture's guarded creation enrolls the record first, so history
-    // opens with its outcome.
     assert_eq!(
         history.result.entries[0].request_id.as_str(),
         "fixture_create"
@@ -93,8 +88,6 @@ fn journal_entries_refuse_an_internal_directory_escape() {
     store
         .save_requirement(save(&store, "enroll", json!({})))
         .unwrap();
-    // The guarded save validates the journal through the contained reader
-    // before it publishes, so an escaped journal directory refuses the write.
     let next = save(&store, "next", json!({}));
     let root = Utf8Path::from_path(temp.path()).unwrap();
     let journal = review_dir(root).join("journal");

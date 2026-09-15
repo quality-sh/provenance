@@ -164,9 +164,6 @@ fn a_lost_result_resolves_through_resubmission_after_recovery() {
         crate::write_error::WriteError(error).safe(),
         crate::write_error::WriteFailure::UncertainWrite
     ));
-    // The write reports uncertainty only to its own caller. Resolution stays
-    // internal: resubmitting the same request at the Store boundary returns
-    // the committed outcome instead of replaying the write.
     let reopened = open(root);
     let retried: SaveRequirement = serde_json::from_slice(&request).unwrap();
     let entry = reopened.save_requirement(retried).unwrap();
