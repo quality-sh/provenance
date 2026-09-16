@@ -26,6 +26,8 @@ pub use reads::{read_evidence, read_history};
 mod snapshot;
 
 #[cfg(test)]
+mod concurrency_tests;
+#[cfg(test)]
 mod recovery_tests;
 
 #[cfg(all(test, any(unix, windows)))]
