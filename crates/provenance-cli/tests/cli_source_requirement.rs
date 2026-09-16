@@ -91,6 +91,26 @@ fn cli_source_requirement_slice_materializes_and_reads_graph() {
         .success();
     Command::cargo_bin("provenance")
         .unwrap()
+        .args([
+            "requirements",
+            "req_schads_overtime",
+            "update",
+            "--repo",
+            &repo,
+            "--scope",
+            "default",
+            "--if-match",
+            &etag,
+            "--stdin",
+            "--format",
+            "json",
+        ])
+        .write_stdin(r#"{"description":"This update uses a stale entity tag."}"#)
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("invalid_update"));
+    Command::cargo_bin("provenance")
+        .unwrap()
         .args(["materialize", "--repo", &repo, "--format", "json"])
         .assert()
         .success();

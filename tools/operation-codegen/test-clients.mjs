@@ -74,7 +74,23 @@ try {
   if (!process.argv.includes('--effect') && family === 'statements') {
     run(['test', '--locked', '-p', 'provenance-http-client', '--test', 'v2_wire']);
   }
-  console.log(`${process.argv.includes('--effect') ? 'Effect client' : 'Promise and Rust clients'} passed against the real ${family} host.`);
+  if (!process.argv.includes('--effect') && family === 'discussions') {
+    run(
+      [
+        'test', '--locked', '-p', 'provenance-http-client', '--test', 'real_host',
+        'real_host_covers_read_guarded_mutation_and_typed_failure', '--', '--ignored', '--exact',
+      ],
+      {
+        ...process.env,
+        PROVENANCE_CLIENT_BASE_URL: fixture.url,
+        PROVENANCE_CLIENT_TOKEN: 'fixture-secret',
+      },
+    );
+  }
+  const flavor = process.argv.includes('--effect')
+    ? 'Effect client'
+    : family === 'discussions' ? 'Promise and Rust clients' : 'Promise client';
+  console.log(`${flavor} passed against the real ${family} host.`);
 } finally {
   const exited = host.exitCode === null ? once(host, 'exit') : Promise.resolve([host.exitCode]);
   host.stdin.end();
