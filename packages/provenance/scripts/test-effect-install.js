@@ -69,11 +69,11 @@ export async function exercise(baseUrl: string, bearer: string, suffix = '') {
    const response=await fetch(input,init);
    if(init?.method==='POST' && new URL(input.toString()).pathname==='/sources') {
      dispatched++; await response.arrayBuffer();
-     return new Response(new ReadableStream());
+     return new Response(new ReadableStream({start(controller){controller.error(new Error('Lost response'));}}));
    }
    return response;
  }}));
- const lost = await Effect.runPromise(Effect.flip(lostClient.createSource({data:{id:lostId,name:'Lost response',source_type:'document',supersedes:[]}}).pipe(Effect.timeout('1 second'))));
+ const lost = await Effect.runPromise(Effect.flip(lostClient.createSource({data:{id:lostId,name:'Lost response',source_type:'document',supersedes:[]}})));
  if(dispatched!==1 || lost._tag!=='ConnectionError') throw new Error('Lost mutation response classification');
  const evidence=await Effect.runPromise(client.getSource({id:lostId}));
  if(evidence.data.id!==lostId) throw new Error('Expected the mutation to persist after response loss');
