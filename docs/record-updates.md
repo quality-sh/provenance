@@ -48,8 +48,10 @@ behavior. A later declaration application can restate the fields it owns.
 A Requirement statement change uses the statement write gate and raises the
 existing Requirement reviews for its Rules. Rule statements use the same
 write gate. Reviews retain their existing before/after values and clearing
-behavior. Requirement and review publication uses more than one shard; a
-failure after publication starts reports `uncertain_write`.
+behavior. The update stages the Requirement and review records in one state
+publication. A preparation failure leaves canonical state unchanged. A failure
+after live state publication starts reports `uncertain_write` and recovery
+selects the complete old or new state.
 
 Rule deprecation and archival use the existing `status` values. An archived
 Rule must have `archived_in_commit`; other Rule statuses must not have it.

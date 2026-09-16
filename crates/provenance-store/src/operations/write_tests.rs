@@ -25,6 +25,37 @@ fn document() -> crate::state_store::TypedSpecInput {
         "requirements":[{"key":"ready","statement":"The system is ready.","sources":["policy"]}],
         "rules":[{"key":"ready","requirement":"ready","statement":"The system is ready."}]})).unwrap()
 }
+fn publication_document(
+    requirement_statement: &str,
+    include_retired: bool,
+    implementation: bool,
+) -> crate::state_store::TypedSpecInput {
+    let mut value = json!({
+        "schema_version":provenance_core::SUPPORTED_SCHEMA_VERSION.0,
+        "spec":"publication", "declared_by":"test",
+        "sources":[{"key":"policy","name":"Policy","kind":"document"}],
+        "requirements":[{
+            "key":"ready", "statement":requirement_statement, "sources":["policy"]
+        }],
+        "rules":[{
+            "key":"ready", "requirement":"ready", "statement":"The system is ready."
+        }]
+    });
+    if include_retired {
+        value["requirements"].as_array_mut().unwrap().push(json!({
+            "key":"retired", "statement":"The old system is ready."
+        }));
+        value["rules"].as_array_mut().unwrap().push(json!({
+            "key":"retired", "requirement":"retired",
+            "statement":"The old system is ready."
+        }));
+    }
+    if implementation {
+        value["sources"][0]["name"] = json!("Revised policy");
+        value["rules"][0]["implementation"] = json!({"file":"src/ready.rs","symbol":"ready"});
+    }
+    serde_json::from_value(value).unwrap()
+}
 #[test]
 fn missing_references_are_typed_without_changing_the_native_message() {
     let (_dir, store, scope) = fixture();
@@ -44,17 +75,137 @@ fn invalid_source_kind_is_a_typed_declaration_refusal() {
     assert!(matches!(error.safe(), WriteFailure::InvalidDeclaration));
 }
 #[test]
-fn apply_reports_uncertainty_after_real_source_publication() {
+fn typed_apply_failure_after_first_write_keeps_the_canonical_graph_unchanged() {
     let (_dir, store, scope) = fixture();
+    let before = canonical_state(&store);
     crate::test_probes::arm("typed_spec_sources_published", || {
         anyhow::bail!("injected after source publication")
     });
     let result = store.apply_typed_spec(&scope, document());
     crate::test_probes::disarm("typed_spec_sources_published");
     let error = WriteError(result.unwrap_err());
-    assert!(matches!(error.safe(), WriteFailure::UncertainWrite));
-    assert_eq!(store.list_sources(&scope).unwrap().len(), 1);
+    assert!(matches!(error.safe(), WriteFailure::WriteFailed));
+    assert_eq!(canonical_state(&store), before);
+    assert!(store.list_sources(&scope).unwrap().is_empty());
     assert!(store.list_requirements(&scope).unwrap().is_empty());
+}
+
+#[test]
+fn requirement_update_failure_after_first_write_keeps_statement_and_reviews_together() {
+    let (_dir, store, scope) = fixture();
+    store
+        .create_requirement(
+            serde_json::from_value(json!({
+                "scope_id":"default", "id":"req_a",
+                "statement":"The system stores records.", "status":"active",
+                "depends_on":[], "supersedes":[]
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+    store
+        .create_rule(
+            serde_json::from_value(json!({
+                "scope_id":"default", "id":"rule_a",
+                "statement":"The system stores the record.", "status":"active",
+                "severity":"high", "requirement_ids":["req_a"], "resolution_ids":[]
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+    let before = canonical_state(&store);
+    crate::test_probes::crash_at("requirement_update_record_written");
+    let result = store.update_requirement(
+        serde_json::from_value(json!({
+            "scope_id":"default", "id":"req_a",
+            "statement":"The system reads records."
+        }))
+        .unwrap(),
+    );
+    crate::test_probes::disarm("requirement_update_record_written");
+
+    assert!(result.is_err());
+    assert_eq!(canonical_state(&store), before);
+    assert_eq!(
+        store.list_requirements(&scope).unwrap()[0].statement,
+        "The system stores records."
+    );
+    assert!(store.open_requirement_reviews(&scope).unwrap().is_empty());
+}
+
+#[test]
+fn typed_apply_success_publishes_records_cascade_and_review_together() {
+    let (_dir, store, scope) = fixture();
+    store
+        .apply_typed_spec(
+            &scope,
+            publication_document("The system is ready.", true, false),
+        )
+        .unwrap();
+    let retired = store
+        .list_requirements(&scope)
+        .unwrap()
+        .into_iter()
+        .find(|record| record.statement == "The old system is ready.")
+        .unwrap();
+    store
+        .create_boundary(
+            serde_json::from_value(json!({
+                "scope_id":"default", "id":"boundary_retired",
+                "requirement_id":retired.id, "statement":"Retired boundary"
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+
+    store
+        .apply_typed_spec(
+            &scope,
+            publication_document("The revised system is ready.", false, true),
+        )
+        .unwrap();
+
+    assert_eq!(
+        store.list_sources(&scope).unwrap()[0].name,
+        "Revised policy"
+    );
+    assert_eq!(
+        store.list_requirements(&scope).unwrap()[0].statement,
+        "The revised system is ready."
+    );
+    assert_eq!(store.list_rules(&scope).unwrap().len(), 1);
+    assert_eq!(store.list_implementation_bindings(&scope).unwrap().len(), 1);
+    assert!(store.list_boundaries(&scope).unwrap().is_empty());
+    let reviews = store.open_requirement_reviews(&scope).unwrap();
+    assert_eq!(reviews.len(), 1);
+    assert_eq!(reviews[0].before, "The system is ready.");
+    assert_eq!(reviews[0].after, "The revised system is ready.");
+}
+
+fn canonical_state(store: &StateStore) -> Vec<(String, Vec<u8>)> {
+    let root = store.layout.state_dir();
+    let mut state = Vec::new();
+    collect_state(&root, &root, &mut state);
+    state.sort_by(|left, right| left.0.cmp(&right.0));
+    state
+}
+
+fn collect_state(
+    root: &camino::Utf8Path,
+    current: &camino::Utf8Path,
+    state: &mut Vec<(String, Vec<u8>)>,
+) {
+    for entry in std::fs::read_dir(current).unwrap() {
+        let path = camino::Utf8PathBuf::from_path_buf(entry.unwrap().path()).unwrap();
+        if path.is_dir() {
+            collect_state(root, &path, state);
+        } else {
+            state.push((
+                path.strip_prefix(root).unwrap().to_string(),
+                std::fs::read(path).unwrap(),
+            ));
+        }
+    }
 }
 #[test]
 fn already_complete_is_typed_and_retains_native_text() {

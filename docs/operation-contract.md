@@ -264,12 +264,17 @@ refusal does not promise that no filesystem byte changed. The wire retains
 typed ownership conflicts and statement diagnostics. Native callers retain
 their detailed diagnostics.
 
-`apply` can replace several shards. A verification start can publish a binding,
-a run, and review changes. The publication lock does not provide rollback.
-After publication starts, an error reports `uncertain_write`; inspect saved
-state before another submission. This includes a write task that panics after
-it starts. An unclassified failure before publication uses `write_failed`.
-Neither error is a validation refusal or a promise of crash-atomic writes.
+`apply` and Requirement updates stage all canonical state changes before one
+state publication. A preparation failure leaves canonical state unchanged.
+Recovery after an interrupted publication selects the complete old or new
+state. A verification start can publish a binding, a run, and review changes
+without that state transaction.
+
+After live publication starts, an error reports `uncertain_write`; inspect
+saved state before another submission. This includes a write task that panics
+after it starts. An unclassified failure before publication uses
+`write_failed`. Neither error is a validation refusal or a promise of
+crash-atomic writes.
 
 The execution task owns started work through caller disconnection. Shutdown
 closes admission and waits for that work. A lost or malformed response can
