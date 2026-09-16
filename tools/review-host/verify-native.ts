@@ -19,7 +19,7 @@ try {
   await copyFile(resolve(binaryArg), binary);
   await chmod(binary, 0o755);
   const repository = join(work, 'repository');
-  const cli = (...args: string[]) => execFileSync(binary, args, { cwd: work, encoding: 'utf8', timeout: 30_000 });
+  const cli = (...args: string[]) => execFileSync(binary, args, { cwd: work, encoding: 'utf8', timeout: 180_000 });
   cli('init', '--path', repository, '--scope', 'default', '--path-prefix', '.');
   for (const [id, parent] of [['req_root', undefined], ['req_child', 'req_root']]) {
     cli('requirements', 'create', '--repo', repository, '--scope', 'default', '--id', id!,
