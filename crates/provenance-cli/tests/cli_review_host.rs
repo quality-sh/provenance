@@ -202,6 +202,18 @@ fn authorization_precedes_body_decode_and_rejects_unrelated_origins() {
             400
         );
     }
+    for (site, expected) in [("cross-site", 403), ("same-origin", 400)] {
+        assert_eq!(
+            response(
+                request(&host, "POST", "/requirements/req_example/discussions", true)
+                    .set("Origin", host.config["endpoint"].as_str().unwrap())
+                    .set("Sec-Fetch-Site", site)
+                    .send_string("invalid")
+            )
+            .status(),
+            expected
+        );
+    }
     assert_eq!(
         response(
             request(&host, "GET", "/review-config", true)

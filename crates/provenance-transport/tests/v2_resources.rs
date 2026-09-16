@@ -405,6 +405,40 @@ async fn authentication_host_and_origin_checks_precede_body_decoding() {
 }
 
 #[tokio::test]
+async fn read_only_authorization_precedes_mutation_body_decoding() {
+    let repo = Repository::new("The shared graph is readable.");
+    let host = host(&repo, false);
+    for (method, path) in [
+        ("POST", "/sources"),
+        ("PATCH", "/requirements/req_shared"),
+        ("POST", "/topics/topic_shared/claim"),
+        ("POST", "/requirements/req_shared/discussions"),
+        (
+            "PATCH",
+            "/requirements/req_shared/discussions/discussion_missing",
+        ),
+    ] {
+        let request = Request::builder()
+            .method(method)
+            .uri(path)
+            .header("host", "fixture.test")
+            .header("authorization", "Bearer fixture-secret")
+            .header("content-type", "application/json")
+            .body(Body::from("invalid json"))
+            .unwrap();
+        let response = host.router().oneshot(request).await.unwrap();
+        assert_eq!(response.status().as_u16(), 403, "{method} {path}");
+        let value: Value = serde_json::from_slice(
+            &axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(value["error"]["kind"], "access_denied", "{path}");
+    }
+}
+
+#[tokio::test]
 async fn mcp_keeps_role_subsets_and_returns_the_http_envelope() {
     let repo = Repository::new("The shared graph is readable.");
     let host = host(&repo, false);

@@ -74,6 +74,9 @@ async fn invoke(State(host): State<StatementHost>, request: Request) -> Response
     let Some(matched) = routing::find(request.method(), request.uri().path()) else {
         return failure::response(ErasedFailure::new(None, OperationFailure::UnknownOperation));
     };
+    if !host.advertises(matched.definition.name) {
+        return failure::response(ErasedFailure::new(None, OperationFailure::AccessDenied));
+    }
     let query = match routing::query(request.uri().query()) {
         Ok(query) => query,
         Err(error) => return failure::response(error),
