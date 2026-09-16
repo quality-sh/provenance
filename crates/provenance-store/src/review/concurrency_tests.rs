@@ -41,12 +41,12 @@ fn fixture() -> (tempfile::TempDir, StateStore) {
             .unwrap();
     }
     store
-        .save_requirement(save(&store, "baseline", json!(null)))
+        .save_requirement(save(&store, "baseline", &json!(null)))
         .unwrap();
     (temp, store)
 }
 
-fn save(store: &StateStore, request: &str, relationships: serde_json::Value) -> SaveRequirement {
+fn save(store: &StateStore, request: &str, relationships: &serde_json::Value) -> SaveRequirement {
     serde_json::from_value(json!({
         "request_id":request,
         "actor":"ben",
@@ -89,7 +89,7 @@ fn hold_locked_save(
 #[test]
 fn concurrent_partial_deltas_compose_from_locked_state() {
     let (_temp, store) = fixture();
-    let first = save(&store, "add_b", json!({"depends_on":{"add":["req_b"]}}));
+    let first = save(&store, "add_b", &json!({"depends_on":{"add":["req_b"]}}));
     let (entered_tx, entered_rx) = mpsc::channel();
     let (release_tx, release_rx) = mpsc::channel();
     let (started_tx, started_rx) = mpsc::channel();
@@ -102,7 +102,7 @@ fn concurrent_partial_deltas_compose_from_locked_state() {
             let result = store.save_requirement(save(
                 &store,
                 "add_c",
-                json!({"depends_on":{"add":["req_c"]}}),
+                &json!({"depends_on":{"add":["req_c"]}}),
             ));
             done_tx.send(()).unwrap();
             result
@@ -132,7 +132,7 @@ fn relationship_delta_expands_under_the_publication_lock() {
         .save_requirement(save(
             &store,
             "locked_expand",
-            json!({"depends_on":{"add":["req_b"]}}),
+            &json!({"depends_on":{"add":["req_b"]}}),
         ))
         .unwrap();
     test_probes::disarm("requirement_relationships_expanding");
@@ -143,8 +143,8 @@ fn relationship_delta_expands_under_the_publication_lock() {
 #[test]
 fn concurrent_final_set_and_delta_return_a_typed_conflict_without_corruption() {
     let (_temp, store) = fixture();
-    let final_set = save(&store, "set_b", json!({"depends_on":["req_b"]}));
-    let stale_delta = save(&store, "add_d", json!({"depends_on":{"add":["req_d"]}}));
+    let final_set = save(&store, "set_b", &json!({"depends_on":["req_b"]}));
+    let stale_delta = save(&store, "add_d", &json!({"depends_on":{"add":["req_d"]}}));
     let (entered_tx, entered_rx) = mpsc::channel();
     let (release_tx, release_rx) = mpsc::channel();
     std::thread::scope(|threads| {
