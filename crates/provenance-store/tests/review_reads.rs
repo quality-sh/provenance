@@ -94,6 +94,8 @@ async fn evidence_reassembles_exact_unicode_and_history_cursor_is_bound() {
     .await
     .unwrap();
     assert_eq!(three.result.entries[0].request_id.as_str(), "next");
+    assert_eq!(three.result.entries.len(), 1);
+    assert!(three.result.next_cursor.is_none());
     store
         .save_requirement(save(&store, "noop", json!({})))
         .unwrap();
