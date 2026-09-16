@@ -117,6 +117,30 @@ fn concurrent_partial_deltas_compose_from_locked_state() {
 }
 
 #[test]
+fn relationship_delta_expands_under_the_publication_lock() {
+    let (temp, store) = fixture();
+    let layout = ProvenanceLayout::new(Utf8Path::from_path(temp.path()).unwrap());
+    let (observed_tx, observed_rx) = mpsc::channel();
+    test_probes::arm("requirement_relationships_expanding", move || {
+        observed_tx
+            .send(test_probes::publication_lock_is_held(&layout))
+            .unwrap();
+        Ok(())
+    });
+
+    store
+        .save_requirement(save(
+            &store,
+            "locked_expand",
+            json!({"depends_on":{"add":["req_b"]}}),
+        ))
+        .unwrap();
+    test_probes::disarm("requirement_relationships_expanding");
+
+    assert!(observed_rx.recv_timeout(Duration::from_secs(2)).unwrap());
+}
+
+#[test]
 fn concurrent_final_set_and_delta_return_a_typed_conflict_without_corruption() {
     let (_temp, store) = fixture();
     let final_set = save(&store, "set_b", json!({"depends_on":["req_b"]}));
