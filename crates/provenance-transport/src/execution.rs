@@ -96,6 +96,9 @@ mod tests {
 
     #[tokio::test]
     async fn admission_refuses_excess_work_without_running_it() {
+        assert!(provenance_store::operations::catalog::mutates(
+            "save-requirement"
+        ));
         let execution = Execution::new(1);
         let worker = execution.clone();
         let (started, ready) = oneshot::channel();
@@ -103,7 +106,7 @@ mod tests {
         let work_barrier = barrier.clone();
         let call = tokio::spawn(async move {
             worker
-                .run("apply", move || {
+                .run("save-requirement", move || {
                     started.send(()).unwrap();
                     work_barrier.wait();
                     Ok(Value::Null)
@@ -112,7 +115,7 @@ mod tests {
         });
         ready.await.unwrap();
         let refused = execution
-            .run("apply", || panic!("Rejected work must not run"))
+            .run("save-requirement", || panic!("Rejected work must not run"))
             .await
             .unwrap_err();
         assert_eq!(

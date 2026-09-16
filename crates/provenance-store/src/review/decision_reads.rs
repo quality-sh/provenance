@@ -5,7 +5,7 @@
 //! dispositions keep their place in the history and stay authoritative for
 //! their own proposals; none of them attests the record's current contents.
 
-use super::decision_state::CycleFacts;
+use super::{decision_state::CycleFacts, RequirementReviewRequest};
 use crate::state_store::StateStore;
 use provenance_core::{
     review::{PendingSubmission, RecordedDecision, RequirementDecisionState},
@@ -14,6 +14,40 @@ use provenance_core::{
 use provenance_macros::rule;
 
 impl StateStore {
+    /// Finds the durable result for one decision-cycle request after recovery.
+    pub fn requirement_review_receipt(
+        &self,
+        input: &RequirementReviewRequest,
+    ) -> anyhow::Result<Option<provenance_core::review::CycleEntry>> {
+        let (scope, request, actor, digest) = match input {
+            RequirementReviewRequest::Submit { request } => (
+                &request.scope_id,
+                &request.request_id,
+                request.actor.as_str(),
+                super::decision_state::request_digest(request)?,
+            ),
+            RequirementReviewRequest::Decide { request } => (
+                &request.scope_id,
+                &request.request_id,
+                request.actor.id.as_str(),
+                super::decision_state::request_digest(request)?,
+            ),
+            RequirementReviewRequest::Withdraw { request } => (
+                &request.scope_id,
+                &request.request_id,
+                request.actor.as_str(),
+                super::decision_state::request_digest(request)?,
+            ),
+        };
+        self.with_repository_publication(|| {
+            anyhow::ensure!(
+                self.manifest()?.scopes.iter().any(|item| item.id == *scope),
+                "review scope is not in the manifest"
+            );
+            super::decision_state::replay(self, scope, request, actor, &digest)
+        })
+    }
+
     /// Reads the decision state of one Requirement: the submission still
     /// waiting, the acceptance that matches current content, every terminal
     /// decision, and every withdrawal.

@@ -23,6 +23,7 @@ fn statement_documents_have_named_operation_and_closed_call_schema() {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)]
 fn operation_names_are_explicit() {
     let (_, mcp) = provenance_codegen::documents();
     let mut names = mcp["tools"]
@@ -71,10 +72,13 @@ fn operation_names_are_explicit() {
             "create-question",
             "create-requirement",
             "create-resolution",
+            "create-review-requirement",
             "create-rule",
             "create-source",
             "create-synthesis-packet",
             "create-topic",
+            "decide-requirement-review",
+            "discussion-receipt",
             "evidence",
             "get",
             "impact",
@@ -90,12 +94,23 @@ fn operation_names_are_explicit() {
             "read-document",
             "release-question",
             "release-topic",
+            "requirement-creation-receipt",
+            "requirement-decision-state",
+            "requirement-edit-state",
+            "requirement-review-receipt",
+            "requirement-save-receipt",
             "resolve-symbol",
+            "review-discussion-messages",
+            "review-discussions",
+            "review-evidence",
+            "review-history",
+            "save-requirement",
             "search",
             "set-question-contradicts",
             "set-requirement-refines",
             "set-requirement-spawned-by",
             "stale",
+            "submit-requirement-review",
             "trace",
             "update-boundary",
             "update-domain",
@@ -109,6 +124,8 @@ fn operation_names_are_explicit() {
             "upsert-synthesis-packet",
             "verification-bindings",
             "verification-runs",
+            "withdraw-requirement-review",
+            "write-discussion",
         ]
     );
 }
@@ -381,6 +398,12 @@ fn mutation_classification_comes_from_the_catalog() {
                 "create-proposal",
                 "create-assertion",
                 "create-disposition",
+                "create-review-requirement",
+                "save-requirement",
+                "write-discussion",
+                "submit-requirement-review",
+                "decide-requirement-review",
+                "withdraw-requirement-review",
             ]
             .iter()
             .any(|name| path.ends_with(&format!("/{name}")));

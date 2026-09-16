@@ -47,6 +47,7 @@ node tools/operation-codegen/test-clients.mjs writes
 node tools/operation-codegen/test-clients.mjs creation
 node tools/operation-codegen/test-clients.mjs discussions
 node tools/operation-codegen/test-clients.mjs ideation
+node tools/operation-codegen/test-clients.mjs review
 node tools/operation-codegen/generate.mjs --check
 ```
 
