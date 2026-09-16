@@ -17,7 +17,7 @@ concurrency:
 jobs:
   gate:
     name: Compatibility changes carry human authorization
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
         with:
