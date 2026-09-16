@@ -49,12 +49,12 @@ class ReleaseContractTests(unittest.TestCase):
             block = re.split(r"\n  [a-z][a-z-]*:\n", workflow.split(f"\n  {job}:\n", 1)[1])[0]
             self.assertIn("    if: github.event_name == 'push'", block)
 
-    def test_accepts_blacksmith_build_runners(self) -> None:
+    def test_accepts_github_hosted_build_runners(self) -> None:
         targets = copy.deepcopy(TARGETS)
         runners = {
-            "x86_64-unknown-linux-gnu": "blacksmith-8vcpu-ubuntu-2404",
-            "x86_64-pc-windows-msvc": "blacksmith-8vcpu-windows-2025",
-            "aarch64-apple-darwin": "blacksmith-12vcpu-macos-latest",
+            "x86_64-unknown-linux-gnu": "ubuntu-24.04",
+            "x86_64-pc-windows-msvc": "windows-latest",
+            "aarch64-apple-darwin": "macos-latest",
         }
         for target in targets:
             target["build_os"] = runners[target["target"]]
@@ -184,7 +184,7 @@ class ReleaseContractTests(unittest.TestCase):
 
     def test_rejects_runners_from_the_wrong_os_family(self) -> None:
         for runner_field in ("build_os", "smoke_os"):
-            for runner in ("macos-latest", "blacksmith-12vcpu-macos-latest"):
+            for runner in ("macos-latest", "windows-latest"):
                 with self.subTest(runner_field=runner_field, runner=runner):
                     targets = copy.deepcopy(TARGETS)
                     linux = next(
