@@ -176,6 +176,15 @@ function operationShapeErrors(document, path, method, operation, seenIds, seenBi
     if (!variables.includes(variable)) errors.push(`${where}: declared path parameter {${variable}} is not in the path`);
   }
 
+  const segments = path.split('/').filter(Boolean);
+  segments.forEach((segment, index) => {
+    if (!ACTIONS.has(segment)) return;
+    if (method !== 'POST') errors.push(`${where}: actions are POSTs`);
+    if (index !== segments.length - 1) {
+      errors.push(`${where}: action segment '${segment}' must be final`);
+    }
+  });
+
   if (method === 'GET' && operation?.requestBody !== undefined) {
     errors.push(`${where}: GET bodies are rejected`);
   }

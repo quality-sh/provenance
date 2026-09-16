@@ -369,13 +369,10 @@ fn input(
                 "path" => anyhow::bail!("path identity comes from the command address"),
                 _ => anyhow::bail!("unknown catalog parameter location"),
             }
-        } else {
-            anyhow::ensure!(
-                definition.request_schema.is_some(),
-                "{definition_name} has no request body",
-                definition_name = definition.name
-            );
+        } else if definition.request_schema.is_some() {
             data.insert(flag.replace('-', "_"), scalar(value)?);
+        } else {
+            query.insert(flag.replace('-', "_"), value.clone());
         }
         index += 2;
     }

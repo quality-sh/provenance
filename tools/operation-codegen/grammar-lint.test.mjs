@@ -160,6 +160,13 @@ test('undeclared actions and queries are rejected', () => {
   assert.ok(routeGrammarErrors(doc).some(error => /query 'rank' is not declared/.test(error)));
 });
 
+test('declared action segments are final POSTs', () => {
+  assert.ok(errorsFor('/requirements/{id}/submit', 'get')
+    .some(error => /actions are POSTs/.test(error)));
+  assert.ok(errorsFor('/requirements/{id}/submit/history', 'post')
+    .some(error => /action segment 'submit' must be final/.test(error)));
+});
+
 test('mutating GETs, implicit POSTs, and read PATCHes are rejected', () => {
   assert.ok(errorsFor('/requirements', 'get', { operation: { 'x-operation-mutates': true } }).some(error => /mutating GETs/.test(error)));
   assert.ok(errorsFor('/requirements', 'post', { operation: { 'x-operation-mutates': undefined } }).some(error => /must be declared explicitly/.test(error)));
