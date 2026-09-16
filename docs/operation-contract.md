@@ -136,7 +136,6 @@ response envelope, and compare the complete compatibility tuple during
 `GET /metadata`. They never start a host or select another repository or scope
 for one call.
 
-The legacy operation inventory remains in
-`tools/operation-codegen/legacy-operation-coverage.json` until Phase 3. It maps
-all 90 former operations to the v2 patterns exactly once. It does not expose
-legacy aliases.
+Generation checks the live OpenAPI and MCP documents against the frozen route
+grammar. It rejects prohibited paths, methods, parameters, envelopes, statuses,
+payload identities, and tool descriptions before it writes generated output.

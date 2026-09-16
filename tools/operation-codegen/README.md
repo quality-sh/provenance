@@ -66,19 +66,15 @@ file inventory and bytes. Differences and oversized files fail. It does not
 compare against a source-control snapshot or change the checkout.
 
 Generation runs the contract grammar linter before any output is written. The
-linter reads `legacy-operation-coverage.json`, which maps all 90 legacy
-operations (74 catalog operations and the 16 review operations from PR #273) to
-the frozen v2 surface in `docs/api-contract-v2.md`, each exactly once. The
-linter fails generation when an operation is unmapped or mapped twice, when the
-fixture drifts from the live catalog, or when a declared route violates the
-contract grammar: repository or scope path prefixes, relationship routes,
-legacy verb routes, `/query` subroutes, GET bodies, required-null requests,
-raw arrays, flattened envelopes, MCP-only wrappers, undeclared actions or
-queries, mutating GETs, read POSTs without `MUTATES=false`, missing failure
-statuses, single-message reads that ship an items envelope, duplicate
-bindings, unresolved path parameters, and generated-name
-collisions. `node --test grammar-lint.test.mjs coverage.test.mjs` runs the
-linter tests without generation.
+linter checks the live OpenAPI and MCP documents against the frozen v2 surface
+in `docs/api-contract-v2.md`. It rejects repository or scope path prefixes,
+relationship routes, legacy verb routes, `/query` subroutes, GET bodies,
+required-null requests, raw arrays, flattened envelopes, MCP-only wrappers,
+undeclared actions or queries, mutating GETs, read POSTs without
+`MUTATES=false`, missing failure statuses, single-message reads that ship an
+items envelope, duplicate bindings, unresolved path parameters, and operation
+name collisions. `node --test grammar-lint.test.mjs` runs the linter tests
+without generation.
 
 The documents and client source directories are ignored. Generation writes an
 ignored `.generation.json` receipt with source and output hashes. Run

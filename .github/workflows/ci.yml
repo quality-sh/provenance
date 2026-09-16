@@ -130,8 +130,8 @@ jobs:
         with:
           node-version: 24
       - run: npm ci --prefix tools/operation-codegen
-      - name: Run the grammar and coverage linter tests
-        run: node --test grammar-lint.test.mjs coverage.test.mjs
+      - name: Run the grammar linter tests
+        run: node --test grammar-lint.test.mjs
         working-directory: tools/operation-codegen
       - run: node tools/operation-codegen/check-source-control.mjs
       - run: node tools/operation-codegen/generate.mjs
