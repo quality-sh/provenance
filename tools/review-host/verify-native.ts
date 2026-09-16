@@ -32,7 +32,7 @@ try {
     PROVENANCE_STE100_INDEX_DIR: join(work, 'ste-indexes'),
   };
   const cli = (...args: string[]) => execFileSync(binary, args, {
-    cwd: work, encoding: 'utf8', timeout: 30_000, env: fixtureEnv,
+    cwd: work, encoding: 'utf8', timeout: 180_000, env: fixtureEnv,
   });
   cli('init', '--path', repository, '--scope', 'default', '--path-prefix', '.');
   for (const [id, parent] of [['req_root', undefined], ['req_child', 'req_root']]) {

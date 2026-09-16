@@ -26,7 +26,7 @@ jobs:
   # Main pushes and manual runs execute every job; filters only narrow PRs.
   changes:
     name: Detect changes
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     outputs:
       rust: ${{ steps.filter.outputs.rust }}
       sdk: ${{ steps.filter.outputs.sdk }}
@@ -113,7 +113,7 @@ jobs:
     # so the same policy trigger keeps the chain that feeds rule-coverage
     # intact.
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true' || needs.changes.outputs.contract == 'true' || needs.changes.outputs.policy == 'true'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
@@ -164,7 +164,7 @@ jobs:
     # rule-coverage can run for a policy-only change and downloads this
     # job's CLI artifact, so the build runs whenever the coverage check can.
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true' || needs.changes.outputs.policy == 'true'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
@@ -216,11 +216,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: blacksmith-4vcpu-windows-2025
+          - os: windows-latest
             target: x86_64-pc-windows-msvc
             binary: provenance.exe
             fixture: existing-root-host-fixture.exe
-          - os: blacksmith-6vcpu-macos-15
+          - os: macos-latest
             target: aarch64-apple-darwin
             binary: provenance
             fixture: existing-root-host-fixture
@@ -270,7 +270,7 @@ jobs:
     name: Format
     needs: [changes, generate-operations]
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.contract == 'true'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -290,7 +290,7 @@ jobs:
     name: Clippy
     needs: [changes, generate-operations]
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.contract == 'true'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -327,7 +327,7 @@ jobs:
     name: Test (${{ matrix.os }})
     needs: [changes, generate-operations]
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.contract == 'true'
-    runs-on: ${{ fromJSON('{"ubuntu-latest":"blacksmith-8vcpu-ubuntu-2404","macos-latest":"blacksmith-12vcpu-macos-latest","windows-latest":"blacksmith-8vcpu-windows-2025"}')[matrix.os] }}
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.changes.outputs.test-matrix) }}
@@ -373,7 +373,7 @@ jobs:
     name: Default-features CLI test
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
@@ -400,7 +400,7 @@ jobs:
     name: Rule Coverage
     needs: [changes, build-cli-linux]
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true' || needs.changes.outputs.policy == 'true'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -466,7 +466,7 @@ jobs:
     name: Rust SDK example
     needs: [changes, build-cli-linux]
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
@@ -503,7 +503,7 @@ jobs:
     name: TypeScript SDK
     needs: [changes, generate-operations, build-cli-linux]
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -536,7 +536,7 @@ jobs:
     name: TypeScript SDK example
     needs: [changes, generate-operations, build-cli-linux]
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -587,7 +587,7 @@ jobs:
     name: Initializer
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.sdk == 'true'
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -677,9 +677,9 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - blacksmith-4vcpu-ubuntu-2404
-          - blacksmith-6vcpu-macos-15
-          - blacksmith-4vcpu-windows-2025
+          - ubuntu-24.04
+          - macos-latest
+          - windows-latest
     steps:
       - uses: actions/checkout@v7
         with:
@@ -743,7 +743,7 @@ jobs:
     name: Operation contract
     needs: [changes, generate-operations]
     if: github.event_name != 'pull_request' || needs.changes.outputs.contract == 'true'
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -838,7 +838,7 @@ jobs:
       - operation-contract
       - repository-file-access
     if: always()
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     steps:
       - name: Check needed job results
         env:
