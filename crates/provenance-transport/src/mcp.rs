@@ -109,7 +109,10 @@ type McpCall = (
     axum::http::HeaderMap,
 );
 
-fn mcp_call(definition: catalog::Definition, value: &Value) -> Result<McpCall, ErasedFailure> {
+fn mcp_call(
+    definition: &'static catalog::Definition,
+    value: &Value,
+) -> Result<McpCall, ErasedFailure> {
     let mut arguments = value.as_object().cloned().ok_or_else(invalid)?;
     let data = arguments
         .remove("data")
@@ -117,7 +120,7 @@ fn mcp_call(definition: catalog::Definition, value: &Value) -> Result<McpCall, E
     let mut path = BTreeMap::new();
     let mut query = BTreeMap::new();
     let mut headers = axum::http::HeaderMap::new();
-    for parameter in &definition.parameters {
+    for parameter in definition.parameters() {
         let mcp_name = if parameter.location == "header" {
             parameter.name.to_ascii_lowercase().replace('-', "_")
         } else {

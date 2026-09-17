@@ -83,6 +83,54 @@ async fn patch(host: &StatementHost, path: &str, data: Value) -> (u16, Value) {
     (status, value)
 }
 
+#[tokio::test]
+async fn patch_refuses_a_non_object_data_value() {
+    let repo = Repository::new("The shared graph is readable.");
+    repo.all_kinds();
+    let host = host(&repo);
+
+    for data in [json!(null), json!(false), json!([]), json!("not an object")] {
+        let (status, failure, _) = call(
+            &host,
+            "PATCH",
+            "/sources/source_shared",
+            Some(json!({"data":data})),
+            &[],
+        )
+        .await;
+        assert_eq!(status, 400, "{failure}");
+        assert_eq!(failure["error"]["kind"], "invalid_input", "{failure}");
+    }
+}
+
+#[tokio::test]
+async fn unsupported_methods_use_the_contract_failure_envelope() {
+    let repo = Repository::new("The shared graph is readable.");
+    repo.all_kinds();
+    let host = host(&repo);
+    let response = host
+        .router()
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri("/sources/source_shared")
+                .header("host", "fixture.test")
+                .header("authorization", "Bearer fixture-secret")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status().as_u16(), 405);
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert!(!bytes.is_empty(), "method refusal had no contract envelope");
+    let failure: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(failure["error"]["kind"], "method_not_allowed", "{failure}");
+    assert!(failure["meta"].is_object(), "{failure}");
+}
+
 fn source(id: &str, name: &str) -> Value {
     json!({
         "id": id, "name": name, "source_type": "document", "url": null,

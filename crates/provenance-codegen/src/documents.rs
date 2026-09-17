@@ -86,21 +86,21 @@ pub fn documents() -> (Value, Value) {
     for definition in definitions {
         let family = pascal(definition.name);
         let request = definition
-            .request_schema
-            .clone()
+            .request_schema()
+            .cloned()
             .map(|schema| component(&format!("{family}Request"), schema, &mut schemas));
         let success = component(
             &format!("{family}Success"),
-            definition.success_schema.clone(),
+            definition.success_schema(),
             &mut schemas,
         );
         let failure = component(
             &format!("{family}Failure"),
-            definition.failure_schema.clone(),
+            definition.failure_schema().clone(),
             &mut schemas,
         );
         let parameters = definition
-            .parameters
+            .parameters()
             .iter()
             .map(|parameter| {
                 json!({
@@ -119,7 +119,7 @@ pub fn documents() -> (Value, Value) {
                 "description":"The current resource precondition token."}});
         }
         responses.insert("200".into(), success_response);
-        for status in &definition.http_statuses {
+        for status in definition.http_statuses() {
             responses.insert(
                 status.to_string(),
                 json!({"description":"Operation failed or was refused",
@@ -129,7 +129,7 @@ pub fn documents() -> (Value, Value) {
         let mut operation = json!({
             "operationId": definition.operation_id,
             "description": definition.description,
-            "x-operation-mutates": definition.mutates,
+            "x-operation-mutates": definition.mutates(),
             "parameters": parameters,
             "responses": responses,
         });
@@ -148,7 +148,7 @@ pub fn documents() -> (Value, Value) {
             "description": definition.description,
             "inputSchema": definition.mcp_input_schema(),
             "outputSchema": definition.mcp_output_schema(),
-            "x-operation-mutates": definition.mutates,
+            "x-operation-mutates": definition.mutates(),
         }));
     }
     add_metadata(&mut paths, &mut schemas);

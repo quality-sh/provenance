@@ -3,7 +3,7 @@ use axum::http::{HeaderMap, Method};
 use provenance_core::protocol::failure::{ErasedFailure, InvalidInputReason, OperationFailure};
 use provenance_store::operations::catalog::{self, ContextKind, Definition, HttpMethod};
 use serde_json::{json, Value};
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::OnceLock};
 
 mod identity;
 mod request;
@@ -12,21 +12,44 @@ mod response;
 pub use request::{decode_body, query};
 
 pub struct Matched {
-    pub definition: Definition,
+    pub definition: &'static Definition,
     pub path: BTreeMap<String, String>,
 }
 
+struct RouteIndex {
+    get: Vec<&'static Definition>,
+    post: Vec<&'static Definition>,
+    patch: Vec<&'static Definition>,
+}
+
+fn index() -> &'static RouteIndex {
+    static ROUTES: OnceLock<RouteIndex> = OnceLock::new();
+    ROUTES.get_or_init(|| {
+        let mut index = RouteIndex {
+            get: Vec::new(),
+            post: Vec::new(),
+            patch: Vec::new(),
+        };
+        for definition in catalog::definitions() {
+            match definition.method {
+                HttpMethod::Get => &mut index.get,
+                HttpMethod::Post => &mut index.post,
+                HttpMethod::Patch => &mut index.patch,
+            }
+            .push(definition);
+        }
+        index
+    })
+}
+
 pub fn find(method: &Method, path: &str) -> Option<Matched> {
-    let wanted = match *method {
-        Method::GET => HttpMethod::Get,
-        Method::POST => HttpMethod::Post,
-        Method::PATCH => HttpMethod::Patch,
+    let candidates = match *method {
+        Method::GET => &index().get,
+        Method::POST => &index().post,
+        Method::PATCH => &index().patch,
         _ => return None,
     };
-    catalog::definitions().into_iter().find_map(|definition| {
-        if definition.method != wanted {
-            return None;
-        }
+    candidates.iter().copied().find_map(|definition| {
         match_path(definition.path, path).map(|path| Matched { definition, path })
     })
 }
@@ -84,19 +107,30 @@ pub async fn invoke(
         &bound.response,
         &matched.path,
     )?;
-    let value = response::success(value, &bound.response);
-    let etag = value
-        .pointer("/data/edit/etag")
-        .or_else(|| value.pointer("/data/etag"))
-        .and_then(Value::as_str)
-        .map(|etag| format!("\"{etag}\""))
-        .or_else(|| {
-            value
-                .pointer("/data/version")
-                .or_else(|| value.pointer("/data/discussion/version"))
-                .and_then(Value::as_u64)
-                .map(|version| format!("\"{version}\""))
-        });
+    let value = response::success(value, &matched.definition, &bound.response)?;
+    let etag = matched
+        .definition
+        .registration
+        .controls
+        .etag
+        .as_ref()
+        .map(|binding| -> Result<String, ErasedFailure> {
+            let value = value
+                .pointer(&format!("/data{}", binding.pointer))
+                .ok_or_else(|| {
+                    ErasedFailure::new(Some(matched.definition.name), OperationFailure::Internal)
+                })?;
+            let text = if binding.numeric {
+                value.as_u64().map(|value| value.to_string())
+            } else {
+                value.as_str().map(str::to_owned)
+            }
+            .ok_or_else(|| {
+                ErasedFailure::new(Some(matched.definition.name), OperationFailure::Internal)
+            })?;
+            Ok(format!("\"{text}\""))
+        })
+        .transpose()?;
     Ok((value, etag))
 }
 

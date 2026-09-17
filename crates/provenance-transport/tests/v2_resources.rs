@@ -186,13 +186,7 @@ async fn a_discussion_member_read_is_addressed_beyond_the_first_list_page() {
     }
 
     let discussion_id = ids.into_iter().max().unwrap();
-    let (status, read) = call(
-        &host,
-        "GET",
-        &format!("{parent}/{discussion_id}"),
-        None,
-    )
-    .await;
+    let (status, read) = call(&host, "GET", &format!("{parent}/{discussion_id}"), None).await;
     assert_eq!(status, 200, "{read}");
     assert_eq!(read["data"]["discussion"]["discussion_id"], discussion_id);
 }

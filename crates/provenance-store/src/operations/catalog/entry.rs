@@ -61,8 +61,6 @@ pub(super) struct Entry {
         Value,
         std::sync::Arc<dyn super::ContextResolver>,
     ) -> OperationFuture<Value, FailureEnvelope>,
-    #[cfg(feature = "schema")]
-    pub definition: fn() -> super::schema::RawDefinition,
 }
 
 fn register<O: Operation>() -> Entry {
@@ -70,8 +68,6 @@ fn register<O: Operation>() -> Entry {
         name: O::NAME,
         mutates: O::MUTATES,
         invoke: super::invoke::invoke_resolved::<O>,
-        #[cfg(feature = "schema")]
-        definition: super::schema::raw_definition::<O>,
     }
 }
 

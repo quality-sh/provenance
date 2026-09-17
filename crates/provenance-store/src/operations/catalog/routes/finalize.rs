@@ -1,4 +1,4 @@
-use super::{schema, BodyBinding, Definition, SelectorBinding};
+use super::{schema, Definition, SelectorBinding};
 
 pub(super) fn request_schemas(definitions: &mut [Definition]) {
     for definition in definitions {
@@ -34,16 +34,11 @@ pub(super) fn request_schemas(definitions: &mut [Definition]) {
                 .iter()
                 .map(|binding| binding.field),
         );
-        if !matches!(
-            registration.request.body,
-            BodyBinding::Direct | BodyBinding::Null
-        ) {
-            fields.push("action");
-        }
+        fields.push("action");
         fields.sort_unstable();
         fields.dedup();
         for field in fields {
-            schema::hide_bound_request_field(&mut definition.request_schema, field);
+            schema::hide_bound_request_field(&mut definition.registration.request.schema, field);
         }
     }
 }

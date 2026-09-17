@@ -27,6 +27,8 @@ pub enum OperationFailure {
     ProtocolMismatch { requested: u32, supported: u32 },
     #[error("unknown operation")]
     UnknownOperation,
+    #[error("method not allowed for this route")]
+    MethodNotAllowed,
     #[error("listener authentication required")]
     Unauthenticated,
     #[error("access denied")]
@@ -46,6 +48,7 @@ impl OperationFailure {
         match self {
             Self::InvalidInput { .. } | Self::ProtocolMismatch { .. } => 400,
             Self::UnknownOperation | Self::UnknownTarget | Self::UnknownScope => 404,
+            Self::MethodNotAllowed => 405,
             Self::Unauthenticated => 401,
             Self::AccessDenied => 403,
             Self::UnavailableNeeds => 503,

@@ -2,8 +2,7 @@ use super::invalid;
 use axum::http::HeaderMap;
 use provenance_core::protocol::failure::ErasedFailure;
 use provenance_store::operations::catalog::{
-    self, BodyBinding, Definition, HandlerBinding, Parameter, QueryRoute, ResponseBinding,
-    SelectorBinding,
+    self, Definition, HandlerBinding, Parameter, QueryRoute, ResponseBinding, SelectorBinding,
 };
 use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
@@ -54,16 +53,19 @@ pub fn bind(
     scope: Option<&str>,
 ) -> Result<BoundRequest, ErasedFailure> {
     let selected = selected_query(definition, query)?;
-    let parameters = selected.map_or(definition.registration.request.query.as_slice(), |route| {
-        route.parameters.as_slice()
-    });
+    let parameters = selected.map_or(
+        definition.registration.request.parameters.as_slice(),
+        |route| route.parameters.as_slice(),
+    );
     let parsed_query = parse_query(parameters, query)?;
-    if matches!(definition.registration.request.body, BodyBinding::Null) && selected.is_none() {
+    let adapter = selected.map_or(definition.registration.request.adapter, |route| {
+        route.request.adapter
+    });
+    if !adapter.object {
         data = Value::Null;
     } else if !data.is_object() {
-        data = json!({});
+        return Err(invalid(None));
     }
-    apply_null_clears(definition, &mut data)?;
     if let Some(object) = data.as_object_mut() {
         object.extend(parsed_query);
         bind_path(definition, path, object)?;
@@ -89,7 +91,8 @@ pub fn bind(
             }
         }
     }
-    shape_body(definition, path, &mut data)?;
+    data = (adapter.adapt)(&definition.registration.request, data, path)
+        .map_err(|error| invalid(error.field))?;
     Ok(BoundRequest {
         data,
         handler: selected.map_or_else(
@@ -137,41 +140,6 @@ fn parse_query(
         parsed.insert(name.clone(), value);
     }
     Ok(parsed)
-}
-
-fn apply_null_clears(definition: &Definition, data: &mut Value) -> Result<(), ErasedFailure> {
-    let Some(object) = data.as_object_mut() else {
-        return Ok(());
-    };
-    let mut clear = object
-        .remove("clear_fields")
-        .map(|value| {
-            value
-                .as_array()
-                .cloned()
-                .ok_or_else(|| invalid(Some("clear_fields")))
-        })
-        .transpose()?
-        .unwrap_or_default();
-    for binding in &definition.registration.request.null_clears {
-        if object.get(binding.field).is_some_and(Value::is_null) {
-            object.remove(binding.field);
-            let name = json!(binding.clear_name);
-            if !clear.contains(&name) {
-                clear.push(name);
-            }
-        }
-    }
-    if !clear.is_empty()
-        || definition.request_schema.as_ref().is_some_and(|schema| {
-            schema
-                .pointer("/properties/data/properties/clear_fields")
-                .is_some()
-        })
-    {
-        object.insert("clear_fields".into(), Value::Array(clear));
-    }
-    Ok(())
 }
 
 fn bind_path(
@@ -243,40 +211,5 @@ fn bind_headers(
         };
         object.insert(binding.field.into(), value);
     }
-    Ok(())
-}
-
-fn shape_body(
-    definition: &Definition,
-    path: &BTreeMap<String, String>,
-    data: &mut Value,
-) -> Result<(), ErasedFailure> {
-    let shape = definition.registration.request.body;
-    if matches!(shape, BodyBinding::Direct | BodyBinding::Null) {
-        return Ok(());
-    }
-    let object = data.as_object_mut().ok_or_else(|| invalid(None))?;
-    let take = |object: &mut Map<String, Value>, field: &'static str| {
-        object.remove(field).ok_or_else(|| invalid(Some(field)))
-    };
-    let action = match shape {
-        BodyBinding::DiscussionStart => json!({
-            "kind":"start", "role":take(object, "role")?, "body":take(object, "body")?
-        }),
-        BodyBinding::DiscussionReply => json!({
-            "kind":"reply",
-            "discussion_id":path.get("discussion_id").ok_or_else(|| invalid(Some("discussion_id")))?,
-            "expected_version":take(object, "expected_version")?,
-            "role":take(object, "role")?, "body":take(object, "body")?
-        }),
-        BodyBinding::DiscussionStatus => json!({
-            "kind":"set_status",
-            "discussion_id":path.get("discussion_id").ok_or_else(|| invalid(Some("discussion_id")))?,
-            "expected_version":take(object, "expected_version")?,
-            "status":take(object, "status")?
-        }),
-        BodyBinding::Direct | BodyBinding::Null => unreachable!(),
-    };
-    object.insert("action".into(), action);
     Ok(())
 }

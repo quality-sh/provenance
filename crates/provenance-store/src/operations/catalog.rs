@@ -27,19 +27,20 @@ mod schema;
 mod scoped_list;
 mod statement;
 mod updates;
-mod v2_review;
 mod v2_discussion_reads;
+mod v2_review;
 mod v2_review_reads;
 pub use updates::*;
-pub use v2_review::*;
 pub use v2_discussion_reads::*;
+pub use v2_review::*;
 pub use v2_review_reads::*;
 
 pub use authoring::{Apply, BeginVerification, CompleteVerification, Plan};
 #[cfg(feature = "schema")]
 pub use binding::{
-    ArgumentAlias, BodyBinding, Controls, HandlerBinding, HeaderBinding, NullClearBinding,
-    ParentBinding, PathBinding, QueryRequestBinding, QueryRoute, Registration, RequestBinding,
+    ArgumentAlias, CliBinding, CliDefault, CliDefaultValue, Controls, EtagBinding, HandlerBinding,
+    HeaderBinding, NullClearBinding, ParentBinding, PathBinding, QueryRequestBinding, QueryRoute,
+    Registration, RequestAdapter, RequestAdapterError, RequestBinding, ResponseAdapter,
     ResponseBinding, ResponseSelection, SelectorBinding,
 };
 pub use context::{

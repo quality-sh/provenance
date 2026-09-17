@@ -1,4 +1,4 @@
-use super::{entry::entries, Operation};
+use super::Operation;
 use provenance_core::protocol::{failure::OperationError, ResponseMeta};
 use schemars::{
     generate::{Contract, SchemaSettings},
@@ -44,12 +44,6 @@ pub struct Definition {
     pub method: HttpMethod,
     pub path: &'static str,
     pub description: &'static str,
-    pub mutates: bool,
-    pub http_statuses: Vec<u16>,
-    pub parameters: Vec<Parameter>,
-    pub request_schema: Option<Value>,
-    pub success_schema: Value,
-    pub failure_schema: Value,
     pub registration: super::Registration,
 }
 
@@ -65,19 +59,76 @@ pub(super) struct RawDefinition {
 
 impl Definition {
     pub const fn returns_etag(&self) -> bool {
-        self.registration.controls.returns_etag
+        self.registration.controls.etag.is_some()
+    }
+    pub const fn mutates(&self) -> bool {
+        self.registration.handler.mutates
+    }
+    pub fn http_statuses(&self) -> &[u16] {
+        &self.registration.handler.http_statuses
+    }
+    pub fn request_schema(&self) -> Option<&Value> {
+        self.registration.request.schema.as_ref()
+    }
+    pub fn failure_schema(&self) -> &Value {
+        &self.registration.handler.failure_schema
+    }
+    pub fn success_schema(&self) -> Value {
+        let mut variants = std::iter::once(&self.registration.response)
+            .chain(
+                self.registration
+                    .queries
+                    .iter()
+                    .map(|query| &query.response),
+            )
+            .map(|response| response.schema.clone())
+            .collect::<Vec<_>>();
+        if variants.len() == 1 {
+            return variants.pop().unwrap();
+        }
+        merge_variants(variants)
+    }
+    pub fn parameters(&self) -> Vec<Parameter> {
+        let mut parameters = self.registration.request.parameters.clone();
+        if !self.registration.queries.is_empty() {
+            parameters.push(query(
+                "query",
+                json!({"type":"string","enum":self.registration.queries.iter().map(|route| route.name).collect::<Vec<_>>() }),
+            ));
+        }
+        for parameter in self
+            .registration
+            .queries
+            .iter()
+            .flat_map(|route| route.parameters.iter())
+        {
+            if !parameters
+                .iter()
+                .any(|found| found.name == parameter.name && found.location == parameter.location)
+            {
+                parameters.push(parameter.clone());
+            }
+        }
+        parameters.extend(
+            self.registration
+                .controls
+                .headers
+                .iter()
+                .map(|binding| header(binding.name)),
+        );
+        parameters
     }
     pub fn mcp_output_schema(&self) -> Value {
-        self.success_schema.clone()
+        self.success_schema()
     }
     pub fn mcp_input_schema(&self) -> Value {
         let mut properties = serde_json::Map::new();
         let mut required = Vec::new();
-        if let Some(body) = &self.request_schema {
+        if let Some(body) = self.request_schema() {
             properties.insert("data".into(), body["properties"]["data"].clone());
             required.push(json!("data"));
         }
-        for parameter in &self.parameters {
+        for parameter in self.parameters() {
             let name = if parameter.location == "header" {
                 parameter.name.to_ascii_lowercase().replace('-', "_")
             } else {
@@ -89,15 +140,30 @@ impl Definition {
             }
         }
         let mut result = json!({"type":"object","additionalProperties":false,"properties":properties,"required":required});
-        if let Some(defs) = self
-            .request_schema
-            .as_ref()
-            .and_then(|schema| schema.get("$defs"))
-        {
+        if let Some(defs) = self.request_schema().and_then(|schema| schema.get("$defs")) {
             result["$defs"] = defs.clone();
         }
         result
     }
+}
+
+fn merge_variants(mut variants: Vec<Value>) -> Value {
+    let mut defs = serde_json::Map::new();
+    for schema in &mut variants {
+        if let Some(Value::Object(found)) = schema
+            .as_object_mut()
+            .and_then(|object| object.remove("$defs"))
+        {
+            for (name, value) in found {
+                defs.entry(name).or_insert(value);
+            }
+        }
+    }
+    let mut schema = json!({"anyOf":variants});
+    if !defs.is_empty() {
+        schema["$defs"] = Value::Object(defs);
+    }
+    schema
 }
 
 fn schema<T: JsonSchema>(contract: Contract) -> Value {
@@ -121,15 +187,6 @@ pub(super) fn raw_definition<O: Operation>() -> RawDefinition {
         http_statuses: statuses(O::MUTATES, O::FAILURE_STATUSES),
         context: O::CONTEXT,
     }
-}
-
-pub(super) fn raw_for(name: &str) -> RawDefinition {
-    let entries = entries();
-    let entry = entries
-        .iter()
-        .find(|entry| entry.name == name)
-        .expect("backing operation");
-    (entry.definition)()
 }
 
 fn statuses(mutates: bool, declared: &[u16]) -> Vec<u16> {
@@ -160,21 +217,13 @@ pub(super) fn response_envelope(mut payload: Value, kind: ResponseKind) -> Value
     }
     let defs = payload.as_object_mut().and_then(|o| o.remove("$defs"));
     payload.as_object_mut().map(|o| o.remove("$schema"));
-    if let Some(result) = payload
-        .get("properties")
-        .and_then(|p| p.get("result"))
-        .cloned()
-    {
-        payload = result;
-    }
     let mut meta = schema::<ResponseMeta>(Contract::Serialize);
     namespace_defs(&mut meta, "ResponseMeta");
     let meta_defs = meta.as_object_mut().and_then(|o| o.remove("$defs"));
     meta.as_object_mut().map(|o| o.remove("$schema"));
     let data = match kind {
         ResponseKind::Items => {
-            let items = list_items(&payload, defs.as_ref()).unwrap_or(payload);
-            json!({"type":"object","additionalProperties":false,"required":["items"],"properties":{"items":items}})
+            json!({"type":"object","additionalProperties":false,"required":["items"],"properties":{"items":payload}})
         }
         ResponseKind::Resource | ResponseKind::Result => payload,
     };
@@ -194,19 +243,29 @@ pub(super) fn response_envelope(mut payload: Value, kind: ResponseKind) -> Value
     result
 }
 
-fn list_items<'a>(payload: &'a Value, defs: Option<&'a Value>) -> Option<Value> {
-    let resolved = payload
+pub(super) fn property_schema(root: &Value, path: &[&str]) -> Value {
+    let mut current = root;
+    for name in path {
+        let resolved = resolve_schema(root, current);
+        current = resolved
+            .get("properties")
+            .and_then(|properties| properties.get(*name))
+            .unwrap_or_else(|| panic!("registered response property {name}: {resolved}"));
+    }
+    let mut selected = current.clone();
+    if let Some(defs) = root.get("$defs") {
+        selected["$defs"] = defs.clone();
+    }
+    selected
+}
+
+fn resolve_schema<'a>(root: &'a Value, schema: &'a Value) -> &'a Value {
+    schema
         .get("$ref")
         .and_then(Value::as_str)
         .and_then(|reference| reference.strip_prefix("#/$defs/"))
-        .and_then(|name| defs?.get(name))
-        .unwrap_or(payload);
-    resolved.get("properties").and_then(|properties| {
-        ["items", "entries", "nodes", "sites", "rules"]
-            .into_iter()
-            .find_map(|name| properties.get(name))
-            .cloned()
-    })
+        .and_then(|name| root.get("$defs").and_then(|defs| defs.get(name)))
+        .unwrap_or(schema)
 }
 
 pub(super) fn namespace_defs(value: &mut Value, prefix: &str) {
@@ -279,9 +338,9 @@ fn remove_response_metadata(value: &mut Value, fields: &[&str]) {
     }
 }
 
-pub fn definitions() -> Vec<Definition> {
+pub fn definitions() -> &'static [Definition] {
     static DEFINITIONS: std::sync::OnceLock<Vec<Definition>> = std::sync::OnceLock::new();
-    DEFINITIONS.get_or_init(super::routes::definitions).clone()
+    DEFINITIONS.get_or_init(super::routes::definitions)
 }
 
 pub(super) fn type_schema<T: JsonSchema>(contract: Contract) -> Value {

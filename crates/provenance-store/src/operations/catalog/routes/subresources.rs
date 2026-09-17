@@ -1,450 +1,423 @@
-#![allow(
-    clippy::literal_string_with_formatting_args,
-    clippy::too_many_lines,
-    clippy::wildcard_imports
-)]
+#![allow(clippy::literal_string_with_formatting_args, clippy::wildcard_imports)]
 
 use super::*;
-use crate::operations::catalog::{BodyBinding, PathBinding, ResponseSelection, SelectorBinding};
+use crate::operations::catalog as operation;
+use crate::operations::catalog::resource_lists as lists;
 
 pub(super) fn register(out: &mut Vec<Definition>) {
-    out.push(backed(
+    history_and_evidence(out);
+    for (plural, kind) in [
+        ("sources", "source"),
+        ("requirements", "requirement"),
+        ("resolutions", "resolution"),
+        ("rules", "rule"),
+        ("topics", "topic"),
+        ("questions", "question"),
+    ] {
+        discussions(out, plural, kind);
+    }
+    proposal_facts(out);
+}
+
+fn history_and_evidence(out: &mut Vec<Definition>) {
+    out.push(backed::<operation::ReadDocument>(
         "get-requirement-document",
         "getRequirementDocument",
         HttpMethod::Get,
         "/requirements/{id}/document",
         "Read the assembled document for one Requirement.",
-        "read-document",
         ResponseKind::Result,
-        vec![
-            schema::path("id"),
-            schema::query("limit", json!({"type":"integer","minimum":1,"maximum":200})),
-            schema::query("cursor", json!({"type":"string"})),
-        ],
+        vec![schema::path("id"), limit(), cursor()],
     ));
-    for (name, id, path, description) in [
-        (
+    out.push(
+        backed::<operation::ReviewHistoryV2>(
             "list-requirement-history",
             "listRequirementHistory",
+            HttpMethod::Get,
             "/requirements/{id}/history",
             "List immutable outcomes for one Requirement.",
-        ),
-        (
+            ResponseKind::Items,
+            vec![schema::path("id"), limit(), cursor()],
+        )
+        .path_field("id", "requirement_id")
+        .items_field("entries")
+        .pagination(),
+    );
+    out.push(
+        backed::<operation::ReviewHistoryEntryV2>(
             "get-requirement-history-entry",
             "getRequirementHistoryEntry",
+            HttpMethod::Get,
             "/requirements/{id}/history/{entry_id}",
             "Read one immutable Requirement outcome.",
-        ),
-        (
+            ResponseKind::Result,
+            vec![schema::path("id"), schema::path("entry_id")],
+        )
+        .path_field("id", "requirement_id"),
+    );
+    out.push(
+        backed::<operation::ReviewEvidenceV2>(
             "get-requirement-history-evidence",
             "getRequirementHistoryEvidence",
+            HttpMethod::Get,
             "/requirements/{id}/history/{entry_id}/evidence/{side}",
             "Read the before or after evidence for one Requirement outcome.",
-        ),
-        (
-            "get-rule-evidence",
-            "getRuleEvidence",
-            "/rules/{id}/evidence",
-            "Read implementation, verification, and Requirement-change evidence for one Rule.",
-        ),
-    ] {
-        let backing = match name {
-            "get-rule-evidence" => "evidence",
-            "list-requirement-history" => "review-history-v2",
-            "get-requirement-history-entry" => "review-history-entry-v2",
-            "get-requirement-history-evidence" => "review-evidence-v2",
-            _ => "read-document",
-        };
-        let mut params: Vec<Parameter> = path
-            .split('/')
-            .filter_map(|part| part.strip_prefix('{').and_then(|p| p.strip_suffix('}')))
-            .map(schema::path)
-            .collect();
-        if name == "list-requirement-history" {
-            params.extend([
-                schema::query("limit", json!({"type":"integer","minimum":1,"maximum":200})),
-                schema::query("cursor", json!({"type":"string"})),
-            ]);
-        }
-        if name == "get-requirement-history-evidence" {
-            params.extend([
+            ResponseKind::Result,
+            vec![
+                schema::path("id"),
+                schema::path("entry_id"),
+                schema::path("side"),
                 schema::query("field", json!({"type":"string"})),
                 schema::query("offset", json!({"type":"integer","minimum":0})),
-            ]);
-        }
-        if name == "get-rule-evidence" {
-            params.extend([
+            ],
+        )
+        .path_field("id", "requirement_id")
+        .result(),
+    );
+    out.push(
+        backed::<operation::Evidence>(
+            "get-rule-evidence",
+            "getRuleEvidence",
+            HttpMethod::Get,
+            "/rules/{id}/evidence",
+            "Read implementation, verification, and Requirement-change evidence for one Rule.",
+            ResponseKind::Result,
+            vec![
+                schema::path("id"),
                 schema::query("base", json!({"type":"string"})),
                 schema::query("head", json!({"type":"string"})),
-            ]);
-        }
-        let mut definition = backed(
-            name,
-            id,
-            HttpMethod::Get,
-            path,
-            description,
-            backing,
-            if name.starts_with("list-") {
-                ResponseKind::Items
-            } else {
-                ResponseKind::Result
-            },
-            params,
-        );
-        if name == "get-rule-evidence" {
-            definition = definition.path_field("id", "rule");
-        } else if name.starts_with("list-requirement-history")
-            || name.starts_with("get-requirement-history")
-        {
-            definition = definition.path_field("id", "requirement_id");
-        }
-        if name == "list-requirement-history" {
-            definition = definition.items_field("entries").pagination();
-        }
-        out.push(definition);
-    }
-    for parent in [
-        "sources",
-        "requirements",
-        "resolutions",
-        "rules",
-        "topics",
-        "questions",
-    ] {
-        discussions(out, parent);
-    }
+            ],
+        )
+        .path_field("id", "rule"),
+    );
+}
+
+fn proposal_facts(out: &mut Vec<Definition>) {
     out.push(
-        backed(
+        backed::<operation::CreateAssertion>(
             "create-proposal-assertion",
             "createProposalAssertion",
             HttpMethod::Post,
             "/proposals/{id}/assertions",
             "Add one immutable assertion to a Proposal.",
-            "create-assertion",
             ResponseKind::Resource,
             vec![schema::path("id")],
         )
-        .path_field("id", "proposal_id"),
+        .path_field("id", "proposal_id")
+        .scope("scope_id"),
     );
     out.push(
-        backed(
+        backed::<operation::CreateDisposition>(
             "create-proposal-disposition",
             "createProposalDisposition",
             HttpMethod::Post,
             "/proposals/{id}/dispositions",
             "Add one immutable disposition to a Proposal.",
-            "create-disposition",
             ResponseKind::Resource,
             vec![schema::path("id")],
         )
-        .path_field("id", "proposal_id"),
+        .path_field("id", "proposal_id")
+        .scope("scope_id"),
     );
-    for (kind, plural, backing) in [
-        ("Assertion", "assertions", "list-assertions-v2"),
-        ("Disposition", "dispositions", "list-dispositions-v2"),
-    ] {
-        let list_path: &'static str =
-            Box::leak(format!("/proposals/{{id}}/{plural}").into_boxed_str());
-        let member_path: &'static str =
-            Box::leak(format!("{list_path}/{{fact_id}}").into_boxed_str());
-        let list_name: &'static str = Box::leak(format!("list-proposal-{plural}").into_boxed_str());
-        let get_name: &'static str =
-            Box::leak(format!("get-proposal-{}", kind.to_ascii_lowercase()).into_boxed_str());
-        let list_id: &'static str = Box::leak(format!("listProposal{kind}s").into_boxed_str());
-        let get_id: &'static str = Box::leak(format!("getProposal{kind}").into_boxed_str());
-        out.push(
-            backed(
-                list_name,
-                list_id,
-                HttpMethod::Get,
-                list_path,
-                "List immutable facts owned by one Proposal.",
-                backing,
-                ResponseKind::Items,
-                vec![schema::path("id")],
-            )
-            .body(BodyBinding::Null)
-            .response_selection(ResponseSelection::ArrayItems {
-                owner_parameter: "id",
-                owner_field: "proposal_id",
-            }),
-        );
-        out.push(
-            backed(
-                get_name,
-                get_id,
-                HttpMethod::Get,
-                member_path,
-                "Read one immutable fact owned by one Proposal.",
-                backing,
-                ResponseKind::Resource,
-                vec![schema::path("id"), schema::path("fact_id")],
-            )
-            .body(BodyBinding::Null)
-            .response_selection(ResponseSelection::ArrayMember {
-                id_parameter: "fact_id",
-                owner_parameter: Some(("id", "proposal_id")),
-            }),
-        );
+    proposal_fact::<lists::ListAssertionsV2>(
+        out,
+        "assertions",
+        "assertion",
+        "Assertion",
+        "listProposalAssertions",
+        "getProposalAssertion",
+    );
+    proposal_fact::<lists::ListDispositionsV2>(
+        out,
+        "dispositions",
+        "disposition",
+        "Disposition",
+        "listProposalDispositions",
+        "getProposalDisposition",
+    );
+}
+
+fn proposal_fact<O: Operation>(
+    out: &mut Vec<Definition>,
+    plural: &'static str,
+    singular: &'static str,
+    _kind: &'static str,
+    list_id: &'static str,
+    get_id: &'static str,
+) {
+    let list_path = leaked(format!("/proposals/{{id}}/{plural}"));
+    let member_path = leaked(format!("{list_path}/{{fact_id}}"));
+    out.push(
+        backed::<O>(
+            leaked(format!("list-proposal-{plural}")),
+            list_id,
+            HttpMethod::Get,
+            list_path,
+            "List immutable facts owned by one Proposal.",
+            ResponseKind::Items,
+            vec![schema::path("id")],
+        )
+        .adapter(request::NULL)
+        .response_selection(ResponseSelection::ArrayItems {
+            owner_parameter: "id",
+            owner_field: "proposal_id",
+        }),
+    );
+    out.push(
+        backed::<O>(
+            leaked(format!("get-proposal-{singular}")),
+            get_id,
+            HttpMethod::Get,
+            member_path,
+            "Read one immutable fact owned by one Proposal.",
+            ResponseKind::Resource,
+            vec![schema::path("id"), schema::path("fact_id")],
+        )
+        .adapter(request::NULL)
+        .response_selection(ResponseSelection::ArrayMember {
+            id_parameter: "fact_id",
+            owner_parameter: Some(("id", "proposal_id")),
+        }),
+    );
+}
+
+fn discussions(out: &mut Vec<Definition>, plural: &'static str, kind: &'static str) {
+    let base = leaked(format!("/{plural}/{{id}}/discussions"));
+    let list = discussion_route::<operation::ReviewDiscussionsV2>(
+        plural,
+        kind,
+        "list-discussions",
+        "ListDiscussions",
+        base,
+        HttpMethod::Get,
+        "List addressed Discussions for the selected parent.",
+        ResponseKind::Items,
+        vec![schema::path("id"), limit(), cursor()],
+    )
+    .items_field("entries")
+    .pagination();
+    out.push(list);
+    out.push(
+        discussion_route::<operation::WriteDiscussionV2>(
+            plural,
+            kind,
+            "create-discussion",
+            "CreateDiscussion",
+            base,
+            HttpMethod::Post,
+            "Start an addressed Discussion for the selected parent.",
+            ResponseKind::Resource,
+            vec![schema::path("id")],
+        )
+        .scope("scope_id")
+        .adapter(request::DISCUSSION_START)
+        .with_request_schema::<operation::StartDiscussionData>()
+        .header("Idempotency-Key", "request_id", false)
+        .cli_default("actor", CliDefaultValue::String("cli"))
+        .with_etag("/version", true),
+    );
+
+    let member = leaked(format!("{base}/{{discussion_id}}"));
+    out.push(
+        discussion_route::<operation::ReviewDiscussionV2>(
+            plural,
+            kind,
+            "get-discussion",
+            "GetDiscussion",
+            member,
+            HttpMethod::Get,
+            "Read one addressed Discussion for the selected parent.",
+            ResponseKind::Resource,
+            vec![schema::path("id"), schema::path("discussion_id")],
+        )
+        .result()
+        .with_etag("/discussion/version", true),
+    );
+    out.push(
+        discussion_route::<operation::WriteDiscussionV2>(
+            plural,
+            kind,
+            "update-discussion",
+            "UpdateDiscussion",
+            member,
+            HttpMethod::Patch,
+            "Change the status of one addressed Discussion.",
+            ResponseKind::Resource,
+            vec![schema::path("id"), schema::path("discussion_id")],
+        )
+        .scope("scope_id")
+        .adapter(request::DISCUSSION_STATUS)
+        .with_request_schema::<operation::UpdateDiscussionData>()
+        .header("Idempotency-Key", "request_id", false)
+        .numeric_header("If-Match", "expected_version")
+        .with_etag("/version", true),
+    );
+
+    let messages = leaked(format!("{member}/messages"));
+    out.push(
+        discussion_route::<operation::ReviewDiscussionMessagesV2>(
+            plural,
+            kind,
+            "list-discussion-messages",
+            "ListDiscussionMessages",
+            messages,
+            HttpMethod::Get,
+            "List messages in one addressed Discussion.",
+            ResponseKind::Items,
+            vec![
+                schema::path("id"),
+                schema::path("discussion_id"),
+                limit(),
+                cursor(),
+            ],
+        )
+        .selector(SelectorBinding::Discussion {
+            parameter: "discussion_id",
+            field: "selector",
+        })
+        .items_field("entries")
+        .pagination(),
+    );
+    out.push(
+        discussion_route::<operation::WriteDiscussionV2>(
+            plural,
+            kind,
+            "create-discussion-message",
+            "CreateDiscussionMessage",
+            messages,
+            HttpMethod::Post,
+            "Append one message to an addressed Discussion.",
+            ResponseKind::Resource,
+            vec![schema::path("id"), schema::path("discussion_id")],
+        )
+        .scope("scope_id")
+        .adapter(request::DISCUSSION_REPLY)
+        .with_request_schema::<operation::ReplyDiscussionData>()
+        .header("Idempotency-Key", "request_id", false)
+        .numeric_header("If-Match", "expected_version")
+        .cli_default("actor", CliDefaultValue::String("cli"))
+        .with_etag("/version", true),
+    );
+    let message = leaked(format!("{messages}/{{message_id}}"));
+    out.push(
+        discussion_route::<operation::ReviewDiscussionMessageV2>(
+            plural,
+            kind,
+            "get-discussion-message",
+            "GetDiscussionMessage",
+            message,
+            HttpMethod::Get,
+            "Read one message in an addressed Discussion.",
+            ResponseKind::Resource,
+            vec![
+                schema::path("id"),
+                schema::path("discussion_id"),
+                schema::path("message_id"),
+            ],
+        )
+        .selector(SelectorBinding::Discussion {
+            parameter: "discussion_id",
+            field: "selector",
+        })
+        .result(),
+    );
+    legacy_messages(out, plural, kind);
+}
+
+fn legacy_messages(out: &mut Vec<Definition>, plural: &'static str, kind: &'static str) {
+    let list_path = leaked(format!(
+        "/{plural}/{{id}}/discussion-containers/{{container_id}}/legacy-messages"
+    ));
+    out.push(
+        discussion_route::<operation::ReviewDiscussionMessagesV2>(
+            plural,
+            kind,
+            "list-legacy-message",
+            "ListLegacyMessage",
+            list_path,
+            HttpMethod::Get,
+            "List unassigned historical messages from their parent container.",
+            ResponseKind::Items,
+            vec![
+                schema::path("id"),
+                schema::path("container_id"),
+                limit(),
+                cursor(),
+            ],
+        )
+        .selector(SelectorBinding::Legacy {
+            parameter: "container_id",
+            field: "selector",
+        })
+        .items_field("entries")
+        .pagination(),
+    );
+    let member_path = leaked(format!("{list_path}/{{message_id}}"));
+    out.push(
+        discussion_route::<operation::ReviewDiscussionMessageV2>(
+            plural,
+            kind,
+            "get-legacy-message",
+            "GetLegacyMessage",
+            member_path,
+            HttpMethod::Get,
+            "Read one unassigned historical message from its parent container.",
+            ResponseKind::Resource,
+            vec![
+                schema::path("id"),
+                schema::path("container_id"),
+                schema::path("message_id"),
+            ],
+        )
+        .selector(SelectorBinding::Legacy {
+            parameter: "container_id",
+            field: "selector",
+        })
+        .result(),
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn discussion_route<O: Operation>(
+    plural: &'static str,
+    kind: &'static str,
+    name: &'static str,
+    operation_suffix: &'static str,
+    path: &'static str,
+    method: HttpMethod,
+    description: &'static str,
+    response: ResponseKind,
+    parameters: Vec<Parameter>,
+) -> Definition {
+    backed::<O>(
+        leaked(format!("{plural}-{name}")),
+        leaked(format!("{kind}{operation_suffix}")),
+        method,
+        path,
+        description,
+        response,
+        parameters,
+    )
+    .parent(kind)
+}
+
+impl Definition {
+    fn with_request_schema<T: schemars::JsonSchema>(mut self) -> Self {
+        self.registration.request.schema = Some(schema::request_envelope(
+            schema::type_schema::<T>(Contract::Deserialize),
+        ));
+        self
     }
 }
 
-fn discussions(out: &mut Vec<Definition>, parent: &'static str) {
-    let base: &'static str = Box::leak(format!("/{parent}/{{id}}/discussions").into_boxed_str());
-    for (suffix, method, name, id, backing, kind, description) in [
-        (
-            "",
-            HttpMethod::Get,
-            "list-discussions",
-            "listDiscussions",
-            "review-discussions-v2",
-            ResponseKind::Items,
-            "List addressed Discussions for the selected parent.",
-        ),
-        (
-            "",
-            HttpMethod::Post,
-            "create-discussion",
-            "createDiscussion",
-            "write-discussion-v2",
-            ResponseKind::Resource,
-            "Start an addressed Discussion for the selected parent.",
-        ),
-        (
-            "/{discussion_id}",
-            HttpMethod::Get,
-            "get-discussion",
-            "getDiscussion",
-            "review-discussions-v2",
-            ResponseKind::Resource,
-            "Read one addressed Discussion for the selected parent.",
-        ),
-        (
-            "/{discussion_id}",
-            HttpMethod::Patch,
-            "update-discussion",
-            "updateDiscussion",
-            "write-discussion-v2",
-            ResponseKind::Resource,
-            "Change the status of one addressed Discussion.",
-        ),
-        (
-            "/{discussion_id}/messages",
-            HttpMethod::Get,
-            "list-discussion-messages",
-            "listDiscussionMessages",
-            "review-discussion-messages-v2",
-            ResponseKind::Items,
-            "List messages in one addressed Discussion.",
-        ),
-        (
-            "/{discussion_id}/messages",
-            HttpMethod::Post,
-            "create-discussion-message",
-            "createDiscussionMessage",
-            "write-discussion-v2",
-            ResponseKind::Resource,
-            "Append one message to an addressed Discussion.",
-        ),
-        (
-            "/{discussion_id}/messages/{message_id}",
-            HttpMethod::Get,
-            "get-discussion-message",
-            "getDiscussionMessage",
-            "review-discussion-messages-v2",
-            ResponseKind::Resource,
-            "Read one message in an addressed Discussion.",
-        ),
-    ] {
-        let path: &'static str = Box::leak(format!("{base}{suffix}").into_boxed_str());
-        let tool: &'static str = Box::leak(format!("{parent}-{name}").into_boxed_str());
-        let mut id_chars = id.chars();
-        let action = id_chars.next().map_or_else(String::new, |first| {
-            first.to_uppercase().chain(id_chars).collect()
-        });
-        let operation: &'static str =
-            Box::leak(format!("{}{action}", parent.trim_end_matches('s')).into_boxed_str());
-        let params = path
-            .split('/')
-            .filter_map(|p| p.strip_prefix('{').and_then(|p| p.strip_suffix('}')))
-            .map(schema::path)
-            .collect();
-        let mut params: Vec<Parameter> = params;
-        if matches!(name, "list-discussions" | "list-discussion-messages") {
-            params.extend([
-                schema::query("limit", json!({"type":"integer","minimum":1,"maximum":200})),
-                schema::query("cursor", json!({"type":"string"})),
-            ]);
-        }
-        let member_message = name == "get-discussion-message";
-        let backing = if member_message {
-            "review-discussion-message-v2"
-        } else if name == "get-discussion" {
-            "review-discussion-v2"
-        } else {
-            backing
-        };
-        let mut definition = backed(
-            tool,
-            operation,
-            method,
-            path,
-            description,
-            backing,
-            kind,
-            params,
-        );
-        definition.registration.request.path.clear();
-        definition = definition.parent(parent.trim_end_matches('s'));
-        if matches!(name, "list-discussion-messages" | "get-discussion-message") {
-            definition = definition.selector(SelectorBinding::Discussion {
-                parameter: "discussion_id",
-                field: "selector",
-            });
-        }
-        if name == "get-discussion" {
-            definition.registration.request.path.push(PathBinding {
-                parameter: "discussion_id",
-                field: "discussion_id",
-            });
-        }
-        if member_message {
-            definition.registration.request.path.push(PathBinding {
-                parameter: "message_id",
-                field: "message_id",
-            });
-        }
-        if matches!(name, "list-discussions" | "list-discussion-messages") {
-            definition = definition.items_field("entries").pagination();
-        }
-        if name == "get-discussion" {
-            definition.success_schema = schema::response_envelope(
-                schema::type_schema::<provenance_core::threads::DiscussionGroup>(
-                    Contract::Serialize,
-                ),
-                ResponseKind::Resource,
-            );
-        } else if name == "get-discussion-message" {
-            definition.success_schema = schema::response_envelope(
-                schema::type_schema::<provenance_core::Message>(Contract::Serialize),
-                ResponseKind::Resource,
-            );
-        }
-        if name == "create-discussion" {
-            definition.request_schema = Some(schema::request_envelope(schema::type_schema::<
-                super::super::StartDiscussionData,
-            >(
-                Contract::Deserialize
-            )));
-            definition = definition
-                .body(BodyBinding::DiscussionStart)
-                .header("Idempotency-Key", "request_id", false)
-                .with_etag();
-        } else if name == "create-discussion-message" {
-            definition.request_schema = Some(schema::request_envelope(schema::type_schema::<
-                super::super::ReplyDiscussionData,
-            >(
-                Contract::Deserialize
-            )));
-            definition = definition
-                .body(BodyBinding::DiscussionReply)
-                .header("Idempotency-Key", "request_id", false)
-                .numeric_header("If-Match", "expected_version")
-                .with_etag();
-        } else if name == "update-discussion" {
-            definition.request_schema = Some(schema::request_envelope(schema::type_schema::<
-                super::super::UpdateDiscussionData,
-            >(
-                Contract::Deserialize
-            )));
-            definition = definition
-                .body(BodyBinding::DiscussionStatus)
-                .header("Idempotency-Key", "request_id", false)
-                .numeric_header("If-Match", "expected_version")
-                .with_etag();
-        } else if matches!(name, "get-discussion" | "get-discussion-message") {
-            definition = definition.with_etag();
-        }
-        out.push(definition);
-    }
-    for suffix in ["", "/{message_id}"] {
-        let path: &'static str = Box::leak(
-            format!(
-                "/{parent}/{{id}}/discussion-containers/{{container_id}}/legacy-messages{suffix}"
-            )
-            .into_boxed_str(),
-        );
-        let one = !suffix.is_empty();
-        let name: &'static str = Box::leak(
-            format!(
-                "{parent}-{}legacy-message",
-                if one { "get-" } else { "list-" }
-            )
-            .into_boxed_str(),
-        );
-        let id: &'static str = Box::leak(
-            format!(
-                "{}{}LegacyMessage",
-                parent.trim_end_matches('s'),
-                if one { "Get" } else { "List" }
-            )
-            .into_boxed_str(),
-        );
-        let mut params: Vec<Parameter> = path
-            .split('/')
-            .filter_map(|p| p.strip_prefix('{').and_then(|p| p.strip_suffix('}')))
-            .map(schema::path)
-            .collect();
-        if !one {
-            params.extend([
-                schema::query("limit", json!({"type":"integer","minimum":1,"maximum":200})),
-                schema::query("cursor", json!({"type":"string"})),
-            ]);
-        }
-        let backing = if one {
-            "review-discussion-message-v2"
-        } else {
-            "review-discussion-messages-v2"
-        };
-        let mut definition = backed(
-            name,
-            id,
-            HttpMethod::Get,
-            path,
-            if one {
-                "Read one unassigned historical message from its parent container."
-            } else {
-                "List unassigned historical messages from their parent container."
-            },
-            backing,
-            if one {
-                ResponseKind::Resource
-            } else {
-                ResponseKind::Items
-            },
-            params,
-        );
-        definition.registration.request.path.clear();
-        definition =
-            definition
-                .parent(parent.trim_end_matches('s'))
-                .selector(SelectorBinding::Legacy {
-                    parameter: "container_id",
-                    field: "selector",
-                });
-        if one {
-            definition.registration.request.path.push(PathBinding {
-                parameter: "message_id",
-                field: "message_id",
-            });
-            definition.success_schema = schema::response_envelope(
-                schema::type_schema::<provenance_core::Message>(Contract::Serialize),
-                ResponseKind::Resource,
-            );
-        } else {
-            definition = definition.items_field("entries").pagination();
-        }
-        out.push(definition);
-    }
+fn limit() -> Parameter {
+    schema::query("limit", json!({"type":"integer","minimum":1,"maximum":200}))
+}
+
+fn cursor() -> Parameter {
+    schema::query("cursor", json!({"type":"string"}))
+}
+
+fn leaked(value: String) -> &'static str {
+    Box::leak(value.into_boxed_str())
 }

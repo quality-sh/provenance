@@ -172,7 +172,9 @@ async fn group(
          ORDER BY j.version DESC LIMIT 1",
     )
     .bind(ctx.snapshot().scope().as_str())
-    .bind(super::discussion_state::discussion_kind_word(parent.node_type))
+    .bind(super::discussion_state::discussion_kind_word(
+        parent.node_type,
+    ))
     .bind(parent.node_id.as_str())
     .bind(discussion_id.as_str())
     .fetch_optional(&mut **tx)

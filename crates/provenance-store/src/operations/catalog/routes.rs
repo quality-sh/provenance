@@ -2,27 +2,39 @@
 
 use super::{
     schema::{self, Definition, HttpMethod, Parameter, ResponseKind},
-    ArgumentAlias, BodyBinding, HandlerBinding, HeaderBinding, NullClearBinding, ParentBinding,
-    PathBinding, QueryRequestBinding, QueryRoute, Registration, ResponseBinding, ResponseSelection,
+    ArgumentAlias, CliDefault, CliDefaultValue, EtagBinding, HandlerBinding, HeaderBinding,
+    NullClearBinding, Operation, ParentBinding, PathBinding, QueryRequestBinding, QueryRoute,
+    Registration, RequestAdapter, ResponseAdapter, ResponseBinding, ResponseSelection,
     SelectorBinding,
 };
 use schemars::generate::Contract;
 use serde_json::{json, Value};
 
 #[allow(clippy::too_many_arguments)]
-fn backed(
+fn backed<O: Operation>(
     name: &'static str,
     operation_id: &'static str,
     method: HttpMethod,
     path: &'static str,
     description: &'static str,
-    backing: &'static str,
     kind: ResponseKind,
     parameters: Vec<Parameter>,
 ) -> Definition {
-    let raw = schema::raw_for(backing);
-    let inject_scope = raw.request_schema["properties"].get("scope_id").is_some();
-    let mut registration = Registration::new(backing, raw.context, kind);
+    let raw = schema::raw_definition::<O>();
+    let response = response_binding(raw.success_schema.clone(), kind);
+    let request_schema = (!matches!(method, HttpMethod::Get))
+        .then(|| schema::request_envelope(raw.request_schema.clone()));
+    let mut registration = Registration::new(
+        HandlerBinding {
+            operation: O::NAME,
+            context: raw.context,
+            mutates: raw.mutates,
+            http_statuses: raw.http_statuses,
+            failure_schema: raw.failure_schema,
+        },
+        request_schema,
+        response,
+    );
     registration.request.path = parameters
         .iter()
         .filter(|parameter| parameter.location == "path")
@@ -31,44 +43,42 @@ fn backed(
             field: parameter.name,
         })
         .collect();
-    registration.request.query = parameters
-        .iter()
-        .filter(|parameter| parameter.location == "query")
-        .cloned()
-        .collect();
-    registration.request.scope_field = inject_scope.then_some("scope_id");
+    registration.request.parameters = parameters;
     Definition {
         name,
         operation_id,
         method,
         path,
         description,
-        mutates: raw.mutates,
-        http_statuses: raw.http_statuses,
-        parameters,
-        request_schema: (!matches!(method, HttpMethod::Get))
-            .then(|| schema::request_envelope(raw.request_schema)),
-        success_schema: schema::response_envelope(raw.success_schema, kind),
-        failure_schema: raw.failure_schema,
         registration,
     }
 }
 
-fn read<T: schemars::JsonSchema>(
+fn read<T: schemars::JsonSchema, O: Operation>(
     name: &'static str,
     operation_id: &'static str,
     path: &'static str,
     description: &'static str,
-    backing: &'static str,
     kind: ResponseKind,
     parameters: Vec<Parameter>,
 ) -> Definition {
-    let raw = schema::raw_for(backing);
+    let raw = schema::raw_definition::<O>();
+    let raw_response = raw.success_schema.clone();
     let payload = match kind {
         ResponseKind::Items => schema::type_schema::<Vec<T>>(Contract::Serialize),
         _ => schema::type_schema::<T>(Contract::Serialize),
     };
-    let mut registration = Registration::new(backing, raw.context, kind);
+    let mut registration = Registration::new(
+        HandlerBinding {
+            operation: O::NAME,
+            context: raw.context,
+            mutates: raw.mutates,
+            http_statuses: raw.http_statuses,
+            failure_schema: raw.failure_schema,
+        },
+        None,
+        ResponseBinding::direct(kind, raw_response, schema::response_envelope(payload, kind)),
+    );
     registration.request.path = parameters
         .iter()
         .filter(|parameter| parameter.location == "path")
@@ -77,23 +87,13 @@ fn read<T: schemars::JsonSchema>(
             field: parameter.name,
         })
         .collect();
-    registration.request.query = parameters
-        .iter()
-        .filter(|parameter| parameter.location == "query")
-        .cloned()
-        .collect();
+    registration.request.parameters = parameters;
     Definition {
         name,
         operation_id,
         method: HttpMethod::Get,
         path,
         description,
-        mutates: false,
-        http_statuses: raw.http_statuses,
-        parameters,
-        request_schema: None,
-        success_schema: schema::response_envelope(payload, kind),
-        failure_schema: raw.failure_schema,
         registration,
     }
 }
@@ -113,7 +113,6 @@ impl Definition {
     }
 
     fn header(mut self, name: &'static str, field: &'static str, trim_quotes: bool) -> Self {
-        self.parameters.push(schema::header(name));
         self.registration.controls.headers.push(HeaderBinding {
             name,
             field,
@@ -124,7 +123,6 @@ impl Definition {
     }
 
     fn numeric_header(mut self, name: &'static str, field: &'static str) -> Self {
-        self.parameters.push(schema::header(name));
         self.registration.controls.headers.push(HeaderBinding {
             name,
             field,
@@ -134,12 +132,21 @@ impl Definition {
         self
     }
 
-    const fn body(mut self, body: BodyBinding) -> Self {
-        self.registration.request.body = body;
+    const fn adapter(mut self, adapter: RequestAdapter) -> Self {
+        self.registration.request.adapter = adapter;
         self
     }
 
-    const fn parent(mut self, kind: &'static str) -> Self {
+    const fn scope(mut self, field: &'static str) -> Self {
+        self.registration.request.scope_field = Some(field);
+        self
+    }
+
+    fn parent(mut self, kind: &'static str) -> Self {
+        self.registration
+            .request
+            .path
+            .retain(|binding| binding.parameter != "id");
         self.registration.request.parent = Some(ParentBinding {
             kind,
             id_parameter: "id",
@@ -148,7 +155,15 @@ impl Definition {
         self
     }
 
-    const fn selector(mut self, selector: SelectorBinding) -> Self {
+    fn selector(mut self, selector: SelectorBinding) -> Self {
+        let parameter = match &selector {
+            SelectorBinding::Discussion { parameter, .. }
+            | SelectorBinding::Legacy { parameter, .. } => *parameter,
+        };
+        self.registration
+            .request
+            .path
+            .retain(|binding| binding.parameter != parameter);
         self.registration.request.selector = Some(selector);
         self
     }
@@ -158,6 +173,9 @@ impl Definition {
             .iter()
             .map(|(field, clear_name)| NullClearBinding { field, clear_name })
             .collect();
+        if !fields.is_empty() {
+            self.registration.request.adapter = request::NULLABLE_PATCH;
+        }
         self
     }
 
@@ -166,8 +184,8 @@ impl Definition {
         self
     }
 
-    const fn with_etag(mut self) -> Self {
-        self.registration.controls.returns_etag = true;
+    fn with_etag(mut self, pointer: &'static str, numeric: bool) -> Self {
+        self.registration.controls.etag = Some(EtagBinding { pointer, numeric });
         self
     }
 
@@ -176,10 +194,47 @@ impl Definition {
         self
     }
 
-    const fn items_field(mut self, field: &'static str) -> Self {
-        self.registration.response.items_field = Some(field);
+    fn items_field(mut self, field: &'static str) -> Self {
+        self.registration.response.adapter = ResponseAdapter::ResultItems(field);
+        let payload =
+            schema::property_schema(&self.registration.response.raw_schema, &["result", field]);
+        self.registration.response.schema = schema::response_envelope(payload, ResponseKind::Items);
         self
     }
+
+    fn result(mut self) -> Self {
+        self.registration.response.adapter = ResponseAdapter::Result;
+        let payload = schema::property_schema(&self.registration.response.raw_schema, &["result"]);
+        self.registration.response.schema =
+            schema::response_envelope(payload, self.registration.response.kind);
+        self
+    }
+
+    fn cli_default(mut self, field: &'static str, value: CliDefaultValue) -> Self {
+        self.registration
+            .cli
+            .defaults
+            .push(CliDefault { field, value });
+        self
+    }
+
+    fn cli_defaults(mut self, defaults: &[CliDefault]) -> Self {
+        self.registration.cli.defaults.extend_from_slice(defaults);
+        self
+    }
+
+    fn argument_aliases(mut self, aliases: &[ArgumentAlias]) -> Self {
+        self.registration
+            .request
+            .argument_aliases
+            .extend_from_slice(aliases);
+        self
+    }
+}
+
+fn response_binding(raw_schema: Value, kind: ResponseKind) -> ResponseBinding {
+    let payload = raw_schema.clone();
+    ResponseBinding::direct(kind, raw_schema, schema::response_envelope(payload, kind))
 }
 
 fn list_parameters(searchable: bool, rule: bool) -> Vec<Parameter> {
@@ -231,11 +286,7 @@ fn member_parameters(searchable: bool) -> Vec<Parameter> {
     parameters
 }
 
-fn with_query_results(
-    mut definition: Definition,
-    queries: &[(&'static str, ResponseKind)],
-    node_type: &'static str,
-) -> Definition {
+fn with_query_results(mut definition: Definition, queries: Vec<QueryRoute>) -> Definition {
     if queries.is_empty() {
         return definition;
     }
@@ -243,191 +294,113 @@ fn with_query_results(
         definition
             .registration
             .request
-            .query
-            .retain(|parameter| matches!(parameter.name, "limit" | "cursor" | "rule"));
+            .parameters
+            .retain(|parameter| {
+                parameter.location == "path"
+                    || matches!(parameter.name, "limit" | "cursor" | "rule")
+            });
     } else {
-        definition.registration.request.query.clear();
+        definition
+            .registration
+            .request
+            .parameters
+            .retain(|parameter| parameter.location == "path");
     }
-    let mut variants = vec![definition.success_schema.clone()];
-    let mut defs = serde_json::Map::new();
-    for schema in &mut variants {
-        if let Some(Value::Object(found)) = schema
-            .as_object_mut()
-            .and_then(|object| object.remove("$defs"))
-        {
-            defs.extend(found);
-        }
-    }
-    for (backing, kind) in queries {
-        let raw = schema::raw_for(backing);
-        let mut response = schema::response_envelope(raw.success_schema, *kind);
-        let prefix = backing
-            .split('-')
-            .map(|part| {
-                let mut chars = part.chars();
-                chars.next().map_or_else(String::new, |first| {
-                    first.to_uppercase().chain(chars).collect()
-                })
-            })
-            .collect::<String>();
-        schema::namespace_defs(&mut response, &prefix);
-        if let Some(Value::Object(found)) = response
-            .as_object_mut()
-            .and_then(|object| object.remove("$defs"))
-        {
-            for (name, value) in found {
-                defs.entry(name).or_insert(value);
-            }
-        }
-        variants.push(response);
-        let request = QueryRequestBinding {
-            node_type: matches!(*backing, "search" | "trace" | "neighbors" | "impact")
-                .then_some(node_type),
-            node_types: *backing == "search",
-        };
-        let parameters = query::parameters(
-            &raw.request_schema,
-            &definition.registration.request,
-            &request,
-        );
-        definition.registration.queries.push(QueryRoute {
-            name: backing,
-            handler: HandlerBinding {
-                operation: backing,
-                context: raw.context,
-            },
-            parameters,
-            request,
-            response: ResponseBinding {
-                kind: *kind,
-                selection: ResponseSelection::Direct,
-                items_field: match *backing {
-                    "search" => Some("nodes"),
-                    "stale" => Some("sites"),
-                    "resolve-symbol" => Some("rules"),
-                    _ => None,
-                },
-            },
-        });
-    }
-    // The ordinary list and a query can have the same JSON shape. Both are
-    // valid results for this route, so validation must accept overlap.
-    definition.success_schema = json!({"anyOf":variants});
-    if !defs.is_empty() {
-        definition.success_schema["$defs"] = Value::Object(defs);
-    }
+    definition.registration.queries = queries;
     definition
 }
 
-macro_rules! resource {
-    ($out:ident, $ty:ty, $plural:literal, $singular:literal, $singular_id:literal, $plural_id:literal, $create:literal, $update:literal) => {{
-        let searchable = matches!(
-            $plural,
-            "sources"
-                | "requirements"
-                | "resolutions"
-                | "rules"
-                | "domains"
-                | "boundaries"
-                | "topics"
-                | "questions"
-        );
-        let verification = matches!($plural, "verification-runs" | "verification-bindings");
-        let mut parameters = list_parameters(searchable, $plural == "rules");
-        if verification {
-            parameters.push(schema::query(
-                "rule",
-                json!({"type":"string","minLength":1}),
-            ));
-        }
-        let backing = if verification {
-            $plural
-        } else if searchable {
-            concat!("page-", $plural, "-v2")
-        } else {
-            concat!("list-", $plural)
-        };
-        let mut list = read::<$ty>(
-            concat!("list-", $plural),
-            concat!("list", $plural_id),
-            concat!("/", $plural),
-            concat!("List ", $plural, " in the bound scope."),
-            backing,
-            ResponseKind::Items,
-            parameters,
-        );
-        if backing.starts_with("list-") {
-            list.registration.request.body = BodyBinding::Null;
-        } else {
-            list.registration.response.items_field = Some("items");
-            list.registration.controls.pagination = true;
-        }
-        let list_queries = if $plural == "rules" {
-            vec![
-                ("search", ResponseKind::Items),
-                ("stale", ResponseKind::Items),
-                ("resolve-symbol", ResponseKind::Items),
-            ]
-        } else if searchable {
-            vec![("search", ResponseKind::Items)]
-        } else {
-            Vec::new()
-        };
-        $out.push(with_query_results(list, &list_queries, $singular));
-        let member = read::<$ty>(
-            concat!("get-", $singular),
-            concat!("get", $singular_id),
-            concat!("/", $plural, "/{id}"),
-            concat!("Read one ", $singular, " in the bound scope."),
-            concat!("list-", $plural),
-            ResponseKind::Resource,
-            member_parameters(searchable),
-        )
-        .body(BodyBinding::Null)
-        .response_selection(ResponseSelection::ArrayMember {
-            id_parameter: "id",
-            owner_parameter: None,
-        });
-        let member_queries = if searchable {
-            vec![
-                ("trace", ResponseKind::Result),
-                ("neighbors", ResponseKind::Result),
-                ("impact", ResponseKind::Result),
-            ]
-        } else {
-            Vec::new()
-        };
-        $out.push(with_query_results(member, &member_queries, $singular));
-        if !$create.is_empty() {
-            $out.push(backed(
-                concat!("create-", $singular),
-                concat!("create", $singular_id),
-                HttpMethod::Post,
-                concat!("/", $plural),
-                concat!("Create one ", $singular, " in the bound scope."),
-                $create,
-                ResponseKind::Resource,
-                Vec::new(),
-            ));
-        }
-        if !$update.is_empty() {
-            $out.push(backed(
-                concat!("update-", $singular),
-                concat!("update", $singular_id),
-                HttpMethod::Patch,
-                concat!("/", $plural, "/{id}"),
-                concat!("Apply a partial change to one ", $singular, "."),
-                $update,
-                ResponseKind::Resource,
-                vec![schema::path("id")],
-            ));
-        }
-    }};
+fn query_route<O: Operation>(
+    definition: &Definition,
+    kind: ResponseKind,
+    node_type: Option<&'static str>,
+    node_types: bool,
+    adapter: ResponseAdapter,
+    payload_path: &[&str],
+) -> QueryRoute {
+    let raw = schema::raw_definition::<O>();
+    let request = QueryRequestBinding {
+        node_type,
+        node_types,
+        adapter: request::DIRECT,
+    };
+    let parameters = query::parameters(
+        &raw.request_schema,
+        &definition.registration.request,
+        &request,
+    );
+    let payload = if payload_path.is_empty() {
+        raw.success_schema.clone()
+    } else {
+        schema::property_schema(&raw.success_schema, payload_path)
+    };
+    QueryRoute {
+        name: O::NAME,
+        handler: HandlerBinding {
+            operation: O::NAME,
+            context: raw.context,
+            mutates: raw.mutates,
+            http_statuses: raw.http_statuses,
+            failure_schema: raw.failure_schema,
+        },
+        parameters,
+        request,
+        response: ResponseBinding {
+            kind,
+            selection: ResponseSelection::Direct,
+            adapter,
+            raw_schema: raw.success_schema,
+            schema: schema::response_envelope(payload, kind),
+        },
+    }
+}
+
+fn searchable_queries(definition: &Definition, node_type: &'static str) -> Vec<QueryRoute> {
+    vec![query_route::<super::Search>(
+        definition,
+        ResponseKind::Items,
+        Some(node_type),
+        true,
+        ResponseAdapter::ObjectItems("nodes"),
+        &["nodes"],
+    )]
+}
+
+fn member_queries(definition: &Definition, node_type: &'static str) -> Vec<QueryRoute> {
+    vec![
+        query_route::<super::Trace>(
+            definition,
+            ResponseKind::Result,
+            Some(node_type),
+            false,
+            ResponseAdapter::Direct,
+            &[],
+        ),
+        query_route::<super::Neighbors>(
+            definition,
+            ResponseKind::Result,
+            Some(node_type),
+            false,
+            ResponseAdapter::Direct,
+            &[],
+        ),
+        query_route::<super::Impact>(
+            definition,
+            ResponseKind::Result,
+            Some(node_type),
+            false,
+            ResponseAdapter::Direct,
+            &[],
+        ),
+    ]
 }
 
 mod actions;
 mod finalize;
 mod query;
+pub(super) mod request;
+#[macro_use]
+mod resource;
 mod resources;
 mod subresources;
 

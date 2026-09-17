@@ -1,6 +1,6 @@
 use provenance_core::protocol::{failure::ErasedFailure, read_failure::ReadFailure};
 use provenance_store::operations::catalog::{
-    Definition, ResponseBinding, ResponseKind, ResponseSelection,
+    Definition, ResponseAdapter, ResponseBinding, ResponseSelection,
 };
 use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
@@ -51,26 +51,6 @@ pub fn select(
             *value = found;
             Ok(())
         }
-        ResponseSelection::PageMember {
-            id_parameter,
-            id_pointer,
-        } => {
-            let id = path
-                .get(*id_parameter)
-                .ok_or_else(|| not_found(definition))?;
-            let found = value
-                .pointer("/result/entries")
-                .and_then(Value::as_array)
-                .and_then(|entries| {
-                    entries
-                        .iter()
-                        .find(|entry| entry.pointer(id_pointer).and_then(Value::as_str) == Some(id))
-                })
-                .cloned()
-                .ok_or_else(|| not_found(definition))?;
-            value["result"] = found;
-            Ok(())
-        }
     }
 }
 
@@ -78,39 +58,76 @@ fn not_found(definition: &Definition) -> ErasedFailure {
     ErasedFailure::declared(definition.name, ReadFailure::ResourceNotFound, 404)
 }
 
-pub fn success(mut value: Value, binding: &ResponseBinding) -> Value {
+pub fn success(
+    mut value: Value,
+    definition: &Definition,
+    binding: &ResponseBinding,
+) -> Result<Value, ErasedFailure> {
     let mut meta = Map::new();
     if let Some(object) = value.as_object_mut() {
         move_meta(object, &mut meta);
         object.remove("protocol_version");
         object.remove("operation");
-        if binding.kind == ResponseKind::Resource && object.get("found") == Some(&json!(true)) {
-            value = object.remove("node").unwrap_or(Value::Null);
-        }
     }
-    if let Some(result) = value
-        .as_object_mut()
-        .and_then(|object| object.remove("result"))
-    {
-        value = result;
-        if let Some(object) = value.as_object_mut() {
-            move_page_meta(object, &mut meta);
-        }
-    }
-    let data = if binding.kind == ResponseKind::Items {
-        if value.is_array() {
+    let data = match binding.adapter {
+        ResponseAdapter::Direct => value,
+        ResponseAdapter::Result => take_result(value, definition, &mut meta)?,
+        ResponseAdapter::ArrayItems => {
+            if !value.is_array() {
+                return Err(malformed(definition));
+            }
             json!({"items":value})
-        } else {
-            let items = binding
-                .items_field
-                .and_then(|field| value.as_object_mut()?.remove(field))
-                .unwrap_or(value);
+        }
+        ResponseAdapter::ObjectItems(field) => {
+            let items = value
+                .as_object_mut()
+                .and_then(|object| object.remove(field))
+                .ok_or_else(|| malformed(definition))?;
+            if !items.is_array() {
+                return Err(malformed(definition));
+            }
             json!({"items":items})
         }
-    } else {
-        value
+        ResponseAdapter::ResultItems(field) => {
+            let mut result = take_result(value, definition, &mut meta)?;
+            let items = result
+                .as_object_mut()
+                .and_then(|object| object.remove(field))
+                .ok_or_else(|| malformed(definition))?;
+            if !items.is_array() {
+                return Err(malformed(definition));
+            }
+            json!({"items":items})
+        }
     };
-    json!({"data":data,"meta":meta})
+    Ok(json!({"data":data,"meta":meta}))
+}
+
+fn take_result(
+    mut value: Value,
+    definition: &Definition,
+    meta: &mut Map<String, Value>,
+) -> Result<Value, ErasedFailure> {
+    let result = value
+        .as_object_mut()
+        .and_then(|object| take_field(object, "result"))
+        .ok_or_else(|| malformed(definition))?;
+    let mut result = result;
+    if let Some(object) = result.as_object_mut() {
+        move_page_meta(object, meta);
+    }
+    Ok(result)
+}
+
+fn take_field(object: &mut Map<String, Value>, field: &str) -> Option<Value> {
+    object.remove(field)
+}
+
+fn malformed(definition: &Definition) -> ErasedFailure {
+    ErasedFailure::new(
+        Some(definition.name),
+        provenance_core::protocol::failure::OperationFailure::Internal,
+    )
 }
 
 fn move_meta(object: &mut Map<String, Value>, meta: &mut Map<String, Value>) {

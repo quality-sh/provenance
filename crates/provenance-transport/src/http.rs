@@ -23,7 +23,10 @@ pub fn router(host: StatementHost) -> Router {
             HttpMethod::Patch => router.route(&path, patch(invoke)),
         };
     }
-    router.fallback(unknown).with_state(host)
+    router
+        .method_not_allowed_fallback(method_not_allowed)
+        .fallback(unknown)
+        .with_state(host)
 }
 
 fn axum_path(path: &str) -> String {
@@ -40,6 +43,10 @@ fn axum_path(path: &str) -> String {
 
 async fn unknown() -> Response {
     failure::response(ErasedFailure::new(None, OperationFailure::UnknownOperation))
+}
+
+async fn method_not_allowed() -> Response {
+    failure::response(ErasedFailure::new(None, OperationFailure::MethodNotAllowed))
 }
 
 async fn metadata(State(host): State<StatementHost>, request: Request) -> Response {
@@ -72,7 +79,7 @@ async fn invoke(State(host): State<StatementHost>, request: Request) -> Response
         Err(error) => return failure::response(error),
     };
     let headers = request.headers().clone();
-    let expects_body = matched.definition.request_schema.is_some();
+    let expects_body = matched.definition.request_schema().is_some();
     let Ok(bytes) = (tokio::select! {
         biased;
         () = host.stopping.cancelled() => return failure::response(ErasedFailure::new(None, OperationFailure::UnavailableNeeds)),

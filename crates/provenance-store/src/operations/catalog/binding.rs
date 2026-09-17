@@ -1,9 +1,14 @@
 use super::{ContextKind, Parameter, ResponseKind};
+use serde_json::Value;
+use std::collections::BTreeMap;
 
 #[derive(Clone)]
 pub struct HandlerBinding {
     pub operation: &'static str,
     pub context: ContextKind,
+    pub mutates: bool,
+    pub http_statuses: Vec<u16>,
+    pub failure_schema: Value,
 }
 
 #[derive(Clone)]
@@ -31,14 +36,16 @@ pub enum SelectorBinding {
     },
 }
 
-#[derive(Clone, Copy, Default)]
-pub enum BodyBinding {
-    #[default]
-    Direct,
-    Null,
-    DiscussionStart,
-    DiscussionReply,
-    DiscussionStatus,
+#[derive(Clone, Copy)]
+pub struct RequestAdapter {
+    pub object: bool,
+    pub adapt:
+        fn(&RequestBinding, Value, &BTreeMap<String, String>) -> Result<Value, RequestAdapterError>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct RequestAdapterError {
+    pub field: Option<&'static str>,
 }
 
 #[derive(Clone)]
@@ -51,18 +58,53 @@ pub struct NullClearBinding {
 pub struct ArgumentAlias {
     pub argument: &'static str,
     pub field: &'static str,
+    pub wrap_array: bool,
+}
+
+#[derive(Clone, Copy)]
+pub enum CliDefaultValue {
+    String(&'static str),
+    EmptyArray,
+}
+
+#[derive(Clone)]
+pub struct CliDefault {
+    pub field: &'static str,
+    pub value: CliDefaultValue,
 }
 
 #[derive(Clone, Default)]
+pub struct CliBinding {
+    pub defaults: Vec<CliDefault>,
+}
+
+#[derive(Clone)]
 pub struct RequestBinding {
-    pub body: BodyBinding,
+    pub schema: Option<Value>,
+    pub adapter: RequestAdapter,
     pub path: Vec<PathBinding>,
     pub parent: Option<ParentBinding>,
     pub selector: Option<SelectorBinding>,
     pub scope_field: Option<&'static str>,
-    pub query: Vec<Parameter>,
+    pub parameters: Vec<Parameter>,
     pub null_clears: Vec<NullClearBinding>,
     pub argument_aliases: Vec<ArgumentAlias>,
+}
+
+impl Default for RequestBinding {
+    fn default() -> Self {
+        Self {
+            schema: None,
+            adapter: super::routes::request::DIRECT,
+            path: Vec::new(),
+            parent: None,
+            selector: None,
+            scope_field: None,
+            parameters: Vec::new(),
+            null_clears: Vec::new(),
+            argument_aliases: Vec::new(),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -77,7 +119,13 @@ pub struct HeaderBinding {
 pub struct Controls {
     pub headers: Vec<HeaderBinding>,
     pub pagination: bool,
-    pub returns_etag: bool,
+    pub etag: Option<EtagBinding>,
+}
+
+#[derive(Clone)]
+pub struct EtagBinding {
+    pub pointer: &'static str,
+    pub numeric: bool,
 }
 
 #[derive(Clone)]
@@ -91,33 +139,56 @@ pub enum ResponseSelection {
         id_parameter: &'static str,
         owner_parameter: Option<(&'static str, &'static str)>,
     },
-    PageMember {
-        id_parameter: &'static str,
-        id_pointer: &'static str,
-    },
 }
 
 #[derive(Clone)]
 pub struct ResponseBinding {
     pub kind: ResponseKind,
     pub selection: ResponseSelection,
-    pub items_field: Option<&'static str>,
+    pub adapter: ResponseAdapter,
+    pub raw_schema: Value,
+    pub schema: Value,
+}
+
+#[derive(Clone, Copy)]
+pub enum ResponseAdapter {
+    Direct,
+    Result,
+    ArrayItems,
+    ObjectItems(&'static str),
+    ResultItems(&'static str),
 }
 
 impl ResponseBinding {
-    pub const fn direct(kind: ResponseKind) -> Self {
+    pub fn direct(kind: ResponseKind, raw_schema: Value, schema: Value) -> Self {
         Self {
             kind,
             selection: ResponseSelection::Direct,
-            items_field: None,
+            adapter: match kind {
+                ResponseKind::Resource | ResponseKind::Result => ResponseAdapter::Direct,
+                ResponseKind::Items => ResponseAdapter::ArrayItems,
+            },
+            raw_schema,
+            schema,
         }
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct QueryRequestBinding {
     pub node_type: Option<&'static str>,
     pub node_types: bool,
+    pub adapter: RequestAdapter,
+}
+
+impl Default for QueryRequestBinding {
+    fn default() -> Self {
+        Self {
+            node_type: None,
+            node_types: false,
+            adapter: super::routes::request::DIRECT,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -136,16 +207,25 @@ pub struct Registration {
     pub controls: Controls,
     pub response: ResponseBinding,
     pub queries: Vec<QueryRoute>,
+    pub cli: CliBinding,
 }
 
 impl Registration {
-    pub fn new(operation: &'static str, context: ContextKind, response: ResponseKind) -> Self {
+    pub fn new(
+        handler: HandlerBinding,
+        request_schema: Option<Value>,
+        response: ResponseBinding,
+    ) -> Self {
         Self {
-            handler: HandlerBinding { operation, context },
-            request: RequestBinding::default(),
+            handler,
+            request: RequestBinding {
+                schema: request_schema,
+                ..RequestBinding::default()
+            },
             controls: Controls::default(),
-            response: ResponseBinding::direct(response),
+            response,
             queries: Vec::new(),
+            cli: CliBinding::default(),
         }
     }
 }

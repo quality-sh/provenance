@@ -94,7 +94,7 @@ impl FixtureAccess {
         let mutates = provenance_store::operations::catalog::definitions()
             .into_iter()
             .find(|definition| definition.name == operation)
-            .is_some_and(|definition| definition.mutates);
+            .is_some_and(|definition| definition.mutates());
         !self.denied_operations.contains(operation) && (self.writes || !mutates)
     }
     pub(crate) fn authenticate(
