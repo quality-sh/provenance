@@ -14,11 +14,11 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         "update-source"
     );
     let requirements = read::<provenance_core::Requirement>(
-        "list-requirements",
+        "page-requirements-v2",
         "listRequirements",
         "/requirements",
         "List requirements in the bound scope.",
-        "list-requirements",
+        "page-requirements-v2",
         ResponseKind::Items,
         list_parameters(true, false),
     );

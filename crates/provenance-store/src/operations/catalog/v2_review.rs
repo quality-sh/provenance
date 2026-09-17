@@ -13,7 +13,8 @@ use crate::{
 };
 use provenance_core::{
     review::{CycleEntry, RequirementDecisionState, RequirementEditState},
-    Requirement, RequirementStatus, ScopeId, StableId,
+    CanonicalArtifact, DispositionActor, DispositionDecision, Requirement, RequirementStatus,
+    ScopeId, StableId,
 };
 use serde::{Deserialize, Serialize};
 
@@ -31,15 +32,11 @@ fn resource(
     scope: &ScopeId,
     id: &StableId,
 ) -> anyhow::Result<RequirementResource> {
-    let record = store
-        .list_requirements(scope)?
-        .into_iter()
-        .find(|record| &record.id == id)
-        .ok_or(provenance_core::protocol::read_failure::ReadFailure::ResourceNotFound)?;
+    let snapshot = store.requirement_resource_snapshot(scope, id)?;
     Ok(RequirementResource {
-        record,
-        edit: store.requirement_edit_state(scope, id)?,
-        decision: store.requirement_decision_state(scope, id)?,
+        record: snapshot.record,
+        edit: snapshot.edit,
+        decision: snapshot.decision,
     })
 }
 
@@ -248,15 +245,101 @@ decision!(
     review::SubmitRequirementReview,
     submit_requirement_review
 );
-decision!(
+
+#[derive(Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct DecideRequirementReviewRequest {
+    pub scope_id: ScopeId,
+    pub requirement_id: StableId,
+    pub request_id: StableId,
+    pub actor: DispositionActor,
+    pub proposal_id: StableId,
+    pub disposition_id: StableId,
+    pub decision: DispositionDecision,
+    pub rationale: String,
+    pub canonical_artifact: Option<CanonicalArtifact>,
+    pub feedback: Option<review::ReviewFeedback>,
+    pub declared_by: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct WithdrawRequirementReviewRequest {
+    pub scope_id: ScopeId,
+    pub requirement_id: StableId,
+    pub request_id: StableId,
+    pub actor: String,
+    pub proposal_id: StableId,
+    pub declared_by: Option<String>,
+    pub reason: Option<String>,
+}
+
+macro_rules! addressed_decision {
+    ($name:ident, $wire:literal, $request:ty, $input:ty, $method:ident, $convert:expr) => {
+        pub struct $name;
+        impl Operation for $name {
+            type Request = $request;
+            type Success = CycleEntry;
+            type Failure = WriteError;
+            const NAME: &'static str = $wire;
+            const MUTATES: bool = true;
+            const CONTEXT: ContextKind = ContextKind::Scope;
+            const FAILURE_STATUSES: &'static [u16] = &[409];
+            fn needs(_: &Self::Request) -> ExecutionNeeds {
+                &[ExecutionNeed::GraphStorage]
+            }
+            fn failure_status(error: &WriteError) -> u16 {
+                error.status()
+            }
+            fn run(
+                context: PreparedContext,
+                request: Self::Request,
+            ) -> OperationFuture<Self::Success, Self::Failure> {
+                Box::pin(async move {
+                    let context = context.scope()?;
+                    let requirement_id = request.requirement_id.clone();
+                    let input: $input = ($convert)(request);
+                    Ok(StateStore::new(ProvenanceLayout::new(context.root))
+                        .$method(&requirement_id, input)?)
+                })
+            }
+        }
+    };
+}
+
+addressed_decision!(
     DecideRequirementReviewV2,
     "decide-requirement-review-v2",
+    DecideRequirementReviewRequest,
     review::DecideRequirementReview,
-    decide_requirement_review
+    decide_requirement_review_for,
+    |request: DecideRequirementReviewRequest| review::DecideRequirementReview {
+        scope_id: request.scope_id,
+        request_id: request.request_id,
+        actor: request.actor,
+        proposal_id: request.proposal_id,
+        disposition_id: request.disposition_id,
+        decision: request.decision,
+        rationale: request.rationale,
+        canonical_artifact: request.canonical_artifact,
+        feedback: request.feedback,
+        declared_by: request.declared_by,
+    }
 );
-decision!(
+addressed_decision!(
     WithdrawRequirementReviewV2,
     "withdraw-requirement-review-v2",
+    WithdrawRequirementReviewRequest,
     review::WithdrawRequirementReview,
-    withdraw_requirement_review
+    withdraw_requirement_review_for,
+    |request: WithdrawRequirementReviewRequest| review::WithdrawRequirementReview {
+        scope_id: request.scope_id,
+        request_id: request.request_id,
+        actor: request.actor,
+        proposal_id: request.proposal_id,
+        declared_by: request.declared_by,
+        reason: request.reason,
+    }
 );

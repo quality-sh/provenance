@@ -201,6 +201,8 @@ fn path_field<'a>(name: &'a str, backing: &str) -> &'a str {
         && matches!(
             backing,
             "submit-requirement-review-v2"
+                | "decide-requirement-review-v2"
+                | "withdraw-requirement-review-v2"
                 | "review-history-v2"
                 | "review-history-entry-v2"
                 | "review-evidence-v2"

@@ -94,7 +94,6 @@ pub async fn invoke(
         .invoke_backing(matched.definition.name, backing, call)
         .await?;
     response::select_addressed(&mut value, &matched.definition, &matched.path)?;
-    response::paginate(&mut value, &matched.definition, &query, query_name)?;
     let mut value = response::success(value, matched.definition.response_kind, query_name);
     response::select_page_member(&mut value, &matched.definition, &matched.path)?;
     let etag = value

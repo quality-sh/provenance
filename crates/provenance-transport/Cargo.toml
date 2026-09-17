@@ -13,7 +13,7 @@ publish.workspace = true
 workspace = true
 
 [features]
-test-fixture = ["dep:tempfile"]
+test-fixture = ["dep:tempfile", "provenance-store/test-fixture"]
 
 [dependencies]
 tempfile = { workspace = true, optional = true }

@@ -1,4 +1,3 @@
-use super::invalid;
 use provenance_core::protocol::{failure::ErasedFailure, read_failure::ReadFailure};
 use provenance_store::operations::catalog::{Definition, ResponseKind};
 use serde_json::{json, Map, Value};
@@ -44,60 +43,6 @@ pub fn select_addressed(
         .ok_or_else(|| not_found(definition))?;
     *value = found;
     Ok(())
-}
-
-pub fn paginate(
-    value: &mut Value,
-    definition: &Definition,
-    query: &BTreeMap<String, String>,
-    query_name: Option<&str>,
-) -> Result<(), ErasedFailure> {
-    if query_name.is_some()
-        || definition.response_kind != ResponseKind::Items
-        || !definition.backing.starts_with("list-")
-        || !query
-            .keys()
-            .any(|name| matches!(name.as_str(), "limit" | "cursor"))
-    {
-        return Ok(());
-    }
-    let limit = query
-        .get("limit")
-        .map_or(Ok(50), |raw| raw.parse::<usize>())
-        .map_err(|_| invalid(Some("limit")))?;
-    if !(1..=200).contains(&limit) {
-        return Err(invalid(Some("limit")));
-    }
-    let offset = query
-        .get("cursor")
-        .map_or(Ok(0), |cursor| decode_cursor(definition, cursor))?;
-    let entries = value.as_array().ok_or_else(|| invalid(None))?;
-    if offset > entries.len() {
-        return Err(invalid(Some("cursor")));
-    }
-    let end = offset.saturating_add(limit).min(entries.len());
-    let items = entries[offset..end].to_vec();
-    let has_more = end < entries.len();
-    let next_cursor = has_more.then(|| encode_cursor(definition, end));
-    *value = json!({
-        "items": items,
-        "limit": limit,
-        "has_more": has_more,
-        "next_cursor": next_cursor,
-    });
-    Ok(())
-}
-
-fn encode_cursor(definition: &Definition, offset: usize) -> String {
-    format!("list:{}:{offset}", definition.operation_id)
-}
-
-fn decode_cursor(definition: &Definition, cursor: &str) -> Result<usize, ErasedFailure> {
-    let prefix = format!("list:{}:", definition.operation_id);
-    cursor
-        .strip_prefix(&prefix)
-        .and_then(|offset| offset.parse().ok())
-        .ok_or_else(|| invalid(Some("cursor")))
 }
 
 pub fn select_page_member(

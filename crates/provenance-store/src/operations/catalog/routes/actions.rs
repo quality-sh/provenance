@@ -71,7 +71,7 @@ pub(super) fn register(out: &mut Vec<Definition>) {
             "/requirements/{id}/submissions/{proposal_id}/decide",
             "decide-requirement-review-v2",
             "Decide one Requirement review submission.",
-            &["scope_id", "request_id", "proposal_id"][..],
+            &["scope_id", "requirement_id", "request_id", "proposal_id"][..],
         ),
         (
             "withdraw-requirement-review",
@@ -79,7 +79,7 @@ pub(super) fn register(out: &mut Vec<Definition>) {
             "/requirements/{id}/submissions/{proposal_id}/withdraw",
             "withdraw-requirement-review-v2",
             "Withdraw one Requirement review submission.",
-            &["scope_id", "request_id", "proposal_id"][..],
+            &["scope_id", "requirement_id", "request_id", "proposal_id"][..],
         ),
         (
             "begin-verification",

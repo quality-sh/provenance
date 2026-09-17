@@ -201,6 +201,8 @@ macro_rules! resource {
         }
         let backing = if verification {
             $plural
+        } else if searchable {
+            concat!("page-", $plural, "-v2")
         } else {
             concat!("list-", $plural)
         };

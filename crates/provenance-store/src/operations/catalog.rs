@@ -17,6 +17,7 @@ mod ideation;
 mod invoke;
 mod records;
 mod resource_lists;
+mod resource_pages;
 #[cfg(feature = "schema")]
 mod routes;
 #[cfg(feature = "schema")]

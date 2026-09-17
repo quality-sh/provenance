@@ -146,6 +146,14 @@ impl CycleFacts {
             .any(|e| e.fact == CycleFact::Decided && e.proposal_id == *proposal)
     }
 
+    pub(super) fn submission_requirement(&self, proposal: &StableId) -> anyhow::Result<&StableId> {
+        self.entries
+            .iter()
+            .find(|entry| entry.fact == CycleFact::Submitted && entry.proposal_id == *proposal)
+            .map(|entry| &entry.requirement_id)
+            .ok_or_else(|| anyhow::anyhow!("the proposal has no review submission cycle entry"))
+    }
+
     /// The feedback Message a decision published, if it did.
     pub(super) fn feedback_for(&self, disposition: &StableId) -> Option<StableId> {
         self.entries.iter().find_map(|e| {
