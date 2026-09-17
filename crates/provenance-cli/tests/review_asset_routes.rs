@@ -1,5 +1,7 @@
 use std::{
-    io::{BufRead, BufReader, Read},
+    collections::BTreeMap,
+    io::{BufRead, BufReader, Cursor, Read, Write},
+    net::TcpStream,
     process::{Child, Command, Stdio},
     sync::mpsc,
     time::Duration,
@@ -64,9 +66,6 @@ fn accepted_inventory_uses_the_composed_router_and_origin_checks() {
     .unwrap();
     let (_host, config) = start(repo.path());
     let endpoint = config["endpoint"].as_str().unwrap();
-    let agent = ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(5))
-        .build();
     for (path, expected) in ASSETS.iter().copied().chain(std::iter::once((
         "/",
         ASSETS
@@ -76,8 +75,7 @@ fn accepted_inventory_uses_the_composed_router_and_origin_checks() {
             .1,
     ))) {
         for method in ["GET", "HEAD"] {
-            let url = format!("{endpoint}{path}");
-            let reply = response(agent.request(method, &url).call());
+            let reply = request(endpoint, method, path, &[], &[]);
             assert_eq!(reply.status(), 200, "{method} {path}");
             assert_eq!(
                 reply.header("Content-Length").unwrap(),
@@ -98,7 +96,7 @@ fn accepted_inventory_uses_the_composed_router_and_origin_checks() {
                 ("Sec-Fetch-Site", "cross-site"),
             ] {
                 assert_eq!(
-                    response(agent.request(method, &url).set(header, value).call()).status(),
+                    request(endpoint, method, path, &[(header, value)], &[]).status(),
                     403,
                     "{method} {path} {header}"
                 );
@@ -111,29 +109,103 @@ fn accepted_inventory_uses_the_composed_router_and_origin_checks() {
         "/assets/missing.js",
     ] {
         assert_eq!(
-            response(agent.get(&format!("{endpoint}{path}")).call()).status(),
+            request(endpoint, "GET", path, &[], &[]).status(),
             404,
             "{path}"
         );
     }
     assert_eq!(
-        response(agent.get(&format!("{endpoint}/review-config")).call()).status(),
+        request(endpoint, "GET", "/review-config", &[], &[]).status(),
         401
     );
     assert_eq!(
-        response(
-            agent
-                .get(&format!("{endpoint}/discussion-containers"))
-                .send_string("invalid")
-        )
-        .status(),
+        request(endpoint, "GET", "/discussion-containers", &[], b"invalid").status(),
         401
     );
 }
 
-fn response(result: Result<ureq::Response, ureq::Error>) -> ureq::Response {
-    match result {
-        Ok(response) | Err(ureq::Error::Status(_, response)) => response,
-        Err(error) => panic!("{error}"),
+struct WireResponse {
+    status: u16,
+    headers: BTreeMap<String, String>,
+    body: Vec<u8>,
+}
+
+impl WireResponse {
+    fn status(&self) -> u16 {
+        self.status
+    }
+
+    fn header(&self, name: &str) -> Option<&str> {
+        self.headers
+            .get(&name.to_ascii_lowercase())
+            .map(String::as_str)
+    }
+
+    fn into_reader(self) -> Cursor<Vec<u8>> {
+        Cursor::new(self.body)
+    }
+}
+
+fn request(
+    endpoint: &str,
+    method: &str,
+    path: &str,
+    headers: &[(&str, &str)],
+    body: &[u8],
+) -> WireResponse {
+    let authority = endpoint.strip_prefix("http://").unwrap();
+    let mut stream = TcpStream::connect(authority).unwrap();
+    stream
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .unwrap();
+    stream
+        .set_write_timeout(Some(Duration::from_secs(5)))
+        .unwrap();
+
+    write!(stream, "{method} {path} HTTP/1.1\r\n").unwrap();
+    if !headers
+        .iter()
+        .any(|(name, _)| name.eq_ignore_ascii_case("Host"))
+    {
+        write!(stream, "Host: {authority}\r\n").unwrap();
+    }
+    write!(
+        stream,
+        "Connection: close\r\nContent-Length: {}\r\n",
+        body.len()
+    )
+    .unwrap();
+    for (name, value) in headers {
+        write!(stream, "{name}: {value}\r\n").unwrap();
+    }
+    stream.write_all(b"\r\n").unwrap();
+    stream.write_all(body).unwrap();
+
+    let mut response = Vec::new();
+    stream.read_to_end(&mut response).unwrap();
+    let header_end = response
+        .windows(4)
+        .position(|window| window == b"\r\n\r\n")
+        .unwrap();
+    let head = std::str::from_utf8(&response[..header_end]).unwrap();
+    let mut lines = head.split("\r\n");
+    let status = lines
+        .next()
+        .unwrap()
+        .split_whitespace()
+        .nth(1)
+        .unwrap()
+        .parse()
+        .unwrap();
+    let headers = lines
+        .map(|line| {
+            let (name, value) = line.split_once(':').unwrap();
+            (name.to_ascii_lowercase(), value.trim().to_owned())
+        })
+        .collect();
+    WireResponse {
+        status,
+        headers,
+        body: response[(header_end + 4)..].to_vec(),
     }
 }
