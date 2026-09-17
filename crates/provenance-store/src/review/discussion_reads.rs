@@ -21,6 +21,19 @@ pub async fn read_discussions(
     crate::operations::queries::page::checked("review-discussions", answer)
 }
 
+pub async fn read_discussion(
+    repo: &Utf8Path,
+    scope: &ScopeId,
+    policy: ReadPolicy,
+    parent: ThreadParent,
+    discussion_id: StableId,
+) -> anyhow::Result<Stamped<DiscussionGroup>> {
+    reader::answer(repo, scope, policy, move |ctx| {
+        Box::pin(group(ctx, parent, discussion_id))
+    })
+    .await
+}
+
 pub(super) fn check_limit(limit: usize) -> anyhow::Result<()> {
     anyhow::ensure!(
         (1..=200).contains(&limit),
@@ -137,5 +150,40 @@ async fn groups(ctx: &ReadContext, query: DiscussionQuery) -> anyhow::Result<Dis
     Ok(DiscussionPage {
         entries,
         next_cursor: None,
+    })
+}
+
+async fn group(
+    ctx: &ReadContext,
+    parent: ThreadParent,
+    discussion_id: StableId,
+) -> anyhow::Result<DiscussionGroup> {
+    ctx.snapshot().bound_page_work().await?;
+    check_parent(ctx, &parent).await?;
+    for family in ["review_journal", "threads"] {
+        ctx.snapshot().attest(family);
+    }
+    let mut tx = ctx.snapshot().connection().await;
+    let row: Option<(String, String, i64)> = sqlx::query_as(
+        "SELECT j.payload,t.status,length(CAST(j.payload AS BLOB)) \
+         FROM review_journal j \
+         JOIN threads t ON t.scope_id=j.scope_id AND t.id=j.thread_id \
+         WHERE j.scope_id=? AND j.parent_type=? AND j.parent_id=? AND j.discussion_id=? \
+         ORDER BY j.version DESC LIMIT 1",
+    )
+    .bind(ctx.snapshot().scope().as_str())
+    .bind(super::discussion_state::discussion_kind_word(parent.node_type))
+    .bind(parent.node_id.as_str())
+    .bind(discussion_id.as_str())
+    .fetch_optional(&mut **tx)
+    .await?;
+    drop(tx);
+    let (payload, status, size) = row.ok_or(ReadFailure::ResourceNotFound)?;
+    if size > i64::try_from(RECORD_BYTES)? {
+        return Err(ReadFailure::PageRecordTooLarge.into());
+    }
+    Ok(DiscussionGroup::Addressed {
+        discussion: Box::new(serde_json::from_str::<DiscussionEntry>(&payload)?),
+        container_status: serde_json::from_value(serde_json::Value::String(status))?,
     })
 }

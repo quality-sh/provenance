@@ -280,6 +280,8 @@ fn discussions(out: &mut Vec<Definition>, parent: &'static str) {
         let member_message = name == "get-discussion-message";
         let backing = if member_message {
             "review-discussion-message-v2"
+        } else if name == "get-discussion" {
+            "review-discussion-v2"
         } else {
             backing
         };
@@ -301,6 +303,12 @@ fn discussions(out: &mut Vec<Definition>, parent: &'static str) {
                 field: "selector",
             });
         }
+        if name == "get-discussion" {
+            definition.registration.request.path.push(PathBinding {
+                parameter: "discussion_id",
+                field: "discussion_id",
+            });
+        }
         if member_message {
             definition.registration.request.path.push(PathBinding {
                 parameter: "message_id",
@@ -309,12 +317,6 @@ fn discussions(out: &mut Vec<Definition>, parent: &'static str) {
         }
         if matches!(name, "list-discussions" | "list-discussion-messages") {
             definition = definition.items_field("entries").pagination();
-        }
-        if name == "get-discussion" {
-            definition = definition.response_selection(ResponseSelection::PageMember {
-                id_parameter: "discussion_id",
-                id_pointer: "/discussion/discussion_id",
-            });
         }
         if name == "get-discussion" {
             definition.success_schema = schema::response_envelope(

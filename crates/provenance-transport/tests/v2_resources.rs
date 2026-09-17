@@ -157,6 +157,47 @@ async fn all_addressed_discussion_routes_work_for_questions() {
 }
 
 #[tokio::test]
+async fn a_discussion_member_read_is_addressed_beyond_the_first_list_page() {
+    let repo = Repository::new("The shared graph is readable.");
+    repo.all_kinds();
+    let host = host(&repo, true);
+    let parent = "/sources/source_shared/discussions";
+    let mut ids = Vec::new();
+
+    for index in 0..51 {
+        let (status, started) = call_with_headers(
+            &host,
+            "POST",
+            parent,
+            Some(json!({"data":{
+                "actor":"reviewer", "declared_by":null,
+                "role":"user", "body":format!("Discussion {index}.")
+            }})),
+            &[("idempotency-key", &format!("discussion_{index}"))],
+        )
+        .await;
+        assert_eq!(status, 200, "{started}");
+        ids.push(
+            started["data"]["discussion_id"]
+                .as_str()
+                .unwrap()
+                .to_owned(),
+        );
+    }
+
+    let discussion_id = ids.into_iter().max().unwrap();
+    let (status, read) = call(
+        &host,
+        "GET",
+        &format!("{parent}/{discussion_id}"),
+        None,
+    )
+    .await;
+    assert_eq!(status, 200, "{read}");
+    assert_eq!(read["data"]["discussion"]["discussion_id"], discussion_id);
+}
+
+#[tokio::test]
 async fn draft_patch_refuses_missing_resources() {
     let repo = Repository::new("The shared graph is readable.");
     let host = host(&repo, true);

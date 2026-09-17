@@ -28,9 +28,11 @@ mod scoped_list;
 mod statement;
 mod updates;
 mod v2_review;
+mod v2_discussion_reads;
 mod v2_review_reads;
 pub use updates::*;
 pub use v2_review::*;
+pub use v2_discussion_reads::*;
 pub use v2_review_reads::*;
 
 pub use authoring::{Apply, BeginVerification, CompleteVerification, Plan};
