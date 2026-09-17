@@ -22,7 +22,7 @@ fn request_validator(operation: &str) -> jsonschema::JSONSchema {
         .iter()
         .find(|entry| entry.name == operation)
         .unwrap();
-    compiled(definition.request_schema.as_ref().unwrap())
+    compiled(definition.request_schema().unwrap())
 }
 
 fn round_trip<T: JsonSchema + DeserializeOwned + Serialize>(value: &Value) {
@@ -172,7 +172,7 @@ fn list_routes_have_no_request_body() {
             .iter()
             .find(|entry| entry.name == operation)
             .unwrap();
-        assert!(definition.request_schema.is_none(), "{operation}");
+        assert!(definition.request_schema().is_none(), "{operation}");
     }
 }
 
@@ -185,12 +185,13 @@ fn list_results_use_the_shared_items_envelope() {
         "list-proposal-assertions",
     ] {
         let definition = definitions.iter().find(|entry| entry.name == name).unwrap();
-        assert_eq!(definition.success_schema["type"], "object", "{name}");
+        let success_schema = definition.success_schema();
+        assert_eq!(success_schema["type"], "object", "{name}");
         assert_eq!(
-            definition.success_schema["properties"]["data"]["required"],
+            success_schema["properties"]["data"]["required"],
             json!(["items"])
         );
-        assert!(!definition.mutates, "{name}");
+        assert!(!definition.mutates(), "{name}");
         let output = definition.mcp_output_schema();
         assert_eq!(output["type"], "object");
         assert_eq!(
@@ -204,6 +205,6 @@ fn list_results_use_the_shared_items_envelope() {
         "create-proposal-disposition",
     ] {
         let definition = definitions.iter().find(|entry| entry.name == name).unwrap();
-        assert!(definition.mutates, "{name}");
+        assert!(definition.mutates(), "{name}");
     }
 }

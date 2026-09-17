@@ -63,7 +63,7 @@ async fn dispatch_refuses_incompatible_versions_before_decoding() {
 #[test]
 fn mcp_schema_resolves_definitions_at_the_document_root() {
     let definition = super::definitions()
-        .into_iter()
+        .iter()
         .find(|entry| entry.name == "check-statement")
         .unwrap();
     let schema = definition.mcp_input_schema();
@@ -161,7 +161,7 @@ async fn declared_handler_fields_cannot_disappear_during_erasure() {
 #[test]
 fn resource_operations_have_unique_registered_contracts() {
     let names: Vec<_> = super::definitions()
-        .into_iter()
+        .iter()
         .map(|entry| entry.name)
         .collect();
     let unique = names
@@ -188,7 +188,7 @@ fn resource_operations_have_unique_registered_contracts() {
 #[test]
 fn query_registrations_keep_typed_scalar_parameters() {
     let definition = super::definitions()
-        .into_iter()
+        .iter()
         .find(|definition| definition.name == "list-rules")
         .unwrap();
     let stale = definition
@@ -209,7 +209,7 @@ fn query_registrations_keep_typed_scalar_parameters() {
         base.schema
     );
     let member = super::definitions()
-        .into_iter()
+        .iter()
         .find(|definition| definition.name == "get-rule")
         .unwrap();
     let trace = member
@@ -275,9 +275,11 @@ fn data_free_failure_schema_does_not_advertise_read_refusals() {
         .to_string()
         .contains("no_projection"));
     assert!(!statement.http_statuses.contains(&409));
+    assert!(statement.http_statuses.contains(&405));
     let get = super::schema::raw_definition::<super::Get>();
     assert!(get.failure_schema.to_string().contains("no_projection"));
     assert!(get.http_statuses.contains(&409));
+    assert!(get.http_statuses.contains(&405));
 }
 
 #[cfg(feature = "schema")]
@@ -295,13 +297,14 @@ fn every_discussion_message_member_schema_accepts_one_message() {
         },
         "meta": {}
     });
-    for definition in super::definitions().into_iter().filter(|definition| {
+    for definition in super::definitions().iter().filter(|definition| {
         definition.name.ends_with("get-discussion-message")
             || definition.name.ends_with("get-legacy-message")
     }) {
+        let success_schema = definition.success_schema();
         let validator = jsonschema::JSONSchema::options()
             .with_draft(jsonschema::Draft::Draft202012)
-            .compile(&definition.success_schema)
+            .compile(&success_schema)
             .unwrap();
         assert!(
             validator.is_valid(&message),

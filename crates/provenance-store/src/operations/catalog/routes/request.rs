@@ -2,7 +2,7 @@ use crate::operations::catalog::{RequestAdapter, RequestAdapterError, RequestBin
 use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
 
-pub(crate) const DIRECT: RequestAdapter = RequestAdapter {
+pub const DIRECT: RequestAdapter = RequestAdapter {
     object: true,
     adapt: direct,
 };
@@ -27,7 +27,8 @@ pub(super) const DISCUSSION_STATUS: RequestAdapter = RequestAdapter {
     adapt: discussion_status,
 };
 
-fn direct(
+#[allow(clippy::unnecessary_wraps)]
+const fn direct(
     _: &RequestBinding,
     value: Value,
     _: &BTreeMap<String, String>,
@@ -35,6 +36,7 @@ fn direct(
     Ok(value)
 }
 
+#[allow(clippy::unnecessary_wraps)]
 fn null(
     _: &RequestBinding,
     _: Value,

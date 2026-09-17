@@ -24,7 +24,7 @@ const requestEnvelope = data => ({
 function operation(path, method, overrides = {}) {
   const mutates = overrides['x-operation-mutates'] ?? method !== 'get';
   const statuses = overrides.statuses
-    ?? [400, 401, 403, 404, ...(mutates ? [409] : []), 500, 503];
+    ?? [400, 401, 403, 404, 405, ...(mutates ? [409] : []), 500, 503];
   const parameters = path.match(/\{([a-z0-9_]+)\}/g)?.map(part => ({
     name: part.slice(1, -1), in: 'path', required: true, schema: { type: 'string' },
   })) ?? [];
@@ -175,7 +175,7 @@ test('mutating GETs, implicit POSTs, and read PATCHes are rejected', () => {
 
 test('missing failure statuses are rejected', () => {
   assert.ok(errorsFor('/requirements/{id}', 'get', { statuses: [400, 500] }).some(error => /base status 401 is not declared/.test(error)));
-  assert.ok(errorsFor('/requirements', 'post', { statuses: [400, 401, 403, 404, 500, 503] }).some(error => /must declare 409/.test(error)));
+  assert.ok(errorsFor('/requirements', 'post', { statuses: [400, 401, 403, 404, 405, 500, 503] }).some(error => /must declare 409/.test(error)));
 });
 
 test('declared statuses cover every live failure variant status', () => {
@@ -192,6 +192,20 @@ test('declared statuses cover every live failure variant status', () => {
   };
   delete doc.paths['/requirements/{id}'].get.responses['503'];
   assert.ok(documentGrammarErrors(doc).some(error => /file_unavailable.*503|503.*file_unavailable/.test(error)));
+});
+
+test('method errors have the declared envelope status', () => {
+  const doc = document([{ path: '/requirements/{id}', method: 'get' }]);
+  doc.paths['/requirements/{id}'].get.responses['400'].content['application/json'].schema = {
+    ...failureEnvelope,
+    properties: {
+      ...failureEnvelope.properties,
+      error: { properties: { kind: { const: 'method_not_allowed' } } },
+    },
+  };
+  assert.deepEqual(documentGrammarErrors(doc), []);
+  delete doc.paths['/requirements/{id}'].get.responses['405'];
+  assert.ok(documentGrammarErrors(doc).some(error => /method_not_allowed.*405|405.*method_not_allowed/.test(error)));
 });
 
 test('a single-message read never ships the items envelope', () => {

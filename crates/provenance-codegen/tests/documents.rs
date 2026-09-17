@@ -140,6 +140,9 @@ fn metadata_is_the_only_compatibility_advertisement() {
     let (openapi, _) = provenance_codegen::documents();
     assert!(openapi.get("x-protocol-version").is_none());
     assert!(openapi.get("x-provenance-compatibility").is_none());
+    assert!(operation(&openapi, "/metadata", "get")["responses"]
+        .get("405")
+        .is_some());
     let reference = operation(&openapi, "/metadata", "get")["responses"]["200"]["content"]
         ["application/json"]["schema"]["$ref"]
         .as_str()

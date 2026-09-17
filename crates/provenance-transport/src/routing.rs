@@ -87,10 +87,10 @@ pub async fn invoke(
     if !host.advertises(matched.definition.name) {
         return Err(ErasedFailure::new(None, OperationFailure::AccessDenied));
     }
-    identity::reject(&data, &matched.path, &matched.definition)?;
+    identity::reject(&data, &matched.path, matched.definition)?;
     let identity = host.bound_identity();
     let bound = request::bind(
-        &matched.definition,
+        matched.definition,
         &matched.path,
         data,
         &query,
@@ -103,11 +103,11 @@ pub async fn invoke(
         .await?;
     response::select(
         &mut value,
-        &matched.definition,
+        matched.definition,
         &bound.response,
         &matched.path,
     )?;
-    let value = response::success(value, &matched.definition, &bound.response)?;
+    let value = response::success(value, matched.definition, &bound.response)?;
     let etag = matched
         .definition
         .registration

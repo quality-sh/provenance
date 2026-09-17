@@ -25,7 +25,7 @@ impl ServerHandler for StatementHost {
         _: RequestContext<RoleServer>,
     ) -> impl Future<Output = Result<ListToolsResult, ErrorData>> + '_ {
         let tools = catalog::definitions()
-            .into_iter()
+            .iter()
             .filter(|definition| self.advertises(definition.name))
             .map(|definition| {
                 let mut tool = Tool::new(
@@ -56,7 +56,7 @@ impl ServerHandler for StatementHost {
         _: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
         let Some(definition) = catalog::definitions()
-            .into_iter()
+            .iter()
             .find(|d| d.name == request.name)
         else {
             return Err(ErrorData::new(

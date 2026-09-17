@@ -21,7 +21,7 @@ const ACTIONS = new Set([
 const QUERIES = new Set([
   'search', 'stale', 'impact', 'trace', 'neighbors', 'resolve-symbol',
 ]);
-const BASE_STATUSES = [400, 401, 403, 404, 500, 503];
+const BASE_STATUSES = [400, 401, 403, 404, 405, 500, 503];
 
 // Edge vocabulary: names that describe a relationship, never a resource.
 const EDGE_SEGMENTS = new Set([
@@ -265,7 +265,8 @@ export function routeGrammarErrors(document) {
 const FAILURE_STATUS = new Map([
   ['invalid_input', 400], ['protocol_mismatch', 400],
   ['unknown_operation', 404], ['unknown_target', 404], ['unknown_scope', 404],
-  ['unauthenticated', 401], ['access_denied', 403], ['unavailable_needs', 503], ['internal', 500],
+  ['unauthenticated', 401], ['access_denied', 403], ['method_not_allowed', 405],
+  ['unavailable_needs', 503], ['internal', 500],
   ['resource_not_found', 404], ['read_failed', 500], ['file_access_denied', 403],
   ['file_unavailable', 503], ['git_unavailable', 503],
   ['cursor_invalid', 409], ['cursor_revision_changed', 409], ['page_budget_exceeded', 409],

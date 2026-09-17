@@ -41,12 +41,11 @@ async fn call(
     if let Some(key) = key {
         request = request.header("idempotency-key", key);
     }
-    let body = if let Some(value) = body {
+    let has_body = body.is_some();
+    let body = body.map_or_else(Body::empty, |value| Body::from(value.to_string()));
+    if has_body {
         request = request.header("content-type", "application/json");
-        Body::from(value.to_string())
-    } else {
-        Body::empty()
-    };
+    }
     let response = host
         .router()
         .oneshot(request.body(body).unwrap())

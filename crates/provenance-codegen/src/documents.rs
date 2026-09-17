@@ -188,7 +188,7 @@ fn add_metadata(paths: &mut Map<String, Value>, schemas: &mut Map<String, Value>
         "200".into(),
         json!({"description":"Operation result","content":{"application/json":{"schema":success}}}),
     );
-    for status in [400, 401, 403, 404, 409, 500, 503] {
+    for status in [400, 401, 403, 404, 405, 409, 500, 503] {
         responses.insert(status.to_string(), json!({"description":"Operation failed or was refused","content":{"application/json":{"schema":failure}}}));
     }
     paths.insert(

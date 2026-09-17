@@ -253,6 +253,16 @@ fn discussions(out: &mut Vec<Definition>, plural: &'static str, kind: &'static s
         .with_etag("/version", true),
     );
 
+    discussion_messages(out, plural, kind, member);
+    legacy_messages(out, plural, kind);
+}
+
+fn discussion_messages(
+    out: &mut Vec<Definition>,
+    plural: &'static str,
+    kind: &'static str,
+    member: &'static str,
+) {
     let messages = leaked(format!("{member}/messages"));
     out.push(
         discussion_route::<operation::ReviewDiscussionMessagesV2>(
@@ -321,7 +331,6 @@ fn discussions(out: &mut Vec<Definition>, plural: &'static str, kind: &'static s
         })
         .result(),
     );
-    legacy_messages(out, plural, kind);
 }
 
 fn legacy_messages(out: &mut Vec<Definition>, plural: &'static str, kind: &'static str) {

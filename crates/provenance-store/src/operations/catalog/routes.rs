@@ -184,7 +184,7 @@ impl Definition {
         self
     }
 
-    fn with_etag(mut self, pointer: &'static str, numeric: bool) -> Self {
+    const fn with_etag(mut self, pointer: &'static str, numeric: bool) -> Self {
         self.registration.controls.etag = Some(EtagBinding { pointer, numeric });
         self
     }

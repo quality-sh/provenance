@@ -39,9 +39,11 @@ pub enum SelectorBinding {
 #[derive(Clone, Copy)]
 pub struct RequestAdapter {
     pub object: bool,
-    pub adapt:
-        fn(&RequestBinding, Value, &BTreeMap<String, String>) -> Result<Value, RequestAdapterError>,
+    pub adapt: RequestAdapterFn,
 }
+
+pub type RequestAdapterFn =
+    fn(&RequestBinding, Value, &BTreeMap<String, String>) -> Result<Value, RequestAdapterError>;
 
 #[derive(Clone, Copy, Debug)]
 pub struct RequestAdapterError {
@@ -160,7 +162,7 @@ pub enum ResponseAdapter {
 }
 
 impl ResponseBinding {
-    pub fn direct(kind: ResponseKind, raw_schema: Value, schema: Value) -> Self {
+    pub const fn direct(kind: ResponseKind, raw_schema: Value, schema: Value) -> Self {
         Self {
             kind,
             selection: ResponseSelection::Direct,

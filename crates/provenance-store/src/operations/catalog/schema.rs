@@ -67,10 +67,10 @@ impl Definition {
     pub fn http_statuses(&self) -> &[u16] {
         &self.registration.handler.http_statuses
     }
-    pub fn request_schema(&self) -> Option<&Value> {
+    pub const fn request_schema(&self) -> Option<&Value> {
         self.registration.request.schema.as_ref()
     }
-    pub fn failure_schema(&self) -> &Value {
+    pub const fn failure_schema(&self) -> &Value {
         &self.registration.handler.failure_schema
     }
     pub fn success_schema(&self) -> Value {
@@ -190,7 +190,7 @@ pub(super) fn raw_definition<O: Operation>() -> RawDefinition {
 }
 
 fn statuses(mutates: bool, declared: &[u16]) -> Vec<u16> {
-    [400, 401, 403, 404, 500, 503]
+    [400, 401, 403, 404, 405, 500, 503]
         .into_iter()
         .chain(mutates.then_some(409))
         .chain(declared.iter().copied())
