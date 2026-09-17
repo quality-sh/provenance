@@ -185,7 +185,7 @@ async fn requirement_get_pairs_content_with_the_etag_from_one_publication_snapsh
                 ("if-match", &writer_etag),
             ],
         ));
-        done_tx.send(()).unwrap();
+        let _ = done_tx.send(());
         result
     });
     let layout = repo.layout.clone();

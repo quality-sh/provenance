@@ -1,9 +1,18 @@
-use super::{identity, invalid};
+use super::invalid;
 use axum::http::HeaderMap;
 use provenance_core::protocol::failure::ErasedFailure;
-use provenance_store::operations::catalog::{Definition, ResponseKind};
+use provenance_store::operations::catalog::{
+    self, BodyBinding, Definition, HandlerBinding, Parameter, QueryRoute, ResponseBinding,
+    SelectorBinding,
+};
 use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
+
+pub struct BoundRequest {
+    pub data: Value,
+    pub handler: HandlerBinding,
+    pub response: ResponseBinding,
+}
 
 pub fn query(raw: Option<&str>) -> Result<BTreeMap<String, String>, ErasedFailure> {
     url::form_urlencoded::parse(raw.unwrap_or_default().as_bytes()).try_fold(
@@ -36,275 +45,238 @@ pub fn decode_body(bytes: &[u8], expects_body: bool) -> Result<Value, ErasedFail
     Ok(object["data"].clone())
 }
 
-pub fn validate_query(
+pub fn bind(
     definition: &Definition,
+    path: &BTreeMap<String, String>,
+    mut data: Value,
     query: &BTreeMap<String, String>,
-) -> Result<(), ErasedFailure> {
-    for name in query.keys() {
-        if !definition
-            .parameters
-            .iter()
-            .any(|parameter| parameter.location == "query" && parameter.name == name)
-        {
-            return Err(invalid(Some(name)));
+    headers: &HeaderMap,
+    scope: Option<&str>,
+) -> Result<BoundRequest, ErasedFailure> {
+    let selected = selected_query(definition, query)?;
+    let parameters = selected.map_or(definition.registration.request.query.as_slice(), |route| {
+        route.parameters.as_slice()
+    });
+    let parsed_query = parse_query(parameters, query)?;
+    if matches!(definition.registration.request.body, BodyBinding::Null) && selected.is_none() {
+        data = Value::Null;
+    } else if !data.is_object() {
+        data = json!({});
+    }
+    apply_null_clears(definition, &mut data)?;
+    if let Some(object) = data.as_object_mut() {
+        object.extend(parsed_query);
+        bind_path(definition, path, object)?;
+        bind_headers(definition, headers, object)?;
+        if let Some(field) = definition.registration.request.scope_field {
+            object.insert(field.into(), json!(scope.ok_or_else(|| invalid(None))?));
         }
-    }
-    if query.contains_key("query") {
-        return Ok(());
-    }
-    if definition.backing.starts_with("list-") && definition.response_kind == ResponseKind::Items {
-        for name in query.keys() {
-            if !matches!(name.as_str(), "limit" | "cursor") {
-                return Err(invalid(Some(name)));
+        if let Some(route) = selected {
+            if let Some(node_type) = route.request.node_type {
+                let field = if route.request.node_types {
+                    "node_types"
+                } else {
+                    "node_type"
+                };
+                object.insert(
+                    field.into(),
+                    if route.request.node_types {
+                        json!([node_type])
+                    } else {
+                        json!(node_type)
+                    },
+                );
             }
         }
-    } else if definition.backing.starts_with("list-") && !query.is_empty() {
-        return Err(invalid(query.keys().next().map(String::as_str)));
     }
-    Ok(())
+    shape_body(definition, path, &mut data)?;
+    Ok(BoundRequest {
+        data,
+        handler: selected.map_or_else(
+            || definition.registration.handler.clone(),
+            |route| route.handler.clone(),
+        ),
+        response: selected.map_or_else(
+            || definition.registration.response.clone(),
+            |route| route.response.clone(),
+        ),
+    })
 }
 
-pub fn get_request(
-    definition: &Definition,
-    path: &BTreeMap<String, String>,
+fn selected_query<'a>(
+    definition: &'a Definition,
     query: &BTreeMap<String, String>,
-) -> Result<Value, ErasedFailure> {
-    if definition.backing.starts_with("list-") {
-        return Ok(Value::Null);
-    }
-    if definition.backing == "get" {
-        return Ok(json!({"node_type": identity::node_type(definition.path)?, "id":path["id"]}));
-    }
-    let mut value = Map::new();
-    for (name, raw) in query {
-        if name != "query" {
-            value.insert(name.clone(), scalar(raw));
-        }
-    }
-    Ok(Value::Object(value))
-}
-
-pub fn query_request(
-    name: &str,
-    definition: &Definition,
-    path: &BTreeMap<String, String>,
-    query: &BTreeMap<String, String>,
-) -> Result<Value, ErasedFailure> {
-    let mut value = Map::new();
-    for (field, raw) in query {
-        if field != "query" {
-            let parsed = if field == "relations" {
-                Value::Array(raw.split(',').map(|part| json!(part)).collect())
-            } else {
-                scalar(raw)
-            };
-            value.insert(field.clone(), parsed);
-        }
-    }
-    if let Some(id) = path.get("id") {
-        value.insert("id".into(), json!(id));
-    }
-    if name == "search" {
-        value.insert(
-            "node_types".into(),
-            json!([identity::node_type(definition.path)?]),
-        );
-    }
-    if matches!(name, "trace" | "neighbors" | "impact") {
-        value.insert(
-            "node_type".into(),
-            json!(identity::node_type(definition.path)?),
-        );
-    }
-    Ok(Value::Object(value))
-}
-
-fn scalar(raw: &str) -> Value {
-    match raw {
-        "true" => json!(true),
-        "false" => json!(false),
-        _ => raw.parse::<u64>().map_or_else(|_| json!(raw), Value::from),
-    }
-}
-
-pub fn inject_path(
-    data: &mut Value,
-    path: &BTreeMap<String, String>,
-    definition: &Definition,
-) -> Result<(), ErasedFailure> {
-    let Some(object) = data.as_object_mut() else {
-        return Ok(());
+) -> Result<Option<&'a QueryRoute>, ErasedFailure> {
+    let Some(name) = query.get("query") else {
+        return Ok(None);
     };
-    let backing = definition.backing;
-    if is_discussion(backing) {
-        object.insert("parent".into(), parent(definition, path)?);
-    }
-    if backing == "review-discussion-messages-v2" {
-        let selector = if let Some(id) = path.get("discussion_id") {
-            json!({"kind":"discussion","discussion_id":id})
-        } else if let Some(id) = path.get("container_id") {
-            json!({"kind":"legacy","thread_id":id})
-        } else {
-            return Err(invalid(Some("discussion_id")));
-        };
-        object.insert("selector".into(), selector);
-    }
-    for (name, value) in path {
-        if is_discussion(backing)
-            && matches!(
-                name.as_str(),
-                "id" | "discussion_id" | "container_id" | "message_id"
-            )
-        {
+    definition
+        .registration
+        .queries
+        .iter()
+        .find(|route| route.name == name)
+        .map(Some)
+        .ok_or_else(|| invalid(Some("query")))
+}
+
+fn parse_query(
+    parameters: &[Parameter],
+    query: &BTreeMap<String, String>,
+) -> Result<Map<String, Value>, ErasedFailure> {
+    let mut parsed = Map::new();
+    for (name, raw) in query {
+        if name == "query" {
             continue;
         }
-        let field = path_field(name, backing);
-        if backing != "get" {
-            object.insert(field.to_owned(), json!(value));
-        }
+        let parameter = parameters
+            .iter()
+            .find(|parameter| parameter.name == name && parameter.location == "query")
+            .ok_or_else(|| invalid(Some(name)))?;
+        let value =
+            catalog::parse_parameter_value(parameter, raw).map_err(|_| invalid(Some(name)))?;
+        parsed.insert(name.clone(), value);
     }
-    Ok(())
+    Ok(parsed)
 }
 
-fn is_discussion(backing: &str) -> bool {
-    matches!(
-        backing,
-        "review-discussions-v2" | "review-discussion-messages-v2" | "write-discussion-v2"
-    )
-}
-
-fn parent(
-    definition: &Definition,
-    path: &BTreeMap<String, String>,
-) -> Result<Value, ErasedFailure> {
-    let id = path.get("id").ok_or_else(|| invalid(Some("id")))?;
-    let kind = match definition.path.split('/').nth(1).unwrap_or_default() {
-        "sources" => "source",
-        "requirements" => "requirement",
-        "resolutions" => "resolution",
-        "rules" => "rule",
-        "topics" => "topic",
-        "questions" => "question",
-        _ => return Err(invalid(Some("collection"))),
-    };
-    Ok(json!({"node_type":kind,"node_id":id}))
-}
-
-fn path_field<'a>(name: &'a str, backing: &str) -> &'a str {
-    if name == "run_id" {
-        "run"
-    } else if name == "id" && matches!(backing, "create-assertion" | "create-disposition") {
-        "proposal_id"
-    } else if name == "id" && backing == "evidence" {
-        "rule"
-    } else if name == "id"
-        && matches!(
-            backing,
-            "submit-requirement-review-v2"
-                | "decide-requirement-review-v2"
-                | "withdraw-requirement-review-v2"
-                | "review-history-v2"
-                | "review-history-entry-v2"
-                | "review-evidence-v2"
-        )
-    {
-        "requirement_id"
-    } else {
-        name
-    }
-}
-
-pub fn inject_headers(
-    data: &mut Value,
-    definition: &Definition,
-    headers: &HeaderMap,
-) -> Result<(), ErasedFailure> {
+fn apply_null_clears(definition: &Definition, data: &mut Value) -> Result<(), ErasedFailure> {
     let Some(object) = data.as_object_mut() else {
         return Ok(());
     };
-    if let Some(value) = headers.get("Idempotency-Key") {
-        object.insert(
-            "request_id".into(),
-            json!(header(value, "Idempotency-Key")?),
-        );
-    }
-    if definition.backing == "update-requirement-v2" {
-        if let Some(value) = headers.get("If-Match") {
-            object.insert(
-                "expected_etag".into(),
-                json!(header(value, "If-Match")?.trim_matches('"')),
-            );
+    let mut clear = object
+        .remove("clear_fields")
+        .map(|value| {
+            value
+                .as_array()
+                .cloned()
+                .ok_or_else(|| invalid(Some("clear_fields")))
+        })
+        .transpose()?
+        .unwrap_or_default();
+    for binding in &definition.registration.request.null_clears {
+        if object.get(binding.field).is_some_and(Value::is_null) {
+            object.remove(binding.field);
+            let name = json!(binding.clear_name);
+            if !clear.contains(&name) {
+                clear.push(name);
+            }
         }
+    }
+    if !clear.is_empty()
+        || definition.request_schema.as_ref().is_some_and(|schema| {
+            schema
+                .pointer("/properties/data/properties/clear_fields")
+                .is_some()
+        })
+    {
+        object.insert("clear_fields".into(), Value::Array(clear));
     }
     Ok(())
 }
 
-fn header<'a>(
-    value: &'a axum::http::HeaderValue,
-    name: &'static str,
-) -> Result<&'a str, ErasedFailure> {
-    value.to_str().map_err(|_| invalid(Some(name)))
-}
-
-pub fn shape_discussion_action(
-    data: &mut Value,
+fn bind_path(
     definition: &Definition,
     path: &BTreeMap<String, String>,
-    headers: &HeaderMap,
+    object: &mut Map<String, Value>,
 ) -> Result<(), ErasedFailure> {
-    if definition.backing != "write-discussion-v2" {
+    for binding in &definition.registration.request.path {
+        let value = path
+            .get(binding.parameter)
+            .ok_or_else(|| invalid(Some(binding.parameter)))?;
+        object.insert(binding.field.into(), json!(value));
+    }
+    if let Some(binding) = &definition.registration.request.parent {
+        let id = path
+            .get(binding.id_parameter)
+            .ok_or_else(|| invalid(Some(binding.id_parameter)))?;
+        object.insert(
+            binding.field.into(),
+            json!({"node_type":binding.kind,"node_id":id}),
+        );
+    }
+    if let Some(binding) = &definition.registration.request.selector {
+        let (parameter, field, selector) = match binding {
+            SelectorBinding::Discussion { parameter, field } => {
+                (*parameter, *field, "discussion_id")
+            }
+            SelectorBinding::Legacy { parameter, field } => (*parameter, *field, "thread_id"),
+        };
+        let id = path
+            .get(parameter)
+            .ok_or_else(|| invalid(Some(parameter)))?;
+        let kind = if selector == "discussion_id" {
+            "discussion"
+        } else {
+            "legacy"
+        };
+        let mut value = Map::new();
+        value.insert("kind".into(), json!(kind));
+        value.insert(selector.into(), json!(id));
+        object.insert(field.into(), Value::Object(value));
+    }
+    Ok(())
+}
+
+fn bind_headers(
+    definition: &Definition,
+    headers: &HeaderMap,
+    object: &mut Map<String, Value>,
+) -> Result<(), ErasedFailure> {
+    for binding in &definition.registration.controls.headers {
+        let raw = headers
+            .get(binding.name)
+            .ok_or_else(|| invalid(Some(binding.name)))?
+            .to_str()
+            .map_err(|_| invalid(Some(binding.name)))?;
+        let raw = if binding.trim_quotes {
+            raw.trim_matches('"')
+        } else {
+            raw
+        };
+        let value = if binding.numeric {
+            Value::from(
+                raw.parse::<u64>()
+                    .map_err(|_| invalid(Some(binding.name)))?,
+            )
+        } else {
+            json!(raw)
+        };
+        object.insert(binding.field.into(), value);
+    }
+    Ok(())
+}
+
+fn shape_body(
+    definition: &Definition,
+    path: &BTreeMap<String, String>,
+    data: &mut Value,
+) -> Result<(), ErasedFailure> {
+    let shape = definition.registration.request.body;
+    if matches!(shape, BodyBinding::Direct | BodyBinding::Null) {
         return Ok(());
     }
     let object = data.as_object_mut().ok_or_else(|| invalid(None))?;
-    let action = if definition.name.ends_with("create-discussion") {
-        json!({"kind":"start","role":take(object, "role")?,"body":take(object, "body")?})
-    } else {
-        changed_discussion_action(object, definition, path, headers)?
+    let take = |object: &mut Map<String, Value>, field: &'static str| {
+        object.remove(field).ok_or_else(|| invalid(Some(field)))
+    };
+    let action = match shape {
+        BodyBinding::DiscussionStart => json!({
+            "kind":"start", "role":take(object, "role")?, "body":take(object, "body")?
+        }),
+        BodyBinding::DiscussionReply => json!({
+            "kind":"reply",
+            "discussion_id":path.get("discussion_id").ok_or_else(|| invalid(Some("discussion_id")))?,
+            "expected_version":take(object, "expected_version")?,
+            "role":take(object, "role")?, "body":take(object, "body")?
+        }),
+        BodyBinding::DiscussionStatus => json!({
+            "kind":"set_status",
+            "discussion_id":path.get("discussion_id").ok_or_else(|| invalid(Some("discussion_id")))?,
+            "expected_version":take(object, "expected_version")?,
+            "status":take(object, "status")?
+        }),
+        BodyBinding::Direct | BodyBinding::Null => unreachable!(),
     };
     object.insert("action".into(), action);
-    Ok(())
-}
-
-fn changed_discussion_action(
-    object: &mut Map<String, Value>,
-    definition: &Definition,
-    path: &BTreeMap<String, String>,
-    headers: &HeaderMap,
-) -> Result<Value, ErasedFailure> {
-    let discussion_id = path
-        .get("discussion_id")
-        .ok_or_else(|| invalid(Some("discussion_id")))?;
-    let version = headers
-        .get("If-Match")
-        .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.trim_matches('"').parse::<u64>().ok())
-        .ok_or_else(|| invalid(Some("If-Match")))?;
-    if definition.name.ends_with("create-discussion-message") {
-        Ok(
-            json!({"kind":"reply","discussion_id":discussion_id,"expected_version":version,
-            "role":take(object, "role")?,"body":take(object, "body")?}),
-        )
-    } else {
-        Ok(
-            json!({"kind":"set_status","discussion_id":discussion_id,"expected_version":version,
-            "status":take(object, "status")?}),
-        )
-    }
-}
-
-fn take(object: &mut Map<String, Value>, field: &'static str) -> Result<Value, ErasedFailure> {
-    object.remove(field).ok_or_else(|| invalid(Some(field)))
-}
-
-pub fn require_headers(definition: &Definition, headers: &HeaderMap) -> Result<(), ErasedFailure> {
-    for parameter in definition
-        .parameters
-        .iter()
-        .filter(|parameter| parameter.location == "header" && parameter.required)
-    {
-        if headers.get(parameter.name).is_none() {
-            return Err(invalid(Some(parameter.name)));
-        }
-    }
     Ok(())
 }

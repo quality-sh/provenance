@@ -13,6 +13,14 @@ const missingStamp: GetResponse = { data: { id: "rule_a" } };
 // @ts-expect-error A flattened result cannot satisfy the v2 get contract.
 const wrongOperation: GetResponse = { id: "rule_a", max_depth: 1, nodes: [] };
 
+// Resource GETs use their generated member contract. They are not search
+// GraphNodes and do not acquire a node_type tag at runtime.
+export function sourceUrl(response: GetResponse<"source">): string | null | undefined {
+  // @ts-expect-error Resource GET responses do not contain the search union tag.
+  response.data.node_type;
+  return response.data.url;
+}
+
 const missingCuts: EvidenceResponse = {
   // @ts-expect-error The current evidence result always includes all four cut flags.
   data: { rule_id: "rule_a",

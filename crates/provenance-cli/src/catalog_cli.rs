@@ -41,17 +41,12 @@ pub async fn try_dispatch(arguments: &[String]) -> anyhow::Result<bool> {
         print_help(&collection);
         return Ok(true);
     }
-    let (method, path, route_words) = address(&collection, words)?;
-    let definition = catalog::definitions()
-        .into_iter()
-        .find(|definition| {
-            definition
-                .method
-                .as_str()
-                .eq_ignore_ascii_case(method.as_str())
-                && path_matches(definition.path, &path)
-        })
-        .ok_or_else(|| anyhow::anyhow!("the catalog does not declare {method} {path}"))?;
+    let (definition, path, route_words) = resolve(&collection, &words)?;
+    let method = match definition.method {
+        catalog::HttpMethod::Get => Method::GET,
+        catalog::HttpMethod::Post => Method::POST,
+        catalog::HttpMethod::Patch => Method::PATCH,
+    };
     let (data, query, headers) = input(&definition, &route_words)?;
     if matches!(
         collection.as_str(),
@@ -153,168 +148,143 @@ fn split_global(arguments: &[String]) -> anyhow::Result<Option<(Context, Vec<Str
     Ok(Some((Context { repo, scope, quiet }, rest)))
 }
 
-fn address(
+fn resolve(
     collection: &str,
-    mut words: Vec<String>,
-) -> anyhow::Result<(Method, String, Vec<String>)> {
-    let first = words
-        .first()
-        .map(String::as_str)
-        .ok_or_else(|| anyhow::anyhow!("{collection} requires list, create, an id, or a query"))?;
-    let (method, path, consumed) = match first {
-        "list" => (Method::GET, format!("/{collection}"), 1),
-        "create" => (Method::POST, format!("/{collection}"), 1),
-        "search" | "stale" | "resolve-symbol" => (Method::GET, format!("/{collection}"), 0),
-        "begin-verification" if collection == "verification-runs" => (
-            Method::POST,
-            "/verification-runs/begin-verification".into(),
-            1,
-        ),
-        "get" | "update" => {
-            let id = words
-                .get(1)
-                .ok_or_else(|| anyhow::anyhow!("{first} requires a resource id"))?;
-            (
-                if first == "get" {
-                    Method::GET
-                } else {
-                    Method::PATCH
-                },
-                format!("/{collection}/{id}"),
-                2,
-            )
-        }
-        id => {
-            let action = words.get(1).map_or("get", String::as_str);
-            member_address(collection, id, action, &words)?
-        }
-    };
-    if consumed > 0 {
-        words.drain(0..consumed);
-    }
-    Ok((method, path, words))
-}
-
-fn member_address(
-    collection: &str,
-    id: &str,
-    action: &str,
     words: &[String],
-) -> anyhow::Result<(Method, String, usize)> {
-    let base = format!("/{collection}/{id}");
-    match action {
-        "get" => Ok((Method::GET, base, usize::from(words.get(1).is_some()) + 1)),
-        "update" => Ok((Method::PATCH, base, 2)),
-        "trace" | "neighbors" | "impact" => Ok((Method::GET, base, 1)),
-        "claim" | "release" | "close" | "answer" | "submit" => {
-            Ok((Method::POST, format!("{base}/{action}"), 2))
-        }
-        "complete-verification" if collection == "verification-runs" => {
-            Ok((Method::POST, format!("{base}/complete-verification"), 2))
-        }
-        "document" | "evidence" => Ok((Method::GET, format!("{base}/{action}"), 2)),
-        "history" => history_address(&base, words),
-        "submissions" if collection == "requirements" => submission_address(&base, words),
-        "assertions" | "dispositions" if collection == "proposals" => {
-            Ok(fact_address(&base, action, words))
-        }
-        "discussions" => discussion_address(&base, words),
-        "discussion-containers" => legacy_message_address(&base, words),
-        _ => anyhow::bail!("unknown {collection} member action: {action}"),
-    }
-}
-
-fn history_address(base: &str, words: &[String]) -> anyhow::Result<(Method, String, usize)> {
-    let Some(entry) = words.get(2) else {
-        return Ok((Method::GET, format!("{base}/history"), 2));
-    };
-    let mut path = format!("{base}/history/{entry}");
-    let consumed = if words.get(3).is_some_and(|word| word == "evidence") {
-        let side = words
-            .get(4)
-            .ok_or_else(|| anyhow::anyhow!("history evidence requires before or after"))?;
-        write!(path, "/evidence/{side}").expect("writing to a String cannot fail");
-        5
-    } else {
-        3
-    };
-    Ok((Method::GET, path, consumed))
-}
-
-fn submission_address(base: &str, words: &[String]) -> anyhow::Result<(Method, String, usize)> {
-    let proposal = words
-        .get(2)
-        .ok_or_else(|| anyhow::anyhow!("submissions requires a Proposal id"))?;
-    let action = words
-        .get(3)
-        .ok_or_else(|| anyhow::anyhow!("submission requires decide or withdraw"))?;
-    anyhow::ensure!(
-        matches!(action.as_str(), "decide" | "withdraw"),
-        "submission action must be decide or withdraw"
-    );
+) -> anyhow::Result<(Definition, String, Vec<String>)> {
+    let address_len = words
+        .iter()
+        .position(|word| word.starts_with("--"))
+        .unwrap_or(words.len());
+    let address = &words[..address_len];
+    let mut matches = catalog::definitions()
+        .into_iter()
+        .filter(|definition| definition.path.split('/').nth(1) == Some(collection))
+        .flat_map(|definition| candidates(&definition, address))
+        .collect::<Vec<_>>();
+    matches.sort_by_key(|candidate| (candidate.score, candidate.consumed));
+    let candidate = matches.pop().ok_or_else(|| {
+        anyhow::anyhow!(
+            "the catalog does not declare the {collection} command: {}",
+            address.join(" ")
+        )
+    })?;
     Ok((
-        Method::POST,
-        format!("{base}/submissions/{proposal}/{action}"),
-        4,
+        candidate.definition,
+        candidate.path,
+        words[candidate.consumed..].to_vec(),
     ))
 }
 
-fn fact_address(base: &str, kind: &str, words: &[String]) -> (Method, String, usize) {
-    match words.get(2).map(String::as_str) {
-        None | Some("list") => (Method::GET, format!("{base}/{kind}"), words.len().min(3)),
-        Some("create") => (Method::POST, format!("{base}/{kind}"), 3),
-        Some(id) => (Method::GET, format!("{base}/{kind}/{id}"), 3),
-    }
+struct Candidate {
+    definition: Definition,
+    path: String,
+    consumed: usize,
+    score: usize,
 }
 
-fn discussion_address(base: &str, words: &[String]) -> anyhow::Result<(Method, String, usize)> {
-    match words.get(2).map(String::as_str) {
-        None | Some("list") => Ok((
-            Method::GET,
-            format!("{base}/discussions"),
-            words.len().min(3),
-        )),
-        Some("create") => Ok((Method::POST, format!("{base}/discussions"), 3)),
-        Some(discussion) => {
-            let path = format!("{base}/discussions/{discussion}");
-            match words.get(3).map(String::as_str) {
-                None | Some("get") => Ok((Method::GET, path, words.len().min(4))),
-                Some("update") => Ok((Method::PATCH, path, 4)),
-                Some("messages") => match words.get(4).map(String::as_str) {
-                    None | Some("list") => {
-                        Ok((Method::GET, format!("{path}/messages"), words.len().min(5)))
-                    }
-                    Some("create") => Ok((Method::POST, format!("{path}/messages"), 5)),
-                    Some(message) => Ok((Method::GET, format!("{path}/messages/{message}"), 5)),
-                },
-                Some(other) => anyhow::bail!("unknown Discussion action: {other}"),
+fn candidates(definition: &Definition, words: &[String]) -> Vec<Candidate> {
+    let route = definition
+        .path
+        .split('/')
+        .skip(2)
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>();
+    let mut patterns: Vec<(Vec<&str>, Vec<&str>)> = Vec::new();
+    if route.is_empty() {
+        match definition.method {
+            catalog::HttpMethod::Get => patterns.push((vec!["list"], Vec::new())),
+            catalog::HttpMethod::Post => patterns.push((vec!["create"], Vec::new())),
+            catalog::HttpMethod::Patch => {}
+        }
+        if definition.method == catalog::HttpMethod::Get
+            && words.first().is_some_and(|word| {
+                definition
+                    .registration
+                    .queries
+                    .iter()
+                    .any(|query| query.name == word)
+            })
+        {
+            patterns.push((Vec::new(), Vec::new()));
+        }
+    } else {
+        match definition.method {
+            catalog::HttpMethod::Get => {
+                patterns.extend([
+                    (Vec::new(), Vec::new()),
+                    (Vec::new(), vec!["get"]),
+                    (Vec::new(), vec!["list"]),
+                ]);
+                if route.len() == 1 && route[0].starts_with('{') {
+                    patterns.push((vec!["get"], Vec::new()));
+                }
+            }
+            catalog::HttpMethod::Patch => {
+                patterns.push((Vec::new(), vec!["update"]));
+                if route.len() == 1 && route[0].starts_with('{') {
+                    patterns.push((vec!["update"], Vec::new()));
+                }
+            }
+            catalog::HttpMethod::Post => {
+                patterns.push((Vec::new(), Vec::new()));
+                patterns.push((Vec::new(), vec!["create"]));
             }
         }
     }
+    patterns
+        .into_iter()
+        .filter_map(|(prefix, suffix)| match_candidate(definition, &route, words, &prefix, &suffix))
+        .collect()
 }
 
-fn legacy_message_address(base: &str, words: &[String]) -> anyhow::Result<(Method, String, usize)> {
-    let container = words
-        .get(2)
-        .ok_or_else(|| anyhow::anyhow!("discussion-containers requires a container id"))?;
-    anyhow::ensure!(
-        words.get(3).is_some_and(|word| word == "legacy-messages"),
-        "expected legacy-messages after the container id"
-    );
-    let path = format!("{base}/discussion-containers/{container}/legacy-messages");
-    Ok(match words.get(4) {
-        Some(message) => (Method::GET, format!("{path}/{message}"), 5),
-        None => (Method::GET, path, 4),
+fn match_candidate(
+    definition: &Definition,
+    route: &[&str],
+    words: &[String],
+    prefix: &[&str],
+    suffix: &[&str],
+) -> Option<Candidate> {
+    let consumed = prefix.len() + route.len() + suffix.len();
+    if words.len() < consumed
+        || !prefix
+            .iter()
+            .zip(words)
+            .all(|(expected, actual)| expected == actual)
+        || !suffix
+            .iter()
+            .zip(&words[prefix.len() + route.len()..])
+            .all(|(expected, actual)| expected == actual)
+    {
+        return None;
+    }
+    let route_words = &words[prefix.len()..prefix.len() + route.len()];
+    if !route.iter().zip(route_words).all(|(expected, actual)| {
+        expected.starts_with('{') && expected.ends_with('}') || expected == actual
+    }) {
+        return None;
+    }
+    let mut path = String::new();
+    write!(path, "/{}", definition.path.split('/').nth(1)?).ok()?;
+    for (expected, actual) in route.iter().zip(route_words) {
+        write!(
+            path,
+            "/{}",
+            if expected.starts_with('{') {
+                actual.as_str()
+            } else {
+                *expected
+            }
+        )
+        .ok()?;
+    }
+    let literals = route.iter().filter(|part| !part.starts_with('{')).count();
+    Some(Candidate {
+        definition: definition.clone(),
+        path,
+        consumed,
+        score: literals * 4 + prefix.len() + suffix.len(),
     })
-}
-
-fn path_matches(pattern: &str, actual: &str) -> bool {
-    let expected = pattern.split('/').filter(|part| !part.is_empty());
-    let actual = actual.split('/').filter(|part| !part.is_empty());
-    expected.clone().count() == actual.clone().count()
-        && expected.zip(actual).all(|(expected, actual)| {
-            expected.starts_with('{') && expected.ends_with('}') || expected == actual
-        })
 }
 
 #[allow(clippy::too_many_lines)]
@@ -330,10 +300,11 @@ fn input(
     let query_action = words
         .first()
         .filter(|word| {
-            matches!(
-                word.as_str(),
-                "search" | "stale" | "resolve-symbol" | "trace" | "neighbors" | "impact"
-            )
+            definition
+                .registration
+                .queries
+                .iter()
+                .any(|route| route.name == word.as_str())
         })
         .cloned();
     if query_action.is_some() {
@@ -369,8 +340,16 @@ fn input(
                 "path" => anyhow::bail!("path identity comes from the command address"),
                 _ => anyhow::bail!("unknown catalog parameter location"),
             }
-        } else if definition.request_schema.is_some() {
-            data.insert(flag.replace('-', "_"), scalar(value)?);
+        } else if let Some(request_schema) = &definition.request_schema {
+            let field = flag.replace('-', "_");
+            let schema = body_field_schema(request_schema, &field)
+                .ok_or_else(|| anyhow::anyhow!("unknown body field: --{flag}"))?;
+            if value.starts_with('[') || value.starts_with('{') {
+                anyhow::bail!("arrays and objects must come from --stdin");
+            }
+            let parsed = catalog::parse_schema_value_in(request_schema, schema, value)
+                .map_err(|_| anyhow::anyhow!("invalid value for --{flag}"))?;
+            data.insert(field, parsed);
         } else {
             query.insert(flag.replace('-', "_"), value.clone());
         }
@@ -429,9 +408,11 @@ fn input(
         data.entry("status").or_insert_with(|| json!("open"));
         data.entry("links").or_insert_with(|| json!([]));
     }
-    if definition.name.ends_with("create-discussion")
-        || definition.name.ends_with("create-discussion-message")
-    {
+    if matches!(
+        definition.registration.request.body,
+        provenance_store::operations::catalog::BodyBinding::DiscussionStart
+            | provenance_store::operations::catalog::BodyBinding::DiscussionReply
+    ) {
         data.entry("actor").or_insert_with(|| json!("cli"));
     }
     if definition.parameters.iter().any(|parameter| {
@@ -446,6 +427,17 @@ fn input(
     Ok((Value::Object(data), query, headers))
 }
 
+fn body_field_schema<'a>(request: &'a Value, field: &str) -> Option<&'a Value> {
+    let properties = request
+        .pointer("/properties/data/properties")?
+        .as_object()?;
+    properties.get(field).or_else(|| {
+        properties
+            .get(&format!("{field}s"))
+            .and_then(|schema| schema.get("items"))
+    })
+}
+
 fn move_scalar_to_singleton(data: &mut Map<String, Value>, source: &str, target: &str) {
     if let Some(value) = data.remove(source) {
         data.insert(target.to_owned(), json!([value]));
@@ -458,24 +450,6 @@ fn rename_scalar(data: &mut Map<String, Value>, source: &str, target: &str) {
     }
 }
 
-fn scalar(value: &str) -> anyhow::Result<Value> {
-    Ok(match value {
-        "true" => Value::Bool(true),
-        "false" => Value::Bool(false),
-        "null" => Value::Null,
-        value if value.parse::<i64>().is_ok() => Value::from(value.parse::<i64>()?),
-        value if value.parse::<f64>().is_ok() => Value::from(value.parse::<f64>()?),
-        value if value.starts_with('[') || value.starts_with('{') => {
-            anyhow::bail!("arrays and objects must come from --stdin")
-        }
-        value => Value::String(value.to_owned()),
-    })
-}
-
 fn cli_name(name: &str) -> String {
     name.to_ascii_lowercase().replace('_', "-")
 }
-
-#[cfg(test)]
-#[path = "catalog_cli/tests.rs"]
-mod tests;

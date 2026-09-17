@@ -41,8 +41,7 @@ async fn page<K: ProjectionRow>(
         (1..=200).contains(&request.limit),
         "resource page limit must be between 1 and 200"
     );
-    let (cursor, mut position) =
-        Cursor::open(ctx, operation, &request.limit, request.cursor.as_deref())?;
+    let (cursor, mut position) = Cursor::open(ctx, operation, &(), request.cursor.as_deref())?;
     ctx.snapshot().bound_page_work().await?;
     let table = ctx.snapshot().table::<K>();
     let ids = table.search_ids(&position.id, request.limit + 1).await?;

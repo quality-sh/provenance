@@ -1,6 +1,7 @@
 #![allow(clippy::too_many_lines, clippy::wildcard_imports)]
 
 use super::*;
+use crate::operations::catalog::{BodyBinding, ResponseSelection};
 
 pub(super) fn register(out: &mut Vec<Definition>) {
     resource!(
@@ -13,18 +14,32 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         "create-source",
         "update-source"
     );
+    configure_patch(
+        out,
+        "update-source",
+        &[
+            ("url", "url"),
+            ("reference", "reference"),
+            ("commit_pin", "commit_pin"),
+            ("effective_date", "effective_date"),
+            ("review_date", "review_date"),
+        ],
+    );
     let requirements = read::<provenance_core::Requirement>(
-        "page-requirements-v2",
+        "list-requirements",
         "listRequirements",
         "/requirements",
         "List requirements in the bound scope.",
         "page-requirements-v2",
         ResponseKind::Items,
         list_parameters(true, false),
-    );
+    )
+    .items_field("items")
+    .pagination();
     out.push(with_query_results(
         requirements,
         &[("search", ResponseKind::Items)],
+        "requirement",
     ));
     let requirement = backed(
         "get-requirement",
@@ -34,9 +49,9 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         "Read one Requirement with its edit and decision state.",
         "get-requirement-v2",
         ResponseKind::Resource,
-        &[],
         member_parameters(true),
-    );
+    )
+    .with_etag();
     out.push(with_query_results(
         requirement,
         &[
@@ -44,29 +59,42 @@ pub(super) fn register(out: &mut Vec<Definition>) {
             ("neighbors", ResponseKind::Result),
             ("impact", ResponseKind::Result),
         ],
+        "requirement",
     ));
-    out.push(backed(
-        "create-requirement",
-        "createRequirement",
-        HttpMethod::Post,
-        "/requirements",
-        "Create one Requirement through the guarded review journal.",
-        "create-requirement-v2",
-        ResponseKind::Resource,
-        &["request_id"],
-        Vec::new(),
-    ));
-    out.push(backed(
-        "update-requirement",
-        "updateRequirement",
-        HttpMethod::Patch,
-        "/requirements/{id}",
-        "Apply one guarded Requirement text and relationship delta.",
-        "update-requirement-v2",
-        ResponseKind::Resource,
-        &["request_id", "expected_etag", "id"],
-        vec![schema::path("id")],
-    ));
+    out.push(
+        backed(
+            "create-requirement",
+            "createRequirement",
+            HttpMethod::Post,
+            "/requirements",
+            "Create one Requirement through the guarded review journal.",
+            "create-requirement-v2",
+            ResponseKind::Resource,
+            Vec::new(),
+        )
+        .header("Idempotency-Key", "request_id", false)
+        .with_etag(),
+    );
+    out.push(
+        backed(
+            "update-requirement",
+            "updateRequirement",
+            HttpMethod::Patch,
+            "/requirements/{id}",
+            "Apply one guarded Requirement text and relationship delta.",
+            "update-requirement-v2",
+            ResponseKind::Resource,
+            vec![schema::path("id")],
+        )
+        .header("Idempotency-Key", "request_id", false)
+        .header("If-Match", "expected_etag", true)
+        .null_clears(&[
+            ("description", "description"),
+            ("fog", "fog"),
+            ("domain_id", "domain_id"),
+        ])
+        .with_etag(),
+    );
     resource!(
         out,
         provenance_core::Resolution,
@@ -76,6 +104,19 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         "Resolutions",
         "create-resolution",
         "update-resolution"
+    );
+    configure_patch(
+        out,
+        "update-resolution",
+        &[
+            ("context", "context"),
+            ("enforcement", "enforcement"),
+            ("confidence", "confidence"),
+            ("made_by", "made_by"),
+            ("approved_by", "approved_by"),
+            ("approved_at", "approved_at"),
+            ("review_on", "review_on"),
+        ],
     );
     resource!(
         out,
@@ -87,6 +128,16 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         "create-rule",
         "update-rule"
     );
+    configure_patch(
+        out,
+        "update-rule",
+        &[
+            ("name", "name"),
+            ("description", "description"),
+            ("source_document", "source_document"),
+            ("source_section", "source_section"),
+        ],
+    );
     resource!(
         out,
         provenance_core::Domain,
@@ -96,6 +147,11 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         "Domains",
         "create-domain",
         "update-domain"
+    );
+    configure_patch(
+        out,
+        "update-domain",
+        &[("description", "description"), ("color", "color")],
     );
     resource!(
         out,
@@ -107,6 +163,7 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         "create-boundary",
         "update-boundary"
     );
+    configure_patch(out, "update-boundary", &[("source_ref", "source_ref")]);
     resource!(
         out,
         provenance_core::Topic,
@@ -126,6 +183,14 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         "Questions",
         "create-question",
         "update-question"
+    );
+    configure_patch(
+        out,
+        "update-question",
+        &[
+            ("resolution_id", "resolution_id"),
+            ("contradicts", "contradicts"),
+        ],
     );
     resource!(
         out,
@@ -178,6 +243,21 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         ""
     );
     indexes(out);
+}
+
+fn configure_patch(
+    definitions: &mut [Definition],
+    name: &str,
+    nullable: &[(&'static str, &'static str)],
+) {
+    let definition = definitions
+        .iter_mut()
+        .find(|definition| definition.name == name)
+        .expect("registered resource PATCH");
+    definition.registration.request.null_clears = nullable
+        .iter()
+        .map(|(field, clear_name)| NullClearBinding { field, clear_name })
+        .collect();
 }
 
 fn indexes(out: &mut Vec<Definition>) {

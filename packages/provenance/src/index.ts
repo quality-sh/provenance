@@ -25,6 +25,7 @@ import type {
   ImpactResponse,
   NeighborsRequest,
   NeighborsResponse,
+  NodeType,
   PlanResult,
   ResolveSymbolRequest,
   ResolveSymbolResponse,
@@ -261,9 +262,9 @@ export async function plan(
   })).data;
 }
 
-export async function get(request: GetRequest): Promise<GetResponse> {
+export async function get<Kind extends NodeType>(request: GetRequest<Kind>): Promise<GetResponse<Kind>> {
   const selected = settings;
-  return memberCall(await connection(selected), request.node_type, request.id, {}) as Promise<GetResponse>;
+  return memberCall(await connection(selected), request.node_type, request.id, {}) as Promise<GetResponse<Kind>>;
 }
 
 export async function search(request: SearchRequest): Promise<SearchResponse> {

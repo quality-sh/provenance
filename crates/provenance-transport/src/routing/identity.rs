@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 
 pub(super) fn reject(
     data: &Value,
-    path: &BTreeMap<String, String>,
+    _path: &BTreeMap<String, String>,
     definition: &Definition,
 ) -> Result<(), ErasedFailure> {
     let Some(object) = data.as_object() else {
@@ -15,29 +15,49 @@ pub(super) fn reject(
     if object.get("context").is_some_and(Value::is_object) {
         return Err(invalid(Some("context")));
     }
-    let repeated = ["repository", "scope", "scope_id"]
+    let bound = definition
+        .registration
+        .request
+        .path
+        .iter()
+        .map(|binding| binding.field)
+        .chain(definition.registration.request.scope_field)
+        .chain(
+            definition
+                .registration
+                .request
+                .parent
+                .iter()
+                .map(|binding| binding.field),
+        )
+        .chain(
+            definition
+                .registration
+                .request
+                .selector
+                .iter()
+                .map(|binding| match binding {
+                    provenance_store::operations::catalog::SelectorBinding::Discussion {
+                        field,
+                        ..
+                    }
+                    | provenance_store::operations::catalog::SelectorBinding::Legacy {
+                        field,
+                        ..
+                    } => *field,
+                }),
+        )
+        .chain(
+            definition
+                .registration
+                .controls
+                .headers
+                .iter()
+                .map(|binding| binding.field),
+        );
+    let repeated = ["repository", "scope", "context"]
         .into_iter()
-        .chain(path.keys().map(String::as_str).filter(|name| {
-            !(name == &"id"
-                && matches!(
-                    definition.name,
-                    "create-proposal-assertion" | "create-proposal-disposition"
-                ))
-        }))
+        .chain(bound)
         .find(|name| object.contains_key(*name));
     repeated.map_or(Ok(()), |field| Err(invalid(Some(field))))
-}
-
-pub(super) fn node_type(path: &str) -> Result<&'static str, ErasedFailure> {
-    match path.split('/').nth(1) {
-        Some("sources") => Ok("source"),
-        Some("requirements") => Ok("requirement"),
-        Some("resolutions") => Ok("resolution"),
-        Some("rules") => Ok("rule"),
-        Some("domains") => Ok("domain"),
-        Some("boundaries") => Ok("boundary"),
-        Some("topics") => Ok("topic"),
-        Some("questions") => Ok("question"),
-        _ => Err(invalid(None)),
-    }
 }

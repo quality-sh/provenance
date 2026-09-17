@@ -2,6 +2,8 @@
 
 mod actions;
 mod authoring;
+#[cfg(feature = "schema")]
+mod binding;
 mod relationships;
 pub use actions::*;
 pub use relationships::*;
@@ -32,6 +34,12 @@ pub use v2_review::*;
 pub use v2_review_reads::*;
 
 pub use authoring::{Apply, BeginVerification, CompleteVerification, Plan};
+#[cfg(feature = "schema")]
+pub use binding::{
+    BodyBinding, Controls, HandlerBinding, HeaderBinding, NullClearBinding, ParentBinding,
+    PathBinding, QueryRequestBinding, QueryRoute, Registration, RequestBinding, ResponseBinding,
+    ResponseSelection, SelectorBinding,
+};
 pub use context::{
     ContextKind, ContextResolver, ExecutionNeed, ExecutionNeeds, PreparedContext, PreparedRead,
     PreparedRepository, PreparedScope, RequestedContext,
@@ -48,7 +56,10 @@ pub use ideation::{
 };
 pub use invoke::{invoke, invoke_typed, invoke_with};
 #[cfg(feature = "schema")]
-pub use schema::{definitions, Definition, HttpMethod, Parameter, ResponseKind};
+pub use schema::{
+    definitions, parse_parameter_value, parse_schema_value, parse_schema_value_in, Definition,
+    HttpMethod, Parameter, ParseValueError, ResponseKind,
+};
 pub use statement::CheckStatement;
 
 #[cfg(test)]

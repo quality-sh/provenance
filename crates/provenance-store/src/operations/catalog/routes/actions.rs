@@ -8,14 +8,13 @@ use super::*;
 
 pub(super) fn register(out: &mut Vec<Definition>) {
     computations(out);
-    for (name, id, path, backing, description, strip) in [
+    for (name, id, path, backing, description) in [
         (
             "claim-topic",
             "claimTopic",
             "/topics/{id}/claim",
             "claim-topic",
             "Claim one open Topic for an actor.",
-            &["scope_id", "id"][..],
         ),
         (
             "release-topic",
@@ -23,7 +22,6 @@ pub(super) fn register(out: &mut Vec<Definition>) {
             "/topics/{id}/release",
             "release-topic",
             "Release the claim on one Topic.",
-            &["scope_id", "id"][..],
         ),
         (
             "close-topic",
@@ -31,7 +29,6 @@ pub(super) fn register(out: &mut Vec<Definition>) {
             "/topics/{id}/close",
             "close-topic",
             "Close one Topic in the bound scope.",
-            &["scope_id", "id"][..],
         ),
         (
             "claim-question",
@@ -39,7 +36,6 @@ pub(super) fn register(out: &mut Vec<Definition>) {
             "/questions/{id}/claim",
             "claim-question",
             "Claim one open Question for an actor.",
-            &["scope_id", "id"][..],
         ),
         (
             "release-question",
@@ -47,7 +43,6 @@ pub(super) fn register(out: &mut Vec<Definition>) {
             "/questions/{id}/release",
             "release-question",
             "Release the claim on one Question.",
-            &["scope_id", "id"][..],
         ),
         (
             "answer-question",
@@ -55,7 +50,6 @@ pub(super) fn register(out: &mut Vec<Definition>) {
             "/questions/{id}/answer",
             "answer-question",
             "Record the answer to one Question.",
-            &["scope_id", "id"][..],
         ),
         (
             "submit-requirement-review",
@@ -63,7 +57,6 @@ pub(super) fn register(out: &mut Vec<Definition>) {
             "/requirements/{id}/submit",
             "submit-requirement-review-v2",
             "Submit the current Requirement revision for review.",
-            &["scope_id", "request_id", "requirement_id"][..],
         ),
         (
             "decide-requirement-review",
@@ -71,7 +64,6 @@ pub(super) fn register(out: &mut Vec<Definition>) {
             "/requirements/{id}/submissions/{proposal_id}/decide",
             "decide-requirement-review-v2",
             "Decide one Requirement review submission.",
-            &["scope_id", "requirement_id", "request_id", "proposal_id"][..],
         ),
         (
             "withdraw-requirement-review",
@@ -79,7 +71,6 @@ pub(super) fn register(out: &mut Vec<Definition>) {
             "/requirements/{id}/submissions/{proposal_id}/withdraw",
             "withdraw-requirement-review-v2",
             "Withdraw one Requirement review submission.",
-            &["scope_id", "requirement_id", "request_id", "proposal_id"][..],
         ),
         (
             "begin-verification",
@@ -87,7 +78,6 @@ pub(super) fn register(out: &mut Vec<Definition>) {
             "/verification-runs/begin-verification",
             "begin-verification",
             "Begin one verification run for a Rule declaration.",
-            &[][..],
         ),
         (
             "complete-verification",
@@ -95,7 +85,6 @@ pub(super) fn register(out: &mut Vec<Definition>) {
             "/verification-runs/{run_id}/complete-verification",
             "complete-verification",
             "Complete one verification run with a passed or failed result.",
-            &["run"][..],
         ),
     ] {
         let params = path
@@ -103,7 +92,7 @@ pub(super) fn register(out: &mut Vec<Definition>) {
             .filter_map(|p| p.strip_prefix('{').and_then(|p| p.strip_suffix('}')))
             .map(schema::path)
             .collect();
-        out.push(backed(
+        let mut definition = backed(
             name,
             id,
             HttpMethod::Post,
@@ -111,9 +100,24 @@ pub(super) fn register(out: &mut Vec<Definition>) {
             description,
             backing,
             ResponseKind::Resource,
-            strip,
             params,
-        ));
+        );
+        if matches!(
+            name,
+            "submit-requirement-review"
+                | "decide-requirement-review"
+                | "withdraw-requirement-review"
+        ) {
+            definition = definition.path_field("id", "requirement_id").header(
+                "Idempotency-Key",
+                "request_id",
+                false,
+            );
+        }
+        if name == "complete-verification" {
+            definition = definition.path_field("run_id", "run");
+        }
+        out.push(definition);
     }
 }
 
@@ -149,7 +153,6 @@ fn computations(out: &mut Vec<Definition>) {
             description,
             backing,
             ResponseKind::Result,
-            &[],
             Vec::new(),
         ));
     }

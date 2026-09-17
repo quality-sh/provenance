@@ -50,10 +50,7 @@ pub struct Definition {
     pub request_schema: Option<Value>,
     pub success_schema: Value,
     pub failure_schema: Value,
-    pub response_kind: ResponseKind,
-    pub backing: &'static str,
-    pub context: super::ContextKind,
-    pub inject_scope: bool,
+    pub registration: super::Registration,
 }
 
 #[derive(Clone)]
@@ -67,11 +64,8 @@ pub(super) struct RawDefinition {
 }
 
 impl Definition {
-    pub fn returns_etag(&self) -> bool {
-        matches!(
-            self.name,
-            "get-requirement" | "create-requirement" | "update-requirement"
-        ) || self.name.contains("discussion") && self.response_kind == ResponseKind::Resource
+    pub const fn returns_etag(&self) -> bool {
+        self.registration.controls.returns_etag
     }
     pub fn mcp_output_schema(&self) -> Value {
         self.success_schema.clone()
@@ -134,11 +128,6 @@ pub(super) fn raw_for(name: &str) -> RawDefinition {
     let entry = entries
         .iter()
         .find(|entry| entry.name == name)
-        .or_else(|| {
-            name.starts_with("list-")
-                .then(|| entries.iter().find(|entry| entry.name == "get"))
-                .flatten()
-        })
         .expect("backing operation");
     (entry.definition)()
 }
@@ -155,7 +144,7 @@ fn statuses(mutates: bool, declared: &[u16]) -> Vec<u16> {
 
 pub(super) fn response_envelope(mut payload: Value, kind: ResponseKind) -> Value {
     if kind != ResponseKind::Items {
-        strip_fields(
+        remove_response_metadata(
             &mut payload,
             &[
                 "protocol_version",
@@ -251,8 +240,7 @@ pub(super) fn namespace_defs(value: &mut Value, prefix: &str) {
     }
 }
 
-pub(super) fn request_envelope(mut request: Value, strip: &[&str]) -> Value {
-    strip_fields(&mut request, strip);
+pub(super) fn request_envelope(mut request: Value) -> Value {
     let defs = request.as_object_mut().and_then(|o| o.remove("$defs"));
     request.as_object_mut().map(|o| o.remove("$schema"));
     let mut result = json!({"type":"object","additionalProperties":false,"required":["data"],"properties":{"data":request}});
@@ -262,7 +250,22 @@ pub(super) fn request_envelope(mut request: Value, strip: &[&str]) -> Value {
     result
 }
 
-fn strip_fields(value: &mut Value, fields: &[&str]) {
+pub(super) fn hide_bound_request_field(request: &mut Option<Value>, field: &str) {
+    let Some(data) = request
+        .as_mut()
+        .and_then(|schema| schema.pointer_mut("/properties/data"))
+    else {
+        return;
+    };
+    data.pointer_mut("/properties")
+        .and_then(Value::as_object_mut)
+        .map(|properties| properties.remove(field));
+    if let Some(required) = data.pointer_mut("/required").and_then(Value::as_array_mut) {
+        required.retain(|name| name.as_str() != Some(field));
+    }
+}
+
+fn remove_response_metadata(value: &mut Value, fields: &[&str]) {
     let Some(object) = value.as_object_mut() else {
         return;
     };
@@ -309,5 +312,98 @@ pub(super) fn header(name: &'static str) -> Parameter {
         location: "header",
         required: true,
         schema: json!({"type":"string","minLength":1}),
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ParseValueError;
+
+pub fn parse_parameter_value(parameter: &Parameter, raw: &str) -> Result<Value, ParseValueError> {
+    parse_schema_value(&parameter.schema, raw)
+}
+
+pub fn parse_schema_value(schema: &Value, raw: &str) -> Result<Value, ParseValueError> {
+    parse_schema_value_in(schema, schema, raw)
+}
+
+pub fn parse_schema_value_in(
+    root: &Value,
+    schema: &Value,
+    raw: &str,
+) -> Result<Value, ParseValueError> {
+    if let Some(reference) = schema.get("$ref").and_then(Value::as_str) {
+        let name = reference.strip_prefix("#/$defs/").ok_or(ParseValueError)?;
+        let resolved = root
+            .get("$defs")
+            .and_then(|defs| defs.get(name))
+            .ok_or(ParseValueError)?;
+        return parse_schema_value_in(root, resolved, raw);
+    }
+    if let Some(variants) = schema
+        .get("anyOf")
+        .or_else(|| schema.get("oneOf"))
+        .and_then(Value::as_array)
+    {
+        if raw == "null"
+            && variants
+                .iter()
+                .any(|variant| variant.get("type") == Some(&json!("null")))
+        {
+            return Ok(Value::Null);
+        }
+        return variants
+            .iter()
+            .filter(|variant| variant.get("type") != Some(&json!("null")))
+            .find_map(|variant| parse_schema_value_in(root, variant, raw).ok())
+            .ok_or(ParseValueError);
+    }
+    if let Some(values) = schema.get("enum").and_then(Value::as_array) {
+        let value = Value::String(raw.to_owned());
+        return values
+            .contains(&value)
+            .then_some(value)
+            .ok_or(ParseValueError);
+    }
+    if let Some(types) = schema.get("type").and_then(Value::as_array) {
+        if raw == "null" && types.iter().any(|kind| kind == "null") {
+            return Ok(Value::Null);
+        }
+        return types
+            .iter()
+            .filter_map(Value::as_str)
+            .filter(|kind| *kind != "null")
+            .find_map(|kind| {
+                let mut variant = schema.clone();
+                variant["type"] = json!(kind);
+                parse_schema_value_in(root, &variant, raw).ok()
+            })
+            .ok_or(ParseValueError);
+    }
+    match schema.get("type").and_then(Value::as_str) {
+        Some("string") => Ok(Value::String(raw.to_owned())),
+        Some("boolean") => match raw {
+            "true" => Ok(Value::Bool(true)),
+            "false" => Ok(Value::Bool(false)),
+            _ => Err(ParseValueError),
+        },
+        Some("integer") => {
+            let value = raw.parse::<i64>().map_err(|_| ParseValueError)?;
+            let minimum = schema.get("minimum").and_then(Value::as_i64);
+            let maximum = schema.get("maximum").and_then(Value::as_i64);
+            if minimum.is_some_and(|minimum| value < minimum)
+                || maximum.is_some_and(|maximum| value > maximum)
+            {
+                return Err(ParseValueError);
+            }
+            Ok(Value::from(value))
+        }
+        Some("number") => {
+            let value = raw.parse::<f64>().map_err(|_| ParseValueError)?;
+            serde_json::Number::from_f64(value)
+                .map(Value::Number)
+                .ok_or(ParseValueError)
+        }
+        Some("null") if raw == "null" => Ok(Value::Null),
+        _ => Err(ParseValueError),
     }
 }

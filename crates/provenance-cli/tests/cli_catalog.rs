@@ -221,7 +221,11 @@ fn collection_lists_accept_the_returned_cursor() {
         ])
         .output()
         .unwrap();
-    assert!(second.status.success());
+    assert!(
+        second.status.success(),
+        "{}",
+        String::from_utf8_lossy(&second.stderr)
+    );
     let second: Value = serde_json::from_slice(&second.stdout).unwrap();
     assert_eq!(second["data"]["items"].as_array().unwrap().len(), 1);
     assert_ne!(
@@ -251,4 +255,34 @@ fn member_reads_return_a_typed_refusal_for_unknown_query_parameters() {
         .failure()
         .stderr(contains("\"kind\":\"invalid_input\""))
         .stderr(contains("\"field\":\"stray\""));
+}
+
+#[test]
+fn scalar_flags_follow_the_declared_body_field_type() {
+    let (_directory, repo) = init();
+    let output = provenance()
+        .args([
+            "sources",
+            "create",
+            "--repo",
+            &repo,
+            "--id",
+            "source_numeric_name",
+            "--name",
+            "123",
+            "--url",
+            "true",
+            "--format",
+            "json",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let output: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(output["data"]["name"], "123");
+    assert_eq!(output["data"]["url"], "true");
 }

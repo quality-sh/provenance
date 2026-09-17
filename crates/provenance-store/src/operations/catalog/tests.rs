@@ -214,10 +214,11 @@ fn request_field_stripping_does_not_change_nested_definitions() {
         id: String,
         nested: Nested,
     }
-    let schema = super::schema::request_envelope(
+    let mut schema = Some(super::schema::request_envelope(
         super::schema::type_schema::<Request>(schemars::generate::Contract::Deserialize),
-        &["id"],
-    );
+    ));
+    super::schema::hide_bound_request_field(&mut schema, "id");
+    let schema = schema.unwrap();
 
     assert!(schema["properties"]["data"]["properties"]
         .get("id")
@@ -237,4 +238,39 @@ fn data_free_failure_schema_does_not_advertise_read_refusals() {
     let get = super::schema::raw_definition::<super::Get>();
     assert!(get.failure_schema.to_string().contains("no_projection"));
     assert!(get.http_statuses.contains(&409));
+}
+
+#[cfg(feature = "schema")]
+#[test]
+fn every_discussion_message_member_schema_accepts_one_message() {
+    let message = json!({
+        "data": {
+            "schema_version": 2,
+            "scope_id": "default",
+            "id": "message_a",
+            "thread_id": "thread_a",
+            "role": "user",
+            "body": "One message.",
+            "created_at": 1
+        },
+        "meta": {}
+    });
+    for definition in super::definitions().into_iter().filter(|definition| {
+        definition.name.ends_with("get-discussion-message")
+            || definition.name.ends_with("get-legacy-message")
+    }) {
+        let validator = jsonschema::JSONSchema::options()
+            .with_draft(jsonschema::Draft::Draft202012)
+            .compile(&definition.success_schema)
+            .unwrap();
+        assert!(
+            validator.is_valid(&message),
+            "{} rejects a single Message: {:?}",
+            definition.name,
+            validator
+                .validate(&message)
+                .unwrap_err()
+                .collect::<Vec<_>>()
+        );
+    }
 }

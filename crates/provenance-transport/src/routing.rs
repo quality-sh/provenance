@@ -57,45 +57,34 @@ fn match_path(pattern: &str, actual: &str) -> Option<BTreeMap<String, String>> {
 pub async fn invoke(
     host: &StatementHost,
     matched: &Matched,
-    mut data: Value,
+    data: Value,
     query: BTreeMap<String, String>,
     headers: &HeaderMap,
 ) -> Result<(Value, Option<String>), ErasedFailure> {
     if !host.advertises(matched.definition.name) {
         return Err(ErasedFailure::new(None, OperationFailure::AccessDenied));
     }
-    request::validate_query(&matched.definition, &query)?;
     identity::reject(&data, &matched.path, &matched.definition)?;
-    request::require_headers(&matched.definition, headers)?;
-    request::shape_discussion_action(&mut data, &matched.definition, &matched.path, headers)?;
-    request::inject_headers(&mut data, &matched.definition, headers)?;
-    let mut backing = matched.definition.backing;
-    let query_name = query.get("query").map(String::as_str);
-    if let Some(name @ ("search" | "stale" | "resolve-symbol" | "trace" | "neighbors" | "impact")) =
-        query_name
-    {
-        backing = name;
-        data = request::query_request(name, &matched.definition, &matched.path, &query)?;
-    } else if matches!(matched.definition.method, HttpMethod::Get) {
-        data = request::get_request(&matched.definition, &matched.path, &query)?;
-    }
-    request::inject_path(&mut data, &matched.path, &matched.definition)?;
-    if matched.definition.inject_scope {
-        let scope = host
-            .bound_identity()
-            .map(|(_, scope)| scope)
-            .ok_or_else(|| invalid(None))?;
-        data.as_object_mut()
-            .ok_or_else(|| invalid(None))?
-            .insert("scope_id".into(), json!(scope));
-    }
-    let call = host.bound_call(matched.definition.context, &data)?;
+    let identity = host.bound_identity();
+    let bound = request::bind(
+        &matched.definition,
+        &matched.path,
+        data,
+        &query,
+        headers,
+        identity.as_ref().map(|(_, scope)| scope.as_str()),
+    )?;
+    let call = host.bound_call(bound.handler.context, &bound.data)?;
     let mut value = host
-        .invoke_backing(matched.definition.name, backing, call)
+        .invoke_backing(matched.definition.name, bound.handler.operation, call)
         .await?;
-    response::select_addressed(&mut value, &matched.definition, &matched.path)?;
-    let mut value = response::success(value, matched.definition.response_kind, query_name);
-    response::select_page_member(&mut value, &matched.definition, &matched.path)?;
+    response::select(
+        &mut value,
+        &matched.definition,
+        &bound.response,
+        &matched.path,
+    )?;
+    let value = response::success(value, &bound.response);
     let etag = value
         .pointer("/data/edit/etag")
         .or_else(|| value.pointer("/data/etag"))

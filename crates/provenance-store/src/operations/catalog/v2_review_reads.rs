@@ -346,6 +346,52 @@ impl Operation for ReviewDiscussionMessagesV2 {
 #[derive(Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
+pub struct DiscussionMessageRequest {
+    pub parent: ThreadParent,
+    pub selector: DiscussionSelector,
+    pub message_id: StableId,
+}
+
+pub struct ReviewDiscussionMessageV2;
+impl Operation for ReviewDiscussionMessageV2 {
+    type Request = DiscussionMessageRequest;
+    type Success = ReadResult<Message>;
+    type Failure = ReadError;
+    const NAME: &'static str = "review-discussion-message-v2";
+    const CONTEXT: ContextKind = ContextKind::Scoped;
+    const FAILURE_STATUSES: &'static [u16] = &[409];
+    fn needs(_: &Self::Request) -> ExecutionNeeds {
+        &[
+            ExecutionNeed::GraphStorage,
+            ExecutionNeed::ProjectionMaintenance,
+        ]
+    }
+    fn failure_status(error: &ReadError) -> u16 {
+        error.status()
+    }
+    fn run(
+        context: PreparedContext,
+        request: Self::Request,
+    ) -> OperationFuture<Self::Success, Self::Failure> {
+        Box::pin(async move {
+            let read = context.graph()?;
+            Ok(review::read_discussion_message(
+                &read.root,
+                &read.scope,
+                read.policy,
+                request.parent,
+                request.selector,
+                request.message_id,
+            )
+            .await?
+            .into())
+        })
+    }
+}
+
+#[derive(Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
 pub struct WriteDiscussionRequest {
     pub scope_id: ScopeId,
     pub parent: ThreadParent,
