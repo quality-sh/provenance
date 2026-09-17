@@ -121,6 +121,8 @@ async fn discussion_members_are_direct_and_both_message_lists_paginate() {
     let (status, first) = call(&host, "GET", &format!("{base}?limit=1"), None).await;
     assert_eq!(status, 200, "{first}");
     assert_eq!(first["data"]["items"].as_array().unwrap().len(), 1);
+    assert_eq!(first["meta"]["limit"], 1);
+    assert_eq!(first["meta"]["has_more"], true);
     let cursor = first["meta"]["next_cursor"].as_str().unwrap();
     let (status, second) = call(
         &host,
@@ -131,6 +133,7 @@ async fn discussion_members_are_direct_and_both_message_lists_paginate() {
     .await;
     assert_eq!(status, 200, "{second}");
     assert_eq!(second["data"]["items"].as_array().unwrap().len(), 1);
+    assert_eq!(second["meta"]["limit"], 1);
 
     let legacy_first = store
         .post_thread_message(PostMessageInput {
@@ -161,10 +164,15 @@ async fn discussion_members_are_direct_and_both_message_lists_paginate() {
     let (status, first) = call(&host, "GET", &format!("{legacy}?limit=1"), None).await;
     assert_eq!(status, 200, "{first}");
     assert_eq!(first["data"]["items"].as_array().unwrap().len(), 1);
+    assert_eq!(first["meta"]["limit"], 1);
+    assert_eq!(first["meta"]["has_more"], true);
     let cursor = first["meta"]["next_cursor"].as_str().unwrap();
     let (status, second) = call(&host, "GET", &format!("{legacy}?cursor={cursor}"), None).await;
     assert_eq!(status, 200, "{second}");
     assert_eq!(second["data"]["items"].as_array().unwrap().len(), 1);
+    assert_eq!(second["meta"]["limit"], 50);
+    assert_eq!(second["meta"]["has_more"], false);
+    assert!(second["meta"]["next_cursor"].is_null());
 }
 
 #[tokio::test]
