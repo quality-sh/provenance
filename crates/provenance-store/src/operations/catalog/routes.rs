@@ -2,8 +2,8 @@
 
 use super::{
     schema::{self, Definition, HttpMethod, Parameter, ResponseKind},
-    BodyBinding, HandlerBinding, HeaderBinding, NullClearBinding, ParentBinding, PathBinding,
-    QueryRequestBinding, QueryRoute, Registration, ResponseBinding, ResponseSelection,
+    ArgumentAlias, BodyBinding, HandlerBinding, HeaderBinding, NullClearBinding, ParentBinding,
+    PathBinding, QueryRequestBinding, QueryRoute, Registration, ResponseBinding, ResponseSelection,
     SelectorBinding,
 };
 use schemars::generate::Contract;
@@ -37,7 +37,7 @@ fn backed(
         .cloned()
         .collect();
     registration.request.scope_field = inject_scope.then_some("scope_id");
-    let mut definition = Definition {
+    Definition {
         name,
         operation_id,
         method,
@@ -51,14 +51,7 @@ fn backed(
         success_schema: schema::response_envelope(raw.success_schema, kind),
         failure_schema: raw.failure_schema,
         registration,
-    };
-    if inject_scope {
-        schema::hide_bound_request_field(&mut definition.request_schema, "scope_id");
     }
-    for binding in &definition.registration.request.path {
-        schema::hide_bound_request_field(&mut definition.request_schema, binding.field);
-    }
-    definition
 }
 
 fn read<T: schemars::JsonSchema>(
@@ -115,7 +108,6 @@ impl Definition {
             .find(|binding| binding.parameter == parameter)
         {
             binding.field = field;
-            schema::hide_bound_request_field(&mut self.request_schema, field);
         }
         self
     }
@@ -128,7 +120,6 @@ impl Definition {
             trim_quotes,
             numeric: false,
         });
-        schema::hide_bound_request_field(&mut self.request_schema, field);
         self
     }
 
@@ -140,36 +131,25 @@ impl Definition {
             trim_quotes: true,
             numeric: true,
         });
-        schema::hide_bound_request_field(&mut self.request_schema, field);
         self
     }
 
-    fn body(mut self, body: BodyBinding) -> Self {
+    const fn body(mut self, body: BodyBinding) -> Self {
         self.registration.request.body = body;
-        if !matches!(body, BodyBinding::Direct | BodyBinding::Null) {
-            schema::hide_bound_request_field(&mut self.request_schema, "action");
-        }
         self
     }
 
-    fn parent(mut self, kind: &'static str) -> Self {
+    const fn parent(mut self, kind: &'static str) -> Self {
         self.registration.request.parent = Some(ParentBinding {
             kind,
             id_parameter: "id",
             field: "parent",
         });
-        schema::hide_bound_request_field(&mut self.request_schema, "parent");
         self
     }
 
-    fn selector(mut self, selector: SelectorBinding) -> Self {
-        let field = match &selector {
-            SelectorBinding::Discussion { field, .. } | SelectorBinding::Legacy { field, .. } => {
-                *field
-            }
-        };
+    const fn selector(mut self, selector: SelectorBinding) -> Self {
         self.registration.request.selector = Some(selector);
-        schema::hide_bound_request_field(&mut self.request_schema, field);
         self
     }
 
@@ -300,7 +280,16 @@ fn with_query_results(
             }
         }
         variants.push(response);
-        let parameters = query_parameters(backing);
+        let request = QueryRequestBinding {
+            node_type: matches!(*backing, "search" | "trace" | "neighbors" | "impact")
+                .then_some(node_type),
+            node_types: *backing == "search",
+        };
+        let parameters = query::parameters(
+            &raw.request_schema,
+            &definition.registration.request,
+            &request,
+        );
         definition.registration.queries.push(QueryRoute {
             name: backing,
             handler: HandlerBinding {
@@ -308,11 +297,7 @@ fn with_query_results(
                 context: raw.context,
             },
             parameters,
-            request: QueryRequestBinding {
-                node_type: matches!(*backing, "search" | "trace" | "neighbors" | "impact")
-                    .then_some(node_type),
-                node_types: *backing == "search",
-            },
+            request,
             response: ResponseBinding {
                 kind: *kind,
                 selection: ResponseSelection::Direct,
@@ -332,45 +317,6 @@ fn with_query_results(
         definition.success_schema["$defs"] = Value::Object(defs);
     }
     definition
-}
-
-fn query_parameters(name: &str) -> Vec<Parameter> {
-    match name {
-        "search" => vec![
-            schema::query("text", json!({"type":"string"})),
-            schema::query("limit", json!({"type":"integer","minimum":1,"maximum":200})),
-            schema::query("cursor", json!({"type":"string"})),
-        ],
-        "stale" => vec![
-            schema::query("base", json!({"type":"string"})),
-            schema::query("head", json!({"type":"string"})),
-            schema::query("limit", json!({"type":"integer","minimum":1,"maximum":200})),
-            schema::query("cursor", json!({"type":"string"})),
-        ],
-        "resolve-symbol" => vec![
-            schema::query("symbol", json!({"type":"string"})),
-            schema::query("file", json!({"type":"string"})),
-            schema::query("line", json!({"type":"integer","minimum":1})),
-        ],
-        "trace" => vec![
-            schema::query(
-                "direction",
-                json!({"type":"string","enum":["in","out","both"]}),
-            ),
-            schema::query(
-                "max_depth",
-                json!({"type":"integer","minimum":1,"maximum":10}),
-            ),
-        ],
-        "neighbors" => vec![
-            schema::query(
-                "direction",
-                json!({"type":"string","enum":["in","out","both"]}),
-            ),
-            schema::query("limit", json!({"type":"integer","minimum":1,"maximum":200})),
-        ],
-        _ => Vec::new(),
-    }
 }
 
 macro_rules! resource {
@@ -480,6 +426,8 @@ macro_rules! resource {
 }
 
 mod actions;
+mod finalize;
+mod query;
 mod resources;
 mod subresources;
 
@@ -488,5 +436,6 @@ pub(super) fn definitions() -> Vec<Definition> {
     resources::register(&mut definitions);
     subresources::register(&mut definitions);
     actions::register(&mut definitions);
+    finalize::request_schemas(&mut definitions);
     definitions
 }

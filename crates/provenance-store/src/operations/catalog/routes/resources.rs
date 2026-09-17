@@ -184,6 +184,7 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         "create-question",
         "update-question"
     );
+    configure_argument_alias(out, "create-question", "method", "resolution_method");
     configure_patch(
         out,
         "update-question",
@@ -258,6 +259,23 @@ fn configure_patch(
         .iter()
         .map(|(field, clear_name)| NullClearBinding { field, clear_name })
         .collect();
+}
+
+fn configure_argument_alias(
+    definitions: &mut [Definition],
+    name: &str,
+    argument: &'static str,
+    field: &'static str,
+) {
+    let definition = definitions
+        .iter_mut()
+        .find(|definition| definition.name == name)
+        .expect("registered resource operation");
+    definition
+        .registration
+        .request
+        .argument_aliases
+        .push(ArgumentAlias { argument, field });
 }
 
 fn indexes(out: &mut Vec<Definition>) {
