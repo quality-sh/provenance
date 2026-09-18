@@ -47,7 +47,7 @@ pub async fn try_dispatch(arguments: &[String]) -> anyhow::Result<bool> {
         print_help(&collection);
         return Ok(true);
     }
-    let definition = resolved.definition;
+    let definition = resolved.address.definition;
     let method = match definition.method {
         catalog::HttpMethod::Get => Method::GET,
         catalog::HttpMethod::Post => Method::POST,
@@ -207,7 +207,11 @@ fn input(
         {
             match parameter.location {
                 "query" => {
-                    query.insert(parameter.name.to_owned(), value.clone());
+                    let parsed = catalog::parse_parameter_value(parameter, value)
+                        .map_err(|_| anyhow::anyhow!("invalid value for --{flag}"))?;
+                    let encoded = catalog::serialize_parameter_value(parameter, &parsed)
+                        .map_err(|_| anyhow::anyhow!("invalid value for --{flag}"))?;
+                    query.insert(parameter.name.to_owned(), encoded);
                 }
                 "header" => {
                     headers.insert(
