@@ -82,7 +82,7 @@ pub fn documents() -> (Value, Value) {
     let mut paths: Map<String, Value> = Map::new();
     let mut tools = Vec::new();
     let definitions = provenance_store::operations::catalog::definitions();
-    check_names(&definitions);
+    check_names(definitions);
     for definition in definitions {
         let family = pascal(definition.name);
         let request = definition
@@ -221,7 +221,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "operationId collision")]
     fn operation_ids_cannot_collide() {
-        let mut definitions = provenance_store::operations::catalog::definitions();
+        let mut definitions = provenance_store::operations::catalog::definitions().to_vec();
         definitions[1].operation_id = definitions[0].operation_id;
         super::check_names(&definitions[..2]);
     }

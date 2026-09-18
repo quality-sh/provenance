@@ -284,4 +284,13 @@ async fn query_values_follow_declared_types_and_query_routes() {
         assert_eq!(status, 400, "{value}");
         assert_eq!(value["error"]["kind"], "invalid_input");
     }
+    let (status, value) = call(
+        &host,
+        "GET",
+        "/requirements/req_shared?query=trace&limit=1",
+        None,
+    )
+    .await;
+    assert_eq!(status, 200, "{value}");
+    assert_eq!(value["data"]["nodes"].as_array().unwrap().len(), 1);
 }
