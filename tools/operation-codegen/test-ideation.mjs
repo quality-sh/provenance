@@ -109,8 +109,8 @@ export async function checkIdeation({ HttpClient, OperationError }, fixture) {
       assert.ok(!seen.has(item.id), `duplicate proposal ${item.id}`);
       seen.add(item.id);
     }
-    assert.equal(page.meta.has_more, page.meta.next_cursor !== undefined);
-    cursor = page.meta.next_cursor;
+    cursor = page.meta.next_cursor ?? undefined;
+    assert.equal(page.meta.has_more, cursor !== undefined);
   } while (cursor !== undefined);
   for (const id of largeIds) assert.ok(seen.has(id), `missing proposal ${id}`);
 
