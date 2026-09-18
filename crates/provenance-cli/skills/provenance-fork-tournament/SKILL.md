@@ -128,8 +128,7 @@ provenance questions claim --scope <scope> \
 4. **Mark the question blocked-on-human** and post the proposal ids to its thread:
 
     ```sh
-    provenance questions update --scope <scope> \
-      --id <question_id> \
+    provenance questions <question_id> update --scope <scope> \
       --status blocked-on-human
 
     provenance thread post --scope <scope> \
@@ -245,8 +244,8 @@ The promotion gate, with a clock. This is a grill-shaped turn against the artifa
 
 ## CLI gaps and conventions (as of this writing)
 
-- **Question status and method are first-class** — use `questions update --status
-  blocked-on-human` for the phase boundary, and `questions update --method prototype`
+- **Question status and method are first-class** — use `questions <id> update --status
+  blocked-on-human` for the phase boundary, and `questions <id> update --method prototype`
   if an existing question was minted with the wrong method. Keep the thread post because
   proposal ids are not question link targets.
 - **Proposal definitions are immutable and always `proposed`.** Before disposition, create an

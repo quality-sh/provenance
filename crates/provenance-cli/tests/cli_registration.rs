@@ -125,6 +125,7 @@ fn discussion_member_address_selects_the_read_route() {
         if messages {
             args.push("messages");
         }
+        args.push("get");
         args.extend(["--repo", &repo, "--format", "json"]);
         let output = provenance().args(args).output().unwrap();
         assert!(

@@ -103,12 +103,17 @@ pub fn documents() -> (Value, Value) {
             .parameters()
             .iter()
             .map(|parameter| {
-                json!({
+                let mut document = json!({
                     "name": parameter.name,
                     "in": parameter.location,
                     "required": parameter.required,
                     "schema": parameter.schema,
-                })
+                });
+                if parameter.location == "query" && parameter.schema["type"] == "array" {
+                    document["style"] = json!("form");
+                    document["explode"] = json!(false);
+                }
+                document
             })
             .collect::<Vec<_>>();
         let mut responses = Map::new();

@@ -1,62 +1,6 @@
-use provenance_core::protocol::{failure::ErasedFailure, read_failure::ReadFailure};
-use provenance_store::operations::catalog::{
-    Definition, ResponseAdapter, ResponseBinding, ResponseSelection,
-};
+use provenance_core::protocol::failure::ErasedFailure;
+use provenance_store::operations::catalog::{Definition, ResponseAdapter, ResponseBinding};
 use serde_json::{json, Map, Value};
-use std::collections::BTreeMap;
-
-pub fn select(
-    value: &mut Value,
-    definition: &Definition,
-    binding: &ResponseBinding,
-    path: &BTreeMap<String, String>,
-) -> Result<(), ErasedFailure> {
-    match &binding.selection {
-        ResponseSelection::Direct => Ok(()),
-        ResponseSelection::ArrayItems {
-            owner_parameter,
-            owner_field,
-        } => {
-            let owner = path
-                .get(*owner_parameter)
-                .ok_or_else(|| not_found(definition))?;
-            if let Some(entries) = value.as_array_mut() {
-                entries
-                    .retain(|entry| entry.get(*owner_field).and_then(Value::as_str) == Some(owner));
-            }
-            Ok(())
-        }
-        ResponseSelection::ArrayMember {
-            id_parameter,
-            owner_parameter,
-        } => {
-            let id = path
-                .get(*id_parameter)
-                .ok_or_else(|| not_found(definition))?;
-            let owner = owner_parameter
-                .as_ref()
-                .and_then(|(parameter, field)| path.get(*parameter).map(|value| (*field, value)));
-            let found = value
-                .as_array()
-                .and_then(|entries| {
-                    entries.iter().find(|entry| {
-                        entry.get("id").and_then(Value::as_str) == Some(id)
-                            && owner.is_none_or(|(field, owner)| {
-                                entry.get(field).and_then(Value::as_str) == Some(owner)
-                            })
-                    })
-                })
-                .cloned()
-                .ok_or_else(|| not_found(definition))?;
-            *value = found;
-            Ok(())
-        }
-    }
-}
-
-fn not_found(definition: &Definition) -> ErasedFailure {
-    ErasedFailure::declared(definition.name, ReadFailure::ResourceNotFound, 404)
-}
 
 pub fn success(
     mut value: Value,

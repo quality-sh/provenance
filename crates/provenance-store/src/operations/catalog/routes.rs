@@ -4,8 +4,7 @@ use super::{
     schema::{self, Definition, HttpMethod, Parameter, ResponseKind},
     ArgumentAlias, CliDefault, CliDefaultValue, EtagBinding, HandlerBinding, HeaderBinding,
     NullClearBinding, Operation, ParentBinding, PathBinding, QueryRequestBinding, QueryRoute,
-    Registration, RequestAdapter, ResponseAdapter, ResponseBinding, ResponseSelection,
-    SelectorBinding,
+    Registration, RequestAdapter, ResponseAdapter, ResponseBinding, SelectorBinding,
 };
 use schemars::generate::Contract;
 use serde_json::{json, Value};
@@ -189,11 +188,6 @@ impl Definition {
         self
     }
 
-    const fn response_selection(mut self, selection: ResponseSelection) -> Self {
-        self.registration.response.selection = selection;
-        self
-    }
-
     fn items_field(mut self, field: &'static str) -> Self {
         self.registration.response.adapter = ResponseAdapter::ResultItems(field);
         let payload =
@@ -238,20 +232,25 @@ fn response_binding(raw_schema: Value, kind: ResponseKind) -> ResponseBinding {
 }
 
 fn list_parameters(searchable: bool, rule: bool) -> Vec<Parameter> {
+    let mut parameters = vec![
+        schema::query("limit", json!({"type":"integer","minimum":1,"maximum":200})),
+        schema::query("cursor", json!({"type":"string"})),
+    ];
     if !searchable {
-        return Vec::new();
+        return parameters;
     }
     let queries = if rule {
         vec!["search", "stale", "resolve-symbol"]
     } else {
         vec!["search"]
     };
-    let mut parameters = vec![
-        schema::query("query", json!({"type":"string","enum":queries})),
-        schema::query("text", json!({"type":"string"})),
-        schema::query("limit", json!({"type":"integer","minimum":1,"maximum":200})),
-        schema::query("cursor", json!({"type":"string"})),
-    ];
+    parameters.splice(
+        0..0,
+        [
+            schema::query("query", json!({"type":"string","enum":queries})),
+            schema::query("text", json!({"type":"string"})),
+        ],
+    );
     if rule {
         parameters.extend([
             schema::query("base", json!({"type":"string"})),
@@ -347,7 +346,6 @@ fn query_route<O: Operation>(
         request,
         response: ResponseBinding {
             kind,
-            selection: ResponseSelection::Direct,
             adapter,
             raw_schema: raw.success_schema,
             schema: schema::response_envelope(payload, kind),
