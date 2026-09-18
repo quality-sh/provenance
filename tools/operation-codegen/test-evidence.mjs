@@ -50,7 +50,7 @@ export async function checkEvidence({ HttpClient, OperationError }, fixture) {
   const staleCursor = firstPage.meta.next_cursor;
   assert.equal(typeof staleCursor, 'string');
   const runsPath = join(
-    fixture.root, '.provenance/cache/scopes/default/verification-runs.jsonl',
+    fixture.repository_root, '.provenance/cache/scopes/default/verification-runs.jsonl',
   );
   const existing = (await readFile(runsPath, 'utf8')).split('\n').filter(Boolean).map(JSON.parse);
   const added = { ...existing.at(-1), id: 'verification_live_revision' };
