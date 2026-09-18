@@ -46,16 +46,16 @@ pub(super) fn resolve(collection: &str, words: &[String]) -> anyhow::Result<Reso
     })
 }
 
-fn addresses() -> &'static [Address] {
-    static ADDRESSES: OnceLock<Vec<Address>> = OnceLock::new();
-    ADDRESSES.get_or_init(build)
-}
-
 pub(super) fn registrations(collection: &str) -> Vec<&'static Address> {
     addresses()
         .iter()
         .filter(|address| address.collection == collection)
         .collect()
+}
+
+fn addresses() -> &'static [Address] {
+    static ADDRESSES: OnceLock<Vec<Address>> = OnceLock::new();
+    ADDRESSES.get_or_init(build)
 }
 
 fn build() -> Vec<Address> {
