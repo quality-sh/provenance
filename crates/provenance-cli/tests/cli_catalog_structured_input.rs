@@ -290,8 +290,16 @@ fn conflicting_body_sources_are_rejected_without_overwrite() {
     let (_directory, repo) = init();
     provenance()
         .args([
-            "sources", "create", "--repo", &repo, "--id", "source_duplicate", "--name",
-            "First", "--name", "Second",
+            "sources",
+            "create",
+            "--repo",
+            &repo,
+            "--id",
+            "source_duplicate",
+            "--name",
+            "First",
+            "--name",
+            "Second",
         ])
         .assert()
         .failure()
@@ -320,7 +328,13 @@ fn conflicting_body_sources_are_rejected_without_overwrite() {
 
     provenance()
         .args([
-            "sources", "create", "--repo", &repo, "--stdin", "--name", "Flag name",
+            "sources",
+            "create",
+            "--repo",
+            &repo,
+            "--stdin",
+            "--name",
+            "Flag name",
         ])
         .write_stdin(r#"{"id":"source_stdin_collision","name":"Stdin name"}"#)
         .assert()

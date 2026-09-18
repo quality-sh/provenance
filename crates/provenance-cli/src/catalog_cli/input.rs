@@ -263,7 +263,10 @@ fn parse_plain(root: &Value, schema: &Value, raw: &str, flag: &str) -> anyhow::R
 fn parse_json(root: &Value, schema: &Value, raw: &str, flag: &str) -> anyhow::Result<Value> {
     let value = serde_json::from_str(raw)
         .map_err(|_| anyhow::anyhow!("invalid JSON value for --{flag}"))?;
-    anyhow::ensure!(validates(root, schema, &value)?, "invalid value for --{flag}");
+    anyhow::ensure!(
+        validates(root, schema, &value)?,
+        "invalid value for --{flag}"
+    );
     Ok(value)
 }
 
@@ -354,10 +357,7 @@ fn apply_defaults(definition: &Definition, data: &mut Map<String, Value>) {
     }
 }
 
-fn apply_idempotency_key(
-    definition: &Definition,
-    headers: &mut HeaderMap,
-) -> anyhow::Result<()> {
+fn apply_idempotency_key(definition: &Definition, headers: &mut HeaderMap) -> anyhow::Result<()> {
     if definition.parameters().iter().any(|parameter| {
         parameter.location == "header" && parameter.required && parameter.name == "Idempotency-Key"
     }) && !headers.contains_key("Idempotency-Key")
