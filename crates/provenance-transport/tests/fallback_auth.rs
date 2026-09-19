@@ -7,7 +7,7 @@
 
 use axum::{body::Body, http::Request};
 use provenance_transport::StatementHost;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use tower::ServiceExt as _;
 
 const VALID: &[(&str, &str)] = &[
@@ -90,7 +90,10 @@ async fn unsupported_method_with_valid_credentials_keeps_method_not_allowed() {
 
 #[tokio::test]
 async fn unknown_path_with_foreign_host_is_denied_before_classification() {
-    let headers = &[("host", "evil.test"), ("authorization", "Bearer fixture-secret")];
+    let headers = &[
+        ("host", "evil.test"),
+        ("authorization", "Bearer fixture-secret"),
+    ];
     let (status, failure) = send(&host(), "GET", "/no-such-route", headers).await;
     assert_eq!(status, 403, "{failure}");
     assert_eq!(failure["error"]["kind"], "access_denied", "{failure}");
