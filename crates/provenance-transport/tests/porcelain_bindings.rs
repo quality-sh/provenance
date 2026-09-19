@@ -147,6 +147,29 @@ async fn mcp_get_readable_content_includes_related_records_and_bounds() {
     server.await.unwrap().cancel().await.unwrap();
 }
 
+#[test]
+#[verifies("rule_porcelain_mcp_readable_structured", examples)]
+fn mcp_readable_get_warns_when_the_record_or_view_is_stale() {
+    let outcome = provenance_porcelain::get::GetOutcome {
+        record: provenance_porcelain::get::Record::new(
+            "req_stale",
+            "requirement",
+            json!({"id":"req_stale"}),
+        ),
+        view: provenance_porcelain::get::View::Impact,
+        related: Vec::new(),
+        detail: None,
+        bounds: None,
+        record_metadata: Some(json!({"freshness_error":"record catch-up failed"})),
+        view_metadata: Some(json!({"freshness_error":"view catch-up failed"})),
+    };
+
+    let readable = provenance_transport::porcelain::render_get_readable(&outcome);
+
+    assert!(readable.contains("warning: record freshness: record catch-up failed"));
+    assert!(readable.contains("warning: view freshness: view catch-up failed"));
+}
+
 #[cfg(feature = "test-fixture")]
 #[tokio::test]
 async fn mcp_get_keeps_permitted_kinds_without_probing_forbidden_kinds() {
@@ -257,6 +280,7 @@ impl provenance_porcelain::check::CheckPort for CheckFixturePort {
 #[tokio::test]
 #[verifies("rule_porcelain_action_names_match", conformance)]
 #[verifies("rule_porcelain_check_categories", examples)]
+#[verifies("rule_porcelain_mcp_readable_structured", examples)]
 async fn mcp_check_uses_its_separately_injected_port() {
     use rmcp::{model::CallToolRequestParams, ServiceExt as _};
 
@@ -308,6 +332,37 @@ async fn mcp_check_uses_its_separately_injected_port() {
         .unwrap()
         .text
         .contains("statements: findings"));
+    assert!(result.content[0]
+        .as_text()
+        .unwrap()
+        .text
+        .contains("statement finding"));
+    client.cancel().await.unwrap();
+    server.await.unwrap().cancel().await.unwrap();
+}
+
+#[cfg(feature = "test-fixture")]
+#[tokio::test]
+#[verifies("rule_porcelain_regular_graph_work_has_commands", examples)]
+async fn mcp_regular_graph_work_executes_a_record_command() {
+    use rmcp::{model::CallToolRequestParams, ServiceExt as _};
+
+    let repository = support::records::Repository::new("The shared graph is readable.");
+    let host = support::resource_http::host(&repository, false);
+    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
+    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let client = ().serve(client_io).await.unwrap();
+
+    let result = client
+        .call_tool(CallToolRequestParams::new("list-requirements"))
+        .await
+        .unwrap();
+
+    assert_ne!(result.is_error, Some(true), "{result:?}");
+    assert_eq!(
+        result.structured_content.unwrap()["data"]["items"][0]["id"],
+        "req_shared"
+    );
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
 }

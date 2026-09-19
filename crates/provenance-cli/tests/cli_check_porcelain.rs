@@ -1,6 +1,7 @@
 use assert_cmd::Command;
 use provenance_macros::verifies;
 use serde_json::Value;
+use std::io::Write as _;
 
 #[test]
 #[verifies("rule_porcelain_action_names_match", conformance)]
@@ -116,6 +117,66 @@ fn cli_check_keeps_graph_findings_as_a_failing_exit() {
     let report: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(report["categories"][0]["category"], "graph");
     assert_eq!(report["categories"][0]["status"], "findings");
+}
+
+#[test]
+#[verifies("rule_porcelain_id_unique_in_repository", examples)]
+fn graph_check_rejects_duplicate_rows_of_the_same_kind_id_and_scope() {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path().to_str().unwrap();
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .args([
+            "init",
+            "--path",
+            repo,
+            "--scope",
+            "default",
+            "--path-prefix",
+            ".",
+        ])
+        .assert()
+        .success();
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .args([
+            "requirements",
+            "create",
+            "--repo",
+            repo,
+            "--id",
+            "req_duplicate_row",
+            "--statement",
+            "The graph rejects duplicate stored rows.",
+        ])
+        .assert()
+        .success();
+    let path = directory
+        .path()
+        .join(".provenance/state/scopes/default/requirements/req.jsonl");
+    let row = std::fs::read_to_string(&path).unwrap();
+    std::fs::OpenOptions::new()
+        .append(true)
+        .open(path)
+        .unwrap()
+        .write_all(row.as_bytes())
+        .unwrap();
+
+    let output = Command::cargo_bin("provenance")
+        .unwrap()
+        .args(["check", "--repo", repo, "--graph", "--format", "json"])
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let message = report["categories"][0]["findings"][0]["message"]
+        .as_str()
+        .unwrap();
+    assert!(
+        message.contains("requirement req_duplicate_row appears more than once in scope default"),
+        "{message}"
+    );
 }
 
 #[test]

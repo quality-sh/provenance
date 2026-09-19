@@ -23,17 +23,11 @@ pub(super) struct Selectors {
 
 impl Selectors {
     fn input(self) -> CheckInput {
-        let mut categories = Vec::new();
-        if self.graph {
-            categories.push(Category::Graph);
-        }
-        if self.statements {
-            categories.push(Category::Statements);
-        }
-        if self.bindings {
-            categories.push(Category::Bindings);
-        }
-        CheckInput::new(categories)
+        provenance_cli::porcelain::check_input_from_selectors(
+            self.graph,
+            self.statements,
+            self.bindings,
+        )
     }
 }
 

@@ -19,9 +19,6 @@ use cli::Cli;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let arguments = std::env::args().collect::<Vec<_>>();
-    if provenance_cli::porcelain::try_dispatch_bare(&arguments).await? {
-        return Ok(());
-    }
     if provenance_cli::porcelain::explicitly_selects_get(&arguments)?
         && provenance_cli::porcelain::try_dispatch(&arguments).await?
     {
@@ -45,7 +42,9 @@ async fn main() -> anyhow::Result<()> {
                 .get_subcommands()
                 .any(|candidate| candidate.get_name() == command)
     });
-    if !is_builtin && provenance_cli::porcelain::try_dispatch(&arguments).await? {
+    if provenance_cli::porcelain::bare_target_selects_get(&arguments, is_builtin)
+        && provenance_cli::porcelain::try_dispatch(&arguments).await?
+    {
         return Ok(());
     }
     let cli = Cli::parse();

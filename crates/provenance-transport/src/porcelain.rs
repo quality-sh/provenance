@@ -343,9 +343,26 @@ pub(crate) async fn call_check(
     let summary = outcome
         .categories
         .iter()
-        .map(|report| format!("{:?}: {:?}", report.category, report.status).to_ascii_lowercase())
+        .flat_map(|report| {
+            let heading =
+                format!("{:?}: {:?}", report.category, report.status).to_ascii_lowercase();
+            std::iter::once(heading)
+                .chain(
+                    report
+                        .findings
+                        .iter()
+                        .map(|finding| format!("  - {}", finding.message)),
+                )
+                .chain(
+                    report
+                        .unavailable_reason
+                        .iter()
+                        .map(|reason| format!("  - {reason}")),
+                )
+                .collect::<Vec<_>>()
+        })
         .collect::<Vec<_>>()
-        .join("; ");
+        .join("\n");
     let mut result =
         CallToolResult::structured(serde_json::to_value(outcome).expect("check outcome is JSON"));
     result.content = vec![Content::text(summary)];
@@ -383,7 +400,7 @@ pub(crate) async fn call_get(
     }
 }
 
-fn render_get_readable(outcome: &provenance_porcelain::get::GetOutcome) -> String {
+pub fn render_get_readable(outcome: &provenance_porcelain::get::GetOutcome) -> String {
     let mut lines = vec![
         format!("{} {}", outcome.record.kind, outcome.record.id),
         format!("view: {:?}", outcome.view).to_ascii_lowercase(),
@@ -421,6 +438,17 @@ fn render_get_readable(outcome: &provenance_porcelain::get::GetOutcome) -> Strin
             bounds.truncated,
             bounds.continuation.as_deref().unwrap_or("none")
         ));
+    }
+    for (label, metadata) in [
+        ("record", outcome.record_metadata.as_ref()),
+        ("view", outcome.view_metadata.as_ref()),
+    ] {
+        if let Some(error) = metadata
+            .and_then(|value| value.get("freshness_error"))
+            .and_then(Value::as_str)
+        {
+            lines.push(format!("warning: {label} freshness: {error}"));
+        }
     }
     lines.join("\n")
 }

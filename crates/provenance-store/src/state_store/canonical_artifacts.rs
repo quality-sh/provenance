@@ -29,56 +29,56 @@ impl CanonicalArtifactIndex {
             NodeType::Source,
             store.list_sources(scope_id)?,
             |record| (record.scope_id, record.id),
-        );
+        )?;
         extend_scoped(
             &mut entries,
             scope_id,
             NodeType::Requirement,
             store.list_requirements(scope_id)?,
             |record| (record.scope_id, record.id),
-        );
+        )?;
         extend_scoped(
             &mut entries,
             scope_id,
             NodeType::Resolution,
             store.list_resolutions(scope_id)?,
             |record| (record.scope_id, record.id),
-        );
+        )?;
         extend_scoped(
             &mut entries,
             scope_id,
             NodeType::Rule,
             store.list_rules(scope_id)?,
             |record| (record.scope_id, record.id),
-        );
+        )?;
         extend_scoped(
             &mut entries,
             scope_id,
             NodeType::Topic,
             store.list_topics(scope_id)?,
             |record| (record.scope_id, record.id),
-        );
+        )?;
         extend_scoped(
             &mut entries,
             scope_id,
             NodeType::Question,
             store.list_questions(scope_id)?,
             |record| (record.scope_id, record.id),
-        );
+        )?;
         extend_scoped(
             &mut entries,
             scope_id,
             NodeType::Domain,
             store.list_domains(scope_id)?,
             |record| (record.scope_id, record.id),
-        );
+        )?;
         extend_scoped(
             &mut entries,
             scope_id,
             NodeType::Boundary,
             store.list_boundaries(scope_id)?,
             |record| (record.scope_id, record.id),
-        );
+        )?;
         Ok(Self {
             scope_id: scope_id.clone(),
             entries,
@@ -98,7 +98,7 @@ impl CanonicalArtifactIndex {
                         scope_id,
                     ))?,
                     |record| (record.scope_id, record.id),
-                );
+                )?;
             };
         }
         extend!(Source, sources_path, provenance_core::Source);
@@ -268,9 +268,19 @@ fn extend_scoped<T>(
     kind: NodeType,
     records: Vec<T>,
     fields: impl Fn(T) -> (ScopeId, StableId),
-) {
-    entries.extend(records.into_iter().filter_map(|record| {
+) -> anyhow::Result<()> {
+    for record in records {
         let (embedded_scope_id, id) = fields(record);
-        (embedded_scope_id == *scope_id).then(|| key(kind, &id))
-    }));
+        if embedded_scope_id != *scope_id {
+            continue;
+        }
+        anyhow::ensure!(
+            entries.insert(key(kind, &id)),
+            "{} {} appears more than once in scope {}",
+            kind_word(kind),
+            id.as_str(),
+            scope_id.as_str()
+        );
+    }
+    Ok(())
 }

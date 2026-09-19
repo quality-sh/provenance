@@ -29,16 +29,33 @@ impl std::error::Error for BindingError {}
 
 /// Translate CLI-owned selector flags into one semantic check request.
 pub fn parse_check(words: &[&str]) -> Result<CheckInput, BindingError> {
-    let mut categories = Vec::new();
+    let mut graph = false;
+    let mut statements = false;
+    let mut bindings = false;
     for word in words {
-        categories.push(match *word {
-            "--graph" => Category::Graph,
-            "--statements" => Category::Statements,
-            "--bindings" => Category::Bindings,
+        match *word {
+            "--graph" => graph = true,
+            "--statements" => statements = true,
+            "--bindings" => bindings = true,
             _ => return Err(BindingError),
-        });
+        }
     }
-    Ok(CheckInput::new(categories))
+    Ok(check_input_from_selectors(graph, statements, bindings))
+}
+
+/// Translate the live CLI selector fields into one semantic check request.
+pub fn check_input_from_selectors(graph: bool, statements: bool, bindings: bool) -> CheckInput {
+    let mut categories = Vec::new();
+    if graph {
+        categories.push(Category::Graph);
+    }
+    if statements {
+        categories.push(Category::Statements);
+    }
+    if bindings {
+        categories.push(Category::Bindings);
+    }
+    CheckInput::new(categories)
 }
 
 /// Render a semantic check result for a terminal reader.
@@ -132,23 +149,10 @@ pub async fn try_dispatch(arguments: &[String]) -> anyhow::Result<bool> {
     Ok(true)
 }
 
-/// Run a bare target through Porcelain before built-in command parsing.
-/// A failed probe yields to built-in parsing; the main dispatcher retries other targets.
+/// Select the default get action without reading repository state.
 #[rule("rule_porcelain_get_is_default_action")]
-pub async fn try_dispatch_bare(arguments: &[String]) -> anyhow::Result<bool> {
-    if raw_words(arguments).len() != 1 {
-        return Ok(false);
-    }
-    let Some(invocation) = split_get_arguments(arguments)? else {
-        return Ok(false);
-    };
-    if !provenance_store::layout::ProvenanceLayout::new(&invocation.repo)
-        .manifest_path()
-        .is_file()
-    {
-        return Ok(false);
-    }
-    Ok(try_dispatch(arguments).await.unwrap_or(false))
+pub fn bare_target_selects_get(arguments: &[String], is_builtin: bool) -> bool {
+    !is_builtin && raw_words(arguments).len() == 1
 }
 
 /// Report whether the arguments explicitly select the target-first get grammar.
@@ -242,48 +246,69 @@ fn render_get(outcome: &GetOutcome, format: Option<OutputFormat>) -> serde_json:
     if format == Some(OutputFormat::Json) {
         serde_json::to_string_pretty(outcome)
     } else {
-        let mut sections = vec![
-            format!("{} {}", outcome.record.kind, outcome.record.id),
-            format!("view: {:?}", outcome.view).to_ascii_lowercase(),
-            format!(
-                "record:\n{}",
-                serde_json::to_string_pretty(&outcome.record.value)?
-            ),
-        ];
-        if !outcome.related.is_empty() {
-            sections.push(format!(
-                "related:\n{}",
-                outcome
-                    .related
-                    .iter()
-                    .map(|record| format!(
-                        "- {} {}: {}",
-                        record.kind,
-                        record.id,
-                        serde_json::to_string(&record.value).expect("record values are valid JSON")
-                    ))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            ));
-        }
-        if let Some(detail) = &outcome.detail {
-            sections.push(format!(
-                "detail:\n{}",
-                serde_json::to_string_pretty(detail)?
-            ));
-        }
-        if let Some(bounds) = &outcome.bounds {
-            sections.push(format!(
-                "bounds: limit={} max_depth={} has_more={} truncated={} continuation={}",
-                bounds.limit,
-                bounds
-                    .max_depth
-                    .map_or_else(|| "none".to_owned(), |depth| depth.to_string()),
-                bounds.has_more,
-                bounds.truncated,
-                bounds.continuation.as_deref().unwrap_or("none")
-            ));
-        }
-        Ok(sections.join("\n\n"))
+        render_get_readable(outcome)
     }
+}
+
+/// Render a get outcome and report any stale response metadata.
+pub fn render_get_readable(outcome: &GetOutcome) -> serde_json::Result<String> {
+    let sections = vec![
+        format!("{} {}", outcome.record.kind, outcome.record.id),
+        format!("view: {:?}", outcome.view).to_ascii_lowercase(),
+        format!(
+            "record:\n{}",
+            serde_json::to_string_pretty(&outcome.record.value)?
+        ),
+    ];
+    let mut sections = sections;
+    if !outcome.related.is_empty() {
+        sections.push(format!(
+            "related:\n{}",
+            outcome
+                .related
+                .iter()
+                .map(|record| format!(
+                    "- {} {}: {}",
+                    record.kind,
+                    record.id,
+                    serde_json::to_string(&record.value).expect("record values are valid JSON")
+                ))
+                .collect::<Vec<_>>()
+                .join("\n")
+        ));
+    }
+    if let Some(detail) = &outcome.detail {
+        sections.push(format!(
+            "detail:\n{}",
+            serde_json::to_string_pretty(detail)?
+        ));
+    }
+    if let Some(bounds) = &outcome.bounds {
+        sections.push(format!(
+            "bounds: limit={} max_depth={} has_more={} truncated={} continuation={}",
+            bounds.limit,
+            bounds
+                .max_depth
+                .map_or_else(|| "none".to_owned(), |depth| depth.to_string()),
+            bounds.has_more,
+            bounds.truncated,
+            bounds.continuation.as_deref().unwrap_or("none")
+        ));
+    }
+    Ok(finish_readable(outcome, sections))
+}
+
+fn finish_readable(outcome: &GetOutcome, mut sections: Vec<String>) -> String {
+    for (label, metadata) in [
+        ("record", outcome.record_metadata.as_ref()),
+        ("view", outcome.view_metadata.as_ref()),
+    ] {
+        if let Some(error) = metadata
+            .and_then(|value| value.get("freshness_error"))
+            .and_then(serde_json::Value::as_str)
+        {
+            sections.push(format!("warning: {label} freshness: {error}"));
+        }
+    }
+    sections.join("\n\n")
 }

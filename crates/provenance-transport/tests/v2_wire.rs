@@ -1,5 +1,4 @@
 use axum::{body::Body, http::Request};
-use provenance_macros::verifies;
 use provenance_store::operations::catalog;
 use provenance_transport::StatementHost;
 use rmcp::{model::CallToolRequestParams, ServiceExt as _};
@@ -79,7 +78,6 @@ async fn metadata_carries_the_tuple_in_an_envelope() {
 }
 
 #[tokio::test]
-#[verifies("rule_porcelain_regular_graph_work_has_commands", examples)]
 async fn mcp_projects_the_same_resource_operation() {
     let host = StatementHost::default();
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
