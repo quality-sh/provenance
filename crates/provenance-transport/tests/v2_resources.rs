@@ -432,8 +432,9 @@ async fn mcp_keeps_role_subsets_and_returns_the_http_envelope() {
         .call_tool(CallToolRequestParams::new("list-sources"))
         .await
         .unwrap();
+    assert_ne!(result.is_error, Some(true), "{result:?}");
     let value = result.structured_content.unwrap();
-    assert!(value["data"]["items"].is_array());
+    assert!(value["data"]["items"].is_array(), "{value}");
     assert!(value["meta"].is_object());
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
