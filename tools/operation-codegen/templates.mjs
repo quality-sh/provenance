@@ -266,11 +266,11 @@ function rustQueryMethod(path, method, op) {
   const helpers = variants.map(variant => {
     const name = variant.selector === null ? 'Base' : pascal(variant.selector);
     const parameters = variant.parameters.filter(parameter => parameter.schema.const === undefined);
-    const arguments = parameters.map(parameter => `${propertyName(parameter)}: ${rustType(parameter)}`);
+    const helperArguments = parameters.map(parameter => `${propertyName(parameter)}: ${rustType(parameter)}`);
     const helper = `${operation}_${variant.selector === null ? 'base' : variant.selector.replaceAll('-', '_')}`;
     const success = schemaName(variant.success);
     const failed = schemaName(variant.failure);
-    return `    async fn ${helper}(&self${arguments.length ? `, ${arguments.join(', ')}` : ''}) -> Result<${output}, Error> {
+    return `    async fn ${helper}(&self${helperArguments.length ? `, ${helperArguments.join(', ')}` : ''}) -> Result<${output}, Error> {
         ${rustVariantRequest(path, method, op, variant, operation)}
         let status = response.status();
         let value = runtime::read_json(response, "${operation}", false).await?;
