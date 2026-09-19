@@ -5,7 +5,7 @@ use serde_json::{json, Map, Value};
 use std::io::{self, Write};
 
 #[derive(Debug)]
-pub(crate) struct Success {
+pub struct Success {
     value: Value,
     bytes: Vec<u8>,
 }
