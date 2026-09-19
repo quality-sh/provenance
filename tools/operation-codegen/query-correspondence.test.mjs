@@ -77,9 +77,11 @@ test('Rust generation uses a closed query input and decodes the selected result'
   const files = rustClientFiles(document, { wire: 2, state: 1, review_journal: 1, read_derivation: 1 });
   const source = files['operations/get_rule.rs'];
   assert.match(source, /pub enum GetRuleInput<'a>/);
-  assert.match(source, /pub enum GetRuleOutput/);
-  assert.match(source, /GetRuleInput::Base \{ id \} => \{[\s\S]*?let request = self\.http\.get\(url\);/);
-  assert.match(source, /GetRuleInput::Trace \{ id, direction \} => \{[\s\S]*?let mut request = self\.http\.get\(url\);/);
+  assert.match(source, /Base\(Box<GetRuleBaseSuccess>\)/);
+  assert.match(source, /GetRuleInput::Base \{ id \} => self\.get_rule_base\(id\)\.await/);
+  assert.match(source, /async fn get_rule_base\(&self, id: &'a str\)/);
+  assert.match(source, /let url = format!\("\{\}\/rules\/\{\}", self\.base_url, runtime::path\(id\)\);/);
+  assert.doesNotMatch(source, /"\/rules\/\{id\}"/);
   assert.match(source, /runtime::validate\(&value, "GetRuleTraceSuccess"/);
   assert.match(source, /GetRuleOutput::Trace/);
 });
