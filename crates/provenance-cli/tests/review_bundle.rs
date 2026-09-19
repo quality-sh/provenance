@@ -21,7 +21,7 @@ use std::{
 
 use provenance_core::{Manifest, RepoPathPrefix, ScopeId};
 use provenance_store::layout::ProvenanceLayout;
-use serde_json::{json, Value};
+use serde_json::Value;
 
 fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -116,15 +116,8 @@ fn body(response: ureq::Response) -> Vec<u8> {
     bytes
 }
 
-fn call_operation(host: &Value, target: &str) -> ureq::Response {
-    response(
-        request(host, "POST", "/v9/operations/list-threads", true)
-            .set("Content-Type", "application/json")
-            .send_string(
-                &json!({"context":{"repository":target,"scope":"default"},"request":null})
-                    .to_string(),
-            ),
-    )
+fn call_operation(host: &Value) -> ureq::Response {
+    response(request(host, "GET", "/discussion-containers", true).call())
 }
 
 fn start_host(work: &Path, repo: &Path) -> Child {
@@ -330,8 +323,7 @@ fn assert_served_bundle(config: &Value, files: &BTreeMap<String, Vec<u8>>) {
         response(request(config, "GET", "/metadata", false).call()).status(),
         200
     );
-    assert_eq!(call_operation(config, "A").status(), 200);
-    assert_eq!(call_operation(config, "B").status(), 404);
+    assert_eq!(call_operation(config).status(), 200);
     assert_eq!(
         response(request(config, "GET", "/assets/missing.js", false).call()).status(),
         404

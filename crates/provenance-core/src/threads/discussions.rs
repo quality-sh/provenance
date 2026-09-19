@@ -2,6 +2,7 @@ use crate::{SchemaVersion, ScopeId, StableId, ThreadParent};
 use serde::{Deserialize, Serialize};
 
 /// A Discussion's status is independent of its Thread container.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DiscussionStatus {
@@ -9,6 +10,7 @@ pub enum DiscussionStatus {
     Resolved,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DiscussionFact {
@@ -18,6 +20,7 @@ pub enum DiscussionFact {
 }
 
 /// One immutable membership or status fact is also the request receipt.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DiscussionEntry {
@@ -39,6 +42,7 @@ pub struct DiscussionEntry {
 }
 
 /// An outcome cites one known Message in one Discussion. It does not infer membership.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DiscussionOrigin {
@@ -47,6 +51,7 @@ pub struct DiscussionOrigin {
     pub message_id: StableId,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum DiscussionGroup {
@@ -61,6 +66,7 @@ pub enum DiscussionGroup {
     },
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DiscussionQuery {
@@ -70,12 +76,14 @@ pub struct DiscussionQuery {
     pub cursor: Option<String>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiscussionPage {
     pub entries: Vec<DiscussionGroup>,
     pub next_cursor: Option<String>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum DiscussionSelector {
@@ -83,6 +91,7 @@ pub enum DiscussionSelector {
     Legacy { thread_id: StableId },
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DiscussionMessagesQuery {
@@ -93,6 +102,7 @@ pub struct DiscussionMessagesQuery {
     pub cursor: Option<String>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiscussionMessagesPage {
     pub entries: Vec<crate::Message>,

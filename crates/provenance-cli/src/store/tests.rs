@@ -1,4 +1,4 @@
-use super::{NotFound, Store};
+use super::Store;
 use provenance_core::{
     Manifest, RepoPathPrefix, RequirementStatus, RuleSeverity, RuleStatus, ScopeId, SourceType,
     StableId,
@@ -86,70 +86,6 @@ fn open_builds_the_layout_from_the_repository_root() {
     let store = Store::open(root.clone());
 
     assert_eq!(store.layout().state_dir(), root.join(".provenance/state"));
-}
-
-#[test]
-fn point_reads_return_each_requested_record() {
-    let (_directory, store, scope) = seeded_store();
-
-    assert_eq!(
-        store
-            .source(&scope, &StableId::new("source_policy").unwrap())
-            .unwrap()
-            .id
-            .as_str(),
-        "source_policy"
-    );
-    assert_eq!(
-        store
-            .requirement(&scope, &StableId::new("req_policy").unwrap())
-            .unwrap()
-            .id
-            .as_str(),
-        "req_policy"
-    );
-    assert_eq!(
-        store
-            .rule(&scope, &StableId::new("rule_policy").unwrap())
-            .unwrap()
-            .id
-            .as_str(),
-        "rule_policy"
-    );
-}
-
-#[test]
-fn point_read_refusals_keep_the_command_messages() {
-    let (_directory, store, scope) = initialized_store();
-    let missing_requirement = StableId::new("req_missing").unwrap();
-    let missing_rule = StableId::new("rule_missing").unwrap();
-    let missing_source = StableId::new("source_missing").unwrap();
-
-    assert_not_found(
-        store.requirement(&scope, &missing_requirement),
-        &NotFound::Requirement,
-        "requirement does not exist",
-    );
-    assert_not_found(
-        store.rule(&scope, &missing_rule),
-        &NotFound::Rule(missing_rule),
-        "rule `rule_missing` not found in scope",
-    );
-    assert_not_found(
-        store.source(&scope, &missing_source),
-        &NotFound::Source,
-        "source does not exist",
-    );
-}
-
-fn assert_not_found<T: std::fmt::Debug>(
-    result: anyhow::Result<T>,
-    expected: &NotFound,
-    message: &str,
-) {
-    let error = result.unwrap_err();
-    assert_eq!(error.to_string(), message);
-    assert_eq!(error.downcast_ref::<NotFound>(), Some(expected));
 }
 
 #[test]

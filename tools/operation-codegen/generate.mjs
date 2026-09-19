@@ -8,7 +8,7 @@ import { typescriptFiles, effectFiles } from './typescript.mjs';
 import { responseSchemas } from './validators.mjs';
 import { compareTrees } from './inventory.mjs';
 import { rustClientFiles } from './templates.mjs';
-import { lintFixture, catalogNamesFromDocument } from './grammar-lint.mjs';
+import { documentGrammarErrors } from './grammar-lint.mjs';
 import { generatedDirectories as directories, recordGeneration } from './artifacts.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -21,15 +21,16 @@ async function generate(temporary, generator) {
   run(generator, ['export', join(temporary, directories[0])]);
   const openapiPath = join(temporary, directories[0], 'openapi.json');
   const document = JSON.parse(await readFile(openapiPath, 'utf8'));
-  const coverage = JSON.parse(await readFile(new URL('./legacy-operation-coverage.json', import.meta.url), 'utf8'));
-  const grammarErrors = lintFixture(coverage, { catalogNames: catalogNamesFromDocument(document) });
-  if (grammarErrors.length) throw new Error(['Operation coverage or contract grammar check failed:', ...grammarErrors.map(error => `  - ${error}`)].join('\n'));
+  const mcp = JSON.parse(await readFile(join(temporary, directories[0], 'mcp.json'), 'utf8'));
+  const compatibility = JSON.parse(await readFile(join(temporary, directories[0], 'compatibility.json'), 'utf8'));
+  const grammarErrors = documentGrammarErrors(document, mcp);
+  if (grammarErrors.length) throw new Error(['Operation contract grammar check failed:', ...grammarErrors.map(error => `  - ${error}`)].join('\n'));
   const tsDir = join(temporary, directories[1]);
-  for (const [path, source] of Object.entries({ ...await typescriptFiles(document), ...await effectFiles(document) })) await writeFile(join(tsDir, path), source);
+  for (const [path, source] of Object.entries({ ...await typescriptFiles(document, compatibility), ...await effectFiles(document) })) await writeFile(join(tsDir, path), source);
   const rustDir = join(temporary, directories[2]);
   run(generator, ['rust', openapiPath, rustDir]);
   await writeFile(join(rustDir, 'responses.json'), JSON.stringify({ components: document.components, response_schemas: responseSchemas(document) }) + '\n');
-  const clientFiles = rustClientFiles(document);
+  const clientFiles = rustClientFiles(document, compatibility);
   for (const [path, source] of Object.entries(clientFiles)) {
     await mkdir(dirname(join(rustDir, path)), { recursive: true });
     await writeFile(join(rustDir, path), source);

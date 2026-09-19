@@ -13,6 +13,19 @@ fn provenance_json(args: &[&str]) -> Value {
     serde_json::from_slice(&output).unwrap()
 }
 
+fn provenance_json_stdin(args: &[&str], input: &str) -> Value {
+    let output = Command::cargo_bin("provenance")
+        .unwrap()
+        .args(args)
+        .write_stdin(input)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    serde_json::from_slice(&output).unwrap()
+}
+
 #[test]
 #[allow(clippy::too_many_lines)]
 fn cli_create_commands_preserve_origin_thread_and_message() {
@@ -46,25 +59,31 @@ fn cli_create_commands_preserve_origin_thread_and_message() {
         "--format",
         "json",
     ]);
-    let posted = provenance_json(&[
-        "thread",
-        "post",
-        "--repo",
-        &repo,
-        "--scope",
-        "default",
-        "--parent-type",
-        "requirement",
-        "--parent-id",
-        "req_origin_seed",
-        "--role",
-        "user",
-        "--format",
-        "json",
-        "Promote this conversation into artifacts",
-    ]);
-    let origin_thread = posted["thread"]["id"].as_str().unwrap().to_string();
-    let origin_message = posted["message"]["id"].as_str().unwrap().to_string();
+    let posted = provenance_json_stdin(
+        &[
+            "requirements",
+            "req_origin_seed",
+            "discussions",
+            "create",
+            "--repo",
+            &repo,
+            "--scope",
+            "default",
+            "--stdin",
+            "--format",
+            "json",
+        ],
+        r#"{"role":"user","body":"Promote this conversation into artifacts"}"#,
+    );
+    let discussion_id = posted["data"]["discussion_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let origin_thread = posted["data"]["thread_id"].as_str().unwrap().to_string();
+    let origin_message = posted["data"]["root_message_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
 
     let source = provenance_json(&[
         "sources",
@@ -84,24 +103,29 @@ fn cli_create_commands_preserve_origin_thread_and_message() {
         "--format",
         "json",
     ]);
-    let requirement = provenance_json(&[
-        "requirements",
-        "create",
-        "--repo",
-        &repo,
-        "--scope",
-        "default",
-        "--id",
-        "req_origin_child",
-        "--statement",
-        "Origin child requirement",
-        "--origin-thread",
-        &origin_thread,
-        "--origin-message",
-        &origin_message,
-        "--format",
-        "json",
-    ]);
+    let requirement = provenance_json_stdin(
+        &[
+            "requirements",
+            "create",
+            "--repo",
+            &repo,
+            "--scope",
+            "default",
+            "--stdin",
+            "--format",
+            "json",
+        ],
+        &serde_json::json!({
+            "id":"req_origin_child",
+            "statement":"Origin child requirement",
+            "origin":{
+                "thread_id": origin_thread,
+                "discussion_id": discussion_id,
+                "message_id": origin_message
+            }
+        })
+        .to_string(),
+    );
     let resolution = provenance_json(&[
         "resolutions",
         "create",
@@ -150,8 +174,8 @@ fn cli_create_commands_preserve_origin_thread_and_message() {
     ]);
 
     for artifact in [&source, &requirement, &resolution, &rule] {
-        assert_eq!(artifact["origin_thread"], origin_thread);
-        assert_eq!(artifact["origin_message"], origin_message);
+        assert_eq!(artifact["data"]["origin_thread"], origin_thread);
+        assert_eq!(artifact["data"]["origin_message"], origin_message);
     }
 
     // The CLI-created Requirements enroll through the guarded journal, and a

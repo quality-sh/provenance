@@ -3,6 +3,7 @@ mod canonical_artifacts;
 mod domain_writers;
 mod graph_validation;
 mod ideation_batches;
+mod ideation_edits;
 mod ideation_targets;
 mod ideation_validation;
 mod ideation_writers;
@@ -35,6 +36,7 @@ pub use ideation_batches::{
     ensure_asserted_contribution_unchanged, ensure_asserted_synthesis_unchanged, CONTRIBUTION_KIND,
     SYNTHESIS_KIND,
 };
+pub use ideation_edits::{UpdateContributionInput, UpdateSynthesisPacketInput};
 pub use inputs::{
     AddSourceReferenceInput, BeginVerificationInput, CascadedResource, CompleteVerificationInput,
     CreateAssertionInput, CreateBoundaryInput, CreateContributionInput, CreateDispositionInput,

@@ -5,13 +5,12 @@ isolated targets and explicit target/scope grants. These tests do not authorize
 real repository hosting. The [local review host](review-host.md) defines the
 production caller and repository access contract.
 
-The catalog adds `impact`, `resolve-symbol`, `evidence`, `stale`,
-`verification-runs`, and `verification-bindings`. The four structured reads use
-repository, scope, and optional freshness. The two verification lists accept
-repository and scope, with an optional Rule filter. They reject freshness and
-page controls. Native and HTTP list results remain complete arrays. MCP returns
-the complete array in `{"result": [...]}` and declares that object in its output
-schema. A queue refusal never returns a partial list as a complete answer.
+The catalog exposes `impact`, `resolve-symbol`, `evidence`, and `stale` on their
+owning resource paths. It also exposes the `verification-runs` and
+`verification-bindings` collections. The connection binds the repository and
+scope. Queries use GET parameters on the owning path. HTTP and MCP use the same
+response envelope. Lists return records in `data.items`. A queue refusal never
+returns a partial list as a complete answer.
 
 Evidence without a base reads verification runs but does not request Git.
 A head without a base retains this behavior. A base adds canonical evidence and
@@ -121,7 +120,7 @@ Linux tests exercise selected and ancestor symlinks, portable invalid paths,
 root replacement after open, repeated ancestor replacement, FIFO refusal,
 ignored symlinks, deterministic cuts, real Git revisions, and a missing promised
 blob whose control run invokes a remote helper. They also cover all six HTTP and
-MCP operations, complete arrays, all four cuts, scope isolation, and no-base
-behavior. Passing these tests does not certify every filesystem or production
-host configuration. Platform runtime checks must run on their target operating
-systems before release.
+MCP operations, complete list envelopes, all four cuts, scope isolation, and
+no-base behavior. Passing these tests does not certify every filesystem or
+production host configuration. Platform runtime checks must run on their target
+operating systems before release.

@@ -48,13 +48,15 @@ impl RequirementRelations {
         expand_list(
             &mut final_sets.depends_on,
             "depends_on",
-            before,
+            "requirement",
+            &before.id,
             self.depends_on.as_ref(),
         )?;
         expand_list(
             &mut final_sets.supersedes,
             "supersedes",
-            before,
+            "requirement",
+            &before.id,
             self.supersedes.as_ref(),
         )?;
         if let Some(edit) = &self.spawned_by {
@@ -120,10 +122,11 @@ fn sort_citations(entries: &mut [SourceReference]) {
     });
 }
 
-fn expand_list(
+pub fn expand_list(
     target: &mut Vec<StableId>,
     name: &str,
-    before: &Requirement,
+    owner_kind: &str,
+    owner_id: &StableId,
     edit: Option<&ListEdit>,
 ) -> anyhow::Result<()> {
     let Some(edit) = edit else { return Ok(()) };
@@ -138,8 +141,8 @@ fn expand_list(
             for entry in remove {
                 anyhow::ensure!(
                     target.contains(entry),
-                    "requirement {} does not name a record under {name}: {}",
-                    before.id.as_str(),
+                    "{owner_kind} {} does not name a record under {name}: {}",
+                    owner_id.as_str(),
                     entry.as_str()
                 );
             }

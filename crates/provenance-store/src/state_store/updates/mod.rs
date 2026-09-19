@@ -7,6 +7,8 @@ mod shaping;
 
 use crate::write_error::{SourceFailure, WriteFailure};
 pub use inputs::*;
+use provenance_core::model::relations::RelationOwner;
+use provenance_core::ScopeId;
 
 fn invalid(message: &str) -> anyhow::Error {
     SourceFailure::wrap(WriteFailure::InvalidUpdate, anyhow::anyhow!("{message}"))
@@ -56,4 +58,19 @@ fn missing() -> anyhow::Error {
         WriteFailure::MissingReference,
         anyhow::anyhow!("record does not exist"),
     )
+}
+
+fn validate_final_relations<T: RelationOwner>(
+    store: &crate::state_store::StateStore,
+    scope: &ScopeId,
+    record: &T,
+) -> anyhow::Result<()> {
+    for (name, target) in record.references() {
+        let declaration = T::relations()
+            .iter()
+            .find(|declaration| declaration.name == name)
+            .expect("a record reference has a relation declaration");
+        store.ensure_node_exists(scope, declaration.target, target, name)?;
+    }
+    store.validate_graph_scope(scope)
 }

@@ -1,3 +1,5 @@
+#![allow(clippy::result_large_err)]
+
 //! Isolated adapters for the shared operation contract.
 //!
 //! This library does not open a listener. The CLI owns the local review listener.
@@ -10,6 +12,7 @@ mod http;
 mod local;
 mod mcp;
 mod mcp_io;
+mod routing;
 
 pub use access::HostAccess;
 pub use local::LocalAccess;
@@ -68,6 +71,16 @@ impl StatementHost {
     pub(crate) fn advertises(&self, operation: &str) -> bool {
         self.access.advertises(operation)
     }
+    pub(crate) fn bound_call(
+        &self,
+        kind: provenance_store::operations::catalog::ContextKind,
+        request: &Value,
+    ) -> Result<Value, FailureEnvelope> {
+        routing::context(self.access.bound_identity(), kind, request)
+    }
+    pub(crate) fn bound_identity(&self) -> Option<(String, String)> {
+        self.access.bound_identity()
+    }
 
     fn admit(&self) -> Result<OwnedSemaphorePermit, FailureEnvelope> {
         self.ingress
@@ -99,6 +112,23 @@ impl StatementHost {
         http::router(self.clone())
     }
 
+    /// Invoke one registered resource route for a native caller that already
+    /// bound its repository and scope through `HostAccess`.
+    pub async fn invoke_resource(
+        &self,
+        method: axum::http::Method,
+        path: &str,
+        data: Value,
+        query: std::collections::BTreeMap<String, String>,
+        headers: axum::http::HeaderMap,
+    ) -> Result<Value, FailureEnvelope> {
+        let matched = routing::find(&method, path)
+            .ok_or_else(|| FailureEnvelope::new(None, OperationFailure::UnknownOperation))?;
+        routing::invoke(self, &matched, data, query, &headers)
+            .await
+            .map(|result| result.0)
+    }
+
     /// Close admission and wait for all operation work, including disconnected calls.
     pub async fn shutdown(&self) {
         self.ingress.close();
@@ -106,21 +136,21 @@ impl StatementHost {
         self.execution.shutdown().await;
     }
 
-    async fn invoke(
+    async fn invoke_backing(
         &self,
-        operation: String,
-        version: u32,
+        public_name: &str,
+        backing: &str,
         call: Value,
     ) -> Result<Value, FailureEnvelope> {
         let runtime = tokio::runtime::Handle::current();
         let access: Arc<dyn provenance_store::operations::catalog::ContextResolver> =
             self.access.clone();
-        let dispatched_operation = operation.clone();
+        let backing = backing.to_owned();
         self.execution
-            .run(&operation, move || {
+            .run(public_name, move || {
                 runtime.block_on(provenance_store::operations::catalog::invoke_with(
-                    &dispatched_operation,
-                    version,
+                    &backing,
+                    provenance_core::SDK_PROTOCOL_VERSION,
                     call,
                     access,
                 ))

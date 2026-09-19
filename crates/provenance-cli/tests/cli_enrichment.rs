@@ -44,31 +44,22 @@ fn cli_creates_and_exports_enriched_sources_and_resolutions() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "sources",
-            "create",
-            "--repo",
-            &repo,
-            "--scope",
-            "default",
-            "--id",
-            "source_sah",
-            "--name",
-            "Support at Home",
-            "--source-type",
-            "legislation",
-            "--reference",
-            "Department guidance",
-            "--commit-pin",
-            "5e1f2a9c4b6d8e0f1234567890abcdef12345678",
-            "--effective-date",
-            "1714521600000",
-            "--review-date",
-            "1717200000000",
-            "--supersedes",
-            "source_sah_2025",
-            "--format",
+            "sources", "create", "--repo", &repo, "--scope", "default", "--stdin", "--format",
             "json",
         ])
+        .write_stdin(
+            serde_json::json!({
+                "id": "source_sah",
+                "name": "Support at Home",
+                "source_type": "legislation",
+                "reference": "Department guidance",
+                "commit_pin": "5e1f2a9c4b6d8e0f1234567890abcdef12345678",
+                "effective_date": 1_714_521_600_000_i64,
+                "review_date": 1_717_200_000_000_i64,
+                "supersedes": ["source_sah_2025"]
+            })
+            .to_string(),
+        )
         .assert()
         .success()
         .stdout(predicates::str::contains(
@@ -153,41 +144,33 @@ fn cli_creates_and_exports_enriched_sources_and_resolutions() {
             &repo,
             "--scope",
             "default",
-            "--id",
-            "res_sah",
-            "--title",
-            "SAH extraction",
-            "--requirement-id",
-            "req_sah",
-            "--position",
-            "Keep as draft extraction",
-            "--rationale",
-            "Needs human review",
-            "--status",
-            "draft",
-            "--context",
-            "Codebase scan",
-            "--enforcement",
-            "specification",
-            "--confidence",
-            "0.91",
-            "--input-type",
-            "regulatory",
-            "--input-reference",
-            "SAH program manual",
-            "--input-summary",
-            "Program rules reviewed",
-            "--made-by",
-            "Analyst One",
-            "--approved-by",
-            "Approver Two",
-            "--approved-at",
-            "1714780800000",
-            "--supersedes",
-            "res_sah_2025",
+            "--stdin",
             "--format",
             "json",
         ])
+        .write_stdin(
+            serde_json::json!({
+                "id": "res_sah",
+                "title": "SAH extraction",
+                "requirement_ids": ["req_sah"],
+                "supersedes": ["res_sah_2025"],
+                "position": "Keep as draft extraction",
+                "rationale": "Needs human review",
+                "status": "draft",
+                "context": "Codebase scan",
+                "enforcement": "specification",
+                "confidence": 0.91,
+                "inputs": [{
+                    "input_type": "regulatory",
+                    "reference": "SAH program manual",
+                    "summary": "Program rules reviewed"
+                }],
+                "made_by": "Analyst One",
+                "approved_by": "Approver Two",
+                "approved_at": 1_714_780_800_000_i64
+            })
+            .to_string(),
+        )
         .assert()
         .success()
         .stdout(predicates::str::contains(r#""input_type": "regulatory""#))
@@ -255,7 +238,7 @@ fn cli_rejects_invalid_source_commit_pin() {
         ])
         .assert()
         .failure()
-        .stderr(predicates::str::contains("commit pin must"));
+        .stderr(predicates::str::contains("invalid_commit_pin"));
 }
 
 /// An input has to name where it came from and say what it told the decision.
@@ -293,32 +276,30 @@ fn cli_rejects_a_resolution_input_with_a_blank_reference() {
             &repo,
             "--scope",
             "default",
-            "--id",
-            "res_sah",
-            "--requirement-id",
-            "req_sah",
-            "--title",
-            "SAH extraction",
-            "--position",
-            "Keep as draft extraction",
-            "--rationale",
-            "Needs human review",
-            "--status",
-            "draft",
-            "--input-type",
-            "regulatory",
-            "--input-reference",
-            "   ",
-            "--input-summary",
-            "Program rules reviewed",
+            "--stdin",
             "--format",
             "json",
         ])
+        .write_stdin(
+            serde_json::json!({
+                "id": "res_sah",
+                "requirement_ids": ["req_sah"],
+                "title": "SAH extraction",
+                "position": "Keep as draft extraction",
+                "rationale": "Needs human review",
+                "status": "draft",
+                "supersedes": [],
+                "inputs": [{
+                    "input_type": "regulatory",
+                    "reference": "   ",
+                    "summary": "Program rules reviewed"
+                }]
+            })
+            .to_string(),
+        )
         .assert()
         .failure()
-        .stderr(predicates::str::contains(
-            "resolution input reference must not be blank",
-        ));
+        .stderr(predicates::str::contains("request.inputs[0]"));
 }
 
 /// The same refusal on the way in from a file. An export edited to blank an

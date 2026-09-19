@@ -53,7 +53,7 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
     let endpoint = format!("http://{address}");
     let config = json!({
         "endpoint": endpoint, "repositoryId": options.repository_id, "scope": options.scope,
-        "protocolVersion": provenance_core::SDK_PROTOCOL_VERSION,
+        "compatibility": provenance_core::protocol::host::COMPATIBILITY,
         "sdkVersion": env!("CARGO_PKG_VERSION"),
     });
     let router = host

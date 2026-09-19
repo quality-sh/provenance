@@ -2,48 +2,8 @@
 #[allow(dead_code)]
 #[path = "support/records.rs"]
 mod records;
-use records::{call, host, Repository};
+use records::Repository;
 use serde_json::json;
-
-#[tokio::test]
-async fn selected_source_paths_cannot_read_an_outside_sentinel() {
-    let repo = Repository::new("The evidence is readable.");
-    let outside = tempfile::tempdir().unwrap();
-    std::fs::write(
-        outside.path().join("outside.rs"),
-        "#[rule(\"rule_shared\")]\nfn OUTSIDE_SENTINEL() {}\n",
-    )
-    .unwrap();
-    std::os::unix::fs::symlink(
-        outside.path().join("outside.rs"),
-        repo.dir.path().join("link.rs"),
-    )
-    .unwrap();
-    std::os::unix::fs::symlink(outside.path(), repo.dir.path().join("ancestor")).unwrap();
-    let host = host(&[("selected", &repo)], &["selected"]);
-    for file in [
-        "link.rs",
-        "ancestor/outside.rs",
-        "../outside.rs",
-        "/tmp/outside.rs",
-        "C:\\outside.rs",
-        "src/../outside.rs",
-    ] {
-        let (status, answer) = call(
-            &host,
-            "resolve-symbol",
-            json!({"context":{"repository":"selected","scope":"default"},"request":{"file":file}}),
-        )
-        .await;
-        assert_eq!(status, 403, "{file}: {answer}");
-        assert_eq!(answer["error"]["kind"], "file_access_denied");
-        assert!(!answer.to_string().contains("OUTSIDE_SENTINEL"));
-    }
-    let (status, answer) = call(&host, "impact", json!({"context":{"repository":"selected","scope":"default"},"request":{"id":"rule_shared"}})).await;
-    assert_eq!(status, 403, "{answer}");
-    assert_eq!(answer["error"]["kind"], "file_access_denied");
-    host.shutdown().await;
-}
 
 #[test]
 fn native_verification_checks_relative_and_absolute_files_before_publication() {

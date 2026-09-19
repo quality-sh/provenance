@@ -1,4 +1,5 @@
 mod atomic_file;
+mod catalog_cli;
 mod cli;
 mod docs;
 mod gitignore;
@@ -17,6 +18,10 @@ use cli::Cli;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let arguments = std::env::args().collect::<Vec<_>>();
+    if catalog_cli::try_dispatch(&arguments).await? {
+        return Ok(());
+    }
     let cli = Cli::parse();
     let quiet = cli.quiet;
     handlers::dispatch(cli.command, quiet).await

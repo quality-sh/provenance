@@ -31,8 +31,8 @@ fn a_reference_with_a_loadable_index_rejects_an_unapproved_word() {
         String::from_utf8_lossy(&output.stdout)
     );
     let error = error_json(&output);
-    assert_eq!(error["field"], "statement");
-    let findings = error["findings"]
+    assert_eq!(error["kind"], "statement_invalid", "{error}");
+    let findings = error["report"]["findings"]
         .as_array()
         .expect("the error lists findings");
     assert_eq!(findings.len(), 1, "findings: {findings:?}");

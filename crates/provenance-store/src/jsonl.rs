@@ -151,7 +151,7 @@ mod tests {
     }
 
     #[test]
-    fn persistence_failure_after_mutation_reports_an_uncertain_outcome() {
+    fn persistence_failure_after_mutation_reports_a_write_failure() {
         use crate::write_error::{PublicationStarted, WriteError, WriteFailure};
         let dir = tempfile::tempdir().unwrap();
         let root = camino::Utf8Path::from_path(dir.path()).unwrap();
@@ -176,7 +176,7 @@ mod tests {
             .is_some());
         assert!(matches!(
             WriteError(error).safe(),
-            WriteFailure::UncertainWrite
+            WriteFailure::WriteFailed
         ));
     }
 

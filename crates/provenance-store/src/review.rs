@@ -3,9 +3,10 @@ mod classifier;
 pub(crate) mod guard;
 mod input;
 mod journal;
-mod relationships;
+pub(crate) mod relationships;
+mod resource_read;
 mod save;
-pub use input::{RequirementRelations, SaveRequirement};
+pub use input::{ListEdit, RequirementRelations, SaveRequirement};
 
 fn owner_matches(record: &provenance_core::Requirement, owner: Option<&str>) -> anyhow::Result<()> {
     if record.declared_by.as_deref() != owner {
@@ -41,8 +42,8 @@ mod authoring;
 mod discussion_messages;
 mod discussion_reads;
 mod typed_adoption;
-pub use discussion_messages::read_discussion_messages;
-pub use discussion_reads::read_discussions;
+pub use discussion_messages::{read_discussion_message, read_discussion_messages};
+pub use discussion_reads::{read_discussion, read_discussions};
 #[cfg(test)]
 mod discussion_recovery_tests;
 

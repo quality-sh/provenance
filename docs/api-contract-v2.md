@@ -138,11 +138,9 @@ status. The declared set omits no status that the variants produce.
 Under-declaration is impossible.
 
 The base status set is 400, 401, 403, 404, 500, 503. A mutating operation also
-declares 409. A read POST declares `MUTATES=false`. Today the generator linter
-validates the fixture's own status declarations: the base set, 409 on a
-mutating route, and sorted unique lists. Checking the declared statuses
-against the live catalog's runtime failure variants is a Phase 2b requirement;
-until that drift check exists, the linter sees the fixture's declarations only.
+declares 409. A read POST declares `MUTATES=false`. The generator linter checks
+the live OpenAPI document. It requires the base set, 409 on a mutating route,
+and a declared status for each runtime failure variant.
 
 ## 6. Compatibility tuple and gate
 
@@ -155,6 +153,7 @@ negotiation.
 
 The release removes versioned URLs, per-call version fields, response version
 echoes, old operation aliases, and compatibility translators.
+Phase 2b removed the legacy versioned operation wire.
 
 A breaking change requires human authorization. Agents never bump a version, a
 release, or the tuple. The required compatibility gate fails when a watched
@@ -182,15 +181,11 @@ Generated clients and MCP expose the collapsed contract. They do not reproduce
 the 90 legacy commands under new names. MCP tool descriptions stay
 resource-focused and useful.
 
-Two grammar rules from the plan are explicit Phase 2b deferrals, recorded so
-the freeze does not silently lose them. `payload-identity-repetition` rejects a
-payload that repeats a connection or path identity fact — repository, scope,
-collection, or resource id — inside its fields; the linter cannot check it
-today because the fixture declares no payload schemas.
-`tool-description-usefulness` is the enforceable form of the requirement above,
-that MCP tool descriptions stay resource-focused and useful; it needs the
-Phase 2b tool declarations to bind against. Both checks land when Phase 2b
-adds the payload and tool declarations they need.
+`payload-identity-repetition` rejects a payload that repeats a connection or
+path identity fact: repository, scope, collection, or resource ID.
+`tool-description-usefulness` requires each MCP tool description to identify
+its resource behavior. The generator checks both rules against the live
+OpenAPI and MCP documents.
 
 ## 8. Decision record — 2026-09-13 (binding)
 
@@ -211,9 +206,10 @@ adds the payload and tool declarations they need.
    `/query/{name}` subroutes exist. This rule supersedes the draft
    `GET /query/{query}` family.
 
-## 9. Coverage
+## 9. Permanent enforcement
 
-The fixture tools/operation-codegen/legacy-operation-coverage.json maps all 90
-legacy operations (74 catalog operations and the 16 review operations from PR
-#273) to this surface, each exactly once. The generator fails when an operation
-is unmapped, mapped twice, or drifted from the catalog.
+The generator checks the live OpenAPI and MCP documents against this grammar.
+It rejects a prohibited route shape, request shape, response envelope, status,
+payload identity, or tool description before it writes generated output. The
+compatibility gate in `docs/compatibility-gate.md` remains independent and
+required.

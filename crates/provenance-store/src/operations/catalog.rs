@@ -2,6 +2,8 @@
 
 mod actions;
 mod authoring;
+#[cfg(feature = "schema")]
+mod binding;
 mod relationships;
 pub use actions::*;
 pub use relationships::*;
@@ -16,14 +18,31 @@ mod failures;
 mod ideation;
 mod invoke;
 mod records;
+mod resource_lists;
+mod resource_pages;
+#[cfg(feature = "schema")]
+mod routes;
 #[cfg(feature = "schema")]
 mod schema;
 mod scoped_list;
 mod statement;
 mod updates;
+mod v2_discussion_reads;
+mod v2_review;
+mod v2_review_reads;
 pub use updates::*;
+pub use v2_discussion_reads::*;
+pub use v2_review::*;
+pub use v2_review_reads::*;
 
 pub use authoring::{Apply, BeginVerification, CompleteVerification, Plan};
+#[cfg(feature = "schema")]
+pub use binding::{
+    ArgumentAlias, CliBinding, CliDefault, CliDefaultValue, Controls, EtagBinding, HandlerBinding,
+    HeaderBinding, NullClearBinding, ParentBinding, PathBinding, QueryRequestBinding, QueryRoute,
+    Registration, RequestAdapter, RequestAdapterError, RequestBinding, ResponseAdapter,
+    ResponseBinding, ResponseSelection, SelectorBinding,
+};
 pub use context::{
     ContextKind, ContextResolver, ExecutionNeed, ExecutionNeeds, PreparedContext, PreparedRead,
     PreparedRepository, PreparedScope, RequestedContext,
@@ -40,7 +59,10 @@ pub use ideation::{
 };
 pub use invoke::{invoke, invoke_typed, invoke_with};
 #[cfg(feature = "schema")]
-pub use schema::{bind_response_identity, definitions, Definition};
+pub use schema::{
+    definitions, parse_parameter_value, parse_schema_value, parse_schema_value_in, Definition,
+    HttpMethod, Parameter, ParseValueError, ResponseKind,
+};
 pub use statement::CheckStatement;
 
 #[cfg(test)]

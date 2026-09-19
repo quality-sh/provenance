@@ -124,14 +124,20 @@ impl HostAccess for LocalAccess {
     }
 
     fn advertises(&self, operation: &str) -> bool {
-        catalog::contains(operation)
+        catalog::definitions()
+            .iter()
+            .any(|definition| definition.name == operation)
+    }
+
+    fn bound_identity(&self) -> Option<(String, String)> {
+        Some((self.repository.clone(), self.scope.as_str().to_owned()))
     }
 }
 
 impl ContextResolver for LocalAccess {
     fn prepare(
         &self,
-        operation: &'static str,
+        _operation: &'static str,
         context: RequestedContext,
         needs: ExecutionNeeds,
     ) -> Result<PreparedContext, OperationFailure> {
@@ -145,10 +151,9 @@ impl ContextResolver for LocalAccess {
         if repository != self.repository {
             return Err(OperationFailure::UnknownTarget);
         }
-        if !self.advertises(operation)
-            || scope
-                .as_deref()
-                .is_some_and(|scope| scope != self.scope.as_str())
+        if scope
+            .as_deref()
+            .is_some_and(|scope| scope != self.scope.as_str())
         {
             return Err(OperationFailure::AccessDenied);
         }

@@ -19,6 +19,7 @@ use crate::{
     publication::with_staged_state,
     shards,
     state_store::{CreateDispositionInput, CreateProposalCardInput, StateStore},
+    write_error::{SourceFailure, WriteFailure},
 };
 use provenance_core::{
     review::{CycleEntry, CycleFact, REVIEW_SCHEMA_VERSION},
@@ -165,6 +166,22 @@ impl StateStore {
         &self,
         input: DecideRequirementReview,
     ) -> anyhow::Result<CycleEntry> {
+        self.decide_requirement_review_addressed(None, input)
+    }
+
+    pub fn decide_requirement_review_for(
+        &self,
+        requirement_id: &StableId,
+        input: DecideRequirementReview,
+    ) -> anyhow::Result<CycleEntry> {
+        self.decide_requirement_review_addressed(Some(requirement_id.clone()), input)
+    }
+
+    fn decide_requirement_review_addressed(
+        &self,
+        addressed: Option<StableId>,
+        input: DecideRequirementReview,
+    ) -> anyhow::Result<CycleEntry> {
         let actor = input.actor.id.clone();
         let digest = request_digest(&input)?;
         let scope = input.scope_id.clone();
@@ -173,14 +190,15 @@ impl StateStore {
                 self.manifest()?.scopes.iter().any(|s| s.id == scope),
                 "review scope is not in the manifest"
             );
+            let proposal = review_submission(self, &scope, &input.proposal_id)?;
+            let facts = CycleFacts::validated(self, &scope)?;
+            validate_submission_address(&proposal, &facts, &input.proposal_id, addressed.as_ref())?;
+            self.requirement(&scope, &proposal.traceability.target.artifact_id)?;
             if let Some(receipt) =
                 super::decision_state::replay(self, &scope, &input.request_id, &actor, &digest)?
             {
                 return Ok(receipt);
             }
-            let proposal = review_submission(self, &scope, &input.proposal_id)?;
-            self.requirement(&scope, &proposal.traceability.target.artifact_id)?;
-            let facts = CycleFacts::validated(self, &scope)?;
             anyhow::ensure!(
                 !facts.is_withdrawn(&input.proposal_id),
                 "this review submission was withdrawn from review"
@@ -319,6 +337,22 @@ impl StateStore {
         &self,
         input: WithdrawRequirementReview,
     ) -> anyhow::Result<CycleEntry> {
+        self.withdraw_requirement_review_addressed(None, input)
+    }
+
+    pub fn withdraw_requirement_review_for(
+        &self,
+        requirement_id: &StableId,
+        input: WithdrawRequirementReview,
+    ) -> anyhow::Result<CycleEntry> {
+        self.withdraw_requirement_review_addressed(Some(requirement_id.clone()), input)
+    }
+
+    fn withdraw_requirement_review_addressed(
+        &self,
+        addressed: Option<StableId>,
+        input: WithdrawRequirementReview,
+    ) -> anyhow::Result<CycleEntry> {
         anyhow::ensure!(
             !input.actor.trim().is_empty(),
             "invalid review request identity"
@@ -336,15 +370,16 @@ impl StateStore {
                 self.manifest()?.scopes.iter().any(|s| s.id == scope),
                 "review scope is not in the manifest"
             );
+            let proposal = review_submission(self, &scope, &input.proposal_id)?;
+            let facts = CycleFacts::validated(self, &scope)?;
+            validate_submission_address(&proposal, &facts, &input.proposal_id, addressed.as_ref())?;
+            let record = self.requirement(&scope, &proposal.traceability.target.artifact_id)?;
+            owner_matches(&record, input.declared_by.as_deref())?;
             if let Some(receipt) =
                 super::decision_state::replay(self, &scope, &input.request_id, &input.actor, &digest)?
             {
                 return Ok(receipt);
             }
-            let proposal = review_submission(self, &scope, &input.proposal_id)?;
-            let record = self.requirement(&scope, &proposal.traceability.target.artifact_id)?;
-            owner_matches(&record, input.declared_by.as_deref())?;
-            let facts = CycleFacts::validated(self, &scope)?;
             anyhow::ensure!(
                 !facts.is_withdrawn(&input.proposal_id),
                 "this review submission was already withdrawn"
@@ -384,6 +419,27 @@ impl StateStore {
         write_receipt(self, &entry)?;
         Ok(entry)
     }
+}
+
+fn validate_submission_address(
+    proposal: &provenance_core::ProposalCard,
+    facts: &CycleFacts,
+    proposal_id: &StableId,
+    addressed: Option<&StableId>,
+) -> anyhow::Result<()> {
+    let proposal_requirement = &proposal.traceability.target.artifact_id;
+    let cycle_requirement = facts
+        .submission_requirement(proposal_id)
+        .map_err(|error| SourceFailure::wrap(WriteFailure::InvalidUpdate, error))?;
+    let matches_cycle = cycle_requirement == proposal_requirement;
+    let matches_address = addressed.is_none_or(|required| required == proposal_requirement);
+    if matches_cycle && matches_address {
+        return Ok(());
+    }
+    Err(SourceFailure::wrap(
+        WriteFailure::InvalidUpdate,
+        anyhow::anyhow!("the review submission does not belong to the addressed Requirement"),
+    ))
 }
 
 /// The feedback Discussion's request key is derived from the decision's, so a

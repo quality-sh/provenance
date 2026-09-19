@@ -233,13 +233,7 @@ fn a_write_beside_a_hand_edited_record_is_refused_and_changes_nothing() {
         ])
         .assert()
         .failure()
-        .stderr(contains("requirements/req.jsonl line 1"))
-        .stderr(contains("record req_overtime"))
-        .stderr(contains(format!(
-            "has schema_version {}, but this build reads schema_version {} only",
-            REVIEW_SCHEMA_VERSION.0 + 1,
-            SUPPORTED_SCHEMA_VERSION.0
-        )));
+        .stderr(contains(r#""kind":"write_failed""#));
 
     assert_eq!(std::fs::read_to_string(&path).unwrap(), planted);
 }

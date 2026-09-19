@@ -50,50 +50,47 @@ function readRecords(repo: string, relative: string): WrittenRecord[] {
     .map((line) => JSON.parse(line) as WrittenRecord);
 }
 
+function catalogWrite(
+  repo: string,
+  address: string[],
+  data: Record<string, unknown>,
+  headers: string[] = [],
+): any {
+  return JSON.parse(execFileSync(
+    engine,
+    [...address, "--repo", repo, "--scope", "default", "--format", "json", ...headers, "--stdin"],
+    { encoding: "utf8", input: JSON.stringify(data) },
+  ));
+}
+
+const requirementData = (id: string, statement: string) => ({
+  actor: "sdk-test", id, statement, status: "discovery", depends_on: [], supersedes: [],
+});
+
 /** A requirement and a resolution the writers already hold, for the
  *  declarations that name a resolution by canonical id. */
 function seedResolution(repo: string): void {
-  execFileSync(engine, [
-    "requirements",
-    "create",
-    "--repo",
-    repo,
-    "--scope",
-    "default",
-    "--id",
-    "req_seed",
-    "--statement",
-    "The seed requirement stands",
-  ]);
-  execFileSync(engine, [
-    "resolutions",
-    "create",
-    "--repo",
-    repo,
-    "--scope",
-    "default",
-    "--id",
-    "res_seed",
-    "--title",
-    "Seed decision",
-    "--requirement-id",
-    "req_seed",
-    "--position",
-    "Adopt",
-    "--rationale",
-    "Seeds the relations",
-    "--status",
-    "proposed",
-  ]);
+  catalogWrite(repo, ["requirements", "create"], requirementData(
+    "req_seed", "The seed requirement stands",
+  ), ["--idempotency-key", "request_seed_requirement"]);
+  catalogWrite(repo, ["resolutions", "create"], {
+    id: "res_seed", title: "Seed decision", requirement_ids: ["req_seed"],
+    supersedes: [], position: "Adopt", rationale: "Seeds the relations",
+    status: "proposed", inputs: [],
+  });
 }
 
 
 function engineJson(repo: string, args: string[]): unknown {
-  return JSON.parse(
-    execFileSync(engine, [...args, "--repo", repo, "--format", "json"], {
-      encoding: "utf8",
-    }),
-  );
+  const command = args[0] === "sdk" && args[1] === "verification-runs"
+    ? ["verification-runs", "list", ...args.slice(2)]
+    : args;
+  const envelope = JSON.parse(execFileSync(
+    engine,
+    [...command, "--repo", repo, "--format", "json"],
+    { encoding: "utf8" },
+  ));
+  return envelope.data.items;
 }
 
 test("a spec-bound Rule is its own immutable verification handle", async () => {
@@ -206,61 +203,20 @@ test("spec-bound declarations serialize exact unowned adoption targets", async (
 test("spec-bound declarations adopt exact unowned engine records", async () => {
   const repo = repository();
   configure({ ...await fixtureSettings(repo), owner: "spec://typescript/bound-adoption-runtime" });
-  execFileSync(engine, [
-    "sources",
-    "create",
-    "--repo",
-    repo,
-    "--scope",
-    "default",
-    "--id",
-    "source_existing",
-    "--name",
-    "policy",
-    "--source-type",
-    "document",
-    "--reference",
-    "docs/policy.md",
-  ]);
-  execFileSync(engine, [
-    "requirements",
-    "create",
-    "--repo",
-    repo,
-    "--scope",
-    "default",
-    "--id",
-    "req_existing",
-    "--statement",
-    "The canonical Requirement keeps its identity",
-  ]);
-  execFileSync(engine, [
-    "requirements",
-    "source-ref",
-    "add",
-    "--repo",
-    repo,
-    "--scope",
-    "default",
-    "--requirement-id",
-    "req_existing",
-    "--source-id",
-    "source_existing",
-  ]);
-  execFileSync(engine, [
-    "rules",
-    "create",
-    "--repo",
-    repo,
-    "--scope",
-    "default",
-    "--id",
-    "rule_existing",
-    "--requirement-id",
-    "req_existing",
-    "--statement",
-    "The canonical Rule keeps its identity",
-  ]);
+  catalogWrite(repo, ["sources", "create"], {
+    id: "source_existing", name: "policy", source_type: "document",
+    reference: "docs/policy.md", supersedes: [],
+  });
+  const requirement = catalogWrite(repo, ["requirements", "create"], requirementData(
+    "req_existing", "The canonical Requirement keeps its identity",
+  ), ["--idempotency-key", "request_existing_requirement"]);
+  catalogWrite(repo, ["requirements", "req_existing", "update"], {
+    actor: "sdk-test", relationships: { cites: [{ source_id: "source_existing" }] },
+  }, ["--idempotency-key", "request_seed_citation", "--if-match", requirement.data.edit.etag]);
+  catalogWrite(repo, ["rules", "create"], {
+    id: "rule_existing", requirement_ids: ["req_existing"], resolution_ids: [],
+    statement: "The canonical Rule keeps its identity", status: "draft", severity: "high",
+  });
   const provenance = defineSpec("bound-adoption-runtime");
   const policy = provenance
     .source("policy")
@@ -322,47 +278,19 @@ test("a spec-bound Source declares a supported non-document kind", async () => {
 test("spec-bound declarations adopt an unowned external_integration Source", async () => {
   const repo = repository();
   configure({ ...await fixtureSettings(repo), owner: "spec://typescript/bound-source-kind-runtime" });
-  execFileSync(engine, [
-    "sources",
-    "create",
-    "--repo",
-    repo,
-    "--scope",
-    "default",
-    "--id",
-    "source_workflowd_integration_brief",
-    "--name",
-    "workflowd integration brief (agent-authored, relayed by Ben Nasraoui 2026-08-19)",
-    "--source-type",
-    "external_integration",
-    "--reference",
-    "session:824f8174 workflowd-agent brief",
-  ]);
-  execFileSync(engine, [
-    "requirements",
-    "create",
-    "--repo",
-    repo,
-    "--scope",
-    "default",
-    "--id",
-    "req_env_key_at_invocation",
-    "--statement",
-    "The provider reads the environment value at invocation",
-  ]);
-  execFileSync(engine, [
-    "requirements",
-    "source-ref",
-    "add",
-    "--repo",
-    repo,
-    "--scope",
-    "default",
-    "--requirement-id",
-    "req_env_key_at_invocation",
-    "--source-id",
-    "source_workflowd_integration_brief",
-  ]);
+  catalogWrite(repo, ["sources", "create"], {
+    id: "source_workflowd_integration_brief",
+    name: "workflowd integration brief (agent-authored, relayed by Ben Nasraoui 2026-08-19)",
+    source_type: "external_integration",
+    reference: "session:824f8174 workflowd-agent brief", supersedes: [],
+  });
+  const requirement = catalogWrite(repo, ["requirements", "create"], requirementData(
+    "req_env_key_at_invocation", "The provider reads the environment value at invocation",
+  ), ["--idempotency-key", "request_external_requirement"]);
+  catalogWrite(repo, ["requirements", "req_env_key_at_invocation", "update"], {
+    actor: "sdk-test",
+    relationships: { cites: [{ source_id: "source_workflowd_integration_brief" }] },
+  }, ["--idempotency-key", "request_seed_external_citation", "--if-match", requirement.data.edit.etag]);
 
   const provenance = defineSpec("noscope");
   const brief = provenance

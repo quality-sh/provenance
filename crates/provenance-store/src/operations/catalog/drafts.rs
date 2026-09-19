@@ -4,7 +4,10 @@ use super::{
 };
 use crate::{
     layout::ProvenanceLayout,
-    state_store::{CreateContributionInput, CreateSynthesisPacketInput, StateStore},
+    state_store::{
+        CreateContributionInput, CreateSynthesisPacketInput, StateStore, UpdateContributionInput,
+        UpdateSynthesisPacketInput,
+    },
     write_error::{SourceFailure, WriteError, WriteFailure},
 };
 creation!(
@@ -18,9 +21,9 @@ creation!(
 creation!(
     UpsertContribution,
     "upsert-contribution",
-    CreateContributionInput,
+    UpdateContributionInput,
     provenance_core::Contribution,
-    upsert_contribution,
+    update_contribution,
     [GraphStorage]
 );
 creation!(
@@ -34,8 +37,8 @@ creation!(
 creation!(
     UpsertSynthesisPacket,
     "upsert-synthesis-packet",
-    CreateSynthesisPacketInput,
+    UpdateSynthesisPacketInput,
     provenance_core::SynthesisPacket,
-    upsert_synthesis_packet,
+    update_synthesis_packet,
     [GraphStorage]
 );

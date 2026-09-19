@@ -191,7 +191,7 @@ fn lost_response_reconciles_receipt_after_failed_cleanup() {
     test_probes::disarm("state_published");
     assert!(matches!(
         crate::write_error::WriteError(result.unwrap_err()).safe(),
-        crate::write_error::WriteFailure::UncertainWrite
+        crate::write_error::WriteFailure::WriteFailed
     ));
     let reopened = open(root);
     let receipt = reopened.discussion_receipt(&input).unwrap().unwrap();

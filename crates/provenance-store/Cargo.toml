@@ -14,6 +14,7 @@ workspace = true
 
 [features]
 schema = ["dep:schemars", "provenance-core/schema", "provenance-ste100/schema"]
+test-fixture = []
 
 [dependencies]
 time.workspace = true

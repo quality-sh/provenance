@@ -13,7 +13,7 @@ publish.workspace = true
 workspace = true
 
 [features]
-test-fixture = ["dep:tempfile"]
+test-fixture = ["dep:tempfile", "provenance-store/test-fixture"]
 
 [dependencies]
 tempfile = { workspace = true, optional = true }
@@ -22,6 +22,7 @@ provenance-core.workspace = true
 provenance-store = { workspace = true, features = ["schema"] }
 serde_json.workspace = true
 serde.workspace = true
+url.workspace = true
 tokio-util = { version = "0.7", features = ["rt"] }
 tokio = { workspace = true, features = ["sync", "io-util", "io-std", "time"] }
 rmcp = { version = "=1.4.0", default-features = false, features = ["server", "client"] }

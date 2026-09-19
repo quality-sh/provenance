@@ -2,6 +2,7 @@ use assert_cmd::Command;
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 #[test]
+#[allow(clippy::too_many_lines)]
 fn cli_source_requirement_slice_materializes_and_reads_graph() {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path().to_string_lossy().to_string();
@@ -59,23 +60,33 @@ fn cli_source_requirement_slice_materializes_and_reads_graph() {
         ])
         .assert()
         .success();
+    let store = provenance_store::state_store::StateStore::new(
+        provenance_store::layout::ProvenanceLayout::new(&repo),
+    );
+    let etag = store
+        .requirement_edit_state(
+            &provenance_core::ScopeId::new("default").unwrap(),
+            &provenance_core::StableId::new("req_schads_overtime").unwrap(),
+        )
+        .unwrap()
+        .etag;
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
             "requirements",
-            "source-ref",
-            "add",
+            "req_schads_overtime",
+            "update",
             "--repo",
             &repo,
             "--scope",
             "default",
-            "--requirement-id",
-            "req_schads_overtime",
-            "--source-id",
-            "source_schads",
+            "--if-match",
+            &etag,
+            "--stdin",
             "--format",
             "json",
         ])
+        .write_stdin(r#"{"relationships":{"cites":[{"source_id":"source_schads"}]}}"#)
         .assert()
         .success();
     Command::cargo_bin("provenance")

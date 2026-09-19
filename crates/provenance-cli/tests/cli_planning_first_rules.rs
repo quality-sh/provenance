@@ -47,19 +47,31 @@ fn planning_first_repo() -> tempfile::TempDir {
         "--statement",
         "Expenses above the delegated authority limit need second-approver sign-off",
     ]);
-    provenance(&[
-        "requirements",
-        "source-ref",
-        "add",
-        "--repo",
-        &repo,
-        "--scope",
-        "default",
-        "--requirement-id",
-        "req_second_approver",
-        "--source-id",
-        "source_finance_policy",
-    ]);
+    let store = provenance_store::state_store::StateStore::new(
+        provenance_store::layout::ProvenanceLayout::new(&repo),
+    );
+    let etag = store
+        .requirement_edit_state(
+            &provenance_core::ScopeId::new("default").unwrap(),
+            &provenance_core::StableId::new("req_second_approver").unwrap(),
+        )
+        .unwrap()
+        .etag;
+    provenance_stdin(
+        &[
+            "requirements",
+            "req_second_approver",
+            "update",
+            "--repo",
+            &repo,
+            "--scope",
+            "default",
+            "--if-match",
+            &etag,
+            "--stdin",
+        ],
+        r#"{"relationships":{"cites":[{"source_id":"source_finance_policy"}]}}"#,
+    );
     provenance(&[
         "rules",
         "create",
@@ -83,6 +95,19 @@ fn provenance(args: &[&str]) -> String {
     let output = Command::cargo_bin("provenance")
         .unwrap()
         .args(args)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    String::from_utf8(output).unwrap()
+}
+
+fn provenance_stdin(args: &[&str], input: &str) -> String {
+    let output = Command::cargo_bin("provenance")
+        .unwrap()
+        .args(args)
+        .write_stdin(input)
         .assert()
         .success()
         .get_output()

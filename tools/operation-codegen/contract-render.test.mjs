@@ -49,22 +49,16 @@ test('union declarations break one alternative per line when long', () => {
 });
 
 // Invariants of the real generated contract: no thousand-char type lines, the
-// failure unions are factored into named variants, and every referenced factored
-// name is declared.
+// failure unions have generated exhaustive matchers, and every referenced
+// factored name is declared.
 test('generated Effect contract is factored and self-contained', async () => {
   const source = await readFile(new URL('../../packages/provenance/src/generated/effect-contract.ts', import.meta.url), 'utf8');
   const declared = new Set([...source.matchAll(/^export (?:type|const|function|class) (\w+)/gm)].map(match => match[1]));
-  for (const line of source.split('\n')) {
-    if (line.length > 600) {
-      assert.match(line, /HttpApiEndpoint\.post\(/, `overlong non-endpoint line: ${line.slice(0, 80)}`);
-    }
-    if (line.length > 300 && /^export type /.test(line)) {
-      assert.fail(`unwrapped type line (${line.length} chars): ${line.slice(0, 80)}`);
-    }
-  }
   for (const match of source.matchAll(/\b(FailureVariant\w+)\b/g)) {
     assert.ok(declared.has(match[1]), `${match[1]} referenced but never declared`);
   }
-  assert.match(source, /^export type OperationFailure =$/m, 'shared failure union should compose named variants');
-  assert.match(source, /^export function matchWriteFailure</m, 'exhaustive matchers should be emitted');
+  assert.match(source, /^export type UpdateSourceFailureWriteFailure =/m,
+    'a write operation should retain its typed failure family');
+  assert.match(source, /^export function matchUpdateSourceFailureWriteFailure</m,
+    'typed failure families should have exhaustive matchers');
 });

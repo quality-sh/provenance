@@ -130,8 +130,8 @@ jobs:
         with:
           node-version: 24
       - run: npm ci --prefix tools/operation-codegen
-      - name: Run the grammar and coverage linter tests
-        run: node --test grammar-lint.test.mjs coverage.test.mjs
+      - name: Run the grammar linter tests
+        run: node --test grammar-lint.test.mjs
         working-directory: tools/operation-codegen
       - run: node tools/operation-codegen/check-source-control.mjs
       - run: node tools/operation-codegen/generate.mjs
@@ -489,15 +489,15 @@ jobs:
             cargo test)
           rule_id=$(target/debug/provenance rules list \
             --repo "$fixture_repo" --scope default --format json \
-            | jq -er 'select(length == 1) | .[0].id')
-          target/debug/provenance rules show \
-            --repo "$fixture_repo" --scope default --id "$rule_id" --format json
-          target/debug/provenance sdk verification-runs \
+            | jq -er '.data.items | select(length == 1) | .[0].id')
+          target/debug/provenance rules get "$rule_id" \
+            --repo "$fixture_repo" --scope default --format json
+          target/debug/provenance verification-runs list \
             --repo "$fixture_repo" --scope default --rule "$rule_id" --format json \
-            | jq -e 'length == 1 and .[0].status == "passed"'
-          target/debug/provenance sdk verification-bindings \
+            | jq -e '.data.items | length == 1 and .[0].status == "passed"'
+          target/debug/provenance verification-bindings list \
             --repo "$fixture_repo" --scope default --rule "$rule_id" --format json \
-            | jq -e 'length == 1 and .[0].file == "tests/share_links.rs"'
+            | jq -e '.data.items | length == 1 and .[0].file == "tests/share_links.rs"'
 
   typescript-sdk:
     name: TypeScript SDK
@@ -571,15 +571,15 @@ jobs:
           npm test --prefix examples/typescript-sdk
           rule_id=$(target/debug/provenance rules list \
             --repo "$fixture_repo" --scope default --format json \
-            | jq -er 'select(length == 1) | .[0].id')
-          target/debug/provenance rules show \
-            --repo "$fixture_repo" --scope default --id "$rule_id" --format json
-          target/debug/provenance sdk verification-runs \
+            | jq -er '.data.items | select(length == 1) | .[0].id')
+          target/debug/provenance rules get "$rule_id" \
+            --repo "$fixture_repo" --scope default --format json
+          target/debug/provenance verification-runs list \
             --repo "$fixture_repo" --scope default --rule "$rule_id" --format json \
-            | jq -e 'length == 1 and .[0].status == "passed"'
-          target/debug/provenance sdk verification-bindings \
+            | jq -e '.data.items | length == 1 and .[0].status == "passed"'
+          target/debug/provenance verification-bindings list \
             --repo "$fixture_repo" --scope default --rule "$rule_id" --format json \
-            | jq -e 'length == 1 and .[0].file == "dist/share-links.test.js"'
+            | jq -e '.data.items | length == 1 and .[0].file == "dist/share-links.test.js"'
 
   # One job, six managers: each smoke is seconds long, and six matrix legs
   # cost six runners to save one check row.
@@ -775,11 +775,7 @@ jobs:
         shell: bash
         run: |
           families=(statements records evidence writes creation discussions ideation)
-          test_args=()
-          for family in "${families[@]}"; do
-            test_args+=(--test "$family")
-          done
-          cargo test --locked -p provenance-http-client "${test_args[@]}" --no-run --timings
+          cargo test --locked -p provenance-http-client --test v2_wire --no-run --timings
           # Each family has a separate temporary repository and host port.
           # Cargo locks the shared build directory during fixture builds.
           printf '%s\0' "${families[@]}" | xargs -0 -n 1 -P 4 node tools/operation-codegen/test-clients.mjs

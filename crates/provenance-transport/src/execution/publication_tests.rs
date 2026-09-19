@@ -37,7 +37,7 @@ fn requirements(repo: &Repository) -> usize {
 }
 
 #[tokio::test]
-async fn a_panicked_task_after_publication_has_an_uncertain_outcome() {
+async fn a_panicked_task_after_publication_has_an_internal_failure() {
     let repo = Repository::new("The graph is readable.");
     let before = requirements(&repo);
     let context = context(&repo);
@@ -52,8 +52,11 @@ async fn a_panicked_task_after_publication_has_an_uncertain_outcome() {
         .unwrap_err();
     execution.shutdown().await;
     assert_eq!(requirements(&repo), before + 1, "the write took effect");
-    assert_eq!(error.error, serde_json::json!({"kind":"uncertain_write"}));
-    assert_eq!(error.operation.as_deref(), Some("apply"));
+    assert_eq!(error.error, serde_json::json!({"kind":"internal"}));
+    assert_eq!(
+        serde_json::to_value(error.meta).unwrap(),
+        serde_json::json!({})
+    );
 }
 
 #[tokio::test]
