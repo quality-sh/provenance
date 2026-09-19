@@ -36,7 +36,11 @@ async fn message_pages_continue_at_the_same_limit_and_refuse_a_changed_limit() {
         .await
         .unwrap();
     assert_eq!(first.result.entries.len(), 2);
-    let cursor = first.result.next_cursor.clone().expect("page one continues");
+    let cursor = first
+        .result
+        .next_cursor
+        .clone()
+        .expect("page one continues");
     let second = read_discussion_messages(
         root,
         &scope(),
