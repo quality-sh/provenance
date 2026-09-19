@@ -66,6 +66,7 @@ pub use invoke::{invoke, invoke_typed, invoke_with};
 pub use schema::{
     definitions, parse_parameter_value, parse_schema_value, parse_schema_value_in,
     serialize_parameter_value, Definition, HttpMethod, Parameter, ParseValueError, ResponseKind,
+    QueryVariant,
 };
 pub use statement::CheckStatement;
 

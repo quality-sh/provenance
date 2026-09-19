@@ -9,9 +9,11 @@ fn variant<'a>(operation: &'a Value, selector: Option<&str>) -> &'a Value {
         .as_array()
         .expect("query variants")
         .iter()
-        .find(|variant| match selector {
-            Some(selector) => variant["selector"] == selector,
-            None => variant["selector"].is_null(),
+        .find(|variant| {
+            selector.map_or_else(
+                || variant["selector"].is_null(),
+                |selector| variant["selector"] == selector,
+            )
         })
         .expect("selected query variant")
 }

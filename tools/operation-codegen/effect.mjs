@@ -101,9 +101,35 @@ export function effectClient(document) {
   const routes = Object.values(document.paths).flatMap(route => ['get', 'post', 'patch'].flatMap(method => route[method] ? [route[method]] : []))
     .filter(op => op.operationId !== 'metadata' && op.responses?.['200']?.content?.['application/json'] && op.responses?.['400']?.content?.['application/json']);
   const ref = schema => schema.$ref.split('/').at(-1);
+  const queryVariants = op => op['x-provenance-query-variants'] ?? [];
+  const variantStem = (op, variant) => `${pascal(op.operationId)}${variant.selector === null ? 'Base' : pascal(variant.selector)}`;
+  const queryTypes = new Set();
   const methods = routes.map(op => {
     const success = ref(op.responses['200'].content['application/json'].schema);
     const failure = ref(op.responses['400'].content['application/json'].schema);
+    const variants = queryVariants(op);
+    if (variants.length) {
+      const overloads = variants.map(variant => {
+        const stem = variantStem(op, variant);
+        for (const suffix of ['Input', 'Success', 'Failure']) queryTypes.add(`${stem}${suffix}`);
+        return `  ${op.operationId}(call: ${stem}Input): Effect.Effect<${stem}Success, ClientFailure<${stem}Failure>>;`;
+      }).join('\n');
+      const inputs = variants.map(variant => `${variantStem(op, variant)}Input`).join(' | ');
+      const successes = variants.map(variant => `${variantStem(op, variant)}Success`).join(' | ');
+      const failures = variants.map(variant => `${variantStem(op, variant)}Failure`).join(' | ');
+      const branches = variants.map(variant => {
+        const stem = variantStem(op, variant);
+        const condition = variant.selector === null
+          ? 'call.query === undefined'
+          : `call.query === ${JSON.stringify(variant.selector)}`;
+        return `    if (${condition}) return this.runtime.run<${stem}Input, ${stem}Success, ${stem}Failure>('${op.operationId}', false, call, (input, signal) => this.http.${op.operationId}(input, { signal }));`;
+      }).join('\n');
+      return `${overloads}
+  ${op.operationId}(call: ${inputs}): Effect.Effect<${successes}, ClientFailure<${failures}>> {
+${branches}
+    return Effect.die(new TypeError('Invalid query selector'));
+  }`;
+    }
     return `  ${op.operationId}(call: Parameters<HttpClient['${op.operationId}']>[0]): Effect.Effect<components['schemas']['${success}'], ClientFailure<components['schemas']['${failure}']>> {
     return this.runtime.run('${op.operationId}', ${op['x-operation-mutates'] === true}, call, (input, signal) => this.http.${op.operationId}(input, { signal }));
   }`;
@@ -112,7 +138,8 @@ export function effectClient(document) {
 import * as Effect from 'effect/Effect';
 import * as Context from 'effect/Context';
 import * as Layer from 'effect/Layer';
-import { HttpClient, type components } from './client.js';
+import { HttpClient, type components${[...queryTypes].map(name => `, type ${name}`).join('')} } from './client.js';
+export type { ${[...queryTypes].join(', ')} } from './client.js';
 import { ClientRuntime, requestEffect, connectionFailure, type ClientFailure } from '../effect-runtime.js';
 export interface ClientOptions {
   readonly baseUrl: string;
