@@ -200,15 +200,26 @@ function rustQueryStatement(parameter) {
     : `if let Some(value) = ${name} { request = request.query(&[(${JSON.stringify(parameter.name)}, ${value})]); }`;
 }
 
+function rustUrl(path, pathParameters) {
+  if (pathParameters.length === 0) return `self.base_url.clone() + ${JSON.stringify(path)}`;
+  const parameters = new Map(pathParameters.map(parameter => [parameter.name, parameter]));
+  const values = [];
+  const template = path.replace(/\{([^}]+)\}/g, (_match, name) => {
+    const parameter = parameters.get(name);
+    if (parameter === undefined) throw new Error(`Unbound path parameter: ${name}`);
+    values.push(`runtime::path(${propertyName(parameter)})`);
+    return '{}';
+  });
+  if (values.length !== pathParameters.length) throw new Error(`Unused path parameter: ${path}`);
+  return `format!(${JSON.stringify(`{}${template}`)}, self.base_url, ${values.join(', ')})`;
+}
+
 function rustVariantRequest(path, method, op, variant, operation) {
   const parameters = variant.parameters;
   const pathParameters = parameters.filter(parameter => parameter.in === 'path');
   const queryParameters = parameters.filter(parameter => parameter.in === 'query');
   const headerParameters = parameters.filter(parameter => parameter.in === 'header');
-  let setup = `let ${pathParameters.length ? 'mut ' : ''}url = self.base_url.clone() + "${path}";`;
-  for (const parameter of pathParameters) {
-    setup += `\n                url = url.replace("{${parameter.name}}", &runtime::path(${propertyName(parameter)}));`;
-  }
+  let setup = `let url = ${rustUrl(path, pathParameters)};`;
   const changesRequest = queryParameters.length > 0 || headerParameters.length > 0;
   setup += `\n                let ${changesRequest ? 'mut ' : ''}request = self.http.${method}(url);`;
   for (const parameter of queryParameters) setup += `\n                ${rustQueryStatement(parameter)}`;
@@ -238,7 +249,7 @@ function rustQueryMethod(path, method, op) {
   }).join('\n');
   const outputs = variants.map(variant => {
     const name = variant.selector === null ? 'Base' : pascal(variant.selector);
-    return `    ${name}(${schemaName(variant.success)}),`;
+    return `    ${name}(Box<${schemaName(variant.success)}>),`;
   }).join('\n');
   const failures = variants.map(variant => {
     const name = variant.selector === null ? 'Base' : pascal(variant.selector);
@@ -249,21 +260,29 @@ function rustQueryMethod(path, method, op) {
     const fields = variant.parameters.filter(parameter => parameter.schema.const === undefined)
       .map(parameter => propertyName(parameter));
     const pattern = fields.length ? ` { ${fields.join(', ')} }` : '';
+    const helper = `${operation}_${variant.selector === null ? 'base' : variant.selector.replaceAll('-', '_')}`;
+    return `            ${input}::${name}${pattern} => self.${helper}(${fields.join(', ')}).await`;
+  }).join(',\n');
+  const helpers = variants.map(variant => {
+    const name = variant.selector === null ? 'Base' : pascal(variant.selector);
+    const parameters = variant.parameters.filter(parameter => parameter.schema.const === undefined);
+    const arguments = parameters.map(parameter => `${propertyName(parameter)}: ${rustType(parameter)}`);
+    const helper = `${operation}_${variant.selector === null ? 'base' : variant.selector.replaceAll('-', '_')}`;
     const success = schemaName(variant.success);
     const failed = schemaName(variant.failure);
-    return `            ${input}::${name}${pattern} => {
-                ${rustVariantRequest(path, method, op, variant, operation)}
-                let status = response.status();
-                let value = runtime::read_json(response, "${operation}", false).await?;
-                if !status.is_success() {
-                    runtime::validate(&value, "${failed}", "${operation}", false)?;
-                    let failure = runtime::decode(value, "${operation}", false)?;
-                    return Err(Error::Operation { status: status.as_u16(), failure: OperationFailure::${operationStem}(Box::new(${failure}::${name}(failure))) });
-                }
-                runtime::validate(&value, "${success}", "${operation}", false)?;
-                Ok(${output}::${name}(runtime::decode(value, "${operation}", false)?))
-            }`;
-  }).join(',\n');
+    return `    async fn ${helper}(&self${arguments.length ? `, ${arguments.join(', ')}` : ''}) -> Result<${output}, Error> {
+        ${rustVariantRequest(path, method, op, variant, operation)}
+        let status = response.status();
+        let value = runtime::read_json(response, "${operation}", false).await?;
+        if !status.is_success() {
+            runtime::validate(&value, "${failed}", "${operation}", false)?;
+            let failure = runtime::decode(value, "${operation}", false)?;
+            return Err(Error::Operation { status: status.as_u16(), failure: OperationFailure::${operationStem}(Box::new(${failure}::${name}(failure))) });
+        }
+        runtime::validate(&value, "${success}", "${operation}", false)?;
+        Ok(${output}::${name}(Box::new(runtime::decode(value, "${operation}", false)?)))
+    }`;
+  }).join('\n');
   return `// Generated from OpenAPI. Do not edit.
 use crate::types::{${imports.join(', ')}};
 pub enum ${input}<'a> {
@@ -283,6 +302,7 @@ impl HttpClient {
 ${arms}
         }
     }
+${helpers}
 }
 `;
 }
@@ -295,11 +315,7 @@ function rustRequest(path, method, op, operation) {
   const pathParameters = (op.parameters ?? []).filter(parameter => parameter.in === 'path');
   const queryParameters = (op.parameters ?? []).filter(parameter => parameter.in === 'query');
   const headerParameters = (op.parameters ?? []).filter(parameter => parameter.in === 'header');
-  let setup = `let ${pathParameters.length ? 'mut ' : ''}url = self.base_url.clone() + "${path}";`;
-  for (const parameter of pathParameters) {
-    const name = propertyName(parameter);
-    setup += `\n        url = url.replace("{${parameter.name}}", &runtime::path(${name}));`;
-  }
+  let setup = `let url = ${rustUrl(path, pathParameters)};`;
   const changesRequest = queryParameters.length > 0 || headerParameters.length > 0 || op.requestBody;
   setup += `\n        let ${changesRequest ? 'mut ' : ''}request = self.http.${method}(url);`;
   for (const parameter of queryParameters) {
@@ -334,7 +350,7 @@ export function rustClientFiles(document, compatibility) {
     const variant = op.operationId[0].toUpperCase() + op.operationId.slice(1);
     const name = op.operationId.replace(/[A-Z]/g, c => '_' + c.toLowerCase());
     return [`operations/${name}.rs`, `// Generated from OpenAPI. Do not edit.
-#[allow(clippy::too_many_arguments, clippy::literal_string_with_formatting_args)]
+#[allow(clippy::too_many_arguments)]
 impl HttpClient {
     pub async fn ${name}(&self, ${rustArgs(op)}) -> Result<${success}, Error> {
         ${rustRequest(path, method, op, name)}

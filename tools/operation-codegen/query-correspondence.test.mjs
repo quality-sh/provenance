@@ -79,7 +79,7 @@ test('Rust generation uses a closed query input and decodes the selected result'
   assert.match(source, /pub enum GetRuleInput<'a>/);
   assert.match(source, /Base\(Box<GetRuleBaseSuccess>\)/);
   assert.match(source, /GetRuleInput::Base \{ id \} => self\.get_rule_base\(id\)\.await/);
-  assert.match(source, /async fn get_rule_base\(&self, id: &'a str\)/);
+  assert.match(source, /async fn get_rule_base\(&self, id: &str\)/);
   assert.match(source, /let url = format!\("\{\}\/rules\/\{\}", self\.base_url, runtime::path\(id\)\);/);
   assert.doesNotMatch(source, /"\/rules\/\{id\}"/);
   assert.match(source, /runtime::validate\(&value, "GetRuleTraceSuccess"/);
