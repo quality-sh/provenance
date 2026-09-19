@@ -53,7 +53,7 @@ test('every catalog method is lazy and preserves its generated request, success,
       if (init?.method !== 'POST') return Response.json({ data: {
         compatibility: sdk.COMPATIBILITY,
         package: { name: 'provenance', version: 'test' },
-        contract_digest: 'fixture', repository: null, scope: null,
+        repository: null, scope: null,
       }, meta: {} });
       posts++;
       assert.equal(url, `https://example.test${path}`);

@@ -33,7 +33,7 @@ async function host(handler, action) {
 }
 
 const metadata = compatibility => ({
-  data: { compatibility, package: { name: 'fixture', version: '0' }, contract_digest: 'fixture', repository: 'fixture', scope: 'default' }, meta: {},
+  data: { compatibility, package: { name: 'fixture', version: '0' }, repository: 'fixture', scope: 'default' }, meta: {},
 });
 
 test('typed refusal is preserved and operation is sent once', async () => {
