@@ -1,4 +1,5 @@
 use crate::atomic_file::{FileRollbackJournal, FileSnapshot};
+use crate::init_summary::{scope_phrase, skill_note, InitEnding, InitSummary};
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{Manifest, RepoPathPrefix, Scope, ScopeId};
@@ -13,10 +14,18 @@ pub(super) struct InitOptions {
     pub(super) ste_pdf: Option<Utf8PathBuf>,
     pub(super) invocation_channel: crate::cli::InvocationChannel,
     pub(super) package_manager: Option<crate::cli::PackageManager>,
+    /// Suppresses the printed summary; `--quiet` asks for silence.
+    pub(super) quiet: bool,
 }
 
 pub(super) fn init(path: &Utf8Path, options: InitOptions) -> anyhow::Result<()> {
-    prepare_init(path, options)?.apply()
+    let quiet = options.quiet;
+    let plan = prepare_init(path, options)?;
+    let ending = plan.apply()?;
+    if !quiet {
+        ending.print();
+    }
+    Ok(())
 }
 
 pub(super) struct InitPlan {
@@ -29,6 +38,7 @@ pub(super) struct InitPlan {
     gitignore_before: FileSnapshot,
     gitignore_bytes: Vec<u8>,
     dictionary: crate::ste_onboarding::Plan,
+    ending: InitEnding,
 }
 
 #[rule("rule_init_plans_all_project_writes")]
@@ -43,6 +53,7 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
         ste_pdf,
         invocation_channel,
         package_manager,
+        ..
     } = options;
     super::check::recover_repository_before_init(path)
         .context("failed to recover an interrupted repository publication")?;
@@ -89,21 +100,37 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
     let manifest_bytes = format!("{}\n", serde_json::to_string_pretty(&manifest)?).into_bytes();
     let skills = crate::skills::plan_init_at(path.as_std_path())
         .context("failed to plan the bundled Provenance skills")?;
-    let agents_path = path.join("AGENTS.md");
-    let agents_before = FileSnapshot::read(agents_path.as_std_path())?;
-    let without_legacy =
-        crate::legacy_cleanup::project_agents(agents_before.bytes().unwrap_or_default());
-    let agents_bytes = crate::onboarding::project(&without_legacy, &invocation)?;
-    let gitignore_path = path.join(".gitignore");
-    let gitignore_before = FileSnapshot::read(gitignore_path.as_std_path())?;
-    let gitignore_bytes = crate::gitignore::project_ignored(
-        gitignore_before.bytes().unwrap_or_default(),
-        ".provenance/cache/",
-    )
-    .context("failed to ignore the Provenance cache")?;
+    let planned = PlannedFiles::plan(path, &invocation, manifest_before, manifest_bytes)?;
     super::check::validate_repository_with_manifest(path, &manifest)
         .context("the planned Provenance state is not valid")?;
     let dictionary = crate::ste_onboarding::prepare(path, ste_pdf.as_deref())?;
+    let scope_ids: Vec<String> = manifest
+        .scopes
+        .iter()
+        .map(|scope| scope.id.as_str().to_owned())
+        .collect();
+    let skills_changes = skills.planned_changes();
+    let ending = build_summary(
+        path,
+        &scope_ids,
+        &planned,
+        &skills_changes,
+        &invocation,
+        &dictionary,
+    )
+    .map_or_else(
+        || already_ending(&scope_ids, path, &dictionary),
+        |summary| InitEnding::Applied(Box::new(summary)),
+    );
+    let PlannedFiles {
+        manifest_bytes,
+        manifest_before,
+        agents_bytes,
+        agents_before,
+        gitignore_bytes,
+        gitignore_before,
+        ..
+    } = planned;
     Ok(InitPlan {
         path: path.to_path_buf(),
         manifest_before,
@@ -114,12 +141,155 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
         gitignore_before,
         gitignore_bytes,
         dictionary,
+        ending,
     })
+}
+
+/// The managed file states a planned init would write, kept together so the
+/// summary can read them in one place.
+struct PlannedFiles {
+    manifest_bytes: Vec<u8>,
+    manifest_before: FileSnapshot,
+    agents_bytes: Vec<u8>,
+    agents_before: FileSnapshot,
+    agents_had_section: bool,
+    gitignore_bytes: Vec<u8>,
+    gitignore_before: FileSnapshot,
+}
+
+impl PlannedFiles {
+    fn plan(
+        path: &Utf8Path,
+        invocation: &crate::onboarding::Invocation,
+        manifest_before: FileSnapshot,
+        manifest_bytes: Vec<u8>,
+    ) -> anyhow::Result<Self> {
+        let agents_before = FileSnapshot::read(path.join("AGENTS.md").as_std_path())?;
+        let without_legacy =
+            crate::legacy_cleanup::project_agents(agents_before.bytes().unwrap_or_default());
+        let agents_bytes = crate::onboarding::project(&without_legacy, invocation)?;
+        let agents_had_section = String::from_utf8(without_legacy)
+            .is_ok_and(|text| crate::onboarding::owns_section(&text));
+        let gitignore_before = FileSnapshot::read(path.join(".gitignore").as_std_path())?;
+        let gitignore_bytes = crate::gitignore::project_ignored(
+            gitignore_before.bytes().unwrap_or_default(),
+            ".provenance/cache/",
+        )
+        .context("failed to ignore the Provenance cache")?;
+        Ok(Self {
+            manifest_bytes,
+            manifest_before,
+            agents_bytes,
+            agents_before,
+            agents_had_section,
+            gitignore_bytes,
+            gitignore_before,
+        })
+    }
+}
+
+/// The one-line ending for a run that would change nothing.
+fn already_ending(
+    scope_ids: &[String],
+    path: &Utf8Path,
+    dictionary: &crate::ste_onboarding::Plan,
+) -> InitEnding {
+    let dictionary = dictionary
+        .has_guidance()
+        .then(|| dictionary.dictionary_section());
+    InitEnding::Already {
+        line: format!(
+            "Provenance is already set up for {} in {path}. No change.",
+            scope_phrase(scope_ids)
+        ),
+        dictionary,
+    }
+}
+
+/// Builds the new-versus-changed inventory for the printed summary, or
+/// returns nothing when this run would not write one byte.
+fn build_summary(
+    path: &Utf8Path,
+    scope_ids: &[String],
+    planned: &PlannedFiles,
+    skills: &crate::skills::InitSkillChanges,
+    invocation: &crate::onboarding::Invocation,
+    dictionary: &crate::ste_onboarding::Plan,
+) -> Option<InitSummary> {
+    let manifest_changed =
+        planned.manifest_before.bytes() != Some(planned.manifest_bytes.as_slice());
+    let agents_changed = planned.agents_before.bytes() != Some(planned.agents_bytes.as_slice());
+    let gitignore_changed =
+        planned.gitignore_before.bytes() != Some(planned.gitignore_bytes.as_slice());
+    let skills_unchanged = skills.canonical.is_unchanged() && skills.claude.is_unchanged();
+    if !manifest_changed && !agents_changed && !gitignore_changed && skills_unchanged {
+        return None;
+    }
+    let mut summary = InitSummary::new(
+        format!(
+            "Initialized Provenance for {} in {path}",
+            scope_phrase(scope_ids)
+        ),
+        Some(dictionary.dictionary_section()),
+    );
+    if manifest_changed {
+        let note = format!("manifest for {}", scope_phrase(scope_ids));
+        if planned.manifest_before.bytes().is_none() {
+            summary.push_new(".provenance/state", note);
+        } else {
+            summary.push_changed(".provenance/state/manifest.json", "updated the manifest");
+        }
+    }
+    for (changes, directory, noun) in [
+        (&skills.canonical, ".agents/skills", "skill"),
+        (
+            &skills.claude,
+            ".claude/skills",
+            if skills.claude_links { "link" } else { "skill" },
+        ),
+    ] {
+        if changes.is_unchanged() {
+            continue;
+        }
+        let note = skill_note(changes.installed, changes.updated, changes.removed, noun);
+        if changes.updated == 0 && changes.removed == 0 {
+            summary.push_new(directory, note);
+        } else {
+            summary.push_changed(directory, note);
+        }
+    }
+    if agents_changed {
+        let note = if planned.agents_had_section {
+            "updated the Provenance section"
+        } else {
+            "added the Provenance section"
+        };
+        if planned.agents_before.bytes().is_none() {
+            summary.push_new("AGENTS.md", note);
+        } else {
+            summary.push_changed("AGENTS.md", note);
+        }
+    }
+    if gitignore_changed {
+        if planned.gitignore_before.bytes().is_none() {
+            summary.push_new(".gitignore", "added one line");
+        } else {
+            summary.push_changed(".gitignore", "added one line");
+        }
+    }
+    let prefix = invocation.command_prefix();
+    let scope = scope_ids.first().map_or("default", String::as_str);
+    summary.push_step(format!("{prefix} prime --quiet"));
+    summary.push_step(format!("{prefix} check --quiet"));
+    summary.push_step(format!(
+        "{prefix} coverage scan --path . --scope {scope} --validate-rules"
+    ));
+    Some(summary)
 }
 
 impl InitPlan {
     #[rule("rule_init_apply_rolls_back_owned_changes")]
-    pub(super) fn apply(self) -> anyhow::Result<()> {
+    pub(super) fn apply(self) -> anyhow::Result<InitEnding> {
         let layout = ProvenanceLayout::new(self.path.clone());
         self.manifest_before
             .recheck(layout.manifest_path().as_std_path())?;
@@ -165,8 +335,7 @@ impl InitPlan {
             };
         }
         rollback.commit()?;
-        self.dictionary.print_message();
-        Ok(())
+        Ok(self.ending)
     }
 }
 
@@ -239,6 +408,7 @@ mod tests {
                 ste_pdf: None,
                 invocation_channel: crate::cli::InvocationChannel::Native,
                 package_manager: None,
+                quiet: true,
             },
         )
         .unwrap();

@@ -114,6 +114,39 @@ fn init_download_work_runs_on_tokios_blocking_pool() {
     assert!(!onboarding.contains("std::thread::spawn"));
 }
 
+/// The summary `init` prints is one ending defined in one module: status line,
+/// tagline, new-versus-changed inventory, numbered next steps, and exactly one
+/// docs link. The dictionary attribution stays out of the summary; the LICENSE
+/// notice test pins it.
+#[test]
+fn init_summary_structure_stays_pinned_in_one_module() {
+    let workspace = workspace_root();
+    let summary = fs::read_to_string(workspace.join("crates/provenance-cli/src/init_summary.rs"))
+        .expect("read init summary");
+    let repo = fs::read_to_string(workspace.join("crates/provenance-cli/src/handlers/repo.rs"))
+        .expect("read init handler");
+
+    assert_eq!(
+        summary
+            .matches("Never lose the why behind your decisions.")
+            .count(),
+        1,
+        "the tagline is the one what-Provenance-is line"
+    );
+    assert!(summary.contains("https://github.com/quality-sh/provenance/tree/main/docs"));
+    assert!(summary.contains("Next steps"));
+    assert!(summary.contains("New"));
+    assert!(summary.contains("Changed"));
+
+    assert!(repo.contains("added the Provenance section"));
+    assert!(repo.contains("updated the Provenance section"));
+    assert!(repo.contains("added one line"));
+    assert!(
+        !repo.contains("print_message"),
+        "the STE message is folded into the summary"
+    );
+}
+
 #[test]
 fn release_tests_keep_the_ste_asset_override_on_loopback() {
     let onboarding =

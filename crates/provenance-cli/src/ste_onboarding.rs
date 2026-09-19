@@ -1,6 +1,6 @@
 use crate::atomic_file::{FileRollbackJournal, FileSnapshot};
 use anyhow::Context;
-use camino::Utf8Path;
+use camino::{Utf8Path, Utf8PathBuf};
 use fs2::FileExt;
 use provenance_macros::rule;
 use provenance_ste100::DictionaryImport;
@@ -16,11 +16,29 @@ const OFFICIAL_ASSET: &str = "https://www.asd-ste100.org/assets/files/ASD-STE100
 const DOWNLOAD_ATTEMPTS: usize = 3;
 const MAX_ASSET_BYTES: u64 = 64 * 1024 * 1024;
 
+/// Where an imported dictionary came from, as the init summary reports it.
+#[derive(Clone, PartialEq, Eq)]
+pub enum DictionarySource {
+    /// The `--ste-pdf` file the user selected.
+    SelectedFile(Utf8PathBuf),
+    /// The official ASD-STE100 asset, downloaded once and cached.
+    OfficialAsset,
+}
+
+/// What the dictionary step did, as the init summary reports it.
+#[derive(Clone, PartialEq, Eq)]
+pub enum DictionaryOutcome {
+    Imported(DictionarySource),
+    AlreadyImported,
+    /// No import happened; the text is the loud warning with the retry path.
+    Guidance(String),
+}
+
 pub struct Plan {
     import: Option<DictionaryImport>,
     reference_before: Option<FileSnapshot>,
     reference_bytes: Option<Vec<u8>>,
-    message: Option<String>,
+    outcome: DictionaryOutcome,
 }
 
 /// Onboarding acquires the Issue 9 dictionary without a manual mode: reuse an
@@ -36,18 +54,18 @@ pub fn prepare(repo: &Utf8Path, selected_pdf: Option<&Utf8Path>) -> anyhow::Resu
         return Ok(Plan::unchanged(reference_before));
     }
 
-    let (import, message) = if let Some(pdf) = selected_pdf {
+    let (import, outcome) = if let Some(pdf) = selected_pdf {
         (
             Some(import_pdf(pdf)?),
-            Some(format!("Imported the Issue 9 dictionary from {pdf}.")),
+            DictionaryOutcome::Imported(DictionarySource::SelectedFile(pdf.to_owned())),
         )
     } else {
         match acquire_official_dictionary_blocking() {
             Ok(import) => (
                 Some(import),
-                Some("Imported the Issue 9 dictionary from the official asset.".to_owned()),
+                DictionaryOutcome::Imported(DictionarySource::OfficialAsset),
             ),
-            Err(error) => (None, Some(fallback_guidance(&error))),
+            Err(error) => (None, DictionaryOutcome::Guidance(fallback_guidance(&error))),
         }
     };
 
@@ -56,7 +74,7 @@ pub fn prepare(repo: &Utf8Path, selected_pdf: Option<&Utf8Path>) -> anyhow::Resu
             import: None,
             reference_before: None,
             reference_bytes: None,
-            message,
+            outcome,
         });
     };
     let before = FileSnapshot::read(reference_path.as_std_path())?;
@@ -67,7 +85,7 @@ pub fn prepare(repo: &Utf8Path, selected_pdf: Option<&Utf8Path>) -> anyhow::Resu
         import: Some(import),
         reference_before: Some(before),
         reference_bytes: Some(bytes),
-        message,
+        outcome,
     })
 }
 
@@ -77,7 +95,7 @@ impl Plan {
             import: None,
             reference_before: Some(reference_before),
             reference_bytes: None,
-            message: None,
+            outcome: DictionaryOutcome::AlreadyImported,
         }
     }
 
@@ -110,10 +128,23 @@ impl Plan {
         )
     }
 
-    pub(super) fn print_message(&self) {
-        if let Some(message) = &self.message {
-            println!("{message}");
+    /// The dictionary part of the init summary: what happened to the
+    /// dictionary. The required attribution stays in the LICENSE notice.
+    pub(super) fn dictionary_section(&self) -> String {
+        match &self.outcome {
+            DictionaryOutcome::Imported(source) => import_section(source),
+            DictionaryOutcome::AlreadyImported => {
+                "Dictionary: ASD-STE100 Issue 9 is already imported.".to_owned()
+            }
+            // The warning stands alone; its first word is the loud part.
+            DictionaryOutcome::Guidance(text) => text.clone(),
         }
+    }
+
+    /// True when no import happened and the one-line already-set-up ending
+    /// must still carry the warning.
+    pub(super) const fn has_guidance(&self) -> bool {
+        matches!(self.outcome, DictionaryOutcome::Guidance(_))
     }
 }
 
@@ -265,4 +296,15 @@ fn fallback_guidance(error: &anyhow::Error) -> String {
     format!(
         "Warning: the official Issue 9 asset is unavailable after {DOWNLOAD_ATTEMPTS} attempts ({error}). Initialization continues without a dictionary. To add it later, rerun init, or run `provenance dictionary import --pdf <path>` with a local PDF file."
     )
+}
+
+fn import_section(source: &DictionarySource) -> String {
+    match source {
+        DictionarySource::SelectedFile(pdf) => {
+            format!("Dictionary: Imported the Issue 9 dictionary from {pdf}.")
+        }
+        DictionarySource::OfficialAsset => {
+            "Dictionary: Imported the Issue 9 dictionary from the official asset.".to_owned()
+        }
+    }
 }

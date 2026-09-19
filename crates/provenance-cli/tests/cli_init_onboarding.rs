@@ -3,6 +3,10 @@ use predicates::prelude::*;
 use provenance_macros::verifies;
 use std::path::Path;
 
+#[path = "cli_dictionary/support.rs"]
+#[allow(dead_code)]
+mod dictionary_support;
+
 const INSTRUCTIONS: &str = r#"## Provenance
 
 Requirements live in a Provenance graph. Plan changes with the graph and update

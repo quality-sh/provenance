@@ -172,6 +172,16 @@ pub fn plan_init_at(base: &Path) -> anyhow::Result<InitSkillPlan> {
     )?))
 }
 
+/// Planned per-directory changes for an init summary.
+pub struct InitSkillChanges {
+    /// The canonical `.agents/skills` directory.
+    pub canonical: install_plan::DirectoryChanges,
+    /// The `.claude/skills` directory.
+    pub claude: install_plan::DirectoryChanges,
+    /// Whether the `.claude` entries are symlinks (false when they are copies).
+    pub claude_links: bool,
+}
+
 impl InitSkillPlan {
     pub(crate) fn recheck(&self) -> anyhow::Result<()> {
         self.0.recheck()
@@ -182,6 +192,16 @@ impl InitSkillPlan {
         rollback: &mut crate::atomic_file::FileRollbackJournal,
     ) -> anyhow::Result<()> {
         self.0.apply_in(rollback).map(|_| ())
+    }
+
+    /// What this plan would change, counted per managed directory.
+    pub(crate) fn planned_changes(&self) -> InitSkillChanges {
+        let changes = self.0.planned_changes();
+        InitSkillChanges {
+            canonical: changes.canonical,
+            claude: changes.claude,
+            claude_links: changes.claude_links,
+        }
     }
 }
 

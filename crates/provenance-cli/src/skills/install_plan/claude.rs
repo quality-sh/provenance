@@ -94,6 +94,27 @@ impl ClaudeAction {
         )
     }
 
+    /// The statuses `apply` will report, known at plan time.
+    pub(super) fn planned_statuses(&self) -> Vec<FileStatus> {
+        match self {
+            Self::Copy { files, .. } => files.iter().map(|action| action.status).collect(),
+            Self::Symlink {
+                before,
+                verdict,
+                fallback,
+                ..
+            } => match verdict {
+                InstallVerdict::Ours => vec![FileStatus::Unchanged],
+                InstallVerdict::CopyInto => fallback.iter().map(|action| action.status).collect(),
+                _ => vec![if matches!(before, TargetEntry::Vacant) {
+                    FileStatus::Linked
+                } else {
+                    FileStatus::Updated
+                }],
+            },
+        }
+    }
+
     pub(super) fn fallback_reason(&self) -> String {
         match self {
             Self::Symlink { path, .. } => {
