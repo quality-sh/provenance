@@ -47,7 +47,7 @@ impl StateStore {
     fn create_review_requirement_with<R>(
         &self,
         mut input: CreateReviewRequirement,
-        complete: impl FnOnce(&StateStore, ReviewEntry) -> anyhow::Result<R>,
+        complete: impl FnOnce(&Self, ReviewEntry) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
         let digest = normalize(&mut input)?;
         self.with_repository_publication(|| {

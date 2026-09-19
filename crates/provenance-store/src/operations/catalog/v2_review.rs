@@ -130,7 +130,7 @@ impl Operation for CreateRequirementV2 {
                     actor: request.actor,
                     origin: request.origin,
                     create: CreateRequirementInput {
-                        scope_id: scope.clone(),
+                        scope_id: scope,
                         id: request.id,
                         statement: request.statement,
                         description: request.description,
@@ -197,7 +197,7 @@ impl Operation for UpdateRequirementV2 {
                 expected_etag: request.expected_etag,
                 relationships: request.relationships,
                 update: UpdateRequirementInput {
-                    scope_id: scope.clone(),
+                    scope_id: scope,
                     id: request.id,
                     declared_by: request.declared_by,
                     statement: request.statement,

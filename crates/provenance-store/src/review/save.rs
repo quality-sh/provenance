@@ -62,7 +62,7 @@ impl StateStore {
         &self,
         mut input: SaveRequirement,
         origin: Option<provenance_core::threads::DiscussionOrigin>,
-        complete: impl FnOnce(&StateStore, ReviewEntry) -> anyhow::Result<R>,
+        complete: impl FnOnce(&Self, ReviewEntry) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
         anyhow::ensure!(
             !input.actor.trim().is_empty(),
