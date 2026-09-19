@@ -203,12 +203,7 @@ fn evidence_query() -> EvidenceQuery {
 #[verifies("rule_query_pages_bound_shared_reads", examples)]
 async fn evidence_keeps_an_under_budget_record() {
     let (dir, store, scope) = seeded_store();
-    crate::cache::tests::fixtures::create_rule_of(
-        &store,
-        &scope,
-        "rule_overtime",
-        "req_overtime",
-    );
+    crate::cache::tests::fixtures::create_rule_of(&store, &scope, "rule_overtime", "req_overtime");
     append_verification_binding(&store, &scope, "x".repeat(LARGE_FIELD_BYTES));
 
     let answer = queries::evidence(
@@ -226,12 +221,7 @@ async fn evidence_keeps_an_under_budget_record() {
 #[verifies("rule_query_pages_bound_shared_reads", examples)]
 async fn evidence_refuses_one_record_over_the_record_budget() {
     let (dir, store, scope) = seeded_store();
-    crate::cache::tests::fixtures::create_rule_of(
-        &store,
-        &scope,
-        "rule_overtime",
-        "req_overtime",
-    );
+    crate::cache::tests::fixtures::create_rule_of(&store, &scope, "rule_overtime", "req_overtime");
     append_verification_binding(&store, &scope, "x".repeat(70_000));
 
     let error = queries::evidence(
