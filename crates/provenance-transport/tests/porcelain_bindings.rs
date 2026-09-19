@@ -2,6 +2,7 @@ use provenance_macros::verifies;
 use provenance_porcelain::{Action, Outcome, RecordRequest};
 use serde_json::json;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 #[cfg(feature = "test-fixture")]
 #[allow(dead_code)]
@@ -68,6 +69,21 @@ async fn host_get_port_returns_a_record_through_the_resource_path() {
     assert_eq!(outcome.record.id, "req_shared");
     assert_eq!(outcome.record.kind, "requirement");
     assert_eq!(outcome.record.value["id"], "req_shared");
+    assert!(
+        outcome.record_metadata.as_ref().unwrap().is_object(),
+        "metadata: {:?}",
+        outcome.record_metadata
+    );
+    let impact = porcelain
+        .get(GetInput::new("req_shared", View::Impact))
+        .await
+        .unwrap();
+    assert!(impact
+        .view_metadata
+        .as_ref()
+        .unwrap()
+        .get("stamp")
+        .is_some());
 }
 
 #[cfg(feature = "test-fixture")]
@@ -106,13 +122,99 @@ async fn mcp_get_runs_through_the_composed_service() {
     server.await.unwrap().cancel().await.unwrap();
 }
 
+#[cfg(feature = "test-fixture")]
+#[tokio::test]
+async fn mcp_get_keeps_permitted_kinds_without_probing_forbidden_kinds() {
+    use provenance_transport::fixture::{FixtureAccess, Target};
+    use rmcp::{model::CallToolRequestParams, ServiceExt as _};
+
+    let repository = support::records::Repository::new("The shared graph is readable.");
+    repository.all_kinds();
+    let mut access = FixtureAccess::new(
+        vec![Target {
+            id: "selected".into(),
+            root: repository.dir.path().to_path_buf(),
+        }],
+        vec![("selected".into(), "default".into())],
+        "fixture-secret",
+        "fixture.test",
+    )
+    .unwrap();
+    for operation in [
+        "get-source",
+        "get-resolution",
+        "get-rule",
+        "get-topic",
+        "get-question",
+        "get-domain",
+        "get-boundary",
+    ] {
+        access = access.deny_operation(operation);
+    }
+    let host = provenance_transport::StatementHost::with_fixture_access(access);
+    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
+    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let client = ().serve(client_io).await.unwrap();
+
+    assert!(client
+        .list_all_tools()
+        .await
+        .unwrap()
+        .iter()
+        .any(|tool| tool.name == "get"));
+    let allowed = client
+        .call_tool(
+            CallToolRequestParams::new("get")
+                .with_arguments(json!({"target":"req_shared"}).as_object().unwrap().clone()),
+        )
+        .await
+        .unwrap();
+    assert_ne!(allowed.is_error, Some(true));
+    let children = client
+        .call_tool(
+            CallToolRequestParams::new("get").with_arguments(
+                json!({"target":"req_shared","view":"children"})
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+            ),
+        )
+        .await
+        .unwrap();
+    assert!(children.structured_content.as_ref().unwrap()["related"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|record| record["kind"] == "requirement"));
+    let forbidden = client
+        .call_tool(
+            CallToolRequestParams::new("get").with_arguments(
+                json!({"target":"source_shared"})
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+            ),
+        )
+        .await
+        .unwrap();
+    assert_eq!(forbidden.is_error, Some(true));
+    assert_eq!(
+        forbidden.structured_content.unwrap()["error"]["kind"],
+        "not_found"
+    );
+
+    client.cancel().await.unwrap();
+    server.await.unwrap().cancel().await.unwrap();
+}
+
 struct CheckFixturePort;
 
 impl provenance_porcelain::check::CheckPort for CheckFixturePort {
-    fn run(
-        &self,
+    fn run<'a>(
+        &'a self,
         category: provenance_porcelain::check::Category,
-    ) -> provenance_porcelain::check::PortFuture<'_> {
+        _: Option<&'a str>,
+    ) -> provenance_porcelain::check::PortFuture<'a> {
         Box::pin(async move {
             Ok(match category {
                 provenance_porcelain::check::Category::Statements => {
@@ -167,6 +269,44 @@ async fn mcp_check_uses_its_separately_injected_port() {
         .unwrap()
         .text
         .contains("statements: findings"));
+    client.cancel().await.unwrap();
+    server.await.unwrap().cancel().await.unwrap();
+}
+
+#[cfg(feature = "test-fixture")]
+struct ScopeRecordingPort(Arc<Mutex<Option<String>>>);
+
+#[cfg(feature = "test-fixture")]
+impl provenance_porcelain::check::CheckPort for ScopeRecordingPort {
+    fn run<'a>(
+        &'a self,
+        _: provenance_porcelain::check::Category,
+        scope: Option<&'a str>,
+    ) -> provenance_porcelain::check::PortFuture<'a> {
+        *self.0.lock().unwrap() = scope.map(str::to_owned);
+        Box::pin(async { Ok(Vec::new()) })
+    }
+}
+
+#[cfg(feature = "test-fixture")]
+#[tokio::test]
+async fn mcp_check_binds_the_host_scope_into_the_check_port() {
+    use rmcp::{model::CallToolRequestParams, ServiceExt as _};
+
+    let repository = support::records::Repository::new("The shared graph is readable.");
+    let seen = Arc::new(Mutex::new(None));
+    let host = support::resource_http::host(&repository, false)
+        .with_check_port(Arc::new(ScopeRecordingPort(seen.clone())));
+    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
+    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let client = ().serve(client_io).await.unwrap();
+
+    client
+        .call_tool(CallToolRequestParams::new("check"))
+        .await
+        .unwrap();
+
+    assert_eq!(seen.lock().unwrap().as_deref(), Some("default"));
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
 }

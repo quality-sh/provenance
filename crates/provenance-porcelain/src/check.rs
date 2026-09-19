@@ -20,6 +20,7 @@ const ALL_CATEGORIES: &[Category] = &[Category::Graph, Category::Statements, Cat
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct CheckInput {
     selectors: Vec<Category>,
+    scope: Option<String>,
 }
 
 /// One actionable check finding.
@@ -124,7 +125,7 @@ pub type PortFuture<'a> = Pin<Box<dyn Future<Output = Result<Vec<Finding>, Strin
 
 /// Category computations supplied by a repository-aware caller.
 pub trait CheckPort: Send + Sync {
-    fn run(&self, category: Category) -> PortFuture<'_>;
+    fn run<'a>(&'a self, category: Category, scope: Option<&'a str>) -> PortFuture<'a>;
 
     fn context(&self, _category: Category) -> Option<serde_json::Value> {
         None
@@ -132,8 +133,8 @@ pub trait CheckPort: Send + Sync {
 }
 
 impl CheckPort for Arc<dyn CheckPort> {
-    fn run(&self, category: Category) -> PortFuture<'_> {
-        self.as_ref().run(category)
+    fn run<'a>(&'a self, category: Category, scope: Option<&'a str>) -> PortFuture<'a> {
+        self.as_ref().run(category, scope)
     }
 
     fn context(&self, category: Category) -> Option<serde_json::Value> {
@@ -228,7 +229,17 @@ impl CheckInput {
         let mut selectors = selectors.into_iter().collect::<Vec<_>>();
         selectors.sort_unstable();
         selectors.dedup();
-        Self { selectors }
+        Self {
+            selectors,
+            scope: None,
+        }
+    }
+
+    /// Bind a trusted host-selected scope to this request.
+    #[must_use]
+    pub fn in_scope(mut self, scope: impl Into<String>) -> Self {
+        self.scope = Some(scope.into());
+        self
     }
 
     /// Return selected categories, or all categories when none were selected.
@@ -250,7 +261,7 @@ impl<P: CheckPort> crate::Porcelain<P> {
     pub async fn check(&self, input: CheckInput) -> CheckOutcome {
         let mut categories = Vec::new();
         for &category in input.categories() {
-            let report = match self.port.run(category).await {
+            let report = match self.port.run(category, input.scope.as_deref()).await {
                 Ok(findings) => match self.port.context(category) {
                     None => {
                         if findings.is_empty() {

@@ -56,6 +56,48 @@ fn check_registers_every_scope_record_before_validating_references() {
 }
 
 #[test]
+#[verifies("rule_porcelain_id_unique_in_repository", examples)]
+fn check_rejects_stored_canonical_id_collisions_across_kinds_and_scopes() {
+    for cross_scope in [false, true] {
+        let dir = tempfile::tempdir().unwrap();
+        init(dir.path());
+        let state = dir.path().join(".provenance/state");
+        if cross_scope {
+            std::fs::write(
+                state.join("manifest.json"),
+                serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scopes":[{"id":"default","path_prefix":"."},{"id":"other","path_prefix":"other"}]}).to_string(),
+            )
+            .unwrap();
+        }
+        write_jsonl(
+            &state.join("scopes/default/requirements/req.jsonl"),
+            serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"shared_id","statement":"First record","status":"active"}).to_string(),
+        );
+        let (scope, path, record) = if cross_scope {
+            (
+                "other",
+                "requirements/req.jsonl",
+                serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"other","id":"shared_id","statement":"Second record","status":"active"}),
+            )
+        } else {
+            (
+                "default",
+                "sources/source.jsonl",
+                serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"shared_id","name":"Second record","source_type":"document"}),
+            )
+        };
+        write_jsonl(
+            &state.join(format!("scopes/{scope}/{path}")),
+            record.to_string(),
+        );
+
+        provenance(dir.path())
+            .failure()
+            .stderr(contains("record ID shared_id appears more than once"));
+    }
+}
+
+#[test]
 fn check_rejects_record_whose_embedded_scope_differs_from_directory_scope() {
     let dir = tempfile::tempdir().unwrap();
     init(dir.path());

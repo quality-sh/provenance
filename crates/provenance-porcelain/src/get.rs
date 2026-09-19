@@ -14,6 +14,9 @@ pub struct Record {
     pub id: String,
     pub kind: String,
     pub value: Value,
+    /// Metadata from the operation that resolved this record.
+    #[serde(skip)]
+    pub response_metadata: Option<Value>,
 }
 
 impl Record {
@@ -22,7 +25,14 @@ impl Record {
             id: id.into(),
             kind: kind.into(),
             value,
+            response_metadata: None,
         }
+    }
+
+    #[must_use]
+    pub fn with_response_metadata(mut self, metadata: Value) -> Self {
+        self.response_metadata = Some(metadata);
+        self
     }
 }
 
@@ -77,6 +87,12 @@ pub struct GetOutcome {
     pub related: Vec<Record>,
     pub detail: Option<Value>,
     pub bounds: Option<Bounds>,
+    /// Metadata from the operation that resolved the selected record.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub record_metadata: Option<Value>,
+    /// Metadata from the traversal or impact operation, when selected.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub view_metadata: Option<Value>,
 }
 
 /// A traversal request sent through the injected operation port.
@@ -94,6 +110,8 @@ pub struct TraversalRequest {
 pub struct Traversal {
     pub records: Vec<Record>,
     pub bounds: Bounds,
+    /// Metadata from the traversal operation.
+    pub response_metadata: Option<Value>,
 }
 
 /// An impact result with its page state.
@@ -101,6 +119,8 @@ pub struct Traversal {
 pub struct Impact {
     pub detail: Value,
     pub bounds: Bounds,
+    /// Metadata from the impact operation.
+    pub response_metadata: Option<Value>,
 }
 
 /// A failure from validation, identity resolution, or an injected operation.
@@ -129,7 +149,7 @@ impl std::error::Error for ReadError {}
 pub trait GetPort: Send + Sync {
     fn resolve<'a>(&'a self, id: &'a str) -> PortFuture<'a, Option<Record>>;
     fn traverse(&self, request: TraversalRequest) -> PortFuture<'_, Traversal>;
-    fn impact<'a>(&'a self, id: &'a str, limit: usize) -> PortFuture<'a, Impact>;
+    fn impact<'a>(&'a self, record: &'a Record, limit: usize) -> PortFuture<'a, Impact>;
 }
 
 impl<P: GetPort> crate::Porcelain<P> {
@@ -148,6 +168,7 @@ impl<P: GetPort> crate::Porcelain<P> {
             .resolve(&input.target)
             .await?
             .ok_or(ReadError::NotFound)?;
+        let record_metadata = record.response_metadata.clone();
         if matches!(input.view, View::Children | View::Grounding) {
             let traversal = self
                 .port
@@ -173,19 +194,20 @@ impl<P: GetPort> crate::Porcelain<P> {
                 related,
                 detail: None,
                 bounds: Some(traversal.bounds),
+                record_metadata,
+                view_metadata: traversal.response_metadata,
             });
         }
         if input.view == View::Impact {
-            let impact = self
-                .port
-                .impact(&input.target, input.limit.unwrap_or(50))
-                .await?;
+            let impact = self.port.impact(&record, input.limit.unwrap_or(50)).await?;
             return Ok(GetOutcome {
                 record,
                 view: input.view,
                 related: Vec::new(),
                 detail: Some(impact.detail),
                 bounds: Some(impact.bounds),
+                record_metadata,
+                view_metadata: impact.response_metadata,
             });
         }
         Ok(GetOutcome {
@@ -194,6 +216,8 @@ impl<P: GetPort> crate::Porcelain<P> {
             related: Vec::new(),
             detail: None,
             bounds: None,
+            record_metadata,
+            view_metadata: None,
         })
     }
 }

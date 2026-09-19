@@ -120,6 +120,7 @@ fn cli_check_keeps_graph_findings_as_a_failing_exit() {
 #[test]
 #[verifies("rule_porcelain_coverage_does_not_run_tests", examples)]
 #[verifies("rule_porcelain_missing_binding_not_invalid", examples)]
+#[verifies("rule_binding_finding_uses_configured_severity", examples)]
 fn cli_binding_check_reports_absence_without_running_or_failing_project_tests() {
     let directory = tempfile::tempdir().unwrap();
     Command::cargo_bin("provenance")
@@ -157,7 +158,15 @@ fn cli_binding_check_reports_absence_without_running_or_failing_project_tests() 
     let output = Command::cargo_bin("provenance")
         .unwrap()
         .current_dir(directory.path())
-        .args(["check", "--repo", ".", "--bindings", "--format", "json"])
+        .args([
+            "check",
+            "--repo",
+            ".",
+            "--strict",
+            "--bindings",
+            "--format",
+            "json",
+        ])
         .output()
         .unwrap();
 

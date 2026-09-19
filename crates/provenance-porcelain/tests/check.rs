@@ -19,7 +19,7 @@ fn bare_check_selects_every_category() {
 struct FixturePort;
 
 impl CheckPort for FixturePort {
-    fn run(&self, category: Category) -> PortFuture<'_> {
+    fn run<'a>(&'a self, category: Category, _: Option<&'a str>) -> PortFuture<'a> {
         Box::pin(async move {
             Ok(match category {
                 Category::Graph => vec![Finding::new("dangling requirement reference")],
@@ -63,7 +63,7 @@ async fn output_keeps_each_category_and_its_findings_separate() {
 struct UnavailablePort;
 
 impl CheckPort for UnavailablePort {
-    fn run(&self, _: Category) -> PortFuture<'_> {
+    fn run<'a>(&'a self, _: Category, _: Option<&'a str>) -> PortFuture<'a> {
         Box::pin(async { Err("source scanner is not installed".to_owned()) })
     }
 }

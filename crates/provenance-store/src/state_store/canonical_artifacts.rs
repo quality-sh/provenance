@@ -1,7 +1,7 @@
 use super::StateStore;
 use provenance_core::model::relations::kind_word;
 use provenance_core::{
-    CanonicalArtifact, CanonicalArtifactType, IdeationTarget, NodeType, ScopeId, StableId,
+    CanonicalArtifact, CanonicalArtifactType, IdeationTarget, NodeType, Scope, ScopeId, StableId,
 };
 use provenance_macros::rule;
 use std::collections::HashSet;
@@ -178,11 +178,23 @@ impl StateStore {
     ) -> anyhow::Result<()> {
         let manifest = self.manifest()?;
         ensure_replacement_ids_unique(
-            scope_id,
+            Some(scope_id),
             replacements,
             replaced_kinds,
             manifest.scopes.into_iter().map(|scope| {
                 CanonicalArtifactIndex::load(self, &scope.id).map(|index| (scope.id, index))
+            }),
+        )
+    }
+
+    /// Validate the repository-wide identity invariant for stored records.
+    pub fn validate_canonical_ids_unique(&self, scopes: &[Scope]) -> anyhow::Result<()> {
+        ensure_replacement_ids_unique(
+            None,
+            std::iter::empty(),
+            &[],
+            scopes.iter().map(|scope| {
+                CanonicalArtifactIndex::load(self, &scope.id).map(|index| (scope.id.clone(), index))
             }),
         )
     }
@@ -195,7 +207,7 @@ impl StateStore {
     ) -> anyhow::Result<()> {
         let manifest = super::manifest_from_bytes(&std::fs::read(self.layout.manifest_path())?)?;
         ensure_replacement_ids_unique(
-            scope_id,
+            Some(scope_id),
             replacements,
             replaced_kinds,
             manifest.scopes.into_iter().map(|scope| {
@@ -207,7 +219,7 @@ impl StateStore {
 }
 
 fn ensure_replacement_ids_unique<'a>(
-    scope_id: &ScopeId,
+    scope_id: Option<&ScopeId>,
     replacements: impl IntoIterator<Item = &'a StableId>,
     replaced_kinds: &[NodeType],
     scopes: impl IntoIterator<Item = anyhow::Result<(ScopeId, CanonicalArtifactIndex)>>,
@@ -220,13 +232,16 @@ fn ensure_replacement_ids_unique<'a>(
     for scope in scopes {
         let (current_scope, index) = scope?;
         for entry in index.entries {
-            if current_scope == *scope_id && replaced_kinds.contains(entry.kind) {
+            if scope_id.is_some_and(|scope_id| current_scope == *scope_id)
+                && replaced_kinds.contains(entry.kind)
+            {
                 continue;
             }
             crate::write_error::ensure!(
                 AlreadyExists,
-                ids.insert(entry.id),
-                "record ID already exists in this repository"
+                ids.insert(entry.id.clone()),
+                "record ID {} appears more than once in this repository",
+                entry.id
             );
         }
     }

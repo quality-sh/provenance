@@ -108,7 +108,7 @@ impl ServerHandler for StatementHost {
                     },
                 )));
             }
-            return Ok(crate::porcelain::call_check(port.clone(), arguments).await);
+            return Ok(crate::porcelain::call_check(self, port.clone(), arguments).await);
         }
         let Some(definition) = catalog::definitions()
             .iter()

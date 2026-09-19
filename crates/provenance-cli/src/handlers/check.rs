@@ -49,19 +49,25 @@ impl RepositoryCheckPort {
         Self { repo, strict, base }
     }
 
-    fn compute(&self, category: Category) -> Result<Vec<Finding>, String> {
+    fn compute(&self, category: Category, scope: Option<&str>) -> Result<Vec<Finding>, String> {
         match category {
-            Category::Graph => self.graph_findings(),
-            Category::Statements => self.statement_findings(),
-            Category::Bindings => self.binding_findings(),
+            Category::Graph => self.graph_findings(scope),
+            Category::Statements => self.statement_findings(scope),
+            Category::Bindings => self.binding_findings(scope),
         }
     }
 
-    fn graph_findings(&self) -> Result<Vec<Finding>, String> {
+    fn graph_findings(&self, scope: Option<&str>) -> Result<Vec<Finding>, String> {
         let store = Store::open(&self.repo);
         match store.with_repository_publication(|| {
-            let manifest = store.manifest()?;
-            validate_locked(&store, &manifest)
+            let mut manifest = store.manifest()?;
+            if let Some(scope) = scope {
+                manifest
+                    .scopes
+                    .retain(|candidate| candidate.id.as_str() == scope);
+                anyhow::ensure!(!manifest.scopes.is_empty(), "scope {scope} does not exist");
+            }
+            validate_locked(&store, &manifest, scope.is_none())
         }) {
             Ok(()) => Ok(Vec::new()),
             Err(error) if error.downcast_ref::<std::io::Error>().is_some() => {
@@ -71,11 +77,17 @@ impl RepositoryCheckPort {
         }
     }
 
-    fn statement_findings(&self) -> Result<Vec<Finding>, String> {
+    fn statement_findings(&self, scope: Option<&str>) -> Result<Vec<Finding>, String> {
         let store = Store::open(&self.repo);
         store
             .with_repository_publication(|| {
-                let manifest = store.manifest()?;
+                let mut manifest = store.manifest()?;
+                if let Some(scope) = scope {
+                    manifest
+                        .scopes
+                        .retain(|candidate| candidate.id.as_str() == scope);
+                    anyhow::ensure!(!manifest.scopes.is_empty(), "scope {scope} does not exist");
+                }
                 if self.strict {
                     ensure_strict_dictionary_index(store.layout())?;
                     let analysis = statement_report::changed_statements_from_commits(
@@ -103,11 +115,15 @@ impl RepositoryCheckPort {
             .map_err(|error| format!("{error:#}"))
     }
 
-    fn binding_findings(&self) -> Result<Vec<Finding>, String> {
+    fn binding_findings(&self, selected_scope: Option<&str>) -> Result<Vec<Finding>, String> {
         let store = Store::open(&self.repo);
         let manifest = store.manifest().map_err(|error| format!("{error:#}"))?;
         let mut findings = Vec::new();
-        for scope in manifest.scopes {
+        for scope in manifest
+            .scopes
+            .into_iter()
+            .filter(|scope| selected_scope.is_none_or(|selected| scope.id.as_str() == selected))
+        {
             let report =
                 super::coverage::coverage_scan(&self.repo, &self.repo, scope.id.as_str(), true)
                     .map_err(|error| format!("{error:#}"))?;
@@ -123,10 +139,11 @@ impl RepositoryCheckPort {
 }
 
 impl CheckPort for RepositoryCheckPort {
-    fn run(&self, category: Category) -> PortFuture<'_> {
+    fn run<'a>(&'a self, category: Category, scope: Option<&'a str>) -> PortFuture<'a> {
         let port = self.clone();
+        let scope = scope.map(str::to_owned);
         Box::pin(async move {
-            tokio::task::spawn_blocking(move || port.compute(category))
+            tokio::task::spawn_blocking(move || port.compute(category, scope.as_deref()))
                 .await
                 .map_err(|error| format!("check worker failed: {error}"))?
         })
@@ -181,10 +198,9 @@ pub(super) async fn check(
         .iter()
         .any(|category| category.status == Status::Unavailable);
     let strict_findings = strict
-        && report
-            .categories
-            .iter()
-            .any(|category| category.status == Status::Findings);
+        && report.categories.iter().any(|category| {
+            category.category == Category::Statements && category.status == Status::Findings
+        });
     let binding_refused = binding_error_policy
         && report.categories.iter().any(|category| {
             category.category == Category::Bindings
@@ -220,7 +236,7 @@ pub(super) fn validate_repository(repo: Utf8PathBuf) -> anyhow::Result<()> {
     let store = Store::open(repo);
     store.with_repository_publication(|| {
         let manifest = store.manifest()?;
-        validate_locked(&store, &manifest)
+        validate_locked(&store, &manifest, true)
     })
 }
 
@@ -230,10 +246,10 @@ pub(super) fn validate_repository_with_manifest(
 ) -> anyhow::Result<()> {
     let store = Store::open(repo);
     match std::fs::symlink_metadata(store.layout().provenance_dir()) {
-        Ok(_) => store.with_repository_publication(|| validate_locked(&store, manifest)),
+        Ok(_) => store.with_repository_publication(|| validate_locked(&store, manifest, true)),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             provenance_store::publication::with_read_only_validation(store.layout(), || {
-                validate_locked(&store, manifest)
+                validate_locked(&store, manifest, true)
             })
         }
         Err(error) => Err(error.into()),
@@ -274,7 +290,11 @@ fn ensure_strict_dictionary_index(
     }
 }
 
-fn validate_locked(store: &Store, manifest: &Manifest) -> anyhow::Result<()> {
+fn validate_locked(
+    store: &Store,
+    manifest: &Manifest,
+    repository_wide: bool,
+) -> anyhow::Result<()> {
     ensure_supported_schema_version("manifest", manifest.schema_version)?;
     anyhow::ensure!(
         !manifest.scopes.is_empty(),
@@ -286,12 +306,18 @@ fn validate_locked(store: &Store, manifest: &Manifest) -> anyhow::Result<()> {
         .map(|scope| scope.id.as_str().to_string())
         .collect();
 
-    let scope_directory_findings = store
-        .list_scope_directories()?
-        .into_iter()
-        .filter(|directory| !manifest_scopes.contains(directory))
-        .map(|directory| format!("scope directory {directory} is absent from manifest"))
-        .collect::<Vec<_>>();
+    store.validate_canonical_ids_unique(&manifest.scopes)?;
+
+    let scope_directory_findings = if repository_wide {
+        store
+            .list_scope_directories()?
+            .into_iter()
+            .filter(|directory| !manifest_scopes.contains(directory))
+            .map(|directory| format!("scope directory {directory} is absent from manifest"))
+            .collect::<Vec<_>>()
+    } else {
+        Vec::new()
+    };
 
     let mut index = CheckIndex::default();
     let mut dangling = Vec::new();
@@ -397,5 +423,38 @@ mod tests {
         validate_repository_with_manifest(&repo, &manifest).unwrap();
 
         assert!(!layout.provenance_dir().exists());
+    }
+
+    #[tokio::test]
+    async fn scoped_check_does_not_read_another_scope() {
+        let directory = tempfile::tempdir().unwrap();
+        let repo = Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
+        let layout = ProvenanceLayout::new(repo.clone());
+        std::fs::create_dir_all(layout.state_dir()).unwrap();
+        let mut manifest = Manifest::default_with_scope(
+            ScopeId::new("default").unwrap(),
+            RepoPathPrefix::new("."),
+        );
+        manifest.scopes.push(provenance_core::Scope {
+            id: ScopeId::new("other").unwrap(),
+            path_prefix: RepoPathPrefix::new("other"),
+        });
+        std::fs::write(
+            layout.manifest_path(),
+            serde_json::to_vec(&manifest).unwrap(),
+        )
+        .unwrap();
+        let foreign = layout
+            .scopes_dir()
+            .join("other")
+            .join("requirements")
+            .join("req.jsonl");
+        std::fs::create_dir_all(foreign.parent().unwrap()).unwrap();
+        std::fs::write(foreign, "not JSON\n").unwrap();
+
+        let port = RepositoryCheckPort::new(repo, false, None);
+        let findings = port.run(Category::Graph, Some("default")).await.unwrap();
+
+        assert!(findings.is_empty());
     }
 }

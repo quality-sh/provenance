@@ -15,10 +15,13 @@ struct FixturePort {
     has_more: bool,
     continuation: Option<String>,
     truncated: bool,
+    resolves: Arc<Mutex<usize>>,
+    impact_record: Arc<Mutex<Option<Record>>>,
 }
 
 impl GetPort for FixturePort {
     fn resolve<'a>(&'a self, _: &'a str) -> PortFuture<'a, Option<Record>> {
+        *self.resolves.lock().unwrap() += 1;
         Box::pin(async { Ok(Some(self.record.clone())) })
     }
 
@@ -34,11 +37,13 @@ impl GetPort for FixturePort {
                     continuation: self.continuation.clone(),
                     truncated: self.truncated,
                 },
+                response_metadata: Some(json!({"stamp": "view"})),
             })
         })
     }
 
-    fn impact<'a>(&'a self, _: &'a str, limit: usize) -> PortFuture<'a, Impact> {
+    fn impact<'a>(&'a self, record: &'a Record, limit: usize) -> PortFuture<'a, Impact> {
+        *self.impact_record.lock().unwrap() = Some(record.clone());
         Box::pin(async move {
             Ok(Impact {
                 detail: self.impact.clone(),
@@ -49,6 +54,10 @@ impl GetPort for FixturePort {
                     continuation: self.continuation.clone(),
                     truncated: self.truncated,
                 },
+                response_metadata: Some(json!({
+                    "stamp": "impact",
+                    "freshness_error": "catch-up failed"
+                })),
             })
         })
     }
@@ -67,6 +76,8 @@ fn service() -> Porcelain<FixturePort> {
         has_more: false,
         continuation: None,
         truncated: false,
+        resolves: Arc::new(Mutex::new(0)),
+        impact_record: Arc::new(Mutex::new(None)),
     })
 }
 
@@ -89,6 +100,8 @@ async fn children_select_depth_and_returned_kinds() {
         has_more: false,
         continuation: None,
         truncated: false,
+        resolves: Arc::new(Mutex::new(0)),
+        impact_record: Arc::new(Mutex::new(None)),
     });
     let mut input = GetInput::new("req_root", View::Children);
     input.max_depth = Some(2);
@@ -116,6 +129,8 @@ async fn returned_kind_filter_does_not_limit_intermediate_traversal() {
         has_more: false,
         continuation: None,
         truncated: false,
+        resolves: Arc::new(Mutex::new(0)),
+        impact_record: Arc::new(Mutex::new(None)),
     });
     let mut input = GetInput::new("req_root", View::Children);
     input.max_depth = Some(2);
@@ -138,18 +153,23 @@ async fn grounding_and_impact_are_identified_named_views() {
         has_more: false,
         continuation: None,
         truncated: false,
+        resolves: Arc::new(Mutex::new(0)),
+        impact_record: Arc::new(Mutex::new(None)),
     })
     .get(GetInput::new("rule_alpha", View::Grounding))
     .await
     .unwrap();
     let impact = Porcelain::new(FixturePort {
-        record: record("req_alpha", "requirement"),
+        record: record("req_alpha", "requirement")
+            .with_response_metadata(json!({"stamp": "record"})),
         traversed: Vec::new(),
         request: Arc::new(Mutex::new(None)),
         impact: json!({"affected_rules": ["rule_alpha"]}),
         has_more: false,
         continuation: None,
         truncated: false,
+        resolves: Arc::new(Mutex::new(0)),
+        impact_record: Arc::new(Mutex::new(None)),
     })
     .get(GetInput::new("req_alpha", View::Impact))
     .await
@@ -159,6 +179,12 @@ async fn grounding_and_impact_are_identified_named_views() {
     assert_eq!(grounding.related, vec![record("req_alpha", "requirement")]);
     assert_eq!(impact.view, View::Impact);
     assert_eq!(impact.detail.unwrap()["affected_rules"][0], "rule_alpha");
+    assert_eq!(impact.record_metadata.unwrap()["stamp"], "record");
+    assert_eq!(impact.view_metadata.as_ref().unwrap()["stamp"], "impact");
+    assert_eq!(
+        impact.view_metadata.unwrap()["freshness_error"],
+        "catch-up failed"
+    );
 }
 
 #[tokio::test]
@@ -184,6 +210,8 @@ async fn incomplete_read_reports_its_bound_and_continuation() {
         has_more: true,
         continuation: Some("next-page".into()),
         truncated: false,
+        resolves: Arc::new(Mutex::new(0)),
+        impact_record: Arc::new(Mutex::new(None)),
     });
     let mut input = GetInput::new("req_root", View::Impact);
     input.limit = Some(1);
@@ -194,6 +222,34 @@ async fn incomplete_read_reports_its_bound_and_continuation() {
     assert_eq!(bounds.max_depth, None);
     assert!(bounds.has_more);
     assert_eq!(bounds.continuation.as_deref(), Some("next-page"));
+}
+
+#[tokio::test]
+async fn impact_reuses_the_resolved_identity() {
+    let resolves = Arc::new(Mutex::new(0));
+    let impact_record = Arc::new(Mutex::new(None));
+    let porcelain = Porcelain::new(FixturePort {
+        record: record("req_alpha", "requirement"),
+        traversed: Vec::new(),
+        request: Arc::new(Mutex::new(None)),
+        impact: json!({"affected_rules": []}),
+        has_more: false,
+        continuation: None,
+        truncated: false,
+        resolves: resolves.clone(),
+        impact_record: impact_record.clone(),
+    });
+
+    porcelain
+        .get(GetInput::new("req_alpha", View::Impact))
+        .await
+        .unwrap();
+
+    assert_eq!(*resolves.lock().unwrap(), 1);
+    assert_eq!(
+        impact_record.lock().unwrap().as_ref().unwrap().kind,
+        "requirement"
+    );
 }
 
 #[tokio::test]

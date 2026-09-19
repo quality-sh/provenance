@@ -68,7 +68,10 @@ impl GetPort for HostGetPort {
     fn resolve<'a>(&'a self, id: &'a str) -> PortFuture<'a, Option<Record>> {
         Box::pin(async move {
             let mut found = None;
-            for (kind, collection, _) in RECORD_KINDS {
+            for (kind, collection, operation) in RECORD_KINDS {
+                if !self.host.advertises(operation) {
+                    continue;
+                }
                 let path = format!("/{collection}/{id}");
                 match self.query(&path, BTreeMap::new()).await {
                     Ok(value) => {
@@ -76,7 +79,8 @@ impl GetPort for HostGetPort {
                         if found.is_some() {
                             return Err(ReadError::AmbiguousIdentity);
                         }
-                        found = Some(Record::new(id, kind, data));
+                        let metadata = value.get("meta").cloned().ok_or_else(malformed)?;
+                        found = Some(Record::new(id, kind, data).with_response_metadata(metadata));
                     }
                     Err(ReadError::NotFound) => {}
                     Err(error) => return Err(error),
@@ -109,26 +113,40 @@ impl GetPort for HostGetPort {
             let records = value
                 .pointer("/data/nodes")
                 .and_then(Value::as_array)
-                .ok_or_else(malformed)?
-                .iter()
-                .map(|entry| record_from_node(&entry["node"]))
-                .collect::<Result<Vec<_>, _>>()?;
+                .ok_or_else(malformed)?;
+            let mut permitted = Vec::new();
+            for entry in records {
+                let record = record_from_node(&entry["node"])?;
+                if operation_for_kind(&record.kind)
+                    .is_some_and(|operation| self.host.advertises(operation))
+                {
+                    permitted.push(record);
+                }
+            }
             Ok(Traversal {
-                records,
+                records: permitted,
                 bounds: bounds(&value, Some(request.max_depth)),
+                response_metadata: value.get("meta").cloned(),
             })
         })
     }
 
-    fn impact<'a>(&'a self, id: &'a str, limit: usize) -> PortFuture<'a, Impact> {
+    fn impact<'a>(&'a self, record: &'a Record, limit: usize) -> PortFuture<'a, Impact> {
         Box::pin(async move {
-            let record = self.resolve(id).await?.ok_or(ReadError::NotFound)?;
+            if !RECORD_KINDS
+                .iter()
+                .all(|(_, _, operation)| self.host.advertises(operation))
+            {
+                return Err(ReadError::InvalidOptions);
+            }
             let collection = collection(&record.kind)?;
             let query = BTreeMap::from([
                 ("query".to_owned(), "impact".to_owned()),
                 ("limit".to_owned(), limit.to_string()),
             ]);
-            let value = self.query(&format!("/{collection}/{id}"), query).await?;
+            let value = self
+                .query(&format!("/{collection}/{}", record.id), query)
+                .await?;
             let detail = value.get("data").cloned().ok_or_else(malformed)?;
             let mut result_bounds = bounds(&value, None);
             result_bounds.truncated |= detail
@@ -138,6 +156,7 @@ impl GetPort for HostGetPort {
             Ok(Impact {
                 detail,
                 bounds: result_bounds,
+                response_metadata: value.get("meta").cloned(),
             })
         })
     }
@@ -148,6 +167,12 @@ fn collection(kind: &str) -> Result<&'static str, ReadError> {
         .iter()
         .find_map(|(candidate, collection, _)| (*candidate == kind).then_some(*collection))
         .ok_or(ReadError::InvalidOptions)
+}
+
+fn operation_for_kind(kind: &str) -> Option<&'static str> {
+    RECORD_KINDS
+        .iter()
+        .find_map(|(candidate, _, operation)| (*candidate == kind).then_some(*operation))
 }
 
 fn record_from_node(value: &Value) -> Result<Record, ReadError> {
@@ -206,7 +231,7 @@ pub const fn action_names() -> &'static [&'static str] {
 pub(crate) fn get_is_available(host: &crate::StatementHost) -> bool {
     RECORD_KINDS
         .iter()
-        .all(|(_, _, operation)| host.advertises(operation))
+        .any(|(_, _, operation)| host.advertises(operation))
 }
 
 pub(crate) fn get_tool() -> rmcp::model::Tool {
@@ -252,6 +277,7 @@ pub(crate) fn check_tool() -> rmcp::model::Tool {
 }
 
 pub(crate) async fn call_check(
+    host: &crate::StatementHost,
     port: std::sync::Arc<dyn provenance_porcelain::check::CheckPort>,
     arguments: serde_json::Map<String, Value>,
 ) -> CallToolResult {
@@ -259,7 +285,11 @@ pub(crate) async fn call_check(
         return get_error("invalid_options", "unsupported check options");
     };
     let service = provenance_porcelain::Porcelain::new(port);
-    let outcome = service.check(arguments.into_check_input()).await;
+    let mut input = arguments.into_check_input();
+    if let Some((_, scope)) = host.bound_identity() {
+        input = input.in_scope(scope);
+    }
+    let outcome = service.check(input).await;
     let summary = outcome
         .categories
         .iter()
