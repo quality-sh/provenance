@@ -73,6 +73,8 @@ test('Rust generation uses a closed query input and decodes the selected result'
   assert.match(source, /pub enum GetRuleInput<'a>/);
   assert.match(source, /Trace \{ id: &'a str, direction: Option<&'a str> \}/);
   assert.match(source, /pub enum GetRuleOutput/);
+  assert.match(source, /GetRuleInput::Base \{ id \} => \{[\s\S]*?let request = self\.http\.get\(url\);/);
+  assert.match(source, /GetRuleInput::Trace \{ id, direction \} => \{[\s\S]*?let mut request = self\.http\.get\(url\);/);
   assert.match(source, /runtime::validate\(&value, "GetRuleTraceSuccess"/);
   assert.match(source, /GetRuleOutput::Trace/);
 });

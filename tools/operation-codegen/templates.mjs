@@ -209,7 +209,8 @@ function rustVariantRequest(path, method, op, variant, operation) {
   for (const parameter of pathParameters) {
     setup += `\n                url = url.replace("{${parameter.name}}", &runtime::path(${propertyName(parameter)}));`;
   }
-  setup += `\n                let mut request = self.http.${method}(url);`;
+  const changesRequest = queryParameters.length > 0 || headerParameters.length > 0;
+  setup += `\n                let ${changesRequest ? 'mut ' : ''}request = self.http.${method}(url);`;
   for (const parameter of queryParameters) setup += `\n                ${rustQueryStatement(parameter)}`;
   for (const parameter of headerParameters) {
     setup += `\n                request = request.header(${JSON.stringify(parameter.name)}, ${propertyName(parameter)});`;

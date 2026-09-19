@@ -211,14 +211,14 @@ impl Definition {
     }
 }
 
-fn merge_variants(mut variants: Vec<Value>) -> Value {
+fn merge_variants(variants: Vec<Value>) -> Value {
     let mut unique = Vec::new();
-    for variant in variants.drain(..) {
+    for variant in variants {
         if !unique.contains(&variant) {
             unique.push(variant);
         }
     }
-    variants = unique;
+    let mut variants = unique;
     if variants.len() == 1 {
         return variants.pop().unwrap();
     }
