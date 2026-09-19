@@ -186,29 +186,50 @@ impl Definition {
         self.success_schema()
     }
     pub fn mcp_input_schema(&self) -> Value {
-        let mut properties = serde_json::Map::new();
-        let mut required = Vec::new();
-        if let Some(body) = self.request_schema() {
-            properties.insert("data".into(), body["properties"]["data"].clone());
-            required.push(json!("data"));
-        }
-        for parameter in self.parameters() {
-            let name = if parameter.location == "header" {
-                parameter.name.to_ascii_lowercase().replace('-', "_")
-            } else {
-                parameter.name.to_owned()
-            };
-            properties.insert(name.clone(), parameter.schema.clone());
-            if parameter.required {
-                required.push(json!(name));
-            }
-        }
-        let mut result = json!({"type":"object","additionalProperties":false,"properties":properties,"required":required});
+        let variants: Vec<QueryVariant> = self.query_variants();
+        let parameter_sets: Vec<Vec<Parameter>> = if variants.is_empty() {
+            vec![self.parameters()]
+        } else {
+            variants
+                .into_iter()
+                .map(|variant| variant.parameters)
+                .collect()
+        };
+        let mut schemas: Vec<Value> = parameter_sets
+            .iter()
+            .map(|parameters| mcp_input_variant_schema(self.request_schema(), parameters))
+            .collect();
+        let mut result: Value = if schemas.len() == 1 {
+            schemas.pop().unwrap()
+        } else {
+            json!({"oneOf":schemas})
+        };
         if let Some(defs) = self.request_schema().and_then(|schema| schema.get("$defs")) {
             result["$defs"] = defs.clone();
         }
         result
     }
+}
+
+fn mcp_input_variant_schema(body: Option<&Value>, parameters: &[Parameter]) -> Value {
+    let mut properties: serde_json::Map<String, Value> = serde_json::Map::new();
+    let mut required: Vec<Value> = Vec::new();
+    if let Some(body) = body {
+        properties.insert("data".into(), body["properties"]["data"].clone());
+        required.push(json!("data"));
+    }
+    for parameter in parameters {
+        let name: String = if parameter.location == "header" {
+            parameter.name.to_ascii_lowercase().replace('-', "_")
+        } else {
+            parameter.name.to_owned()
+        };
+        properties.insert(name.clone(), parameter.schema.clone());
+        if parameter.required {
+            required.push(json!(name));
+        }
+    }
+    json!({"type":"object","additionalProperties":false,"properties":properties,"required":required})
 }
 
 fn merge_variants(variants: Vec<Value>) -> Value {
