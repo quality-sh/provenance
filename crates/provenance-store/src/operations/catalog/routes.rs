@@ -3,8 +3,8 @@
 use super::{
     schema::{self, Definition, HttpMethod, Parameter, ResponseKind},
     ArgumentAlias, CliDefault, CliDefaultValue, EtagBinding, HandlerBinding, HeaderBinding,
-    NullClearBinding, Operation, ParentBinding, PathBinding, QueryRequestBinding, QueryRoute,
-    Registration, RequestAdapter, ResponseAdapter, ResponseBinding, SelectorBinding,
+    Operation, ParentBinding, PathBinding, QueryRequestBinding, QueryRoute, Registration,
+    RequestAdapter, ResponseAdapter, ResponseBinding, SelectorBinding,
 };
 use schemars::generate::Contract;
 use serde_json::{json, Value};
@@ -167,14 +167,8 @@ impl Definition {
         self
     }
 
-    fn null_clears(mut self, fields: &[(&'static str, &'static str)]) -> Self {
-        self.registration.request.null_clears = fields
-            .iter()
-            .map(|(field, clear_name)| NullClearBinding { field, clear_name })
-            .collect();
-        if !fields.is_empty() {
-            self.registration.request.adapter = request::NULLABLE_PATCH;
-        }
+    fn public_patch(mut self, fields: &[(&'static str, &'static str)]) -> Self {
+        request::register_public_patch(&mut self.registration.request, fields);
         self
     }
 
