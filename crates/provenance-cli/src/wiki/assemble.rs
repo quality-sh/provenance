@@ -1,9 +1,10 @@
 //! Assembles the wiki page model from Provenance state.
 //!
-//! Pure joins over the scope export: relation fields are matched against
-//! record vectors by stable id, in record order, so output is deterministic
-//! for a given state. Every hole found on the way becomes a gap notice or an
-//! orphan entry instead of being dropped.
+//! The pages read records, relations, and rule attribution through one
+//! `GraphQuery` over the scope export — the same traversals gap policy
+//! runs on — so output is deterministic for a given state and a page can
+//! never disagree with its gap notices. Every hole found on the way
+//! becomes a gap notice or an orphan entry instead of being dropped.
 
 mod context;
 mod coverage;
@@ -77,7 +78,6 @@ fn build_corpus_with_coverage(
         coverage: coverage.map(|scan| &scan.report),
         gaps: &gaps,
         query: GraphQuery::new(&graph),
-        rule_requirements: std::cell::OnceCell::new(),
     };
     let requirements = state
         .requirements

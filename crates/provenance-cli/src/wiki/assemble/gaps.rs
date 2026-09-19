@@ -2,7 +2,7 @@ use crate::wiki::model::{
     GapNotice, OpenQuestionNotice, OrphanRecord, OrphanReport, PageLink, UnfinishedPage,
 };
 use provenance_core::{NodeType, StableId};
-use provenance_store::cache::{GapItem, GapKind};
+use provenance_store::cache::{GapItem, GapKind, RecordRef};
 
 use super::context::Assembler;
 use super::page_links::{requirement_link, resolution_link, rule_link, source_link};
@@ -26,16 +26,12 @@ impl Assembler<'_> {
             .gaps
             .iter()
             .filter(|gap| gap.kind == GapKind::OpenQuestion)
-            .filter_map(|gap| {
-                self.state
-                    .questions
-                    .iter()
-                    .find(|question| question.id.as_str() == gap.node_id)
-            })
+            .filter_map(|gap| self.open_question(gap))
             .map(|question| OpenQuestionNotice {
                 question: question.question.clone(),
                 status: question.status,
                 requirement: self
+                    .query
                     .find_requirement(&question.requirement_id)
                     .map(requirement_link),
             })
@@ -69,36 +65,40 @@ impl Assembler<'_> {
         }
     }
 
+    /// The open question a gap names, found kind-qualified so a record
+    /// of another kind sharing the id cannot stand in for it.
+    fn open_question(&self, gap: &GapItem) -> Option<&provenance_core::Question> {
+        match self.query.find(NodeType::Question, &gap.node_id) {
+            Some(RecordRef::Question(question)) => Some(question),
+            Some(
+                RecordRef::Source(_)
+                | RecordRef::Requirement(_)
+                | RecordRef::Resolution(_)
+                | RecordRef::Rule(_)
+                | RecordRef::Topic(_)
+                | RecordRef::Domain(_)
+                | RecordRef::Boundary(_),
+            )
+            | None => None,
+        }
+    }
+
     fn record_link(&self, node_type: NodeType, node_id: &str) -> Option<PageLink> {
-        match node_type {
-            NodeType::Requirement => self
-                .state
-                .requirements
-                .iter()
-                .find(|record| record.id.as_str() == node_id)
-                .map(requirement_link),
-            NodeType::Resolution => self
-                .state
-                .resolutions
-                .iter()
-                .find(|record| record.id.as_str() == node_id)
-                .map(resolution_link),
-            NodeType::Rule => self
-                .state
-                .rules
-                .iter()
-                .find(|record| record.id.as_str() == node_id)
-                .map(rule_link),
-            NodeType::Source => self
-                .state
-                .sources
-                .iter()
-                .find(|record| record.id.as_str() == node_id)
-                .map(source_link),
-            // Domains and boundaries have no wiki page of their own yet, so
-            // a gap about one links nowhere, the same as topics and
+        match self.query.find(node_type, node_id) {
+            // Domains and boundaries have no wiki page of their own yet,
+            // so a gap about one links nowhere, the same as topics and
             // questions.
-            NodeType::Topic | NodeType::Question | NodeType::Domain | NodeType::Boundary => None,
+            Some(RecordRef::Requirement(record)) => Some(requirement_link(record)),
+            Some(RecordRef::Resolution(record)) => Some(resolution_link(record)),
+            Some(RecordRef::Rule(record)) => Some(rule_link(record)),
+            Some(RecordRef::Source(record)) => Some(source_link(record)),
+            Some(
+                RecordRef::Topic(_)
+                | RecordRef::Question(_)
+                | RecordRef::Domain(_)
+                | RecordRef::Boundary(_),
+            )
+            | None => None,
         }
     }
 
