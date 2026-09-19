@@ -166,9 +166,7 @@ fn query_variant_documents(
     variants
         .into_iter()
         .map(|variant| {
-            let suffix = variant
-                .selector
-                .map_or_else(|| "Base".to_owned(), pascal);
+            let suffix = variant.selector.map_or_else(|| "Base".to_owned(), pascal);
             let success = component(
                 &format!("{family}{suffix}Success"),
                 variant.success_schema,
