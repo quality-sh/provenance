@@ -10,7 +10,7 @@ fn metadata(wire: u32) -> String {
         "data": {
             "compatibility": {"wire":wire,"state":2,"review_journal":3,"read_derivation":3},
             "package": {"name":"fixture","version":"0"},
-            "contract_digest": "fixture", "repository": "fixture", "scope": "default"
+            "repository": "fixture", "scope": "default"
         },
         "meta": {}
     })

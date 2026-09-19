@@ -70,10 +70,9 @@ async fn metadata_carries_the_tuple_in_an_envelope() {
             "wire": 9, "state": 2, "review_journal": 3, "read_derivation": 3
         })
     );
-    assert!(value["data"]["contract_digest"]
-        .as_str()
-        .unwrap()
-        .starts_with("sha256:"));
+    // No contract digest: the tuple, the package identity, and the bound
+    // repository and scope are the whole advertisement.
+    assert!(value["data"].get("contract_digest").is_none());
     assert_eq!(value["meta"], json!({}));
 }
 

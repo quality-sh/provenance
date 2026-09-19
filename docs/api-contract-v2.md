@@ -11,9 +11,9 @@ The client binds one repository, one scope, and one credential at connection.
 Authorization applies to every call. Resource paths carry no repository or scope
 segments. Path identity repeats no connection fact.
 
-`GET /metadata` returns the compatibility tuple, the package identity, the
-contract digest, and the authorized facts about the bound repository and scope.
-It is the sole version advertisement.
+`GET /metadata` returns the compatibility tuple, the package identity, and the
+authorized facts about the bound repository and scope. It is the sole version
+advertisement.
 
 ## 2. Route patterns
 
@@ -147,9 +147,7 @@ and a declared status for each runtime failure variant.
 One authoritative compatibility tuple contains `wire`, `state`,
 `review_journal`, and `read_derivation`. `/metadata` is its sole public
 advertisement. Generated constants derive from that one definition. A client
-supports exactly one tuple and refuses a mismatch at connection. The contract
-digest identifies artifacts and renderer pins; it is not a compatibility
-negotiation.
+supports exactly one tuple and refuses a mismatch at connection.
 
 The release removes versioned URLs, per-call version fields, response version
 echoes, old operation aliases, and compatibility translators.

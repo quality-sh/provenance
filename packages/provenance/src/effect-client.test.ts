@@ -9,7 +9,7 @@ const metadata = (repository = 'fixture', scope = 'default') => Response.json({
   data: {
     compatibility: COMPATIBILITY,
     package: { name: 'provenance', version: 'test' },
-    contract_digest: 'fixture', repository, scope,
+    repository, scope,
   },
   meta: {},
 });

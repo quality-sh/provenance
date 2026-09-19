@@ -36,7 +36,6 @@ export async function recordingHost(responses: Readonly<Record<string, unknown>>
       response.end(JSON.stringify({ data: {
         compatibility: COMPATIBILITY,
         package: { name: "provenance", version: "test-recorder" },
-        contract_digest: "test-recorder",
         ...identity,
       }, meta: {} }));
       return;

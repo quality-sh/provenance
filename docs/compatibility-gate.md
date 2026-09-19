@@ -85,7 +85,6 @@ node --test tools/compat-gate/check.test.mjs    # gate unit and integration test
 
 ## What the gate does not do
 
-The gate does not judge the content of a change. It does not validate the
-contract digest, and it does not stop a release; the release flow has its own
-checks. A passed gate says one thing: a human wrote a fresh authorization for
-this compatibility change.
+The gate does not judge the content of a change. It does not stop a release;
+the release flow has its own checks. A passed gate says one thing: a human
+wrote a fresh authorization for this compatibility change.

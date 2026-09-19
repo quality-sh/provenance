@@ -9,9 +9,9 @@ from this catalog.
 ## Connection identity
 
 A connection binds one repository, one scope, and one credential. Calls do not
-repeat these facts in a path or request body. `GET /metadata` returns the single
-compatibility tuple, package identity, contract digest, and the repository and
-scope that the connection can use. It is the only public version advertisement.
+repeat these facts in a path or request body. `GET /metadata` returns the
+compatibility tuple, the package identity, and the repository and scope that
+the connection can use. It is the only public version advertisement.
 The tuple does not change as part of the v2 route restructure.
 
 ## Resources
