@@ -107,7 +107,7 @@ async fn messages(
     let (cursor, mut position) = Cursor::open(
         ctx,
         "review-discussion-messages",
-        &(&query.parent, &query.selector),
+        &(&query.parent, &query.selector, query.limit),
         query.cursor.as_deref(),
     )?;
     ctx.snapshot().bound_page_work().await?;
