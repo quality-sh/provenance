@@ -81,6 +81,7 @@ test('Effect generation retains selector-specific success and failure types', ()
   const source = effectClient(document);
   assert.match(source, /getRule\(call: GetRuleTraceInput\): Effect\.Effect<GetRuleTraceSuccess, ClientFailure<GetRuleTraceFailure>>/);
   assert.match(source, /getRule\(call: GetRuleBaseInput\): Effect\.Effect<GetRuleBaseSuccess, ClientFailure<GetRuleBaseFailure>>/);
+  assert.match(source, /type GetRuleTraceSuccess.*type GetRuleTraceFailure.*from '\.\/client\.js'/);
   assert.match(source, /export type \{ GetRuleBaseInput, GetRuleTraceInput \} from '\.\/client\.js'/);
   assert.doesNotMatch(source, /export type \{[^}]*GetRuleTraceSuccess/);
 });

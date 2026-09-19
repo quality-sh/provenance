@@ -136,12 +136,12 @@ ${branches}
     return this.runtime.run('${op.operationId}', ${op['x-operation-mutates'] === true}, call, (input, signal) => this.http.${op.operationId}(input, { signal }));
   }`;
   });
+  const queryTypes = [...queryInputs, ...queryContracts];
   return `// Generated from OpenAPI. Do not edit.
 import * as Effect from 'effect/Effect';
 import * as Context from 'effect/Context';
 import * as Layer from 'effect/Layer';
-import { HttpClient, type components${[...queryInputs].map(name => `, type ${name}`).join('')} } from './client.js';
-${queryContracts.size ? `import type { ${[...queryContracts].join(', ')} } from './effect-contract.js';` : ''}
+import { HttpClient, type components${queryTypes.map(name => `, type ${name}`).join('')} } from './client.js';
 ${queryInputs.size ? `export type { ${[...queryInputs].join(', ')} } from './client.js';` : ''}
 import { ClientRuntime, requestEffect, connectionFailure, type ClientFailure } from '../effect-runtime.js';
 export interface ClientOptions {
