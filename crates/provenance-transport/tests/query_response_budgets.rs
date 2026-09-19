@@ -67,27 +67,64 @@ fn orphan_rules(repo: &Repository) {
     std::fs::write(path, format!("{rewritten}\n")).unwrap();
 }
 
-fn add_large_children(repo: &Repository, count: usize) {
+fn add_child(repo: &Repository, index: usize, description_bytes: usize) {
     let store = StateStore::new(repo.layout.clone());
     let scope = ScopeId::new("default").unwrap();
+    store
+        .create_requirement(CreateRequirementInput {
+            scope_id: scope,
+            id: StableId::new(format!("req_large_{index:03}")).unwrap(),
+            statement: "The graph includes this record.".into(),
+            description: Some("x".repeat(description_bytes)),
+            status: RequirementStatus::Active,
+            domain_id: None,
+            refines: Some(StableId::new("req_shared").unwrap()),
+            depends_on: vec![],
+            supersedes: vec![],
+            spawned_by: None,
+            origin_thread: None,
+            origin_message: None,
+        })
+        .unwrap();
+}
+
+fn add_large_children(repo: &Repository, count: usize) {
     for index in 0..count {
-        store
-            .create_requirement(CreateRequirementInput {
-                scope_id: scope.clone(),
-                id: StableId::new(format!("req_large_{index:03}")).unwrap(),
-                statement: "The graph includes this record.".into(),
-                description: Some("x".repeat(60_000)),
-                status: RequirementStatus::Active,
-                domain_id: None,
-                refines: Some(StableId::new("req_shared").unwrap()),
-                depends_on: vec![],
-                supersedes: vec![],
-                spawned_by: None,
-                origin_thread: None,
-                origin_message: None,
-            })
-            .unwrap();
+        add_child(repo, index, 60_000);
     }
+}
+
+fn set_requirement_description(repo: &Repository, id: &str, description_bytes: usize) {
+    let scope = ScopeId::new("default").unwrap();
+    let path = provenance_store::shards::requirements_path(&repo.layout, &scope);
+    let records = std::fs::read_to_string(&path).unwrap();
+    let rewritten = records
+        .lines()
+        .map(|line| {
+            let mut record: Value = serde_json::from_str(line).unwrap();
+            if record["id"].as_str() == Some(id) {
+                record["description"] = json!("x".repeat(description_bytes));
+            }
+            serde_json::to_string(&record).unwrap()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    std::fs::write(path, format!("{rewritten}\n")).unwrap();
+}
+
+async fn public_query_at_boundary(extra_bytes: usize) -> (u16, Vec<u8>, Value) {
+    let repo = Repository::new("The shared rule is readable.");
+    add_large_children(&repo, 18);
+    add_child(&repo, 18, 0);
+    let host = host(&repo);
+    let path = "/requirements/req_shared?query=neighbors&direction=both&limit=200";
+    let (status, baseline, value) = call(&host, path).await;
+    assert_eq!(status, 200, "{value}");
+    let remaining = QUERY_RESPONSE_BYTES.checked_sub(baseline.len()).unwrap();
+    assert!(remaining + extra_bytes < 60_000);
+
+    set_requirement_description(&repo, "req_large_018", remaining + extra_bytes);
+    call(&host, path).await
 }
 
 #[tokio::test]
@@ -135,5 +172,20 @@ async fn public_query_wire_includes_final_catch_up_failure_metadata() {
     assert!(value["data"]["items"].is_array());
     assert!(value.get("protocol_version").is_none());
     assert!(value.get("operation").is_none());
+    assert!(bytes.len() <= QUERY_RESPONSE_BYTES);
+}
+
+#[tokio::test]
+async fn public_query_wire_accepts_the_exact_finalized_limit() {
+    let (status, bytes, value) = public_query_at_boundary(0).await;
+    assert_eq!(status, 200, "{value}");
+    assert_eq!(bytes.len(), QUERY_RESPONSE_BYTES);
+}
+
+#[tokio::test]
+async fn public_query_wire_refuses_one_byte_over_the_finalized_limit() {
+    let (status, bytes, value) = public_query_at_boundary(1).await;
+    assert_eq!(status, 409, "{value}");
+    assert_eq!(value["error"], json!({"kind": "page_budget_exceeded"}));
     assert!(bytes.len() <= QUERY_RESPONSE_BYTES);
 }
