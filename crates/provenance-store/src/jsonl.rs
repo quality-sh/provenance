@@ -96,7 +96,7 @@ where
     for (index, line) in contents.lines().enumerate() {
         let value: serde_json::Value = serde_json::from_str(line)?;
         ensure_supported_record_version(path, index + 1, &value)?;
-        let (record, raw) = RawRecord::deserialize(line, value, index + 1)?;
+        let (record, raw) = RawRecord::deserialize(line, &value, index + 1)?;
         loaded.push(record, raw);
     }
     Ok(loaded)

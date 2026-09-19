@@ -1,6 +1,7 @@
 use super::support::Fixture;
 use serde_json::{json, Value};
-use std::path::PathBuf;
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 
 const COMMIT: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const AT: &str = "2026-09-01T00:00:00Z";
@@ -37,6 +38,32 @@ fn write_rows(fixture: &Fixture, family: &str, file: &str, rows: &[String]) {
 
 fn padded(value: &Value) -> String {
     format!("  {}  ", serde_json::to_string(value).unwrap())
+}
+
+fn state_snapshot(fixture: &Fixture) -> BTreeMap<PathBuf, Vec<u8>> {
+    let root = fixture.dir.path().join(".provenance/state");
+    let mut files = BTreeMap::new();
+    collect_files(&root, &root, &mut files);
+    files
+}
+
+fn collect_files(root: &Path, current: &Path, files: &mut BTreeMap<PathBuf, Vec<u8>>) {
+    let mut entries = std::fs::read_dir(current)
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    entries.sort_by_key(std::fs::DirEntry::path);
+    for entry in entries {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_files(root, &path, files);
+        } else {
+            files.insert(
+                path.strip_prefix(root).unwrap().to_owned(),
+                std::fs::read(path).unwrap(),
+            );
+        }
+    }
 }
 
 #[tokio::test]
@@ -88,7 +115,18 @@ async fn create_keeps_every_unrelated_source_row_byte_for_byte() {
 async fn resolution_create_keeps_unrelated_superseded_by_exactly() {
     let fixture = Fixture::new();
     fixture.requirement().await;
-    fixture.call("create-resolution", json!({"scope_id":"default","id":"resolution_old","title":"Old decision","position":"Keep the saved record.","rationale":"The record remains available.","status":"draft","requirement_ids":["req_one"],"supersedes":[],"inputs":[]})).await.unwrap();
+    let old = json!({
+        "scope_id": "default",
+        "id": "resolution_old",
+        "title": "Old decision",
+        "position": "Keep the saved record.",
+        "rationale": "The record remains available.",
+        "status": "draft",
+        "requirement_ids": ["req_one"],
+        "supersedes": [],
+        "inputs": []
+    });
+    fixture.call("create-resolution", old).await.unwrap();
     let mut record = parsed_rows(&fixture, "resolutions", "res.jsonl").remove(0);
     record["superseded_by"] = json!("resolution_future");
     let expected = padded(&record);
@@ -99,7 +137,18 @@ async fn resolution_create_keeps_unrelated_superseded_by_exactly() {
         std::slice::from_ref(&expected),
     );
 
-    fixture.call("create-resolution", json!({"scope_id":"default","id":"resolution_new","title":"New decision","position":"Add another record.","rationale":"The new record is required.","status":"draft","requirement_ids":["req_one"],"supersedes":[],"inputs":[]})).await.unwrap();
+    let new = json!({
+        "scope_id": "default",
+        "id": "resolution_new",
+        "title": "New decision",
+        "position": "Add another record.",
+        "rationale": "The new record is required.",
+        "status": "draft",
+        "requirement_ids": ["req_one"],
+        "supersedes": [],
+        "inputs": []
+    });
+    fixture.call("create-resolution", new).await.unwrap();
 
     assert!(raw_rows(&fixture, "resolutions", "res.jsonl").contains(&expected));
 }
@@ -196,6 +245,7 @@ async fn target_edit_with_nested_unknown_data_is_refused_without_publication() {
         "req.jsonl",
         std::slice::from_ref(&original),
     );
+    let before = state_snapshot(&fixture);
 
     let error = fixture
         .call(
@@ -206,5 +256,5 @@ async fn target_edit_with_nested_unknown_data_is_refused_without_publication() {
         .unwrap_err();
 
     assert_ne!(error["kind"], "unknown_operation");
-    assert_eq!(raw_rows(&fixture, "requirements", "req.jsonl"), [original]);
+    assert_eq!(state_snapshot(&fixture), before);
 }

@@ -12,7 +12,7 @@ pub(super) struct RawRecord {
 impl RawRecord {
     pub(super) fn deserialize<T: DeserializeOwned + Serialize>(
         line: &str,
-        value: serde_json::Value,
+        value: &serde_json::Value,
         line_number: usize,
     ) -> anyhow::Result<(T, Self)> {
         let mut top_level_unknown = Vec::new();
@@ -89,7 +89,7 @@ impl<T> LoadedRecords<T> {
         &self.records
     }
 
-    pub(super) fn records_mut(&mut self) -> &mut Vec<T> {
+    pub(super) const fn records_mut(&mut self) -> &mut Vec<T> {
         &mut self.records
     }
 }
@@ -151,7 +151,7 @@ fn unique_id_match(
     Ok(first)
 }
 
-fn take(raw: &mut [Option<RawRecord>], index: usize) -> RawRecord {
+const fn take(raw: &mut [Option<RawRecord>], index: usize) -> RawRecord {
     raw[index].take().expect("matched raw record is available")
 }
 
