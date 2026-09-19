@@ -28,9 +28,8 @@ pub(super) async fn search(
 }
 
 async fn search_page(ctx: &ReadContext, request: SearchQuery) -> anyhow::Result<SearchResult> {
+    use crate::operations::reader::PAGE_BYTES;
     use crate::operations::reader::{Cursor, Position};
-    use crate::operations::reader::{PAGE_BYTES, RECORD_BYTES};
-    use provenance_core::protocol::read_failure::ReadFailure;
     request
         .validate()
         .map_err(provenance_core::protocol::QueryValidation::into_native)?;
@@ -77,9 +76,6 @@ async fn search_page(ctx: &ReadContext, request: SearchQuery) -> anyhow::Result<
                     .any(|text| text.to_lowercase().contains(&needle));
                 if contains_text {
                     let size = serde_json::to_vec(&node)?.len();
-                    if size > RECORD_BYTES {
-                        return Err(ReadFailure::PageRecordTooLarge.into());
-                    }
                     if matched.len() == request.limit || bytes + size > PAGE_BYTES {
                         has_more = true;
                         break 'kinds;

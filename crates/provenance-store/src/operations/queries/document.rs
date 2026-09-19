@@ -16,6 +16,17 @@ pub async fn read_document(
     policy: ReadPolicy,
     request: ReadDocumentQuery,
 ) -> anyhow::Result<Stamped<ReadDocumentResult>> {
+    read_document_answer(repo, scope, policy, request)
+        .await
+        .and_then(|answer| super::page::checked("read-document", answer))
+}
+
+pub(crate) async fn read_document_answer(
+    repo: Option<Utf8PathBuf>,
+    scope: &ScopeId,
+    policy: ReadPolicy,
+    request: ReadDocumentQuery,
+) -> anyhow::Result<Stamped<ReadDocumentResult>> {
     let answer = served(repo, scope, policy, move |ctx| {
         // Keep page errors until the freshness policy is checked.
         Box::pin(async move { Ok(read(ctx, request).await) })
@@ -24,14 +35,11 @@ pub async fn read_document(
     if answer.stamp.policy == StampPolicy::CatchUpFailed {
         return Err(ReadFailure::DocumentCatchUpFailed.into());
     }
-    super::page::checked(
-        "read-document",
-        Stamped {
-            result: answer.result?,
-            stamp: answer.stamp,
-            freshness_error: answer.freshness_error,
-        },
-    )
+    Ok(Stamped {
+        result: answer.result?,
+        stamp: answer.stamp,
+        freshness_error: answer.freshness_error,
+    })
 }
 
 pub(super) async fn read(
@@ -45,7 +53,7 @@ pub(super) async fn read(
 }
 
 async fn page(ctx: &ReadContext, request: ReadDocumentQuery) -> anyhow::Result<ReadDocumentResult> {
-    use crate::operations::reader::{PAGE_BYTES, RECORD_BYTES};
+    use crate::operations::reader::PAGE_BYTES;
     request
         .validate()
         .map_err(provenance_core::protocol::QueryValidation::into_native)?;
@@ -93,9 +101,6 @@ async fn page(ctx: &ReadContext, request: ReadDocumentQuery) -> anyhow::Result<R
         };
         if let Some(entry) = entry {
             let size = serde_json::to_vec(&entry)?.len();
-            if size > RECORD_BYTES {
-                return Err(ReadFailure::PageRecordTooLarge.into());
-            }
             if bytes + size > PAGE_BYTES {
                 has_more = true;
                 break;
