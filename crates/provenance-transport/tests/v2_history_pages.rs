@@ -106,9 +106,11 @@ async fn requirement_history_pages_report_limit_has_more_and_cursor() {
         assert_eq!(status, 200, "page {page}: {body}");
         assert_eq!(body["meta"]["limit"], 2, "page {page} echoes the limit");
         let items = body["data"]["items"].as_array().unwrap();
-        seen.extend(items.iter().map(|item| {
-            item["request_id"].as_str().unwrap().to_owned()
-        }));
+        seen.extend(
+            items
+                .iter()
+                .map(|item| item["request_id"].as_str().unwrap().to_owned()),
+        );
         if body["meta"]["has_more"] == json!(true) {
             assert_eq!(items.len(), 2, "only a full page may continue");
             cursor = body["meta"]["next_cursor"].as_str().unwrap().to_owned();
