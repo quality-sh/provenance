@@ -59,10 +59,11 @@ where
 {
     with_state_publication(path, || {
         let _lock = AdvisoryLock::acquire(lock_path)?;
-        let mut records = read_jsonl_unlocked(path)?;
-        let result = mutate(&mut records)?;
-        crate::review::guard::protect_rows(path, &records)?;
-        write_jsonl_atomic_unlocked(path, &records)
+        let mut loaded = read_jsonl_unlocked(path)?;
+        let result = mutate(&mut loaded.records)?;
+        crate::review::guard::protect_rows(path, &loaded.records)?;
+        let lines = loaded.serialize_preserving_unknown_fields(path)?;
+        write_jsonl_lines_atomic_unlocked(path, &lines)
             .map_err(crate::write_error::publication_started)?;
         Ok(result)
     })
@@ -70,29 +71,155 @@ where
 
 /// The read a write is built on, guarded the same way an ordinary read is.
 ///
-/// A mutation rewrites the whole shard, so every line it did not touch still
-/// has to survive a round trip through a struct. A line written in a layout
-/// this build does not know does not survive it: the fields the struct does
-/// not recognise are dropped on the way out, which turns an unrelated `create`
-/// into a silent edit of somebody else's record. So the version is read from
-/// the raw JSON and judged by
+/// A mutation rewrites the whole shard. The version is read from the raw JSON
+/// and judged by
 /// [`ensure_supported_record_version`](crate::state_store::readers::ensure_supported_record_version),
 /// the same function the read choke point calls, before any record is built.
 ///
-/// The check runs before the caller's mutation and before anything is written,
-/// so a refusal leaves the shard exactly as it was found.
-fn read_jsonl_unlocked<T: DeserializeOwned>(path: &Utf8Path) -> anyhow::Result<Vec<T>> {
+/// Open records can also carry same-version fields that this build does not
+/// own. The read keeps those fields beside the typed record. Unchanged rows
+/// keep their exact raw line; changed rows add their top-level unknown fields
+/// after the new typed serialization. A changed row with a nested unknown
+/// field is refused because the generic writer cannot safely associate that
+/// field after a change inside a sequence or nested object.
+fn read_jsonl_unlocked<T>(path: &Utf8Path) -> anyhow::Result<LoadedRecords<T>>
+where
+    T: DeserializeOwned + Serialize,
+{
     if !path.exists() {
-        return Ok(Vec::new());
+        return Ok(LoadedRecords::default());
     }
     let contents = std::fs::read_to_string(path)?;
     let mut records = Vec::new();
+    let mut raw_records = Vec::new();
     for (index, line) in contents.lines().enumerate() {
         let value: serde_json::Value = serde_json::from_str(line)?;
         ensure_supported_record_version(path, index + 1, &value)?;
-        records.push(serde_json::from_value(value)?);
+        let mut top_level_unknown = Vec::new();
+        let mut nested_unknown = None;
+        let mut deserializer = serde_json::Deserializer::from_str(line);
+        let record = serde_ignored::deserialize(&mut deserializer, |unknown| match unknown {
+            serde_ignored::Path::Map {
+                parent: serde_ignored::Path::Root,
+                key,
+            } => {
+                top_level_unknown.push(key);
+            }
+            other => {
+                if nested_unknown.is_none() {
+                    nested_unknown = Some(other.to_string());
+                }
+            }
+        })?;
+        let known = serde_json::to_value(&record)?;
+        let unknown = top_level_unknown
+            .into_iter()
+            .filter_map(|key| value.get(&key).cloned().map(|value| (key, value)))
+            .collect();
+        records.push(record);
+        raw_records.push(RawRecord {
+            raw_line: line.to_owned(),
+            known,
+            unknown,
+            nested_unknown,
+            line_number: index + 1,
+        });
     }
-    Ok(records)
+    Ok(LoadedRecords {
+        records,
+        raw_records,
+    })
+}
+
+struct RawRecord {
+    raw_line: String,
+    known: serde_json::Value,
+    unknown: serde_json::Map<String, serde_json::Value>,
+    nested_unknown: Option<String>,
+    line_number: usize,
+}
+
+struct LoadedRecords<T> {
+    records: Vec<T>,
+    raw_records: Vec<RawRecord>,
+}
+
+impl<T> Default for LoadedRecords<T> {
+    fn default() -> Self {
+        Self {
+            records: Vec::new(),
+            raw_records: Vec::new(),
+        }
+    }
+}
+
+impl<T: Serialize> LoadedRecords<T> {
+    fn serialize_preserving_unknown_fields(self, path: &Utf8Path) -> anyhow::Result<Vec<String>> {
+        let mut available = self.raw_records.into_iter().map(Some).collect::<Vec<_>>();
+        self.records
+            .iter()
+            .map(|record| {
+                let value = serde_json::to_value(record)?;
+                let matching = matching_raw_record(&available, &value);
+                let Some(index) = matching else {
+                    return Ok(serde_json::to_string(record)?);
+                };
+                let raw = available[index]
+                    .take()
+                    .expect("matching record is available");
+                if value == raw.known {
+                    return Ok(raw.raw_line);
+                }
+                if let Some(unknown) = raw.nested_unknown {
+                    anyhow::bail!(
+                        "{path} line {}: nested unknown field `{unknown}` cannot survive a typed record change",
+                        raw.line_number
+                    );
+                }
+                append_unknown_fields(serde_json::to_string(record)?, raw.unknown)
+            })
+            .collect()
+    }
+}
+
+fn append_unknown_fields(
+    mut typed: String,
+    unknown: serde_json::Map<String, serde_json::Value>,
+) -> anyhow::Result<String> {
+    if unknown.is_empty() {
+        return Ok(typed);
+    }
+    if !typed.ends_with('}') {
+        anyhow::bail!("a changed record with unknown fields must serialize as an object");
+    }
+    typed.pop();
+    let mut needs_comma = typed != "{";
+    for (key, value) in unknown {
+        if needs_comma {
+            typed.push(',');
+        }
+        typed.push_str(&serde_json::to_string(&key)?);
+        typed.push(':');
+        typed.push_str(&serde_json::to_string(&value)?);
+        needs_comma = true;
+    }
+    typed.push('}');
+    Ok(typed)
+}
+
+fn matching_raw_record(
+    available: &[Option<RawRecord>],
+    value: &serde_json::Value,
+) -> Option<usize> {
+    let id = value.get("id").and_then(serde_json::Value::as_str);
+    available.iter().position(|candidate| {
+        candidate.as_ref().is_some_and(|raw| {
+            id.map_or_else(
+                || raw.known == *value,
+                |id| raw.known.get("id").and_then(serde_json::Value::as_str) == Some(id),
+            )
+        })
+    })
 }
 
 /// Writes one JSONL shard while the caller holds the publication lock.
@@ -112,6 +239,19 @@ fn write_jsonl_atomic_unlocked<T: Serialize>(path: &Utf8Path, records: &[T]) -> 
     let mut temp = tempfile::NamedTempFile::new_in(parent)?;
     for record in records {
         writeln!(temp, "{}", to_stable_json(record)?)?;
+    }
+    temp.persist(path)?;
+    Ok(())
+}
+
+fn write_jsonl_lines_atomic_unlocked(path: &Utf8Path, lines: &[String]) -> anyhow::Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let parent = path.parent().unwrap_or_else(|| Utf8Path::new("."));
+    let mut temp = tempfile::NamedTempFile::new_in(parent)?;
+    for line in lines {
+        writeln!(temp, "{line}")?;
     }
     temp.persist(path)?;
     Ok(())
@@ -137,11 +277,122 @@ fn with_state_publication<R>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde::Serialize;
+    use serde::{Deserialize, Serialize};
     #[derive(Serialize)]
     struct Record {
         id: &'static str,
     }
+
+    #[derive(Debug, Deserialize, Serialize)]
+    struct NestedRecord {
+        schema_version: u32,
+        id: String,
+        detail: Detail,
+    }
+
+    #[derive(Debug, Deserialize, Serialize)]
+    struct Detail {
+        known: String,
+    }
+
+    #[derive(Debug, Deserialize, Serialize)]
+    struct OrderedRecord {
+        schema_version: u32,
+        scope_id: String,
+        id: String,
+        name: String,
+    }
+
+    #[test]
+    fn unrelated_mutation_keeps_a_nested_unknown_record_exactly() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = camino::Utf8Path::from_path(dir.path()).unwrap();
+        let path = root.join("records.jsonl");
+        let existing = "{ \"id\":\"one\", \"detail\":{\"extension\":true,\"known\":\"value\"}, \"schema_version\":2 }";
+        std::fs::write(&path, format!("{existing}\n")).unwrap();
+
+        mutate_jsonl_locked(
+            &path,
+            &root.join("records.lock"),
+            |records: &mut Vec<NestedRecord>| {
+                records.push(NestedRecord {
+                    schema_version: provenance_core::SUPPORTED_SCHEMA_VERSION.0,
+                    id: "two".into(),
+                    detail: Detail {
+                        known: "new".into(),
+                    },
+                });
+                Ok(())
+            },
+        )
+        .unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(path).unwrap(),
+            format!(
+                "{existing}\n{{\"schema_version\":2,\"id\":\"two\",\"detail\":{{\"known\":\"new\"}}}}\n"
+            )
+        );
+    }
+
+    #[test]
+    fn mutation_refuses_to_change_a_record_with_a_nested_unknown_field() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = camino::Utf8Path::from_path(dir.path()).unwrap();
+        let path = root.join("records.jsonl");
+        std::fs::write(
+            &path,
+            "{\"schema_version\":2,\"id\":\"one\",\"detail\":{\"known\":\"value\",\"extension\":true}}\n",
+        )
+        .unwrap();
+        let before = std::fs::read(&path).unwrap();
+        let mut callback_ran = false;
+
+        let message = mutate_jsonl_locked(
+            &path,
+            &root.join("records.lock"),
+            |records: &mut Vec<NestedRecord>| {
+                callback_ran = true;
+                records[0].detail.known = "changed".into();
+                Ok(())
+            },
+        )
+        .unwrap_err()
+        .to_string();
+
+        assert!(callback_ran);
+        assert!(message.contains("nested unknown field"), "{message}");
+        assert!(message.contains("detail.extension"), "{message}");
+        assert_eq!(std::fs::read(path).unwrap(), before);
+    }
+
+    #[test]
+    fn mutation_keeps_the_serialized_field_order_for_a_new_record() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = camino::Utf8Path::from_path(dir.path()).unwrap();
+        let path = root.join("records.jsonl");
+
+        mutate_jsonl_locked(
+            &path,
+            &root.join("records.lock"),
+            |records: &mut Vec<OrderedRecord>| {
+                records.push(OrderedRecord {
+                    schema_version: provenance_core::SUPPORTED_SCHEMA_VERSION.0,
+                    scope_id: "default".into(),
+                    id: "one".into(),
+                    name: "One".into(),
+                });
+                Ok(())
+            },
+        )
+        .unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(path).unwrap(),
+            "{\"schema_version\":2,\"scope_id\":\"default\",\"id\":\"one\",\"name\":\"One\"}\n"
+        );
+    }
+
     #[test]
     fn writes_newline_terminated_jsonl() {
         let dir = tempfile::tempdir().unwrap();

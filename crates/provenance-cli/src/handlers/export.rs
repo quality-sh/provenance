@@ -67,6 +67,7 @@ pub fn export_scope(repo: Utf8PathBuf, scope: String) -> anyhow::Result<ScopeExp
     let scope_id = ScopeId::new(scope.clone())?;
     let store = Store::open(repo);
     store.with_repository_publication(|| {
+        store.ensure_scope_exportable(&scope_id)?;
         store.ensure_review_portable(&scope_id)?;
         store.validate_ideation_scope(&scope_id)?;
         store.validate_graph_scope(&scope_id)?;
@@ -152,3 +153,6 @@ pub(super) fn handle(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests;

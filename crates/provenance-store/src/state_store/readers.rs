@@ -13,6 +13,8 @@ enum Fields {
     Open,
     /// Unknown fields are refused, so a pinned graph carries nothing extra.
     Closed,
+    /// Unknown fields are refused after a dedicated compatibility transform.
+    NormalizedClosed,
 }
 
 const NO_NESTED_RECORDS: &[&str] = &[];
@@ -46,9 +48,8 @@ fn record_from_line<T: DeserializeOwned>(
     ensure_supported_nested_record_versions(path, line_number, &value, nested_record_fields)?;
     match fields {
         Fields::Open => Ok(serde_json::from_value(value)?),
-        // The closed reader needs the untouched line: `serde_ignored` reports
-        // an unknown field by walking the document as it was written.
         Fields::Closed => deserialize_closed(line),
+        Fields::NormalizedClosed => deserialize_closed(&serde_json::to_string(&value)?),
     }
 }
 
@@ -259,6 +260,20 @@ pub(super) fn read_legacy_dispositions(
     store.state_path_access(path, || read_legacy_dispositions_unlocked(path))
 }
 
+pub(super) fn read_legacy_dispositions_closed(
+    store: &StateStore,
+    path: &Utf8Path,
+) -> anyhow::Result<Vec<DispositionRecord>> {
+    store.state_path_access(path, || {
+        read_records(
+            path,
+            Fields::NormalizedClosed,
+            normalize_disposition_aliases,
+            NO_NESTED_RECORDS,
+        )
+    })
+}
+
 fn read_legacy_dispositions_unlocked(path: &Utf8Path) -> anyhow::Result<Vec<DispositionRecord>> {
     read_records(
         path,
@@ -305,6 +320,20 @@ pub(super) fn read_jsonl_closed<T: DeserializeOwned>(
     path: &Utf8Path,
 ) -> anyhow::Result<Vec<T>> {
     store.state_path_access(path, || read_jsonl_closed_unlocked(path))
+}
+
+pub(super) fn read_ideation_landings_closed<T: DeserializeOwned>(
+    store: &StateStore,
+    path: &Utf8Path,
+) -> anyhow::Result<Vec<T>> {
+    store.state_path_access(path, || {
+        read_records(
+            path,
+            Fields::Closed,
+            leave_as_written,
+            IDEATION_LANDING_RECORD_FIELDS,
+        )
+    })
 }
 
 fn read_jsonl_closed_unlocked<T: DeserializeOwned>(path: &Utf8Path) -> anyhow::Result<Vec<T>> {
@@ -366,6 +395,20 @@ pub(super) fn read_message_shards(
 ) -> anyhow::Result<Vec<Message>> {
     store.state_path_access(&shards::threads_path(layout, scope), || {
         read_jsonl_shards(message_shard_paths(layout, scope)?, "message")
+    })
+}
+
+pub(super) fn read_message_shards_closed(
+    store: &StateStore,
+    layout: &ProvenanceLayout,
+    scope: &ScopeId,
+) -> anyhow::Result<Vec<Message>> {
+    store.state_path_access(&shards::threads_path(layout, scope), || {
+        let mut records = Vec::new();
+        for path in message_shard_paths(layout, scope)? {
+            records.extend(read_jsonl_closed_unlocked(&path)?);
+        }
+        Ok(records)
     })
 }
 
