@@ -205,6 +205,6 @@ Question answers stay on the answer action. Proposal, Assertion, and
 Disposition history keeps its existing lifecycle writers. Bulk ideation
 landing stays native-only.
 
-Page limits keep the 200-record bound. Search and Requirement document reads
-continue a sequence with a cursor; [cursor-reads.md](cursor-reads.md) defines
-that contract.
+Page limits keep the 200-record bound. List and query reads continue a
+sequence with a cursor; [cursor-reads.md](cursor-reads.md) defines that
+contract.

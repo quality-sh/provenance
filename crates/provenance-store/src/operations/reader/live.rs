@@ -110,6 +110,19 @@ impl<'c> LiveHandle<'c> {
         StateStore::new(self.layout()).list_verification_runs(scope)
     }
 
+    /// Reads the scope's verification runs without loading the file at once.
+    pub(crate) fn read_runs<R>(
+        &self,
+        scope: &ScopeId,
+        read: impl FnOnce(
+            &str,
+            &mut dyn FnMut() -> anyhow::Result<Option<(i64, VerificationRun)>>,
+        ) -> anyhow::Result<R>,
+    ) -> anyhow::Result<R> {
+        self.only(Live::VerificationRuns);
+        StateStore::new(self.layout()).read_verification_runs(scope, read)
+    }
+
     /// The two commits a range names, resolved; `head` defaults to the
     /// current commit. A range that does not resolve refuses here, before
     /// anything else is read.

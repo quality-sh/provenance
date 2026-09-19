@@ -131,22 +131,8 @@ pub struct EtagBinding {
 }
 
 #[derive(Clone)]
-pub enum ResponseSelection {
-    Direct,
-    ArrayItems {
-        owner_parameter: &'static str,
-        owner_field: &'static str,
-    },
-    ArrayMember {
-        id_parameter: &'static str,
-        owner_parameter: Option<(&'static str, &'static str)>,
-    },
-}
-
-#[derive(Clone)]
 pub struct ResponseBinding {
     pub kind: ResponseKind,
-    pub selection: ResponseSelection,
     pub adapter: ResponseAdapter,
     pub raw_schema: Value,
     pub schema: Value,
@@ -165,7 +151,6 @@ impl ResponseBinding {
     pub const fn direct(kind: ResponseKind, raw_schema: Value, schema: Value) -> Self {
         Self {
             kind,
-            selection: ResponseSelection::Direct,
             adapter: match kind {
                 ResponseKind::Resource | ResponseKind::Result => ResponseAdapter::Direct,
                 ResponseKind::Items => ResponseAdapter::ArrayItems,
