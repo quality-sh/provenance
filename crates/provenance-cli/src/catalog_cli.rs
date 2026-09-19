@@ -1,5 +1,6 @@
 //! Generated-dialect CLI dispatch over the registered resource catalog.
 use axum::http::{HeaderMap, HeaderName, HeaderValue, Method};
+use provenance_macros::rule;
 use provenance_store::operations::catalog::{self, Definition};
 use serde_json::{json, Map, Value};
 use std::{
@@ -33,6 +34,8 @@ const COLLECTIONS: &[&str] = &[
     "dispositions",
 ];
 
+/// Dispatches direct graph commands from the live operation catalog.
+#[rule("rule_porcelain_regular_graph_work_has_commands")]
 pub async fn try_dispatch(arguments: &[String]) -> anyhow::Result<bool> {
     let Some((context, mut words)) = split_global(arguments)? else {
         return Ok(false);

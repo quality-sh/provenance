@@ -69,5 +69,6 @@ pdf_oxide = { version = "=0.3.77", default-features = false, features = ["legacy
 jsonschema.workspace = true
 tempfile.workspace = true
 predicates.workspace = true
+rmcp = { version = "=1.4.0", default-features = false, features = ["client"] }
 sha2.workspace = true
 tar.workspace = true

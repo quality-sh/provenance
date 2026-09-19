@@ -1,7 +1,7 @@
 use provenance_macros::verifies;
-use provenance_porcelain::{Action, Outcome, RecordRequest};
 use serde_json::json;
 use std::sync::Arc;
+#[cfg(feature = "test-fixture")]
 use std::sync::Mutex;
 
 #[cfg(feature = "test-fixture")]
@@ -16,36 +16,6 @@ fn statement_host_supplies_the_injected_get_port() {
     fn assert_port<P: provenance_porcelain::get::GetPort>() {}
 
     assert_port::<provenance_transport::porcelain::HostGetPort>();
-}
-
-#[test]
-#[verifies("rule_porcelain_mcp_target_argument", examples)]
-fn mcp_get_translates_its_structured_target_argument() {
-    let arguments: provenance_transport::porcelain::GetArguments =
-        serde_json::from_value(json!({"target": "req_alpha"})).unwrap();
-
-    assert_eq!(
-        arguments.into_request(),
-        RecordRequest::new("req_alpha", Action::Get)
-    );
-}
-
-#[test]
-#[verifies("rule_porcelain_mcp_readable_structured", examples)]
-fn mcp_result_contains_readable_and_structured_content() {
-    let data = json!({"id": "req_alpha", "kind": "requirement"});
-    let outcome = Outcome::new(
-        "Requirement req_alpha: Keep the surfaces consistent.",
-        data.clone(),
-    );
-
-    let result = provenance_transport::porcelain::render(outcome).unwrap();
-
-    assert_eq!(
-        result.content[0].as_text().unwrap().text,
-        "Requirement req_alpha: Keep the surfaces consistent."
-    );
-    assert_eq!(result.structured_content, Some(data));
 }
 
 #[cfg(feature = "test-fixture")]
@@ -88,6 +58,7 @@ async fn host_get_port_returns_a_record_through_the_resource_path() {
 
 #[cfg(feature = "test-fixture")]
 #[tokio::test]
+#[verifies("rule_porcelain_action_names_match", conformance)]
 #[verifies("rule_porcelain_mcp_target_argument", examples)]
 #[verifies("rule_porcelain_mcp_readable_structured", examples)]
 async fn mcp_get_runs_through_the_composed_service() {
@@ -101,7 +72,28 @@ async fn mcp_get_runs_through_the_composed_service() {
     let client = ().serve(client_io).await.unwrap();
 
     let tools = client.list_all_tools().await.unwrap();
-    assert!(tools.iter().any(|tool| tool.name == "get"));
+    let get = tools.iter().find(|tool| tool.name == "get").unwrap();
+    let output_schema = get.output_schema.as_ref().expect("get output schema");
+    assert_eq!(output_schema["type"], "object");
+    assert_eq!(output_schema["additionalProperties"], false);
+    assert_eq!(
+        output_schema["required"],
+        json!(["record", "view", "related", "detail", "bounds"])
+    );
+    assert_eq!(
+        output_schema["properties"]["view"]["enum"],
+        json!(["record", "children", "grounding", "impact"])
+    );
+    assert_eq!(
+        output_schema["$defs"]["bounds"]["required"],
+        json!([
+            "limit",
+            "max_depth",
+            "has_more",
+            "continuation",
+            "truncated"
+        ])
+    );
     let result = client
         .call_tool(
             CallToolRequestParams::new("get")
@@ -111,13 +103,46 @@ async fn mcp_get_runs_through_the_composed_service() {
         .unwrap();
 
     assert_ne!(result.is_error, Some(true));
-    assert_eq!(
-        result.content[0].as_text().unwrap().text,
-        "requirement req_shared"
-    );
+    let readable = &result.content[0].as_text().unwrap().text;
+    assert!(readable.contains("requirement req_shared"), "{readable}");
+    assert!(readable.contains("The graph is readable."), "{readable}");
+    assert!(readable.contains("view: record"), "{readable}");
     let value = result.structured_content.unwrap();
     assert_eq!(value["record"]["id"], "req_shared");
     assert_eq!(value["record"]["kind"], "requirement");
+    client.cancel().await.unwrap();
+    server.await.unwrap().cancel().await.unwrap();
+}
+
+#[cfg(feature = "test-fixture")]
+#[tokio::test]
+async fn mcp_get_readable_content_includes_related_records_and_bounds() {
+    use rmcp::{model::CallToolRequestParams, ServiceExt as _};
+
+    let repository = support::records::Repository::new("The shared graph is readable.");
+    let host = support::resource_http::host(&repository, false);
+    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
+    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let client = ().serve(client_io).await.unwrap();
+
+    let result = client
+        .call_tool(
+            CallToolRequestParams::new("get").with_arguments(
+                json!({"target":"req_shared","view":"children","limit":7})
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+            ),
+        )
+        .await
+        .unwrap();
+
+    assert_ne!(result.is_error, Some(true));
+    let readable = &result.content[0].as_text().unwrap().text;
+    assert!(readable.contains("view: children"), "{readable}");
+    assert!(readable.contains("rule_shared"), "{readable}");
+    assert!(readable.contains("bounds:"), "{readable}");
+    assert!(readable.contains("limit=7"), "{readable}");
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
 }
@@ -230,6 +255,7 @@ impl provenance_porcelain::check::CheckPort for CheckFixturePort {
 }
 
 #[tokio::test]
+#[verifies("rule_porcelain_action_names_match", conformance)]
 #[verifies("rule_porcelain_check_categories", examples)]
 async fn mcp_check_uses_its_separately_injected_port() {
     use rmcp::{model::CallToolRequestParams, ServiceExt as _};
@@ -242,7 +268,20 @@ async fn mcp_check_uses_its_separately_injected_port() {
     let client = ().serve(client_io).await.unwrap();
 
     let tools = client.list_all_tools().await.unwrap();
-    assert!(tools.iter().any(|tool| tool.name == "check"));
+    let check = tools.iter().find(|tool| tool.name == "check").unwrap();
+    let output_schema = check.output_schema.as_ref().expect("check output schema");
+    assert_eq!(output_schema["type"], "object");
+    assert_eq!(output_schema["additionalProperties"], false);
+    assert_eq!(output_schema["required"], json!(["categories"]));
+    assert_eq!(
+        output_schema["properties"]["categories"]["items"]["properties"]["status"]["enum"],
+        json!(["passed", "findings", "unavailable"])
+    );
+    assert_eq!(
+        output_schema["properties"]["categories"]["items"]["properties"]["findings"]["items"]
+            ["required"],
+        json!(["message"])
+    );
     let result = client
         .call_tool(
             CallToolRequestParams::new("check").with_arguments(

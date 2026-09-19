@@ -2182,6 +2182,7 @@ dependencies = [
  "provenance-transport",
  "pulldown-cmark",
  "remove_dir_all",
+ "rmcp",
  "rustix",
  "same-file",
  "semver",

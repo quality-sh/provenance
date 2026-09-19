@@ -1,18 +1,17 @@
 //! MCP-owned bindings for shared Porcelain capabilities.
 
 use axum::http::{HeaderMap, Method};
+use provenance_macros::rule;
 use provenance_porcelain::check::{Category, CheckInput};
 use provenance_porcelain::get::{
     Bounds, GetInput, GetPort, Impact, PortFuture, ReadError, Record, Traversal, TraversalRequest,
     View,
 };
-use provenance_porcelain::{Action, Outcome, RecordRequest};
 use rmcp::model::{CallToolResult, Content};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::{Map, Value};
 use std::collections::BTreeMap;
 
-const ACTION_NAMES: &[&str] = &["get", "check"];
 const RECORD_KINDS: [(&str, &str, &str); 8] = [
     ("source", "sources", "get-source"),
     ("requirement", "requirements", "get-requirement"),
@@ -223,11 +222,6 @@ fn operation_error(error: &provenance_core::protocol::failure::ErasedFailure) ->
     }
 }
 
-/// Return the Porcelain action names exposed by the MCP binding.
-pub const fn action_names() -> &'static [&'static str] {
-    ACTION_NAMES
-}
-
 pub(crate) fn get_is_available(host: &crate::StatementHost) -> bool {
     RECORD_KINDS
         .iter()
@@ -247,11 +241,13 @@ pub(crate) fn get_tool() -> rmcp::model::Tool {
             "limit": {"type": "integer", "minimum": 1}
         }
     });
-    rmcp::model::Tool::new(
+    let mut tool = rmcp::model::Tool::new(
         "get",
         "Read one repository record by its repository-local ID.",
         schema.as_object().expect("get schema is an object").clone(),
-    )
+    );
+    tool.output_schema = Some(get_output_schema().into());
+    tool
 }
 
 pub(crate) fn check_tool() -> rmcp::model::Tool {
@@ -266,14 +262,68 @@ pub(crate) fn check_tool() -> rmcp::model::Tool {
             }
         }
     });
-    rmcp::model::Tool::new(
+    let mut tool = rmcp::model::Tool::new(
         "check",
         "Check graph validity, statement quality, and binding coverage.",
         schema
             .as_object()
             .expect("check schema is an object")
             .clone(),
-    )
+    );
+    tool.output_schema = Some(check_output_schema().into());
+    tool
+}
+
+fn get_output_schema() -> Map<String, Value> {
+    serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["record", "view", "related", "detail", "bounds"],
+        "properties": {
+            "record": {"$ref": "#/$defs/record"},
+            "view": {"type": "string", "enum": ["record", "children", "grounding", "impact"]},
+            "related": {"type": "array", "items": {"$ref": "#/$defs/record"}},
+            "detail": {}, "bounds": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/bounds"}]},
+            "record_metadata": {}, "view_metadata": {}
+        },
+        "$defs": {
+            "record": {"type": "object", "additionalProperties": false,
+                "required": ["id", "kind", "value"], "properties": {
+                    "id": {"type": "string"}, "kind": {"type": "string"}, "value": {}
+                }},
+            "bounds": {"type": "object", "additionalProperties": false,
+                "required": ["limit", "max_depth", "has_more", "continuation", "truncated"],
+                "properties": {"limit": {"type": "integer", "minimum": 0},
+                    "max_depth": {"type": ["integer", "null"], "minimum": 0},
+                    "has_more": {"type": "boolean"},
+                    "continuation": {"type": ["string", "null"]}, "truncated": {"type": "boolean"}
+                }}
+        }
+    })
+    .as_object()
+    .expect("get output schema is an object")
+    .clone()
+}
+
+fn check_output_schema() -> Map<String, Value> {
+    serde_json::json!({
+        "type": "object", "additionalProperties": false, "required": ["categories"],
+        "properties": {"categories": {"type": "array", "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["category", "status", "findings"],
+            "properties": {
+                "category": {"type": "string", "enum": ["graph", "statements", "bindings"]},
+                "status": {"type": "string", "enum": ["passed", "findings", "unavailable"]},
+                "findings": {"type": "array", "items": {"type": "object",
+                    "additionalProperties": false, "required": ["message"],
+                    "properties": {"message": {"type": "string"}, "detail": {}}}},
+                "unavailable_reason": {"type": "string"}, "context": {}
+            }
+        }}}
+    })
+    .as_object()
+    .expect("check output schema is an object")
+    .clone()
 }
 
 pub(crate) async fn call_check(
@@ -302,6 +352,8 @@ pub(crate) async fn call_check(
     result
 }
 
+/// Returns readable and structured MCP content for one get request.
+#[rule("rule_porcelain_mcp_readable_structured")]
 pub(crate) async fn call_get(
     host: &crate::StatementHost,
     arguments: serde_json::Map<String, Value>,
@@ -312,7 +364,7 @@ pub(crate) async fn call_get(
     let service = provenance_porcelain::Porcelain::new(HostGetPort::new(host.clone()));
     match service.get(arguments.into_get_input()).await {
         Ok(outcome) => {
-            let summary = format!("{} {}", outcome.record.kind, outcome.record.id);
+            let summary = render_get_readable(&outcome);
             let mut result = CallToolResult::structured(
                 serde_json::to_value(outcome).expect("get outcome is JSON"),
             );
@@ -329,6 +381,48 @@ pub(crate) async fn call_get(
             &error.to_string(),
         ),
     }
+}
+
+fn render_get_readable(outcome: &provenance_porcelain::get::GetOutcome) -> String {
+    let mut lines = vec![
+        format!("{} {}", outcome.record.kind, outcome.record.id),
+        format!("view: {:?}", outcome.view).to_ascii_lowercase(),
+        format!(
+            "record: {}",
+            serde_json::to_string_pretty(&outcome.record.value)
+                .expect("record values are valid JSON")
+        ),
+    ];
+    if !outcome.related.is_empty() {
+        lines.push("related:".to_owned());
+        lines.extend(outcome.related.iter().map(|record| {
+            format!(
+                "- {} {}: {}",
+                record.kind,
+                record.id,
+                serde_json::to_string(&record.value).expect("record values are valid JSON")
+            )
+        }));
+    }
+    if let Some(detail) = &outcome.detail {
+        lines.push(format!(
+            "detail: {}",
+            serde_json::to_string_pretty(detail).expect("view details are valid JSON")
+        ));
+    }
+    if let Some(bounds) = &outcome.bounds {
+        lines.push(format!(
+            "bounds: limit={} max_depth={} has_more={} truncated={} continuation={}",
+            bounds.limit,
+            bounds
+                .max_depth
+                .map_or_else(|| "none".to_owned(), |depth| depth.to_string()),
+            bounds.has_more,
+            bounds.truncated,
+            bounds.continuation.as_deref().unwrap_or("none")
+        ));
+    }
+    lines.join("\n")
 }
 
 fn get_error(kind: &str, message: &str) -> CallToolResult {
@@ -358,12 +452,8 @@ pub struct GetArguments {
 }
 
 impl GetArguments {
-    /// Translate the MCP input into a shared semantic request.
-    pub fn into_request(self) -> RecordRequest {
-        RecordRequest::new(self.target, Action::Get)
-    }
-
     /// Translate the MCP input into a shared semantic get request.
+    #[rule("rule_porcelain_mcp_target_argument")]
     pub fn into_get_input(self) -> GetInput {
         GetInput {
             target: self.target,
@@ -373,11 +463,4 @@ impl GetArguments {
             limit: self.limit,
         }
     }
-}
-
-/// Render a shared outcome in the MCP-owned result shape.
-pub fn render<T: Serialize>(outcome: Outcome<T>) -> serde_json::Result<CallToolResult> {
-    let mut result = CallToolResult::structured(serde_json::to_value(outcome.data)?);
-    result.content = vec![Content::text(outcome.summary)];
-    Ok(result)
 }

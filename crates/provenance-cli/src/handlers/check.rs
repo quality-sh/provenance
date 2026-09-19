@@ -115,6 +115,8 @@ impl RepositoryCheckPort {
             .map_err(|error| format!("{error:#}"))
     }
 
+    /// Finds missing code bindings without running project tests.
+    #[rule("rule_porcelain_coverage_does_not_run_tests")]
     fn binding_findings(&self, selected_scope: Option<&str>) -> Result<Vec<Finding>, String> {
         let store = Store::open(&self.repo);
         let manifest = store.manifest().map_err(|error| format!("{error:#}"))?;
@@ -290,6 +292,8 @@ fn ensure_strict_dictionary_index(
     }
 }
 
+/// Validates graph records without treating missing code bindings as graph errors.
+#[rule("rule_porcelain_missing_binding_not_invalid")]
 fn validate_locked(
     store: &Store,
     manifest: &Manifest,

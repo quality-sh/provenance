@@ -3,6 +3,7 @@ use provenance_macros::verifies;
 use serde_json::Value;
 
 #[test]
+#[verifies("rule_porcelain_action_names_match", conformance)]
 fn cli_check_selector_runs_and_renders_only_the_selected_category() {
     let directory = tempfile::tempdir().unwrap();
     Command::cargo_bin("provenance")
@@ -142,18 +143,40 @@ fn cli_binding_check_reports_absence_without_running_or_failing_project_tests() 
         format!("#!/bin/sh\ntouch {}\n", marker.display()),
     )
     .unwrap();
-    let rules = directory
-        .path()
-        .join(".provenance/state/scopes/default/rules/rule.jsonl");
-    std::fs::create_dir_all(rules.parent().unwrap()).unwrap();
-    std::fs::write(
-        rules,
-        concat!(
-            r#"{"schema_version":2,"scope_id":"default","id":"rule_unbound","statement":"The system keeps the record.","status":"active","severity":"medium","requirement_ids":[]}"#,
-            "\n"
-        ),
-    )
-    .unwrap();
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .args([
+            "requirements",
+            "create",
+            "--repo",
+            directory.path().to_str().unwrap(),
+            "--id",
+            "req_unbound",
+            "--statement",
+            "The system keeps the record.",
+        ])
+        .assert()
+        .success();
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .args([
+            "rules",
+            "create",
+            "--repo",
+            directory.path().to_str().unwrap(),
+            "--id",
+            "rule_unbound",
+            "--requirement-id",
+            "req_unbound",
+            "--statement",
+            "The system keeps the record.",
+            "--status",
+            "active",
+            "--severity",
+            "medium",
+        ])
+        .assert()
+        .success();
 
     let output = Command::cargo_bin("provenance")
         .unwrap()
@@ -163,6 +186,7 @@ fn cli_binding_check_reports_absence_without_running_or_failing_project_tests() 
             "--repo",
             ".",
             "--strict",
+            "--graph",
             "--bindings",
             "--format",
             "json",
@@ -177,9 +201,11 @@ fn cli_binding_check_reports_absence_without_running_or_failing_project_tests() 
     );
     assert!(!marker.exists());
     let report: Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(report["categories"][0]["category"], "bindings");
-    assert_eq!(report["categories"][0]["status"], "findings");
-    assert!(report["categories"][0]["findings"]
+    assert_eq!(report["categories"][0]["category"], "graph");
+    assert_eq!(report["categories"][0]["status"], "passed");
+    assert_eq!(report["categories"][1]["category"], "bindings");
+    assert_eq!(report["categories"][1]["status"], "findings");
+    assert!(report["categories"][1]["findings"]
         .as_array()
         .unwrap()
         .iter()

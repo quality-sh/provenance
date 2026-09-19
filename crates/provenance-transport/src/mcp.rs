@@ -1,5 +1,6 @@
 use crate::{routing, StatementHost, MAX_BODY_BYTES};
 use provenance_core::protocol::failure::{ErasedFailure, InvalidInputReason, OperationFailure};
+use provenance_macros::rule;
 use provenance_store::operations::catalog;
 use rmcp::{
     model::{
@@ -19,6 +20,8 @@ impl ServerHandler for StatementHost {
         info
     }
 
+    /// Lists the live MCP action names used for cross-surface conformance.
+    #[rule("rule_porcelain_action_names_match")]
     fn list_tools(
         &self,
         _: Option<PaginatedRequestParams>,

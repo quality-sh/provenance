@@ -1,5 +1,6 @@
 use assert_cmd::Command;
 use predicates::str::contains;
+use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::path::Path;
 
@@ -64,6 +65,7 @@ fn create_verification_run(repo: &str, rule: &str, key: &str) {
 }
 
 #[test]
+#[verifies("rule_porcelain_regular_graph_work_has_commands", examples)]
 fn collection_commands_use_resource_addresses_and_v2_envelopes() {
     let (_directory, repo) = init();
     let source = json!({

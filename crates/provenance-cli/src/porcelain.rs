@@ -1,37 +1,18 @@
 //! CLI-owned bindings for shared Porcelain capabilities.
 
+use provenance_macros::rule;
 use provenance_porcelain::check::{Category, CheckInput, CheckOutcome};
 use provenance_porcelain::get::{GetInput, GetOutcome, View};
-use provenance_porcelain::{Action, Outcome, RecordRequest};
-use serde::Serialize;
 use std::{
     fmt::{Display, Formatter},
     net::{Ipv4Addr, SocketAddr},
 };
-
-const ACTION_NAMES: &[&str] = &["get", "check"];
-
-/// Return the Porcelain action names exposed by the CLI binding.
-pub const fn action_names() -> &'static [&'static str] {
-    ACTION_NAMES
-}
 
 /// An explicit CLI output format.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum OutputFormat {
     /// Emit JSON result data.
     Json,
-}
-
-/// Render a shared outcome in the CLI-owned output shape.
-pub fn render<T: Serialize>(
-    outcome: &Outcome<T>,
-    format: Option<OutputFormat>,
-) -> serde_json::Result<String> {
-    match format {
-        None => Ok(outcome.summary.clone()),
-        Some(OutputFormat::Json) => serde_json::to_string_pretty(&outcome.data),
-    }
 }
 
 /// An invalid CLI Porcelain binding.
@@ -45,15 +26,6 @@ impl Display for BindingError {
 }
 
 impl std::error::Error for BindingError {}
-
-/// Translate target-first CLI words into one semantic record request.
-pub fn parse_record(words: &[&str]) -> Result<RecordRequest, BindingError> {
-    match words {
-        [target, "get"] if *target != "get" => Ok(RecordRequest::new(*target, Action::Get)),
-        [target] if !target.is_empty() => Ok(RecordRequest::new(*target, Action::Get)),
-        _ => Err(BindingError),
-    }
-}
 
 /// Translate CLI-owned selector flags into one semantic check request.
 pub fn parse_check(words: &[&str]) -> Result<CheckInput, BindingError> {
@@ -97,6 +69,7 @@ pub fn render_check(outcome: &CheckOutcome) -> String {
 }
 
 /// Translate CLI-owned get words into one semantic request.
+#[rule("rule_porcelain_cli_target_action_order")]
 pub fn parse_get(words: &[&str]) -> Result<GetInput, BindingError> {
     let (target, mut index) = match words {
         [target, rest @ ..] if !target.is_empty() && rest.first().copied() != Some("get") => {
@@ -157,6 +130,25 @@ pub async fn try_dispatch(arguments: &[String]) -> anyhow::Result<bool> {
     let outcome = service.get(input).await?;
     println!("{}", render_get(&outcome, invocation.format)?);
     Ok(true)
+}
+
+/// Run a bare target through Porcelain before built-in command parsing.
+/// A failed probe yields to built-in parsing; the main dispatcher retries other targets.
+#[rule("rule_porcelain_get_is_default_action")]
+pub async fn try_dispatch_bare(arguments: &[String]) -> anyhow::Result<bool> {
+    if raw_words(arguments).len() != 1 {
+        return Ok(false);
+    }
+    let Some(invocation) = split_get_arguments(arguments)? else {
+        return Ok(false);
+    };
+    if !provenance_store::layout::ProvenanceLayout::new(&invocation.repo)
+        .manifest_path()
+        .is_file()
+    {
+        return Ok(false);
+    }
+    Ok(try_dispatch(arguments).await.unwrap_or(false))
 }
 
 /// Report whether the arguments explicitly select the target-first get grammar.
@@ -244,10 +236,54 @@ fn split_get_arguments(arguments: &[String]) -> anyhow::Result<Option<GetInvocat
     }))
 }
 
+/// Renders the selected record as readable text or structured JSON.
+#[rule("rule_porcelain_cli_readable_json")]
 fn render_get(outcome: &GetOutcome, format: Option<OutputFormat>) -> serde_json::Result<String> {
     if format == Some(OutputFormat::Json) {
         serde_json::to_string_pretty(outcome)
     } else {
-        Ok(format!("{} {}", outcome.record.kind, outcome.record.id))
+        let mut sections = vec![
+            format!("{} {}", outcome.record.kind, outcome.record.id),
+            format!("view: {:?}", outcome.view).to_ascii_lowercase(),
+            format!(
+                "record:\n{}",
+                serde_json::to_string_pretty(&outcome.record.value)?
+            ),
+        ];
+        if !outcome.related.is_empty() {
+            sections.push(format!(
+                "related:\n{}",
+                outcome
+                    .related
+                    .iter()
+                    .map(|record| format!(
+                        "- {} {}: {}",
+                        record.kind,
+                        record.id,
+                        serde_json::to_string(&record.value).expect("record values are valid JSON")
+                    ))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            ));
+        }
+        if let Some(detail) = &outcome.detail {
+            sections.push(format!(
+                "detail:\n{}",
+                serde_json::to_string_pretty(detail)?
+            ));
+        }
+        if let Some(bounds) = &outcome.bounds {
+            sections.push(format!(
+                "bounds: limit={} max_depth={} has_more={} truncated={} continuation={}",
+                bounds.limit,
+                bounds
+                    .max_depth
+                    .map_or_else(|| "none".to_owned(), |depth| depth.to_string()),
+                bounds.has_more,
+                bounds.truncated,
+                bounds.continuation.as_deref().unwrap_or("none")
+            ));
+        }
+        Ok(sections.join("\n\n"))
     }
 }

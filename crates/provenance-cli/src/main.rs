@@ -19,6 +19,9 @@ use cli::Cli;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let arguments = std::env::args().collect::<Vec<_>>();
+    if provenance_cli::porcelain::try_dispatch_bare(&arguments).await? {
+        return Ok(());
+    }
     if provenance_cli::porcelain::explicitly_selects_get(&arguments)?
         && provenance_cli::porcelain::try_dispatch(&arguments).await?
     {

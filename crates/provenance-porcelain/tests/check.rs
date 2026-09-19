@@ -1,7 +1,6 @@
 use provenance_macros::verifies;
 use provenance_porcelain::check::{
-    binding_findings, separate_repository_findings, BindingInventory, Category, CategoryReport,
-    CheckInput, CheckPort, Finding, PortFuture, RuleBindingState, Status,
+    Category, CategoryReport, CheckInput, CheckPort, Finding, PortFuture, Status,
 };
 use provenance_porcelain::Porcelain;
 
@@ -80,35 +79,6 @@ async fn a_category_that_cannot_run_is_unavailable_not_passed() {
         outcome.categories[0].unavailable_reason.as_deref(),
         Some("source scanner is not installed")
     );
-}
-
-#[test]
-#[verifies("rule_porcelain_coverage_does_not_run_tests", examples)]
-fn binding_inspection_does_not_start_a_project_test_runner() {
-    let directory = tempfile::tempdir().unwrap();
-    let marker = directory.path().join("project-tests-ran");
-    std::fs::write(
-        directory.path().join("project-test.sh"),
-        format!("#!/bin/sh\ntouch {}\n", marker.display()),
-    )
-    .unwrap();
-    let inventory = BindingInventory::new([RuleBindingState::new("rule_alpha", true)]);
-
-    let findings = binding_findings(&inventory);
-
-    assert_eq!(findings.len(), 2);
-    assert!(!marker.exists());
-}
-
-#[test]
-#[verifies("rule_porcelain_missing_binding_not_invalid", examples)]
-fn missing_bindings_are_coverage_findings_not_graph_findings() {
-    let inventory = BindingInventory::new([RuleBindingState::new("rule_alpha", true)]);
-
-    let findings = separate_repository_findings(Vec::new(), &inventory);
-
-    assert!(findings.graph.is_empty());
-    assert_eq!(findings.bindings.len(), 2);
 }
 
 #[test]
