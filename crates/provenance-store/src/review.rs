@@ -5,6 +5,7 @@ mod input;
 mod journal;
 pub(crate) mod relationships;
 mod resource_read;
+pub(crate) use resource_read::RequirementResourceSnapshot;
 mod save;
 pub use input::{ListEdit, RequirementRelations, SaveRequirement};
 
