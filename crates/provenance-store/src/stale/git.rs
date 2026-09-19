@@ -133,7 +133,23 @@ pub fn resolve_range(
 }
 
 pub fn revision_files(repo: &Utf8Path, revision: &str) -> anyhow::Result<Vec<RevisionFile>> {
-    let output = git(repo, &["ls-tree", "-rz", "--name-only", revision])?;
+    revision_files_at_paths(repo, revision, &[])
+}
+
+/// Read the revision blobs for all selected repository paths. An empty path
+/// list selects the complete tree.
+pub fn revision_files_at_paths(
+    repo: &Utf8Path,
+    revision: &str,
+    paths: &[Utf8PathBuf],
+) -> anyhow::Result<Vec<RevisionFile>> {
+    let output = command(repo)
+        .arg("--literal-pathspecs")
+        .args(["ls-tree", "-rz", "--name-only", revision, "--"])
+        .args(paths)
+        .output()
+        .context("run git ls-tree")?;
+    let output = checked(output, "git ls-tree")?;
     let mut files = Vec::new();
     for raw_path in output.stdout.split(|byte| *byte == 0) {
         if raw_path.is_empty() {
