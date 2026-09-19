@@ -25,16 +25,10 @@ const CREATE_REQUIREMENT_DEFAULTS: &[CliDefault] = &[
         value: CliDefaultValue::EmptyArray,
     },
 ];
-const UPDATE_REQUIREMENT_DEFAULTS: &[CliDefault] = &[
-    CliDefault {
-        field: "actor",
-        value: CliDefaultValue::String("cli"),
-    },
-    CliDefault {
-        field: "clear_fields",
-        value: CliDefaultValue::EmptyArray,
-    },
-];
+const UPDATE_REQUIREMENT_DEFAULTS: &[CliDefault] = &[CliDefault {
+    field: "actor",
+    value: CliDefaultValue::String("cli"),
+}];
 const CREATE_SOURCE_DEFAULTS: &[CliDefault] = &[
     CliDefault {
         field: "source_type",
@@ -400,7 +394,7 @@ fn requirements(out: &mut Vec<Definition>) {
         .header("Idempotency-Key", "request_id", false)
         .header("If-Match", "expected_etag", true)
         .cli_defaults(UPDATE_REQUIREMENT_DEFAULTS)
-        .null_clears(&[
+        .public_patch(&[
             ("description", "description"),
             ("fog", "fog"),
             ("domain_id", "domain_id"),
