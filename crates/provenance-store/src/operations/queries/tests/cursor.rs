@@ -60,6 +60,40 @@ async fn cursor_pages_preserve_order_and_refuse_invalid_continuations() {
     let mut tampered = next.clone();
     tampered["cursor"] = json!(format!("{cursor}x"));
     assert!(search(&root, tampered).await.is_err());
+    let wrong_operation = queries::read_document(
+        Some(root.clone()),
+        &scope,
+        ReadPolicy::default(),
+        provenance_core::protocol::ReadDocumentQuery {
+            id: "req_overtime".into(),
+            cursor: Some(cursor.to_owned()),
+            limit: 1,
+        },
+    )
+    .await
+    .unwrap_err();
+    assert!(wrong_operation.to_string().contains("cursor"));
+    let other_scope = provenance_core::ScopeId::new("other").unwrap();
+    let manifest_path = store.layout.manifest_path();
+    let mut manifest: Value =
+        serde_json::from_slice(&std::fs::read(&manifest_path).unwrap()).unwrap();
+    manifest["scopes"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"id":"other","path_prefix":"."}));
+    std::fs::write(&manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+    let wrong_scope = queries::search(
+        Some(root.clone()),
+        &other_scope,
+        ReadPolicy::default(),
+        serde_json::from_value(json!({
+            "text":"req_", "node_types":["requirement"], "limit":200, "cursor":cursor
+        }))
+        .unwrap(),
+    )
+    .await
+    .unwrap_err();
+    assert!(wrong_scope.to_string().contains("cursor"));
     record["id"] = json!("req_new");
     crate::cache::tests::fixtures::append_record(&path, &record);
     assert!(search(&root, next)

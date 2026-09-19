@@ -68,6 +68,7 @@ impl StateStore {
             None => canonical_digest::canonical_bytes(&input)?,
         });
         self.with_repository_publication(|| {
+            crate::test_probes::at("requirement_save_locked")?;
             let scope_id = input.update.scope_id.clone();
             let scope = &scope_id;
             anyhow::ensure!(
@@ -127,6 +128,7 @@ impl StateStore {
         let id = before.id.clone();
         self.apply_requirement_update(input.update)?;
         if let Some(relationships) = input.relationships {
+            crate::test_probes::at("requirement_relationships_expanding")?;
             let final_sets = relationships.expand(before)?;
             self.replace_review_relationships(&scope, &id, final_sets)?;
         }

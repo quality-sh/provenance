@@ -1,75 +1,16 @@
 #![cfg(feature = "test-fixture")]
 mod support {
     pub mod records;
+    pub mod resource_http;
 }
 use axum::{body::Body, http::Request};
 use provenance_core::{MessageRole, NodeType, ScopeId, StableId, ThreadParent};
 use provenance_store::state_store::{PostMessageInput, StateStore};
-use provenance_transport::StatementHost;
 use rmcp::{model::CallToolRequestParams, ServiceExt as _};
 use serde_json::{json, Value};
 use support::records::Repository;
+use support::resource_http::{call, call_with_headers, host};
 use tower::ServiceExt as _;
-
-fn host(repo: &Repository, writable: bool) -> StatementHost {
-    use provenance_transport::fixture::{FixtureAccess, Target};
-    let access = FixtureAccess::new(
-        vec![Target {
-            id: "selected".into(),
-            root: repo.dir.path().to_path_buf(),
-        }],
-        vec![("selected".into(), "default".into())],
-        "fixture-secret",
-        "fixture.test",
-    )
-    .unwrap();
-    StatementHost::with_fixture_access(if writable {
-        access.allow_writes()
-    } else {
-        access
-    })
-}
-
-async fn call(host: &StatementHost, method: &str, path: &str, body: Option<Value>) -> (u16, Value) {
-    call_with_headers(host, method, path, body, &[]).await
-}
-
-#[allow(clippy::option_if_let_else)]
-async fn call_with_headers(
-    host: &StatementHost,
-    method: &str,
-    path: &str,
-    body: Option<Value>,
-    headers: &[(&str, &str)],
-) -> (u16, Value) {
-    let mut request = Request::builder()
-        .method(method)
-        .uri(path)
-        .header("host", "fixture.test")
-        .header("authorization", "Bearer fixture-secret");
-    for (name, value) in headers {
-        request = request.header(*name, *value);
-    }
-    let body = if let Some(value) = body {
-        request = request.header("content-type", "application/json");
-        Body::from(value.to_string())
-    } else {
-        Body::empty()
-    };
-    let response = host
-        .router()
-        .oneshot(request.body(body).unwrap())
-        .await
-        .unwrap();
-    let status = response.status().as_u16();
-    let value = serde_json::from_slice(
-        &axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap(),
-    )
-    .unwrap();
-    (status, value)
-}
 
 #[tokio::test]
 async fn all_addressed_discussion_routes_work_for_questions() {
@@ -189,36 +130,6 @@ async fn a_discussion_member_read_is_addressed_beyond_the_first_list_page() {
     let (status, read) = call(&host, "GET", &format!("{parent}/{discussion_id}"), None).await;
     assert_eq!(status, 200, "{read}");
     assert_eq!(read["data"]["discussion"]["discussion_id"], discussion_id);
-}
-
-#[tokio::test]
-async fn draft_patch_refuses_missing_resources() {
-    let repo = Repository::new("The shared graph is readable.");
-    let host = host(&repo, true);
-    let contribution = json!({"data":{
-        "target":{"artifact_type":"requirement","artifact_id":"req_shared"},
-        "participant_slot":"reviewer", "stance":"support",
-        "strongest_finding":"Observed.", "evidence_references":[], "material_claims":[],
-        "risks":[], "objections":[], "challenges":[], "suggested_artifact_changes":[],
-        "unsupported_recommendations":[],
-        "uncertainty":{"level":"low","rationale":"Direct evidence."}, "open_questions":[]
-    }});
-    let synthesis = json!({"data":{
-        "target":{"artifact_type":"requirement","artifact_id":"req_shared"},
-        "summary":"No record exists.", "consensus":[], "contested_claims":[],
-        "minority_objections":[], "evidence_gaps":[], "unsupported_speculation":[],
-        "open_questions":[], "suggested_artifacts":[], "required_human_decisions":[]
-    }});
-    for (path, body) in [
-        ("/contributions/contribution_missing", contribution),
-        ("/synthesis-packets/synthesis_missing", synthesis),
-    ] {
-        let (status, failure) = call(&host, "PATCH", path, Some(body)).await;
-        assert_eq!(status, 404, "{failure}");
-        assert_eq!(failure["error"]["kind"], "resource_not_found");
-        let (status, read) = call(&host, "GET", path, None).await;
-        assert_eq!(status, 404, "{read}");
-    }
 }
 
 #[tokio::test]
@@ -405,6 +316,40 @@ async fn authentication_host_and_origin_checks_precede_body_decoding() {
 }
 
 #[tokio::test]
+async fn read_only_authorization_precedes_mutation_body_decoding() {
+    let repo = Repository::new("The shared graph is readable.");
+    let host = host(&repo, false);
+    for (method, path) in [
+        ("POST", "/sources"),
+        ("PATCH", "/requirements/req_shared"),
+        ("POST", "/topics/topic_shared/claim"),
+        ("POST", "/requirements/req_shared/discussions"),
+        (
+            "PATCH",
+            "/requirements/req_shared/discussions/discussion_missing",
+        ),
+    ] {
+        let request = Request::builder()
+            .method(method)
+            .uri(path)
+            .header("host", "fixture.test")
+            .header("authorization", "Bearer fixture-secret")
+            .header("content-type", "application/json")
+            .body(Body::from("invalid json"))
+            .unwrap();
+        let response = host.router().oneshot(request).await.unwrap();
+        assert_eq!(response.status().as_u16(), 403, "{method} {path}");
+        let value: Value = serde_json::from_slice(
+            &axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(value["error"]["kind"], "access_denied", "{path}");
+    }
+}
+
+#[tokio::test]
 async fn mcp_keeps_role_subsets_and_returns_the_http_envelope() {
     let repo = Repository::new("The shared graph is readable.");
     let host = host(&repo, false);
@@ -427,53 +372,4 @@ async fn mcp_keeps_role_subsets_and_returns_the_http_envelope() {
     assert!(value["meta"].is_object());
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
-}
-
-#[tokio::test]
-async fn requirement_patch_binds_receipt_and_precondition_headers() {
-    let repo = Repository::new("The shared graph is readable.");
-    let host = host(&repo, true);
-    let request = Request::builder()
-        .method("GET")
-        .uri("/requirements/req_shared")
-        .header("host", "fixture.test")
-        .header("authorization", "Bearer fixture-secret")
-        .body(Body::empty())
-        .unwrap();
-    let response = host.router().oneshot(request).await.unwrap();
-    let etag = response
-        .headers()
-        .get("etag")
-        .unwrap()
-        .to_str()
-        .unwrap()
-        .to_owned();
-    let request = Request::builder()
-        .method("PATCH")
-        .uri("/requirements/req_shared")
-        .header("host", "fixture.test")
-        .header("authorization", "Bearer fixture-secret")
-        .header("content-type", "application/json")
-        .header("idempotency-key", "request_transport_edit")
-        .header("if-match", etag)
-        .body(Body::from(
-            json!({"data":{"actor":"ben","description":"Edited through the resource route."}})
-                .to_string(),
-        ))
-        .unwrap();
-    let response = host.router().oneshot(request).await.unwrap();
-    let status = response.status().as_u16();
-    let value: Value = serde_json::from_slice(
-        &axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap(),
-    )
-    .unwrap();
-    assert_eq!(status, 200, "{value}");
-    assert_eq!(
-        value["data"]["description"],
-        "Edited through the resource route."
-    );
-    assert!(value["data"]["edit"]["etag"].is_string());
-    assert!(value["data"]["decision"].is_object());
 }
