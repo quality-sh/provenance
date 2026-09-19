@@ -170,7 +170,7 @@ async fn neighbors_refuses_an_oversized_response_through_native_and_registered_c
 fn append_verification_binding(
     store: &crate::state_store::StateStore,
     scope: &provenance_core::ScopeId,
-    declared_by: String,
+    declared_by: &str,
 ) {
     let path = crate::shards::verification_bindings_path(&store.layout, scope);
     crate::cache::tests::fixtures::append_record(
@@ -204,7 +204,7 @@ fn evidence_query() -> EvidenceQuery {
 async fn evidence_keeps_an_under_budget_record() {
     let (dir, store, scope) = seeded_store();
     crate::cache::tests::fixtures::create_rule_of(&store, &scope, "rule_overtime", "req_overtime");
-    append_verification_binding(&store, &scope, "x".repeat(LARGE_FIELD_BYTES));
+    append_verification_binding(&store, &scope, &"x".repeat(LARGE_FIELD_BYTES));
 
     let answer = queries::evidence(
         Some(root_of(&dir)),
@@ -222,7 +222,7 @@ async fn evidence_keeps_an_under_budget_record() {
 async fn evidence_refuses_one_record_over_the_record_budget() {
     let (dir, store, scope) = seeded_store();
     crate::cache::tests::fixtures::create_rule_of(&store, &scope, "rule_overtime", "req_overtime");
-    append_verification_binding(&store, &scope, "x".repeat(70_000));
+    append_verification_binding(&store, &scope, &"x".repeat(70_000));
 
     let error = queries::evidence(
         Some(root_of(&dir)),
