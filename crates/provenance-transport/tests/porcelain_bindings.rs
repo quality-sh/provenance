@@ -1,6 +1,7 @@
 use provenance_macros::verifies;
 use provenance_porcelain::{Action, Outcome, RecordRequest};
 use serde_json::json;
+use std::sync::Arc;
 
 #[cfg(feature = "test-fixture")]
 #[allow(dead_code)]
@@ -101,6 +102,71 @@ async fn mcp_get_runs_through_the_composed_service() {
     let value = result.structured_content.unwrap();
     assert_eq!(value["record"]["id"], "req_shared");
     assert_eq!(value["record"]["kind"], "requirement");
+    client.cancel().await.unwrap();
+    server.await.unwrap().cancel().await.unwrap();
+}
+
+struct CheckFixturePort;
+
+impl provenance_porcelain::check::CheckPort for CheckFixturePort {
+    fn run(
+        &self,
+        category: provenance_porcelain::check::Category,
+    ) -> provenance_porcelain::check::PortFuture<'_> {
+        Box::pin(async move {
+            Ok(match category {
+                provenance_porcelain::check::Category::Statements => {
+                    vec![provenance_porcelain::check::Finding::new(
+                        "statement finding",
+                    )]
+                }
+                provenance_porcelain::check::Category::Graph
+                | provenance_porcelain::check::Category::Bindings => Vec::new(),
+            })
+        })
+    }
+}
+
+#[tokio::test]
+#[verifies("rule_porcelain_check_categories", examples)]
+async fn mcp_check_uses_its_separately_injected_port() {
+    use rmcp::{model::CallToolRequestParams, ServiceExt as _};
+
+    let host =
+        provenance_transport::StatementHost::default().with_check_port(Arc::new(CheckFixturePort));
+    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
+    let server_host = host.clone();
+    let server = tokio::spawn(async move { server_host.serve_mcp(server_io).await.unwrap() });
+    let client = ().serve(client_io).await.unwrap();
+
+    let tools = client.list_all_tools().await.unwrap();
+    assert!(tools.iter().any(|tool| tool.name == "check"));
+    let result = client
+        .call_tool(
+            CallToolRequestParams::new("check").with_arguments(
+                json!({"categories":["statements"]})
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+            ),
+        )
+        .await
+        .unwrap();
+
+    assert_ne!(result.is_error, Some(true));
+    assert_eq!(
+        result.structured_content.as_ref().unwrap()["categories"][0]["category"],
+        "statements"
+    );
+    assert_eq!(
+        result.structured_content.as_ref().unwrap()["categories"][0]["status"],
+        "findings"
+    );
+    assert!(result.content[0]
+        .as_text()
+        .unwrap()
+        .text
+        .contains("statements: findings"));
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
 }

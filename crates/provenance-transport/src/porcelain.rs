@@ -1,6 +1,7 @@
 //! MCP-owned bindings for shared Porcelain capabilities.
 
 use axum::http::{HeaderMap, Method};
+use provenance_porcelain::check::{Category, CheckInput};
 use provenance_porcelain::get::{
     Bounds, GetInput, GetPort, Impact, PortFuture, ReadError, Record, Traversal, TraversalRequest,
     View,
@@ -22,6 +23,21 @@ const RECORD_KINDS: [(&str, &str, &str); 8] = [
     ("domain", "domains", "get-domain"),
     ("boundary", "boundaries", "get-boundary"),
 ];
+
+/// MCP input for the `check` Porcelain action.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct CheckArguments {
+    #[serde(default)]
+    pub categories: Vec<Category>,
+}
+
+impl CheckArguments {
+    /// Translate MCP selectors into one shared semantic request.
+    pub fn into_check_input(self) -> CheckInput {
+        CheckInput::new(self.categories)
+    }
+}
 
 /// Existing resource routes adapted to the injected Porcelain read port.
 #[derive(Clone)]
@@ -211,6 +227,49 @@ pub(crate) fn get_tool() -> rmcp::model::Tool {
         "Read one repository record by its repository-local ID.",
         schema.as_object().expect("get schema is an object").clone(),
     )
+}
+
+pub(crate) fn check_tool() -> rmcp::model::Tool {
+    let schema = serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+            "categories": {
+                "type": "array",
+                "items": {"type": "string", "enum": ["graph", "statements", "bindings"]},
+                "uniqueItems": true
+            }
+        }
+    });
+    rmcp::model::Tool::new(
+        "check",
+        "Check graph validity, statement quality, and binding coverage.",
+        schema
+            .as_object()
+            .expect("check schema is an object")
+            .clone(),
+    )
+}
+
+pub(crate) async fn call_check(
+    port: std::sync::Arc<dyn provenance_porcelain::check::CheckPort>,
+    arguments: serde_json::Map<String, Value>,
+) -> CallToolResult {
+    let Ok(arguments) = serde_json::from_value::<CheckArguments>(Value::Object(arguments)) else {
+        return get_error("invalid_options", "unsupported check options");
+    };
+    let service = provenance_porcelain::Porcelain::new(port);
+    let outcome = service.check(arguments.into_check_input()).await;
+    let summary = outcome
+        .categories
+        .iter()
+        .map(|report| format!("{:?}: {:?}", report.category, report.status).to_ascii_lowercase())
+        .collect::<Vec<_>>()
+        .join("; ");
+    let mut result =
+        CallToolResult::structured(serde_json::to_value(outcome).expect("check outcome is JSON"));
+    result.content = vec![Content::text(summary)];
+    result
 }
 
 pub(crate) async fn call_get(

@@ -1,5 +1,6 @@
 //! Shared human-facing semantics for Provenance interfaces.
 
+pub mod check;
 pub mod get;
 
 /// A shared Porcelain capability selected by an interface binding.

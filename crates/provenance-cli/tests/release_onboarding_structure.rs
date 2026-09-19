@@ -199,7 +199,7 @@ fn packed_target_parser_accepts_windows_line_endings() {
 }
 
 #[test]
-fn cargo_provenance_is_a_std_only_forwarding_shim() {
+fn cargo_provenance_stays_a_std_only_forwarding_shim_when_the_cli_has_a_library() {
     let workspace = workspace_root();
     let crate_root = workspace.join("crates/provenance-cli");
     let temporary = tempfile::tempdir().unwrap();
@@ -211,7 +211,6 @@ fn cargo_provenance_is_a_std_only_forwarding_shim() {
         .output()
         .expect("compile cargo-provenance directly");
 
-    assert!(!crate_root.join("src/lib.rs").exists());
     assert!(
         output.status.success(),
         "the shim requires more than std: {}",

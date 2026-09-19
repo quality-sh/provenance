@@ -88,6 +88,17 @@ fn cli_and_mcp_get_bindings_translate_to_the_same_semantics() {
 }
 
 #[test]
+fn cli_and_mcp_check_bindings_keep_native_shapes_and_shared_semantics() {
+    let cli = provenance_cli::porcelain::parse_check(&["--graph", "--bindings"]).unwrap();
+    let mcp: provenance_transport::porcelain::CheckArguments = serde_json::from_value(json!({
+        "categories": ["graph", "bindings"]
+    }))
+    .unwrap();
+
+    assert_eq!(cli.categories(), mcp.into_check_input().categories());
+}
+
+#[test]
 #[verifies("rule_porcelain_cli_target_action_order", examples)]
 #[verifies("rule_porcelain_cli_readable_json", examples)]
 fn target_first_get_runs_through_the_cli_entrypoint() {

@@ -30,6 +30,26 @@ fn check_strict(repository: &std::path::Path, base: Option<&str>) -> std::proces
     command.output().unwrap()
 }
 
+fn statements(report: &Value) -> &Value {
+    report["categories"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|category| category["category"] == "statements")
+        .unwrap()
+}
+
+fn diagnostics(report: &Value) -> Value {
+    Value::Array(
+        statements(report)["findings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|finding| finding["detail"].clone())
+            .collect(),
+    )
+}
+
 fn rewrite_statement(repository: &std::path::Path, shard: &str, id: &str, statement: &str) {
     let path = repository.join(shard);
     let contents = std::fs::read_to_string(&path).unwrap();
@@ -75,17 +95,18 @@ fn strict_check_reads_the_git_head_candidate_on_a_clean_checkout() {
 
     assert!(!output.status.success());
     let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(statements(&report)["status"], "findings");
     assert_eq!(
-        report,
-        json!({
-            "status": "findings",
-            "candidate_commit": candidate,
-            "base_commit": base,
-            "diagnostics": [
-                diagnostic("requirement", "req_changed", 5),
-                diagnostic("rule", "rule_changed", 4)
-            ]
-        })
+        statements(&report)["context"]["candidate_commit"],
+        candidate
+    );
+    assert_eq!(statements(&report)["context"]["base_commit"], base);
+    assert_eq!(
+        diagnostics(&report),
+        json!([
+            diagnostic("requirement", "req_changed", 5),
+            diagnostic("rule", "rule_changed", 4)
+        ])
     );
 }
 
@@ -105,18 +126,27 @@ fn explicit_base_can_check_findings_that_the_parent_policy_permits() {
     let parent_output = check_strict(repo, None);
     assert!(parent_output.status.success());
     let parent_report: Value = serde_json::from_slice(&parent_output.stdout).unwrap();
-    assert_eq!(parent_report["status"], "ok");
-    assert_eq!(parent_report["candidate_commit"], candidate);
-    assert_eq!(parent_report["diagnostics"], json!([]));
+    assert_eq!(statements(&parent_report)["status"], "passed");
+    assert_eq!(
+        statements(&parent_report)["context"]["candidate_commit"],
+        candidate
+    );
+    assert_eq!(diagnostics(&parent_report), json!([]));
 
     let explicit_output = check_strict(repo, Some(&clean_base));
     assert!(!explicit_output.status.success());
     let explicit_report: Value = serde_json::from_slice(&explicit_output.stdout).unwrap();
-    assert_eq!(explicit_report["status"], "findings");
-    assert_eq!(explicit_report["candidate_commit"], candidate);
-    assert_eq!(explicit_report["base_commit"], clean_base);
+    assert_eq!(statements(&explicit_report)["status"], "findings");
     assert_eq!(
-        explicit_report["diagnostics"],
+        statements(&explicit_report)["context"]["candidate_commit"],
+        candidate
+    );
+    assert_eq!(
+        statements(&explicit_report)["context"]["base_commit"],
+        clean_base
+    );
+    assert_eq!(
+        diagnostics(&explicit_report),
         json!([diagnostic("requirement", "req_history", 7)])
     );
 }
@@ -135,11 +165,14 @@ fn initial_commit_uses_an_empty_comparison_base() {
 
     assert!(!output.status.success());
     let report: Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(report["status"], "findings");
-    assert_eq!(report["candidate_commit"], candidate);
-    assert_eq!(report["base_commit"], Value::Null);
+    assert_eq!(statements(&report)["status"], "findings");
     assert_eq!(
-        report["diagnostics"],
+        statements(&report)["context"]["candidate_commit"],
+        candidate
+    );
+    assert_eq!(statements(&report)["context"]["base_commit"], Value::Null);
+    assert_eq!(
+        diagnostics(&report),
         json!([diagnostic("requirement", "req_initial", 7)])
     );
 }
@@ -159,15 +192,13 @@ fn strict_check_ignores_dirty_working_tree_statement_edits() {
 
     assert!(output.status.success());
     let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(statements(&report)["status"], "passed");
     assert_eq!(
-        report,
-        json!({
-            "status": "ok",
-            "candidate_commit": candidate,
-            "base_commit": base,
-            "diagnostics": []
-        })
+        statements(&report)["context"]["candidate_commit"],
+        candidate
     );
+    assert_eq!(statements(&report)["context"]["base_commit"], base);
+    assert_eq!(diagnostics(&report), json!([]));
 }
 
 #[test]
@@ -181,7 +212,8 @@ fn invalid_explicit_base_reports_the_revision_error() {
     let output = check_strict(repo, Some("does-not-exist"));
 
     assert!(!output.status.success());
-    assert!(output.stdout.is_empty());
+    let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(statements(&report)["status"], "unavailable");
     assert!(String::from_utf8(output.stderr)
         .unwrap()
         .contains("Git revision \"does-not-exist\" does not identify a commit"));
@@ -215,10 +247,13 @@ fn merge_commit_uses_its_first_parent_as_the_default_base() {
 
     assert!(output.status.success());
     let report: Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(report["status"], "ok");
-    assert_eq!(report["candidate_commit"], candidate);
-    assert_eq!(report["base_commit"], first_parent);
-    assert_eq!(report["diagnostics"], json!([]));
+    assert_eq!(statements(&report)["status"], "passed");
+    assert_eq!(
+        statements(&report)["context"]["candidate_commit"],
+        candidate
+    );
+    assert_eq!(statements(&report)["context"]["base_commit"], first_parent);
+    assert_eq!(diagnostics(&report), json!([]));
 }
 
 #[test]
@@ -251,7 +286,8 @@ fn shallow_checkout_does_not_mistake_an_unavailable_parent_for_an_empty_base() {
     let output = check_strict(&checkout, None);
 
     assert!(!output.status.success());
-    assert!(output.stdout.is_empty());
+    let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(statements(&report)["status"], "unavailable");
     let stderr = String::from_utf8(output.stderr).unwrap();
     assert!(stderr.contains("first parent is not available. Fetch more Git history"));
     assert!(stderr.contains("does not identify a commit"));

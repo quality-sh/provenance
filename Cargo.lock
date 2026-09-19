@@ -2265,6 +2265,7 @@ dependencies = [
  "provenance-macros",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio",
 ]
 

@@ -52,7 +52,7 @@ fn check_registers_every_scope_record_before_validating_references() {
 
     provenance(dir.path())
         .success()
-        .stdout(contains(r#""status": "ok""#));
+        .stdout(contains(r#""category": "graph""#).and(contains(r#""status": "passed""#)));
 }
 
 #[test]
@@ -234,7 +234,7 @@ fn check_accepts_origin_message_in_non_default_month_shard() {
 
     provenance(dir.path())
         .success()
-        .stdout(contains(r#""status": "ok""#));
+        .stdout(contains(r#""category": "graph""#).and(contains(r#""status": "passed""#)));
 }
 
 #[test]
@@ -322,7 +322,7 @@ fn check_without_strict_keeps_the_soft_fallback_for_a_reference_without_an_index
         ])
         .assert()
         .success()
-        .stdout(contains(r#""status": "ok""#));
+        .stdout(contains(r#""category": "graph""#).and(contains(r#""status": "passed""#)));
 }
 
 #[test]
@@ -355,7 +355,7 @@ fn strict_check_passes_when_the_referenced_index_is_present() {
         ])
         .assert()
         .success()
-        .stdout(contains(r#""status": "ok""#));
+        .stdout(contains(r#""category": "graph""#).and(contains(r#""status": "passed""#)));
 }
 
 fn git(repo: &Path, arguments: &[&str]) {

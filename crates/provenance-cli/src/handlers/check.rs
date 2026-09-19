@@ -3,6 +3,7 @@ use crate::store::Store;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{ensure_supported_schema_version, Manifest};
 use provenance_macros::rule;
+use provenance_porcelain::check::{Category, CheckInput, CheckPort, Finding, PortFuture, Status};
 use provenance_store::dictionary_reference::{resolve_project_dictionary, DictionaryResolution};
 use std::collections::BTreeSet;
 
@@ -13,34 +14,206 @@ mod statement_report;
 
 use index::CheckIndex;
 
+#[derive(Clone, Copy)]
+pub(super) struct Selectors {
+    pub graph: bool,
+    pub statements: bool,
+    pub bindings: bool,
+}
+
+impl Selectors {
+    fn input(self) -> CheckInput {
+        let mut categories = Vec::new();
+        if self.graph {
+            categories.push(Category::Graph);
+        }
+        if self.statements {
+            categories.push(Category::Statements);
+        }
+        if self.bindings {
+            categories.push(Category::Bindings);
+        }
+        CheckInput::new(categories)
+    }
+}
+
+#[derive(Clone)]
+pub struct RepositoryCheckPort {
+    repo: Utf8PathBuf,
+    strict: bool,
+    base: Option<String>,
+}
+
+impl RepositoryCheckPort {
+    pub const fn new(repo: Utf8PathBuf, strict: bool, base: Option<String>) -> Self {
+        Self { repo, strict, base }
+    }
+
+    fn compute(&self, category: Category) -> Result<Vec<Finding>, String> {
+        match category {
+            Category::Graph => self.graph_findings(),
+            Category::Statements => self.statement_findings(),
+            Category::Bindings => self.binding_findings(),
+        }
+    }
+
+    fn graph_findings(&self) -> Result<Vec<Finding>, String> {
+        let store = Store::open(&self.repo);
+        match store.with_repository_publication(|| {
+            let manifest = store.manifest()?;
+            validate_locked(&store, &manifest)
+        }) {
+            Ok(()) => Ok(Vec::new()),
+            Err(error) if error.downcast_ref::<std::io::Error>().is_some() => {
+                Err(format!("{error:#}"))
+            }
+            Err(error) => Ok(vec![Finding::new(format!("{error:#}"))]),
+        }
+    }
+
+    fn statement_findings(&self) -> Result<Vec<Finding>, String> {
+        let store = Store::open(&self.repo);
+        store
+            .with_repository_publication(|| {
+                let manifest = store.manifest()?;
+                if self.strict {
+                    ensure_strict_dictionary_index(store.layout())?;
+                    let analysis = statement_report::changed_statements_from_commits(
+                        &self.repo,
+                        &manifest,
+                        self.base.as_deref(),
+                    )?;
+                    Ok(analysis.diagnostics)
+                } else {
+                    statement_report::changed_statements_from_head(&store, &self.repo, &manifest)
+                }
+            })
+            .map(|diagnostics| {
+                diagnostics
+                    .into_iter()
+                    .map(|diagnostic| {
+                        Finding::with_detail(
+                            &diagnostic.message,
+                            serde_json::to_value(&diagnostic)
+                                .expect("statement diagnostic is JSON"),
+                        )
+                    })
+                    .collect()
+            })
+            .map_err(|error| format!("{error:#}"))
+    }
+
+    fn binding_findings(&self) -> Result<Vec<Finding>, String> {
+        let store = Store::open(&self.repo);
+        let manifest = store.manifest().map_err(|error| format!("{error:#}"))?;
+        let mut findings = Vec::new();
+        for scope in manifest.scopes {
+            let report =
+                super::coverage::coverage_scan(&self.repo, &self.repo, scope.id.as_str(), true)
+                    .map_err(|error| format!("{error:#}"))?;
+            findings.extend(report.warnings.iter().map(|warning| {
+                Finding::with_detail(
+                    &warning.message,
+                    serde_json::to_value(warning).expect("coverage warning is JSON"),
+                )
+            }));
+        }
+        Ok(findings)
+    }
+}
+
+impl CheckPort for RepositoryCheckPort {
+    fn run(&self, category: Category) -> PortFuture<'_> {
+        let port = self.clone();
+        Box::pin(async move {
+            tokio::task::spawn_blocking(move || port.compute(category))
+                .await
+                .map_err(|error| format!("check worker failed: {error}"))?
+        })
+    }
+
+    fn context(&self, category: Category) -> Option<serde_json::Value> {
+        (self.strict && category == Category::Statements)
+            .then(|| {
+                statement_report::committed_statement_context(&self.repo, self.base.as_deref())
+                    .ok()
+                    .and_then(|context| serde_json::to_value(context).ok())
+            })
+            .flatten()
+    }
+}
+
 #[rule("rule_ste_strict_committed_statement_gate")]
-pub(super) fn check(repo: &Utf8Path, strict: bool, base: Option<&str>) -> anyhow::Result<()> {
-    let store = Store::open(repo);
-    let report = store.with_repository_publication(|| {
-        let manifest = store.manifest()?;
-        collect_report_locked(&store, repo, &manifest, strict, base)
-    })?;
-    let has_findings = !report.diagnostics.is_empty();
-    output::print_json(&report)?;
-    anyhow::ensure!(
-        !strict || !has_findings,
-        "strict statement check found ASD-STE100 findings"
-    );
+pub(super) async fn check(
+    repo: Utf8PathBuf,
+    strict: bool,
+    base: Option<String>,
+    json: bool,
+    selectors: Selectors,
+) -> anyhow::Result<()> {
+    let input = selectors.input();
+    let binding_error_policy = if input.categories().contains(&Category::Bindings) {
+        matches!(
+            provenance_store::settings::Settings::load(
+                &provenance_store::layout::ProvenanceLayout::new(&repo),
+            )?
+            .coverage
+            .binding_findings,
+            provenance_store::settings::BindingFindingsSeverity::Error
+        )
+    } else {
+        false
+    };
+    let service =
+        provenance_porcelain::Porcelain::new(RepositoryCheckPort::new(repo, strict, base));
+    let report = service.check(input).await;
+    if json {
+        output::print_json(&report)?;
+    } else {
+        println!("{}", provenance_cli::porcelain::render_check(&report));
+    }
+    let graph_failed = report
+        .categories
+        .iter()
+        .any(|category| category.category == Category::Graph && category.status != Status::Passed);
+    let unavailable = report
+        .categories
+        .iter()
+        .any(|category| category.status == Status::Unavailable);
+    let strict_findings = strict
+        && report
+            .categories
+            .iter()
+            .any(|category| category.status == Status::Findings);
+    let binding_refused = binding_error_policy
+        && report.categories.iter().any(|category| {
+            category.category == Category::Bindings
+                && category.findings.iter().any(|finding| {
+                    finding
+                        .detail
+                        .as_ref()
+                        .and_then(|detail| detail.get("binding_finding"))
+                        .and_then(serde_json::Value::as_bool)
+                        .unwrap_or(false)
+                })
+        });
+    if graph_failed || unavailable || strict_findings || binding_refused {
+        let details = report
+            .categories
+            .iter()
+            .filter(|category| category.status != Status::Passed)
+            .flat_map(|category| {
+                category
+                    .findings
+                    .iter()
+                    .map(|finding| finding.message.as_str())
+                    .chain(category.unavailable_reason.as_deref())
+            })
+            .collect::<Vec<_>>()
+            .join("; ");
+        anyhow::bail!(details);
+    }
     Ok(())
-}
-
-#[derive(serde::Serialize)]
-struct CheckReport {
-    status: &'static str,
-    #[serde(flatten, skip_serializing_if = "Option::is_none")]
-    commits: Option<CommitRange>,
-    diagnostics: Vec<provenance_store::statement_analysis::StatementDiagnostic>,
-}
-
-#[derive(serde::Serialize)]
-struct CommitRange {
-    candidate_commit: String,
-    base_commit: Option<String>,
 }
 
 pub(super) fn validate_repository(repo: Utf8PathBuf) -> anyhow::Result<()> {
@@ -74,38 +247,6 @@ pub(super) fn recover_repository_before_init(repo: &Utf8Path) -> anyhow::Result<
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(error) => Err(error.into()),
     }
-}
-
-fn collect_report_locked(
-    store: &Store,
-    repo: &Utf8Path,
-    manifest: &Manifest,
-    strict: bool,
-    base: Option<&str>,
-) -> anyhow::Result<CheckReport> {
-    validate_locked(store, manifest)?;
-    if strict {
-        ensure_strict_dictionary_index(store.layout())?;
-        let analysis = statement_report::changed_statements_from_commits(repo, manifest, base)?;
-        let status = if analysis.diagnostics.is_empty() {
-            "ok"
-        } else {
-            "findings"
-        };
-        return Ok(CheckReport {
-            status,
-            commits: Some(CommitRange {
-                candidate_commit: analysis.candidate_commit,
-                base_commit: analysis.base_commit,
-            }),
-            diagnostics: analysis.diagnostics,
-        });
-    }
-    Ok(CheckReport {
-        status: "ok",
-        commits: None,
-        diagnostics: statement_report::changed_statements_from_head(store, repo, manifest)?,
-    })
 }
 
 /// Fails a strict check when the committed dictionary reference has no

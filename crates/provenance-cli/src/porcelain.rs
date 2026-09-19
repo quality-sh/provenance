@@ -1,5 +1,6 @@
 //! CLI-owned bindings for shared Porcelain capabilities.
 
+use provenance_porcelain::check::{Category, CheckInput, CheckOutcome};
 use provenance_porcelain::get::{GetInput, GetOutcome, View};
 use provenance_porcelain::{Action, Outcome, RecordRequest};
 use serde::Serialize;
@@ -52,6 +53,47 @@ pub fn parse_record(words: &[&str]) -> Result<RecordRequest, BindingError> {
         [target] if !target.is_empty() => Ok(RecordRequest::new(*target, Action::Get)),
         _ => Err(BindingError),
     }
+}
+
+/// Translate CLI-owned selector flags into one semantic check request.
+pub fn parse_check(words: &[&str]) -> Result<CheckInput, BindingError> {
+    let mut categories = Vec::new();
+    for word in words {
+        categories.push(match *word {
+            "--graph" => Category::Graph,
+            "--statements" => Category::Statements,
+            "--bindings" => Category::Bindings,
+            _ => return Err(BindingError),
+        });
+    }
+    Ok(CheckInput::new(categories))
+}
+
+/// Render a semantic check result for a terminal reader.
+pub fn render_check(outcome: &CheckOutcome) -> String {
+    outcome
+        .categories
+        .iter()
+        .flat_map(|report| {
+            let heading =
+                format!("{:?}: {:?}", report.category, report.status).to_ascii_lowercase();
+            std::iter::once(heading)
+                .chain(
+                    report
+                        .findings
+                        .iter()
+                        .map(|finding| format!("  - {}", finding.message)),
+                )
+                .chain(
+                    report
+                        .unavailable_reason
+                        .iter()
+                        .map(|reason| format!("  - {reason}")),
+                )
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// Translate CLI-owned get words into one semantic request.
@@ -119,6 +161,12 @@ pub async fn try_dispatch(arguments: &[String]) -> anyhow::Result<bool> {
 
 /// Report whether the arguments explicitly select the target-first get grammar.
 pub fn explicitly_selects_get(arguments: &[String]) -> anyhow::Result<bool> {
+    if raw_words(arguments)
+        .get(1)
+        .is_none_or(|word| word.as_str() != "get")
+    {
+        return Ok(false);
+    }
     let Some(invocation) = split_get_arguments(arguments)? else {
         return Ok(false);
     };
@@ -133,6 +181,22 @@ pub fn explicitly_selects_get(arguments: &[String]) -> anyhow::Result<bool> {
             .collect::<Vec<_>>(),
     )
     .is_ok())
+}
+
+fn raw_words(arguments: &[String]) -> Vec<&String> {
+    let mut words = Vec::new();
+    let mut index = 1;
+    while index < arguments.len() {
+        match arguments[index].as_str() {
+            "--quiet" => index += 1,
+            "--repo" | "--scope" | "--format" => index += 2,
+            _ => {
+                words.push(&arguments[index]);
+                index += 1;
+            }
+        }
+    }
+    words
 }
 
 struct GetInvocation {
