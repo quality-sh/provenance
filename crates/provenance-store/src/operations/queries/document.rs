@@ -21,7 +21,7 @@ pub async fn read_document(
         .and_then(|answer| super::page::checked("read-document", answer))
 }
 
-pub(crate) async fn read_document_answer(
+pub async fn read_document_answer(
     repo: Option<Utf8PathBuf>,
     scope: &ScopeId,
     policy: ReadPolicy,
