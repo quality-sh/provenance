@@ -103,7 +103,8 @@ export function effectClient(document) {
   const ref = schema => schema.$ref.split('/').at(-1);
   const queryVariants = op => op['x-provenance-query-variants'] ?? [];
   const variantStem = (op, variant) => `${pascal(op.operationId)}${variant.selector === null ? 'Base' : pascal(variant.selector)}`;
-  const queryTypes = new Set();
+  const queryInputs = new Set();
+  const queryContracts = new Set();
   const methods = routes.map(op => {
     const success = ref(op.responses['200'].content['application/json'].schema);
     const failure = ref(op.responses['400'].content['application/json'].schema);
@@ -111,7 +112,8 @@ export function effectClient(document) {
     if (variants.length) {
       const overloads = variants.map(variant => {
         const stem = variantStem(op, variant);
-        for (const suffix of ['Input', 'Success', 'Failure']) queryTypes.add(`${stem}${suffix}`);
+        queryInputs.add(`${stem}Input`);
+        for (const suffix of ['Success', 'Failure']) queryContracts.add(`${stem}${suffix}`);
         return `  ${op.operationId}(call: ${stem}Input): Effect.Effect<${stem}Success, ClientFailure<${stem}Failure>>;`;
       }).join('\n');
       const inputs = variants.map(variant => `${variantStem(op, variant)}Input`).join(' | ');
@@ -138,8 +140,9 @@ ${branches}
 import * as Effect from 'effect/Effect';
 import * as Context from 'effect/Context';
 import * as Layer from 'effect/Layer';
-import { HttpClient, type components${[...queryTypes].map(name => `, type ${name}`).join('')} } from './client.js';
-export type { ${[...queryTypes].join(', ')} } from './client.js';
+import { HttpClient, type components${[...queryInputs].map(name => `, type ${name}`).join('')} } from './client.js';
+${queryContracts.size ? `import type { ${[...queryContracts].join(', ')} } from './effect-contract.js';` : ''}
+${queryInputs.size ? `export type { ${[...queryInputs].join(', ')} } from './client.js';` : ''}
 import { ClientRuntime, requestEffect, connectionFailure, type ClientFailure } from '../effect-runtime.js';
 export interface ClientOptions {
   readonly baseUrl: string;

@@ -23,9 +23,9 @@ function tsType(parameter) {
   return 'string';
 }
 
-function tsFields(parameters) {
+function tsFields(parameters, required = parameter => parameter.required) {
   return parameters.map(parameter =>
-    `${JSON.stringify(propertyName(parameter))}${parameter.required ? '' : '?'}: ${tsType(parameter)}`);
+    `${JSON.stringify(propertyName(parameter))}${required(parameter) ? '' : '?'}: ${tsType(parameter)}`);
 }
 
 function tsCall(op) {
@@ -48,6 +48,14 @@ function queryTypeDeclarations(op) {
       `export type ${stem}Failure = components['schemas']['${schemaName(variant.failure)}'];`,
     ];
   });
+}
+
+function queryImplementationCall(op, variants) {
+  const required = parameter => variants.every(variant => variant.parameters.some(candidate =>
+    candidate.name === parameter.name
+      && candidate.in === parameter.in
+      && candidate.required));
+  return `{ ${tsFields(op.parameters ?? [], required).join('; ')} }`;
 }
 
 function tsRequest(path, method, op) {
@@ -95,7 +103,7 @@ export function typescriptClient(document, compatibility) {
         return `${condition} ? { success: validate.${schemaName(variant.success)}, failure: validate.${schemaName(variant.failure)} }`;
       }).join(' : ');
       return `${overloads}
-  async ${op.operationId}(call: ${tsCall(op)}, options: { signal?: AbortSignal } = {}): Promise<${successUnion}> {
+  async ${op.operationId}(call: ${queryImplementationCall(op, variants)}, options: { signal?: AbortSignal } = {}): Promise<${successUnion}> {
     const contract = ${contracts} : undefined;
     if (contract === undefined) throw new TypeError('Invalid query selector');
 ${tsRequest(path, method, op)}

@@ -28,7 +28,7 @@ const document = {
     'x-operation-mutates': false,
     parameters: [
       parameter('id', true), parameter('query', false, { type: 'string', enum: ['trace'] }),
-      parameter('direction', false),
+      parameter('direction', true),
     ],
     responses: {
       200: { content: { 'application/json': { schema: reference('GetRuleSuccess') } } },
@@ -36,7 +36,7 @@ const document = {
     },
     'x-provenance-query-variants': [
       { selector: null, parameters: [parameter('id', true)], success: reference('GetRuleBaseSuccess'), failure: reference('GetRuleBaseFailure') },
-      { selector: 'trace', parameters: [parameter('id', true), parameter('query', true, { type: 'string', const: 'trace' }), parameter('direction', false)], success: reference('GetRuleTraceSuccess'), failure: reference('GetRuleTraceFailure') },
+      { selector: 'trace', parameters: [parameter('id', true), parameter('query', true, { type: 'string', const: 'trace' }), parameter('direction', true)], success: reference('GetRuleTraceSuccess'), failure: reference('GetRuleTraceFailure') },
     ],
     } },
   },
@@ -60,7 +60,8 @@ const document = {
 test('Promise generation overloads selectors and validates the selected contracts', () => {
   const source = typescriptClient(document, { wire: 2, state: 1, review_journal: 1, read_derivation: 1 });
   assert.match(source, /export type GetRuleBaseInput = \{ "id": string; "query"\?: undefined \}/);
-  assert.match(source, /export type GetRuleTraceInput = \{ "id": string; "query": 'trace'; "direction"\?: string \}/);
+  assert.match(source, /export type GetRuleTraceInput = \{ "id": string; "query": 'trace'; "direction": string \}/);
+  assert.match(source, /async getRule\(call: \{ "id": string; "query"\?: 'trace'; "direction"\?: string \}/);
   assert.match(source, /getRule\(call: GetRuleTraceInput.*Promise<GetRuleTraceSuccess>/);
   assert.match(source, /validate\.GetRuleTraceSuccess/);
   assert.match(source, /validate\.GetRuleTraceFailure/);
@@ -80,6 +81,8 @@ test('Effect generation retains selector-specific success and failure types', ()
   const source = effectClient(document);
   assert.match(source, /getRule\(call: GetRuleTraceInput\): Effect\.Effect<GetRuleTraceSuccess, ClientFailure<GetRuleTraceFailure>>/);
   assert.match(source, /getRule\(call: GetRuleBaseInput\): Effect\.Effect<GetRuleBaseSuccess, ClientFailure<GetRuleBaseFailure>>/);
+  assert.match(source, /export type \{ GetRuleBaseInput, GetRuleTraceInput \} from '\.\/client\.js'/);
+  assert.doesNotMatch(source, /export type \{[^}]*GetRuleTraceSuccess/);
 });
 
 async function generatedClient() {
