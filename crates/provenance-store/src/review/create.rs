@@ -70,15 +70,6 @@ impl StateStore {
         })
     }
 
-    /// Reports absence only after recovery, scope checks, and current owner checks.
-    pub fn requirement_creation_receipt(
-        &self,
-        mut input: CreateReviewRequirement,
-    ) -> anyhow::Result<Option<ReviewEntry>> {
-        let digest = normalize(&mut input)?;
-        self.with_repository_publication(|| self.creation_receipt(&input, &digest))
-    }
-
     fn creation_receipt(
         &self,
         input: &CreateReviewRequirement,
@@ -122,7 +113,7 @@ impl StateStore {
         intent_digest: String,
     ) -> anyhow::Result<ReviewEntry> {
         let scope = input.create.scope_id.clone();
-        let created = self.create_requirement(input.create)?;
+        let created = self.write_requirement(input.create)?;
         let path = shards::requirements_path(&self.layout, &scope);
         let after = self.mutate_jsonl_records(&path, |records: &mut Vec<Requirement>| {
             let record = records.iter_mut().find(|r| r.id == created.id).unwrap();

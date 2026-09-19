@@ -125,19 +125,43 @@ fn prepare_export(repo: &std::path::Path, output_dir: &std::path::Path) -> std::
         ])
         .assert()
         .success();
+    // The thread parent seeds through the import path, which keeps the record
+    // plain: these tests pin import validation, and a CLI-created Requirement
+    // would enroll its scope into the review journal, whose lossless export is
+    // a later phase.
+    let seed = repo.join("seed.json");
+    std::fs::write(
+        &seed,
+        serde_json::json!({
+            "scope": "default",
+            "requirements": [{
+                "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+                "scope_id": "default",
+                "id": "req_parent",
+                "statement": "Thread parent",
+                "status": "discovery"
+            }],
+            "sources": [],
+            "resolutions": [],
+            "rules": [],
+            "threads": [],
+            "messages": []
+        })
+        .to_string(),
+    )
+    .unwrap();
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "requirements",
-            "create",
+            "import",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
             "default",
-            "--id",
-            "req_parent",
-            "--statement",
-            "Thread parent",
+            "--input",
+            seed.to_str().unwrap(),
+            "--format",
+            "json",
         ])
         .assert()
         .success();

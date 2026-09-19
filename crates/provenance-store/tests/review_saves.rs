@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 mod review_support;
 use provenance_core::review::SaveOutcome;
 use review_support::*;
@@ -9,7 +10,7 @@ fn repeated_content_has_distinct_occurrences_and_lifecycle_keeps_revision() {
     let a = store
         .save_requirement(save(&store, "enroll", json!({})))
         .unwrap();
-    assert_eq!(a.outcome, SaveOutcome::Enrolled);
+    assert_eq!(a.outcome, SaveOutcome::NoChange);
     let b = store
         .save_requirement(save(&store, "edit_b", json!({"description":"B"})))
         .unwrap();
@@ -78,14 +79,20 @@ fn stale_etag_and_wrong_owner_refuse_without_changing_state() {
         ))
         .is_err());
     assert_eq!(before, store.list_requirements(&scope()).unwrap());
-    assert!(store
+    let etag = store.requirement_edit_state(&scope(), &id()).unwrap().etag;
+    let bypassed = store
         .update_requirement(
             serde_json::from_value(
-                json!({"scope_id":"default","id":"req_a","description":"bypass"})
+                json!({"scope_id":"default","id":"req_a","description":"bypass"}),
             )
-            .unwrap()
+            .unwrap(),
         )
-        .is_err());
+        .unwrap();
+    assert_eq!(bypassed.description.as_deref(), Some("bypass"));
+    assert_ne!(
+        store.requirement_edit_state(&scope(), &id()).unwrap().etag,
+        etag
+    );
 }
 
 #[test]

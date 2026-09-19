@@ -311,12 +311,20 @@ fn apply_refuses_to_take_over_an_unowned_record() {
         .failure()
         .stderr(contains("sharing").and(contains("not owned")));
 
-    provenance()
-        .args(["export", "--repo", repo, "--scope", "default"])
+    // The export refuses: the CLI-created Requirement is enrolled, and a
+    // review-bearing scope refuses a lossy export. The record content is
+    // still readable through the typed get query.
+    let answer = provenance()
+        .args(["sdk", "get", "--repo", repo, "--scope", "default"])
+        .write_stdin(serde_json::json!({"node_type": "requirement", "id": "sharing"}).to_string())
         .assert()
         .success()
-        .stdout(contains("Externally managed statement"))
-        .stdout(contains("Share links expire").not());
+        .get_output()
+        .stdout
+        .clone();
+    let node: serde_json::Value = serde_json::from_slice(&answer).unwrap();
+    assert_eq!(node["found"], true);
+    assert_eq!(node["node"]["statement"], "Externally managed statement");
 }
 
 #[test]

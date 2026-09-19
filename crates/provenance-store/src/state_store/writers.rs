@@ -1,9 +1,8 @@
-use super::{AddSourceReferenceInput, CreateRequirementInput, CreateSourceInput, StateStore};
+use super::{CreateRequirementInput, CreateSourceInput, StateStore};
 use crate::shards;
 use crate::write_error::{SourceFailure, WriteFailure};
 use provenance_core::{
-    validate_optional_commit_pin, NodeType, Requirement, ScopeId, Source, SourceReference,
-    StableId, SUPPORTED_SCHEMA_VERSION,
+    validate_optional_commit_pin, NodeType, Requirement, Source, StableId, SUPPORTED_SCHEMA_VERSION,
 };
 
 impl StateStore {
@@ -64,27 +63,11 @@ impl StateStore {
         })
     }
 
-    pub fn create_requirement(&self, input: CreateRequirementInput) -> anyhow::Result<Requirement> {
-        self.with_repository_publication(|| {
-            self.validate_requirement_origin(
-                &input.scope_id,
-                input.origin_thread.as_ref(),
-                input.origin_message.as_ref(),
-            )?;
-            if self.origin_requires_review(&input.scope_id, input.origin_message.as_ref())? {
-                anyhow::ensure!(
-                    crate::review::guard::writer_allows(
-                        &shards::requirements_path(&self.layout, &input.scope_id),
-                        input.id.as_str()
-                    ),
-                    "addressed Requirement creation requires an immutable review outcome"
-                );
-            }
-            self.write_requirement(input)
-        })
-    }
-
-    fn write_requirement(&self, input: CreateRequirementInput) -> anyhow::Result<Requirement> {
+    /// Creates a Requirement only within the guarded creation path.
+    pub(crate) fn write_requirement(
+        &self,
+        input: CreateRequirementInput,
+    ) -> anyhow::Result<Requirement> {
         let CreateRequirementInput {
             scope_id,
             id,
@@ -149,87 +132,6 @@ impl StateStore {
             records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
             Ok(requirement)
         })
-    }
-
-    /// Set (`Some`) or clear (`None`) the deliberately unstructured fog text
-    /// on a requirement.
-    pub fn set_requirement_fog(
-        &self,
-        scope_id: &ScopeId,
-        id: &StableId,
-        fog: Option<String>,
-    ) -> anyhow::Result<Requirement> {
-        if let Some(fog) = &fog {
-            anyhow::ensure!(!fog.trim().is_empty(), "fog text must not be empty");
-        }
-        let path = shards::requirements_path(&self.layout, scope_id);
-        self.mutate_graph_record(&path, |records: &mut Vec<Requirement>| {
-            let requirement = records
-                .iter_mut()
-                .find(|requirement| &requirement.id == id)
-                .ok_or_else(|| anyhow::anyhow!("requirement does not exist"))?;
-            requirement.fog = fog;
-            Ok(requirement.clone())
-        })
-    }
-
-    pub fn add_source_reference(
-        &self,
-        input: AddSourceReferenceInput,
-    ) -> anyhow::Result<Requirement> {
-        self.with_repository_publication(|| self.write_source_reference(input))
-    }
-
-    fn write_source_reference(
-        &self,
-        input: AddSourceReferenceInput,
-    ) -> anyhow::Result<Requirement> {
-        let AddSourceReferenceInput {
-            scope_id,
-            source_id,
-            requirement_id,
-            clause,
-        } = input;
-        crate::write_error::ensure!(
-            MissingReference,
-            self.list_sources(&scope_id)?
-                .iter()
-                .any(|source| source.id == source_id),
-            "source {} does not exist (--target-id)",
-            source_id.as_str()
-        );
-        let source_ref = SourceReference { source_id, clause };
-        let requirements_path = shards::requirements_path(&self.layout, &scope_id);
-        let requirement =
-            self.mutate_graph_record(&requirements_path, |requirements: &mut Vec<Requirement>| {
-                let requirement = requirements
-                    .iter_mut()
-                    .find(|requirement| requirement.id == requirement_id)
-                    .ok_or_else(|| {
-                        SourceFailure::wrap(
-                            WriteFailure::MissingReference,
-                            anyhow::anyhow!(
-                                "requirement {} does not exist (--requirement-id)",
-                                requirement_id.as_str()
-                            ),
-                        )
-                    })?;
-                if !requirement
-                    .source_refs
-                    .iter()
-                    .any(|existing| existing == &source_ref)
-                {
-                    requirement.source_refs.push(source_ref);
-                    requirement.source_refs.sort_by(|a, b| {
-                        a.source_id
-                            .as_str()
-                            .cmp(b.source_id.as_str())
-                            .then(a.clause.cmp(&b.clause))
-                    });
-                }
-                Ok(requirement.clone())
-            })?;
-        Ok(requirement)
     }
 }
 

@@ -1,5 +1,11 @@
 use super::{classifier, guard, journal, SaveRequirement};
-use crate::{canonical_digest, publication::with_staged_state, shards, state_store::StateStore};
+use crate::{
+    canonical_digest,
+    publication::with_staged_state,
+    shards,
+    state_store::StateStore,
+    write_error::{SourceFailure, WriteFailure},
+};
 use provenance_core::review::{
     RequirementEditState, ReviewEntry, SaveOutcome, REVIEW_SCHEMA_VERSION,
 };
@@ -92,10 +98,12 @@ impl StateStore {
                 .as_ref()
                 .map(|e| e.etag.clone())
                 .unwrap_or(journal::etag(&record, None)?);
-            anyhow::ensure!(
-                input.expected_etag == current_etag,
-                "stale Requirement edit etag"
-            );
+            if input.expected_etag != current_etag {
+                return Err(SourceFailure::wrap(
+                    WriteFailure::InvalidUpdate,
+                    anyhow::anyhow!("stale Requirement edit etag"),
+                ));
+            }
             with_staged_state(&self.layout, false, |layout| {
                 let staged = Self::new(layout.clone());
                 let path = shards::requirements_path(layout, scope);
@@ -117,9 +125,10 @@ impl StateStore {
     ) -> anyhow::Result<ReviewEntry> {
         let scope = before.scope_id.clone();
         let id = before.id.clone();
-        self.update_requirement(input.update)?;
+        self.apply_requirement_update(input.update)?;
         if let Some(relationships) = input.relationships {
-            self.replace_review_relationships(&scope, &id, relationships)?;
+            let final_sets = relationships.expand(before)?;
+            self.replace_review_relationships(&scope, &id, final_sets)?;
         }
         let path = shards::requirements_path(&self.layout, &scope);
         let after = self.mutate_jsonl_records(&path, |records: &mut Vec<Requirement>| {

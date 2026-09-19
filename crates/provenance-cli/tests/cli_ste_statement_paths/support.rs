@@ -1,7 +1,7 @@
 use assert_cmd::Command;
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use serde_json::{json, Value};
-use std::{collections::BTreeMap, path::Path};
+use std::{collections::BTreeMap, io::Write, path::Path};
 
 pub const REQUIREMENTS_SHARD: &str = ".provenance/state/scopes/default/requirements/req.jsonl";
 pub const RULES_SHARD: &str = ".provenance/state/scopes/default/rules/rule.jsonl";
@@ -27,21 +27,29 @@ pub fn init(repo: &Path) {
 }
 
 pub fn create_requirement(repo: &Path, id: &str, statement: &str) {
-    provenance()
-        .args([
-            "requirements",
-            "create",
-            "--repo",
-            repo.to_str().unwrap(),
-            "--scope",
-            "default",
-            "--id",
-            id,
-            "--statement",
-            statement,
-        ])
-        .assert()
-        .success();
+    // Appends a plain record directly to the shard: these tests pin statement
+    // diagnostics over export and import, and a CLI-created Requirement would
+    // enroll its scope into the review journal, whose lossless export is a
+    // later phase. The shard write keeps the scope plain and lossless.
+    let path = repo.join(REQUIREMENTS_SHARD);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .unwrap();
+    writeln!(
+        file,
+        "{}",
+        json!({
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+            "scope_id": "default",
+            "id": id,
+            "statement": statement,
+            "status": "discovery"
+        })
+    )
+    .unwrap();
 }
 
 pub fn create_rule(repo: &Path, id: &str, statement: &str) {
