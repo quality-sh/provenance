@@ -127,8 +127,7 @@ fn query_variants_reuse_matching_consolidated_response_components() {
         .as_object()
         .expect("component schemas");
 
-    for (contract, consolidated) in [("success", "GetRuleSuccess"), ("failure", "GetRuleFailure")]
-    {
+    for (contract, consolidated) in [("success", "GetRuleSuccess"), ("failure", "GetRuleFailure")] {
         let name = selected[contract]["$ref"]
             .as_str()
             .expect("variant contract reference")
@@ -137,9 +136,10 @@ fn query_variants_reuse_matching_consolidated_response_components() {
         references(&schemas[name], &mut found);
         assert!(!found.is_empty(), "variant contract must remain explicit");
         assert!(
-            found.iter().any(|reference| reference.starts_with(&format!(
-                "#/components/schemas/{consolidated}"
-            ))),
+            found
+                .iter()
+                .any(|reference| reference
+                    .starts_with(&format!("#/components/schemas/{consolidated}"))),
             "{name} must reuse matching {consolidated} components: {found:?}"
         );
     }
