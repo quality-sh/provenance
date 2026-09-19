@@ -27,22 +27,6 @@ impl Display for BindingError {
 
 impl std::error::Error for BindingError {}
 
-/// Translate CLI-owned selector flags into one semantic check request.
-pub fn parse_check(words: &[&str]) -> Result<CheckInput, BindingError> {
-    let mut graph = false;
-    let mut statements = false;
-    let mut bindings = false;
-    for word in words {
-        match *word {
-            "--graph" => graph = true,
-            "--statements" => statements = true,
-            "--bindings" => bindings = true,
-            _ => return Err(BindingError),
-        }
-    }
-    Ok(check_input_from_selectors(graph, statements, bindings))
-}
-
 /// Translate the live CLI selector fields into one semantic check request.
 pub fn check_input_from_selectors(graph: bool, statements: bool, bindings: bool) -> CheckInput {
     let mut categories = Vec::new();
