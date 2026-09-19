@@ -42,10 +42,7 @@ impl StateStore {
         input: SaveRequirement,
     ) -> anyhow::Result<super::RequirementResourceSnapshot> {
         self.save_requirement_with_origin(input, None, |store, entry| {
-            store.requirement_resource_snapshot_unlocked(
-                &entry.scope_id,
-                &entry.requirement_id,
-            )
+            store.requirement_resource_snapshot_unlocked(&entry.scope_id, &entry.requirement_id)
         })
     }
 

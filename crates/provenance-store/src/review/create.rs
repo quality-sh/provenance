@@ -40,10 +40,7 @@ impl StateStore {
         input: CreateReviewRequirement,
     ) -> anyhow::Result<super::RequirementResourceSnapshot> {
         self.create_review_requirement_with(input, |store, entry| {
-            store.requirement_resource_snapshot_unlocked(
-                &entry.scope_id,
-                &entry.requirement_id,
-            )
+            store.requirement_resource_snapshot_unlocked(&entry.scope_id, &entry.requirement_id)
         })
     }
 

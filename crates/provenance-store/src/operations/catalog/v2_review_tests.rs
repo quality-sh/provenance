@@ -110,14 +110,17 @@ async fn create_response_failure_refuses_before_publication() {
 async fn update_response_failure_refuses_before_publication() {
     let (_temp, context, store, scope) = fixture();
     store
-        .create_requirement(serde_json::from_value(json!({
-            "scope_id": "default",
-            "id": "req_a",
-            "statement": "The system stores records.",
-            "status": "discovery",
-            "depends_on": [],
-            "supersedes": []
-        })).unwrap())
+        .create_requirement(
+            serde_json::from_value(json!({
+                "scope_id": "default",
+                "id": "req_a",
+                "statement": "The system stores records.",
+                "status": "discovery",
+                "depends_on": [],
+                "supersedes": []
+            }))
+            .unwrap(),
+        )
         .unwrap();
     let request = update_request(&store, "update_a");
     let receipts_before = store.review_entries(&scope).unwrap();
@@ -180,7 +183,10 @@ async fn replay_precedes_stale_precondition_and_returns_current_state() {
     .unwrap();
 
     assert_eq!(replay.record.description.as_deref(), Some("Second text."));
-    assert_eq!(replay.edit.etag, store.requirement_edit_state(&scope, &id).unwrap().etag);
+    assert_eq!(
+        replay.edit.etag,
+        store.requirement_edit_state(&scope, &id).unwrap().etag
+    );
     assert_eq!(store.review_entries(&scope).unwrap().len(), 3);
 }
 
@@ -188,19 +194,22 @@ async fn replay_precedes_stale_precondition_and_returns_current_state() {
 fn concurrent_resource_writes_with_one_etag_commit_once() {
     let (_temp, _context, store, scope) = fixture();
     store
-        .create_review_requirement(serde_json::from_value(json!({
-            "request_id": "create_a",
-            "actor": "ben",
-            "origin": null,
-            "create": {
-                "scope_id": "default",
-                "id": "req_a",
-                "statement": "The system stores records.",
-                "status": "discovery",
-                "depends_on": [],
-                "supersedes": []
-            }
-        })).unwrap())
+        .create_review_requirement(
+            serde_json::from_value(json!({
+                "request_id": "create_a",
+                "actor": "ben",
+                "origin": null,
+                "create": {
+                    "scope_id": "default",
+                    "id": "req_a",
+                    "statement": "The system stores records.",
+                    "status": "discovery",
+                    "depends_on": [],
+                    "supersedes": []
+                }
+            }))
+            .unwrap(),
+        )
         .unwrap();
     let id = StableId::new("req_a").unwrap();
     let etag = store.requirement_edit_state(&scope, &id).unwrap().etag;

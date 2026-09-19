@@ -124,25 +124,26 @@ impl Operation for CreateRequirementV2 {
             let context = context.scope()?;
             let scope = context.scope;
             let store = StateStore::new(ProvenanceLayout::new(context.root));
-            let snapshot = store.create_review_requirement_resource(review::CreateReviewRequirement {
-                request_id: request.request_id,
-                actor: request.actor,
-                origin: request.origin,
-                create: CreateRequirementInput {
-                    scope_id: scope.clone(),
-                    id: request.id,
-                    statement: request.statement,
-                    description: request.description,
-                    status: request.status,
-                    domain_id: request.domain_id,
-                    refines: request.refines,
-                    depends_on: request.depends_on,
-                    supersedes: request.supersedes,
-                    spawned_by: request.spawned_by,
-                    origin_thread: request.origin_thread,
-                    origin_message: request.origin_message,
-                },
-            })?;
+            let snapshot =
+                store.create_review_requirement_resource(review::CreateReviewRequirement {
+                    request_id: request.request_id,
+                    actor: request.actor,
+                    origin: request.origin,
+                    create: CreateRequirementInput {
+                        scope_id: scope.clone(),
+                        id: request.id,
+                        statement: request.statement,
+                        description: request.description,
+                        status: request.status,
+                        domain_id: request.domain_id,
+                        refines: request.refines,
+                        depends_on: request.depends_on,
+                        supersedes: request.supersedes,
+                        spawned_by: request.spawned_by,
+                        origin_thread: request.origin_thread,
+                        origin_message: request.origin_message,
+                    },
+                })?;
             Ok(resource_from(snapshot))
         })
     }
