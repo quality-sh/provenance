@@ -12,6 +12,7 @@ mod http;
 mod local;
 mod mcp;
 mod mcp_io;
+pub mod porcelain;
 mod routing;
 
 pub use access::HostAccess;
