@@ -6,10 +6,6 @@ pub const DIRECT: RequestAdapter = RequestAdapter {
     object: true,
     adapt: direct,
 };
-pub(super) const NULL: RequestAdapter = RequestAdapter {
-    object: false,
-    adapt: null,
-};
 pub(super) const NULLABLE_PATCH: RequestAdapter = RequestAdapter {
     object: true,
     adapt: nullable_patch,
@@ -34,15 +30,6 @@ const fn direct(
     _: &BTreeMap<String, String>,
 ) -> Result<Value, RequestAdapterError> {
     Ok(value)
-}
-
-#[allow(clippy::unnecessary_wraps)]
-fn null(
-    _: &RequestBinding,
-    _: Value,
-    _: &BTreeMap<String, String>,
-) -> Result<Value, RequestAdapterError> {
-    Ok(Value::Null)
 }
 
 fn nullable_patch(

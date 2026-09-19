@@ -13,6 +13,71 @@ use support::resource_http::{call, call_with_headers, host};
 use tower::ServiceExt as _;
 
 #[tokio::test]
+async fn graph_queries_apply_declared_relation_filters() {
+    let repo = Repository::new("The shared graph is readable.");
+    repo.all_kinds();
+    let host = host(&repo, false);
+
+    for query in ["neighbors", "trace"] {
+        let (status, filtered) = call(
+            &host,
+            "GET",
+            &format!("/requirements/req_shared?query={query}&relations=domain_id&limit=20"),
+            None,
+        )
+        .await;
+        assert_eq!(status, 200, "{filtered}");
+        let items = if query == "neighbors" {
+            filtered["data"]["neighbors"].as_array().unwrap()
+        } else {
+            filtered["data"]["nodes"].as_array().unwrap()
+        };
+        assert!(!items.is_empty(), "{query}: {filtered}");
+        if query == "neighbors" {
+            assert!(
+                items.iter().all(|item| item["relation"] == "domain_id"),
+                "{query}: {filtered}"
+            );
+        } else {
+            assert!(
+                items
+                    .iter()
+                    .all(|item| item["node"]["id"] == "domain_shared"),
+                "{query}: {filtered}"
+            );
+        }
+    }
+
+    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
+    let server_host = host.clone();
+    let server = tokio::spawn(async move { server_host.serve_mcp(server_io).await.unwrap() });
+    let client = ().serve(client_io).await.unwrap();
+    let result = client
+        .call_tool(
+            CallToolRequestParams::new("get-requirement").with_arguments(
+                json!({
+                    "id":"req_shared", "query":"neighbors",
+                    "relations":["domain_id"], "limit":20
+                })
+                .as_object()
+                .unwrap()
+                .clone(),
+            ),
+        )
+        .await
+        .unwrap();
+    assert_ne!(result.is_error, Some(true));
+    let value = result.structured_content.unwrap();
+    assert!(value["data"]["neighbors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|item| item["relation"] == "domain_id"));
+    client.cancel().await.unwrap();
+    server.await.unwrap().cancel().await.unwrap();
+}
+
+#[tokio::test]
 async fn all_addressed_discussion_routes_work_for_questions() {
     let repo = Repository::new("The shared graph is readable.");
     repo.all_kinds();

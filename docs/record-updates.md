@@ -65,16 +65,17 @@ All eight record command groups accept `update`. Changed fields are JSON or
 an `@file` argument. For example:
 
 ```sh
-provenance sources update --repo . --scope default --id source_policy \
+provenance sources source_policy update --repo . --scope default \
   --fields-json '{"url":"https://example.test/policy","clear_fields":["reference","commit_pin"]}' \
   --format json
 
-provenance resolutions update --repo . --scope default --id resolution_policy \
+provenance resolutions resolution_policy update --repo . --scope default \
   --fields-json '{"status":"approved","approved_by":"reviewer","approved_at":1234}' \
   --format json
 ```
 
-The JSON must not contain `id` or `scope_id`; use the command flags.
+The JSON must not contain `id` or `scope_id`; use the resource address and
+command flags.
 Questions also retain the existing update flags and add `--question`.
 `--fields-json` cannot be combined with those individual question flags.
 The CLI operates on local data and does not need `serve`.

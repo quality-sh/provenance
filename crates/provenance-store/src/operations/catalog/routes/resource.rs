@@ -24,15 +24,20 @@ macro_rules! collection {
     (plain, $ty:ty, $list:ty, $plural:literal, $plural_id:literal, $singular:literal) => {
         read::<$ty, $list>(
             concat!("list-", $plural), concat!("list", $plural_id), concat!("/", $plural),
-            concat!("List ", $plural, " in the bound scope."), ResponseKind::Items, Vec::new(),
-        ).adapter(request::NULL)
+            concat!("List ", $plural, " in the bound scope."), ResponseKind::Items,
+            list_parameters(false, false),
+        ).items_field("items").pagination()
     };
     (verification, $ty:ty, $list:ty, $plural:literal, $plural_id:literal, $singular:literal) => {
         read::<$ty, $list>(
             concat!("list-", $plural), concat!("list", $plural_id), concat!("/", $plural),
             concat!("List ", $plural, " in the bound scope."), ResponseKind::Items,
-            vec![schema::query("rule", json!({"type":"string","minLength":1}))],
-        )
+            vec![
+                schema::query("rule", json!({"type":"string","minLength":1})),
+                schema::query("limit", json!({"type":"integer","minimum":1,"maximum":200})),
+                schema::query("cursor", json!({"type":"string"})),
+            ],
+        ).items_field("items").pagination()
     };
 }
 
@@ -79,11 +84,7 @@ macro_rules! resource {
             ResponseKind::Resource,
             member_parameters_for!($mode),
         )
-        .adapter(request::NULL)
-        .response_selection(ResponseSelection::ArrayMember {
-            id_parameter: "id",
-            owner_parameter: None,
-        });
+        .result();
         let queries = registered_member_queries!($mode, &definition, $singular);
         $out.push(with_query_results(definition, queries));
     }};

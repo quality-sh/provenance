@@ -8,7 +8,7 @@ const propertyName = parameter => parameter.in === 'header'
 
 function tsCall(op) {
   const fields = (op.parameters ?? []).map(parameter =>
-    `${JSON.stringify(propertyName(parameter))}${parameter.required ? '' : '?'}: ${parameter.schema.type === 'integer' ? 'number' : parameter.schema.type === 'boolean' ? 'boolean' : 'string'}`);
+    `${JSON.stringify(propertyName(parameter))}${parameter.required ? '' : '?'}: ${parameter.schema.type === 'integer' ? 'number' : parameter.schema.type === 'boolean' ? 'boolean' : parameter.schema.type === 'array' ? 'string[]' : 'string'}`);
   if (op.requestBody) {
     const request = ref(op.requestBody.content['application/json'].schema);
     fields.push(`data: components['schemas']['${request}']['data']`);
@@ -24,7 +24,7 @@ function tsRequest(path, method, op) {
   const query = (op.parameters ?? []).filter(parameter => parameter.in === 'query');
   const queryCode = query.length ? `
     const query = new URLSearchParams();
-${query.map(parameter => `    if (call[${JSON.stringify(propertyName(parameter))}] !== undefined) query.set(${JSON.stringify(parameter.name)}, String(call[${JSON.stringify(propertyName(parameter))}]));`).join('\n')}
+${query.map(parameter => `    if (call[${JSON.stringify(propertyName(parameter))}] !== undefined) query.set(${JSON.stringify(parameter.name)}, ${parameter.schema.type === 'array' ? `call[${JSON.stringify(propertyName(parameter))}]!.join(',')` : `String(call[${JSON.stringify(propertyName(parameter))}])`});`).join('\n')}
     if (query.size) url.search = query.toString();` : '';
   const headers = (op.parameters ?? []).filter(parameter => parameter.in === 'header');
   const headerCode = [`'content-type': 'application/json'`, ...headers.map(parameter =>
@@ -103,7 +103,7 @@ ${methods}
 }
 
 function rustType(parameter) {
-  const type = parameter.schema.type === 'integer' ? 'u64' : parameter.schema.type === 'boolean' ? 'bool' : '&str';
+  const type = parameter.schema.type === 'integer' ? 'u64' : parameter.schema.type === 'boolean' ? 'bool' : parameter.schema.type === 'array' ? '&[&str]' : '&str';
   return parameter.required ? type : `Option<${type}>`;
 }
 function rustArgs(op) {
@@ -124,7 +124,7 @@ function rustRequest(path, method, op, operation) {
   setup += `\n        let ${changesRequest ? 'mut ' : ''}request = self.http.${method}(url);`;
   for (const parameter of queryParameters) {
     const name = propertyName(parameter);
-    setup += `\n        if let Some(value) = ${name} { request = request.query(&[(${JSON.stringify(parameter.name)}, value.to_string())]); }`;
+    setup += `\n        if let Some(value) = ${name} { request = request.query(&[(${JSON.stringify(parameter.name)}, ${parameter.schema.type === 'array' ? 'value.join(",")' : 'value.to_string()'})]); }`;
   }
   for (const parameter of headerParameters) {
     setup += `\n        request = request.header(${JSON.stringify(parameter.name)}, ${propertyName(parameter)});`;
