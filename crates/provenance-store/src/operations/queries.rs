@@ -49,7 +49,7 @@ pub async fn get(
         Box::pin(async move { records::get(ctx, request).await })
     })
     .await
-    .and_then(|answer| page::checked_result("get", answer))
+    .and_then(|answer| page::checked("get", answer))
 }
 
 pub async fn search(
@@ -62,7 +62,7 @@ pub async fn search(
         Box::pin(async move { records::search(ctx, request).await })
     })
     .await
-    .and_then(|answer| page::checked_result("search", answer))
+    .and_then(|answer| page::checked("search", answer))
 }
 
 pub async fn neighbors(
@@ -75,7 +75,7 @@ pub async fn neighbors(
         Box::pin(async move { walk::neighbors(ctx, request).await })
     })
     .await
-    .and_then(|answer| page::checked_result("neighbors", answer))
+    .and_then(|answer| page::checked("neighbors", answer))
 }
 
 pub async fn trace(
@@ -88,7 +88,7 @@ pub async fn trace(
         Box::pin(async move { walk::trace(ctx, request).await })
     })
     .await
-    .and_then(|answer| page::checked_result("trace", answer))
+    .and_then(|answer| page::checked("trace", answer))
 }
 
 pub async fn impact(
@@ -101,7 +101,7 @@ pub async fn impact(
         Box::pin(async move { impact::impact(ctx, request).await })
     })
     .await
-    .and_then(|answer| page::checked_result("impact", answer))
+    .and_then(|answer| page::checked("impact", answer))
 }
 
 pub async fn evidence(
@@ -114,7 +114,7 @@ pub async fn evidence(
         Box::pin(async move { evidence::evidence(ctx, request).await })
     })
     .await
-    .and_then(|answer| page::checked_result("evidence", answer))
+    .and_then(|answer| page::checked("evidence", answer))
 }
 
 pub async fn stale(
@@ -128,7 +128,7 @@ pub async fn stale(
         Box::pin(async move { stale::stale(ctx, &inner, request) })
     })
     .await
-    .and_then(|answer| page::checked_result("stale", answer))
+    .and_then(|answer| page::checked("stale", answer))
 }
 
 pub async fn resolve_symbol(
@@ -141,5 +141,5 @@ pub async fn resolve_symbol(
         Box::pin(async move { symbols::resolve(ctx, request).await })
     })
     .await
-    .and_then(|answer| page::checked_result("resolve-symbol", answer))
+    .and_then(|answer| page::checked("resolve-symbol", answer))
 }

@@ -25,14 +25,14 @@ pub(super) async fn evidence(
     let by_rule = [rule.as_str()];
     let implementations = snapshot
         .table::<ImplementationBinding>()
-        .by_field("rule_id", &by_rule)
+        .page_by_field("rule_id", &by_rule)
         .await?
         .into_iter()
         .take(request.limit + 1)
         .collect::<Vec<_>>();
     let verifications = snapshot
         .table::<VerificationBinding>()
-        .by_field("rule_id", &by_rule)
+        .page_by_field("rule_id", &by_rule)
         .await?
         .into_iter()
         .take(request.limit + 1)
@@ -55,7 +55,7 @@ pub(super) async fn evidence(
     // run are open.
     let mut reviews = snapshot
         .table::<RequirementReview>()
-        .by_field("rule_id", &by_rule)
+        .page_by_field("rule_id", &by_rule)
         .await?
         .into_iter()
         .filter(|review| review.cleared_at.is_none())

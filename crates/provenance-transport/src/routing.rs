@@ -83,7 +83,7 @@ pub async fn invoke(
     data: Value,
     query: BTreeMap<String, String>,
     headers: &HeaderMap,
-) -> Result<(Value, Option<String>), ErasedFailure> {
+) -> Result<(response::Success, Option<String>), ErasedFailure> {
     if !host.advertises(matched.definition.name) {
         return Err(ErasedFailure::new(None, OperationFailure::AccessDenied));
     }
@@ -101,7 +101,12 @@ pub async fn invoke(
     let value = host
         .invoke_backing(matched.definition.name, bound.handler.operation, call)
         .await?;
-    let value = response::success(value, matched.definition, &bound.response)?;
+    let value = response::success(
+        value,
+        matched.definition,
+        &bound.response,
+        bound.query_response,
+    )?;
     let etag = if query.contains_key("query") {
         None
     } else {
@@ -113,6 +118,7 @@ pub async fn invoke(
             .as_ref()
             .map(|binding| -> Result<String, ErasedFailure> {
                 let value = value
+                    .value()
                     .pointer(&format!("/data{}", binding.pointer))
                     .ok_or_else(|| {
                         ErasedFailure::new(
