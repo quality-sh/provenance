@@ -135,7 +135,7 @@ fn rule_adoption_preserves_a_resolution_relationship_outside_the_typed_surface()
     store
         .create_resolution(CreateResolutionInput {
             scope_id: scope.clone(),
-            id: StableId::new("req_first").unwrap(),
+            id: StableId::new("res_first").unwrap(),
             title: "Existing decision".to_string(),
             requirement_ids: vec![StableId::new("req_second").unwrap()],
             supersedes: Vec::new(),
@@ -161,7 +161,7 @@ fn rule_adoption_preserves_a_resolution_relationship_outside_the_typed_surface()
             name: None,
             description: None,
             requirement_ids: vec![StableId::new("req_second").unwrap()],
-            resolution_ids: vec![StableId::new("req_first").unwrap()],
+            resolution_ids: vec![StableId::new("res_first").unwrap()],
             statement: "The canonical Rule keeps its identity".to_string(),
             status: RuleStatus::Active,
             severity: RuleSeverity::Medium,
@@ -214,5 +214,5 @@ fn rule_adoption_preserves_a_resolution_relationship_outside_the_typed_surface()
     assert!(existing
         .resolution_ids
         .iter()
-        .any(|id| id.as_str() == "req_first"));
+        .any(|id| id.as_str() == "res_first"));
 }

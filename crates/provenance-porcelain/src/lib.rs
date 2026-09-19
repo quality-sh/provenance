@@ -1,5 +1,7 @@
 //! Shared human-facing semantics for Provenance interfaces.
 
+pub mod get;
+
 /// A shared Porcelain capability selected by an interface binding.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Action {
@@ -50,7 +52,7 @@ impl<T> Outcome<T> {
 /// Shared Porcelain capabilities over a caller-supplied operation port.
 #[derive(Clone, Debug)]
 pub struct Porcelain<P> {
-    port: P,
+    pub(crate) port: P,
 }
 
 impl<P> Porcelain<P> {

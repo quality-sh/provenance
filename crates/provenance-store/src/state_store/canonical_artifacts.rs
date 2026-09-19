@@ -85,6 +85,36 @@ impl CanonicalArtifactIndex {
         })
     }
 
+    fn load_unlocked(store: &StateStore, scope_id: &ScopeId) -> anyhow::Result<Self> {
+        let mut entries = HashSet::new();
+        macro_rules! extend {
+            ($kind:ident, $path:ident, $ty:ty) => {
+                extend_scoped(
+                    &mut entries,
+                    scope_id,
+                    NodeType::$kind,
+                    super::readers::read_jsonl_unlocked::<$ty>(&crate::shards::$path(
+                        &store.layout,
+                        scope_id,
+                    ))?,
+                    |record| (record.scope_id, record.id),
+                );
+            };
+        }
+        extend!(Source, sources_path, provenance_core::Source);
+        extend!(Requirement, requirements_path, provenance_core::Requirement);
+        extend!(Resolution, resolutions_path, provenance_core::Resolution);
+        extend!(Rule, rules_path, provenance_core::Rule);
+        extend!(Topic, topics_path, provenance_core::Topic);
+        extend!(Question, questions_path, provenance_core::Question);
+        extend!(Domain, domains_path, provenance_core::Domain);
+        extend!(Boundary, boundaries_path, provenance_core::Boundary);
+        Ok(Self {
+            scope_id: scope_id.clone(),
+            entries,
+        })
+    }
+
     pub(super) fn ensure_exists(&self, artifact: Option<&CanonicalArtifact>) -> anyhow::Result<()> {
         let Some(artifact) = artifact else {
             return Ok(());
@@ -129,6 +159,85 @@ impl StateStore {
     ) -> anyhow::Result<CanonicalArtifactIndex> {
         CanonicalArtifactIndex::load(self, scope_id)
     }
+
+    /// Refuses a canonical ID that any scope in this repository already uses.
+    #[rule("rule_porcelain_id_unique_in_repository")]
+    pub(super) fn ensure_canonical_id_available(
+        &self,
+        scope_id: &ScopeId,
+        id: &StableId,
+    ) -> anyhow::Result<()> {
+        self.ensure_canonical_replacement_ids_unique(scope_id, std::iter::once(id), &[])
+    }
+
+    pub(super) fn ensure_canonical_replacement_ids_unique<'a>(
+        &self,
+        scope_id: &ScopeId,
+        replacements: impl IntoIterator<Item = &'a StableId>,
+        replaced_kinds: &[NodeType],
+    ) -> anyhow::Result<()> {
+        let manifest = self.manifest()?;
+        ensure_replacement_ids_unique(
+            scope_id,
+            replacements,
+            replaced_kinds,
+            manifest.scopes.into_iter().map(|scope| {
+                CanonicalArtifactIndex::load(self, &scope.id).map(|index| (scope.id, index))
+            }),
+        )
+    }
+
+    pub(super) fn ensure_import_ids_unique<'a>(
+        &self,
+        scope_id: &ScopeId,
+        replacements: impl IntoIterator<Item = &'a StableId>,
+        replaced_kinds: &[NodeType],
+    ) -> anyhow::Result<()> {
+        let manifest = super::manifest_from_bytes(&std::fs::read(self.layout.manifest_path())?)?;
+        ensure_replacement_ids_unique(
+            scope_id,
+            replacements,
+            replaced_kinds,
+            manifest.scopes.into_iter().map(|scope| {
+                CanonicalArtifactIndex::load_unlocked(self, &scope.id)
+                    .map(|index| (scope.id, index))
+            }),
+        )
+    }
+}
+
+fn ensure_replacement_ids_unique<'a>(
+    scope_id: &ScopeId,
+    replacements: impl IntoIterator<Item = &'a StableId>,
+    replaced_kinds: &[NodeType],
+    scopes: impl IntoIterator<Item = anyhow::Result<(ScopeId, CanonicalArtifactIndex)>>,
+) -> anyhow::Result<()> {
+    let replaced_kinds = replaced_kinds
+        .iter()
+        .map(|kind| kind_word(*kind))
+        .collect::<HashSet<_>>();
+    let mut ids = HashSet::new();
+    for scope in scopes {
+        let (current_scope, index) = scope?;
+        for entry in index.entries {
+            if current_scope == *scope_id && replaced_kinds.contains(entry.kind) {
+                continue;
+            }
+            crate::write_error::ensure!(
+                AlreadyExists,
+                ids.insert(entry.id),
+                "record ID already exists in this repository"
+            );
+        }
+    }
+    for id in replacements {
+        crate::write_error::ensure!(
+            AlreadyExists,
+            ids.insert(id.as_str().to_owned()),
+            "record ID already exists in this repository"
+        );
+    }
+    Ok(())
 }
 
 fn key(kind: NodeType, id: &StableId) -> RecordKey {

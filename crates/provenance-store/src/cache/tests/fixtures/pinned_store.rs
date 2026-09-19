@@ -1,6 +1,6 @@
 //! The frozen store behind the pinned answers test and the comparison tests:
 //! every kind and every relation, a requirement diamond, a source cited under
-//! two clauses, a `links` pair naming one id under two kinds, lists past
+//! two clauses, a legacy `links` pair naming one id under two kinds, lists past
 //! the limit, a cleared review, and one source file with scanner sites.
 //! It never reads `.provenance/state`, which moves on most pull requests.
 
@@ -13,7 +13,8 @@ use crate::state_store::{
 };
 use provenance_core::{
     ArtifactLink, ArtifactLinkTargetType, QuestionStatus, Requirement, RequirementStatus,
-    ResolutionMethod, ScopeId, SourceReference, SourceType, TopicStatus, SUPPORTED_SCHEMA_VERSION,
+    ResolutionMethod, Rule, ScopeId, SourceReference, SourceType, Topic, TopicStatus,
+    SUPPORTED_SCHEMA_VERSION,
 };
 
 /// The id one requirement and one rule share, so `links` can name it
@@ -59,6 +60,7 @@ pub fn pinned_store_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
     let store = StateStore::new(layout.clone());
     seed_graph(&store, &scope);
     seed_shaping(&store, &scope);
+    seed_legacy_twin(&store, &scope);
     seed_integrations(&layout, &scope);
     let source = layout.root().join("src/pay.rs");
     std::fs::create_dir_all(source.parent().unwrap()).unwrap();
@@ -170,7 +172,41 @@ fn seed_graph(store: &StateStore, scope: &ScopeId) {
         );
     }
     create_rule_of(store, scope, "rule_penalty_001", "req_penalty");
-    create_rule_of(store, scope, TWIN_ID, "req_top");
+    create_rule_of(store, scope, "rule_twin_seed", "req_top");
+}
+
+/// Preserve the pre-uniqueness query fixture as raw legacy state.
+fn seed_legacy_twin(store: &StateStore, scope: &ScopeId) {
+    let path = shards::rules_path(&store.layout, scope);
+    store
+        .mutate_graph_record(&path, |records: &mut Vec<Rule>| {
+            let rule = records
+                .iter_mut()
+                .find(|record| record.id.as_str() == "rule_twin_seed")
+                .unwrap();
+            rule.id = sid(TWIN_ID);
+            rule.statement = format!("{TWIN_ID} statement");
+            let rule = rule.clone();
+            records.sort_by(|left, right| left.id.as_str().cmp(right.id.as_str()));
+            Ok(rule)
+        })
+        .unwrap();
+    let path = shards::topics_path(&store.layout, scope);
+    store
+        .mutate_graph_record(&path, |records: &mut Vec<Topic>| {
+            let topic = records
+                .iter_mut()
+                .find(|record| record.id.as_str() == "topic_rates")
+                .unwrap();
+            topic
+                .links
+                .iter_mut()
+                .find(|link| link.target_type == ArtifactLinkTargetType::Rule)
+                .unwrap()
+                .target_id = sid(TWIN_ID);
+            Ok(topic.clone())
+        })
+        .unwrap();
 }
 
 fn seed_shaping(store: &StateStore, scope: &ScopeId) {
@@ -187,7 +223,7 @@ fn seed_shaping(store: &StateStore, scope: &ScopeId) {
             status: TopicStatus::Open,
             links: vec![
                 link(ArtifactLinkTargetType::Requirement, TWIN_ID),
-                link(ArtifactLinkTargetType::Rule, TWIN_ID),
+                link(ArtifactLinkTargetType::Rule, "rule_twin_seed"),
                 link(ArtifactLinkTargetType::Source, "source_schads"),
             ],
         })

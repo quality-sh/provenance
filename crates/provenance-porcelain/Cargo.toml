@@ -11,3 +11,13 @@ publish.workspace = true
 
 [lints]
 workspace = true
+
+[dependencies]
+provenance-macros.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+provenance-macros.workspace = true
+serde_json.workspace = true
+tokio.workspace = true

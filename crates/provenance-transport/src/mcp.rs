@@ -24,7 +24,7 @@ impl ServerHandler for StatementHost {
         _: Option<PaginatedRequestParams>,
         _: RequestContext<RoleServer>,
     ) -> impl Future<Output = Result<ListToolsResult, ErrorData>> + '_ {
-        let tools = catalog::definitions()
+        let mut tools = catalog::definitions()
             .iter()
             .filter(|definition| self.advertises(definition.name))
             .map(|definition| {
@@ -43,7 +43,10 @@ impl ServerHandler for StatementHost {
                 );
                 tool
             })
-            .collect();
+            .collect::<Vec<_>>();
+        if crate::porcelain::get_is_available(self) {
+            tools.push(crate::porcelain::get_tool());
+        }
         std::future::ready(Ok(ListToolsResult {
             tools,
             ..Default::default()
@@ -55,6 +58,27 @@ impl ServerHandler for StatementHost {
         request: CallToolRequestParams,
         _: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, ErrorData> {
+        if request.name == "get" && crate::porcelain::get_is_available(self) {
+            let _admission = match self.admit() {
+                Ok(permit) => permit,
+                Err(failure) => return Ok(error(failure)),
+            };
+            let arguments = request.arguments.unwrap_or_default();
+            if serde_json::to_vec(&arguments)
+                .map_err(|_| ErrorData::internal_error("Cannot encode input", None))?
+                .len()
+                > MAX_BODY_BYTES
+            {
+                return Ok(error(ErasedFailure::new(
+                    None,
+                    OperationFailure::InvalidInput {
+                        field: None,
+                        reason: InvalidInputReason::TooLarge,
+                    },
+                )));
+            }
+            return Ok(crate::porcelain::call_get(self, arguments).await);
+        }
         let Some(definition) = catalog::definitions()
             .iter()
             .find(|d| d.name == request.name)

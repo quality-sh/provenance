@@ -2261,6 +2261,12 @@ dependencies = [
 [[package]]
 name = "provenance-porcelain"
 version = "0.2.3"
+dependencies = [
+ "provenance-macros",
+ "serde",
+ "serde_json",
+ "tokio",
+]
 
 [[package]]
 name = "provenance-report"

@@ -1,6 +1,11 @@
+use assert_cmd::Command;
 use provenance_macros::verifies;
 use provenance_porcelain::{Action, Outcome, RecordRequest};
 use serde_json::json;
+
+fn provenance() -> Command {
+    Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
+}
 
 #[test]
 #[verifies("rule_porcelain_action_names_match", conformance)]
@@ -53,4 +58,175 @@ fn cli_renders_readable_output_by_default_and_json_on_request() {
         serde_json::from_str::<serde_json::Value>(&json).unwrap(),
         outcome.data
     );
+}
+
+#[test]
+fn cli_and_mcp_get_bindings_translate_to_the_same_semantics() {
+    let cli = provenance_cli::porcelain::parse_get(&[
+        "req_alpha",
+        "get",
+        "--view",
+        "children",
+        "--depth",
+        "2",
+        "--kind",
+        "rule",
+        "--limit",
+        "25",
+    ])
+    .unwrap();
+    let mcp: provenance_transport::porcelain::GetArguments = serde_json::from_value(json!({
+        "target": "req_alpha",
+        "view": "children",
+        "max_depth": 2,
+        "returned_kinds": ["rule"],
+        "limit": 25
+    }))
+    .unwrap();
+
+    assert_eq!(cli, mcp.into_get_input());
+}
+
+#[test]
+#[verifies("rule_porcelain_cli_target_action_order", examples)]
+#[verifies("rule_porcelain_cli_readable_json", examples)]
+fn target_first_get_runs_through_the_cli_entrypoint() {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path().to_string_lossy().into_owned();
+    provenance()
+        .args([
+            "init",
+            "--path",
+            &repo,
+            "--scope",
+            "default",
+            "--path-prefix",
+            ".",
+        ])
+        .assert()
+        .success();
+    provenance()
+        .args([
+            "sources",
+            "create",
+            "--repo",
+            &repo,
+            "--id",
+            "source_porcelain_entrypoint",
+            "--name",
+            "Porcelain entrypoint",
+        ])
+        .assert()
+        .success();
+
+    let output = provenance()
+        .args([
+            "source_porcelain_entrypoint",
+            "get",
+            "--repo",
+            &repo,
+            "--format",
+            "json",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(value["record"]["id"], "source_porcelain_entrypoint");
+    assert_eq!(value["record"]["kind"], "source");
+    assert_eq!(value["view"], "record");
+}
+
+#[test]
+#[verifies("rule_porcelain_cli_target_action_order", examples)]
+fn target_first_get_accepts_global_options_before_the_target() {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path().to_string_lossy().into_owned();
+    provenance()
+        .args([
+            "init",
+            "--path",
+            &repo,
+            "--scope",
+            "default",
+            "--path-prefix",
+            ".",
+        ])
+        .assert()
+        .success();
+    provenance()
+        .args([
+            "sources",
+            "create",
+            "--repo",
+            &repo,
+            "--id",
+            "source_global_options",
+            "--name",
+            "Global options",
+        ])
+        .assert()
+        .success();
+
+    provenance()
+        .args([
+            "--repo",
+            &repo,
+            "--format",
+            "json",
+            "source_global_options",
+            "get",
+        ])
+        .assert()
+        .success();
+}
+
+#[test]
+#[verifies("rule_porcelain_cli_target_action_order", examples)]
+fn explicit_get_disambiguates_a_target_that_matches_a_legacy_command() {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path().to_string_lossy().into_owned();
+    provenance()
+        .args([
+            "init",
+            "--path",
+            &repo,
+            "--scope",
+            "default",
+            "--path-prefix",
+            ".",
+        ])
+        .assert()
+        .success();
+    provenance()
+        .args([
+            "sources",
+            "create",
+            "--repo",
+            &repo,
+            "--id",
+            "sources",
+            "--name",
+            "Reserved target",
+        ])
+        .assert()
+        .success();
+
+    let output = provenance()
+        .args(["sources", "get", "--repo", &repo, "--format", "json"])
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(value["record"]["id"], "sources");
 }
