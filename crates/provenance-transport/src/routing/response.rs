@@ -164,6 +164,14 @@ fn move_meta(object: &mut Map<String, Value>, meta: &mut Map<String, Value>) {
     }
 }
 
+fn move_page_meta(object: &mut Map<String, Value>, meta: &mut Map<String, Value>) {
+    for field in ["limit", "has_more", "next_cursor"] {
+        if let Some(value) = object.remove(field) {
+            meta.insert(field.into(), value);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -172,7 +180,7 @@ mod tests {
 
     fn search_binding() -> (&'static catalog::Definition, catalog::ResponseBinding) {
         let definition = catalog::definitions()
-            .into_iter()
+            .iter()
             .find(|definition| definition.path == "/rules")
             .unwrap();
         let binding = definition
@@ -186,7 +194,7 @@ mod tests {
         (definition, binding)
     }
 
-    fn raw_search(payload: String) -> Value {
+    fn raw_search(payload: &str) -> Value {
         json!({
             "protocol_version": SDK_PROTOCOL_VERSION,
             "operation": "search",
@@ -212,7 +220,7 @@ mod tests {
         definition: &catalog::Definition,
         binding: &catalog::ResponseBinding,
     ) -> usize {
-        let empty = success(raw_search(String::new()), definition, binding, true).unwrap();
+        let empty = success(raw_search(""), definition, binding, true).unwrap();
         QUERY_RESPONSE_BYTES - empty.bytes().len()
     }
 
@@ -222,7 +230,7 @@ mod tests {
         let remaining = payload_bytes_at_limit(definition, &binding);
 
         let at_limit = success(
-            raw_search("x".repeat(remaining)),
+            raw_search(&"x".repeat(remaining)),
             definition,
             &binding,
             true,
@@ -241,7 +249,7 @@ mod tests {
         let remaining = payload_bytes_at_limit(definition, &binding);
 
         let failure = success(
-            raw_search("x".repeat(remaining + 1)),
+            raw_search(&"x".repeat(remaining + 1)),
             definition,
             &binding,
             true,
@@ -257,20 +265,12 @@ mod tests {
         let (definition, binding) = search_binding();
         let remaining = payload_bytes_at_limit(definition, &binding);
         let ordinary = success(
-            raw_search("x".repeat(remaining + 1)),
+            raw_search(&"x".repeat(remaining + 1)),
             definition,
             &binding,
             false,
         )
         .unwrap();
         assert_eq!(ordinary.bytes().len(), QUERY_RESPONSE_BYTES + 1);
-    }
-}
-
-fn move_page_meta(object: &mut Map<String, Value>, meta: &mut Map<String, Value>) {
-    for field in ["limit", "has_more", "next_cursor"] {
-        if let Some(value) = object.remove(field) {
-            meta.insert(field.into(), value);
-        }
     }
 }
