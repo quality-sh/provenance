@@ -9,7 +9,7 @@ use crate::{
 };
 use provenance_core::{
     protocol::failure::{InvalidInputReason, OperationFailure},
-    review::{EvidencePage, EvidenceQuery, ReviewEntry, ReviewHistoryPage, ReviewHistoryQuery},
+    review::{EvidencePage, EvidenceQuery, ReviewEntry, ReviewHistoryQuery},
     threads::{
         DiscussionEntry, DiscussionGroup, DiscussionMessagesQuery, DiscussionQuery,
         DiscussionSelector,
@@ -100,7 +100,7 @@ const fn limit() -> usize {
 pub struct ReviewHistoryV2;
 impl Operation for ReviewHistoryV2 {
     type Request = HistoryRequest;
-    type Success = ReadResult<ReviewHistoryPage>;
+    type Success = ReadResult<DiscussionResultPage<ReviewEntry>>;
     type Failure = ReadError;
     const NAME: &'static str = "review-history-v2";
     const CONTEXT: ContextKind = ContextKind::Scoped;
@@ -120,7 +120,8 @@ impl Operation for ReviewHistoryV2 {
     ) -> OperationFuture<Self::Success, Self::Failure> {
         Box::pin(async move {
             let read = context.graph()?;
-            Ok(review::read_history(
+            let limit = request.limit;
+            let page = review::read_history(
                 &read.root,
                 &read.scope,
                 read.policy,
@@ -130,8 +131,12 @@ impl Operation for ReviewHistoryV2 {
                     cursor: request.cursor,
                 },
             )
-            .await?
-            .into())
+            .await?;
+            Ok(ReadResult {
+                result: discussion_result(page.result.entries, page.result.next_cursor, limit),
+                stamp: page.stamp,
+                freshness_error: page.freshness_error,
+            })
         })
     }
 }
