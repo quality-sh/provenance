@@ -57,6 +57,12 @@ const document = {
   } },
 };
 
+const optionalDirectionDocument = structuredClone(document);
+const optionalDirectionOperation = optionalDirectionDocument.paths['/rules/{id}'].get;
+optionalDirectionOperation.parameters.find(parameter => parameter.name === 'direction').required = false;
+optionalDirectionOperation['x-provenance-query-variants'][1].parameters
+  .find(parameter => parameter.name === 'direction').required = false;
+
 test('Promise generation overloads selectors and validates the selected contracts', () => {
   const source = typescriptClient(document, { wire: 2, state: 1, review_journal: 1, read_derivation: 1 });
   assert.match(source, /export type GetRuleBaseInput = \{ "id": string; "query"\?: undefined \}/);
@@ -71,12 +77,18 @@ test('Rust generation uses a closed query input and decodes the selected result'
   const files = rustClientFiles(document, { wire: 2, state: 1, review_journal: 1, read_derivation: 1 });
   const source = files['operations/get_rule.rs'];
   assert.match(source, /pub enum GetRuleInput<'a>/);
-  assert.match(source, /Trace \{ id: &'a str, direction: Option<&'a str> \}/);
   assert.match(source, /pub enum GetRuleOutput/);
   assert.match(source, /GetRuleInput::Base \{ id \} => \{[\s\S]*?let request = self\.http\.get\(url\);/);
   assert.match(source, /GetRuleInput::Trace \{ id, direction \} => \{[\s\S]*?let mut request = self\.http\.get\(url\);/);
   assert.match(source, /runtime::validate\(&value, "GetRuleTraceSuccess"/);
   assert.match(source, /GetRuleOutput::Trace/);
+});
+
+test('Rust generation distinguishes required and optional query fields', () => {
+  const required = rustClientFiles(document, compatibility)['operations/get_rule.rs'];
+  const optional = rustClientFiles(optionalDirectionDocument, compatibility)['operations/get_rule.rs'];
+  assert.match(required, /Trace \{ id: &'a str, direction: &'a str \}/);
+  assert.match(optional, /Trace \{ id: &'a str, direction: Option<&'a str> \}/);
 });
 
 test('Effect generation retains selector-specific success and failure types', () => {
@@ -117,7 +129,7 @@ test('selected runtime validators reject another query result contract', async (
       const client = await generated.module.HttpClient.connect('https://example.test', async (_url, init) =>
         init?.method === 'GET' ? Response.json(body, { status }) : Response.json(metadata));
       await assert.rejects(
-        client.getRule({ id: 'rule_a', query: 'trace' }),
+        client.getRule({ id: 'rule_a', query: 'trace', direction: 'in' }),
         generated.module.MalformedResponseError,
       );
     }

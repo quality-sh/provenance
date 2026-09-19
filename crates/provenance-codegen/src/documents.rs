@@ -132,33 +132,8 @@ pub fn documents() -> (Value, Value) {
         }
         let variants = definition.query_variants();
         if !variants.is_empty() {
-            operation["x-provenance-query-variants"] = Value::Array(
-                variants
-                    .into_iter()
-                    .map(|variant| {
-                        let suffix = variant.selector.map_or_else(
-                            || "Base".to_owned(),
-                            |selector| pascal(selector),
-                        );
-                        let success = component(
-                            &format!("{family}{suffix}Success"),
-                            variant.success_schema,
-                            &mut schemas,
-                        );
-                        let failure = component(
-                            &format!("{family}{suffix}Failure"),
-                            variant.failure_schema,
-                            &mut schemas,
-                        );
-                        json!({
-                            "selector": variant.selector,
-                            "parameters": variant.parameters.iter().map(parameter_document).collect::<Vec<_>>(),
-                            "success": success,
-                            "failure": failure,
-                        })
-                    })
-                    .collect(),
-            );
+            operation["x-provenance-query-variants"] =
+                Value::Array(query_variant_documents(variants, &family, &mut schemas));
         }
         paths
             .entry(definition.path.to_owned())
@@ -181,6 +156,37 @@ pub fn documents() -> (Value, Value) {
             "paths":paths,"components":{"schemas":schemas}}),
         json!({"tools":tools}),
     )
+}
+
+fn query_variant_documents(
+    variants: Vec<provenance_store::operations::catalog::QueryVariant>,
+    family: &str,
+    schemas: &mut Map<String, Value>,
+) -> Vec<Value> {
+    variants
+        .into_iter()
+        .map(|variant| {
+            let suffix = variant
+                .selector
+                .map_or_else(|| "Base".to_owned(), pascal);
+            let success = component(
+                &format!("{family}{suffix}Success"),
+                variant.success_schema,
+                schemas,
+            );
+            let failure = component(
+                &format!("{family}{suffix}Failure"),
+                variant.failure_schema,
+                schemas,
+            );
+            json!({
+                "selector": variant.selector,
+                "parameters": variant.parameters.iter().map(parameter_document).collect::<Vec<_>>(),
+                "success": success,
+                "failure": failure,
+            })
+        })
+        .collect()
 }
 
 fn parameter_document(parameter: &provenance_store::operations::catalog::Parameter) -> Value {
