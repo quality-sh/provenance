@@ -2,23 +2,23 @@ use provenance_store::operations::catalog::{self, Definition, HttpMethod};
 use std::{collections::BTreeMap, sync::OnceLock};
 
 pub(super) struct Resolved {
-    pub definition: &'static Definition,
+    pub address: &'static Address,
     pub path: String,
     pub flags: Vec<String>,
     pub query: Option<&'static str>,
 }
 
 #[derive(Clone)]
-enum Segment {
+pub(super) enum Segment {
     Literal(&'static str),
     Parameter(&'static str),
 }
 
-struct Address {
-    collection: &'static str,
-    words: Vec<Segment>,
-    definition: &'static Definition,
-    query: Option<&'static str>,
+pub(super) struct Address {
+    pub(super) collection: &'static str,
+    pub(super) words: Vec<Segment>,
+    pub(super) definition: &'static Definition,
+    pub(super) query: Option<&'static str>,
 }
 
 pub(super) fn resolve(collection: &str, words: &[String]) -> anyhow::Result<Resolved> {
@@ -27,9 +27,8 @@ pub(super) fn resolve(collection: &str, words: &[String]) -> anyhow::Result<Reso
         .position(|word| word.starts_with("--"))
         .unwrap_or(words.len());
     let supplied = &words[..address_len];
-    let candidates = addresses()
-        .iter()
-        .filter(|address| address.collection == collection)
+    let candidates = registrations(collection)
+        .into_iter()
         .filter(|address| address.words.len() == supplied.len())
         .collect::<Vec<_>>();
     let address = select_address(candidates, supplied).ok_or_else(|| {
@@ -40,11 +39,18 @@ pub(super) fn resolve(collection: &str, words: &[String]) -> anyhow::Result<Reso
     })?;
     let values = address_values(address, supplied).expect("selected address matches");
     Ok(Resolved {
-        definition: address.definition,
+        address,
         path: render_path(address.definition.path, &values)?,
         flags: words[address_len..].to_vec(),
         query: address.query,
     })
+}
+
+pub(super) fn registrations(collection: &str) -> Vec<&'static Address> {
+    addresses()
+        .iter()
+        .filter(|address| address.collection == collection)
+        .collect()
 }
 
 fn addresses() -> &'static [Address] {
