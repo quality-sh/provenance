@@ -31,6 +31,61 @@ pub struct Finding {
     pub detail: Option<serde_json::Value>,
 }
 
+/// Commit selection used by one strict statement check.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct StatementContext {
+    pub candidate_commit: String,
+    pub base_commit: Option<String>,
+}
+
+/// Repository policy for Rule binding findings.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BindingPolicy {
+    Warning,
+    Error,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct BindingContext {
+    pub policy: BindingPolicy,
+}
+
+/// Typed context emitted by category computations.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(untagged)]
+pub enum CategoryContext {
+    Statements(StatementContext),
+    Bindings(BindingContext),
+}
+
+/// Whether findings in one completed category refuse the command.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum Refusal {
+    #[default]
+    None,
+    Findings,
+}
+
+/// One atomic, category-specific computation before output status is derived.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CategoryRun {
+    Graph {
+        findings: Vec<Finding>,
+        refusal: Refusal,
+    },
+    Statements {
+        findings: Vec<Finding>,
+        context: Option<StatementContext>,
+        refusal: Refusal,
+    },
+    Bindings {
+        findings: Vec<Finding>,
+        context: BindingContext,
+        refusal: Refusal,
+    },
+}
+
 impl Finding {
     pub fn new(message: impl Into<String>) -> Self {
         Self {
@@ -65,7 +120,9 @@ pub struct CategoryReport {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unavailable_reason: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub context: Option<serde_json::Value>,
+    pub context: Option<CategoryContext>,
+    #[serde(skip)]
+    refusal: Refusal,
 }
 
 impl CategoryReport {
@@ -76,6 +133,7 @@ impl CategoryReport {
             findings,
             unavailable_reason: None,
             context: None,
+            refusal: Refusal::None,
         }
     }
 
@@ -86,6 +144,7 @@ impl CategoryReport {
             findings: Vec::new(),
             unavailable_reason: None,
             context: None,
+            refusal: Refusal::None,
         }
     }
 
@@ -96,21 +155,48 @@ impl CategoryReport {
             findings: Vec::new(),
             unavailable_reason: Some(reason),
             context: None,
+            refusal: Refusal::None,
         }
     }
 
-    pub fn with_context(
-        category: Category,
-        findings: Vec<Finding>,
-        context: serde_json::Value,
-    ) -> Self {
+    pub fn from_run(run: CategoryRun) -> Self {
+        let (category, findings, context, refusal) = match run {
+            CategoryRun::Graph { findings, refusal } => {
+                (Category::Graph, findings, None, refusal)
+            }
+            CategoryRun::Statements {
+                findings,
+                context,
+                refusal,
+            } => (
+                Category::Statements,
+                findings,
+                context.map(CategoryContext::Statements),
+                refusal,
+            ),
+            CategoryRun::Bindings {
+                findings,
+                context,
+                refusal,
+            } => (
+                Category::Bindings,
+                findings,
+                Some(CategoryContext::Bindings(context)),
+                refusal,
+            ),
+        };
         let mut report = if findings.is_empty() {
             Self::passed(category)
         } else {
             Self::findings(category, findings)
         };
-        report.context = Some(context);
+        report.context = context;
+        report.refusal = refusal;
         report
+    }
+
+    pub fn refuses(&self) -> bool {
+        self.status == Status::Unavailable || matches!(self.refusal, Refusal::Findings)
     }
 }
 
@@ -121,24 +207,16 @@ pub struct CheckOutcome {
 }
 
 /// One future returned by an injected check port.
-pub type PortFuture<'a> = Pin<Box<dyn Future<Output = Result<Vec<Finding>, String>> + Send + 'a>>;
+pub type PortFuture<'a> = Pin<Box<dyn Future<Output = Result<CategoryRun, String>> + Send + 'a>>;
 
 /// Category computations supplied by a repository-aware caller.
 pub trait CheckPort: Send + Sync {
     fn run<'a>(&'a self, category: Category, scope: Option<&'a str>) -> PortFuture<'a>;
-
-    fn context(&self, _category: Category) -> Option<serde_json::Value> {
-        None
-    }
 }
 
 impl CheckPort for Arc<dyn CheckPort> {
     fn run<'a>(&'a self, category: Category, scope: Option<&'a str>) -> PortFuture<'a> {
         self.as_ref().run(category, scope)
-    }
-
-    fn context(&self, category: Category) -> Option<serde_json::Value> {
-        self.as_ref().context(category)
     }
 }
 
@@ -181,16 +259,7 @@ impl<P: CheckPort> crate::Porcelain<P> {
         let mut categories = Vec::new();
         for &category in input.categories() {
             let report = match self.port.run(category, input.scope.as_deref()).await {
-                Ok(findings) => match self.port.context(category) {
-                    None => {
-                        if findings.is_empty() {
-                            CategoryReport::passed(category)
-                        } else {
-                            CategoryReport::findings(category, findings)
-                        }
-                    }
-                    Some(context) => CategoryReport::with_context(category, findings, context),
-                },
+                Ok(run) => CategoryReport::from_run(run),
                 Err(reason) => CategoryReport::unavailable(category, reason),
             };
             categories.push(report);
