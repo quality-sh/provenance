@@ -91,10 +91,9 @@ pub fn parse_get(words: &[&str]) -> Result<GetInput, BindingError> {
                 };
             }
             "--depth" => input.max_depth = Some(value.parse().map_err(|_| BindingError)?),
-            "--kind" => input.returned_kinds.push(
-                provenance_core::NodeType::parse(value)
-                    .map_err(|_| BindingError)?,
-            ),
+            "--kind" => input
+                .returned_kinds
+                .push(provenance_core::NodeType::parse(value).map_err(|_| BindingError)?),
             "--limit" => input.limit = Some(value.parse().map_err(|_| BindingError)?),
             _ => return Err(BindingError),
         }

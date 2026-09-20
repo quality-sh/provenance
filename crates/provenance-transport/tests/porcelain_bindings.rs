@@ -37,7 +37,10 @@ async fn host_get_port_returns_a_record_through_the_resource_path() {
         .unwrap();
 
     assert_eq!(outcome.record.id().as_str(), "req_shared");
-    assert_eq!(outcome.record.node_type(), provenance_core::NodeType::Requirement);
+    assert_eq!(
+        outcome.record.node_type(),
+        provenance_core::NodeType::Requirement
+    );
     assert!(outcome.record_metadata.as_ref().unwrap().stamp.is_some());
     let impact = porcelain
         .get(GetInput::new("req_shared", View::Impact))

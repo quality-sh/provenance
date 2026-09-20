@@ -161,9 +161,7 @@ impl CategoryReport {
 
     pub fn from_run(run: CategoryRun) -> Self {
         let (category, findings, context, refusal) = match run {
-            CategoryRun::Graph { findings, refusal } => {
-                (Category::Graph, findings, None, refusal)
-            }
+            CategoryRun::Graph { findings, refusal } => (Category::Graph, findings, None, refusal),
             CategoryRun::Statements {
                 findings,
                 context,

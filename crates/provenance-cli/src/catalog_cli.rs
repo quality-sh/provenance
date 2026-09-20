@@ -1,6 +1,6 @@
 //! Generated-dialect CLI dispatch over the registered resource catalog.
-use axum::http::{HeaderMap, HeaderName, HeaderValue, Method};
 use crate::invocation::GlobalContext;
+use axum::http::{HeaderMap, HeaderName, HeaderValue, Method};
 use provenance_store::operations::catalog::{self, Definition};
 use serde_json::{json, Map, Value};
 use std::{
@@ -63,10 +63,7 @@ pub fn is_collection(word: &str) -> bool {
 
 /// Dispatches one parsed graph command from the live operation catalog.
 pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
-    let Invocation {
-        context,
-        mut words,
-    } = invocation;
+    let Invocation { context, mut words } = invocation;
     let collection = words.remove(0);
     if words.as_slice() == ["--help"] {
         print_help(&collection);

@@ -44,30 +44,22 @@ pub(super) async fn load_rows(
     bytes: &[u8],
 ) -> anyhow::Result<u64> {
     match family {
-        ProjectionFamily::Sources => {
-            load_record::<Source>(tx, bytes, GraphNode::Source).await
-        }
-        ProjectionFamily::Domains => {
-            load_record::<Domain>(tx, bytes, GraphNode::Domain).await
-        }
+        ProjectionFamily::Sources => load_record::<Source>(tx, bytes, GraphNode::Source).await,
+        ProjectionFamily::Domains => load_record::<Domain>(tx, bytes, GraphNode::Domain).await,
         ProjectionFamily::Requirements => {
             load_record::<Requirement>(tx, bytes, GraphNode::Requirement).await
         }
         ProjectionFamily::Boundaries => {
             load_record::<Boundary>(tx, bytes, GraphNode::Boundary).await
         }
-        ProjectionFamily::Topics => {
-            load_record::<Topic>(tx, bytes, GraphNode::Topic).await
-        }
+        ProjectionFamily::Topics => load_record::<Topic>(tx, bytes, GraphNode::Topic).await,
         ProjectionFamily::Questions => {
             load_record::<Question>(tx, bytes, GraphNode::Question).await
         }
         ProjectionFamily::Resolutions => {
             load_record::<Resolution>(tx, bytes, GraphNode::Resolution).await
         }
-        ProjectionFamily::Rules => {
-            load_record::<Rule>(tx, bytes, GraphNode::Rule).await
-        }
+        ProjectionFamily::Rules => load_record::<Rule>(tx, bytes, GraphNode::Rule).await,
         ProjectionFamily::Threads => collaboration_records::load_threads(tx, bytes).await,
         ProjectionFamily::Messages => collaboration_records::load_messages(tx, bytes).await,
         ProjectionFamily::Contributions => {
@@ -86,12 +78,8 @@ pub(super) async fn load_rows(
         ProjectionFamily::ImplementationBindings => {
             load_kind::<ImplementationBinding>(tx, bytes).await
         }
-        ProjectionFamily::VerificationBindings => {
-            load_kind::<VerificationBinding>(tx, bytes).await
-        }
+        ProjectionFamily::VerificationBindings => load_kind::<VerificationBinding>(tx, bytes).await,
         ProjectionFamily::ReviewJournal => crate::review::cache::load_rows(tx, bytes).await,
-        ProjectionFamily::RequirementReviews => {
-            load_kind::<RequirementReview>(tx, bytes).await
-        }
+        ProjectionFamily::RequirementReviews => load_kind::<RequirementReview>(tx, bytes).await,
     }
 }

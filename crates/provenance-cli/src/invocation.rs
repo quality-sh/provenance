@@ -59,8 +59,7 @@ impl Invocation {
                     Some(_) => anyhow::bail!("Porcelain get supports --format json"),
                 };
                 let words = shared.words.iter().map(String::as_str).collect::<Vec<_>>();
-                let input = porcelain::parse_get(&words)
-                    .map_err(|error| anyhow::anyhow!(error))?;
+                let input = porcelain::parse_get(&words).map_err(|error| anyhow::anyhow!(error))?;
                 Ok(Self::Get(GetInvocation {
                     repo: shared.context.repo,
                     scope: shared.context.scope,
@@ -116,7 +115,11 @@ impl<'a> ArgumentParser<'a> {
         self.words.push(target.clone());
         self.index += 1;
         self.take_globals()?;
-        if self.arguments.get(self.index).is_some_and(|word| word == "get") {
+        if self
+            .arguments
+            .get(self.index)
+            .is_some_and(|word| word == "get")
+        {
             self.words.push("get".to_owned());
             self.index += 1;
             return Ok(Route::Get);
@@ -221,33 +224,26 @@ mod tests {
             route(&["--repo", "repo", "sources", "list"]),
             Route::Catalog
         );
-        assert_eq!(
-            route(&["sources", "get", "--repo", "repo"]),
-            Route::Get
-        );
-        assert_eq!(
-            route(&["check", "--repo", "repo"]),
-            Route::Builtin
-        );
+        assert_eq!(route(&["sources", "get", "--repo", "repo"]), Route::Get);
+        assert_eq!(route(&["check", "--repo", "repo"]), Route::Builtin);
         assert_eq!(route(&["check", "--strict"]), Route::Builtin);
-        assert_eq!(
-            route(&["unknown_id", "--format", "json"]),
-            Route::Get
-        );
+        assert_eq!(route(&["unknown_id", "--format", "json"]), Route::Get);
     }
 
     #[test]
     fn local_flag_values_are_not_reparsed_as_globals() {
         let input = arguments(&[
-            "sources", "create", "--name", "--repo", "--repo", "repository",
+            "sources",
+            "create",
+            "--name",
+            "--repo",
+            "--repo",
+            "repository",
         ]);
         let mut parser = ArgumentParser::new(&input);
         assert_eq!(parser.route().unwrap(), Route::Catalog);
         let shared = parser.finish().unwrap();
         assert_eq!(shared.context.repo, "repository");
-        assert_eq!(
-            shared.words,
-            ["sources", "create", "--name", "--repo"]
-        );
+        assert_eq!(shared.words, ["sources", "create", "--name", "--repo"]);
     }
 }

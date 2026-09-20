@@ -4,8 +4,8 @@ use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{ensure_supported_schema_version, Manifest};
 use provenance_macros::rule;
 use provenance_porcelain::check::{
-    BindingContext, BindingPolicy, Category, CategoryRun, CheckInput, CheckPort, Finding, PortFuture,
-    Refusal, Status,
+    BindingContext, BindingPolicy, Category, CategoryRun, CheckInput, CheckPort, Finding,
+    PortFuture, Refusal, Status,
 };
 use provenance_store::dictionary_reference::{resolve_project_dictionary, DictionaryResolution};
 use std::collections::BTreeSet;

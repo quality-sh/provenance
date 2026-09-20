@@ -26,7 +26,8 @@ pub use query::{
 };
 pub use response::{
     EvidenceResult, GetResult, ImpactResult, NeighborsResult, QueryResponse, RecordResolution,
-    ResolveRecordResult, ResolveSymbolResult, SearchResult, StaleEvidence, StaleResult, TraceResult,
+    ResolveRecordResult, ResolveSymbolResult, SearchResult, StaleEvidence, StaleResult,
+    TraceResult,
 };
 pub use stamp::{Stamp, StampPolicy, Stamped};
 pub use typed_spec::{

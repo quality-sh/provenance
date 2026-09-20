@@ -1,5 +1,5 @@
 use super::{root_of, seeded_store};
-use crate::cache::{open_cache, catch_up_state};
+use crate::cache::{catch_up_state, open_cache};
 use crate::operations::queries;
 use crate::operations::read_policy::ReadPolicy;
 use provenance_core::protocol::{RecordResolution, ResolveRecordQuery};
@@ -60,15 +60,13 @@ async fn identity_resolution_does_not_reveal_another_bound_scope() {
     let layout = crate::layout::ProvenanceLayout::new(root_of(&dir));
     catch_up_state(&layout).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
-    sqlx::query(
-        "INSERT INTO record_identities (scope_id, id, node_type) VALUES (?, ?, ?)",
-    )
-    .bind("other")
-    .bind("foreign_record")
-    .bind("requirement")
-    .execute(pool.pool())
-    .await
-    .unwrap();
+    sqlx::query("INSERT INTO record_identities (scope_id, id, node_type) VALUES (?, ?, ?)")
+        .bind("other")
+        .bind("foreign_record")
+        .bind("requirement")
+        .execute(pool.pool())
+        .await
+        .unwrap();
     pool.close().await.unwrap();
 
     let answer = queries::resolve_record(
@@ -93,15 +91,14 @@ async fn identity_index_rejects_one_id_in_another_scope_and_kind() {
     catch_up_state(&layout).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
 
-    let error = sqlx::query(
-        "INSERT INTO record_identities (scope_id, id, node_type) VALUES (?, ?, ?)",
-    )
-    .bind("other")
-    .bind("req_overtime")
-    .bind("rule")
-    .execute(pool.pool())
-    .await
-    .unwrap_err();
+    let error =
+        sqlx::query("INSERT INTO record_identities (scope_id, id, node_type) VALUES (?, ?, ?)")
+            .bind("other")
+            .bind("req_overtime")
+            .bind("rule")
+            .execute(pool.pool())
+            .await
+            .unwrap_err();
 
     assert!(error
         .as_database_error()
@@ -120,15 +117,13 @@ async fn hidden_duplicate_kind_does_not_change_the_visible_resolution() {
         .execute(pool.pool())
         .await
         .unwrap();
-    sqlx::query(
-        "INSERT INTO record_identities (scope_id, id, node_type) VALUES (?, ?, ?)",
-    )
-    .bind(scope.as_str())
-    .bind("req_overtime")
-    .bind("rule")
-    .execute(pool.pool())
-    .await
-    .unwrap();
+    sqlx::query("INSERT INTO record_identities (scope_id, id, node_type) VALUES (?, ?, ?)")
+        .bind(scope.as_str())
+        .bind("req_overtime")
+        .bind("rule")
+        .execute(pool.pool())
+        .await
+        .unwrap();
     pool.close().await.unwrap();
 
     let answer = queries::resolve_record(
@@ -157,15 +152,13 @@ async fn identity_resolution_reports_an_ambiguous_visible_index() {
         .execute(pool.pool())
         .await
         .unwrap();
-    sqlx::query(
-        "INSERT INTO record_identities (scope_id, id, node_type) VALUES (?, ?, ?)",
-    )
-    .bind(scope.as_str())
-    .bind("req_overtime")
-    .bind("rule")
-    .execute(pool.pool())
-    .await
-    .unwrap();
+    sqlx::query("INSERT INTO record_identities (scope_id, id, node_type) VALUES (?, ?, ?)")
+        .bind(scope.as_str())
+        .bind("req_overtime")
+        .bind("rule")
+        .execute(pool.pool())
+        .await
+        .unwrap();
     pool.close().await.unwrap();
 
     let answer = queries::resolve_record(

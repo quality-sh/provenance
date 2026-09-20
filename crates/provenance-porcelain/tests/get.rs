@@ -1,11 +1,11 @@
+use provenance_core::protocol::RecordResolution as CoreRecordResolution;
+use provenance_core::protocol::{GraphNode, ImpactResult, ResponseMeta, TracedNode};
 use provenance_macros::verifies;
 use provenance_porcelain::get::{
     GetInput, GetPort, Impact, PortFuture, ReadError, RecordResolution, Traversal,
     TraversalRequest, View, ViewResult,
 };
 use provenance_porcelain::Porcelain;
-use provenance_core::protocol::{GraphNode, ImpactResult, ResponseMeta, TracedNode};
-use provenance_core::protocol::RecordResolution as CoreRecordResolution;
 use serde_json::json;
 use std::sync::{Arc, Mutex};
 
@@ -133,7 +133,10 @@ async fn children_select_depth_and_returned_kinds() {
     let request = Arc::new(Mutex::new(None));
     let porcelain = Porcelain::new(FixturePort {
         record: node("req_root", "requirement"),
-        traversed: vec![traced("req_child", "requirement", 1), traced("rule_leaf", "rule", 2)],
+        traversed: vec![
+            traced("req_child", "requirement", 1),
+            traced("rule_leaf", "rule", 2),
+        ],
         request: request.clone(),
         impact: impact("req_root", 50),
         has_more: false,
@@ -150,11 +153,10 @@ async fn children_select_depth_and_returned_kinds() {
 
     let encoded = serde_json::to_value(&outcome).unwrap();
     assert!(encoded["record"]["value"].get("node_type").is_none());
-    assert_eq!(
-        encoded["related"][0]["value"]["node_type"],
-        "rule"
-    );
-    let ViewResult::Children(traversal) = outcome.result else { panic!("children view") };
+    assert_eq!(encoded["related"][0]["value"]["node_type"], "rule");
+    let ViewResult::Children(traversal) = outcome.result else {
+        panic!("children view")
+    };
     assert_eq!(traversal.records.len(), 1);
     assert_eq!(traversal.records[0].node.id().as_str(), "rule_leaf");
     let sent = request.lock().unwrap().clone().unwrap();
@@ -167,7 +169,10 @@ async fn returned_kind_filter_does_not_limit_intermediate_traversal() {
     let request = Arc::new(Mutex::new(None));
     let porcelain = Porcelain::new(FixturePort {
         record: node("req_root", "requirement"),
-        traversed: vec![traced("res_middle", "resolution", 1), traced("rule_leaf", "rule", 2)],
+        traversed: vec![
+            traced("res_middle", "resolution", 1),
+            traced("rule_leaf", "rule", 2),
+        ],
         request: request.clone(),
         impact: impact("req_root", 50),
         has_more: false,
@@ -182,7 +187,9 @@ async fn returned_kind_filter_does_not_limit_intermediate_traversal() {
 
     let outcome = porcelain.get(input).await.unwrap();
 
-    let ViewResult::Children(traversal) = outcome.result else { panic!("children view") };
+    let ViewResult::Children(traversal) = outcome.result else {
+        panic!("children view")
+    };
     assert_eq!(traversal.records[0].node.id().as_str(), "rule_leaf");
     assert_eq!(request.lock().unwrap().as_ref().unwrap().max_depth, 2);
 }
@@ -219,11 +226,18 @@ async fn grounding_and_impact_are_identified_named_views() {
     .await
     .unwrap();
 
-    let ViewResult::Grounding(traversal) = grounding.result else { panic!("grounding view") };
+    let ViewResult::Grounding(traversal) = grounding.result else {
+        panic!("grounding view")
+    };
     assert_eq!(traversal.records[0].node.id().as_str(), "req_alpha");
-    let ViewResult::Impact(impact) = impact.result else { panic!("impact view") };
+    let ViewResult::Impact(impact) = impact.result else {
+        panic!("impact view")
+    };
     assert_eq!(impact.detail.id, "req_alpha");
-    assert_eq!(impact.response_metadata.unwrap().freshness_error.as_deref(), Some("catch-up failed"));
+    assert_eq!(
+        impact.response_metadata.unwrap().freshness_error.as_deref(),
+        Some("catch-up failed")
+    );
 }
 
 #[tokio::test]
@@ -262,7 +276,9 @@ async fn incomplete_read_reports_its_bound_and_continuation() {
     input.limit = Some(1);
 
     let outcome = porcelain.get(input).await.unwrap();
-    let ViewResult::Impact(impact) = outcome.result else { panic!("impact view") };
+    let ViewResult::Impact(impact) = outcome.result else {
+        panic!("impact view")
+    };
     let bounds = impact.bounds;
 
     assert_eq!(bounds.limit, 1);
@@ -308,7 +324,10 @@ async fn get_resolves_a_record_from_its_id_alone() {
         .unwrap();
 
     assert_eq!(outcome.record.id().as_str(), "req_alpha");
-    assert_eq!(outcome.record.node_type(), provenance_core::NodeType::Requirement);
+    assert_eq!(
+        outcome.record.node_type(),
+        provenance_core::NodeType::Requirement
+    );
 }
 
 #[tokio::test]
@@ -321,7 +340,10 @@ async fn bare_get_returns_the_selected_record() {
 
     assert!(matches!(outcome.result, ViewResult::Record));
     let encoded = serde_json::to_value(outcome).unwrap();
-    assert_eq!(encoded["record"]["value"]["statement"], "Keep the interface clear.");
+    assert_eq!(
+        encoded["record"]["value"]["statement"],
+        "Keep the interface clear."
+    );
     assert_eq!(encoded["related"], json!([]));
     assert_eq!(encoded["bounds"], json!(null));
 }

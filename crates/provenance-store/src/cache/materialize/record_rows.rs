@@ -76,14 +76,12 @@ async fn load<K: Clone + ProjectionRow + serde::de::DeserializeOwned>(
         }
         query.execute(&mut **tx).await?;
         if let Some(node) = node {
-            sqlx::query(
-                "INSERT INTO record_identities (scope_id, id, node_type) VALUES (?, ?, ?)",
-            )
-            .bind(node.scope_id().as_str())
-            .bind(node.id().as_str())
-            .bind(node.node_type().as_str())
-            .execute(&mut **tx)
-            .await?;
+            sqlx::query("INSERT INTO record_identities (scope_id, id, node_type) VALUES (?, ?, ?)")
+                .bind(node.scope_id().as_str())
+                .bind(node.id().as_str())
+                .bind(node.node_type().as_str())
+                .execute(&mut **tx)
+                .await?;
         }
         loaded += 1;
     }
