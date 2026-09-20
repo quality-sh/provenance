@@ -87,11 +87,39 @@ async fn identity_resolution_does_not_reveal_another_bound_scope() {
 }
 
 #[tokio::test]
+async fn identity_index_rejects_one_id_in_another_scope_and_kind() {
+    let (dir, _store, _scope) = seeded_store();
+    let layout = crate::layout::ProvenanceLayout::new(root_of(&dir));
+    catch_up_state(&layout).await.unwrap();
+    let pool = open_cache(&layout).await.unwrap();
+
+    let error = sqlx::query(
+        "INSERT INTO record_identities (scope_id, id, node_type) VALUES (?, ?, ?)",
+    )
+    .bind("other")
+    .bind("req_overtime")
+    .bind("rule")
+    .execute(pool.pool())
+    .await
+    .unwrap_err();
+
+    assert!(error
+        .as_database_error()
+        .is_some_and(sqlx::error::DatabaseError::is_unique_violation));
+    pool.close().await.unwrap();
+}
+
+#[tokio::test]
 async fn hidden_duplicate_kind_does_not_change_the_visible_resolution() {
     let (dir, _store, scope) = seeded_store();
     let layout = crate::layout::ProvenanceLayout::new(root_of(&dir));
     catch_up_state(&layout).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
+    // Simulate a damaged projection so the resolver's visibility rule is tested.
+    sqlx::query("DROP INDEX idx_record_identities_id")
+        .execute(pool.pool())
+        .await
+        .unwrap();
     sqlx::query(
         "INSERT INTO record_identities (scope_id, id, node_type) VALUES (?, ?, ?)",
     )
@@ -124,6 +152,11 @@ async fn identity_resolution_reports_an_ambiguous_visible_index() {
     let layout = crate::layout::ProvenanceLayout::new(root_of(&dir));
     catch_up_state(&layout).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
+    // Simulate a damaged projection so the resolver's ambiguity rule is tested.
+    sqlx::query("DROP INDEX idx_record_identities_id")
+        .execute(pool.pool())
+        .await
+        .unwrap();
     sqlx::query(
         "INSERT INTO record_identities (scope_id, id, node_type) VALUES (?, ?, ?)",
     )

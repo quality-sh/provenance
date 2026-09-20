@@ -61,7 +61,9 @@ pub use ideation::{
     CreateAssertion, CreateDisposition, CreateProposal, ListAssertions, ListDispositions,
     ListProposals,
 };
-pub use invoke::{invoke, invoke_authorized_typed, invoke_typed, invoke_with};
+pub use invoke::{
+    invoke, invoke_authorized_native_typed, invoke_authorized_typed, invoke_typed, invoke_with,
+};
 #[cfg(feature = "schema")]
 pub use schema::{
     definitions, parse_parameter_value, parse_schema_value, parse_schema_value_in,
