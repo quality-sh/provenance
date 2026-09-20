@@ -14,6 +14,9 @@ pub struct Record {
     pub id: String,
     pub kind: String,
     pub value: Value,
+    /// The number of graph hops from the selected record, for traversal results.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub depth: Option<usize>,
     /// Metadata from the operation that resolved this record.
     #[serde(skip)]
     pub response_metadata: Option<Value>,
@@ -25,6 +28,7 @@ impl Record {
             id: id.into(),
             kind: kind.into(),
             value,
+            depth: None,
             response_metadata: None,
         }
     }
@@ -32,6 +36,12 @@ impl Record {
     #[must_use]
     pub fn with_response_metadata(mut self, metadata: Value) -> Self {
         self.response_metadata = Some(metadata);
+        self
+    }
+
+    #[must_use]
+    pub const fn at_depth(mut self, depth: usize) -> Self {
+        self.depth = Some(depth);
         self
     }
 }
@@ -160,7 +170,6 @@ impl<P: GetPort> crate::Porcelain<P> {
     #[rule("rule_porcelain_return_filter_keeps_traversal")]
     #[rule("rule_porcelain_get_has_grounding_impact")]
     #[rule("rule_porcelain_read_rejects_bad_options")]
-    #[rule("rule_porcelain_output_reports_bounds")]
     pub async fn get(&self, input: GetInput) -> Result<GetOutcome, ReadError> {
         validate(&input)?;
         let record = self

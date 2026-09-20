@@ -7,6 +7,34 @@ fn provenance() -> Command {
     Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
 }
 
+fn init_with_source(repo: &str) {
+    provenance()
+        .args([
+            "init",
+            "--path",
+            repo,
+            "--scope",
+            "default",
+            "--path-prefix",
+            ".",
+        ])
+        .assert()
+        .success();
+    provenance()
+        .args([
+            "sources",
+            "create",
+            "--repo",
+            repo,
+            "--id",
+            "source_live_inventory",
+            "--name",
+            "Live inventory",
+        ])
+        .assert()
+        .success();
+}
+
 struct EmptyCheckPort;
 
 impl provenance_porcelain::check::CheckPort for EmptyCheckPort {
@@ -20,37 +48,12 @@ impl provenance_porcelain::check::CheckPort for EmptyCheckPort {
 }
 
 #[tokio::test]
-#[verifies("rule_porcelain_action_names_match", conformance)]
 async fn cli_uses_the_names_from_the_live_mcp_inventory() {
-    use rmcp::ServiceExt as _;
+    use rmcp::{model::CallToolRequestParams, ServiceExt as _};
 
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path().to_string_lossy().into_owned();
-    provenance()
-        .args([
-            "init",
-            "--path",
-            &repo,
-            "--scope",
-            "default",
-            "--path-prefix",
-            ".",
-        ])
-        .assert()
-        .success();
-    provenance()
-        .args([
-            "sources",
-            "create",
-            "--repo",
-            &repo,
-            "--id",
-            "source_live_inventory",
-            "--name",
-            "Live inventory",
-        ])
-        .assert()
-        .success();
+    init_with_source(&repo);
     let access = provenance_transport::LocalAccess::new(
         directory.path(),
         "native",
@@ -78,7 +81,7 @@ async fn cli_uses_the_names_from_the_live_mcp_inventory() {
         .name
         .to_string();
 
-    provenance()
+    let cli_get = provenance()
         .args([
             "source_live_inventory",
             &get_name,
@@ -87,12 +90,43 @@ async fn cli_uses_the_names_from_the_live_mcp_inventory() {
             "--format",
             "json",
         ])
-        .assert()
-        .success();
-    provenance()
+        .output()
+        .unwrap();
+    assert!(cli_get.status.success());
+    let cli_get: serde_json::Value = serde_json::from_slice(&cli_get.stdout).unwrap();
+    let mcp_get = client
+        .call_tool(
+            CallToolRequestParams::new(get_name.clone()).with_arguments(
+                json!({"target":"source_live_inventory"})
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+            ),
+        )
+        .await
+        .unwrap()
+        .structured_content
+        .unwrap();
+    for field in ["record", "view", "related", "detail", "bounds"] {
+        assert_eq!(cli_get[field], mcp_get[field], "get field {field}");
+    }
+
+    let cli_check = provenance()
         .args([&check_name, "--repo", &repo, "--graph", "--format", "json"])
-        .assert()
-        .success();
+        .output()
+        .unwrap();
+    assert!(cli_check.status.success());
+    let cli_check: serde_json::Value = serde_json::from_slice(&cli_check.stdout).unwrap();
+    let mcp_check = client
+        .call_tool(
+            CallToolRequestParams::new(check_name)
+                .with_arguments(json!({"categories":["graph"]}).as_object().unwrap().clone()),
+        )
+        .await
+        .unwrap()
+        .structured_content
+        .unwrap();
+    assert_eq!(cli_check["categories"], mcp_check["categories"]);
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
 }

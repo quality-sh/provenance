@@ -18,8 +18,6 @@ fn bare_help_flag_runs_before_a_repository_exists() {
 }
 
 #[test]
-#[verifies("rule_porcelain_action_names_match", conformance)]
-#[verifies("rule_porcelain_cli_target_action_order", examples)]
 #[verifies("rule_porcelain_cli_readable_json", examples)]
 fn target_first_get_runs_through_the_cli_entrypoint() {
     let directory = tempfile::tempdir().unwrap();
@@ -74,7 +72,6 @@ fn target_first_get_runs_through_the_cli_entrypoint() {
 }
 
 #[test]
-#[verifies("rule_porcelain_cli_target_action_order", examples)]
 fn target_first_get_accepts_global_options_before_the_target() {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path().to_string_lossy().into_owned();
@@ -118,7 +115,6 @@ fn target_first_get_accepts_global_options_before_the_target() {
 }
 
 #[test]
-#[verifies("rule_porcelain_cli_target_action_order", examples)]
 fn explicit_get_disambiguates_a_target_that_matches_a_legacy_command() {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path().to_string_lossy().into_owned();
@@ -252,6 +248,116 @@ fn a_non_command_record_id_uses_get_when_the_action_is_omitted() {
 }
 
 #[test]
+#[verifies("rule_porcelain_get_is_default_action", examples)]
+fn an_omitted_get_action_accepts_view_options_and_global_option_positions() {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path().to_string_lossy().into_owned();
+    provenance()
+        .args([
+            "init",
+            "--path",
+            &repo,
+            "--scope",
+            "default",
+            "--path-prefix",
+            ".",
+        ])
+        .assert()
+        .success();
+    provenance()
+        .args([
+            "requirements",
+            "create",
+            "--repo",
+            &repo,
+            "--id",
+            "req_omitted_options",
+            "--statement",
+            "Omitted get actions retain their options.",
+        ])
+        .assert()
+        .success();
+    provenance()
+        .args([
+            "rules",
+            "create",
+            "--repo",
+            &repo,
+            "--id",
+            "rule_omitted_options",
+            "--requirement-id",
+            "req_omitted_options",
+            "--statement",
+            "The child is returned.",
+        ])
+        .assert()
+        .success();
+
+    let output = provenance()
+        .args([
+            "--repo",
+            &repo,
+            "req_omitted_options",
+            "--view",
+            "children",
+            "--depth",
+            "2",
+            "--kind",
+            "rule",
+            "--format",
+            "json",
+            "--limit",
+            "7",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(value["view"], "children");
+    assert_eq!(value["related"][0]["id"], "rule_omitted_options");
+    assert_eq!(value["related"][0]["depth"], 1);
+    assert_eq!(value["bounds"]["limit"], 7);
+    assert_eq!(value["bounds"]["max_depth"], 2);
+}
+
+#[test]
+fn cli_get_rejects_an_unknown_returned_kind() {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path().to_string_lossy().into_owned();
+    provenance()
+        .args([
+            "init",
+            "--path",
+            &repo,
+            "--scope",
+            "default",
+            "--path-prefix",
+            ".",
+        ])
+        .assert()
+        .success();
+
+    provenance()
+        .args([
+            "req_missing",
+            "--repo",
+            &repo,
+            "--view",
+            "children",
+            "--kind",
+            "invented",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("unsupported read options"));
+}
+
+#[test]
 fn a_bare_get_lookup_error_is_returned_without_command_fallback() {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path().to_string_lossy().into_owned();
@@ -277,7 +383,6 @@ fn a_bare_get_lookup_error_is_returned_without_command_fallback() {
 }
 
 #[test]
-#[verifies("rule_porcelain_cli_target_action_order", examples)]
 fn explicit_get_reads_a_record_that_matches_a_builtin_command() {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path().to_string_lossy().into_owned();

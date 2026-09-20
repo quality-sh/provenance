@@ -21,7 +21,7 @@ pub struct BindingError;
 
 impl Display for BindingError {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str("use <target> get")
+        formatter.write_str("unsupported read options")
     }
 }
 
@@ -70,7 +70,6 @@ pub fn render_check(outcome: &CheckOutcome) -> String {
 }
 
 /// Translate CLI-owned get words into one semantic request.
-#[rule("rule_porcelain_cli_target_action_order")]
 pub fn parse_get(words: &[&str]) -> Result<GetInput, BindingError> {
     let (target, mut index) = match words {
         [target, rest @ ..] if !target.is_empty() && rest.first().copied() != Some("get") => {
@@ -93,7 +92,12 @@ pub fn parse_get(words: &[&str]) -> Result<GetInput, BindingError> {
                 };
             }
             "--depth" => input.max_depth = Some(value.parse().map_err(|_| BindingError)?),
-            "--kind" => input.returned_kinds.push(value.to_owned()),
+            "--kind" => input.returned_kinds.push(
+                provenance_core::NodeType::parse(value)
+                    .map_err(|_| BindingError)?
+                    .as_str()
+                    .to_owned(),
+            ),
             "--limit" => input.limit = Some(value.parse().map_err(|_| BindingError)?),
             _ => return Err(BindingError),
         }
@@ -136,7 +140,8 @@ pub async fn try_dispatch(arguments: &[String]) -> anyhow::Result<bool> {
 /// Select the default get action without reading repository state.
 #[rule("rule_porcelain_get_is_default_action")]
 pub fn bare_target_selects_get(arguments: &[String], is_builtin: bool) -> bool {
-    !is_builtin && raw_words(arguments).len() == 1
+    let words = raw_words(arguments);
+    !is_builtin && !words.is_empty() && words.get(1).is_none_or(|word| word.starts_with("--"))
 }
 
 /// Report whether the arguments explicitly select the target-first get grammar.
@@ -225,7 +230,6 @@ fn split_get_arguments(arguments: &[String]) -> anyhow::Result<Option<GetInvocat
 }
 
 /// Renders the selected record as readable text or structured JSON.
-#[rule("rule_porcelain_cli_readable_json")]
 fn render_get(outcome: &GetOutcome, format: Option<OutputFormat>) -> serde_json::Result<String> {
     if format == Some(OutputFormat::Json) {
         serde_json::to_string_pretty(outcome)

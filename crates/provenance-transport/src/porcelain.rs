@@ -1,27 +1,13 @@
 //! MCP-owned bindings for shared Porcelain capabilities.
 
-use axum::http::{HeaderMap, Method};
-use provenance_macros::rule;
 use provenance_porcelain::check::{Category, CheckInput};
-use provenance_porcelain::get::{
-    Bounds, GetInput, GetPort, Impact, PortFuture, ReadError, Record, Traversal, TraversalRequest,
-    View,
-};
+use provenance_porcelain::get::{GetInput, ReadError, View};
 use rmcp::model::{CallToolResult, Content};
 use serde::Deserialize;
 use serde_json::{Map, Value};
-use std::collections::BTreeMap;
 
-const RECORD_KINDS: [(&str, &str, &str); 8] = [
-    ("source", "sources", "get-source"),
-    ("requirement", "requirements", "get-requirement"),
-    ("resolution", "resolutions", "get-resolution"),
-    ("rule", "rules", "get-rule"),
-    ("topic", "topics", "get-topic"),
-    ("question", "questions", "get-question"),
-    ("domain", "domains", "get-domain"),
-    ("boundary", "boundaries", "get-boundary"),
-];
+mod get_port;
+pub use get_port::HostGetPort;
 
 /// MCP input for the `check` Porcelain action.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq)]
@@ -38,197 +24,12 @@ impl CheckArguments {
     }
 }
 
-/// Existing resource routes adapted to the injected Porcelain read port.
-#[derive(Clone)]
-pub struct HostGetPort {
-    host: crate::StatementHost,
-}
-
-impl HostGetPort {
-    pub const fn new(host: crate::StatementHost) -> Self {
-        Self { host }
-    }
-
-    async fn query(&self, path: &str, query: BTreeMap<String, String>) -> Result<Value, ReadError> {
-        self.host
-            .invoke_resource(
-                Method::GET,
-                path,
-                Value::Object(Map::default()),
-                query,
-                HeaderMap::new(),
-            )
-            .await
-            .map_err(|error| operation_error(&error))
-    }
-}
-
-impl GetPort for HostGetPort {
-    fn resolve<'a>(&'a self, id: &'a str) -> PortFuture<'a, Option<Record>> {
-        Box::pin(async move {
-            let mut found = None;
-            for (kind, collection, operation) in RECORD_KINDS {
-                if !self.host.advertises(operation) {
-                    continue;
-                }
-                let path = format!("/{collection}/{id}");
-                match self.query(&path, BTreeMap::new()).await {
-                    Ok(value) => {
-                        let data = value.get("data").cloned().ok_or_else(malformed)?;
-                        if found.is_some() {
-                            return Err(ReadError::AmbiguousIdentity);
-                        }
-                        let metadata = value.get("meta").cloned().ok_or_else(malformed)?;
-                        found = Some(Record::new(id, kind, data).with_response_metadata(metadata));
-                    }
-                    Err(ReadError::NotFound) => {}
-                    Err(error) => return Err(error),
-                }
-            }
-            Ok(found)
-        })
-    }
-
-    fn traverse(&self, request: TraversalRequest) -> PortFuture<'_, Traversal> {
-        Box::pin(async move {
-            let collection = collection(&request.kind)?;
-            let mut query = BTreeMap::from([
-                ("query".to_owned(), "trace".to_owned()),
-                ("limit".to_owned(), request.limit.to_string()),
-                ("max_depth".to_owned(), request.max_depth.to_string()),
-            ]);
-            query.insert(
-                "direction".to_owned(),
-                if request.view == View::Children {
-                    "in"
-                } else {
-                    "out"
-                }
-                .to_owned(),
-            );
-            let value = self
-                .query(&format!("/{collection}/{}", request.target), query)
-                .await?;
-            let records = value
-                .pointer("/data/nodes")
-                .and_then(Value::as_array)
-                .ok_or_else(malformed)?;
-            let mut permitted = Vec::new();
-            for entry in records {
-                let record = record_from_node(&entry["node"])?;
-                if operation_for_kind(&record.kind)
-                    .is_some_and(|operation| self.host.advertises(operation))
-                {
-                    permitted.push(record);
-                }
-            }
-            Ok(Traversal {
-                records: permitted,
-                bounds: bounds(&value, Some(request.max_depth)),
-                response_metadata: value.get("meta").cloned(),
-            })
-        })
-    }
-
-    fn impact<'a>(&'a self, record: &'a Record, limit: usize) -> PortFuture<'a, Impact> {
-        Box::pin(async move {
-            if !RECORD_KINDS
-                .iter()
-                .all(|(_, _, operation)| self.host.advertises(operation))
-            {
-                return Err(ReadError::InvalidOptions);
-            }
-            let collection = collection(&record.kind)?;
-            let query = BTreeMap::from([
-                ("query".to_owned(), "impact".to_owned()),
-                ("limit".to_owned(), limit.to_string()),
-            ]);
-            let value = self
-                .query(&format!("/{collection}/{}", record.id), query)
-                .await?;
-            let detail = value.get("data").cloned().ok_or_else(malformed)?;
-            let mut result_bounds = bounds(&value, None);
-            result_bounds.truncated |= detail
-                .get("scan_cut")
-                .and_then(Value::as_bool)
-                .unwrap_or(false);
-            Ok(Impact {
-                detail,
-                bounds: result_bounds,
-                response_metadata: value.get("meta").cloned(),
-            })
-        })
-    }
-}
-
-fn collection(kind: &str) -> Result<&'static str, ReadError> {
-    RECORD_KINDS
-        .iter()
-        .find_map(|(candidate, collection, _)| (*candidate == kind).then_some(*collection))
-        .ok_or(ReadError::InvalidOptions)
-}
-
-fn operation_for_kind(kind: &str) -> Option<&'static str> {
-    RECORD_KINDS
-        .iter()
-        .find_map(|(candidate, _, operation)| (*candidate == kind).then_some(*operation))
-}
-
-fn record_from_node(value: &Value) -> Result<Record, ReadError> {
-    let id = value
-        .get("id")
-        .and_then(Value::as_str)
-        .ok_or_else(malformed)?;
-    let kind = value
-        .get("node_type")
-        .and_then(Value::as_str)
-        .ok_or_else(malformed)?;
-    Ok(Record::new(id, kind, value.clone()))
-}
-
-fn bounds(value: &Value, max_depth: Option<usize>) -> Bounds {
-    let limit = usize::try_from(
-        value
-            .pointer("/meta/limit")
-            .and_then(Value::as_u64)
-            .unwrap_or(0),
-    )
-    .unwrap_or(usize::MAX);
-    let has_more = value
-        .pointer("/meta/has_more")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
-    Bounds {
-        limit,
-        max_depth,
-        has_more,
-        continuation: value
-            .pointer("/meta/next_cursor")
-            .and_then(Value::as_str)
-            .map(str::to_owned),
-        truncated: has_more,
-    }
-}
-
-fn malformed() -> ReadError {
-    ReadError::Operation("operation returned an invalid get result".to_owned())
-}
-
-fn operation_error(error: &provenance_core::protocol::failure::ErasedFailure) -> ReadError {
-    if error.error.get("kind").and_then(Value::as_str) == Some("resource_not_found") {
-        ReadError::NotFound
-    } else {
-        ReadError::Operation(serde_json::to_string(error).unwrap_or_default())
-    }
-}
-
 pub(crate) fn get_is_available(host: &crate::StatementHost) -> bool {
-    RECORD_KINDS
-        .iter()
-        .any(|(_, _, operation)| host.advertises(operation))
+    get_port::is_available(host)
 }
 
 pub(crate) fn get_tool() -> rmcp::model::Tool {
+    let record_kinds = provenance_core::NodeType::ALL.map(provenance_core::NodeType::as_str);
     let schema = serde_json::json!({
         "type": "object",
         "additionalProperties": false,
@@ -237,7 +38,7 @@ pub(crate) fn get_tool() -> rmcp::model::Tool {
             "target": {"type": "string", "minLength": 1},
             "view": {"type": "string", "enum": ["record", "children", "grounding", "impact"], "default": "record"},
             "max_depth": {"type": "integer", "minimum": 1},
-            "returned_kinds": {"type": "array", "items": {"type": "string", "minLength": 1}},
+            "returned_kinds": {"type": "array", "items": {"type": "string", "enum": record_kinds}},
             "limit": {"type": "integer", "minimum": 1}
         }
     });
@@ -289,7 +90,8 @@ fn get_output_schema() -> Map<String, Value> {
         "$defs": {
             "record": {"type": "object", "additionalProperties": false,
                 "required": ["id", "kind", "value"], "properties": {
-                    "id": {"type": "string"}, "kind": {"type": "string"}, "value": {}
+                    "id": {"type": "string"}, "kind": {"type": "string"}, "value": {},
+                    "depth": {"type": "integer", "minimum": 1}
                 }},
             "bounds": {"type": "object", "additionalProperties": false,
                 "required": ["limit", "max_depth", "has_more", "continuation", "truncated"],
@@ -370,7 +172,6 @@ pub(crate) async fn call_check(
 }
 
 /// Returns readable and structured MCP content for one get request.
-#[rule("rule_porcelain_mcp_readable_structured")]
 pub(crate) async fn call_get(
     host: &crate::StatementHost,
     arguments: serde_json::Map<String, Value>,
@@ -473,7 +274,7 @@ pub struct GetArguments {
     pub max_depth: Option<usize>,
     /// The record kinds returned after traversal.
     #[serde(default)]
-    pub returned_kinds: Vec<String>,
+    pub returned_kinds: Vec<provenance_core::NodeType>,
     /// The maximum number of view results.
     #[serde(default)]
     pub limit: Option<usize>,
@@ -481,13 +282,16 @@ pub struct GetArguments {
 
 impl GetArguments {
     /// Translate the MCP input into a shared semantic get request.
-    #[rule("rule_porcelain_mcp_target_argument")]
     pub fn into_get_input(self) -> GetInput {
         GetInput {
             target: self.target,
             view: self.view,
             max_depth: self.max_depth,
-            returned_kinds: self.returned_kinds,
+            returned_kinds: self
+                .returned_kinds
+                .into_iter()
+                .map(|kind| kind.as_str().to_owned())
+                .collect(),
             limit: self.limit,
         }
     }

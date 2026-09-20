@@ -58,8 +58,6 @@ async fn host_get_port_returns_a_record_through_the_resource_path() {
 
 #[cfg(feature = "test-fixture")]
 #[tokio::test]
-#[verifies("rule_porcelain_action_names_match", conformance)]
-#[verifies("rule_porcelain_mcp_target_argument", examples)]
 #[verifies("rule_porcelain_mcp_readable_structured", examples)]
 async fn mcp_get_runs_through_the_composed_service() {
     use rmcp::{model::CallToolRequestParams, ServiceExt as _};
@@ -143,8 +141,50 @@ async fn mcp_get_readable_content_includes_related_records_and_bounds() {
     assert!(readable.contains("rule_shared"), "{readable}");
     assert!(readable.contains("bounds:"), "{readable}");
     assert!(readable.contains("limit=7"), "{readable}");
+    let structured = result.structured_content.as_ref().unwrap();
+    assert_eq!(structured["related"][0]["depth"], 1);
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
+}
+
+#[cfg(feature = "test-fixture")]
+#[tokio::test]
+async fn mcp_get_rejects_an_unknown_returned_kind() {
+    use rmcp::{model::CallToolRequestParams, ServiceExt as _};
+
+    let repository = support::records::Repository::new("The shared graph is readable.");
+    let host = support::resource_http::host(&repository, false);
+    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
+    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let client = ().serve(client_io).await.unwrap();
+
+    let result = client
+        .call_tool(
+            CallToolRequestParams::new("get").with_arguments(
+                json!({"target":"req_shared","view":"children","returned_kinds":["invented"]})
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+            ),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(result.is_error, Some(true));
+    assert_eq!(
+        result.structured_content.unwrap()["error"]["kind"],
+        "invalid_options"
+    );
+    client.cancel().await.unwrap();
+    server.await.unwrap().cancel().await.unwrap();
+}
+
+#[cfg(feature = "test-fixture")]
+#[test]
+fn record_fixture_adds_a_scope_without_reusing_repository_ids() {
+    let repository = support::records::Repository::new("The default scope is readable.");
+
+    repository.add_scope("other", "The other scope is readable.");
 }
 
 #[test]
@@ -278,7 +318,6 @@ impl provenance_porcelain::check::CheckPort for CheckFixturePort {
 }
 
 #[tokio::test]
-#[verifies("rule_porcelain_action_names_match", conformance)]
 #[verifies("rule_porcelain_check_categories", examples)]
 #[verifies("rule_porcelain_mcp_readable_structured", examples)]
 async fn mcp_check_uses_its_separately_injected_port() {
@@ -343,7 +382,6 @@ async fn mcp_check_uses_its_separately_injected_port() {
 
 #[cfg(feature = "test-fixture")]
 #[tokio::test]
-#[verifies("rule_porcelain_regular_graph_work_has_commands", examples)]
 async fn mcp_regular_graph_work_executes_a_record_command() {
     use rmcp::{model::CallToolRequestParams, ServiceExt as _};
 
