@@ -76,7 +76,12 @@ async fn cli_uses_the_names_from_the_live_mcp_inventory() {
         .to_string();
     let check_name = tools
         .iter()
-        .find(|tool| tool.input_schema["properties"].get("categories").is_some())
+        .find(|tool| {
+            tool.input_schema
+                .get("properties")
+                .and_then(|properties| properties.get("categories"))
+                .is_some()
+        })
         .unwrap()
         .name
         .to_string();
