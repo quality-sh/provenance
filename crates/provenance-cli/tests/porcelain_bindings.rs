@@ -70,7 +70,7 @@ async fn cli_uses_the_names_from_the_live_mcp_inventory() {
     let tools = client.list_all_tools().await.unwrap();
     let get_name = tools
         .iter()
-        .find(|tool| tool.input_schema["required"] == json!(["target"]))
+        .find(|tool| tool.input_schema.get("required") == Some(&json!(["target"])))
         .unwrap()
         .name
         .to_string();
