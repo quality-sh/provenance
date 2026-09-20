@@ -13,8 +13,7 @@ use crate::state_store::{
 };
 use provenance_core::{
     ArtifactLink, ArtifactLinkTargetType, QuestionStatus, Requirement, RequirementStatus,
-    ResolutionMethod, ScopeId, SourceReference, SourceType, TopicStatus,
-    SUPPORTED_SCHEMA_VERSION,
+    ResolutionMethod, ScopeId, SourceReference, SourceType, TopicStatus, SUPPORTED_SCHEMA_VERSION,
 };
 
 pub const LINKED_REQUIREMENT_ID: &str = "req_twin_record";

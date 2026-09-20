@@ -3,9 +3,7 @@
 //! A struct field with no column fails here until its migration lands.
 
 use super::catch_up_behavior::assert_catch_up_equals_rebuild;
-use super::fixtures::pinned_store::{
-    pinned_store_layout, LINKED_REQUIREMENT_ID, LINKED_RULE_ID,
-};
+use super::fixtures::pinned_store::{pinned_store_layout, LINKED_REQUIREMENT_ID, LINKED_RULE_ID};
 use super::fixtures::seeded_layout;
 use crate::cache::{materialize_state, open_cache};
 use provenance_core::model::ProjectionRow;
