@@ -319,7 +319,10 @@ mod tests {
             "--repo",
             "repository",
         ]);
-        assert_eq!(CommandFamily::select(&input).unwrap(), CommandFamily::Catalog);
+        assert_eq!(
+            CommandFamily::select(&input).unwrap(),
+            CommandFamily::Catalog
+        );
         let shared = ExternalArguments::parse(&input).unwrap();
         assert_eq!(shared.context.repo, "repository");
         assert_eq!(shared.words, ["sources", "create", "--name", "--repo"]);
