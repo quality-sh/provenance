@@ -11,6 +11,7 @@ query!(
     ImpactQuery,
     ImpactResult,
     impact,
+    impact_answer,
     source_needs
 );
 query!(
@@ -19,6 +20,7 @@ query!(
     ResolveSymbolQuery,
     ResolveSymbolResult,
     resolve_symbol,
+    resolve_symbol_answer,
     source_needs
 );
 query!(
@@ -27,9 +29,18 @@ query!(
     EvidenceQuery,
     EvidenceResult,
     evidence,
+    evidence_answer,
     evidence_needs
 );
-query!(Stale, "stale", StaleQuery, StaleResult, stale, git_needs);
+query!(
+    Stale,
+    "stale",
+    StaleQuery,
+    StaleResult,
+    stale,
+    stale_answer,
+    git_needs
+);
 
 const fn source_needs<R>(_: &R) -> ExecutionNeeds {
     &[

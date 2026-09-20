@@ -165,6 +165,7 @@ impl StateStore {
     pub(crate) fn read_verification_runs<R>(
         &self,
         scope_id: &ScopeId,
+        maximum: usize,
         read: impl FnOnce(
             &str,
             &mut dyn FnMut() -> anyhow::Result<Option<(i64, VerificationRun)>>,
@@ -195,7 +196,6 @@ impl StateStore {
             let mut reader = BufReader::new(std::fs::File::open(&path)?);
             let mut line_number = 0_i64;
             let mut next = || {
-                let maximum = crate::cache::read::page::RESOURCE_RECORD_BYTES;
                 let mut bytes = Vec::new();
                 let count = reader
                     .by_ref()

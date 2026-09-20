@@ -95,7 +95,7 @@ impl ServerHandler for StatementHost {
         };
         Ok(
             match routing::invoke(self, &matched, data, query, &headers).await {
-                Ok((value, _)) => CallToolResult::structured(value),
+                Ok((value, _)) => CallToolResult::structured(value.into_value()),
                 Err(failure) => error(failure),
             },
         )

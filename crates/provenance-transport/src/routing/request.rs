@@ -11,6 +11,7 @@ pub struct BoundRequest {
     pub data: Value,
     pub handler: HandlerBinding,
     pub response: ResponseBinding,
+    pub query_response: bool,
 }
 
 pub fn query(raw: Option<&str>) -> Result<BTreeMap<String, String>, ErasedFailure> {
@@ -103,6 +104,7 @@ pub fn bind(
             || definition.registration.response.clone(),
             |route| route.response.clone(),
         ),
+        query_response: selected.is_some(),
     })
 }
 
