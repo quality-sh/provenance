@@ -23,7 +23,7 @@ pub struct GetInvocation {
     input: provenance_porcelain::get::GetInput,
 }
 
-struct ArgumentParser<'a> {
+struct ExternalArguments<'a> {
     arguments: &'a [String],
     index: usize,
     context: GlobalContext,
@@ -31,33 +31,34 @@ struct ArgumentParser<'a> {
     words: Vec<String>,
 }
 
-#[derive(Debug)]
-enum Route {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CommandFamily {
     Builtin,
     Catalog,
-    Get(provenance_porcelain::get::GetInput),
+    Get,
 }
 
 impl Invocation {
     pub fn parse(arguments: Vec<String>) -> anyhow::Result<Self> {
-        let mut parser = ArgumentParser::new(&arguments);
-        match parser.route()? {
-            Route::Builtin => Ok(Self::Builtin(Cli::parse_from(arguments))),
-            Route::Catalog => {
-                let shared = parser.finish()?;
+        match CommandFamily::select(&arguments)? {
+            CommandFamily::Builtin => Ok(Self::Builtin(Cli::parse_from(arguments))),
+            CommandFamily::Catalog => {
+                let shared = ExternalArguments::parse(&arguments)?;
                 Ok(Self::Catalog(catalog_cli::Invocation::new(
                     shared.context,
                     shared.format.as_deref(),
                     shared.words,
                 )?))
             }
-            Route::Get(input) => {
-                let shared = parser.finish()?;
+            CommandFamily::Get => {
+                let shared = ExternalArguments::parse(&arguments)?;
                 let format = match shared.format.as_deref() {
                     None => None,
                     Some("json") => Some(OutputFormat::Json),
                     Some(_) => anyhow::bail!("Porcelain get supports --format json"),
                 };
+                let words = shared.words.iter().map(String::as_str).collect::<Vec<_>>();
+                let input = porcelain::parse_get(&words).map_err(|error| anyhow::anyhow!(error))?;
                 Ok(Self::Get(GetInvocation {
                     repo: shared.context.repo,
                     scope: shared.context.scope,
@@ -85,7 +86,77 @@ impl Invocation {
     }
 }
 
-impl<'a> ArgumentParser<'a> {
+impl CommandFamily {
+    /// Selects one command grammar before any family parses its arguments.
+    #[rule("rule_porcelain_get_is_default_action")]
+    fn select(arguments: &[String]) -> anyhow::Result<Self> {
+        let target_index = after_shared_options(arguments, 1)?;
+        let Some(target) = arguments.get(target_index) else {
+            return Ok(Self::Builtin);
+        };
+        if target.starts_with('-') {
+            return Ok(Self::Builtin);
+        }
+        let action_index = after_shared_options(arguments, target_index + 1)?;
+        let explicit_get = arguments
+            .get(action_index)
+            .is_some_and(|word| word == "get");
+        let catalog = catalog_cli::is_collection(target);
+        if catalog {
+            return if explicit_get && collection_marker_selects_get(arguments, action_index)? {
+                Ok(Self::Get)
+            } else {
+                Ok(Self::Catalog)
+            };
+        }
+        if explicit_get {
+            return Ok(Self::Get);
+        }
+        let builtin = Cli::command()
+            .get_subcommands()
+            .any(|candidate| candidate.get_name() == target);
+        Ok(if builtin { Self::Builtin } else { Self::Get })
+    }
+}
+
+/// A collection ID can itself be `get`. A following bare word is therefore
+/// the catalog action slot; option syntax keeps `get` as the explicit view marker.
+fn collection_marker_selects_get(
+    arguments: &[String],
+    marker_index: usize,
+) -> anyhow::Result<bool> {
+    let suffix_index = after_shared_options(arguments, marker_index + 1)?;
+    Ok(arguments
+        .get(suffix_index)
+        .is_none_or(|word| word.starts_with('-')))
+}
+
+/// Skip shared option tokens for syntax selection only. The selected command
+/// family remains the sole owner of their values and typed context.
+fn after_shared_options(arguments: &[String], mut index: usize) -> anyhow::Result<usize> {
+    while let Some(argument) = arguments.get(index) {
+        match argument.as_str() {
+            "--quiet" => index += 1,
+            "--repo" | "--scope" | "--format" => {
+                anyhow::ensure!(
+                    arguments.get(index + 1).is_some(),
+                    "{argument} requires a value"
+                );
+                index += 2;
+            }
+            _ => break,
+        }
+    }
+    Ok(index)
+}
+
+impl<'a> ExternalArguments<'a> {
+    fn parse(arguments: &'a [String]) -> anyhow::Result<SharedArguments> {
+        let mut parser = Self::new(arguments);
+        parser.complete()?;
+        Ok(parser.finish())
+    }
+
     fn new(arguments: &'a [String]) -> Self {
         Self {
             arguments,
@@ -98,49 +169,6 @@ impl<'a> ArgumentParser<'a> {
             format: None,
             words: Vec::new(),
         }
-    }
-
-    /// Selects one command grammar before repository state is read.
-    #[rule("rule_porcelain_get_is_default_action")]
-    fn route(&mut self) -> anyhow::Result<Route> {
-        self.take_globals()?;
-        let Some(target) = self.arguments.get(self.index).cloned() else {
-            return Ok(Route::Builtin);
-        };
-        if target.starts_with('-') {
-            return Ok(Route::Builtin);
-        }
-        self.words.push(target.clone());
-        self.index += 1;
-        self.take_globals()?;
-        let catalog = catalog_cli::is_collection(&target);
-        let builtin = Cli::command()
-            .get_subcommands()
-            .any(|candidate| candidate.get_name() == target);
-        let explicit_get = self
-            .arguments
-            .get(self.index)
-            .is_some_and(|word| word == "get");
-        if explicit_get {
-            self.complete()?;
-            let words = self.words.iter().map(String::as_str).collect::<Vec<_>>();
-            match porcelain::parse_get(&words) {
-                Ok(input) => return Ok(Route::Get(input)),
-                Err(_) if catalog => return Ok(Route::Catalog),
-                Err(_) if builtin => return Ok(Route::Builtin),
-                Err(error) => return Err(anyhow::anyhow!(error)),
-            }
-        }
-        if catalog {
-            return Ok(Route::Catalog);
-        }
-        if builtin {
-            return Ok(Route::Builtin);
-        }
-        self.complete()?;
-        let words = self.words.iter().map(String::as_str).collect::<Vec<_>>();
-        let input = porcelain::parse_get(&words).map_err(|error| anyhow::anyhow!(error))?;
-        Ok(Route::Get(input))
     }
 
     fn complete(&mut self) -> anyhow::Result<()> {
@@ -171,18 +199,12 @@ impl<'a> ArgumentParser<'a> {
         Ok(())
     }
 
-    fn finish(mut self) -> anyhow::Result<SharedArguments> {
-        self.complete()?;
-        Ok(SharedArguments {
+    fn finish(self) -> SharedArguments {
+        SharedArguments {
             context: self.context,
             format: self.format,
             words: self.words,
-        })
-    }
-
-    fn take_globals(&mut self) -> anyhow::Result<()> {
-        while self.take_global()? {}
-        Ok(())
+        }
     }
 
     fn take_global(&mut self) -> anyhow::Result<bool> {
@@ -231,34 +253,59 @@ mod tests {
 
     #[test]
     fn route_is_one_deterministic_grammar_decision() {
-        let route = |words: &[&str]| {
-            let input = arguments(words);
-            ArgumentParser::new(&input).route().unwrap()
-        };
+        let route = |words: &[&str]| CommandFamily::select(&arguments(words)).unwrap();
+        assert_eq!(route(&["--help"]), CommandFamily::Builtin);
+        assert_eq!(
+            route(&["--quiet", "check", "--repo", "repo"]),
+            CommandFamily::Builtin
+        );
         assert!(matches!(
             route(&["--repo", "repo", "sources", "list"]),
-            Route::Catalog
+            CommandFamily::Catalog
         ));
         assert!(matches!(
             route(&["sources", "get", "--repo", "repo"]),
-            Route::Get(_)
+            CommandFamily::Get
         ));
         assert!(matches!(
             route(&["sources", "get", "update", "--repo", "repo"]),
-            Route::Catalog
+            CommandFamily::Catalog
         ));
+        assert_eq!(
+            route(&["sources", "get", "get", "--repo", "repo"]),
+            CommandFamily::Catalog
+        );
+        assert_eq!(
+            route(&["sources", "update", "get", "--repo", "repo"]),
+            CommandFamily::Catalog
+        );
+        assert_eq!(
+            route(&["sources", "get", "--unknown-option", "value"]),
+            CommandFamily::Get
+        );
+        assert_eq!(
+            route(&["sources", "--help", "--repo", "repo"]),
+            CommandFamily::Catalog
+        );
         assert!(matches!(
             route(&["check", "--repo", "repo"]),
-            Route::Builtin
+            CommandFamily::Builtin
         ));
         assert!(matches!(
             route(&["check", "get", "--repo", "repo"]),
-            Route::Get(_)
+            CommandFamily::Get
         ));
-        assert!(matches!(route(&["check", "--strict"]), Route::Builtin));
+        assert_eq!(
+            route(&["check", "--repo", "repo", "get", "--format", "json"]),
+            CommandFamily::Get
+        );
         assert!(matches!(
-            route(&["unknown_id", "--format", "json"]),
-            Route::Get(_)
+            route(&["check", "--strict"]),
+            CommandFamily::Builtin
+        ));
+        assert!(matches!(
+            route(&["--repo", "repo", "unknown_id", "--format", "json"]),
+            CommandFamily::Get
         ));
     }
 
@@ -272,9 +319,8 @@ mod tests {
             "--repo",
             "repository",
         ]);
-        let mut parser = ArgumentParser::new(&input);
-        assert!(matches!(parser.route().unwrap(), Route::Catalog));
-        let shared = parser.finish().unwrap();
+        assert_eq!(CommandFamily::select(&input).unwrap(), CommandFamily::Catalog);
+        let shared = ExternalArguments::parse(&input).unwrap();
         assert_eq!(shared.context.repo, "repository");
         assert_eq!(shared.words, ["sources", "create", "--name", "--repo"]);
     }

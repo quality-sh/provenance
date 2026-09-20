@@ -189,7 +189,7 @@ fn a_builtin_command_takes_precedence_over_a_matching_record_id() {
         .success();
 
     let output = provenance()
-        .args(["check", "--repo", &repo, "--format", "json"])
+        .args(["--quiet", "check", "--repo", &repo, "--format", "json"])
         .output()
         .unwrap();
 
@@ -413,7 +413,7 @@ fn explicit_get_reads_a_record_that_matches_a_builtin_command() {
         .success();
 
     let output = provenance()
-        .args(["check", "get", "--repo", &repo, "--format", "json"])
+        .args(["check", "--repo", &repo, "get", "--format", "json"])
         .output()
         .unwrap();
 
