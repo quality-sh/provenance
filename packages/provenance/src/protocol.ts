@@ -44,7 +44,6 @@ export type GraphNode = Schemas["ListRulesSuccessGraphNode"];
 export type Stamp = Schemas["GetRuleSuccessResponseMetaStamp"];
 export type StampPolicy = Stamp["policy"];
 export type LiveWord = Stamp["live"][number];
-type ResponseMeta = { stamp?: Stamp | null; freshness_error?: string | null; freshness_cause?: "catch_up_failed" | null; limit?: number | null; has_more?: boolean | null; next_cursor?: string | null };
 
 export interface GetRequest<Kind extends NodeType = NodeType> { node_type: Kind; id: string }
 export interface SearchRequest { collection: GraphCollection; text: string; limit?: number; cursor?: string }
@@ -53,38 +52,38 @@ export interface TraceRequest { node_type: NodeType; id: string; direction?: Dir
 export interface ImpactRequest { node_type: NodeType; id: string }
 export interface ResolveSymbolRequest { file: string; symbol?: string; line?: number }
 export interface EvidenceRequest { rule: string; base?: string; head?: string }
-export interface StaleRequest { base?: string; head?: string; limit?: number; cursor?: string }
+export interface StaleRequest { base: string; head?: string; limit?: number; cursor?: string }
 export type GraphCollection = "sources" | "requirements" | "resolutions" | "rules" | "domains" | "boundaries" | "topics" | "questions";
 
 type MemberResponse<Response> = Response extends { data: infer Data }
   ? Data extends { id: unknown; schema_version: number; scope_id: unknown } ? Response : never
   : never;
 type ResourceGetResponses = {
-  source: MemberResponse<Schemas["GetSourceSuccess"]>;
-  requirement: MemberResponse<Schemas["GetRequirementSuccess"]>;
-  resolution: MemberResponse<Schemas["GetResolutionSuccess"]>;
-  rule: MemberResponse<Schemas["GetRuleSuccess"]>;
-  domain: MemberResponse<Schemas["GetDomainSuccess"]>;
-  boundary: MemberResponse<Schemas["GetBoundarySuccess"]>;
-  topic: MemberResponse<Schemas["GetTopicSuccess"]>;
-  question: MemberResponse<Schemas["GetQuestionSuccess"]>;
+  source: MemberResponse<Schemas["GetSourceBaseSuccess"]>;
+  requirement: MemberResponse<Schemas["GetRequirementBaseSuccess"]>;
+  resolution: MemberResponse<Schemas["GetResolutionBaseSuccess"]>;
+  rule: MemberResponse<Schemas["GetRuleBaseSuccess"]>;
+  domain: MemberResponse<Schemas["GetDomainBaseSuccess"]>;
+  boundary: MemberResponse<Schemas["GetBoundaryBaseSuccess"]>;
+  topic: MemberResponse<Schemas["GetTopicBaseSuccess"]>;
+  question: MemberResponse<Schemas["GetQuestionBaseSuccess"]>;
 };
 export type GetResponse<Kind extends NodeType = NodeType> = ResourceGetResponses[Kind];
-export type SearchResponse = { data: { items: GraphNode[] }; meta: ResponseMeta };
+export type SearchResponse = Schemas["ListRulesSearchSuccess"];
 export type Neighbor = Schemas["GetRuleSuccessNeighbor"];
-export type NeighborsResponse = { data: { id: string; neighbors: Neighbor[] }; meta: ResponseMeta };
+export type NeighborsResponse = Schemas["GetRuleNeighborsSuccess"];
 export type TracedNode = Schemas["GetRuleSuccessTracedNode"];
-export type TraceResponse = { data: { id: string; max_depth: number; nodes: TracedNode[] }; meta: ResponseMeta };
+export type TraceResponse = Schemas["GetRuleTraceSuccess"];
 export type AffectedRule = Schemas["GetRuleSuccessAffectedRule"];
-export type ImpactResponse = { data: { id: string; affected_rules: AffectedRule[]; scan_cut: boolean }; meta: ResponseMeta };
-export type ResolveSymbolResponse = SearchResponse;
+export type ImpactResponse = Schemas["GetRuleImpactSuccess"];
+export type ResolveSymbolResponse = Schemas["ListRulesResolveSymbolSuccess"];
 export type EvidenceResponse = Schemas["GetRuleEvidenceSuccess"];
 export type EvidenceDiffSite = Schemas["ListRulesSuccessEvidenceDiffSite"];
 export type EvidenceDiffState = EvidenceDiffSite["state"];
 export type EvidenceSiteKind = EvidenceDiffSite["kind"];
 export type EvidenceDiffSummary = Schemas["ListRulesSuccessEvidenceDiffSummary"];
-export type StaleResponse = { data: { items: EvidenceDiffSite[] }; meta: ResponseMeta };
-export type QueryEnvelope = { meta: ResponseMeta };
+export type StaleResponse = Schemas["ListRulesStaleSuccess"];
+export type QueryEnvelope = { meta: SearchResponse["meta"] };
 export type ImplementationSite = AffectedRule["implementations"][number];
 export type VerificationSite = AffectedRule["verifications"][number];
 export type ImplementationBinding = Schemas["GetRuleEvidenceSuccessImplementationBinding"];

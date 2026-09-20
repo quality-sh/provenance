@@ -432,9 +432,44 @@ async fn mcp_keeps_role_subsets_and_returns_the_http_envelope() {
         .call_tool(CallToolRequestParams::new("list-sources"))
         .await
         .unwrap();
+    assert_ne!(result.is_error, Some(true), "{result:?}");
     let value = result.structured_content.unwrap();
-    assert!(value["data"]["items"].is_array());
+    assert!(value["data"]["items"].is_array(), "{value}");
     assert!(value["meta"].is_object());
+
+    let missing_text_arguments: serde_json::Map<String, Value> =
+        json!({"query":"search"}).as_object().unwrap().clone();
+    let missing_text: rmcp::model::CallToolResult = client
+        .call_tool(
+            CallToolRequestParams::new("list-sources").with_arguments(missing_text_arguments),
+        )
+        .await
+        .unwrap();
+    assert_eq!(missing_text.is_error, Some(true), "{missing_text:?}");
+
+    let search_arguments: serde_json::Map<String, Value> = json!({
+        "query":"search", "text":"shared"
+    })
+    .as_object()
+    .unwrap()
+    .clone();
+    let search: rmcp::model::CallToolResult = client
+        .call_tool(CallToolRequestParams::new("list-sources").with_arguments(search_arguments))
+        .await
+        .unwrap();
+    assert_ne!(search.is_error, Some(true), "{search:?}");
+
+    let extra_arguments: serde_json::Map<String, Value> = json!({
+        "query":"search", "text":"shared", "base":"main"
+    })
+    .as_object()
+    .unwrap()
+    .clone();
+    let extra: rmcp::model::CallToolResult = client
+        .call_tool(CallToolRequestParams::new("list-sources").with_arguments(extra_arguments))
+        .await
+        .unwrap();
+    assert_eq!(extra.is_error, Some(true), "{extra:?}");
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
 }

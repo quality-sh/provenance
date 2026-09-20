@@ -9,6 +9,13 @@ pub(super) fn parameters(
     let Some(properties) = schema.get("properties").and_then(Value::as_object) else {
         return Vec::new();
     };
+    let required = schema
+        .get("required")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .collect::<std::collections::BTreeSet<_>>();
     properties
         .iter()
         .filter(|(name, _)| !is_bound(name, route, query))
@@ -18,7 +25,7 @@ pub(super) fn parameters(
             Parameter {
                 name: Box::leak(name.clone().into_boxed_str()),
                 location: "query",
-                required: false,
+                required: required.contains(name.as_str()),
                 schema: parameter_schema,
             }
         })

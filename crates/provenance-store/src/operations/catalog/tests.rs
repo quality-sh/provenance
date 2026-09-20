@@ -74,6 +74,38 @@ fn mcp_schema_resolves_definitions_at_the_document_root() {
     assert!(validator.is_valid(&json!({"data":{"statement":"Stop; wait."}})));
 }
 
+#[cfg(feature = "schema")]
+#[test]
+fn mcp_query_schema_validates_only_the_selected_request_shape() {
+    let definition: &super::Definition = super::definitions()
+        .iter()
+        .find(|entry| entry.name == "list-rules")
+        .unwrap();
+    let schema: serde_json::Value = definition.mcp_input_schema();
+    let validator: jsonschema::JSONSchema = jsonschema::JSONSchema::options()
+        .with_draft(jsonschema::Draft::Draft202012)
+        .compile(&schema)
+        .unwrap();
+
+    for value in [
+        json!({}),
+        json!({"query":"search", "text":"bounded"}),
+        json!({"query":"stale", "base":"main"}),
+        json!({"query":"resolve-symbol", "file":"src/lib.rs"}),
+    ] {
+        assert!(validator.is_valid(&value), "valid query shape: {value}");
+    }
+    for value in [
+        json!({"query":"search"}),
+        json!({"query":"stale"}),
+        json!({"query":"resolve-symbol"}),
+        json!({"query":"search", "text":"bounded", "base":"main"}),
+        json!({"text":"bounded"}),
+    ] {
+        assert!(!validator.is_valid(&value), "invalid query shape: {value}");
+    }
+}
+
 #[derive(Debug, serde::Serialize, thiserror::Error)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case")]

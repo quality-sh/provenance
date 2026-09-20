@@ -53,6 +53,14 @@ pub struct Definition {
 }
 
 #[derive(Clone)]
+pub struct QueryVariant {
+    pub selector: Option<&'static str>,
+    pub parameters: Vec<Parameter>,
+    pub success_schema: Value,
+    pub failure_schema: Value,
+}
+
+#[derive(Clone)]
 pub(super) struct RawDefinition {
     pub request_schema: Value,
     pub success_schema: Value,
@@ -123,28 +131,79 @@ impl Definition {
         );
         parameters
     }
+    pub fn query_variants(&self) -> Vec<QueryVariant> {
+        if self.registration.queries.is_empty() {
+            return Vec::new();
+        }
+        let headers = self
+            .registration
+            .controls
+            .headers
+            .iter()
+            .map(|binding| header(binding.name))
+            .collect::<Vec<_>>();
+        let base = QueryVariant {
+            selector: None,
+            parameters: self
+                .registration
+                .request
+                .parameters
+                .iter()
+                .cloned()
+                .chain(headers.iter().cloned())
+                .collect(),
+            success_schema: self.registration.response.schema.clone(),
+            failure_schema: self.registration.handler.failure_schema.clone(),
+        };
+        std::iter::once(base)
+            .chain(self.registration.queries.iter().map(|route| {
+                let mut parameters = self
+                    .registration
+                    .request
+                    .parameters
+                    .iter()
+                    .filter(|parameter| parameter.location == "path")
+                    .cloned()
+                    .collect::<Vec<_>>();
+                parameters.push(Parameter {
+                    name: "query",
+                    location: "query",
+                    required: true,
+                    schema: json!({"type":"string","const":route.name}),
+                });
+                parameters.extend(route.parameters.iter().cloned());
+                parameters.extend(headers.iter().cloned());
+                QueryVariant {
+                    selector: Some(route.name),
+                    parameters,
+                    success_schema: route.response.schema.clone(),
+                    failure_schema: route.handler.failure_schema.clone(),
+                }
+            }))
+            .collect()
+    }
     pub fn mcp_output_schema(&self) -> Value {
         self.success_schema()
     }
     pub fn mcp_input_schema(&self) -> Value {
-        let mut properties = serde_json::Map::new();
-        let mut required = Vec::new();
-        if let Some(body) = self.request_schema() {
-            properties.insert("data".into(), body["properties"]["data"].clone());
-            required.push(json!("data"));
-        }
-        for parameter in self.parameters() {
-            let name = if parameter.location == "header" {
-                parameter.name.to_ascii_lowercase().replace('-', "_")
-            } else {
-                parameter.name.to_owned()
-            };
-            properties.insert(name.clone(), parameter.schema.clone());
-            if parameter.required {
-                required.push(json!(name));
-            }
-        }
-        let mut result = json!({"type":"object","additionalProperties":false,"properties":properties,"required":required});
+        let variants: Vec<QueryVariant> = self.query_variants();
+        let parameter_sets: Vec<Vec<Parameter>> = if variants.is_empty() {
+            vec![self.parameters()]
+        } else {
+            variants
+                .into_iter()
+                .map(|variant| variant.parameters)
+                .collect()
+        };
+        let mut schemas: Vec<Value> = parameter_sets
+            .iter()
+            .map(|parameters| mcp_input_variant_schema(self.request_schema(), parameters))
+            .collect();
+        let mut result: Value = if schemas.len() == 1 {
+            schemas.pop().unwrap()
+        } else {
+            json!({"oneOf":schemas})
+        };
         if let Some(defs) = self.request_schema().and_then(|schema| schema.get("$defs")) {
             result["$defs"] = defs.clone();
         }
@@ -152,7 +211,38 @@ impl Definition {
     }
 }
 
-fn merge_variants(mut variants: Vec<Value>) -> Value {
+fn mcp_input_variant_schema(body: Option<&Value>, parameters: &[Parameter]) -> Value {
+    let mut properties: serde_json::Map<String, Value> = serde_json::Map::new();
+    let mut required: Vec<Value> = Vec::new();
+    if let Some(body) = body {
+        properties.insert("data".into(), body["properties"]["data"].clone());
+        required.push(json!("data"));
+    }
+    for parameter in parameters {
+        let name: String = if parameter.location == "header" {
+            parameter.name.to_ascii_lowercase().replace('-', "_")
+        } else {
+            parameter.name.to_owned()
+        };
+        properties.insert(name.clone(), parameter.schema.clone());
+        if parameter.required {
+            required.push(json!(name));
+        }
+    }
+    json!({"type":"object","additionalProperties":false,"properties":properties,"required":required})
+}
+
+fn merge_variants(variants: Vec<Value>) -> Value {
+    let mut unique = Vec::new();
+    for variant in variants {
+        if !unique.contains(&variant) {
+            unique.push(variant);
+        }
+    }
+    let mut variants = unique;
+    if variants.len() == 1 {
+        return variants.pop().unwrap();
+    }
     let mut defs = serde_json::Map::new();
     for schema in &mut variants {
         if let Some(Value::Object(found)) = schema
