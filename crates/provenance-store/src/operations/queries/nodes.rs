@@ -92,9 +92,7 @@ pub(super) async fn node(
     node_type: NodeType,
     id: &StableId,
 ) -> anyhow::Result<Option<GraphNode>> {
-    let wanted = [(node_type, id.clone())];
-    let mut found = nodes(snapshot, &wanted).await?;
-    Ok(found.remove(&key(node_type, id)))
+    page_node(snapshot, node_type, id.as_str()).await
 }
 
 pub(super) async fn resolve(
@@ -137,7 +135,7 @@ pub(super) async fn nodes(
         let records: Vec<GraphNode> = for_kind!(node_type, K, wrap => {
             snapshot
                 .table::<K>()
-                .by_ids(&ids)
+                .page_by_ids(&ids)
                 .await?
                 .into_iter()
                 .map(wrap)

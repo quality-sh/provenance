@@ -151,7 +151,7 @@ impl ServerHandler for StatementHost {
         };
         Ok(
             match routing::invoke(self, &matched, data, query, &headers).await {
-                Ok((value, _)) => CallToolResult::structured(value),
+                Ok((value, _)) => CallToolResult::structured(value.into_value()),
                 Err(failure) => error(failure),
             },
         )
@@ -176,7 +176,18 @@ fn mcp_call(
     let mut path = BTreeMap::new();
     let mut query = BTreeMap::new();
     let mut headers = axum::http::HeaderMap::new();
-    for parameter in definition.parameters() {
+    let variants: Vec<catalog::QueryVariant> = definition.query_variants();
+    let parameters: Vec<catalog::Parameter> = if variants.is_empty() {
+        definition.parameters()
+    } else {
+        let selector: Option<&str> = arguments.get("query").and_then(Value::as_str);
+        variants
+            .into_iter()
+            .find(|variant| variant.selector == selector)
+            .ok_or_else(invalid)?
+            .parameters
+    };
+    for parameter in parameters {
         let mcp_name = if parameter.location == "header" {
             parameter.name.to_ascii_lowercase().replace('-', "_")
         } else {

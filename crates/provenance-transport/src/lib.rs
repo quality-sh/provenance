@@ -171,7 +171,7 @@ impl StatementHost {
             .ok_or_else(|| FailureEnvelope::new(None, OperationFailure::UnknownOperation))?;
         routing::invoke(self, &matched, data, query, &headers)
             .await
-            .map(|result| result.0)
+            .map(|result| result.0.into_value())
     }
 
     /// Close admission and wait for all operation work, including disconnected calls.

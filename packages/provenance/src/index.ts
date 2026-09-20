@@ -264,30 +264,30 @@ export async function plan(
 
 export async function get<Kind extends NodeType>(request: GetRequest<Kind>): Promise<GetResponse<Kind>> {
   const selected = settings;
-  return memberCall(await connection(selected), request.node_type, request.id, {}) as Promise<GetResponse<Kind>>;
+  return memberCall(await connection(selected), request.node_type, request.id) as Promise<GetResponse<Kind>>;
 }
 
 export async function search(request: SearchRequest): Promise<SearchResponse> {
   const selected = settings;
   const { collection, ...query } = request;
-  return collectionCall(await connection(selected), collection, { query: "search", ...query }) as Promise<SearchResponse>;
+  return collectionCall(await connection(selected), collection, query);
 }
 
 export async function neighbors(request: NeighborsRequest): Promise<NeighborsResponse> {
   const selected = settings;
   const { node_type, id, ...query } = request;
-  return memberCall(await connection(selected), node_type, id, { query: "neighbors", ...query }) as Promise<NeighborsResponse>;
+  return neighborsCall(await connection(selected), node_type, id, query);
 }
 
 export async function trace(request: TraceRequest): Promise<TraceResponse> {
   const selected = settings;
   const { node_type, id, ...query } = request;
-  return memberCall(await connection(selected), node_type, id, { query: "trace", ...query }) as Promise<TraceResponse>;
+  return traceCall(await connection(selected), node_type, id, query);
 }
 
 export async function impact(request: ImpactRequest): Promise<ImpactResponse> {
   const selected = settings;
-  return memberCall(await connection(selected), request.node_type, request.id, { query: "impact" }) as Promise<ImpactResponse>;
+  return impactCall(await connection(selected), request.node_type, request.id);
 }
 
 export async function evidence(request: EvidenceRequest): Promise<EvidenceResponse> {
@@ -297,42 +297,84 @@ export async function evidence(request: EvidenceRequest): Promise<EvidenceRespon
 
 export async function stale(request: StaleRequest): Promise<StaleResponse> {
   const selected = settings;
-  return await (await connection(selected)).listRules({ query: "stale", ...request }) as unknown as StaleResponse;
+  return (await connection(selected)).listRules({ query: "stale", ...request });
 }
 
 export async function resolveSymbol(
   request: ResolveSymbolRequest,
 ): Promise<ResolveSymbolResponse> {
   const selected = settings;
-  return await (await connection(selected)).listRules({ query: "resolve-symbol", ...request, file: portableFile(request.file, selected.localRoot) }) as unknown as ResolveSymbolResponse;
+  return (await connection(selected)).listRules({
+    query: "resolve-symbol",
+    ...request,
+    file: portableFile(request.file, selected.localRoot),
+  });
 }
 
 type CatalogClient = Awaited<ReturnType<typeof connection>>;
-type MemberQuery = { query?: string; direction?: string; limit?: number; max_depth?: number };
 
-function collectionCall(client: CatalogClient, collection: SearchRequest["collection"], query: Omit<SearchRequest, "collection"> & { query: string }) {
+function collectionCall(client: CatalogClient, collection: SearchRequest["collection"], query: Omit<SearchRequest, "collection">) {
   switch (collection) {
-    case "sources": return client.listSources(query);
-    case "requirements": return client.listRequirements(query);
-    case "resolutions": return client.listResolutions(query);
-    case "rules": return client.listRules(query);
-    case "domains": return client.listDomains(query);
-    case "boundaries": return client.listBoundaries(query);
-    case "topics": return client.listTopics(query);
-    case "questions": return client.listQuestions(query);
+    case "sources": return client.listSources({ query: "search", ...query });
+    case "requirements": return client.listRequirements({ query: "search", ...query });
+    case "resolutions": return client.listResolutions({ query: "search", ...query });
+    case "rules": return client.listRules({ query: "search", ...query });
+    case "domains": return client.listDomains({ query: "search", ...query });
+    case "boundaries": return client.listBoundaries({ query: "search", ...query });
+    case "topics": return client.listTopics({ query: "search", ...query });
+    case "questions": return client.listQuestions({ query: "search", ...query });
   }
 }
 
-function memberCall(client: CatalogClient, kind: GetRequest["node_type"], id: string, query: MemberQuery) {
+function memberCall(client: CatalogClient, kind: GetRequest["node_type"], id: string) {
   switch (kind) {
-    case "source": return client.getSource({ id, ...query });
-    case "requirement": return client.getRequirement({ id, ...query });
-    case "resolution": return client.getResolution({ id, ...query });
-    case "rule": return client.getRule({ id, ...query });
-    case "domain": return client.getDomain({ id, ...query });
-    case "boundary": return client.getBoundary({ id, ...query });
-    case "topic": return client.getTopic({ id, ...query });
-    case "question": return client.getQuestion({ id, ...query });
+    case "source": return client.getSource({ id });
+    case "requirement": return client.getRequirement({ id });
+    case "resolution": return client.getResolution({ id });
+    case "rule": return client.getRule({ id });
+    case "domain": return client.getDomain({ id });
+    case "boundary": return client.getBoundary({ id });
+    case "topic": return client.getTopic({ id });
+    case "question": return client.getQuestion({ id });
+  }
+}
+
+function neighborsCall(client: CatalogClient, kind: GetRequest["node_type"], id: string, query: Omit<NeighborsRequest, "node_type" | "id">) {
+  switch (kind) {
+    case "source": return client.getSource({ id, query: "neighbors", ...query });
+    case "requirement": return client.getRequirement({ id, query: "neighbors", ...query });
+    case "resolution": return client.getResolution({ id, query: "neighbors", ...query });
+    case "rule": return client.getRule({ id, query: "neighbors", ...query });
+    case "domain": return client.getDomain({ id, query: "neighbors", ...query });
+    case "boundary": return client.getBoundary({ id, query: "neighbors", ...query });
+    case "topic": return client.getTopic({ id, query: "neighbors", ...query });
+    case "question": return client.getQuestion({ id, query: "neighbors", ...query });
+  }
+}
+
+function traceCall(client: CatalogClient, kind: GetRequest["node_type"], id: string, query: Omit<TraceRequest, "node_type" | "id">) {
+  switch (kind) {
+    case "source": return client.getSource({ id, query: "trace", ...query });
+    case "requirement": return client.getRequirement({ id, query: "trace", ...query });
+    case "resolution": return client.getResolution({ id, query: "trace", ...query });
+    case "rule": return client.getRule({ id, query: "trace", ...query });
+    case "domain": return client.getDomain({ id, query: "trace", ...query });
+    case "boundary": return client.getBoundary({ id, query: "trace", ...query });
+    case "topic": return client.getTopic({ id, query: "trace", ...query });
+    case "question": return client.getQuestion({ id, query: "trace", ...query });
+  }
+}
+
+function impactCall(client: CatalogClient, kind: GetRequest["node_type"], id: string) {
+  switch (kind) {
+    case "source": return client.getSource({ id, query: "impact" });
+    case "requirement": return client.getRequirement({ id, query: "impact" });
+    case "resolution": return client.getResolution({ id, query: "impact" });
+    case "rule": return client.getRule({ id, query: "impact" });
+    case "domain": return client.getDomain({ id, query: "impact" });
+    case "boundary": return client.getBoundary({ id, query: "impact" });
+    case "topic": return client.getTopic({ id, query: "impact" });
+    case "question": return client.getQuestion({ id, query: "impact" });
   }
 }
 

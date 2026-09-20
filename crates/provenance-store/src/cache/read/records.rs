@@ -54,6 +54,46 @@ impl<K: ProjectionRow> Table<'_, K> {
         Ok(records.into_iter().map(|(_, record)| record).collect())
     }
 
+    /// Reads query-page records only after every stored row passes the record ceiling.
+    pub(crate) async fn page_by_field(
+        &self,
+        column: &'static str,
+        values: &[&str],
+    ) -> anyhow::Result<Vec<K>> {
+        let mut values = values.to_vec();
+        values.sort_unstable();
+        values.dedup();
+        let expression = super::page::byte_expression(K::COLUMNS);
+        let maximum = i64::try_from(super::page::RECORD_BYTES)?;
+        for chunk in values.chunks(BIND_CHUNK) {
+            let marks = vec!["?"; chunk.len()].join(", ");
+            let sql = format!(
+                "SELECT {expression} AS record_bytes FROM {} WHERE scope_id = ? AND {} IN ({marks})",
+                quoted(K::TABLE),
+                quoted(column)
+            );
+            let mut query = sqlx::query_scalar(&sql).bind(self.snapshot().scope().as_str());
+            for value in chunk {
+                query = query.bind(*value);
+            }
+            let sizes: Vec<i64> = {
+                let mut tx = self.snapshot().connection().await;
+                query.fetch_all(&mut **tx).await?
+            };
+            if sizes.into_iter().any(|size| size > maximum) {
+                return Err(
+                    provenance_core::protocol::read_failure::ReadFailure::PageRecordTooLarge.into(),
+                );
+            }
+        }
+        self.by_field(column, &values).await
+    }
+
+    pub(crate) async fn page_by_ids(&self, ids: &[StableId]) -> anyhow::Result<Vec<K>> {
+        let wanted: Vec<&str> = ids.iter().map(StableId::as_str).collect();
+        self.page_by_field("id", &wanted).await
+    }
+
     /// The given ids that name a row that counts under the view, in id
     /// order.
     pub async fn ids_that_count(&self, ids: &[StableId]) -> anyhow::Result<Vec<StableId>> {

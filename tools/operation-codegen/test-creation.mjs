@@ -26,17 +26,17 @@ export async function checkCreation({ HttpClient, OperationError }, fixture) {
   assert.equal(updated.data.url, 'https://example.test/new');
 
   const cleared = await client.updateSource({ id: source.id, data: {
-    clear_fields: ['reference', 'commit_pin'],
+    reference: null, commit_pin: null,
   } });
   assert.equal(cleared.data.url, 'https://example.test/new');
   assert.equal(cleared.data.reference, undefined);
   assert.equal(cleared.data.commit_pin, undefined);
 
   await assert.rejects(client.updateSource({ id: source.id, data: {
-    url: 'conflict', clear_fields: ['url'],
+    name: null,
   } }), error => {
     assert.ok(error instanceof OperationError);
-    assert.equal(error.failure.error.kind, 'invalid_update');
+    assert.equal(error.failure.error.kind, 'invalid_input');
     return true;
   });
   assert.equal((await client.getSource({ id: source.id })).data.id, source.id);

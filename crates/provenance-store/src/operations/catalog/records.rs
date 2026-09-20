@@ -10,7 +10,15 @@ use provenance_core::protocol::{
 };
 
 macro_rules! query {
-    ($name:ident, $wire:literal, $request:ident, $result:ident, $handler:ident, $needs:expr) => {
+    (
+        $name:ident,
+        $wire:literal,
+        $request:ident,
+        $result:ident,
+        $handler:ident,
+        $answer:ident,
+        $needs:expr
+    ) => {
         pub struct $name;
         impl Operation for $name {
             type Request = protocol::$request;
@@ -36,13 +44,23 @@ macro_rules! query {
             ) -> OperationFuture<Self::Success, Self::Failure> {
                 Box::pin(async move {
                     let context = context.graph()?;
-                    let mut answer = crate::operations::queries::$handler(
-                        Some(context.root),
-                        &context.scope,
-                        context.policy,
-                        request,
-                    )
-                    .await?;
+                    let mut answer = if context.external {
+                        crate::operations::queries::$answer(
+                            Some(context.root),
+                            &context.scope,
+                            context.policy,
+                            request,
+                        )
+                        .await?
+                    } else {
+                        crate::operations::queries::$handler(
+                            Some(context.root),
+                            &context.scope,
+                            context.policy,
+                            request,
+                        )
+                        .await?
+                    };
                     if context.external
                         && answer.stamp.policy == protocol::StampPolicy::CatchUpFailed
                     {
@@ -68,9 +86,18 @@ query!(
     ReadDocumentQuery,
     ReadDocumentResult,
     read_document,
+    read_document_answer,
     graph_needs
 );
-query!(Get, "get", GetQuery, GetResult, get, graph_needs);
+query!(
+    Get,
+    "get",
+    GetQuery,
+    GetResult,
+    get,
+    get_answer,
+    graph_needs
+);
 query!(
     ResolveRecord,
     "resolve-record",
@@ -85,6 +112,7 @@ query!(
     SearchQuery,
     SearchResult,
     search,
+    search_answer,
     graph_needs
 );
 query!(
@@ -93,9 +121,18 @@ query!(
     NeighborsQuery,
     NeighborsResult,
     neighbors,
+    neighbors_answer,
     graph_needs
 );
-query!(Trace, "trace", TraceQuery, TraceResult, trace, graph_needs);
+query!(
+    Trace,
+    "trace",
+    TraceQuery,
+    TraceResult,
+    trace,
+    trace_answer,
+    graph_needs
+);
 
 pub struct Info;
 impl Operation for Info {

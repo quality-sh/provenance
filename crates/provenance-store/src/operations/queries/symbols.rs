@@ -38,7 +38,7 @@ pub(super) async fn resolve(
         let by_file = [file.as_str()];
         for binding in snapshot
             .table::<ImplementationBinding>()
-            .by_field("file", &by_file)
+            .page_by_field("file", &by_file)
             .await?
         {
             if symbol.is_none_or(|wanted| binding.symbol == wanted) {
@@ -47,7 +47,7 @@ pub(super) async fn resolve(
         }
         for binding in snapshot
             .table::<VerificationBinding>()
-            .by_field("file", &by_file)
+            .page_by_field("file", &by_file)
             .await?
         {
             if symbol.is_none_or(|wanted| binding.symbol.as_deref() == Some(wanted)) {
@@ -61,7 +61,7 @@ pub(super) async fn resolve(
         .collect::<Vec<_>>();
     let matched = snapshot
         .table::<Rule>()
-        .by_ids(&wanted)
+        .page_by_ids(&wanted)
         .await?
         .into_iter()
         .map(|rule| GraphNode::Rule(Box::new(rule)))
