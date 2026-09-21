@@ -35,10 +35,7 @@ impl StateStore {
                 .find(|r| r.id == input.id)
                 .ok_or_else(missing)?;
             owner_matches(record.declared_by.as_deref(), input.declared_by.as_deref())?;
-            review::relationships::expand_list(
-                &mut record.supersedes,
-                input.supersedes.as_ref(),
-            );
+            review::relationships::expand_list(&mut record.supersedes, input.supersedes.as_ref());
             if let Some(name) = &input.name {
                 required_text(name)?;
             }

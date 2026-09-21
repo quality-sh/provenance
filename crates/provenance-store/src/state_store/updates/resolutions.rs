@@ -30,10 +30,7 @@ impl StateStore {
                 &mut record.requirement_ids,
                 input.requirement_ids.as_ref(),
             );
-            review::relationships::expand_list(
-                &mut record.supersedes,
-                input.supersedes.as_ref(),
-            );
+            review::relationships::expand_list(&mut record.supersedes, input.supersedes.as_ref());
             for text in [&input.title, &input.position, &input.rationale]
                 .into_iter()
                 .flatten()

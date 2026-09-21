@@ -141,19 +141,36 @@ async fn public_rule_and_resolution_lists_keep_required_parents_on_noops() {
     for id in ["req_one", "req_two", "req_three"] {
         create_requirement(&fixture, id).await;
     }
-    let resolution = fixture.call("create-resolution", json!({
-        "scope_id":"default", "id":"res_one", "title":"Decision",
-        "position":"Store records", "rationale":"Records are required", "status":"draft",
-        "requirement_ids":["req_one", "req_two"], "supersedes":[], "inputs":[]
-    })).await.unwrap();
-    let rule = fixture.call("create-rule", json!({
-        "scope_id":"default", "id":"rule_one", "statement":"The system stores records.",
-        "status":"draft", "severity":"medium",
-        "requirement_ids":["req_one", "req_two"], "resolution_ids":["res_one"]
-    })).await.unwrap();
+    let resolution = fixture
+        .call(
+            "create-resolution",
+            json!({
+                "scope_id":"default", "id":"res_one", "title":"Decision",
+                "position":"Store records", "rationale":"Records are required", "status":"draft",
+                "requirement_ids":["req_one", "req_two"], "supersedes":[], "inputs":[]
+            }),
+        )
+        .await
+        .unwrap();
+    let rule = fixture
+        .call(
+            "create-rule",
+            json!({
+                "scope_id":"default", "id":"rule_one", "statement":"The system stores records.",
+                "status":"draft", "severity":"medium",
+                "requirement_ids":["req_one", "req_two"], "resolution_ids":["res_one"]
+            }),
+        )
+        .await
+        .unwrap();
 
     for (operation, id, field, before) in [
-        ("update-resolution", "res_one", "requirement_ids", resolution),
+        (
+            "update-resolution",
+            "res_one",
+            "requirement_ids",
+            resolution,
+        ),
         ("update-rule", "rule_one", "requirement_ids", rule),
     ] {
         let removed = fixture
@@ -212,15 +229,27 @@ async fn public_requirement_patch_noops_cover_citations_and_current_etag() {
         )
         .unwrap()
         .etag;
-    let first = fixture.call("update-requirement-v2", json!({
-        "request_id":"remove_once", "actor":"reviewer", "expected_etag":etag,
-        "id":"req_one", "relationships":{"cites":{"remove":["source_one"]}}
-    })).await.unwrap();
-    let repeated = fixture.call("update-requirement-v2", json!({
-        "request_id":"remove_again", "actor":"reviewer",
-        "expected_etag":first["edit"]["etag"], "id":"req_one",
-        "relationships":{"cites":{"remove":["source_one"]}}
-    })).await.unwrap();
+    let first = fixture
+        .call(
+            "update-requirement-v2",
+            json!({
+                "request_id":"remove_once", "actor":"reviewer", "expected_etag":etag,
+                "id":"req_one", "relationships":{"cites":{"remove":["source_one"]}}
+            }),
+        )
+        .await
+        .unwrap();
+    let repeated = fixture
+        .call(
+            "update-requirement-v2",
+            json!({
+                "request_id":"remove_again", "actor":"reviewer",
+                "expected_etag":first["edit"]["etag"], "id":"req_one",
+                "relationships":{"cites":{"remove":["source_one"]}}
+            }),
+        )
+        .await
+        .unwrap();
     assert_eq!(repeated["updated"], first["updated"]);
     assert_eq!(repeated["edit"]["etag"], first["edit"]["etag"]);
     assert_eq!(repeated["statement"], first["statement"]);
