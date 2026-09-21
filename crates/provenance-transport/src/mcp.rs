@@ -51,7 +51,7 @@ impl ServerHandler for StatementHost {
         if self.check_port().is_some() {
             tools.push(crate::porcelain::check_tool());
         }
-        tools.extend(crate::porcelain::authoring::tools(self));
+        tools.extend(crate::porcelain::authoring_tools(self));
         std::future::ready(Ok(ListToolsResult {
             tools,
             ..Default::default()
@@ -113,25 +113,7 @@ impl ServerHandler for StatementHost {
             return Ok(crate::porcelain::call_check(self, port.clone(), arguments).await);
         }
         if let Some(action) = crate::porcelain::Action::parse(&request.name) {
-            let _admission = match self.admit() {
-                Ok(permit) => permit,
-                Err(failure) => return Ok(error(failure)),
-            };
-            let arguments = request.arguments.unwrap_or_default();
-            if serde_json::to_vec(&arguments)
-                .map_err(|_| ErrorData::internal_error("Cannot encode input", None))?
-                .len()
-                > MAX_BODY_BYTES
-            {
-                return Ok(error(ErasedFailure::new(
-                    None,
-                    OperationFailure::InvalidInput {
-                        field: None,
-                        reason: InvalidInputReason::TooLarge,
-                    },
-                )));
-            }
-            return Ok(crate::porcelain::authoring::call(self, action, arguments).await);
+            return call_authoring_action(self, action, request.arguments).await;
         }
         let Some(definition) = catalog::definitions()
             .iter()
@@ -180,6 +162,32 @@ impl ServerHandler for StatementHost {
     }
 }
 
+async fn call_authoring_action(
+    host: &StatementHost,
+    action: crate::porcelain::Action,
+    arguments: Option<serde_json::Map<String, Value>>,
+) -> Result<CallToolResult, ErrorData> {
+    let _admission = match host.admit() {
+        Ok(permit) => permit,
+        Err(failure) => return Ok(error(failure)),
+    };
+    let arguments = arguments.unwrap_or_default();
+    if serde_json::to_vec(&arguments)
+        .map_err(|_| ErrorData::internal_error("Cannot encode input", None))?
+        .len()
+        > MAX_BODY_BYTES
+    {
+        return Ok(error(ErasedFailure::new(
+            None,
+            OperationFailure::InvalidInput {
+                field: None,
+                reason: InvalidInputReason::TooLarge,
+            },
+        )));
+    }
+    Ok(crate::porcelain::call_authoring(host, action, arguments).await)
+}
+
 type McpCall = (
     routing::Matched,
     Value,
@@ -187,7 +195,7 @@ type McpCall = (
     axum::http::HeaderMap,
 );
 
-pub(crate) fn mcp_call(
+pub(super) fn mcp_call(
     definition: &'static catalog::Definition,
     value: &Value,
 ) -> Result<McpCall, ErasedFailure> {
@@ -253,6 +261,6 @@ fn invalid() -> ErasedFailure {
     )
 }
 
-pub(crate) fn error(failure: ErasedFailure) -> CallToolResult {
+pub(super) fn error(failure: ErasedFailure) -> CallToolResult {
     CallToolResult::structured_error(serde_json::to_value(failure).expect("failure is JSON"))
 }

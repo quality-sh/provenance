@@ -425,7 +425,14 @@ mod tests {
             CommandFamily::Target
         );
         assert_eq!(
-            route(&["unknown_id", "--scope", "other", "create", "--type", "source"]),
+            route(&[
+                "unknown_id",
+                "--scope",
+                "other",
+                "create",
+                "--type",
+                "source"
+            ]),
             CommandFamily::Target
         );
     }

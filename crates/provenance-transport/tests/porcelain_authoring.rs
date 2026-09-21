@@ -5,8 +5,8 @@ mod support {
     pub mod resource_http;
 }
 
-use rmcp::{model::CallToolRequestParams, ServiceExt as _};
 use provenance_macros::verifies;
+use rmcp::{model::CallToolRequestParams, ServiceExt as _};
 use serde_json::{json, Value};
 use support::records::Repository;
 
@@ -151,7 +151,11 @@ async fn mcp_target_first_authoring_uses_registered_schemas_and_structured_targe
         }),
     )
     .await;
-    assert_ne!(edited_requirement.is_error, Some(true), "{edited_requirement:?}");
+    assert_ne!(
+        edited_requirement.is_error,
+        Some(true),
+        "{edited_requirement:?}"
+    );
     assert_eq!(
         edited_requirement.structured_content.as_ref().unwrap()["data"]["depends_on"],
         json!(["req_mcp_dependency"])

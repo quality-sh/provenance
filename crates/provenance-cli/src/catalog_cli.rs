@@ -115,7 +115,10 @@ pub(crate) async fn dispatch_target(
         warn_if_skills_missing(&context.repo, context.quiet)?;
     }
     let (data, query, headers) = input(route.definition, &flags, None)?;
-    anyhow::ensure!(query.is_empty(), "target actions do not accept query options");
+    anyhow::ensure!(
+        query.is_empty(),
+        "target actions do not accept query options"
+    );
     let value = host
         .invoke_target(&route, data, headers)
         .await

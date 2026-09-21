@@ -165,7 +165,7 @@ fn definition(action: Action, kind: NodeType) -> Option<&'static Definition> {
         .find(|definition| definition.name == name)
 }
 
-pub(crate) fn tools(host: &crate::StatementHost) -> Vec<Tool> {
+pub(super) fn tools(host: &crate::StatementHost) -> Vec<Tool> {
     Action::ALL
         .into_iter()
         .filter_map(|action| tool(host, action))
@@ -195,7 +195,8 @@ fn tool(host: &crate::StatementHost, action: Action) -> Option<Tool> {
     let mut tool = Tool::new(
         action.as_str(),
         description(action),
-        input.as_object()
+        input
+            .as_object()
             .expect("target action input schema is an object")
             .clone(),
     );
@@ -263,10 +264,7 @@ fn input_schema(action: Action, definitions: &[(NodeType, &'static Definition)])
             object["properties"]
                 .as_object_mut()
                 .expect("registered MCP properties are an object")
-                .insert(
-                    "target".into(),
-                    json!({"type":"string","minLength":1}),
-                );
+                .insert("target".into(), json!({"type":"string","minLength":1}));
             object["required"]
                 .as_array_mut()
                 .expect("registered MCP required is an array")
@@ -312,7 +310,10 @@ fn schema_union(mut variants: Vec<Value>, keyword: &str) -> Value {
     let mut schema = if variants.len() == 1 {
         variants.pop().expect("one schema")
     } else {
-        Value::Object(Map::from_iter([(keyword.to_owned(), Value::Array(variants))]))
+        Value::Object(Map::from_iter([(
+            keyword.to_owned(),
+            Value::Array(variants),
+        )]))
     };
     if !definitions.is_empty() {
         schema["$defs"] = Value::Object(definitions);
@@ -321,12 +322,13 @@ fn schema_union(mut variants: Vec<Value>, keyword: &str) -> Value {
 }
 
 fn namespace_definitions(value: &mut Value, prefix: &str, merged: &mut Map<String, Value>) {
-    if let Some(definitions) = value.as_object_mut().and_then(|object| object.remove("$defs")) {
-        if let Value::Object(definitions) = definitions {
-            for (name, mut schema) in definitions {
-                rewrite_references(&mut schema, prefix);
-                merged.insert(format!("{prefix}{name}"), schema);
-            }
+    if let Some(Value::Object(definitions)) = value
+        .as_object_mut()
+        .and_then(|object| object.remove("$defs"))
+    {
+        for (name, mut schema) in definitions {
+            rewrite_references(&mut schema, prefix);
+            merged.insert(format!("{prefix}{name}"), schema);
         }
     }
     rewrite_references(value, prefix);
@@ -353,7 +355,7 @@ fn rewrite_references(value: &mut Value, prefix: &str) {
     }
 }
 
-pub(crate) async fn call(
+pub(super) async fn call(
     host: &crate::StatementHost,
     action: Action,
     mut arguments: Map<String, Value>,
@@ -363,29 +365,29 @@ pub(crate) async fn call(
         .and_then(|value| value.as_str().map(str::to_owned))
         .filter(|target| !target.is_empty())
     else {
-        return action_error(ActionError::InvalidOptions);
+        return action_error(&ActionError::InvalidOptions);
     };
     let kind = match arguments.remove("type") {
         None => None,
         Some(Value::String(value)) => match NodeType::parse(&value) {
             Ok(kind) => Some(kind),
-            Err(_) => return action_error(ActionError::InvalidOptions),
+            Err(_) => return action_error(&ActionError::InvalidOptions),
         },
-        Some(_) => return action_error(ActionError::InvalidOptions),
+        Some(_) => return action_error(&ActionError::InvalidOptions),
     };
     let route = match host.target_route(action, &target, kind).await {
         Ok(route) => route,
-        Err(error) => return action_error(error),
+        Err(error) => return action_error(&error),
     };
     if action == Action::Create {
         let Some(data) = arguments.get_mut("data").and_then(Value::as_object_mut) else {
-            return action_error(ActionError::InvalidOptions);
+            return action_error(&ActionError::InvalidOptions);
         };
         if data.insert("id".into(), json!(target)).is_some() {
-            return action_error(ActionError::InvalidOptions);
+            return action_error(&ActionError::InvalidOptions);
         }
     } else if arguments.insert("id".into(), json!(target)).is_some() {
-        return action_error(ActionError::InvalidOptions);
+        return action_error(&ActionError::InvalidOptions);
     }
     let (matched, data, query, headers) =
         match crate::mcp::mcp_call(route.definition, &Value::Object(arguments)) {
@@ -405,7 +407,7 @@ pub(crate) async fn call(
     }
 }
 
-fn action_error(error: ActionError) -> CallToolResult {
+fn action_error(error: &ActionError) -> CallToolResult {
     let kind = match error {
         ActionError::InvalidOptions => "invalid_options",
         ActionError::NotFound => "not_found",

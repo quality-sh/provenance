@@ -131,7 +131,10 @@ fn target_first_create_uses_the_target_type_and_separate_parent_fields() {
         ],
         serde_json::json!({"relationships":{"depends_on":{"add":["req_dependency"]}}}),
     );
-    assert_eq!(delta["data"]["depends_on"], serde_json::json!(["req_dependency"]));
+    assert_eq!(
+        delta["data"]["depends_on"],
+        serde_json::json!(["req_dependency"])
+    );
 
     let replacement = json_stdin_output(
         &[
@@ -147,7 +150,10 @@ fn target_first_create_uses_the_target_type_and_separate_parent_fields() {
         ],
         serde_json::json!({"relationships":{"depends_on":["req_parent"]}}),
     );
-    assert_eq!(replacement["data"]["depends_on"], serde_json::json!(["req_parent"]));
+    assert_eq!(
+        replacement["data"]["depends_on"],
+        serde_json::json!(["req_parent"])
+    );
 }
 
 #[test]
