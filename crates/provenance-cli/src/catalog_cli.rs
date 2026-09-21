@@ -98,7 +98,7 @@ pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub(crate) async fn dispatch_target(
+pub async fn dispatch_target(
     context: GlobalContext,
     format: Option<provenance_cli::porcelain::OutputFormat>,
     target: String,
@@ -136,7 +136,7 @@ pub(crate) async fn dispatch_target(
     Ok(())
 }
 
-pub(crate) fn print_target_help(action: provenance_transport::porcelain::Action) {
+pub fn print_target_help(action: provenance_transport::porcelain::Action) {
     println!("Target-first {}:", action.as_str());
     if action == provenance_transport::porcelain::Action::Create {
         println!("  provenance <new-id> create --type <record-type> [fields]");
@@ -186,7 +186,7 @@ fn warn_if_skills_missing(repo: &str, quiet: bool) -> anyhow::Result<()> {
 }
 
 #[allow(clippy::too_many_lines)]
-pub(crate) fn input(
+pub fn input(
     definition: &Definition,
     words: &[String],
     query_action: Option<&'static str>,

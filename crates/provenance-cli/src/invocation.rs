@@ -154,7 +154,8 @@ impl TargetInvocation {
             .ok_or_else(|| anyhow::anyhow!("target action requires an action"))?;
         let action = provenance_transport::porcelain::Action::parse(&action_word)
             .ok_or_else(|| anyhow::anyhow!("unsupported target action"))?;
-        let (kind, flags, help) = target_fields(action, words.collect())?;
+        let words = words.collect::<Vec<_>>();
+        let (kind, flags, help) = target_fields(action, &words)?;
         let format = match shared.format.as_deref() {
             None => None,
             Some("json") => Some(OutputFormat::Json),
@@ -190,7 +191,7 @@ impl TargetInvocation {
 
 fn target_fields(
     action: provenance_transport::porcelain::Action,
-    words: Vec<String>,
+    words: &[String],
 ) -> anyhow::Result<(Option<provenance_core::NodeType>, Vec<String>, bool)> {
     let mut kind = None;
     let mut flags = Vec::new();

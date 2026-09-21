@@ -268,6 +268,7 @@ async fn mcp_named_actions_infer_kind_and_keep_domain_refusals() {
 #[tokio::test]
 async fn mcp_authoring_does_not_expose_or_run_hidden_operations() {
     let repository = Repository::new("The shared graph is readable.");
+    repository.all_kinds();
     let host = support::resource_http::host(&repository, false);
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
     let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
