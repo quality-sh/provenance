@@ -211,8 +211,14 @@ fn an_absent_native_clear_still_validates_the_named_target() {
         .unwrap();
 
     for (target, expected) in [
-        ("req_missing", crate::write_error::WriteFailure::MissingReference),
-        ("source_schads", crate::write_error::WriteFailure::MissingReference),
+        (
+            "req_missing",
+            crate::write_error::WriteFailure::MissingReference,
+        ),
+        (
+            "source_schads",
+            crate::write_error::WriteFailure::MissingReference,
+        ),
         ("req_back", crate::write_error::WriteFailure::InvalidUpdate),
     ] {
         let error = store

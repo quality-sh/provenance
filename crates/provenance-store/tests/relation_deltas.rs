@@ -271,9 +271,7 @@ fn absent_removals_still_validate_missing_wrong_kind_and_forbidden_targets() {
             .save_requirement(relations(&store, request, edit))
             .unwrap_err();
         assert_eq!(
-            std::mem::discriminant(
-                &provenance_store::write_error::WriteError(error).safe()
-            ),
+            std::mem::discriminant(&provenance_store::write_error::WriteError(error).safe()),
             std::mem::discriminant(&expected)
         );
         assert_eq!(record(&store), before);

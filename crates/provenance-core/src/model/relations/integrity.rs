@@ -154,5 +154,7 @@ pub fn reaches<T: RelationOwner>(
     start: &StableId,
     wanted: &StableId,
 ) -> bool {
-    RelationIndex::new(records, name).path(start, wanted).is_some()
+    RelationIndex::new(records, name)
+        .path(start, wanted)
+        .is_some()
 }
