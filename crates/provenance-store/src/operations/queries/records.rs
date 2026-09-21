@@ -3,6 +3,7 @@ use provenance_core::protocol::{
     GetQuery, GetResult, ResolveRecordQuery, ResolveRecordResult, SearchQuery, SearchResult,
 };
 use provenance_core::{NodeType, StableId};
+use provenance_macros::rule;
 
 use super::nodes;
 
@@ -31,6 +32,7 @@ pub(super) async fn resolve_record(
 }
 
 /// Search keeps canonical kind and ID order within the engine page budgets.
+#[rule("rule_porcelain_search_crosses_kinds")]
 pub(super) async fn search(
     ctx: &ReadContext,
     request: SearchQuery,
@@ -47,7 +49,11 @@ async fn search_page(ctx: &ReadContext, request: SearchQuery) -> anyhow::Result<
     request
         .validate()
         .map_err(provenance_core::protocol::QueryValidation::into_native)?;
-    let needle = request.text.trim().to_lowercase();
+    let needle = request
+        .text
+        .as_deref()
+        .map(str::trim)
+        .map(str::to_lowercase);
     let mut wanted = if request.node_types.is_empty() {
         PROTOCOL_FIVE_DEFAULT_KINDS.to_vec()
     } else {
@@ -84,10 +90,11 @@ async fn search_page(ctx: &ReadContext, request: SearchQuery) -> anyhow::Result<
                     .ok_or_else(|| {
                         anyhow::anyhow!("search candidate disappeared inside snapshot")
                     })?;
-                let contains_text = node
-                    .searchable_text()
-                    .iter()
-                    .any(|text| text.to_lowercase().contains(&needle));
+                let contains_text = needle.as_ref().map_or(true, |needle| {
+                    node.searchable_text()
+                        .iter()
+                        .any(|text| text.to_lowercase().contains(needle))
+                });
                 if contains_text {
                     let size = serde_json::to_vec(&node)?.len();
                     if matched.len() == request.limit || bytes + size > PAGE_BYTES {
