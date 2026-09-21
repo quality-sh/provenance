@@ -125,7 +125,9 @@ pub(super) async fn resolve(
 }
 
 /// The records behind the given endpoints that count under the view,
-/// keyed by kind and id. Each kind is read once, in rank order.
+/// keyed by kind and id. Each kind is read once, in rank order. The
+/// caller bounds the list to the page it serves, so every given id is
+/// checked and decoded.
 pub(super) async fn nodes(
     snapshot: &ReadSnapshot,
     wanted: &[(NodeType, StableId)],
@@ -135,7 +137,7 @@ pub(super) async fn nodes(
         let records: Vec<GraphNode> = for_kind!(node_type, K, wrap => {
             snapshot
                 .table::<K>()
-                .page_by_ids(&ids)
+                .checked_by_ids(&ids)
                 .await?
                 .into_iter()
                 .map(wrap)

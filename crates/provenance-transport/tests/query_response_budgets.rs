@@ -189,3 +189,22 @@ async fn public_query_wire_refuses_one_byte_over_the_finalized_limit() {
     assert_eq!(value["error"], json!({"kind": "page_budget_exceeded"}));
     assert!(bytes.len() <= QUERY_RESPONSE_BYTES);
 }
+
+/// The query response cap belongs to query routes alone: the same store
+/// where the query route refuses serves its ordinary member read, whose
+/// envelope carries no query limit at all.
+#[tokio::test]
+async fn ordinary_member_wire_does_not_inherit_the_query_refusal() {
+    let repo = Repository::new("The shared rule is readable.");
+    add_large_children(&repo, 20);
+    let host = host(&repo);
+
+    let query_path = "/requirements/req_shared?query=neighbors&direction=both&limit=200";
+    let (status, _, value) = call(&host, query_path).await;
+    assert_eq!(status, 409, "{value}");
+    assert_eq!(value["error"], json!({"kind": "page_budget_exceeded"}));
+
+    let (status, _, value) = call(&host, "/requirements/req_large_000").await;
+    assert_eq!(status, 200, "{value}");
+    assert_eq!(value["data"]["id"], "req_large_000");
+}
