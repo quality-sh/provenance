@@ -19,27 +19,21 @@ impl StateStore {
         input: UpdateResolutionInput,
     ) -> anyhow::Result<Resolution> {
         let scope = input.scope_id.clone();
+        validate_relationship_removals(self, &input)?;
         let path = shards::resolutions_path(&self.layout, &input.scope_id);
         let record = self.mutate_graph_record(&path, |records: &mut Vec<Resolution>| {
             let record = records
                 .iter_mut()
                 .find(|r| r.id == input.id)
                 .ok_or_else(missing)?;
-            let record_id = record.id.clone();
             review::relationships::expand_list(
                 &mut record.requirement_ids,
-                "requirement_ids",
-                "resolution",
-                &record_id,
                 input.requirement_ids.as_ref(),
-            )?;
+            );
             review::relationships::expand_list(
                 &mut record.supersedes,
-                "supersedes",
-                "resolution",
-                &record_id,
                 input.supersedes.as_ref(),
-            )?;
+            );
             for text in [&input.title, &input.position, &input.rationale]
                 .into_iter()
                 .flatten()
@@ -107,4 +101,29 @@ impl StateStore {
         validate_final_relations(self, &scope, &record)?;
         Ok(record)
     }
+}
+
+fn validate_relationship_removals(
+    store: &StateStore,
+    input: &UpdateResolutionInput,
+) -> anyhow::Result<()> {
+    let records = store.list_resolutions(&input.scope_id)?;
+    records
+        .iter()
+        .find(|record| record.id == input.id)
+        .ok_or_else(missing)?;
+    for (name, edit) in [
+        ("requirement_ids", input.requirement_ids.as_ref()),
+        ("supersedes", input.supersedes.as_ref()),
+    ] {
+        review::relationships::validate_list_removals(
+            store,
+            &input.scope_id,
+            &records,
+            &input.id,
+            name,
+            edit,
+        )?;
+    }
+    Ok(())
 }

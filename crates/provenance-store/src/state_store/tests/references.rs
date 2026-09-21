@@ -166,7 +166,8 @@ fn a_missing_owner_is_refused_by_its_own_id_and_flag() {
 }
 
 #[test]
-fn a_clear_refusal_names_the_relation_it_searched() {
+#[provenance_macros::verifies("rule_porcelain_relationship_membership_noop", examples)]
+fn a_valid_absent_clear_keeps_the_native_record_unchanged() {
     let (_dir, store, scope) = seeded_requirement_store();
     requirement(&store, &scope, "req_rates");
     requirement(&store, &scope, "req_leave");
@@ -174,20 +175,62 @@ fn a_clear_refusal_names_the_relation_it_searched() {
         .add_requirement_depends_on(&scope, &sid("req_overtime"), sid("req_rates"))
         .unwrap();
 
-    let error = store
+    let before = store
+        .list_requirements(&scope)
+        .unwrap()
+        .into_iter()
+        .find(|record| record.id == sid("req_overtime"))
+        .unwrap();
+    let after = store
         .clear_requirement_supersedes(&scope, &sid("req_overtime"), &sid("req_rates"))
-        .unwrap_err();
-    assert_eq!(
-        error.to_string(),
-        "requirement req_overtime does not name a record under supersedes: req_rates"
-    );
-    let error = store
+        .unwrap();
+    assert_eq!(after, before);
+    let after = store
         .clear_requirement_depends_on(&scope, &sid("req_overtime"), &sid("req_leave"))
-        .unwrap_err();
-    assert_eq!(
-        error.to_string(),
-        "requirement req_overtime does not name a record under depends_on: req_leave"
-    );
+        .unwrap();
+    assert_eq!(after, before);
+}
+
+#[test]
+#[provenance_macros::verifies("rule_porcelain_relationship_noop_validates", examples)]
+fn an_absent_native_clear_still_validates_the_named_target() {
+    let (_dir, store, scope) = seeded_source_requirement_store();
+    requirement(&store, &scope, "req_back");
+    store
+        .add_requirement_depends_on(&scope, &sid("req_back"), sid("req_overtime"))
+        .unwrap();
+    let before = store
+        .list_requirements(&scope)
+        .unwrap()
+        .into_iter()
+        .find(|record| record.id == sid("req_overtime"))
+        .unwrap();
+
+    for target in ["req_missing", "source_schads", "req_back"] {
+        assert!(store
+            .clear_requirement_depends_on(&scope, &sid("req_overtime"), &sid(target))
+            .is_err());
+        let after = store
+            .list_requirements(&scope)
+            .unwrap()
+            .into_iter()
+            .find(|record| record.id == sid("req_overtime"))
+            .unwrap();
+        assert_eq!(after, before);
+    }
+
+    for target in ["source_missing", "req_back"] {
+        assert!(store
+            .clear_source_reference(&scope, &sid("req_overtime"), &sid(target))
+            .is_err());
+        let after = store
+            .list_requirements(&scope)
+            .unwrap()
+            .into_iter()
+            .find(|record| record.id == sid("req_overtime"))
+            .unwrap();
+        assert_eq!(after, before);
+    }
 }
 
 #[test]
@@ -310,11 +353,8 @@ fn a_citation_clears_by_source() {
         .clear_source_reference(&scope, &sid("req_overtime"), &sid("source_schads"))
         .unwrap();
     assert!(requirement.source_refs.is_empty());
-    let error = store
+    let repeated = store
         .clear_source_reference(&scope, &sid("req_overtime"), &sid("source_schads"))
-        .unwrap_err();
-    assert_eq!(
-        error.to_string(),
-        "requirement req_overtime does not name source source_schads under cites"
-    );
+        .unwrap();
+    assert_eq!(repeated, requirement);
 }
