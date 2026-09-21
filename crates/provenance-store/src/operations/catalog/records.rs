@@ -99,6 +99,15 @@ query!(
     graph_needs
 );
 query!(
+    ResolveRecord,
+    "resolve-record",
+    ResolveRecordQuery,
+    ResolveRecordResult,
+    resolve_record,
+    resolve_record_answer,
+    graph_needs
+);
+query!(
     Search,
     "search",
     SearchQuery,

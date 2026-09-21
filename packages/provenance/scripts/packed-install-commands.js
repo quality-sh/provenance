@@ -60,7 +60,9 @@ export function createPackedCommands({ temporary, npmCli, isolatedCache }) {
         npm_config_update_notifier: "false",
       },
     });
-    assert.equal(JSON.parse(output).status, "ok");
+    const categories = JSON.parse(output).categories;
+    assert.equal(categories.length, 3);
+    assert.ok(categories.every(category => category.status === "passed"));
     assert.throws(() => readFileSync(selected), /ENOENT/);
   }
 

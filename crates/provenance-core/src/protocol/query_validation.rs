@@ -63,6 +63,12 @@ impl GetQuery {
         id(&self.id)
     }
 }
+impl super::ResolveRecordQuery {
+    pub fn validate(&self) -> Result<(), QueryValidation> {
+        version(self.protocol_version)?;
+        id(&self.id)
+    }
+}
 impl SearchQuery {
     pub fn validate(&self) -> Result<(), QueryValidation> {
         version(self.protocol_version)?;

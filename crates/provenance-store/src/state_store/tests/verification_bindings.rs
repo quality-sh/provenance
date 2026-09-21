@@ -3,6 +3,7 @@ use crate::state_store::{
     BeginVerificationInput, CreateRuleInput, MaterializeVerificationBindingInput,
 };
 use provenance_core::{RuleSeverity, RuleStatus, StableId, VerificationMethod};
+use provenance_macros::verifies;
 
 fn seeded_rule_store() -> (
     tempfile::TempDir,
@@ -87,8 +88,9 @@ fn identity_changes_with_owner_rule_or_explicit_key() {
 }
 
 #[test]
-fn explicit_identity_is_independent_of_the_containing_scope() {
-    let (_directory, store, scope) = seeded_rule_store();
+#[verifies("rule_porcelain_id_unique_in_repository", examples)]
+fn canonical_identity_cannot_be_reused_in_another_scope() {
+    let (_directory, store, _scope) = seeded_rule_store();
     let other_scope = provenance_core::ScopeId::new("other").unwrap();
     let mut manifest = store.manifest().unwrap();
     manifest.scopes.push(provenance_core::Scope {
@@ -116,10 +118,10 @@ fn explicit_identity_is_independent_of_the_containing_scope() {
             origin_message: None,
         })
         .unwrap();
-    store
+    let error = store
         .create_rule(CreateRuleInput {
             archived_in_commit: None,
-            scope_id: other_scope.clone(),
+            scope_id: other_scope,
             id: StableId::new("rule_expiry").unwrap(),
             name: None,
             description: None,
@@ -133,16 +135,9 @@ fn explicit_identity_is_independent_of_the_containing_scope() {
             origin_thread: None,
             origin_message: None,
         })
-        .unwrap();
+        .unwrap_err();
 
-    let first = store
-        .materialize_verification_binding(input(&scope))
-        .unwrap();
-    let second = store
-        .materialize_verification_binding(input(&other_scope))
-        .unwrap();
-
-    assert_eq!(first.id, second.id);
+    assert!(error.to_string().contains("record ID already exists"));
 }
 
 #[test]

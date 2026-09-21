@@ -21,12 +21,13 @@ pub use node::{
     AffectedRule, GraphNode, ImplementationSite, Neighbor, TracedNode, VerificationSite,
 };
 pub use query::{
-    Direction, EvidenceQuery, GetQuery, ImpactQuery, NeighborsQuery, ResolveSymbolQuery,
-    SearchQuery, StaleQuery, TraceQuery,
+    Direction, EvidenceQuery, GetQuery, ImpactQuery, NeighborsQuery, ResolveRecordQuery,
+    ResolveSymbolQuery, SearchQuery, StaleQuery, TraceQuery,
 };
 pub use response::{
-    EvidenceResult, GetResult, ImpactResult, NeighborsResult, QueryResponse, ResolveSymbolResult,
-    SearchResult, StaleEvidence, StaleResult, TraceResult,
+    EvidenceResult, GetResult, ImpactResult, NeighborsResult, QueryResponse, RecordResolution,
+    ResolveRecordResult, ResolveSymbolResult, SearchResult, StaleEvidence, StaleResult,
+    TraceResult,
 };
 pub use stamp::{Stamp, StampPolicy, Stamped};
 pub use typed_spec::{

@@ -33,6 +33,7 @@ impl StateStore {
             statement,
             source_ref,
         } = input;
+        self.ensure_canonical_id_available(&scope_id, &id)?;
         crate::write_error::ensure!(
             InvalidUpdate,
             self.list_requirements(&scope_id)?
@@ -83,6 +84,7 @@ impl StateStore {
             status,
             mut links,
         } = input;
+        self.ensure_canonical_id_available(&scope_id, &id)?;
         crate::write_error::ensure!(
             InvalidUpdate,
             self.list_requirements(&scope_id)?
@@ -133,6 +135,7 @@ impl StateStore {
             resolution_id,
             contradicts,
         } = input;
+        self.ensure_canonical_id_available(&scope_id, &id)?;
         let topic = self
             .list_topics(&scope_id)?
             .into_iter()

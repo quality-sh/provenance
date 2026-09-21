@@ -7,8 +7,9 @@
 use camino::Utf8PathBuf;
 use provenance_core::protocol::{
     EvidenceQuery, EvidenceResult, GetQuery, GetResult, ImpactQuery, ImpactResult, NeighborsQuery,
-    NeighborsResult, ResolveSymbolQuery, ResolveSymbolResult, SearchQuery, SearchResult,
-    StaleQuery, StaleResult, Stamped, TraceQuery, TraceResult,
+    NeighborsResult, ResolveRecordQuery, ResolveRecordResult, ResolveSymbolQuery,
+    ResolveSymbolResult, SearchQuery, SearchResult, StaleQuery, StaleResult, Stamped, TraceQuery,
+    TraceResult,
 };
 use provenance_core::ScopeId;
 
@@ -59,6 +60,29 @@ pub(crate) async fn get_answer(
 ) -> anyhow::Result<Stamped<GetResult>> {
     served(repo, scope, policy, move |ctx| {
         Box::pin(async move { records::get(ctx, request).await })
+    })
+    .await
+}
+
+pub async fn resolve_record(
+    repo: Option<Utf8PathBuf>,
+    scope: &ScopeId,
+    policy: ReadPolicy,
+    request: ResolveRecordQuery,
+) -> anyhow::Result<Stamped<ResolveRecordResult>> {
+    resolve_record_answer(repo, scope, policy, request)
+        .await
+        .and_then(|answer| page::checked("resolve-record", answer))
+}
+
+pub(crate) async fn resolve_record_answer(
+    repo: Option<Utf8PathBuf>,
+    scope: &ScopeId,
+    policy: ReadPolicy,
+    request: ResolveRecordQuery,
+) -> anyhow::Result<Stamped<ResolveRecordResult>> {
+    served(repo, scope, policy, move |ctx| {
+        Box::pin(async move { records::resolve_record(ctx, request).await })
     })
     .await
 }

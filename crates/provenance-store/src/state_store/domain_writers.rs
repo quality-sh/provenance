@@ -4,6 +4,10 @@ use provenance_core::{Domain, SUPPORTED_SCHEMA_VERSION};
 
 impl StateStore {
     pub fn create_domain(&self, input: CreateDomainInput) -> anyhow::Result<Domain> {
+        self.with_repository_publication(|| self.write_domain(input))
+    }
+
+    fn write_domain(&self, input: CreateDomainInput) -> anyhow::Result<Domain> {
         let CreateDomainInput {
             scope_id,
             id,
@@ -11,6 +15,7 @@ impl StateStore {
             description,
             color,
         } = input;
+        self.ensure_canonical_id_available(&scope_id, &id)?;
         let path = shards::domains_path(&self.layout, &scope_id);
         self.mutate_jsonl_records(&path, |records: &mut Vec<Domain>| {
             let domain = Domain {

@@ -28,7 +28,7 @@ pub(crate) use cursor::{Cursor, Position};
 pub(crate) use freshness::is_missing_table;
 pub use live::{Disturbed, Live, LiveHandle};
 pub use refuse_stale::MovedUnit;
-pub use snapshot::{ReadSnapshot, Relations, Table};
+pub use snapshot::{ReadSnapshot, RecordIdentities, RecordIdentity, Relations, Table};
 
 pub(crate) use crate::cache::read::page::{page_error, PAGE_BYTES, RECORD_BYTES};
 /// The projection readers that run over the handles: the fetched relation

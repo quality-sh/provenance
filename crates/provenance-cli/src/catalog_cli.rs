@@ -1,4 +1,5 @@
 //! Generated-dialect CLI dispatch over the registered resource catalog.
+use crate::invocation::GlobalContext;
 use axum::http::{HeaderMap, HeaderName, HeaderValue, Method};
 use provenance_store::operations::catalog::{self, Definition};
 use serde_json::{json, Map, Value};
@@ -33,19 +34,45 @@ const COLLECTIONS: &[&str] = &[
     "dispositions",
 ];
 
-pub async fn try_dispatch(arguments: &[String]) -> anyhow::Result<bool> {
-    let Some((context, mut words)) = split_global(arguments)? else {
-        return Ok(false);
-    };
+pub struct Invocation {
+    context: GlobalContext,
+    words: Vec<String>,
+}
+
+impl Invocation {
+    pub fn new(
+        context: GlobalContext,
+        format: Option<&str>,
+        words: Vec<String>,
+    ) -> anyhow::Result<Self> {
+        anyhow::ensure!(
+            words.first().is_some_and(|word| is_collection(word)),
+            "catalog command requires a registered collection"
+        );
+        anyhow::ensure!(
+            format.is_none_or(|format| format == "json"),
+            "catalog commands support --format json"
+        );
+        Ok(Self { context, words })
+    }
+}
+
+pub fn is_collection(word: &str) -> bool {
+    COLLECTIONS.contains(&word)
+}
+
+/// Dispatches one parsed graph command from the live operation catalog.
+pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
+    let Invocation { context, mut words } = invocation;
     let collection = words.remove(0);
     if words.as_slice() == ["--help"] {
         print_help(&collection);
-        return Ok(true);
+        return Ok(());
     }
     let resolved = address::resolve(&collection, &words)?;
     if resolved.flags.as_slice() == ["--help"] {
         print_help(&collection);
-        return Ok(true);
+        return Ok(());
     }
     let definition = resolved.address.definition;
     let method = match definition.method {
@@ -77,7 +104,7 @@ pub async fn try_dispatch(arguments: &[String]) -> anyhow::Result<bool> {
         Ok(value) => crate::output::print_json(&value)?,
         Err(failure) => anyhow::bail!("{}", serde_json::to_string(&failure)?),
     }
-    Ok(true)
+    Ok(())
 }
 
 fn print_help(collection: &str) {
@@ -103,78 +130,6 @@ fn warn_if_skills_missing(repo: &str, quiet: bool) -> anyhow::Result<()> {
         );
     }
     Ok(())
-}
-
-struct Context {
-    repo: String,
-    scope: String,
-    quiet: bool,
-}
-
-fn split_global(arguments: &[String]) -> anyhow::Result<Option<(Context, Vec<String>)>> {
-    if !begins_catalog_command(arguments) {
-        return Ok(None);
-    }
-    let mut repo = ".".to_owned();
-    let mut scope = "default".to_owned();
-    let mut format = None;
-    let mut quiet = false;
-    let mut rest = Vec::new();
-    let mut index = 1;
-    while index < arguments.len() {
-        match arguments[index].as_str() {
-            "--quiet" => {
-                quiet = true;
-                index += 1;
-            }
-            "--repo" | "--scope" | "--format" => {
-                let value = arguments
-                    .get(index + 1)
-                    .ok_or_else(|| anyhow::anyhow!("{} requires a value", arguments[index]))?;
-                match arguments[index].as_str() {
-                    "--repo" => repo.clone_from(value),
-                    "--scope" => scope.clone_from(value),
-                    _ => format = Some(value.clone()),
-                }
-                index += 2;
-            }
-            word if word.starts_with("--") && word != "--stdin" && word != "--help" => {
-                rest.push(word.to_owned());
-                let value = arguments
-                    .get(index + 1)
-                    .ok_or_else(|| anyhow::anyhow!("{word} requires a value"))?;
-                rest.push(value.clone());
-                index += 2;
-            }
-            word => {
-                rest.push(word.to_owned());
-                index += 1;
-            }
-        }
-    }
-    if rest
-        .first()
-        .is_none_or(|word| !COLLECTIONS.contains(&word.as_str()))
-    {
-        return Ok(None);
-    }
-    anyhow::ensure!(
-        format.as_deref().is_none_or(|format| format == "json"),
-        "catalog commands support --format json"
-    );
-    Ok(Some((Context { repo, scope, quiet }, rest)))
-}
-
-fn begins_catalog_command(arguments: &[String]) -> bool {
-    let mut index = 1;
-    while index < arguments.len() {
-        match arguments[index].as_str() {
-            "--quiet" => index += 1,
-            "--repo" | "--scope" | "--format" => index += 2,
-            word => return COLLECTIONS.contains(&word),
-        }
-    }
-    false
 }
 
 #[allow(clippy::too_many_lines)]
