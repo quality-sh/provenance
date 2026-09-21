@@ -71,9 +71,7 @@ impl RawRecord {
     }
 
     const fn has_unknown(&self) -> bool {
-        !self.unknown.is_empty()
-            || self.repeated_member.is_some()
-            || self.nested_unknown.is_some()
+        !self.unknown.is_empty() || self.repeated_member.is_some() || self.nested_unknown.is_some()
     }
 
     fn changed_line<T: Serialize>(self, path: &Utf8Path, record: &T) -> anyhow::Result<String> {
@@ -298,10 +296,7 @@ fn top_level_members(line: &str) -> anyhow::Result<Scan> {
             _ => {}
         }
     }
-    Ok(Scan {
-        members,
-        repeated,
-    })
+    Ok(Scan { members, repeated })
 }
 
 #[cfg(test)]
@@ -327,8 +322,8 @@ mod tests {
 
     #[test]
     fn detects_a_repeat_written_with_escapes() {
-        let scan = top_level_members(r#"{"a":1,"extension":2,"\u0061":3,"a\"b":4,"a\"b":5}"#)
-            .unwrap();
+        let scan =
+            top_level_members(r#"{"a":1,"extension":2,"\u0061":3,"a\"b":4,"a\"b":5}"#).unwrap();
         assert_eq!(scan.repeated.as_deref(), Some("a"));
         assert_eq!(scan.members.len(), 5);
     }

@@ -46,7 +46,10 @@ fn assert_rows_preserved(after: &[String], untouched: &[String], created: &Value
     assert_eq!(after.len(), untouched.len() + 1, "{after:?}");
     for expected in untouched {
         let count = after.iter().filter(|row| *row == expected).count();
-        assert_eq!(count, 1, "untouched row must survive exactly once: {expected}");
+        assert_eq!(
+            count, 1,
+            "untouched row must survive exactly once: {expected}"
+        );
     }
     let created_row = after
         .iter()
@@ -116,7 +119,11 @@ async fn create_keeps_every_unrelated_source_row_byte_for_byte() {
         .await
         .unwrap();
 
-    assert_rows_preserved(&raw_rows(&fixture, "sources", "source.jsonl"), &before, &created);
+    assert_rows_preserved(
+        &raw_rows(&fixture, "sources", "source.jsonl"),
+        &before,
+        &created,
+    );
 }
 
 #[tokio::test]
@@ -145,7 +152,11 @@ async fn create_keeps_a_row_with_repeated_unknown_members_exactly() {
         .await
         .unwrap();
 
-    assert_rows_preserved(&raw_rows(&fixture, "sources", "source.jsonl"), &[expected], &created);
+    assert_rows_preserved(
+        &raw_rows(&fixture, "sources", "source.jsonl"),
+        &[expected],
+        &created,
+    );
 }
 
 #[tokio::test]
@@ -322,7 +333,10 @@ async fn target_edit_with_nested_unknown_data_is_refused_without_publication() {
         .unwrap_err();
 
     assert_ne!(error["kind"], "unknown_operation");
-    assert_eq!(raw_rows(&fixture, "boundaries", "boundary.jsonl"), vec![original]);
+    assert_eq!(
+        raw_rows(&fixture, "boundaries", "boundary.jsonl"),
+        vec![original]
+    );
     assert_eq!(state_snapshot(&fixture), before);
 }
 
