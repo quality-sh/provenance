@@ -2320,6 +2320,7 @@ version = "0.2.3"
 dependencies = [
  "fs2",
  "jsonschema",
+ "office_oxide",
  "pdf_oxide",
  "provenance-macros",
  "schemars 1.2.2",
