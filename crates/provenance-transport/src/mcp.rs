@@ -195,7 +195,7 @@ type McpCall = (
     axum::http::HeaderMap,
 );
 
-pub(super) fn mcp_call(
+pub fn mcp_call(
     definition: &'static catalog::Definition,
     value: &Value,
 ) -> Result<McpCall, ErasedFailure> {
@@ -261,6 +261,6 @@ fn invalid() -> ErasedFailure {
     )
 }
 
-pub(super) fn error(failure: ErasedFailure) -> CallToolResult {
+pub fn error(failure: ErasedFailure) -> CallToolResult {
     CallToolResult::structured_error(serde_json::to_value(failure).expect("failure is JSON"))
 }
