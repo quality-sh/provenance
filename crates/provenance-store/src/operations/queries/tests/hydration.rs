@@ -60,7 +60,7 @@ fn append_requirement(
     record["id"] = json!(id);
     record["description"] = json!("x".repeat(description_bytes));
     record["domain_id"] = json!(None::<String>);
-    record["refines"] = refines.map(|value| json!(value));
+    record["refines"] = refines.map(|value| json!(value)).unwrap_or(json!(null));
     record["depends_on"] = json!(depends_on);
     record["supersedes"] = json!([]);
     append_record(&path, &record);
@@ -220,7 +220,7 @@ async fn neighbors_hydrate_only_the_served_page_over_a_wide_graph() {
         ))
         .await;
         let result = answer.unwrap().result;
-        assert_eq!(neighbor_ids(&result), order[..limit]);
+        assert_eq!(neighbor_ids(&result), order[..limit].to_vec());
         assert!(result.has_more);
         assert!(
             hydrations <= limit + 2,
@@ -332,7 +332,7 @@ async fn trace_hydrates_only_a_bounded_breadth_page() {
     ))
     .await;
     let result = answer.unwrap().result;
-    assert_eq!(trace_ids(&result), order[..1]);
+    assert_eq!(trace_ids(&result), order[..1].to_vec());
     assert!(result.has_more);
     assert!(hydrations <= 3, "one page row plus the origin probe");
 }
