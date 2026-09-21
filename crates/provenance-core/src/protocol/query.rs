@@ -62,7 +62,7 @@ pub struct ResolveRecordQuery {
     pub allowed_node_types: Vec<NodeType>,
 }
 
-/// Find records whose text contains a phrase.
+/// Find records that satisfy the supplied text and kind predicates.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -71,7 +71,8 @@ pub struct SearchQuery {
     pub protocol_version: Option<u32>,
     #[serde(default)]
     pub cursor: Option<String>,
-    pub text: String,
+    #[serde(default)]
+    pub text: Option<String>,
     #[serde(default)]
     pub node_types: Vec<NodeType>,
     #[serde(default = "default_limit")]
