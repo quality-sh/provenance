@@ -184,6 +184,7 @@ impl<K: ProjectionRow> Table<'_, K> {
         }
         let mut tx = self.snapshot().connection().await;
         let ids: Vec<String> = query.fetch_all(&mut **tx).await?;
+        drop(tx);
         Ok(ids)
     }
 

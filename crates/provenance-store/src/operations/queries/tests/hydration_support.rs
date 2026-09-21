@@ -27,7 +27,7 @@ pub async fn counted<R>(run: impl std::future::Future<Output = R>) -> (R, usize)
     });
     let answer = run.await;
     crate::test_probes::disarm("query_row_hydrated");
-    let hydrations = HYDRATIONS.with(|count| count.get());
+    let hydrations = HYDRATIONS.with(Cell::get);
     (answer, hydrations)
 }
 
