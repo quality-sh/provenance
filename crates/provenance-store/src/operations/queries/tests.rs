@@ -18,6 +18,7 @@ mod document;
 mod document_membership;
 mod evidence;
 mod front_equivalence;
+mod hydration;
 mod impact;
 mod limits;
 mod live;
