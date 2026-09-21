@@ -165,7 +165,7 @@ fn definition(action: Action, kind: NodeType) -> Option<&'static Definition> {
         .find(|definition| definition.name == name)
 }
 
-pub(super) fn tools(host: &crate::StatementHost) -> Vec<Tool> {
+pub fn tools(host: &crate::StatementHost) -> Vec<Tool> {
     Action::ALL
         .into_iter()
         .filter_map(|action| tool(host, action))
@@ -355,7 +355,7 @@ fn rewrite_references(value: &mut Value, prefix: &str) {
     }
 }
 
-pub(super) async fn call(
+pub async fn call(
     host: &crate::StatementHost,
     action: Action,
     mut arguments: Map<String, Value>,
