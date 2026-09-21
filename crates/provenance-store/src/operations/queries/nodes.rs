@@ -4,6 +4,7 @@
 
 use crate::operations::reader::ReadSnapshot;
 use provenance_core::protocol::GraphNode;
+use provenance_core::protocol::RecordResolution;
 use provenance_core::{
     Boundary, Domain, NodeType, Question, Requirement, Resolution, Rule, Source, StableId, Topic,
 };
@@ -92,6 +93,35 @@ pub(super) async fn node(
     id: &StableId,
 ) -> anyhow::Result<Option<GraphNode>> {
     page_node(snapshot, node_type, id.as_str()).await
+}
+
+pub(super) async fn resolve(
+    snapshot: &ReadSnapshot,
+    id: &StableId,
+    allowed_node_types: &[NodeType],
+) -> anyhow::Result<RecordResolution> {
+    let visible = snapshot
+        .record_identities()
+        .resolve(id.as_str())
+        .await?
+        .into_iter()
+        .filter(|identity| {
+            identity.scope_id.as_str() == snapshot.scope().as_str()
+                && allowed_node_types.contains(&identity.node_type)
+        })
+        .map(|identity| identity.node_type)
+        .collect::<Vec<_>>();
+    let [node_type] = visible.as_slice() else {
+        return Ok(if visible.is_empty() {
+            RecordResolution::Missing
+        } else {
+            RecordResolution::Ambiguous
+        });
+    };
+    let node = node(snapshot, *node_type, id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("record identity index points to a missing record"))?;
+    Ok(RecordResolution::Found(node))
 }
 
 /// The records behind the given endpoints that count under the view,

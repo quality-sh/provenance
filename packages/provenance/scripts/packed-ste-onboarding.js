@@ -156,7 +156,9 @@ function assertLocalEngines(project, environment, engineManifest, binaryName, ve
     "check", "--repo", ".", "--format", "json",
   ]);
   assert.equal(check.status, 0, check.stderr);
-  assert.equal(JSON.parse(check.stdout).status, "ok");
+  const categories = JSON.parse(check.stdout).categories;
+  assert.equal(categories.length, 3);
+  assert.ok(categories.every(category => category.status === "passed"));
 }
 
 function assertPreflightAndWriteGate(project, environment, npmCli) {
@@ -228,10 +230,11 @@ function assertStrictCommittedEditGate(project, environment, npmCli, version) {
   ]);
   assert.notEqual(strict.status, 0, "the project-local strict CI command must block findings");
   const report = JSON.parse(strict.stdout);
-  assert.equal(report.status, "findings");
-  assert.equal(report.base_commit, base);
-  assert.equal(report.candidate_commit, candidate);
-  assert.deepEqual(report.diagnostics, [{
+  const statements = report.categories.find(category => category.category === "statements");
+  assert.equal(statements.status, "findings");
+  assert.equal(statements.context.base_commit, base);
+  assert.equal(statements.context.candidate_commit, candidate);
+  assert.deepEqual(statements.findings.map(finding => finding.detail), [{
     resource_kind: "requirement",
     scope_id: "default",
     id: "req_packed_manual_edit",

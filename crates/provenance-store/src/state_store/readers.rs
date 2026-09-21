@@ -234,7 +234,7 @@ pub(super) fn read_jsonl<T: DeserializeOwned>(
     store.state_path_access(path, || read_jsonl_unlocked(path))
 }
 
-fn read_jsonl_unlocked<T: DeserializeOwned>(path: &Utf8Path) -> anyhow::Result<Vec<T>> {
+pub(super) fn read_jsonl_unlocked<T: DeserializeOwned>(path: &Utf8Path) -> anyhow::Result<Vec<T>> {
     read_records(path, Fields::Open, leave_as_written, NO_NESTED_RECORDS)
 }
 

@@ -1,7 +1,7 @@
 use crate::cli::Command;
 
 mod cargo_init;
-mod check;
+pub mod check;
 mod coverage;
 mod dictionary;
 mod docs;
@@ -65,9 +65,26 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
             .await??;
         }
         Command::Check {
-            repo, strict, base, ..
+            repo,
+            strict,
+            base,
+            graph,
+            statements,
+            bindings,
+            format,
         } => {
-            check::check(&repo, strict, base.as_deref())?;
+            check::check(
+                repo,
+                strict,
+                base,
+                format.is_some(),
+                check::Selectors {
+                    graph,
+                    statements,
+                    bindings,
+                },
+            )
+            .await?;
         }
         Command::Docs { command } => {
             docs::handle(command).await?;

@@ -21,6 +21,7 @@ mod evidence;
 mod front_equivalence;
 mod hydration;
 mod hydration_support;
+mod identity;
 mod impact;
 mod limits;
 mod live;

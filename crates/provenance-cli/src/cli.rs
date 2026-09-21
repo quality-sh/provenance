@@ -81,8 +81,17 @@ pub enum Command {
         /// Compare Git HEAD with this commit instead of its first parent.
         #[arg(long, requires = "strict")]
         base: Option<String>,
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
+        /// Run only graph validity checks. Combine with other check selectors.
+        #[arg(long)]
+        graph: bool,
+        /// Run only statement quality checks. Combine with other check selectors.
+        #[arg(long)]
+        statements: bool,
+        /// Run only repository-wide Rule binding checks.
+        #[arg(long)]
+        bindings: bool,
+        #[arg(long, value_enum)]
+        format: Option<JsonFormat>,
     },
     Docs {
         #[command(subcommand)]

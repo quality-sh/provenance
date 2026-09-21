@@ -1,5 +1,7 @@
 use crate::operations::reader::ReadContext;
-use provenance_core::protocol::{GetQuery, GetResult, SearchQuery, SearchResult};
+use provenance_core::protocol::{
+    GetQuery, GetResult, ResolveRecordQuery, ResolveRecordResult, SearchQuery, SearchResult,
+};
 use provenance_core::{NodeType, StableId};
 
 use super::nodes;
@@ -14,6 +16,18 @@ pub(super) async fn get(ctx: &ReadContext, request: GetQuery) -> anyhow::Result<
         found: node.is_some(),
         node,
     })
+}
+
+pub(super) async fn resolve_record(
+    ctx: &ReadContext,
+    request: ResolveRecordQuery,
+) -> anyhow::Result<ResolveRecordResult> {
+    request
+        .validate()
+        .map_err(provenance_core::protocol::QueryValidation::into_native)?;
+    let id = StableId::new(request.id)?;
+    let resolution = nodes::resolve(ctx.snapshot(), &id, &request.allowed_node_types).await?;
+    Ok(ResolveRecordResult { resolution })
 }
 
 /// Search keeps canonical kind and ID order within the engine page budgets.

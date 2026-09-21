@@ -12,6 +12,7 @@ mod http;
 mod local;
 mod mcp;
 mod mcp_io;
+pub mod porcelain;
 mod routing;
 
 pub use access::HostAccess;
@@ -30,6 +31,7 @@ pub(crate) const MAX_BODY_BYTES: usize = 1024 * 1024;
 pub struct StatementHost {
     execution: Execution,
     access: Arc<dyn access::HostAccess>,
+    check_port: Option<Arc<dyn provenance_porcelain::check::CheckPort>>,
     ingress: Arc<Semaphore>,
     stopping: CancellationToken,
 }
@@ -39,6 +41,7 @@ impl Default for StatementHost {
         Self {
             execution: Execution::default(),
             access: Arc::new(access::DataFreeAccess),
+            check_port: None,
             ingress: Arc::new(Semaphore::new(8)),
             stopping: CancellationToken::new(),
         }
@@ -52,6 +55,19 @@ impl StatementHost {
             access,
             ..Self::default()
         }
+    }
+    /// Inject the repository-aware computations used by the MCP `check` tool.
+    #[must_use]
+    pub fn with_check_port(
+        mut self,
+        port: Arc<dyn provenance_porcelain::check::CheckPort>,
+    ) -> Self {
+        self.check_port = Some(port);
+        self
+    }
+
+    pub(crate) fn check_port(&self) -> Option<&Arc<dyn provenance_porcelain::check::CheckPort>> {
+        self.check_port.as_ref()
     }
     #[cfg(feature = "test-fixture")]
     pub fn with_fixture_access(access: fixture::FixtureAccess) -> Self {
@@ -80,6 +96,35 @@ impl StatementHost {
     }
     pub(crate) fn bound_identity(&self) -> Option<(String, String)> {
         self.access.bound_identity()
+    }
+
+    pub(crate) async fn invoke_scoped_typed<O>(
+        &self,
+        request: O::Request,
+    ) -> Result<O::Success, provenance_core::protocol::failure::OperationError<O::Failure>>
+    where
+        O: provenance_store::operations::catalog::Operation,
+    {
+        use provenance_core::protocol::failure::{OperationError, OperationFailure};
+        use provenance_core::protocol::repository::RepositoryContext;
+        use provenance_store::operations::catalog::RequestedContext;
+
+        if !self.advertises(O::NAME) {
+            return Err(OperationError::Common(OperationFailure::AccessDenied));
+        }
+        let (repository, scope) = self
+            .bound_identity()
+            .ok_or(OperationError::Common(OperationFailure::UnavailableNeeds))?;
+        provenance_store::operations::catalog::invoke_authorized_native_typed::<O>(
+            self.access.clone(),
+            RequestedContext::Scoped(RepositoryContext {
+                repository,
+                scope,
+                freshness: None,
+            }),
+            request,
+        )
+        .await
     }
 
     fn admit(&self) -> Result<OwnedSemaphorePermit, FailureEnvelope> {
