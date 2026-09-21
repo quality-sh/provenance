@@ -8,6 +8,7 @@ use provenance_core::protocol::{GetQuery, SearchQuery};
 use provenance_core::{
     Manifest, NodeType, RepoPathPrefix, RequirementStatus, ScopeId, StableId, SDK_PROTOCOL_VERSION,
 };
+use provenance_macros::verifies;
 
 mod binding_pages;
 mod budgets;
@@ -123,6 +124,7 @@ async fn get_answers_a_domain_and_a_boundary_by_id() {
 }
 
 #[tokio::test]
+#[verifies("rule_porcelain_search_crosses_kinds", examples)]
 async fn search_reaches_domains_and_boundaries_by_kind_and_text() {
     let (dir, _store, scope) = seeded_store();
     let answer = super::search(
@@ -132,7 +134,7 @@ async fn search_reaches_domains_and_boundaries_by_kind_and_text() {
         SearchQuery {
             cursor: None,
             protocol_version: Some(SDK_PROTOCOL_VERSION),
-            text: "pay".into(),
+            text: Some("pay".into()),
             node_types: vec![NodeType::Domain, NodeType::Boundary],
             limit: 10,
         },
@@ -154,6 +156,36 @@ async fn search_reaches_domains_and_boundaries_by_kind_and_text() {
 }
 
 #[tokio::test]
+async fn filter_only_search_reaches_each_selected_kind() {
+    let (dir, _store, scope) = seeded_store();
+    let answer = super::search(
+        Some(root_of(&dir)),
+        &scope,
+        ReadPolicy::default(),
+        serde_json::from_value(serde_json::json!({
+            "node_types":["requirement", "boundary"],
+            "limit":10
+        }))
+        .unwrap(),
+    )
+    .await
+    .unwrap()
+    .result;
+    let found: Vec<(NodeType, &str)> = answer
+        .nodes
+        .iter()
+        .map(|node| (node.node_type(), node.id().as_str()))
+        .collect();
+    assert_eq!(
+        found,
+        [
+            (NodeType::Requirement, "req_overtime"),
+            (NodeType::Boundary, "boundary_no_backpay")
+        ]
+    );
+}
+
+#[tokio::test]
 async fn default_search_keeps_the_six_settled_kinds_under_protocol_five() {
     let (dir, _store, scope) = seeded_store();
     let answer = super::search(
@@ -163,7 +195,7 @@ async fn default_search_keeps_the_six_settled_kinds_under_protocol_five() {
         SearchQuery {
             cursor: None,
             protocol_version: Some(SDK_PROTOCOL_VERSION),
-            text: "pay".into(),
+            text: Some("pay".into()),
             node_types: Vec::new(),
             limit: 10,
         },
@@ -210,7 +242,7 @@ async fn search_answers_new_kinds_after_every_settled_kind() {
         SearchQuery {
             cursor: None,
             protocol_version: Some(SDK_PROTOCOL_VERSION),
-            text: "a".into(),
+            text: Some("a".into()),
             node_types: vec![
                 NodeType::Source,
                 NodeType::Requirement,

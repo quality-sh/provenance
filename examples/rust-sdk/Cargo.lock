@@ -1553,6 +1553,7 @@ name = "provenance-ste100"
 version = "0.2.3"
 dependencies = [
  "fs2",
+ "office_oxide",
  "pdf_oxide",
  "provenance-macros",
  "serde",
