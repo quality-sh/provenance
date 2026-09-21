@@ -135,6 +135,7 @@ async fn resolve_symbol_hydrates_only_the_rule_page() {
     create_rule_of(&state, &store.scope, "rule_overtime", "req_overtime");
     create_rule_of(&state, &store.scope, "rule_audit", "req_overtime");
     create_rule_of(&state, &store.scope, "rule_site_000", "req_overtime");
+    create_rule_of(&state, &store.scope, "rule_site_001", "req_overtime");
     for index in 0..30 {
         append_binding(
             &state,
@@ -160,7 +161,7 @@ async fn resolve_symbol_hydrates_only_the_rule_page() {
         ["rule_audit", "rule_overtime"],
         "candidates sort by id"
     );
-    assert!(result.has_more);
+    assert!(result.has_more, "two served rule records remain past the page");
     assert!(hydrations <= 3, "binding rows must never decode");
 
     let (answer, hydrations) = counted(queries::resolve_symbol(
@@ -176,6 +177,6 @@ async fn resolve_symbol_hydrates_only_the_rule_page() {
         ["rule_overtime", "rule_site_000"],
         "the symbol filters"
     );
-    assert!(result.has_more);
+    assert!(result.has_more, "rule_site_001 remains past the page");
     assert!(hydrations <= 3, "binding rows must never decode");
 }
