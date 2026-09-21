@@ -20,13 +20,14 @@ impl StateStore {
             .find(|record| record.id == input.id)
             .ok_or_else(missing)?;
         owner_matches(before.declared_by.as_deref(), input.declared_by.as_deref())?;
-        review::relationships::validate_list_removals(
-            self,
+        self.validate_relation_targets(
             &scope,
             &records,
             &input.id,
-            "supersedes",
-            input.supersedes.as_ref(),
+            &[(
+                "supersedes",
+                review::relationships::removal_targets(input.supersedes.as_ref()),
+            )],
         )?;
         let path = shards::sources_path(&self.layout, &input.scope_id);
         let record = self.mutate_graph_record(&path, |records: &mut Vec<Source>| {
@@ -95,21 +96,20 @@ impl StateStore {
             .find(|record| record.id == input.id)
             .ok_or_else(missing)?;
         owner_matches(before.declared_by.as_deref(), input.declared_by.as_deref())?;
-        review::relationships::validate_list_removals(
-            self,
+        self.validate_relation_targets(
             &scope,
             &records,
             &input.id,
-            "requirement_ids",
-            input.requirement_ids.as_ref(),
-        )?;
-        review::relationships::validate_list_removals(
-            self,
-            &scope,
-            &records,
-            &input.id,
-            "resolution_ids",
-            input.resolution_ids.as_ref(),
+            &[
+                (
+                    "requirement_ids",
+                    review::relationships::removal_targets(input.requirement_ids.as_ref()),
+                ),
+                (
+                    "resolution_ids",
+                    review::relationships::removal_targets(input.resolution_ids.as_ref()),
+                ),
+            ],
         )?;
         let path = shards::rules_path(&self.layout, &input.scope_id);
         let record = self.mutate_graph_record(&path, |records: &mut Vec<Rule>| {

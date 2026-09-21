@@ -10,7 +10,8 @@ fn seed_targets(store: &provenance_store::state_store::StateStore) {
         ("req_b", vec![]),
         ("req_c", vec![]),
         ("req_d", vec![]),
-        ("req_cycle", vec!["req_a"]),
+        ("req_cycle_middle", vec!["req_a"]),
+        ("req_cycle", vec!["req_cycle_middle"]),
     ] {
         store
             .create_requirement(
@@ -239,37 +240,60 @@ fn absent_removals_still_validate_missing_wrong_kind_and_forbidden_targets() {
     let before = record(&store);
     let etag = store.requirement_edit_state(&scope(), &id()).unwrap().etag;
 
-    for (request, edit) in [
+    for (request, edit, expected) in [
         (
             "missing_list_target",
             json!({"depends_on": {"remove": ["req_missing"]}}),
+            provenance_store::write_error::WriteFailure::MissingReference,
         ),
         (
             "wrong_list_target_kind",
             json!({"depends_on": {"remove": ["source_one"]}}),
+            provenance_store::write_error::WriteFailure::MissingReference,
         ),
         (
             "forbidden_list_target",
             json!({"depends_on": {"remove": ["req_cycle"]}}),
+            provenance_store::write_error::WriteFailure::InvalidUpdate,
         ),
         (
             "missing_citation_target",
             json!({"cites": {"remove": ["source_missing"]}}),
+            provenance_store::write_error::WriteFailure::MissingReference,
         ),
         (
             "wrong_citation_target_kind",
             json!({"cites": {"remove": ["req_b"]}}),
+            provenance_store::write_error::WriteFailure::MissingReference,
         ),
     ] {
-        assert!(store
+        let error = store
             .save_requirement(relations(&store, request, edit))
-            .is_err());
+            .unwrap_err();
+        assert_eq!(
+            std::mem::discriminant(
+                &provenance_store::write_error::WriteError(error).safe()
+            ),
+            std::mem::discriminant(&expected)
+        );
         assert_eq!(record(&store), before);
         assert_eq!(
             store.requirement_edit_state(&scope(), &id()).unwrap().etag,
             etag
         );
     }
+
+    let error = store
+        .save_requirement(relations(
+            &store,
+            "cycle_path",
+            json!({"depends_on": {"remove": ["req_cycle"]}}),
+        ))
+        .unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "depends_on forms a cycle: req_cycle -> req_cycle_middle -> req_a -> req_cycle"
+    );
 }
 
 #[test]
