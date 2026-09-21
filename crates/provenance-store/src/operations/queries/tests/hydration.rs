@@ -1,164 +1,23 @@
-//! Query pages hydrate only the records they serve.
+//! Walk pages hydrate only the records they serve.
 //!
-//! The match set behind a page can be arbitrarily wide. The reads behind
-//! `neighbors`, `trace`, `evidence`, and `resolve_symbol` must choose the
-//! page by id before any record decodes: the hydration count then stays
-//! within the page plus fixed probes, an oversized record past the page
-//! cannot refuse the page, and an oversized record inside the page still
-//! refuses with its typed failure. Every count here reads the
-//! `query_row_hydrated` probe, so a bound is proved, not inferred from a
-//! final answer.
+//! The match set behind a `neighbors` or `trace` page can be arbitrarily
+//! wide. The walk must choose the page by id before any record decodes:
+//! the hydration count then stays within the page plus fixed probes, an
+//! oversized record past the page cannot refuse the page, and an
+//! oversized record inside the page still refuses with its typed
+//! failure. Every count here reads the `query_row_hydrated` probe, so a
+//! bound is proved, not inferred from a final answer.
 
-use std::cell::Cell;
-
+use super::hydration_support::{
+    append_requirement, counted, neighbors_query, trace_query,
+};
 use super::{root_of, seeded_store};
-use crate::cache::tests::fixtures::{append_record, create_rule_of};
 use crate::operations::queries;
 use crate::operations::read_policy::ReadPolicy;
-use provenance_core::protocol::{
-    read_failure::ReadFailure, Direction, EvidenceQuery, NeighborsQuery, ResolveSymbolQuery,
-    TraceQuery, SDK_PROTOCOL_VERSION,
-};
-use provenance_core::{NodeType, SUPPORTED_SCHEMA_VERSION};
+use provenance_core::protocol::{read_failure::ReadFailure, NeighborsResult, TraceResult};
 use provenance_macros::verifies;
-use serde_json::json;
 
-/// Over the stored record ceiling, so the record can never decode.
-const OVERSIZED_BYTES: usize = 70_000;
-
-thread_local! {
-    static HYDRATIONS: Cell<usize> = const { Cell::new(0) };
-}
-
-/// Runs one query with the hydration probe armed, and reports how many
-/// projection rows the run decoded.
-async fn counted<R>(run: impl std::future::Future<Output = R>) -> (R, usize) {
-    HYDRATIONS.with(|count| count.set(0));
-    crate::test_probes::arm("query_row_hydrated", || {
-        HYDRATIONS.with(|count| count.set(count.get() + 1));
-        Ok(())
-    });
-    let answer = run.await;
-    crate::test_probes::disarm("query_row_hydrated");
-    let hydrations = HYDRATIONS.with(|count| count.get());
-    (answer, hydrations)
-}
-
-/// One raw requirement beside `req_overtime`, written past the writers'
-/// checks so the test controls every relation field. The domain pointer
-/// is dropped, so the graph holds exactly what the test names.
-fn append_requirement(
-    store: &crate::state_store::StateStore,
-    scope: &provenance_core::ScopeId,
-    id: &str,
-    refines: Option<&str>,
-    depends_on: &[&str],
-    description_bytes: usize,
-) {
-    let path = crate::shards::requirements_path(&store.layout, scope);
-    let mut record = json!(store.list_requirements(scope).unwrap()[0]);
-    record["id"] = json!(id);
-    record["description"] = json!("x".repeat(description_bytes));
-    record["domain_id"] = json!(None::<String>);
-    record["refines"] = refines.map(|value| json!(value)).unwrap_or(json!(null));
-    record["depends_on"] = json!(depends_on);
-    record["supersedes"] = json!([]);
-    append_record(&path, &record);
-}
-
-fn append_binding(
-    store: &crate::state_store::StateStore,
-    scope: &provenance_core::ScopeId,
-    id: &str,
-    rule_id: &str,
-    symbol: &str,
-    declared_by_bytes: usize,
-) {
-    append_record(
-        &crate::shards::implementation_bindings_path(&store.layout, scope),
-        &json!({
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
-            "scope_id": scope.as_str(),
-            "id": id,
-            "rule_id": rule_id,
-            "declared_by": "x".repeat(declared_by_bytes),
-            "file": "src/pay.rs",
-            "symbol": symbol,
-        }),
-    );
-}
-
-fn append_review(
-    store: &crate::state_store::StateStore,
-    scope: &provenance_core::ScopeId,
-    id: &str,
-    cleared_at: Option<i64>,
-) {
-    let mut record = json!({
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
-        "scope_id": scope.as_str(),
-        "id": id,
-        "rule_id": "rule_overtime",
-        "requirement_id": "req_overtime",
-        "field": "statement",
-        "before": "before",
-        "after": "after",
-        "changed_at": 1,
-    });
-    if let Some(cleared_at) = cleared_at {
-        record["cleared_at"] = json!(cleared_at);
-        record["cleared_by_run"] = json!("run_cleared");
-    }
-    append_record(
-        &crate::shards::requirement_reviews_path(&store.layout, scope),
-        &record,
-    );
-}
-
-fn neighbors_query(id: &str, limit: usize) -> NeighborsQuery {
-    NeighborsQuery {
-        protocol_version: Some(SDK_PROTOCOL_VERSION),
-        id: id.into(),
-        node_type: Some(NodeType::Requirement),
-        direction: Direction::Both,
-        relations: Vec::new(),
-        limit,
-    }
-}
-
-fn trace_query(id: &str, max_depth: usize, limit: usize) -> TraceQuery {
-    TraceQuery {
-        protocol_version: Some(SDK_PROTOCOL_VERSION),
-        id: id.into(),
-        node_type: Some(NodeType::Requirement),
-        direction: Direction::Both,
-        relations: Vec::new(),
-        max_depth,
-        limit,
-    }
-}
-
-fn evidence_query(limit: usize) -> EvidenceQuery {
-    EvidenceQuery {
-        protocol_version: Some(SDK_PROTOCOL_VERSION),
-        rule: "rule_overtime".into(),
-        base: None,
-        head: None,
-        limit,
-    }
-}
-
-fn resolve_query(symbol: Option<&str>, limit: usize) -> ResolveSymbolQuery {
-    ResolveSymbolQuery {
-        protocol_version: Some(SDK_PROTOCOL_VERSION),
-        file: "src/pay.rs".into(),
-        symbol: symbol.map(str::to_string),
-        line: None,
-        limit,
-    }
-}
-
-fn neighbor_ids(result: &provenance_core::protocol::NeighborsResult) -> Vec<String> {
+fn neighbor_ids(result: &NeighborsResult) -> Vec<String> {
     result
         .neighbors
         .iter()
@@ -166,12 +25,31 @@ fn neighbor_ids(result: &provenance_core::protocol::NeighborsResult) -> Vec<Stri
         .collect()
 }
 
-fn trace_ids(result: &provenance_core::protocol::TraceResult) -> Vec<(usize, String)> {
+fn trace_ids(result: &TraceResult) -> Vec<(usize, String)> {
     result
         .nodes
         .iter()
         .map(|node| (node.depth, node.node.id().as_str().to_string()))
         .collect()
+}
+
+/// Thirty children refine the seeded requirement, which also names its
+/// domain and carries the seeded boundary: thirty-two neighbours, the
+/// children first in id order.
+fn wide_children(
+    store: &crate::state_store::StateStore,
+    scope: &provenance_core::ScopeId,
+) {
+    for index in 0..30 {
+        append_requirement(
+            store,
+            scope,
+            &format!("req_child_{index:03}"),
+            Some("req_overtime"),
+            &[],
+            0,
+        );
+    }
 }
 
 /// The seeded store's requirement already names its domain and carries
@@ -181,16 +59,7 @@ fn trace_ids(result: &provenance_core::protocol::TraceResult) -> Vec<(usize, Str
 #[verifies("rule_query_pages_bound_shared_reads", examples)]
 async fn neighbors_hydrate_only_the_served_page_over_a_wide_graph() {
     let (dir, store, scope) = seeded_store();
-    for index in 0..30 {
-        append_requirement(
-            &store,
-            &scope,
-            &format!("req_child_{index:03}"),
-            Some("req_overtime"),
-            &[],
-            0,
-        );
-    }
+    wide_children(&store, &scope);
     let root = root_of(&dir);
     let policy = ReadPolicy::default();
 
@@ -249,7 +118,7 @@ async fn an_oversized_neighbor_past_the_page_cannot_refuse_it() {
         "req_child_999",
         Some("req_overtime"),
         &[],
-        OVERSIZED_BYTES,
+        super::hydration_support::OVERSIZED_BYTES,
     );
     let (answer, hydrations) = counted(queries::neighbors(
         Some(root_of(&dir)),
@@ -261,7 +130,13 @@ async fn an_oversized_neighbor_past_the_page_cannot_refuse_it() {
     let result = answer.expect("the page answers past an oversized record").result;
     assert_eq!(
         neighbor_ids(&result),
-        ["req_child_000", "req_child_001", "req_child_002", "req_child_003", "req_child_004"]
+        [
+            "req_child_000",
+            "req_child_001",
+            "req_child_002",
+            "req_child_003",
+            "req_child_004"
+        ]
     );
     assert!(result.has_more, "the oversized record still counts");
     assert!(hydrations <= 7, "the oversized row must never decode");
@@ -270,7 +145,11 @@ async fn an_oversized_neighbor_past_the_page_cannot_refuse_it() {
 #[tokio::test]
 async fn an_oversized_neighbor_in_the_page_still_refuses() {
     let (dir, store, scope) = seeded_store();
-    for (index, bytes) in [(0usize, 0usize), (1, OVERSIZED_BYTES), (2, 0)] {
+    for (index, bytes) in [
+        (0usize, 0usize),
+        (1, super::hydration_support::OVERSIZED_BYTES),
+        (2, 0),
+    ] {
         append_requirement(
             &store,
             &scope,
@@ -298,16 +177,7 @@ async fn an_oversized_neighbor_in_the_page_still_refuses() {
 #[verifies("rule_query_pages_bound_shared_reads", examples)]
 async fn trace_hydrates_only_a_bounded_breadth_page() {
     let (dir, store, scope) = seeded_store();
-    for index in 0..30 {
-        append_requirement(
-            &store,
-            &scope,
-            &format!("req_child_{index:03}"),
-            Some("req_overtime"),
-            &[],
-            0,
-        );
-    }
+    wide_children(&store, &scope);
     let root = root_of(&dir);
     let policy = ReadPolicy::default();
 
@@ -378,7 +248,14 @@ async fn trace_folds_duplicate_paths_and_skips_missing_targets() {
         .collect();
     assert_eq!(
         depth_one,
-        ["req_bridge_00", "req_bridge_01", "req_bridge_02", "req_dangler"]
+        [
+            "req_bridge_00",
+            "req_bridge_01",
+            "req_bridge_02",
+            "req_dangler",
+            "domain_payroll",
+            "boundary_no_backpay"
+        ]
     );
     let depth_two: Vec<String> = trace_ids(&answer)
         .into_iter()
@@ -417,7 +294,14 @@ async fn trace_hydrates_no_depth_beyond_a_full_page() {
             &[&format!("req_island_{index:02}")],
             0,
         );
-        append_requirement(&store, &scope, &format!("req_island_{index:02}"), None, &[], 0);
+        append_requirement(
+            &store,
+            &scope,
+            &format!("req_island_{index:02}"),
+            None,
+            &[],
+            0,
+        );
     }
     append_requirement(
         &store,
@@ -453,163 +337,13 @@ async fn trace_hydrates_no_depth_beyond_a_full_page() {
     let result = answer.unwrap().result;
     assert_eq!(
         trace_ids(&result),
-        [(1usize, "req_wide_00".into()), (1, "req_wide_01".into()), (1, "req_wide_02".into()), (1, "req_wide_03".into())]
+        [
+            (1usize, "req_wide_00".to_string()),
+            (1, "req_wide_01".to_string()),
+            (1, "req_wide_02".to_string()),
+            (1, "req_wide_03".to_string())
+        ]
     );
     assert!(result.has_more);
     assert!(hydrations <= 7, "a full page must not decode depth two");
-}
-
-#[tokio::test]
-#[verifies("rule_query_pages_bound_shared_reads", examples)]
-async fn evidence_hydrates_only_the_served_page() {
-    let (dir, store, scope) = seeded_store();
-    create_rule_of(&store, &scope, "rule_overtime", "req_overtime");
-    for index in 0..30 {
-        append_binding(
-            &store,
-            &scope,
-            &format!("bind_{index:03}"),
-            "rule_overtime",
-            "pay",
-            0,
-        );
-    }
-    let (answer, hydrations) = counted(queries::evidence(
-        Some(root_of(&dir)),
-        &scope,
-        ReadPolicy::default(),
-        evidence_query(3),
-    ))
-    .await;
-    let result = answer.unwrap().result;
-    let ids: Vec<String> = result
-        .implementation_bindings
-        .iter()
-        .map(|binding| binding.id.as_str().to_string())
-        .collect();
-    assert_eq!(ids, ["bind_000", "bind_001", "bind_002"]);
-    assert!(result.implementation_bindings_has_more);
-    assert!(result.has_more);
-    assert!(hydrations <= 4, "three page rows for thirty matches");
-}
-
-#[tokio::test]
-#[verifies("rule_query_pages_bound_shared_reads", examples)]
-async fn an_oversized_binding_past_the_page_cannot_refuse_evidence() {
-    let (dir, store, scope) = seeded_store();
-    create_rule_of(&store, &scope, "rule_overtime", "req_overtime");
-    append_binding(&store, &scope, "bind_000", "rule_overtime", "pay", 0);
-    append_binding(&store, &scope, "bind_001", "rule_overtime", "pay", 0);
-    append_binding(
-        &store,
-        &scope,
-        "bind_999",
-        "rule_overtime",
-        "pay",
-        OVERSIZED_BYTES,
-    );
-    let (answer, hydrations) = counted(queries::evidence(
-        Some(root_of(&dir)),
-        &scope,
-        ReadPolicy::default(),
-        evidence_query(2),
-    ))
-    .await;
-    let result = answer.expect("the page answers past an oversized record").result;
-    let ids: Vec<String> = result
-        .implementation_bindings
-        .iter()
-        .map(|binding| binding.id.as_str().to_string())
-        .collect();
-    assert_eq!(ids, ["bind_000", "bind_001"]);
-    assert!(result.implementation_bindings_has_more);
-    assert!(hydrations <= 3, "the oversized row must never decode");
-}
-
-/// The open-only cut belongs to the candidate query: cleared reviews
-/// between open ones neither serve nor consume a page slot.
-#[tokio::test]
-async fn evidence_pages_only_the_open_reviews() {
-    let (dir, store, scope) = seeded_store();
-    create_rule_of(&store, &scope, "rule_overtime", "req_overtime");
-    for (id, cleared_at) in [
-        ("review_a", None),
-        ("review_b", Some(5)),
-        ("review_c", None),
-        ("review_d", Some(5)),
-        ("review_e", None),
-    ] {
-        append_review(&store, &scope, id, cleared_at);
-    }
-    let answer = queries::evidence(
-        Some(root_of(&dir)),
-        &scope,
-        ReadPolicy::default(),
-        evidence_query(2),
-    )
-    .await
-    .unwrap()
-    .result;
-    let reviews: Vec<String> = answer
-        .reviews
-        .iter()
-        .map(|review| review.id.as_str().to_string())
-        .collect();
-    assert_eq!(reviews, ["review_a", "review_c"]);
-    assert!(answer.reviews_has_more);
-    assert!(answer.review_required);
-}
-
-#[tokio::test]
-#[verifies("rule_query_pages_bound_shared_reads", examples)]
-async fn resolve_symbol_hydrates_only_the_rule_page() {
-    let store = super::comparison::test_stores::seeded_queries();
-    create_rule_of(&store.state_store(), &store.scope, "rule_overtime", "req_overtime");
-    create_rule_of(&store.state_store(), &store.scope, "rule_audit", "req_overtime");
-    create_rule_of(&store.state_store(), &store.scope, "rule_site_000", "req_overtime");
-    for index in 0..30 {
-        append_binding(
-            &store.state_store(),
-            &store.scope,
-            &format!("bind_{index:03}"),
-            &format!("rule_site_{index:03}"),
-            "pay",
-            0,
-        );
-    }
-    append_binding(&store.state_store(), &store.scope, "bind_audit", "rule_audit", "audit", 0);
-
-    let (answer, hydrations) = counted(queries::resolve_symbol(
-        Some(store.root.clone()),
-        &store.scope,
-        ReadPolicy::default(),
-        resolve_query(None, 2),
-    ))
-    .await;
-    let result = answer.unwrap().result;
-    let ids: Vec<String> = result
-        .rules
-        .iter()
-        .map(|node| node.id().as_str().to_string())
-        .collect();
-    assert_eq!(ids, ["rule_audit", "rule_overtime"], "candidates sort by id");
-    assert!(result.has_more);
-    assert!(hydrations <= 3, "binding rows must never decode");
-
-    let (answer, hydrations) = counted(queries::resolve_symbol(
-        Some(store.root.clone()),
-        &store.scope,
-        ReadPolicy::default(),
-        resolve_query(Some("pay"), 2),
-    ))
-    .await;
-    let result = answer.unwrap().result;
-    let ids: Vec<String> = result
-        .rules
-        .iter()
-        .map(|node| node.id().as_str().to_string())
-        .collect();
-    assert_eq!(ids, ["rule_overtime", "rule_site_000"], "the symbol filters");
-    assert!(result.has_more);
-    assert!(hydrations <= 3, "binding rows must never decode");
 }

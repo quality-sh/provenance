@@ -10,6 +10,7 @@ use provenance_core::{
 };
 
 mod budgets;
+mod binding_pages;
 mod comparison;
 mod concurrent;
 mod cursor;
@@ -19,6 +20,7 @@ mod document_membership;
 mod evidence;
 mod front_equivalence;
 mod hydration;
+mod hydration_support;
 mod impact;
 mod limits;
 mod live;

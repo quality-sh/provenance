@@ -23,20 +23,16 @@ pub(super) async fn evidence(
     let scope = ctx.snapshot().scope().clone();
     let snapshot = ctx.snapshot();
     let by_rule = [rule.as_str()];
-    let implementations = snapshot
+    // Each list is one bounded page read: the page is chosen by id, so
+    // the records that decode are the records the answer serves.
+    let (implementation_bindings, implementation_bindings_has_more) = snapshot
         .table::<ImplementationBinding>()
-        .page_by_field("rule_id", &by_rule)
-        .await?
-        .into_iter()
-        .take(request.limit + 1)
-        .collect::<Vec<_>>();
-    let verifications = snapshot
+        .page_by_field("rule_id", &by_rule, "", request.limit)
+        .await?;
+    let (verification_bindings, verification_bindings_has_more) = snapshot
         .table::<VerificationBinding>()
-        .page_by_field("rule_id", &by_rule)
-        .await?
-        .into_iter()
-        .take(request.limit + 1)
-        .collect::<Vec<_>>();
+        .page_by_field("rule_id", &by_rule, "", request.limit)
+        .await?;
     let mut runs = ctx
         .live(Live::VerificationRuns)
         .runs(&scope)?
@@ -52,23 +48,14 @@ pub(super) async fn evidence(
     let latest_verification_run = runs.first().cloned();
     runs.truncate(request.limit + 1);
     // The table answers in id order; only the reviews still waiting on a
-    // run are open.
-    let mut reviews = snapshot
+    // run are open, so the open-only cut is part of the candidate query.
+    let (reviews, reviews_has_more) = snapshot
         .table::<RequirementReview>()
-        .page_by_field("rule_id", &by_rule)
-        .await?
-        .into_iter()
-        .filter(|review| review.cleared_at.is_none())
-        .collect::<Vec<_>>();
+        .page_by_field("rule_id", &by_rule, "cleared_at IS NULL", request.limit)
+        .await?;
     let review_required = !reviews.is_empty();
-    reviews.truncate(request.limit + 1);
 
-    let (implementation_bindings, implementation_bindings_has_more) =
-        take_page(implementations, request.limit);
-    let (verification_bindings, verification_bindings_has_more) =
-        take_page(verifications, request.limit);
     let (verification_runs, verification_runs_has_more) = take_page(runs, request.limit);
-    let (reviews, reviews_has_more) = take_page(reviews, request.limit);
     let stale = request
         .base
         .map(|base| {
