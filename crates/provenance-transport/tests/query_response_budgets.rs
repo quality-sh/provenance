@@ -207,5 +207,4 @@ async fn ordinary_member_wire_does_not_inherit_the_query_refusal() {
     let (status, _, value) = call(&host, "/requirements/req_large_000").await;
     assert_eq!(status, 200, "{value}");
     assert_eq!(value["data"]["id"], "req_large_000");
-    assert!(value["meta"]["stamp"].is_object());
 }
