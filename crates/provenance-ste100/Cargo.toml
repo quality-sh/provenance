@@ -18,6 +18,7 @@ schema = ["dep:schemars"]
 [dependencies]
 schemars = { workspace = true, optional = true }
 fs2.workspace = true
+office_oxide = { version = "=0.1.8", default-features = false }
 pdf_oxide = { version = "=0.3.77", default-features = false, features = ["legacy-crypto"] }
 provenance-macros.workspace = true
 serde.workspace = true
