@@ -57,7 +57,11 @@ impl Request {
     pub fn describe(&self) -> String {
         match self {
             Self::Get(query) => format!("{}:{}", kind_word(query.node_type), query.id),
-            Self::Search(query) => format!("{:?}/{}", query.text, query.node_types.len()),
+            Self::Search(query) => format!(
+                "{:?}/{}",
+                query.text.as_deref().unwrap_or_default(),
+                query.node_types.len()
+            ),
             Self::Neighbors(query) => format!("{}/limit={}", query.id, query.limit),
             Self::Trace(query) => format!("{}/limit={}", query.id, query.limit),
             Self::Impact(query) => query.id.clone(),
@@ -207,7 +211,7 @@ pub fn search(text: &str, node_types: Vec<NodeType>) -> SearchQuery {
     SearchQuery {
         cursor: None,
         protocol_version: Some(SDK_PROTOCOL_VERSION),
-        text: text.to_string(),
+        text: Some(text.to_string()),
         node_types,
 
         limit: 10,
