@@ -45,7 +45,7 @@ pub use binding::{
     ArgumentAlias, CliBinding, CliDefault, CliDefaultValue, Controls, EtagBinding, HandlerBinding,
     HeaderBinding, NullClearBinding, ParentBinding, PathBinding, QueryRequestBinding, QueryRoute,
     Registration, RequestAdapter, RequestAdapterError, RequestBinding, ResponseAdapter,
-    ResponseBinding, SelectorBinding,
+    ResponseBinding, SelectorBinding, TargetAction, TargetBinding,
 };
 pub use context::{
     ContextKind, ContextResolver, ExecutionNeed, ExecutionNeeds, PreparedContext, PreparedRead,
@@ -67,8 +67,8 @@ pub use invoke::{
 #[cfg(feature = "schema")]
 pub use schema::{
     definitions, parse_parameter_value, parse_schema_value, parse_schema_value_in,
-    serialize_parameter_value, Definition, HttpMethod, Parameter, ParseValueError, QueryVariant,
-    ResponseKind,
+    serialize_parameter_value, target_definition, target_definitions, Definition, HttpMethod,
+    Parameter, ParseValueError, QueryVariant, ResponseKind,
 };
 pub use statement::CheckStatement;
 

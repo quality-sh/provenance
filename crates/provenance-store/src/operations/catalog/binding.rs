@@ -1,4 +1,5 @@
 use super::{ContextKind, Parameter, ResponseKind};
+use provenance_core::NodeType;
 use serde_json::Value;
 use std::collections::BTreeMap;
 
@@ -187,6 +188,52 @@ pub struct QueryRoute {
     pub response: ResponseBinding,
 }
 
+/// One target-first porcelain action declared by a canonical operation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TargetAction {
+    Create,
+    Update,
+    Answer,
+    Claim,
+    Release,
+    Submit,
+}
+
+impl TargetAction {
+    pub const ALL: [Self; 6] = [
+        Self::Create,
+        Self::Update,
+        Self::Answer,
+        Self::Claim,
+        Self::Release,
+        Self::Submit,
+    ];
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Create => "create",
+            Self::Update => "update",
+            Self::Answer => "answer",
+            Self::Claim => "claim",
+            Self::Release => "release",
+            Self::Submit => "submit",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|action| action.as_str() == value)
+    }
+}
+
+/// The porcelain action and record kind owned by one registration.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TargetBinding {
+    pub action: TargetAction,
+    pub kind: NodeType,
+}
+
 #[derive(Clone)]
 pub struct Registration {
     pub handler: HandlerBinding,
@@ -195,6 +242,7 @@ pub struct Registration {
     pub response: ResponseBinding,
     pub queries: Vec<QueryRoute>,
     pub cli: CliBinding,
+    pub target: Option<TargetBinding>,
 }
 
 impl Registration {
@@ -213,6 +261,7 @@ impl Registration {
             response,
             queries: Vec::new(),
             cli: CliBinding::default(),
+            target: None,
         }
     }
 }

@@ -199,11 +199,34 @@ pub fn mcp_call(
     definition: &'static catalog::Definition,
     value: &Value,
 ) -> Result<McpCall, ErasedFailure> {
+    mcp_call_with_path(definition, value, BTreeMap::new())
+}
+
+pub(crate) fn mcp_target_call(
+    definition: &'static catalog::Definition,
+    value: &Value,
+    target: &str,
+) -> Result<(Value, BTreeMap<String, String>, axum::http::HeaderMap), ErasedFailure> {
+    let path = definition
+        .registration
+        .request
+        .path
+        .iter()
+        .map(|binding| (binding.parameter.to_owned(), target.to_owned()))
+        .collect();
+    let (_, data, query, headers) = mcp_call_with_path(definition, value, path)?;
+    Ok((data, query, headers))
+}
+
+fn mcp_call_with_path(
+    definition: &'static catalog::Definition,
+    value: &Value,
+    mut path: BTreeMap<String, String>,
+) -> Result<McpCall, ErasedFailure> {
     let mut arguments = value.as_object().cloned().ok_or_else(invalid)?;
     let data = arguments
         .remove("data")
         .unwrap_or_else(|| serde_json::json!({}));
-    let mut path = BTreeMap::new();
     let mut query = BTreeMap::new();
     let mut headers = axum::http::HeaderMap::new();
     let variants: Vec<catalog::QueryVariant> = definition.query_variants();
@@ -218,6 +241,9 @@ pub fn mcp_call(
             .parameters
     };
     for parameter in parameters {
+        if parameter.location == "path" && path.contains_key(parameter.name) {
+            continue;
+        }
         let mcp_name = if parameter.location == "header" {
             parameter.name.to_ascii_lowercase().replace('-', "_")
         } else {

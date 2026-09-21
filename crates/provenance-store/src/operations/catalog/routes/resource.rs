@@ -88,7 +88,7 @@ macro_rules! resource {
         let queries = registered_member_queries!($mode, &definition, $singular);
         $out.push(with_query_results(definition, queries));
     }};
-    ($out:ident, $mode:ident, $ty:ty, $list:ty, $member:ty, $plural:literal, $singular:literal, $singular_id:literal, $plural_id:literal, $create:ty, $update:ty, $create_defaults:expr, $create_aliases:expr, $update_defaults:expr, $update_aliases:expr, $nullable:expr) => {{
+    ($out:ident, $mode:ident, $ty:ty, $list:ty, $member:ty, $plural:literal, $singular:literal, $singular_id:literal, $plural_id:literal, $create:ty, $update:ty, $create_defaults:expr, $create_aliases:expr, $update_defaults:expr, $update_aliases:expr, $nullable:expr, $target_kind:expr) => {{
         resource!(
             $out,
             $mode,
@@ -112,7 +112,8 @@ macro_rules! resource {
             )
             .scope("scope_id")
             .cli_defaults($create_defaults)
-            .argument_aliases($create_aliases),
+            .argument_aliases($create_aliases)
+            .target(TargetAction::Create, $target_kind),
         );
         $out.push(
             backed::<$update>(
@@ -127,7 +128,8 @@ macro_rules! resource {
             .scope("scope_id")
             .cli_defaults($update_defaults)
             .argument_aliases($update_aliases)
-            .public_patch($nullable),
+            .public_patch($nullable)
+            .target(TargetAction::Update, $target_kind),
         );
     }};
 }

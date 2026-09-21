@@ -10,13 +10,15 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         "claimTopic",
         "/topics/{id}/claim",
         "Claim one open Topic for an actor.",
-    ));
+    )
+    .target(TargetAction::Claim, Some(NodeType::Topic)));
     out.push(native::<operation::ReleaseTopic>(
         "release-topic",
         "releaseTopic",
         "/topics/{id}/release",
         "Release the claim on one Topic.",
-    ));
+    )
+    .target(TargetAction::Release, Some(NodeType::Topic)));
     out.push(native::<operation::CloseTopic>(
         "close-topic",
         "closeTopic",
@@ -40,7 +42,8 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         "answerQuestion",
         "/questions/{id}/answer",
         "Record the answer to one Question.",
-    ));
+    )
+    .target(TargetAction::Answer, Some(NodeType::Question)));
     out.push(
         backed::<operation::SubmitRequirementReviewV2>(
             "submit-requirement-review",
@@ -53,7 +56,8 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         )
         .path_field("id", "requirement_id")
         .scope("scope_id")
-        .header("Idempotency-Key", "request_id", false),
+        .header("Idempotency-Key", "request_id", false)
+        .target(TargetAction::Submit, Some(NodeType::Requirement)),
     );
     out.push(
         backed::<operation::DecideRequirementReviewV2>(
