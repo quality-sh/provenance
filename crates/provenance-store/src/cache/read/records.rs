@@ -183,7 +183,8 @@ impl<K: ProjectionRow> Table<'_, K> {
             query = query.bind(symbol);
         }
         let mut tx = self.snapshot().connection().await;
-        query.fetch_all(&mut **tx).await
+        let ids: Vec<String> = query.fetch_all(&mut **tx).await?;
+        Ok(ids)
     }
 
     /// The given ids that count, in id order, each after its stored byte
