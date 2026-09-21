@@ -9,8 +9,8 @@ use provenance_core::{
     Manifest, NodeType, RepoPathPrefix, RequirementStatus, ScopeId, StableId, SDK_PROTOCOL_VERSION,
 };
 
-mod budgets;
 mod binding_pages;
+mod budgets;
 mod comparison;
 mod concurrent;
 mod cursor;

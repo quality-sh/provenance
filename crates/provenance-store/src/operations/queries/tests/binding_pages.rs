@@ -161,7 +161,10 @@ async fn resolve_symbol_hydrates_only_the_rule_page() {
         ["rule_audit", "rule_overtime"],
         "candidates sort by id"
     );
-    assert!(result.has_more, "two served rule records remain past the page");
+    assert!(
+        result.has_more,
+        "two served rule records remain past the page"
+    );
     assert!(hydrations <= 3, "binding rows must never decode");
 
     let (answer, hydrations) = counted(queries::resolve_symbol(

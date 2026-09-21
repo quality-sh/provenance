@@ -8,9 +8,7 @@
 //! failure. Every count here reads the `query_row_hydrated` probe, so a
 //! bound is proved, not inferred from a final answer.
 
-use super::hydration_support::{
-    append_requirement, counted, neighbors_query, trace_query,
-};
+use super::hydration_support::{append_requirement, counted, neighbors_query, trace_query};
 use super::{root_of, seeded_store};
 use crate::operations::queries;
 use crate::operations::read_policy::ReadPolicy;
@@ -36,10 +34,7 @@ fn trace_ids(result: &TraceResult) -> Vec<(usize, String)> {
 /// Thirty children refine the seeded requirement, which also names its
 /// domain and carries the seeded boundary: thirty-two neighbours, the
 /// children first in id order.
-fn wide_children(
-    store: &crate::state_store::StateStore,
-    scope: &provenance_core::ScopeId,
-) {
+fn wide_children(store: &crate::state_store::StateStore, scope: &provenance_core::ScopeId) {
     for index in 0..30 {
         append_requirement(
             store,
@@ -127,7 +122,9 @@ async fn an_oversized_neighbor_past_the_page_cannot_refuse_it() {
         neighbors_query("req_overtime", 5),
     ))
     .await;
-    let result = answer.expect("the page answers past an oversized record").result;
+    let result = answer
+        .expect("the page answers past an oversized record")
+        .result;
     assert_eq!(
         neighbor_ids(&result),
         [
