@@ -34,10 +34,10 @@ fn json_output(arguments: &[&str]) -> Value {
     serde_json::from_slice(&output.stdout).unwrap()
 }
 
-fn json_stdin_output(arguments: &[&str], input: Value) -> Value {
+fn json_stdin_output(arguments: &[&str], input: &Value) -> Value {
     let output = provenance()
         .args(arguments)
-        .write_stdin(serde_json::to_vec(&input).unwrap())
+        .write_stdin(serde_json::to_vec(input).unwrap())
         .output()
         .unwrap();
     assert!(
@@ -129,7 +129,7 @@ fn target_first_create_uses_the_target_type_and_separate_parent_fields() {
             "--format",
             "json",
         ],
-        serde_json::json!({"relationships":{"depends_on":{"add":["req_dependency"]}}}),
+        &serde_json::json!({"relationships":{"depends_on":{"add":["req_dependency"]}}}),
     );
     assert_eq!(
         delta["data"]["depends_on"],
@@ -148,7 +148,7 @@ fn target_first_create_uses_the_target_type_and_separate_parent_fields() {
             "--format",
             "json",
         ],
-        serde_json::json!({"relationships":{"depends_on":["req_parent"]}}),
+        &serde_json::json!({"relationships":{"depends_on":["req_parent"]}}),
     );
     assert_eq!(
         replacement["data"]["depends_on"],
@@ -226,11 +226,8 @@ fn target_first_update_preserves_omissions_and_honors_null_clear() {
     assert_eq!(cleared["data"]["reference"], "clause 1");
 }
 
-#[test]
-#[verifies("rule_porcelain_existing_action_infers_kind", examples)]
-#[verifies("rule_porcelain_named_domain_actions", examples)]
-fn target_first_named_actions_keep_the_existing_domain_preconditions() {
-    let (_directory, repo) = initialized_repo();
+fn named_action_repo() -> (tempfile::TempDir, String) {
+    let (directory, repo) = initialized_repo();
     json_output(&[
         "req_actions",
         "create",
@@ -274,6 +271,14 @@ fn target_first_named_actions_keep_the_existing_domain_preconditions() {
         "json",
     ]);
 
+    (directory, repo)
+}
+
+#[test]
+#[verifies("rule_porcelain_existing_action_infers_kind", examples)]
+#[verifies("rule_porcelain_named_domain_actions", examples)]
+fn target_first_topic_actions_keep_the_existing_domain_preconditions() {
+    let (_directory, repo) = named_action_repo();
     let claimed = json_output(&[
         "topic_actions",
         "claim",
@@ -294,7 +299,13 @@ fn target_first_named_actions_keep_the_existing_domain_preconditions() {
         "json",
     ]);
     assert!(released["data"]["claimed_by"].is_null());
+}
 
+#[test]
+#[verifies("rule_porcelain_existing_action_infers_kind", examples)]
+#[verifies("rule_porcelain_named_domain_actions", examples)]
+fn target_first_question_actions_keep_the_existing_domain_preconditions() {
+    let (_directory, repo) = named_action_repo();
     let answered = json_output(&[
         "question_actions",
         "answer",
@@ -306,30 +317,6 @@ fn target_first_named_actions_keep_the_existing_domain_preconditions() {
         "json",
     ]);
     assert_eq!(answered["data"]["status"], "answered");
-
-    let submitted = json_stdin_output(
-        &[
-            "req_actions",
-            "submit",
-            "--repo",
-            &repo,
-            "--stdin",
-            "--format",
-            "json",
-        ],
-        serde_json::json!({
-            "actor":"agent",
-            "proposal_id":"proposal_cli_target",
-            "proposal_key":"cli-target",
-            "title":"CLI target",
-            "summary":"The target-first action submits this Requirement.",
-            "source_ids":[],
-            "evidence_references":[],
-            "builds_on":[]
-        }),
-    );
-    assert_eq!(submitted["data"]["requirement_id"], "req_actions");
-    assert_eq!(submitted["data"]["fact"], "submitted");
 
     provenance()
         .args([
@@ -344,6 +331,36 @@ fn target_first_named_actions_keep_the_existing_domain_preconditions() {
         .failure()
         .stderr(predicates::str::contains("unsupported action options"))
         .stderr(predicates::str::contains("unrecognized subcommand").not());
+}
+
+#[test]
+#[verifies("rule_porcelain_existing_action_infers_kind", examples)]
+#[verifies("rule_porcelain_named_domain_actions", examples)]
+fn target_first_requirement_submit_keeps_the_existing_domain_preconditions() {
+    let (_directory, repo) = named_action_repo();
+    let submitted = json_stdin_output(
+        &[
+            "req_actions",
+            "submit",
+            "--repo",
+            &repo,
+            "--stdin",
+            "--format",
+            "json",
+        ],
+        &serde_json::json!({
+            "actor":"agent",
+            "proposal_id":"proposal_cli_target",
+            "proposal_key":"cli-target",
+            "title":"CLI target",
+            "summary":"The target-first action submits this Requirement.",
+            "source_ids":[],
+            "evidence_references":[],
+            "builds_on":[]
+        }),
+    );
+    assert_eq!(submitted["data"]["requirement_id"], "req_actions");
+    assert_eq!(submitted["data"]["fact"], "submitted");
 }
 
 #[test]
