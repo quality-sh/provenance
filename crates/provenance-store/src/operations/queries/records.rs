@@ -90,7 +90,7 @@ async fn search_page(ctx: &ReadContext, request: SearchQuery) -> anyhow::Result<
                     .ok_or_else(|| {
                         anyhow::anyhow!("search candidate disappeared inside snapshot")
                     })?;
-                let contains_text = needle.as_ref().map_or(true, |needle| {
+                let contains_text = needle.as_ref().is_none_or(|needle| {
                     node.searchable_text()
                         .iter()
                         .any(|text| text.to_lowercase().contains(needle))

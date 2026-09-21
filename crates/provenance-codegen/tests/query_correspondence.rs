@@ -47,12 +47,12 @@ fn references<'a>(value: &'a Value, found: &mut Vec<&'a str>) {
 }
 
 #[test]
-fn catalog_query_parameters_retain_required_input_facts() {
+fn catalog_query_parameters_retain_required_and_optional_input_facts() {
     let definitions = provenance_store::operations::catalog::definitions();
-    for (definition_name, selector, required) in [
-        ("list-rules", "search", "text"),
-        ("list-rules", "stale", "base"),
-        ("list-rules", "resolve-symbol", "file"),
+    for (definition_name, selector, parameter_name, required) in [
+        ("list-rules", "search", "text", false),
+        ("list-rules", "stale", "base", true),
+        ("list-rules", "resolve-symbol", "file", true),
     ] {
         let definition = definitions
             .iter()
@@ -64,12 +64,14 @@ fn catalog_query_parameters_retain_required_input_facts() {
             .iter()
             .find(|route| route.name == selector)
             .expect("query route");
-        assert!(
-            route
-                .parameters
-                .iter()
-                .any(|parameter| parameter.name == required && parameter.required),
-            "{definition_name} query {selector} must require {required}"
+        let parameter = route
+            .parameters
+            .iter()
+            .find(|parameter| parameter.name == parameter_name)
+            .expect("query parameter");
+        assert_eq!(
+            parameter.required, required,
+            "{definition_name} query {selector} requirement for {parameter_name}"
         );
     }
 }
@@ -85,7 +87,7 @@ fn openapi_retains_each_query_input_and_result_contract() {
 
     assert_eq!(parameter(search, "query")["required"], true);
     assert_eq!(parameter(search, "query")["schema"]["const"], "search");
-    assert_eq!(parameter(search, "text")["required"], true);
+    assert_eq!(parameter(search, "text")["required"], false);
     assert_eq!(parameter(stale, "base")["required"], true);
     assert_eq!(parameter(resolve, "file")["required"], true);
 
