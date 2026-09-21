@@ -2,6 +2,7 @@
 
 mod support {
     pub mod records;
+    #[allow(dead_code)]
     pub mod resource_http;
 }
 
@@ -27,8 +28,7 @@ async fn call(
 #[tokio::test]
 #[verifies("rule_porcelain_action_names_match", examples)]
 #[verifies("rule_porcelain_mcp_target_argument", examples)]
-#[verifies("rule_porcelain_mcp_readable_structured", examples)]
-async fn mcp_target_first_authoring_uses_registered_schemas_and_structured_targets() {
+async fn mcp_target_first_authoring_uses_registered_schemas() {
     let repository = Repository::new("The shared graph is readable.");
     let host = support::resource_http::host(&repository, true);
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
@@ -46,6 +46,20 @@ async fn mcp_target_first_authoring_uses_registered_schemas_and_structured_targe
     assert!(create_schema.to_string().contains("refines"));
     assert!(create_schema.to_string().contains("\"target\""));
     assert!(create_schema.to_string().contains("\"type\""));
+
+    client.cancel().await.unwrap();
+    server.await.unwrap().cancel().await.unwrap();
+}
+
+#[tokio::test]
+#[verifies("rule_porcelain_mcp_target_argument", examples)]
+#[verifies("rule_porcelain_mcp_readable_structured", examples)]
+async fn mcp_target_first_source_create_and_update_keep_structured_targets() {
+    let repository = Repository::new("The shared graph is readable.");
+    let host = support::resource_http::host(&repository, true);
+    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
+    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let client = ().serve(client_io).await.unwrap();
 
     let created = call(
         &client,
@@ -89,6 +103,18 @@ async fn mcp_target_first_authoring_uses_registered_schemas_and_structured_targe
         "section 1"
     );
     assert!(edited.structured_content.as_ref().unwrap()["data"]["url"].is_null());
+
+    client.cancel().await.unwrap();
+    server.await.unwrap().cancel().await.unwrap();
+}
+
+#[tokio::test]
+async fn mcp_target_first_requirement_update_passes_relationship_deltas() {
+    let repository = Repository::new("The shared graph is readable.");
+    let host = support::resource_http::host(&repository, true);
+    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
+    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let client = ().serve(client_io).await.unwrap();
 
     let requirement = call(
         &client,
@@ -160,6 +186,37 @@ async fn mcp_target_first_authoring_uses_registered_schemas_and_structured_targe
         edited_requirement.structured_content.as_ref().unwrap()["data"]["depends_on"],
         json!(["req_mcp_dependency"])
     );
+
+    client.cancel().await.unwrap();
+    server.await.unwrap().cancel().await.unwrap();
+}
+
+#[tokio::test]
+async fn mcp_target_first_requirement_submit_uses_the_target() {
+    let repository = Repository::new("The shared graph is readable.");
+    let host = support::resource_http::host(&repository, true);
+    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
+    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let client = ().serve(client_io).await.unwrap();
+
+    let requirement = call(
+        &client,
+        "create",
+        json!({
+            "target":"req_mcp_target",
+            "type":"requirement",
+            "idempotency_key":"create_req_mcp_target",
+            "data":{
+                "actor":"agent",
+                "statement":"The MCP action submits the target Requirement.",
+                "status":"active",
+                "depends_on":[],
+                "supersedes":[]
+            }
+        }),
+    )
+    .await;
+    assert_ne!(requirement.is_error, Some(true), "{requirement:?}");
 
     let submitted = call(
         &client,
