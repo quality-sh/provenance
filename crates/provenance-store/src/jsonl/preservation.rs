@@ -70,7 +70,7 @@ impl RawRecord {
         record_id(&self.known)
     }
 
-    fn has_unknown(&self) -> bool {
+    const fn has_unknown(&self) -> bool {
         !self.unknown.is_empty()
             || self.repeated_member.is_some()
             || self.nested_unknown.is_some()
