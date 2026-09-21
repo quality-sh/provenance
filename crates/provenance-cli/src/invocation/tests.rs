@@ -49,10 +49,7 @@ fn route_is_one_deterministic_grammar_decision() {
         route(&["sources", "--help", "--repo", "repo"]),
         CommandFamily::Catalog
     );
-    for words in [
-        &["check", "--repo", "repo"][..],
-        &["check", "--strict"],
-    ] {
+    for words in [&["check", "--repo", "repo"][..], &["check", "--strict"]] {
         assert_eq!(route(words), CommandFamily::Builtin);
     }
     assert_eq!(

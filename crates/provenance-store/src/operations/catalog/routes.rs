@@ -4,8 +4,7 @@ use super::{
     schema::{self, Definition, HttpMethod, Parameter, ResponseKind},
     ArgumentAlias, CliDefault, CliDefaultValue, EtagBinding, HandlerBinding, HeaderBinding,
     Operation, ParentBinding, PathBinding, QueryRequestBinding, QueryRoute, Registration,
-    RequestAdapter, ResponseAdapter, ResponseBinding, SelectorBinding,
-    TargetAction, TargetBinding,
+    RequestAdapter, ResponseAdapter, ResponseBinding, SelectorBinding, TargetAction, TargetBinding,
 };
 use provenance_core::NodeType;
 use schemars::generate::Contract;

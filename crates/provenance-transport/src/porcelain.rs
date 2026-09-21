@@ -9,8 +9,8 @@ use serde_json::{Map, Value};
 pub(crate) mod authoring;
 mod authoring_mcp;
 mod get_port;
-pub(super) use authoring_mcp::{call as call_authoring, tools as authoring_tools};
 pub use authoring::{render_readable as render_action_readable, Action, ActionError, TargetRoute};
+pub(super) use authoring_mcp::{call as call_authoring, tools as authoring_tools};
 pub use get_port::HostGetPort;
 
 /// MCP input for the `check` Porcelain action.

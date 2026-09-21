@@ -3,8 +3,8 @@
 use axum::http::HeaderMap;
 use provenance_core::{protocol::RecordResolution, NodeType};
 use provenance_macros::rule;
-use provenance_store::operations::catalog::{self, Definition};
 pub use provenance_store::operations::catalog::TargetAction as Action;
+use provenance_store::operations::catalog::{self, Definition};
 use serde_json::{json, Value};
 use std::{collections::BTreeMap, fmt::Display};
 

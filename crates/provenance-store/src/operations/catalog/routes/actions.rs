@@ -5,20 +5,24 @@ use crate::operations::catalog as operation;
 
 pub(super) fn register(out: &mut Vec<Definition>) {
     computations(out);
-    out.push(native::<operation::ClaimTopic>(
-        "claim-topic",
-        "claimTopic",
-        "/topics/{id}/claim",
-        "Claim one open Topic for an actor.",
-    )
-    .target(TargetAction::Claim, Some(NodeType::Topic)));
-    out.push(native::<operation::ReleaseTopic>(
-        "release-topic",
-        "releaseTopic",
-        "/topics/{id}/release",
-        "Release the claim on one Topic.",
-    )
-    .target(TargetAction::Release, Some(NodeType::Topic)));
+    out.push(
+        native::<operation::ClaimTopic>(
+            "claim-topic",
+            "claimTopic",
+            "/topics/{id}/claim",
+            "Claim one open Topic for an actor.",
+        )
+        .target(TargetAction::Claim, Some(NodeType::Topic)),
+    );
+    out.push(
+        native::<operation::ReleaseTopic>(
+            "release-topic",
+            "releaseTopic",
+            "/topics/{id}/release",
+            "Release the claim on one Topic.",
+        )
+        .target(TargetAction::Release, Some(NodeType::Topic)),
+    );
     out.push(native::<operation::CloseTopic>(
         "close-topic",
         "closeTopic",
@@ -37,13 +41,15 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         "/questions/{id}/release",
         "Release the claim on one Question.",
     ));
-    out.push(native::<operation::AnswerQuestion>(
-        "answer-question",
-        "answerQuestion",
-        "/questions/{id}/answer",
-        "Record the answer to one Question.",
-    )
-    .target(TargetAction::Answer, Some(NodeType::Question)));
+    out.push(
+        native::<operation::AnswerQuestion>(
+            "answer-question",
+            "answerQuestion",
+            "/questions/{id}/answer",
+            "Record the answer to one Question.",
+        )
+        .target(TargetAction::Answer, Some(NodeType::Question)),
+    );
     out.push(
         backed::<operation::SubmitRequirementReviewV2>(
             "submit-requirement-review",

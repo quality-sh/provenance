@@ -55,14 +55,7 @@ fn collection_named_targets_accept_explicit_create_update_and_get() {
     assert_eq!(created["data"]["id"], "sources");
 
     let updated = json_output(&[
-        "sources",
-        "update",
-        "--repo",
-        &repo,
-        "--name",
-        "Changed",
-        "--format",
-        "json",
+        "sources", "update", "--repo", &repo, "--name", "Changed", "--format", "json",
     ]);
     assert_eq!(updated["data"]["id"], "sources");
     assert_eq!(updated["data"]["name"], "Changed");
@@ -120,14 +113,7 @@ fn explicit_named_actions_win_for_collection_named_targets() {
     ]);
 
     let claimed = json_output(&[
-        "topics",
-        "claim",
-        "--repo",
-        &repo,
-        "--actor",
-        "worker",
-        "--format",
-        "json",
+        "topics", "claim", "--repo", &repo, "--actor", "worker", "--format", "json",
     ]);
     assert_eq!(claimed["data"]["claimed_by"], "worker");
     let answered = json_output(&[
@@ -165,14 +151,7 @@ fn reserved_commands_global_flags_and_legacy_catalog_forms_keep_their_meaning() 
         "json",
     ]);
     assert_eq!(legacy["data"]["id"], "source_legacy");
-    let listed = json_output(&[
-        "--repo",
-        &repo,
-        "sources",
-        "list",
-        "--format",
-        "json",
-    ]);
+    let listed = json_output(&["--repo", &repo, "sources", "list", "--format", "json"]);
     assert!(listed["data"]["items"]
         .as_array()
         .unwrap()

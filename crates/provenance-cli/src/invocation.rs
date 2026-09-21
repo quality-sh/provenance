@@ -123,9 +123,7 @@ impl CommandFamily {
             .get(action_index)
             .and_then(|word| provenance_transport::porcelain::Action::parse(word));
         let catalog = catalog_cli::is_collection(target);
-        if explicit_get
-            && (!catalog || collection_marker_selects_get(arguments, action_index)?)
-        {
+        if explicit_get && (!catalog || collection_marker_selects_get(arguments, action_index)?) {
             return Ok(Self::Get);
         }
         if explicit_target.is_some_and(|action| {

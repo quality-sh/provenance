@@ -1,6 +1,6 @@
 use super::{Operation, TargetAction};
-use provenance_core::NodeType;
 use provenance_core::protocol::{failure::OperationError, ResponseMeta};
+use provenance_core::NodeType;
 use schemars::{
     generate::{Contract, SchemaSettings},
     JsonSchema,
