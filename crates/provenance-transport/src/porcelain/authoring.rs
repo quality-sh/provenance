@@ -25,6 +25,7 @@ pub enum ActionError {
     InvalidOptions,
     NotFound,
     AmbiguousIdentity,
+    AccessDenied,
     Operation(String),
 }
 
@@ -34,6 +35,7 @@ impl Display for ActionError {
             Self::InvalidOptions => formatter.write_str("unsupported action options"),
             Self::NotFound => formatter.write_str("record does not exist"),
             Self::AmbiguousIdentity => formatter.write_str("record ID is not unique"),
+            Self::AccessDenied => formatter.write_str("access denied"),
             Self::Operation(message) => formatter.write_str(message),
         }
     }
@@ -67,7 +69,7 @@ impl crate::StatementHost {
                 RecordResolution::Ambiguous => return Err(ActionError::AmbiguousIdentity),
             }
         };
-        let definition = definition(action, kind).ok_or(ActionError::InvalidOptions)?;
+        let definition = self.executable_target_definition(action, kind)?;
         let path = definition.path.replace("{id}", target);
         Ok(TargetRoute {
             action,
@@ -101,10 +103,35 @@ impl crate::StatementHost {
         self.invoke_resource(method, &route.path, data, BTreeMap::new(), headers)
             .await
     }
-}
 
-fn definition(action: Action, kind: NodeType) -> Option<&'static Definition> {
-    catalog::target_definition(action, kind)
+    pub(super) fn executable_target_definitions(
+        &self,
+        action: Action,
+    ) -> Vec<(NodeType, &'static Definition)> {
+        catalog::target_definitions(action)
+            .filter_map(|(kind, _)| {
+                self.executable_target_definition(action, kind)
+                    .ok()
+                    .map(|definition| (kind, definition))
+            })
+            .collect()
+    }
+
+    fn executable_target_definition(
+        &self,
+        action: Action,
+        kind: NodeType,
+    ) -> Result<&'static Definition, ActionError> {
+        let definition = catalog::target_definition(action, kind)
+            .ok_or(ActionError::InvalidOptions)?;
+        if !self.advertises(definition.name) {
+            return Err(ActionError::AccessDenied);
+        }
+        if action != Action::Create && !get_port::resolver_permits(self, kind) {
+            return Err(ActionError::NotFound);
+        }
+        Ok(definition)
+    }
 }
 
 /// Render one catalog result for a reader while preserving the structured value.

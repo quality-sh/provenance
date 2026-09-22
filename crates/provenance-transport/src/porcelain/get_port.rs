@@ -192,8 +192,8 @@ pub(super) fn is_available(host: &crate::StatementHost) -> bool {
         })
 }
 
-pub(super) fn is_resolver_available(host: &crate::StatementHost) -> bool {
-    host.advertises(catalog::ResolveRecord::NAME) && !permitted_node_types(host).is_empty()
+pub(super) fn resolver_permits(host: &crate::StatementHost, kind: NodeType) -> bool {
+    host.advertises(catalog::ResolveRecord::NAME) && permitted_node_types(host).contains(&kind)
 }
 
 #[cfg(test)]
