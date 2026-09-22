@@ -5,6 +5,13 @@ use crate::operations::catalog as operation;
 
 pub(super) fn register(out: &mut Vec<Definition>) {
     computations(out);
+    topics(out);
+    questions(out);
+    requirement_reviews(out);
+    verifications(out);
+}
+
+fn topics(out: &mut Vec<Definition>) {
     out.push(
         native::<operation::ClaimTopic>(
             "claim-topic",
@@ -29,6 +36,9 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         "/topics/{id}/close",
         "Close one Topic in the bound scope.",
     ));
+}
+
+fn questions(out: &mut Vec<Definition>) {
     out.push(native::<operation::ClaimQuestion>(
         "claim-question",
         "claimQuestion",
@@ -50,6 +60,9 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         )
         .target(TargetAction::Answer, Some(NodeType::Question)),
     );
+}
+
+fn requirement_reviews(out: &mut Vec<Definition>) {
     out.push(
         backed::<operation::SubmitRequirementReviewV2>(
             "submit-requirement-review",
@@ -93,6 +106,9 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         .scope("scope_id")
         .header("Idempotency-Key", "request_id", false),
     );
+}
+
+fn verifications(out: &mut Vec<Definition>) {
     out.push(backed::<operation::BeginVerification>(
         "begin-verification",
         "beginVerification",
