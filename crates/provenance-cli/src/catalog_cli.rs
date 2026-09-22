@@ -87,6 +87,65 @@ pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
     ) {
         warn_if_skills_missing(&context.repo, context.quiet)?;
     }
+    let host = local_host(&context)?;
+    match host
+        .invoke_resource(method, &resolved.path, data, query, headers)
+        .await
+    {
+        Ok(value) => crate::output::print_json(&value)?,
+        Err(failure) => anyhow::bail!("{}", serde_json::to_string(&failure)?),
+    }
+    Ok(())
+}
+
+pub async fn dispatch_target(
+    context: GlobalContext,
+    format: Option<provenance_cli::porcelain::OutputFormat>,
+    target: String,
+    action: provenance_transport::porcelain::Action,
+    kind: Option<provenance_core::NodeType>,
+    flags: Vec<String>,
+) -> anyhow::Result<()> {
+    let host = local_host(&context)?;
+    let route = host
+        .target_route(action, &target, kind)
+        .await
+        .map_err(anyhow::Error::new)?;
+    if matches!(route.kind, provenance_core::NodeType::Question) {
+        warn_if_skills_missing(&context.repo, context.quiet)?;
+    }
+    let (data, query, headers) = input(route.definition, &flags, None)?;
+    anyhow::ensure!(
+        query.is_empty(),
+        "target actions do not accept query options"
+    );
+    let value = host
+        .invoke_target(&route, data, headers)
+        .await
+        .map_err(|failure| anyhow::anyhow!(serde_json::to_string(&failure).unwrap()))?;
+    if format == Some(provenance_cli::porcelain::OutputFormat::Json) {
+        crate::output::print_json(&value)?;
+    } else {
+        println!(
+            "{}",
+            provenance_transport::porcelain::render_action_readable(
+                action, &target, route.kind, &value
+            )
+        );
+    }
+    Ok(())
+}
+
+pub fn print_target_help(action: provenance_transport::porcelain::Action) {
+    println!("Target-first {}:", action.as_str());
+    if action == provenance_transport::porcelain::Action::Create {
+        println!("  provenance <new-id> create --type <record-type> [fields]");
+    } else {
+        println!("  provenance <existing-id> {} [fields]", action.as_str());
+    }
+}
+
+fn local_host(context: &GlobalContext) -> anyhow::Result<provenance_transport::StatementHost> {
     let root = std::fs::canonicalize(&context.repo)?;
     let access = provenance_transport::LocalAccess::new(
         &root,
@@ -96,15 +155,9 @@ pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
         SocketAddr::from((Ipv4Addr::LOCALHOST, 1)),
     )
     .map_err(|failure| anyhow::anyhow!(failure))?;
-    let host = provenance_transport::StatementHost::with_access(std::sync::Arc::new(access));
-    match host
-        .invoke_resource(method, &resolved.path, data, query, headers)
-        .await
-    {
-        Ok(value) => crate::output::print_json(&value)?,
-        Err(failure) => anyhow::bail!("{}", serde_json::to_string(&failure)?),
-    }
-    Ok(())
+    Ok(provenance_transport::StatementHost::with_access(
+        std::sync::Arc::new(access),
+    ))
 }
 
 fn print_help(collection: &str) {
@@ -133,7 +186,7 @@ fn warn_if_skills_missing(repo: &str, quiet: bool) -> anyhow::Result<()> {
 }
 
 #[allow(clippy::too_many_lines)]
-fn input(
+pub fn input(
     definition: &Definition,
     words: &[String],
     query_action: Option<&'static str>,

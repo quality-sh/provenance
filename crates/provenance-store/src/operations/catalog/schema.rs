@@ -1,5 +1,6 @@
-use super::Operation;
+use super::{Operation, TargetAction};
 use provenance_core::protocol::{failure::OperationError, ResponseMeta};
+use provenance_core::NodeType;
 use schemars::{
     generate::{Contract, SchemaSettings},
     JsonSchema,
@@ -58,6 +59,23 @@ pub struct QueryVariant {
     pub parameters: Vec<Parameter>,
     pub success_schema: Value,
     pub failure_schema: Value,
+}
+
+pub fn target_definition(action: TargetAction, kind: NodeType) -> Option<&'static Definition> {
+    target_definitions(action)
+        .find_map(|(registered_kind, definition)| (registered_kind == kind).then_some(definition))
+}
+
+pub fn target_definitions(
+    action: TargetAction,
+) -> impl Iterator<Item = (NodeType, &'static Definition)> {
+    definitions().iter().filter_map(move |definition| {
+        definition
+            .registration
+            .target
+            .filter(|binding| binding.action == action)
+            .map(|binding| (binding.kind, definition))
+    })
 }
 
 #[derive(Clone)]

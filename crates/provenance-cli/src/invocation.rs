@@ -8,6 +8,7 @@ pub enum Invocation {
     Builtin(Cli),
     Catalog(catalog_cli::Invocation),
     Get(GetInvocation),
+    Target(TargetInvocation),
 }
 
 pub struct GlobalContext {
@@ -23,6 +24,16 @@ pub struct GetInvocation {
     input: provenance_porcelain::get::GetInput,
 }
 
+pub struct TargetInvocation {
+    context: GlobalContext,
+    format: Option<OutputFormat>,
+    target: String,
+    action: provenance_transport::porcelain::Action,
+    kind: Option<provenance_core::NodeType>,
+    flags: Vec<String>,
+    help: bool,
+}
+
 struct ExternalArguments<'a> {
     arguments: &'a [String],
     index: usize,
@@ -36,6 +47,7 @@ enum CommandFamily {
     Builtin,
     Catalog,
     Get,
+    Target,
 }
 
 impl Invocation {
@@ -66,6 +78,10 @@ impl Invocation {
                     input,
                 }))
             }
+            CommandFamily::Target => {
+                let shared = ExternalArguments::parse(&arguments)?;
+                Ok(Self::Target(TargetInvocation::parse(shared)?))
+            }
         }
     }
 
@@ -82,12 +98,14 @@ impl Invocation {
                 )
                 .await
             }
+            Self::Target(invocation) => invocation.dispatch().await,
         }
     }
 }
 
 impl CommandFamily {
     /// Selects one command grammar before any family parses its arguments.
+    #[rule("rule_porcelain_cli_target_action_order")]
     #[rule("rule_porcelain_get_is_default_action")]
     fn select(arguments: &[String]) -> anyhow::Result<Self> {
         let target_index = after_shared_options(arguments, 1)?;
@@ -101,22 +119,116 @@ impl CommandFamily {
         let explicit_get = arguments
             .get(action_index)
             .is_some_and(|word| word == "get");
+        let explicit_target = arguments
+            .get(action_index)
+            .and_then(|word| provenance_transport::porcelain::Action::parse(word));
         let catalog = catalog_cli::is_collection(target);
-        if catalog {
-            return if explicit_get && collection_marker_selects_get(arguments, action_index)? {
-                Ok(Self::Get)
-            } else {
-                Ok(Self::Catalog)
-            };
-        }
-        if explicit_get {
+        if explicit_get && (!catalog || collection_marker_selects_get(arguments, action_index)?) {
             return Ok(Self::Get);
+        }
+        if explicit_target.is_some_and(|action| {
+            !catalog || collection_marker_selects_target(arguments, action_index, action)
+        }) {
+            return Ok(Self::Target);
+        }
+        if catalog {
+            return Ok(Self::Catalog);
         }
         let builtin = Cli::command()
             .get_subcommands()
             .any(|candidate| candidate.get_name() == target);
         Ok(if builtin { Self::Builtin } else { Self::Get })
     }
+}
+
+impl TargetInvocation {
+    fn parse(shared: SharedArguments) -> anyhow::Result<Self> {
+        let mut words = shared.words.into_iter();
+        let target = words
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("target action requires a target"))?;
+        let action_word = words
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("target action requires an action"))?;
+        let action = provenance_transport::porcelain::Action::parse(&action_word)
+            .ok_or_else(|| anyhow::anyhow!("unsupported target action"))?;
+        let words = words.collect::<Vec<_>>();
+        let (kind, flags, help) = target_fields(action, &words)?;
+        let format = match shared.format.as_deref() {
+            None => None,
+            Some("json") => Some(OutputFormat::Json),
+            Some(_) => anyhow::bail!("target actions support --format json"),
+        };
+        Ok(Self {
+            context: shared.context,
+            format,
+            target,
+            action,
+            kind,
+            flags,
+            help,
+        })
+    }
+
+    async fn dispatch(self) -> anyhow::Result<()> {
+        if self.help {
+            catalog_cli::print_target_help(self.action);
+            return Ok(());
+        }
+        catalog_cli::dispatch_target(
+            self.context,
+            self.format,
+            self.target,
+            self.action,
+            self.kind,
+            self.flags,
+        )
+        .await
+    }
+}
+
+fn target_fields(
+    action: provenance_transport::porcelain::Action,
+    words: &[String],
+) -> anyhow::Result<(Option<provenance_core::NodeType>, Vec<String>, bool)> {
+    let mut kind = None;
+    let mut flags = Vec::new();
+    let mut help = false;
+    let mut index = 0;
+    while index < words.len() {
+        match words[index].as_str() {
+            "--help" => {
+                help = true;
+                index += 1;
+            }
+            "--stdin" => {
+                flags.push(words[index].clone());
+                index += 1;
+            }
+            flag => {
+                let value = words
+                    .get(index + 1)
+                    .ok_or_else(|| anyhow::anyhow!("{flag} requires a value"))?;
+                if flag == "--type" {
+                    anyhow::ensure!(kind.is_none(), "--type can be supplied once");
+                    kind = Some(
+                        provenance_core::NodeType::parse(value)
+                            .map_err(|_| anyhow::anyhow!("unsupported record type"))?,
+                    );
+                } else {
+                    flags.extend([words[index].clone(), value.clone()]);
+                }
+                index += 2;
+            }
+        }
+    }
+    if !help {
+        anyhow::ensure!(
+            (action == provenance_transport::porcelain::Action::Create) == kind.is_some(),
+            "create requires --type and existing-record actions infer it"
+        );
+    }
+    Ok((kind, flags, help))
 }
 
 /// A collection ID can itself be `get`. A following bare word is therefore
@@ -129,6 +241,37 @@ fn collection_marker_selects_get(
     Ok(arguments
         .get(suffix_index)
         .is_none_or(|word| word.starts_with('-')))
+}
+
+/// A collection word can also be a target ID. An option-only suffix selects
+/// its explicit target action. Create also requires the accepted type carrier.
+fn collection_marker_selects_target(
+    arguments: &[String],
+    marker_index: usize,
+    action: provenance_transport::porcelain::Action,
+) -> bool {
+    let mut has_type = false;
+    let mut index = marker_index + 1;
+    while let Some(argument) = arguments.get(index) {
+        match argument.as_str() {
+            "--quiet" | "--stdin" | "--help" => index += 1,
+            "--repo" | "--scope" | "--format" => {
+                if arguments.get(index + 1).is_none() {
+                    return false;
+                }
+                index += 2;
+            }
+            flag if flag.starts_with("--") => {
+                if arguments.get(index + 1).is_none() {
+                    return false;
+                }
+                has_type |= flag == "--type";
+                index += 2;
+            }
+            _ => return false,
+        }
+    }
+    action != provenance_transport::porcelain::Action::Create || has_type
 }
 
 /// Skip shared option tokens for syntax selection only. The selected command
@@ -241,90 +384,4 @@ struct SharedArguments {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn arguments(words: &[&str]) -> Vec<String> {
-        std::iter::once("provenance")
-            .chain(words.iter().copied())
-            .map(str::to_owned)
-            .collect()
-    }
-
-    #[test]
-    fn route_is_one_deterministic_grammar_decision() {
-        let route = |words: &[&str]| CommandFamily::select(&arguments(words)).unwrap();
-        assert_eq!(route(&["--help"]), CommandFamily::Builtin);
-        assert_eq!(
-            route(&["--quiet", "check", "--repo", "repo"]),
-            CommandFamily::Builtin
-        );
-        assert!(matches!(
-            route(&["--repo", "repo", "sources", "list"]),
-            CommandFamily::Catalog
-        ));
-        assert!(matches!(
-            route(&["sources", "get", "--repo", "repo"]),
-            CommandFamily::Get
-        ));
-        assert!(matches!(
-            route(&["sources", "get", "update", "--repo", "repo"]),
-            CommandFamily::Catalog
-        ));
-        assert_eq!(
-            route(&["sources", "get", "get", "--repo", "repo"]),
-            CommandFamily::Catalog
-        );
-        assert_eq!(
-            route(&["sources", "update", "get", "--repo", "repo"]),
-            CommandFamily::Catalog
-        );
-        assert_eq!(
-            route(&["sources", "get", "--unknown-option", "value"]),
-            CommandFamily::Get
-        );
-        assert_eq!(
-            route(&["sources", "--help", "--repo", "repo"]),
-            CommandFamily::Catalog
-        );
-        assert!(matches!(
-            route(&["check", "--repo", "repo"]),
-            CommandFamily::Builtin
-        ));
-        assert!(matches!(
-            route(&["check", "get", "--repo", "repo"]),
-            CommandFamily::Get
-        ));
-        assert_eq!(
-            route(&["check", "--repo", "repo", "get", "--format", "json"]),
-            CommandFamily::Get
-        );
-        assert!(matches!(
-            route(&["check", "--strict"]),
-            CommandFamily::Builtin
-        ));
-        assert!(matches!(
-            route(&["--repo", "repo", "unknown_id", "--format", "json"]),
-            CommandFamily::Get
-        ));
-    }
-
-    #[test]
-    fn local_flag_values_are_not_reparsed_as_globals() {
-        let input = arguments(&[
-            "sources",
-            "create",
-            "--name",
-            "--repo",
-            "--repo",
-            "repository",
-        ]);
-        assert_eq!(
-            CommandFamily::select(&input).unwrap(),
-            CommandFamily::Catalog
-        );
-        let shared = ExternalArguments::parse(&input).unwrap();
-        assert_eq!(shared.context.repo, "repository");
-        assert_eq!(shared.words, ["sources", "create", "--name", "--repo"]);
-    }
-}
+mod tests;

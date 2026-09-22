@@ -51,6 +51,7 @@ impl ServerHandler for StatementHost {
         if self.check_port().is_some() {
             tools.push(crate::porcelain::check_tool());
         }
+        tools.extend(crate::porcelain::authoring_tools(self));
         std::future::ready(Ok(ListToolsResult {
             tools,
             ..Default::default()
@@ -111,6 +112,9 @@ impl ServerHandler for StatementHost {
             }
             return Ok(crate::porcelain::call_check(self, port.clone(), arguments).await);
         }
+        if let Some(action) = crate::porcelain::Action::parse(&request.name) {
+            return call_authoring_action(self, action, request.arguments).await;
+        }
         let Some(definition) = catalog::definitions()
             .iter()
             .find(|d| d.name == request.name)
@@ -158,6 +162,32 @@ impl ServerHandler for StatementHost {
     }
 }
 
+async fn call_authoring_action(
+    host: &StatementHost,
+    action: crate::porcelain::Action,
+    arguments: Option<serde_json::Map<String, Value>>,
+) -> Result<CallToolResult, ErrorData> {
+    let _admission = match host.admit() {
+        Ok(permit) => permit,
+        Err(failure) => return Ok(error(failure)),
+    };
+    let arguments = arguments.unwrap_or_default();
+    if serde_json::to_vec(&arguments)
+        .map_err(|_| ErrorData::internal_error("Cannot encode input", None))?
+        .len()
+        > MAX_BODY_BYTES
+    {
+        return Ok(error(ErasedFailure::new(
+            None,
+            OperationFailure::InvalidInput {
+                field: None,
+                reason: InvalidInputReason::TooLarge,
+            },
+        )));
+    }
+    Ok(crate::porcelain::call_authoring(host, action, arguments).await)
+}
+
 type McpCall = (
     routing::Matched,
     Value,
@@ -165,15 +195,38 @@ type McpCall = (
     axum::http::HeaderMap,
 );
 
-fn mcp_call(
+pub fn mcp_call(
     definition: &'static catalog::Definition,
     value: &Value,
+) -> Result<McpCall, ErasedFailure> {
+    mcp_call_with_path(definition, value, BTreeMap::new())
+}
+
+pub fn mcp_target_call(
+    definition: &'static catalog::Definition,
+    value: &Value,
+    target: &str,
+) -> Result<(Value, BTreeMap<String, String>, axum::http::HeaderMap), ErasedFailure> {
+    let path = definition
+        .registration
+        .request
+        .path
+        .iter()
+        .map(|binding| (binding.parameter.to_owned(), target.to_owned()))
+        .collect();
+    let (_, data, query, headers) = mcp_call_with_path(definition, value, path)?;
+    Ok((data, query, headers))
+}
+
+fn mcp_call_with_path(
+    definition: &'static catalog::Definition,
+    value: &Value,
+    mut path: BTreeMap<String, String>,
 ) -> Result<McpCall, ErasedFailure> {
     let mut arguments = value.as_object().cloned().ok_or_else(invalid)?;
     let data = arguments
         .remove("data")
         .unwrap_or_else(|| serde_json::json!({}));
-    let mut path = BTreeMap::new();
     let mut query = BTreeMap::new();
     let mut headers = axum::http::HeaderMap::new();
     let variants: Vec<catalog::QueryVariant> = definition.query_variants();
@@ -188,6 +241,9 @@ fn mcp_call(
             .parameters
     };
     for parameter in parameters {
+        if parameter.location == "path" && path.contains_key(parameter.name) {
+            continue;
+        }
         let mcp_name = if parameter.location == "header" {
             parameter.name.to_ascii_lowercase().replace('-', "_")
         } else {
@@ -231,6 +287,6 @@ fn invalid() -> ErasedFailure {
     )
 }
 
-fn error(failure: ErasedFailure) -> CallToolResult {
+pub fn error(failure: ErasedFailure) -> CallToolResult {
     CallToolResult::structured_error(serde_json::to_value(failure).expect("failure is JSON"))
 }

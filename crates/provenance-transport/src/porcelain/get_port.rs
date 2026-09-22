@@ -20,25 +20,44 @@ impl HostGetPort {
     }
 
     fn permitted_node_types(&self) -> Vec<NodeType> {
-        catalog::definitions()
-            .iter()
-            .filter(|definition| self.host.advertises(definition.name))
-            .filter_map(|definition| {
-                definition
-                    .registration
-                    .queries
-                    .iter()
-                    .find(|query| query.name == catalog::Trace::NAME)
-                    .and_then(|query| query.request.node_type)
-                    .and_then(|node_type| NodeType::parse(node_type).ok())
-            })
-            .fold(Vec::new(), |mut permitted, node_type| {
-                if !permitted.contains(&node_type) {
-                    permitted.push(node_type);
-                }
-                permitted
-            })
+        permitted_node_types(&self.host)
     }
+}
+
+pub(super) fn permitted_node_types(host: &crate::StatementHost) -> Vec<NodeType> {
+    catalog::definitions()
+        .iter()
+        .filter(|definition| host.advertises(definition.name))
+        .filter_map(|definition| {
+            definition
+                .registration
+                .queries
+                .iter()
+                .find(|query| query.name == catalog::Trace::NAME)
+                .and_then(|query| query.request.node_type)
+                .and_then(|node_type| NodeType::parse(node_type).ok())
+        })
+        .fold(Vec::new(), |mut permitted, node_type| {
+            if !permitted.contains(&node_type) {
+                permitted.push(node_type);
+            }
+            permitted
+        })
+}
+
+pub(super) async fn resolve(
+    host: &crate::StatementHost,
+    id: &str,
+) -> Result<provenance_core::protocol::RecordResolution, String> {
+    let response = host
+        .invoke_scoped_typed::<catalog::ResolveRecord>(ResolveRecordQuery {
+            protocol_version: Some(SDK_PROTOCOL_VERSION),
+            id: id.to_owned(),
+            allowed_node_types: permitted_node_types(host),
+        })
+        .await
+        .map_err(|error| error.to_string())?;
+    Ok(response.result.resolution)
 }
 
 impl GetPort for HostGetPort {
@@ -171,6 +190,10 @@ pub(super) fn is_available(host: &crate::StatementHost) -> bool {
                     .iter()
                     .any(|query| query.name == catalog::Trace::NAME)
         })
+}
+
+pub(super) fn resolver_permits(host: &crate::StatementHost, kind: NodeType) -> bool {
+    host.advertises(catalog::ResolveRecord::NAME) && permitted_node_types(host).contains(&kind)
 }
 
 #[cfg(test)]
