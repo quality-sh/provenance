@@ -5,13 +5,13 @@ use crate::operations::catalog as operation;
 
 pub(super) fn register(out: &mut Vec<Definition>) {
     computations(out);
-    topics(out);
-    questions(out);
+    topic_actions(out);
+    question_actions(out);
     requirement_reviews(out);
-    verifications(out);
+    verification_runs(out);
 }
 
-fn topics(out: &mut Vec<Definition>) {
+fn topic_actions(out: &mut Vec<Definition>) {
     out.push(
         native::<operation::ClaimTopic>(
             "claim-topic",
@@ -38,7 +38,7 @@ fn topics(out: &mut Vec<Definition>) {
     ));
 }
 
-fn questions(out: &mut Vec<Definition>) {
+fn question_actions(out: &mut Vec<Definition>) {
     out.push(native::<operation::ClaimQuestion>(
         "claim-question",
         "claimQuestion",
@@ -108,7 +108,7 @@ fn requirement_reviews(out: &mut Vec<Definition>) {
     );
 }
 
-fn verifications(out: &mut Vec<Definition>) {
+fn verification_runs(out: &mut Vec<Definition>) {
     out.push(backed::<operation::BeginVerification>(
         "begin-verification",
         "beginVerification",
