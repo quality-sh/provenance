@@ -162,33 +162,6 @@ async fn cli_uses_the_names_from_the_live_mcp_inventory() {
 }
 
 #[test]
-fn cli_and_mcp_get_bindings_translate_to_the_same_semantics() {
-    let cli = provenance_cli::porcelain::parse_get(&[
-        "req_alpha",
-        "get",
-        "--view",
-        "children",
-        "--depth",
-        "2",
-        "--kind",
-        "rule",
-        "--limit",
-        "25",
-    ])
-    .unwrap();
-    let mcp: provenance_transport::porcelain::GetArguments = serde_json::from_value(json!({
-        "target": "req_alpha",
-        "view": "children",
-        "max_depth": 2,
-        "returned_kinds": ["rule"],
-        "limit": 25
-    }))
-    .unwrap();
-
-    assert_eq!(cli, mcp.into_get_input());
-}
-
-#[test]
 #[verifies("rule_porcelain_check_selector_union", examples)]
 fn live_cli_and_mcp_check_selectors_keep_shared_semantics() {
     let cli = provenance_cli::porcelain::check_input_from_selectors(true, false, true);

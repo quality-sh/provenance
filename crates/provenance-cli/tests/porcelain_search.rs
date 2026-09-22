@@ -225,34 +225,16 @@ fn continuation_has_no_loss_and_refuses_wrong_query_or_revision() {
 }
 
 #[test]
-fn search_help_and_reserved_target_routing_are_deterministic() {
+fn search_help_is_available_without_a_repository() {
     let directory = tempfile::tempdir().unwrap();
-    let repo = directory.path().to_str().unwrap();
-    success(&[
-        "init",
-        "--path",
-        repo,
-        "--scope",
-        "default",
-        "--path-prefix",
-        ".",
-    ]);
-    success(&[
-        "sources",
-        "create",
-        "--repo",
-        repo,
-        "--id",
-        "search",
-        "--name",
-        "Reserved search target",
-    ]);
-
-    let help = String::from_utf8(success(&["search", "--help"]).stdout).unwrap();
+    let output = provenance()
+        .current_dir(directory.path())
+        .args(["search", "--help"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let help = String::from_utf8(output.stdout).unwrap();
     for option in ["--text", "--kind", "--limit", "--cursor", "--format"] {
         assert!(help.contains(option), "{help}");
     }
-    let target = json(&["search", "get", "--repo", repo, "--format", "json"]);
-    assert_eq!(target["record"]["id"], "search");
-    success(&["sources", "--help", "--repo", repo]);
 }

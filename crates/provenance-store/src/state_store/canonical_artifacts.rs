@@ -1,7 +1,8 @@
 use super::StateStore;
 use provenance_core::model::relations::kind_word;
 use provenance_core::{
-    CanonicalArtifact, CanonicalArtifactType, IdeationTarget, NodeType, Scope, ScopeId, StableId,
+    ensure_record_id_assignable, CanonicalArtifact, CanonicalArtifactType, IdeationTarget,
+    NodeType, Scope, ScopeId, StableId,
 };
 use provenance_macros::rule;
 use std::collections::HashSet;
@@ -167,6 +168,7 @@ impl StateStore {
         scope_id: &ScopeId,
         id: &StableId,
     ) -> anyhow::Result<()> {
+        ensure_record_id_assignable(id.as_str())?;
         self.ensure_canonical_replacement_ids_unique(scope_id, std::iter::once(id), &[])
     }
 
@@ -229,9 +231,13 @@ fn ensure_replacement_ids_unique<'a>(
         .map(|kind| kind_word(*kind))
         .collect::<HashSet<_>>();
     let mut ids = HashSet::new();
+    let mut previous_ids = HashSet::new();
     for scope in scopes {
         let (current_scope, index) = scope?;
         for entry in index.entries {
+            if scope_id.is_some_and(|scope_id| current_scope == *scope_id) {
+                previous_ids.insert(entry.id.clone());
+            }
             if scope_id.is_some_and(|scope_id| current_scope == *scope_id)
                 && replaced_kinds.contains(entry.kind)
             {
@@ -246,6 +252,9 @@ fn ensure_replacement_ids_unique<'a>(
         }
     }
     for id in replacements {
+        if !previous_ids.contains(id.as_str()) {
+            ensure_record_id_assignable(id.as_str())?;
+        }
         crate::write_error::ensure!(
             AlreadyExists,
             ids.insert(id.as_str().to_owned()),
