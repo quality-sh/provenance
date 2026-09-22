@@ -8,6 +8,28 @@ use provenance_http_client::{
 
 #[tokio::test]
 #[ignore = "the generated-client harness supplies a live fixture host"]
+async fn real_host_preserves_typed_metadata_refusal() {
+    let base_url = std::env::var("PROVENANCE_CLIENT_BASE_URL").unwrap();
+    // `HttpClient` is not `Debug`, so the success arm cannot go through `unwrap_err`.
+    let error = match HttpClient::connect_with_bearer(&base_url, "wrong-secret").await {
+        Ok(_) => panic!("expected typed metadata failure, got a connected client"),
+        Err(error) => error,
+    };
+    match error {
+        Error::Operation {
+            status: 401,
+            failure: OperationFailure::Metadata(failure),
+        } => {
+            let value = serde_json::to_value(failure).unwrap();
+            assert_eq!(value["error"]["kind"], "unauthenticated");
+            assert_eq!(value["meta"], serde_json::json!({}));
+        }
+        error => panic!("expected typed metadata failure, got {error}"),
+    }
+}
+
+#[tokio::test]
+#[ignore = "the generated-client harness supplies a live fixture host"]
 async fn real_host_covers_read_guarded_mutation_and_typed_failure() {
     let base_url = std::env::var("PROVENANCE_CLIENT_BASE_URL").unwrap();
     let token = std::env::var("PROVENANCE_CLIENT_TOKEN").unwrap();
