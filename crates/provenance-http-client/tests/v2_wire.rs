@@ -39,9 +39,8 @@ async fn metadata_refusal_preserves_declared_status_and_payload() {
     let failure = serde_json::json!({"error":{"kind":"unauthenticated"},"meta":{}});
     let (url, join) = host(vec![(401, failure.to_string())]);
     // `HttpClient` is not `Debug`, so the success arm cannot go through `unwrap_err`.
-    let error = match HttpClient::connect_with_bearer(&url, "wrong-secret").await {
-        Ok(_) => panic!("expected typed metadata failure, got a connected client"),
-        Err(error) => error,
+    let Err(error) = HttpClient::connect_with_bearer(&url, "wrong-secret").await else {
+        panic!("expected typed metadata failure, got a connected client")
     };
     match error {
         Error::Operation {

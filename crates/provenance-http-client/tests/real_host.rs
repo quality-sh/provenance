@@ -11,9 +11,8 @@ use provenance_http_client::{
 async fn real_host_preserves_typed_metadata_refusal() {
     let base_url = std::env::var("PROVENANCE_CLIENT_BASE_URL").unwrap();
     // `HttpClient` is not `Debug`, so the success arm cannot go through `unwrap_err`.
-    let error = match HttpClient::connect_with_bearer(&base_url, "wrong-secret").await {
-        Ok(_) => panic!("expected typed metadata failure, got a connected client"),
-        Err(error) => error,
+    let Err(error) = HttpClient::connect_with_bearer(&base_url, "wrong-secret").await else {
+        panic!("expected typed metadata failure, got a connected client")
     };
     match error {
         Error::Operation {
