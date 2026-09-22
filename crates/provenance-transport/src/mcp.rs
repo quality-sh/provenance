@@ -202,7 +202,7 @@ pub fn mcp_call(
     mcp_call_with_path(definition, value, BTreeMap::new())
 }
 
-pub(crate) fn mcp_target_call(
+pub fn mcp_target_call(
     definition: &'static catalog::Definition,
     value: &Value,
     target: &str,
