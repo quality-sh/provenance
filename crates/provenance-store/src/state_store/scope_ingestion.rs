@@ -1,6 +1,10 @@
-use super::{ensure_new_ids_assignable, serde_name, StateStore};
+use super::{
+    ensure_new_ids_assignable, read_jsonl_unlocked, read_message_shards_unlocked, serde_name,
+    StateStore,
+};
 use crate::cache::ProjectionFamily;
 use crate::jsonl::write_jsonl_atomic_under_publication;
+use crate::shards;
 use provenance_core::{
     AssertionRecord, Boundary, Contribution, DispositionRecord, Domain, ImplementationBinding,
     Message, NodeType, ProposalCard, Question, Requirement, Resolution, Rule, ScopeId, Source,
@@ -55,47 +59,50 @@ macro_rules! define_scope_shards {
                     ],
                 )?;
                 ensure_new_ids_assignable(
-                    &self.list_verification_bindings(scope)?,
+                    &read_jsonl_unlocked(&shards::verification_bindings_path(&self.layout, scope))?,
                     shards.verification_bindings,
                     |record| record.id.as_str(),
                 )?;
                 ensure_new_ids_assignable(
-                    &self.list_implementation_bindings(scope)?,
+                    &read_jsonl_unlocked(&shards::implementation_bindings_path(
+                        &self.layout,
+                        scope,
+                    ))?,
                     shards.implementation_bindings,
                     |record| record.id.as_str(),
                 )?;
                 ensure_new_ids_assignable(
-                    &self.list_threads(scope)?,
+                    &read_jsonl_unlocked(&shards::threads_path(&self.layout, scope))?,
                     shards.threads,
                     |record| record.id.as_str(),
                 )?;
                 ensure_new_ids_assignable(
-                    &self.list_messages(scope)?,
+                    &read_message_shards_unlocked(&self.layout, scope)?,
                     shards.messages,
                     |record| record.id.as_str(),
                 )?;
                 ensure_new_ids_assignable(
-                    &self.list_contributions(scope)?,
+                    &read_jsonl_unlocked(&shards::contributions_path(&self.layout, scope))?,
                     shards.contributions,
                     |record| record.id.as_str(),
                 )?;
                 ensure_new_ids_assignable(
-                    &self.list_synthesis_packets(scope)?,
+                    &read_jsonl_unlocked(&shards::synthesis_packets_path(&self.layout, scope))?,
                     shards.synthesis_packets,
                     |record| record.id.as_str(),
                 )?;
                 ensure_new_ids_assignable(
-                    &self.list_proposal_definitions(scope)?,
+                    &read_jsonl_unlocked(&shards::proposal_cards_path(&self.layout, scope))?,
                     shards.proposal_cards,
                     |record| record.id.as_str(),
                 )?;
                 ensure_new_ids_assignable(
-                    &self.list_assertion_records(scope)?,
+                    &read_jsonl_unlocked(&shards::assertion_records_path(&self.layout, scope))?,
                     shards.assertion_records,
                     |record| record.id.as_str(),
                 )?;
                 ensure_new_ids_assignable(
-                    &self.list_dispositions(scope)?,
+                    &read_jsonl_unlocked(&shards::dispositions_path(&self.layout, scope))?,
                     shards.dispositions,
                     |record| record.id.as_str(),
                 )?;

@@ -133,3 +133,27 @@ fn a_keyword_id_from_another_record_kind_is_not_preserved() {
         "{error}"
     );
 }
+
+#[test]
+fn an_existing_keyword_message_id_survives_a_scope_import() {
+    let (_directory, store, scope) = initialized_store();
+    let message = Message {
+        schema_version: provenance_core::SUPPORTED_SCHEMA_VERSION,
+        scope_id: scope.clone(),
+        id: StableId::new("search").unwrap(),
+        thread_id: StableId::new("thread_old").unwrap(),
+        role: MessageRole::User,
+        body: "Existing message".into(),
+        created_at: 1,
+        ai_metadata: None,
+    };
+    let path = crate::shards::messages_path(&store.layout, &scope);
+    crate::jsonl::write_jsonl_atomic(&path, std::slice::from_ref(&message)).unwrap();
+    let shards = ScopeShards {
+        messages: std::slice::from_ref(&message),
+        ..ScopeShards::default()
+    };
+
+    store.import_scope(&scope, &shards).unwrap();
+    assert_eq!(store.list_messages(&scope).unwrap()[0].id.as_str(), "search");
+}
