@@ -4,6 +4,7 @@ use provenance_core::SDK_PROTOCOL_VERSION;
 use serde_json::json;
 
 mod ideation;
+mod schema_precision;
 
 #[tokio::test]
 async fn statements_return_the_exact_data_free_analyzer_report() {

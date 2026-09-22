@@ -81,3 +81,41 @@ async fn resource_call_uses_v2_path_and_preserves_typed_failure() {
     assert!(requests[1].starts_with("POST /statement-checks "));
     assert!(requests[1].contains("{\"data\":{\"statement\":\"\"}}"));
 }
+
+#[tokio::test]
+async fn page_responses_without_the_required_page_facts_are_refused() {
+    let refused = serde_json::json!({
+        "data": {"items": []},
+        "meta": {"stamp": null, "freshness_error": null}
+    });
+    let (url, join) = host(vec![(200, metadata(9)), (200, refused.to_string())]);
+    let client = HttpClient::connect(&url).await.unwrap();
+    assert!(matches!(
+        client
+            .list_requirement_history("requirement_a", None, None)
+            .await,
+        Err(Error::MalformedResponse(_))
+    ));
+    let requests = join.join().unwrap();
+    assert_eq!(requests.len(), 2);
+    assert!(requests[1].starts_with("GET /requirements/requirement_a/history "));
+}
+
+#[tokio::test]
+async fn page_responses_accept_the_produced_page_facts() {
+    let accepted = serde_json::json!({
+        "data": {"items": []},
+        "meta": {"limit": 50, "has_more": false, "next_cursor": null}
+    });
+    let (url, join) = host(vec![(200, metadata(9)), (200, accepted.to_string())]);
+    let client = HttpClient::connect(&url).await.unwrap();
+    let page = client
+        .list_requirement_history("requirement_a", None, None)
+        .await
+        .unwrap();
+    assert_eq!(page.data.items.len(), 0);
+    assert_eq!(page.meta.limit, 50);
+    assert!(!page.meta.has_more);
+    assert_eq!(page.meta.next_cursor, None);
+    join.join().unwrap();
+}

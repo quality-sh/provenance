@@ -12,6 +12,8 @@ pub use super::schema_values::{
     ParseValueError,
 };
 
+pub(super) use super::schema_page::stamp_page_metadata;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HttpMethod {
     Get,
@@ -372,7 +374,7 @@ pub(super) fn property_schema(root: &Value, path: &[&str]) -> Value {
     selected
 }
 
-fn resolve_schema<'a>(root: &'a Value, schema: &'a Value) -> &'a Value {
+pub(super) fn resolve_schema<'a>(root: &'a Value, schema: &'a Value) -> &'a Value {
     schema
         .get("$ref")
         .and_then(Value::as_str)
@@ -460,13 +462,16 @@ pub(super) fn type_schema<T: JsonSchema>(contract: Contract) -> Value {
     schema::<T>(contract)
 }
 
+/// A path parameter starts without a schema. The finalize step derives the
+/// published schema from the parameter's typed request field, so no manual
+/// route-wide placeholder survives into the exported contract.
 #[allow(clippy::missing_const_for_fn)]
 pub(super) fn path(name: &'static str) -> Parameter {
     Parameter {
         name,
         location: "path",
         required: true,
-        schema: json!({"type":"string","minLength":1}),
+        schema: Value::Null,
     }
 }
 pub(super) const fn query(name: &'static str, schema: Value) -> Parameter {

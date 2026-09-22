@@ -1,0 +1,5 @@
+error[E0599]: no variant or associated item named `Sideways` found for enum `Direction` in the current scope
+ --> tests/closed_parameters/invented_direction.rs:4:16
+  |
+4 |     Direction::Sideways
+  |                ^^^^^^^^ variant or associated item not found in `Direction`
