@@ -126,6 +126,23 @@ fn write_jsonl_atomic_unlocked<T: Serialize>(path: &Utf8Path, records: &[T]) -> 
     Ok(())
 }
 
+/// Writes stored lines for records the caller already holds verbatim.
+///
+/// Each line lands exactly as given, so records a merge carried over keep
+/// their stored bytes. The records are still walked through the same guards
+/// a canonical write faces, and the write refuses before the replacement
+/// when a guard objects.
+pub fn write_jsonl_lines_atomic<T: Serialize>(
+    path: &Utf8Path,
+    records: &[T],
+    lines: &[String],
+) -> anyhow::Result<()> {
+    with_state_publication(path, || {
+        crate::review::guard::protect_rows(path, records)?;
+        write_jsonl_lines_atomic_unlocked(path, lines)
+    })
+}
+
 fn write_jsonl_lines_atomic_unlocked(path: &Utf8Path, lines: &[String]) -> anyhow::Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
