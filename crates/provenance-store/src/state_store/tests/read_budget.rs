@@ -15,7 +15,7 @@ use provenance_core::model::ProjectionRow;
 use provenance_core::protocol::failure::OperationFailure;
 use provenance_core::protocol::SDK_PROTOCOL_VERSION;
 use provenance_core::{
-    Message, MessageRole, Source, SourceType, StableId, ScopeId, SUPPORTED_SCHEMA_VERSION,
+    Message, MessageRole, ScopeId, Source, SourceType, StableId, SUPPORTED_SCHEMA_VERSION,
 };
 use provenance_macros::verifies;
 use serde_json::json;
@@ -143,7 +143,11 @@ fn trigger_body_fits_the_transport_budget_and_exceeds_the_read_budget() {
 async fn oversized_write_is_refused_before_publication_and_read_stays_clean() {
     let (dir, store, scope) = initialized_store();
     let error = store
-        .create_source(source_of_stored_bytes(&scope, OVERSIZED_ID, READ_BUDGET + 1))
+        .create_source(source_of_stored_bytes(
+            &scope,
+            OVERSIZED_ID,
+            READ_BUDGET + 1,
+        ))
         .expect_err("the oversized write is refused");
     let failure = error
         .downcast_ref::<SourceFailure>()
@@ -166,7 +170,11 @@ async fn record_inside_the_read_budget_is_accepted_and_readable() {
     // The created stamp rides on the stored record, so the fixture keeps a
     // margin that is larger than any stamp and stays inside the budget.
     let source = store
-        .create_source(source_of_stored_bytes(&scope, OVERSIZED_ID, READ_BUDGET - 192))
+        .create_source(source_of_stored_bytes(
+            &scope,
+            OVERSIZED_ID,
+            READ_BUDGET - 192,
+        ))
         .expect("a record inside the read budget is accepted");
     assert!(ReadBudget::read_bytes(&source).unwrap() <= READ_BUDGET);
 

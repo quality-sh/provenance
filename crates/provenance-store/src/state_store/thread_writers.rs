@@ -1,7 +1,7 @@
 use super::read_budget::ensure_within_read_budget;
 use super::{serde_name, PostMessageInput, PostMessageResult, StateStore};
-use crate::write_error::{publication_started, SourceFailure, WriteFailure};
 use crate::shards;
+use crate::write_error::{publication_started, SourceFailure, WriteFailure};
 use provenance_core::{
     Message, NodeType, StableId, Thread, ThreadStatus, SUPPORTED_SCHEMA_VERSION,
 };
