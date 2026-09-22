@@ -35,6 +35,56 @@ fn host(bodies: Vec<(u16, String)>) -> (String, thread::JoinHandle<Vec<String>>)
 }
 
 #[tokio::test]
+async fn metadata_refusal_preserves_declared_status_and_payload() {
+    let failure = serde_json::json!({"error":{"kind":"unauthenticated"},"meta":{}});
+    let (url, join) = host(vec![(401, failure.to_string())]);
+    // `HttpClient` is not `Debug`, so the success arm cannot go through `unwrap_err`.
+    let Err(error) = HttpClient::connect_with_bearer(&url, "wrong-secret").await else {
+        panic!("expected typed metadata failure, got a connected client")
+    };
+    match error {
+        Error::Operation {
+            status: 401,
+            failure: OperationFailure::Metadata(actual),
+        } => assert_eq!(serde_json::to_value(actual).unwrap(), failure),
+        error => panic!("expected typed metadata failure, got {error}"),
+    }
+    assert_eq!(join.join().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn malformed_metadata_refusal_json_is_not_a_declared_failure() {
+    let (url, join) = host(vec![(401, "{".to_owned())]);
+    assert!(matches!(
+        HttpClient::connect(&url).await,
+        Err(Error::MalformedResponse(_))
+    ));
+    assert_eq!(join.join().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn schema_invalid_metadata_refusal_is_not_a_declared_failure() {
+    let body = serde_json::json!({"error":{"kind":"not_declared"},"meta":{}}).to_string();
+    let (url, join) = host(vec![(401, body)]);
+    assert!(matches!(
+        HttpClient::connect(&url).await,
+        Err(Error::MalformedResponse(_))
+    ));
+    assert_eq!(join.join().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn unavailable_metadata_transport_remains_a_connection_failure() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    drop(listener);
+    assert!(matches!(
+        HttpClient::connect(&url).await,
+        Err(Error::Connection(_))
+    ));
+}
+
+#[tokio::test]
 async fn complete_tuple_mismatch_stops_at_metadata() {
     let (url, join) = host(vec![(200, metadata(0))]);
     assert!(matches!(
