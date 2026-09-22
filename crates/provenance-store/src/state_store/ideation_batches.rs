@@ -108,23 +108,7 @@ impl StateStore {
                 &incoming.dispositions,
                 |r| r.id.as_str(),
             )?;
-            for proposal in &incoming.proposals {
-                // Read as the aggregate reads it, so the two cannot disagree
-                // about a landing batch: the intrinsic rule is what a live
-                // proposal row may claim, and a terminal row is legacy history
-                // that `validate_ideation_aggregate` judges by its shipped
-                // fingerprint instead.
-                if proposal.promotion_state == provenance_core::PromotionState::Proposed {
-                    provenance_core::validate_proposal_intrinsic(proposal)?;
-                }
-                // A truthful binding to an exact review revision can only be
-                // written by the review seam, which checks the revision under
-                // the publication lock.
-                anyhow::ensure!(
-                    proposal.proposal_type != provenance_core::ProposalType::RecordRevision,
-                    "batch writes cannot create review submissions; they go through the review seam"
-                );
-            }
+            validate_batch_proposals(&incoming.proposals)?;
             let manifest = self.manifest()?;
             provenance_core::validate_ideation_aggregate(IdeationAggregate {
                 legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
@@ -153,6 +137,27 @@ impl StateStore {
             Ok(())
         })
     }
+}
+
+fn validate_batch_proposals(proposals: &[ProposalCard]) -> anyhow::Result<()> {
+    for proposal in proposals {
+        // Read as the aggregate reads it, so the two cannot disagree
+        // about a landing batch: the intrinsic rule is what a live
+        // proposal row may claim, and a terminal row is legacy history
+        // that `validate_ideation_aggregate` judges by its shipped
+        // fingerprint instead.
+        if proposal.promotion_state == provenance_core::PromotionState::Proposed {
+            provenance_core::validate_proposal_intrinsic(proposal)?;
+        }
+        // A truthful binding to an exact review revision can only be
+        // written by the review seam, which checks the revision under
+        // the publication lock.
+        anyhow::ensure!(
+            proposal.proposal_type != provenance_core::ProposalType::RecordRevision,
+            "batch writes cannot create review submissions; they go through the review seam"
+        );
+    }
+    Ok(())
 }
 
 /// Evidence an assertion rests on cannot be edited afterwards.

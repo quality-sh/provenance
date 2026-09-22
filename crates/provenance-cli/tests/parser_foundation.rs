@@ -156,7 +156,13 @@ fn command_keywords_are_refused_as_record_ids_on_both_cli_write_forms() {
         .stderr(contains("reserved record ID check"));
     provenance()
         .args([
-            "answer", "create", "--repo", &path, "--type=source", "--name", "Answer",
+            "answer",
+            "create",
+            "--repo",
+            &path,
+            "--type=source",
+            "--name",
+            "Answer",
         ])
         .assert()
         .code(2)
@@ -168,7 +174,13 @@ fn end_of_options_allows_an_option_shaped_target() {
     let (_directory, path) = repo();
     provenance()
         .args([
-            "sources", "create", "--repo", &path, "--id=--source", "--name", "Flagged",
+            "sources",
+            "create",
+            "--repo",
+            &path,
+            "--id=--source",
+            "--name",
+            "Flagged",
         ])
         .assert()
         .success();
@@ -176,7 +188,11 @@ fn end_of_options_allows_an_option_shaped_target() {
         .args(["--repo", &path, "--format=json", "--", "--source"])
         .output()
         .unwrap();
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let value: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(value["record"]["id"], "--source");
 }

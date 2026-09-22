@@ -4,12 +4,16 @@ use super::{
 };
 use crate::shards;
 use provenance_core::{
-    ensure_record_id_assignable, validate_optional_confidence_score, Contribution, SynthesisPacket,
-    ScopeId, StableId, SUPPORTED_SCHEMA_VERSION,
+    ensure_record_id_assignable, validate_optional_confidence_score, Contribution, ScopeId,
+    StableId, SynthesisPacket, SUPPORTED_SCHEMA_VERSION,
 };
 
 impl StateStore {
-    fn ensure_contribution_id_assignable(&self, scope: &ScopeId, id: &StableId) -> anyhow::Result<()> {
+    fn ensure_contribution_id_assignable(
+        &self,
+        scope: &ScopeId,
+        id: &StableId,
+    ) -> anyhow::Result<()> {
         let existing = self.list_contributions(scope)?;
         if !existing.iter().any(|record| record.id == *id) {
             ensure_record_id_assignable(id.as_str())?;

@@ -268,7 +268,15 @@ fn collection_member_actions_follow_the_id_then_action_grammar() {
 
     let updated = provenance()
         .args([
-            "sources", "source_action_one", "update", "--repo", &repo, "--name", "Changed", "--format", "json",
+            "sources",
+            "source_action_one",
+            "update",
+            "--repo",
+            &repo,
+            "--name",
+            "Changed",
+            "--format",
+            "json",
         ])
         .output()
         .unwrap();
@@ -283,7 +291,13 @@ fn collection_member_actions_follow_the_id_then_action_grammar() {
 
     let read = provenance()
         .args([
-            "sources", "source_action_two", "get", "--repo", &repo, "--format", "json",
+            "sources",
+            "source_action_two",
+            "get",
+            "--repo",
+            &repo,
+            "--format",
+            "json",
         ])
         .output()
         .unwrap();

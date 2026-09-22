@@ -91,7 +91,14 @@ fn explicit_get_reads_an_ordinary_record_id() {
         .success();
 
     let output = provenance()
-        .args(["source_routing_get", "get", "--repo", &repo, "--format", "json"])
+        .args([
+            "source_routing_get",
+            "get",
+            "--repo",
+            &repo,
+            "--format",
+            "json",
+        ])
         .output()
         .unwrap();
     assert!(
@@ -109,6 +116,8 @@ fn invalid_explicit_get_options_do_not_fall_back_to_the_catalog() {
         .args(["sources", "get", "--unknown-option", "value"])
         .assert()
         .code(2)
-        .stderr(predicates::str::contains("unexpected argument '--unknown-option'"))
+        .stderr(predicates::str::contains(
+            "unexpected argument '--unknown-option'",
+        ))
         .stderr(predicates::str::contains("catalog does not declare").not());
 }
