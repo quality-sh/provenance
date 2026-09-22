@@ -66,7 +66,11 @@ async fn target_first_action_names_match_on_the_live_cli_and_mcp_surfaces() {
     let tools = client.list_all_tools().await.unwrap();
     let mcp = tools
         .iter()
-        .filter_map(|tool| expected.contains(tool.name.as_ref()).then_some(tool.name.as_ref()))
+        .filter_map(|tool| {
+            expected
+                .contains(tool.name.as_ref())
+                .then_some(tool.name.as_ref())
+        })
         .collect::<BTreeSet<_>>();
 
     assert_eq!(cli, expected);
