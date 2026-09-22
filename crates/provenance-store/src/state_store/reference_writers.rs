@@ -128,15 +128,14 @@ impl StateStore {
                         .collect::<BTreeSet<_>>()
                 })
             } else {
-                let position = match target_indexes
+                let position = if let Some(position) = target_indexes
                     .iter()
                     .position(|(indexed_kind, _)| *indexed_kind == kind)
                 {
-                    Some(position) => position,
-                    None => {
-                        target_indexes.push((kind, self.node_ids(scope_id, kind)?));
-                        target_indexes.len() - 1
-                    }
+                    position
+                } else {
+                    target_indexes.push((kind, self.node_ids(scope_id, kind)?));
+                    target_indexes.len() - 1
                 };
                 &target_indexes[position].1
             };
