@@ -48,6 +48,9 @@ impl ServerHandler for StatementHost {
         if crate::porcelain::get_is_available(self) {
             tools.push(crate::porcelain::get_tool());
         }
+        if crate::porcelain::search_is_available(self) {
+            tools.push(crate::porcelain::search_tool());
+        }
         if self.check_port().is_some() {
             tools.push(crate::porcelain::check_tool());
         }
@@ -83,6 +86,27 @@ impl ServerHandler for StatementHost {
                 )));
             }
             return Ok(crate::porcelain::call_get(self, arguments).await);
+        }
+        if request.name == "search" && crate::porcelain::search_is_available(self) {
+            let _admission = match self.admit() {
+                Ok(permit) => permit,
+                Err(failure) => return Ok(error(failure)),
+            };
+            let arguments = request.arguments.unwrap_or_default();
+            if serde_json::to_vec(&arguments)
+                .map_err(|_| ErrorData::internal_error("Cannot encode input", None))?
+                .len()
+                > MAX_BODY_BYTES
+            {
+                return Ok(error(ErasedFailure::new(
+                    None,
+                    OperationFailure::InvalidInput {
+                        field: None,
+                        reason: InvalidInputReason::TooLarge,
+                    },
+                )));
+            }
+            return Ok(crate::porcelain::call_search(self, arguments).await);
         }
         if request.name == "check" {
             let Some(port) = self.check_port() else {
