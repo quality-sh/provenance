@@ -1,6 +1,7 @@
+use super::read_budget::ensure_within_read_budget;
 use super::{serde_name, PostMessageInput, PostMessageResult, StateStore};
 use crate::write_error::{publication_started, SourceFailure, WriteFailure};
-use crate::{operations::reader::RECORD_BYTES, shards};
+use crate::shards;
 use provenance_core::{
     Message, NodeType, StableId, Thread, ThreadStatus, SUPPORTED_SCHEMA_VERSION,
 };
@@ -91,6 +92,7 @@ impl StateStore {
                 thread
             };
             threads.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
+            ensure_within_read_budget(&thread)?;
             Ok(thread)
         })?;
 
@@ -131,14 +133,11 @@ impl StateStore {
             ai_metadata: None,
         };
         // The bounded page readers refuse any Message whose encoded form
-        // exceeds the record budget, so an oversized Message would be
-        // persisted once and never readable. Enforce the same bound here,
-        // before the Message reaches the shard, so the write fails while
-        // nothing has been staged or published.
-        anyhow::ensure!(
-            serde_json::to_vec(&message)?.len() <= RECORD_BYTES,
-            "Message exceeds the record byte budget"
-        );
+        // exceeds the message read budget, so an oversized Message would be
+        // persisted once and never readable. The shared gate refuses the
+        // write before the Message reaches the shard, so nothing has been
+        // staged or published when the refusal returns.
+        ensure_within_read_budget(&message)?;
         let messages_path = shards::messages_path(&self.layout, scope_id);
         self.mutate_jsonl_records(&messages_path, |messages: &mut Vec<Message>| {
             messages.push(message.clone());
