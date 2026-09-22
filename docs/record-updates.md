@@ -86,9 +86,13 @@ example adds one dependency and clears the refine target:
   "relationships": {"depends_on": {"add": ["req_b"]}, "refines": null}}}
 ```
 
-The Store expands each edit against the saved record and validates the
-complete final state. Text and relationships in one PATCH validate and
-publish together. Required lists keep their last entry.
+Before expansion, the Store validates each target that a removal delta names.
+This validation applies when the saved relationship does not contain the
+target. Thus, an absent removal is a no-op only when its named target is valid
+and permitted. The Store then expands each edit against the saved record and
+validates the complete final state. Text and relationships in one PATCH
+validate and publish atomically. A failure in either validation stage publishes
+nothing. Required lists keep their last entry.
 
 `inputs` replaces the Resolution input list. To add a later input, send the
 existing inputs with the new input appended. Input references keep the native

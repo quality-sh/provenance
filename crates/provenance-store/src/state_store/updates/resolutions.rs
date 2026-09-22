@@ -21,25 +21,31 @@ impl StateStore {
         let scope = input.scope_id.clone();
         let path = shards::resolutions_path(&self.layout, &input.scope_id);
         let record = self.mutate_graph_record(&path, |records: &mut Vec<Resolution>| {
-            let record = records
-                .iter_mut()
-                .find(|r| r.id == input.id)
+            let position = records
+                .iter()
+                .position(|record| record.id == input.id)
                 .ok_or_else(missing)?;
-            let record_id = record.id.clone();
+            self.validate_relation_targets(
+                &scope,
+                records,
+                &input.id,
+                &[
+                    (
+                        "requirement_ids",
+                        review::relationships::removal_targets(input.requirement_ids.as_ref()),
+                    ),
+                    (
+                        "supersedes",
+                        review::relationships::removal_targets(input.supersedes.as_ref()),
+                    ),
+                ],
+            )?;
+            let record = &mut records[position];
             review::relationships::expand_list(
                 &mut record.requirement_ids,
-                "requirement_ids",
-                "resolution",
-                &record_id,
                 input.requirement_ids.as_ref(),
-            )?;
-            review::relationships::expand_list(
-                &mut record.supersedes,
-                "supersedes",
-                "resolution",
-                &record_id,
-                input.supersedes.as_ref(),
-            )?;
+            );
+            review::relationships::expand_list(&mut record.supersedes, input.supersedes.as_ref());
             for text in [&input.title, &input.position, &input.rationale]
                 .into_iter()
                 .flatten()
