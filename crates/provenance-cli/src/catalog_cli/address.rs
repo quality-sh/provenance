@@ -43,10 +43,15 @@ pub(super) fn help(collection: &str) -> String {
     registrations(collection)
         .into_iter()
         .map(|address| {
-            let words = address.words.iter().map(|segment| match segment {
-                Segment::Literal(word) => (*word).to_owned(),
-                Segment::Parameter(name) => format!("<{name}>"),
-            }).collect::<Vec<_>>().join(" ");
+            let words = address
+                .words
+                .iter()
+                .map(|segment| match segment {
+                    Segment::Literal(word) => (*word).to_owned(),
+                    Segment::Parameter(name) => format!("<{name}>"),
+                })
+                .collect::<Vec<_>>()
+                .join(" ");
             format!("  {collection} {words}")
         })
         .collect::<Vec<_>>()

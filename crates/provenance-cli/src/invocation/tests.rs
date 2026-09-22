@@ -19,6 +19,9 @@ fn reserved_ids_cover_declared_root_commands_collections_and_actions() {
     }
     for definition in catalog::definitions() {
         let collection = definition.path.split('/').nth(1).unwrap();
-        assert!(RESERVED_RECORD_IDS.contains(&collection), "{collection} is not reserved");
+        assert!(
+            RESERVED_RECORD_IDS.contains(&collection),
+            "{collection} is not reserved"
+        );
     }
 }
