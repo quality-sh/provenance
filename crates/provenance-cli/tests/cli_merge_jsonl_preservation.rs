@@ -1,6 +1,7 @@
-//! Pins byte-level preservation in the git merge driver's write: a merged
+//! Pins JSON-line preservation in the git merge driver's write: a merged
 //! shard is written from the stored lines, so records outside the merge's
-//! targets keep their exact stored bytes.
+//! targets keep their stored JSON spelling. Line terminators are normalized
+//! to `\n`.
 
 use assert_cmd::Command;
 use std::path::{Path, PathBuf};
@@ -65,7 +66,7 @@ fn added_rule() -> String {
 }
 
 #[test]
-fn an_untouched_row_keeps_its_stored_bytes_through_the_merge() {
+fn an_untouched_row_keeps_its_stored_json_line_through_the_merge() {
     let directory = tempfile::tempdir().unwrap();
     let stored = stored_spelling("req_base");
     let sides = Sides::write(
@@ -80,7 +81,7 @@ fn an_untouched_row_keeps_its_stored_bytes_through_the_merge() {
     let merged = std::fs::read_to_string(&sides.output).unwrap();
     assert!(
         merged.contains(&stored),
-        "the untouched row must land exactly as stored: {merged}"
+        "the untouched JSON line must land as stored: {merged}"
     );
 }
 

@@ -1,5 +1,5 @@
-//! Pins the stored-row contract of the merge write: untouched rows keep
-//! their exact stored bytes, an adopted row keeps the bytes of the side
+//! Pins the stored-row contract of the merge write: untouched rows keep their
+//! stored JSON line bytes, an adopted row keeps the line bytes of the side
 //! that moved it, and a record no side stored is refused.
 
 use super::{preserved_lines, read_jsonl_rows, StoredRow};

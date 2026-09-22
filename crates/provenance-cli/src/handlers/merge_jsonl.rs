@@ -2,8 +2,8 @@ use crate::output;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_macros::rule;
 use provenance_store::merge::{
-    changed_statement_diagnostics, merge_records, preserved_lines, read_jsonl_rows,
-    read_jsonl_rows_for_shard, validate_merged_records, MergeOutcome, StoredRow,
+    changed_statement_diagnostics, merge_records, read_jsonl_rows, read_jsonl_rows_for_shard,
+    validate_merged_records, MergeOutcome, StoredRow,
 };
 use provenance_store::statement_analysis::violation_error;
 
@@ -36,7 +36,7 @@ pub(super) fn handle(
     let their_rows = read_rows(theirs)?;
     let record_values = |rows: &[StoredRow]| {
         rows.iter()
-            .map(|row| row.record.clone())
+            .map(|row| row.record().clone())
             .collect::<Vec<_>>()
     };
     let outcome = merge_records(
@@ -60,11 +60,14 @@ pub(super) fn handle(
         }
     }
     if let Some(output_path) = output_path {
-        // Every merged record is one side's stored record, so the result is
-        // written from the stored lines: untouched rows keep their exact
-        // bytes, and an adopted row lands as the side that moved it held it.
-        let lines = preserved_lines(&our_rows, &their_rows, records)?;
-        provenance_store::jsonl::write_jsonl_lines_atomic(&output_path, records, &lines)?;
+        // The writer selects the stored row that matches each merged record,
+        // so a caller cannot pair checked records with unrelated raw lines.
+        provenance_store::jsonl::write_preserved_jsonl_atomic(
+            &output_path,
+            &our_rows,
+            &their_rows,
+            records,
+        )?;
     }
     output::print_json(&outcome)?;
     if let MergeOutcome::Conflicted { conflicts, .. } = &outcome {

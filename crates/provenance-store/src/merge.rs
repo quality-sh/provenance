@@ -65,15 +65,24 @@ pub type CanonicalRecord = Value;
 /// One stored input row kept beside the record parsed from it.
 ///
 /// A merge never authors record content: every merged record is one side's
-/// record unchanged. Keeping the exact stored line beside that record lets
-/// the merged shard preserve each record's stored bytes, so content this
-/// build would encode differently survives the write untouched.
+/// record unchanged. Keeping the stored JSON line beside that record lets the
+/// merged shard preserve the line's bytes, so content this build would encode
+/// differently survives the write untouched. The writer normalizes line
+/// terminators to `\n`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoredRow {
     /// The row exactly as the input file held it, without its newline.
-    pub line: String,
+    line: String,
     /// The record parsed from that line.
-    pub record: Value,
+    record: Value,
+}
+
+impl StoredRow {
+    /// Returns the record parsed from this stored row.
+    #[must_use]
+    pub const fn record(&self) -> &Value {
+        &self.record
+    }
 }
 
 /// Reads one JSONL merge input, keeping each stored row beside its record.
@@ -116,7 +125,7 @@ pub fn read_jsonl_rows(path: &camino::Utf8Path) -> anyhow::Result<Vec<StoredRow>
 /// ours when our side holds it, theirs when only theirs does. The merge is
 /// refused when no stored row matches, because re-encoding that record would
 /// publish content that no side stored.
-pub fn preserved_lines(
+pub(crate) fn preserved_lines(
     ours: &[StoredRow],
     theirs: &[StoredRow],
     merged: &[CanonicalRecord],
