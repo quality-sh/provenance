@@ -118,7 +118,10 @@ async fn non_create_schema_and_dispatch_deny_a_hidden_mutation() {
     );
     let source = call(&client, "get-source", json!({"id":"source_shared"})).await;
     assert_ne!(source.is_error, Some(true), "{source:?}");
-    assert_eq!(source.structured_content.unwrap()["data"]["name"], "Shared source");
+    assert_eq!(
+        source.structured_content.unwrap()["data"]["name"],
+        "Shared source"
+    );
 
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
@@ -128,11 +131,13 @@ async fn non_create_schema_and_dispatch_deny_a_hidden_mutation() {
 async fn no_resolvable_kind_hides_non_create_tools_but_keeps_create_executable() {
     let repository = Repository::new("The shared graph is readable.");
     let mut access = writable_access(&repository);
-    for definition in catalog::definitions().iter().filter(|definition| {
-        definition.registration.queries.iter().any(|query| {
-            query.name == catalog::Trace::NAME && query.request.node_type.is_some()
+    for definition in
+        catalog::definitions().iter().filter(|definition| {
+            definition.registration.queries.iter().any(|query| {
+                query.name == catalog::Trace::NAME && query.request.node_type.is_some()
+            })
         })
-    }) {
+    {
         access = access.deny_operation(definition.name);
     }
     let host = StatementHost::with_fixture_access(access);

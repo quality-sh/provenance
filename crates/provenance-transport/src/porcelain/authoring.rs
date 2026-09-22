@@ -122,8 +122,8 @@ impl crate::StatementHost {
         action: Action,
         kind: NodeType,
     ) -> Result<&'static Definition, ActionError> {
-        let definition = catalog::target_definition(action, kind)
-            .ok_or(ActionError::InvalidOptions)?;
+        let definition =
+            catalog::target_definition(action, kind).ok_or(ActionError::InvalidOptions)?;
         if !self.advertises(definition.name) {
             return Err(ActionError::AccessDenied);
         }
