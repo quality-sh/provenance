@@ -4,9 +4,8 @@ use provenance_core::protocol::{QueryResponse, SearchQuery, SearchResult};
 use std::{fmt::Display, future::Future, pin::Pin};
 
 /// One future returned by an injected search port.
-pub type PortFuture<'a> = Pin<
-    Box<dyn Future<Output = Result<QueryResponse<SearchResult>, SearchError>> + Send + 'a>,
->;
+pub type PortFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<QueryResponse<SearchResult>, SearchError>> + Send + 'a>>;
 
 /// A failure from search validation, authorization, or the canonical operation.
 #[derive(Clone, Debug, Eq, PartialEq)]

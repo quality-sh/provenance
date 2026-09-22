@@ -24,9 +24,7 @@ impl SearchPort for HostSearchPort {
             if request.node_types.is_empty() {
                 request.node_types = permitted;
             } else {
-                request
-                    .node_types
-                    .retain(|kind| permitted.contains(kind));
+                request.node_types.retain(|kind| permitted.contains(kind));
                 if request.node_types.is_empty() {
                     return Err(SearchError::AccessDenied);
                 }
@@ -43,8 +41,8 @@ fn operation_error(
     error: &OperationError<<catalog::Search as catalog::Operation>::Failure>,
 ) -> SearchError {
     let message = error.to_string();
-    let detail = serde_json::to_value(error)
-        .unwrap_or_else(|_| serde_json::json!({"kind":"internal"}));
+    let detail =
+        serde_json::to_value(error).unwrap_or_else(|_| serde_json::json!({"kind":"internal"}));
     SearchError::Operation { message, detail }
 }
 

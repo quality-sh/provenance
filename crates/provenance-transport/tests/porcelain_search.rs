@@ -28,12 +28,13 @@ fn access(repository: &Repository) -> FixtureAccess {
 }
 
 fn deny_kind(mut access: FixtureAccess, kind: NodeType) -> FixtureAccess {
-    for definition in catalog::definitions().iter().filter(|definition| {
-        definition.registration.queries.iter().any(|query| {
-            query.name == "trace"
-                && query.request.node_type == Some(kind.as_str())
+    for definition in
+        catalog::definitions().iter().filter(|definition| {
+            definition.registration.queries.iter().any(|query| {
+                query.name == "trace" && query.request.node_type == Some(kind.as_str())
+            })
         })
-    }) {
+    {
         access = access.deny_operation(definition.name);
     }
     access
@@ -68,11 +69,17 @@ async fn named_mcp_search_intersects_text_and_multiple_kinds() {
     assert!(tool.output_schema.is_some());
 
     let text_only = call(&client, json!({"text":"excludes code"})).await;
-    assert_eq!(text_only.structured_content.as_ref().unwrap()["nodes"][0]["node_type"], "boundary");
+    assert_eq!(
+        text_only.structured_content.as_ref().unwrap()["nodes"][0]["node_type"],
+        "boundary"
+    );
 
     let kind_only = call(&client, json!({"node_types":["domain", "rule"]})).await;
     let kinds = kind_only.structured_content.as_ref().unwrap()["nodes"]
-        .as_array().unwrap().iter().map(|node| node["node_type"].as_str().unwrap())
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|node| node["node_type"].as_str().unwrap())
         .collect::<Vec<_>>();
     assert_eq!(kinds, ["rule", "domain"]);
 
@@ -81,7 +88,9 @@ async fn named_mcp_search_intersects_text_and_multiple_kinds() {
         json!({"text":"searchable", "node_types":["requirement", "rule"]}),
     )
     .await;
-    let nodes = combined.structured_content.as_ref().unwrap()["nodes"].as_array().unwrap();
+    let nodes = combined.structured_content.as_ref().unwrap()["nodes"]
+        .as_array()
+        .unwrap();
     assert_eq!(nodes.len(), 1);
     assert_eq!(nodes[0]["node_type"], "rule");
 
@@ -106,7 +115,10 @@ async fn mcp_search_content_matches_the_structured_bounded_page() {
     let cursor = structured["next_cursor"].as_str().unwrap();
     let readable = &first.content[0].as_text().unwrap().text;
     for node in structured["nodes"].as_array().unwrap() {
-        assert!(readable.contains(node["id"].as_str().unwrap()), "{readable}");
+        assert!(
+            readable.contains(node["id"].as_str().unwrap()),
+            "{readable}"
+        );
     }
     assert!(readable.contains("limit=2"), "{readable}");
     assert!(readable.contains(cursor), "{readable}");
@@ -116,10 +128,18 @@ async fn mcp_search_content_matches_the_structured_bounded_page() {
         json!({"text":"shared", "limit":2, "cursor":cursor}),
     )
     .await;
-    let first_ids = structured["nodes"].as_array().unwrap().iter()
-        .map(|node| node["id"].as_str().unwrap()).collect::<Vec<_>>();
-    let second_ids = second.structured_content.as_ref().unwrap()["nodes"].as_array().unwrap().iter()
-        .map(|node| node["id"].as_str().unwrap()).collect::<Vec<_>>();
+    let first_ids = structured["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|node| node["id"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    let second_ids = second.structured_content.as_ref().unwrap()["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|node| node["id"].as_str().unwrap())
+        .collect::<Vec<_>>();
     assert!(first_ids.iter().all(|id| !second_ids.contains(id)));
 
     let wrong_query = call(
@@ -143,11 +163,7 @@ async fn mcp_search_applies_kind_grants_before_the_canonical_page() {
     let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
 
-    let result = call(
-        &client,
-        json!({"node_types":["source", "rule"], "limit":1}),
-    )
-    .await;
+    let result = call(&client, json!({"node_types":["source", "rule"], "limit":1})).await;
     let structured = result.structured_content.unwrap();
     assert_eq!(structured["nodes"][0]["node_type"], "rule");
     assert_eq!(structured["has_more"], false);

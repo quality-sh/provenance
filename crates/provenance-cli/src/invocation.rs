@@ -94,8 +94,8 @@ impl Invocation {
                     Some(_) => anyhow::bail!("Porcelain search supports --format json"),
                 };
                 let words = shared.words.iter().map(String::as_str).collect::<Vec<_>>();
-                let command = porcelain::parse_search(&words)
-                    .map_err(|error| anyhow::anyhow!(error))?;
+                let command =
+                    porcelain::parse_search(&words).map_err(|error| anyhow::anyhow!(error))?;
                 Ok(Self::Search(SearchInvocation {
                     context: shared.context,
                     format,

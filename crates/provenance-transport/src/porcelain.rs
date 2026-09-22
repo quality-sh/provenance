@@ -55,7 +55,10 @@ pub(crate) fn search_tool() -> rmcp::model::Tool {
     let mut tool = rmcp::model::Tool::new(
         "search",
         "Find records across the permitted kinds in the bound scope.",
-        input.as_object().expect("search schema is an object").clone(),
+        input
+            .as_object()
+            .expect("search schema is an object")
+            .clone(),
     );
     tool.output_schema = Some(
         output
@@ -245,9 +248,9 @@ pub(crate) async fn call_search(
     host: &crate::StatementHost,
     arguments: serde_json::Map<String, Value>,
 ) -> CallToolResult {
-    let Ok(mut request) = serde_json::from_value::<provenance_core::protocol::SearchQuery>(
-        Value::Object(arguments),
-    ) else {
+    let Ok(mut request) =
+        serde_json::from_value::<provenance_core::protocol::SearchQuery>(Value::Object(arguments))
+    else {
         return get_error("invalid_options", "unsupported search options");
     };
     request.protocol_version = Some(provenance_core::SDK_PROTOCOL_VERSION);

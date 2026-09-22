@@ -107,19 +107,8 @@ fn root_search_supports_text_kind_and_intersection_in_both_formats() {
     assert_eq!(ids(&kind_only), ["req_search", "rule_search"]);
 
     let combined = json(&[
-        "search",
-        "--repo",
-        repo,
-        "--text",
-        "shared",
-        "--kind",
-        "source",
-        "--kind",
-        "rule",
-        "--limit",
-        "1",
-        "--format",
-        "json",
+        "search", "--repo", repo, "--text", "shared", "--kind", "source", "--kind", "rule",
+        "--limit", "1", "--format", "json",
     ]);
     assert_eq!(ids(&combined), ["rule_search"]);
     assert_eq!(combined["limit"], 1);
