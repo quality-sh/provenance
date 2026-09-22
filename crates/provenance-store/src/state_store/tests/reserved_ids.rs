@@ -155,5 +155,8 @@ fn an_existing_keyword_message_id_survives_a_scope_import() {
     };
 
     store.import_scope(&scope, &shards).unwrap();
-    assert_eq!(store.list_messages(&scope).unwrap()[0].id.as_str(), "search");
+    assert_eq!(
+        store.list_messages(&scope).unwrap()[0].id.as_str(),
+        "search"
+    );
 }
