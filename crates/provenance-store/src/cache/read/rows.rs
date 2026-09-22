@@ -21,6 +21,7 @@ pub fn select_columns<K: ProjectionRow>() -> String {
 
 /// The record a row holds, read column by column.
 pub(super) fn decode<K: ProjectionRow>(row: &SqliteRow) -> anyhow::Result<K> {
+    crate::test_probes::at("query_row_hydrated")?;
     K::from_row(&column_values::<K>(row)?)
 }
 

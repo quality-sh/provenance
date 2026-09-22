@@ -10,6 +10,7 @@ use provenance_core::{
 };
 use provenance_macros::verifies;
 
+mod binding_pages;
 mod budgets;
 mod comparison;
 mod concurrent;
@@ -19,6 +20,8 @@ mod document;
 mod document_membership;
 mod evidence;
 mod front_equivalence;
+mod hydration;
+mod hydration_support;
 mod identity;
 mod impact;
 mod limits;

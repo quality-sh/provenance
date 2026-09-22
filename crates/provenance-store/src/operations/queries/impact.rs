@@ -74,11 +74,11 @@ pub(super) async fn impact(
         (
             snapshot
                 .table::<ImplementationBinding>()
-                .page_by_field("rule_id", &rule_ids)
+                .checked_by_field("rule_id", &rule_ids)
                 .await?,
             snapshot
                 .table::<VerificationBinding>()
-                .page_by_field("rule_id", &rule_ids)
+                .checked_by_field("rule_id", &rule_ids)
                 .await?,
         )
     };
