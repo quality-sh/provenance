@@ -1,8 +1,8 @@
 use super::{ensure_new_ids_assignable, read_ideation_landings, IdeationLandingBatch, StateStore};
 use crate::shards;
 use provenance_core::{
-    AssertionRecord, Contribution, DispositionRecord,
-    IdeationAggregate, ProposalCard, ScopeId, SynthesisPacket,
+    AssertionRecord, Contribution, DispositionRecord, IdeationAggregate, ProposalCard, ScopeId,
+    SynthesisPacket,
 };
 use provenance_macros::rule;
 use std::collections::BTreeSet;
@@ -57,7 +57,9 @@ impl StateStore {
             ensure_new_ids_assignable(&synthesis_packets, &incoming.synthesis_packets, |record| {
                 record.id.as_str()
             })?;
-            ensure_new_ids_assignable(&proposals, &incoming.proposals, |record| record.id.as_str())?;
+            ensure_new_ids_assignable(&proposals, &incoming.proposals, |record| {
+                record.id.as_str()
+            })?;
             ensure_new_ids_assignable(&assertions, &incoming.assertions, |record| {
                 record.id.as_str()
             })?;

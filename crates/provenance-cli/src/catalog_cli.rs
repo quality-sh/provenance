@@ -34,6 +34,12 @@ impl Invocation {
             &["stdin"],
         )
         .unwrap_or_else(|error| usage_error(error));
+        if resolved.address.definition.method == catalog::HttpMethod::Post {
+            if let Some(id) = data.get("id").and_then(Value::as_str) {
+                provenance_core::ensure_record_id_assignable(id)
+                    .unwrap_or_else(|error| usage_error(error));
+            }
+        }
         Ok(Self {
             context: args.common.context(),
             path: resolved.path,
@@ -52,7 +58,11 @@ pub fn is_collection(word: &str) -> bool {
 pub fn command(collection: &str) -> anyhow::Result<Command> {
     let registrations = address::registrations(collection);
     let mut command = grammar::catalog_command();
-    command = command.after_help(address::help(collection));
+    let mut help = address::help(collection);
+    if collection == "questions" {
+        help.push_str("\nA question should be resolvable in one agent session;\notherwise it is fog or needs decomposition.");
+    }
+    command = command.after_help(help);
     fields::augment(
         command,
         registrations.into_iter().map(|address| address.definition),
@@ -115,6 +125,10 @@ pub async fn dispatch_target(
     kind: Option<provenance_core::NodeType>,
     matches: ArgMatches,
 ) -> anyhow::Result<()> {
+    if action == provenance_transport::porcelain::Action::Create {
+        provenance_core::ensure_record_id_assignable(&target)
+            .unwrap_or_else(|error| usage_error(error));
+    }
     let host = local_host(&context)?;
     let route = host
         .target_route(action, &target, kind)

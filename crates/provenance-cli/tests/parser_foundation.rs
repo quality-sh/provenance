@@ -84,7 +84,7 @@ fn shared_flags_and_equals_values_work_at_all_target_positions() {
         String::from_utf8_lossy(&read.stderr)
     );
     let value: Value = serde_json::from_slice(&read.stdout).unwrap();
-    assert_eq!(value["record"]["name"], "--repo");
+    assert_eq!(value["record"]["value"]["name"], "--repo");
 }
 
 #[test]
@@ -154,4 +154,29 @@ fn command_keywords_are_refused_as_record_ids_on_both_cli_write_forms() {
         .assert()
         .failure()
         .stderr(contains("reserved record ID check"));
+    provenance()
+        .args([
+            "answer", "create", "--repo", &path, "--type=source", "--name", "Answer",
+        ])
+        .assert()
+        .code(2)
+        .stderr(contains("reserved record ID answer"));
+}
+
+#[test]
+fn end_of_options_allows_an_option_shaped_target() {
+    let (_directory, path) = repo();
+    provenance()
+        .args([
+            "sources", "create", "--repo", &path, "--id=--source", "--name", "Flagged",
+        ])
+        .assert()
+        .success();
+    let output = provenance()
+        .args(["--repo", &path, "--format=json", "--", "--source"])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let value: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(value["record"]["id"], "--source");
 }
