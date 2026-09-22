@@ -62,9 +62,7 @@ async fn assert_search_hidden_and_refused(
 ) {
     let tools = client.list_all_tools().await.unwrap();
     assert!(!tools.iter().any(|tool| tool.name == "search"));
-    let direct = client
-        .call_tool(CallToolRequestParams::new("search"))
-        .await;
+    let direct = client.call_tool(CallToolRequestParams::new("search")).await;
     assert!(direct.is_err(), "{direct:?}");
 }
 
@@ -195,7 +193,9 @@ async fn list_denial_excludes_a_kind_before_selection_and_paging() {
     assert_eq!(first_page["nodes"][0]["node_type"], "requirement");
     assert_eq!(first_page["has_more"], true);
     let cursor = first_page["next_cursor"].as_str().unwrap();
-    assert!(!serde_json::to_string(&first).unwrap().contains("source_shared"));
+    assert!(!serde_json::to_string(&first)
+        .unwrap()
+        .contains("source_shared"));
 
     let second = call(
         &client,
@@ -211,7 +211,9 @@ async fn list_denial_excludes_a_kind_before_selection_and_paging() {
     assert_eq!(second_page["nodes"][0]["node_type"], "rule");
     assert_eq!(second_page["has_more"], false);
     assert!(second_page["next_cursor"].is_null());
-    assert!(!serde_json::to_string(&second).unwrap().contains("source_shared"));
+    assert!(!serde_json::to_string(&second)
+        .unwrap()
+        .contains("source_shared"));
 
     let implicit = call(&client, json!({"text":"shared", "limit":20})).await;
     let implicit_page = implicit.structured_content.as_ref().unwrap();
